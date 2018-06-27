@@ -35,6 +35,7 @@ if sys.version_info[0] < 3:
     print("Connector MariaDB/Python requires Python 3.x")
     sys.exit(1)
 
+subprocess.call('git submodule init && git submodule update')
 assure_path_exists('libmariadb/bld')
 subprocess.call('cd libmariadb/bld && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4', shell=True)
 
