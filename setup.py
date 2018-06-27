@@ -27,15 +27,14 @@ def mariadb_config(what):
     return data
 
 def assure_path_exists(path):
-        dir = os.path.dirname(path)
-        if not os.path.exists(dir):
-                os.makedirs(dir)
+        if not os.path.exists(path):
+                os.makedirs(path)
 
 if sys.version_info[0] < 3:
     print("Connector MariaDB/Python requires Python 3.x")
     sys.exit(1)
 
-subprocess.call('git submodule init && git submodule update')
+subprocess.call('git submodule init && git submodule update', shell=True)
 assure_path_exists('libmariadb/bld')
 subprocess.call('cd libmariadb/bld && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4', shell=True)
 
