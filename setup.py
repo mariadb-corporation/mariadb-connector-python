@@ -36,7 +36,7 @@ if sys.version_info[0] < 3:
 
 subprocess.call('git submodule init && git submodule update', shell=True)
 assure_path_exists('libmariadb/bld')
-subprocess.call('cd libmariadb/bld && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4', shell=True)
+subprocess.call('cd libmariadb/bld && cmake .. -DCMAKE_BUILD_TYPE=Debug && make -j4', shell=True)
 
 if sys.platform != "win32":
 

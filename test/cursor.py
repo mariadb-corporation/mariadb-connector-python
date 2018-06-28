@@ -1,6 +1,5 @@
 #!/usr/bin/env python -O
 
-from mariadb import indicator
 import mariadb
 import datetime
 import unittest
@@ -14,7 +13,6 @@ class CursorTest(unittest.TestCase):
     del self.connection
 
   def test_date(self):
-    print("test_date")
     cursor= self.connection.cursor()
     cursor.execute("CREATE OR REPLACE TABLE t1(c1 TIMESTAMP(6), c2 TIME(6), c3 DATETIME(6), c4 DATE)")
     t= datetime.datetime(2018,6,20,12,22,31,123456)
@@ -33,7 +31,6 @@ class CursorTest(unittest.TestCase):
     cursor.close()
 
   def test_numbers(self):
-    print("test_numbers")
     cursor= self.connection.cursor()
     cursor.execute("CREATE OR REPLACE TABLE t1 (a tinyint unsigned, b smallint unsigned, c mediumint unsigned, d int unsigned, e bigint unsigned, f double)")
     c1= 4
@@ -56,7 +53,6 @@ class CursorTest(unittest.TestCase):
     del cursor
 
   def test_string(self):
-    print("test_string")
     cursor= self.connection.cursor()
     cursor.execute("CREATE OR REPLACE TABLE t1 (a char(5), b varchar(100), c tinytext, d mediumtext, e text, f longtext)");
 
@@ -89,7 +85,6 @@ class CursorTest(unittest.TestCase):
     c4= b'd' * 100000;
 
     a= (None, None, None, None)
-    cursor.indicators= a
     cursor.execute("INSERT INTO t1 VALUES (?,?,?,?)", (c1, c2, c3, c4))
 
     cursor.execute("SELECT * FROM t1")
@@ -99,3 +94,50 @@ class CursorTest(unittest.TestCase):
     self.assertEqual(row[2],c3)
     self.assertEqual(row[3],c4)
     del cursor
+
+  def test_fetchmany(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE t1 (id int, name varchar(64), city varchar(64))");
+    params= [(1, u"Jack",  u"Boston"),
+           (2, u"Martin",  u"Ohio"),
+           (3, u"James",  u"Washington"),
+           (4, u"Rasmus",  u"Helsinki"),
+           (5, u"Andrey",  u"Sofia")]
+    cursor.executemany("INSERT INTO t1 VALUES (?,?,?)", params);
+
+    #test Errors
+#   # a) if no select was executed
+    self.assertRaises(mariadb.Error, cursor.fetchall)
+    #b ) if cursor was not executed
+    del cursor
+    cursor= self.connection.cursor()
+    self.assertRaises(mariadb.Error, cursor.fetchall)
+
+    cursor.execute("SELECT id, name, city FROM t1 ORDER BY id")
+    self.assertEqual(0, cursor.rowcount())
+    row = cursor.fetchall()
+    self.assertEqual(row, params)
+    self.assertEqual(5, cursor.rowcount())
+
+    cursor.execute("SELECT id, name, city FROM t1 ORDER BY id")
+    self.assertEqual(0, cursor.rowcount())
+    print("row count 3: ", cursor.rowcount())
+    row= cursor.fetchmany()
+    print("row count 4: ", cursor.rowcount())
+    self.assertEqual(row,[])
+
+    row= cursor.fetchmany(1)
+    print("row count: ", cursor.rowcount())
+    self.assertEqual(row,[params[0]])
+
+    row= cursor.fetchmany(2)
+    self.assertEqual(row,([params[1], params[2]]))
+
+    cursor.arraysize= 1
+    row= cursor.fetchmany()
+    self.assertEqual(row,[params[3]])
+
+    cursor.arraysize= 2
+    row= cursor.fetchmany()
+    self.assertEqual(row,[params[4]])
+    print("row count: ", cursor.rowcount())

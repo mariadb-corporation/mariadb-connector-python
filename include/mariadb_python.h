@@ -71,8 +71,8 @@ typedef struct {
   PyObject_HEAD
   MYSQL_STMT *stmt;
   PyObject *data;
-  uint64_t rowcount;
   uint32_t array_size;
+  uint32_t row_array_size;
   uint32_t param_count;
   Mariadb_ParamInfo *paraminfo;
   Mariadb_ParamValue *value;
@@ -83,6 +83,7 @@ typedef struct {
   char *statement;
   PyObject **values;
   uint8_t is_prepared;
+  uint8_t is_buffered;
 } Mariadb_Cursor;
 
 typedef struct {

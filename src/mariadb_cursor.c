@@ -83,6 +83,12 @@ static struct PyMemberDef Mariadb_Cursor_Members[] =
    offsetof(Mariadb_Cursor, lastrowid),
    READONLY,
    "row id of the last modified (inserted) row"},
+  {"arraysize",
+   T_LONG,
+   offsetof(Mariadb_Cursor, row_array_size),
+   0,
+   "the number of rows to fetch"},
+   {NULL}
 };
 
 PyObject * Mariadb_Cursor_initialize(Mariadb_Connection *self)
@@ -98,7 +104,6 @@ PyObject * Mariadb_Cursor_initialize(Mariadb_Connection *self)
 		return NULL;
 	}
 
-  c->rowcount= -1;
   c->array_size= 1;
 	return (PyObject *) c;
 }
@@ -294,14 +299,12 @@ PyObject *Mariadb_Cursor_execute(Mariadb_Cursor *self,
     if (mariadb_stmt_execute_direct(self->stmt, statement, statement_len))
     {
       mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, NULL);
-      self->rowcount= -1;
       goto error;
     }
   } else {
     if (mysql_stmt_execute(self->stmt))
     {
       mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, NULL);
-      self->rowcount= -1;
       goto error;
     }
     self->lastrowid= mysql_stmt_insert_id(self->stmt);
@@ -337,11 +340,10 @@ PyObject *Mariadb_Cursor_rowcount(Mariadb_Cursor *self)
 
   if (PyErr_Occurred())
     return NULL;
-  if (self->fields)
-    self->rowcount= mysql_stmt_num_rows(self->stmt);
+  if (mysql_stmt_field_count(self->stmt))
+    return PyLong_FromLongLong(mysql_stmt_num_rows(self->stmt));
   else
-    self->rowcount= mysql_stmt_affected_rows(self->stmt);
-  return PyLong_FromLongLong(self->rowcount);
+    return PyLong_FromLongLong(mysql_stmt_affected_rows(self->stmt));
 }
 
 PyObject *Mariadb_Cursor_fieldcount(Mariadb_Cursor *self)
@@ -425,7 +427,8 @@ PyObject *Mariadb_Cursor_fetchone(Mariadb_Cursor *self)
 static
 PyObject *Mariadb_Cursor_fetchmany(Mariadb_Cursor *self, PyObject *Args)
 {
-  PyObject *RowNr, *List;
+  PyObject *RowNr= NULL,
+           *List= NULL;
   uint32_t i,rows;
 
   MARIADB_CHECK_STMT(self);
@@ -439,16 +442,17 @@ PyObject *Mariadb_Cursor_fetchmany(Mariadb_Cursor *self, PyObject *Args)
     return NULL;
   }
 
-  if (!PyArg_ParseTuple(Args, "O!", &PyLong_Type, &RowNr))
+  if (!PyArg_ParseTuple(Args, "|O!", &PyLong_Type, &RowNr))
     return NULL;
 
-  rows= PyLong_AsLong(RowNr);
+  rows= (RowNr) ? PyLong_AsLong(RowNr) : self->row_array_size;
+
   if (!(List= PyList_New(0)))
     return NULL;
 
   /* if rows=0, return an empty list */
   if (!rows)
-    goto end;
+    return List;
 
   for (i=0; i < rows; i++)
   {
@@ -462,7 +466,6 @@ PyObject *Mariadb_Cursor_fetchmany(Mariadb_Cursor *self, PyObject *Args)
       PyTuple_SET_ITEM(Row, j, self->values[j]);
     PyList_Append(List, Row);
   }
-
 end:
   return List;
 }
