@@ -35,13 +35,13 @@ static PyMethodDef Mariadb_Connection_Methods[] =
      METH_VARARGS | METH_KEYWORDS,
      "Connect with a MySQL server"},
   {"commit", (PyCFunction)Mariadb_commit,
-     METH_VARARGS | METH_KEYWORDS,
+     METH_NOARGS,
      "Commits the current transaction"},
-  {"rollback", (PyCFunction)Mariadb_commit,
-     METH_VARARGS | METH_KEYWORDS,
+  {"rollback", (PyCFunction)Mariadb_rollback,
+     METH_NOARGS,
      "Rolls back the current transaction"},
   {"cursor", (PyCFunction)Mariadb_Cursor_initialize,
-     METH_NOARGS,
+     METH_VARARGS | METH_KEYWORDS,
      "Creates a new cursor"},
   /* additional methods */
   {
@@ -53,10 +53,10 @@ static PyMethodDef Mariadb_Connection_Methods[] =
   {
     "auto_commit",
     (PyCFunction)Mariadb_autocommit,
-    METH_O,
+    METH_VARARGS,
     "Toggles autocommit mode on or off"
   },
-  {NULL} /* always last */
+  {NULL} /* alwa+ys last */
 };
 
 static struct PyMemberDef Mariadb_Connection_Members[] =

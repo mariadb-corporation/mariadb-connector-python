@@ -19,9 +19,11 @@
 #include "Python.h"
 #include "bytesobject.h"
 #include "structmember.h"
+#include "structseq.h"
 #include <stdarg.h>
 #include <mysql.h>
 #include <errmsg.h>
+#include <mysqld_error.h>
 
 #if defined(_WIN32) && defined(_MSVC)
 #ifndef L64
@@ -82,9 +84,19 @@ typedef struct {
   MYSQL_FIELD *fields;
   char *statement;
   PyObject **values;
+  PyStructSequence_Desc sequence_desc;
+  PyStructSequence_Field *sequence_fields;
+  PyTypeObject *sequence_type;
+  unsigned long row_number;
   uint8_t is_prepared;
   uint8_t is_buffered;
+  uint8_t is_named_tuple;
 } Mariadb_Cursor;
+
+typedef struct
+{
+  PyObject_HEAD
+} Mariadb_Fieldinfo;
 
 typedef struct {
   ps_field_fetch_func func;
@@ -92,19 +104,14 @@ typedef struct {
   unsigned long max_len;
 } Mariadb_Conversion;
 
-typedef struct {
-    PyObject_HEAD
-    enum enum_indicator_type indicator;
-} Mariadb_Indicator;
-
 /* Exceptions */
 PyObject *Mariadb_InterfaceError;
 PyObject *Mariadb_Error;
 PyObject *Mariadb_DatabaseError;
 PyObject *Mariadb_DataError;
 
+PyTypeObject Mariadb_Fieldinfo_Type;
 PyTypeObject Mariadb_Connection_Type;
-PyTypeObject Mariadb_Indicator_Type;
 PyTypeObject Mariadb_Cursor_Type;
 
 /* Function prototypes */
@@ -121,7 +128,7 @@ PyObject *Mariadb_rollback(Mariadb_Connection *self);
 PyObject *Mariadb_commit(Mariadb_Connection *self);
 PyObject *Mariadb_close(Mariadb_Connection *self);
 PyObject *Mariadb_connect( PyObject *self,PyObject *args,	PyObject *kwargs);
-PyObject *Mariadb_Cursor_initialize(Mariadb_Connection *self);
+PyObject *Mariadb_Cursor_initialize(Mariadb_Connection *self, PyObject *args, PyObject *kwargs);
 
 /* codecs prototypes  */
 uint8_t mariadb_check_bulk_parameters(Mariadb_Cursor *self,

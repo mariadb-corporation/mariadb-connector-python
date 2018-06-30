@@ -121,23 +121,104 @@ class CursorTest(unittest.TestCase):
 
     cursor.execute("SELECT id, name, city FROM t1 ORDER BY id")
     self.assertEqual(0, cursor.rowcount())
-    print("row count 3: ", cursor.rowcount())
-    row= cursor.fetchmany()
-    print("row count 4: ", cursor.rowcount())
+    row= cursor.fetchmany(0)
     self.assertEqual(row,[])
 
     row= cursor.fetchmany(1)
-    print("row count: ", cursor.rowcount())
     self.assertEqual(row,[params[0]])
+    self.assertEqual(1, cursor.rowcount())
 
     row= cursor.fetchmany(2)
     self.assertEqual(row,([params[1], params[2]]))
+    self.assertEqual(3, cursor.rowcount())
 
     cursor.arraysize= 1
     row= cursor.fetchmany()
     self.assertEqual(row,[params[3]])
+    self.assertEqual(4, cursor.rowcount())
 
     cursor.arraysize= 2
     row= cursor.fetchmany()
     self.assertEqual(row,[params[4]])
-    print("row count: ", cursor.rowcount())
+    self.assertEqual(5, cursor.rowcount())
+    del cursor
+
+  def test1_multi_result(self):
+    cursor= self.connection.cursor()
+    sql= """
+           CREATE OR REPLACE PROCEDURE p1()
+           BEGIN
+             SELECT 1 FROM DUAL;
+             SELECT 2 FROM DUAL;
+           END
+         """
+    cursor.execute(sql)
+    cursor.execute("call p1()")
+    row= cursor.fetchone()
+    self.assertEqual(row[0], 1)
+    cursor.nextset()
+    row= cursor.fetchone()
+    self.assertEqual(row[0], 2)
+    del cursor
+
+  def test_buffered(self):
+    cursor= self.connection.cursor()
+    cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3", buffered=True)
+    self.assertEqual(cursor.rowcount(), 3)
+    del cursor
+
+  def test_xfield_types(self):
+    cursor= self.connection.cursor()
+    fieldinfo= mariadb.fieldinfo()
+    cursor.execute("CREATE OR REPLACE TABLE t1 (a tinyint not null auto_increment primary key, b smallint, c int, d bigint, e float, f decimal, g double, h char(10), i varchar(255), j blob, index(b))");
+    info= cursor.description()
+    self.assertEqual(info, None)
+    cursor.execute("SELECT * FROM t1")
+    info= cursor.description()
+    self.assertEqual(fieldinfo.type(info[0]), "TINY")
+    self.assertEqual(fieldinfo.type(info[1]), "SHORT")
+    self.assertEqual(fieldinfo.type(info[2]), "LONG")
+    self.assertEqual(fieldinfo.type(info[3]), "LONGLONG")
+    self.assertEqual(fieldinfo.type(info[4]), "FLOAT")
+    self.assertEqual(fieldinfo.type(info[5]), "NEWDECIMAL")
+    self.assertEqual(fieldinfo.type(info[6]), "DOUBLE")
+    self.assertEqual(fieldinfo.type(info[7]), "STRING")
+    self.assertEqual(fieldinfo.type(info[8]), "VAR_STRING")
+    self.assertEqual(fieldinfo.type(info[9]), "BLOB")
+    self.assertEqual(fieldinfo.flag(info[0]), "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT | NUMERIC")
+    self.assertEqual(fieldinfo.flag(info[1]), "PART_KEY | NUMERIC")
+    self.assertEqual(fieldinfo.flag(info[9]), "BLOB | BINARY")
+    del cursor
+
+  def test_named_tuple(self):
+    cursor= self.connection.cursor(named_tuple=1)
+    cursor.execute("CREATE OR REPLACE TABLE t1 (id int, name varchar(64), city varchar(64))");
+    params= [(1, u"Jack",  u"Boston"),
+           (2, u"Martin",  u"Ohio"),
+           (3, u"James",  u"Washington"),
+           (4, u"Rasmus",  u"Helsinki"),
+           (5, u"Andrey",  u"Sofia")]
+    cursor.executemany("INSERT INTO t1 VALUES (?,?,?)", params);
+    cursor.execute("SELECT * FROM t1 ORDER BY id")
+    row= cursor.fetchone()
+
+    self.assertEqual(cursor.statement, "SELECT * FROM t1 ORDER BY id")
+    self.assertEqual(row.id, 1)
+    self.assertEqual(row.name, "Jack")
+    self.assertEqual(row.city, "Boston")
+    del cursor
+
+  def test_laststatement(self):
+    cursor= self.connection.cursor(named_tuple=1)
+    cursor.execute("CREATE OR REPLACE TABLE t1 (id int, name varchar(64), city varchar(64))");
+    self.assertEqual(cursor.statement, "CREATE OR REPLACE TABLE t1 (id int, name varchar(64), city varchar(64))")
+
+    params= [(1, u"Jack",  u"Boston"),
+           (2, u"Martin",  u"Ohio"),
+           (3, u"James",  u"Washington"),
+           (4, u"Rasmus",  u"Helsinki"),
+           (5, u"Andrey",  u"Sofia")]
+    cursor.executemany("INSERT INTO t1 VALUES (?,?,?)", params);
+    cursor.execute("SELECT * FROM t1 ORDER BY id")
+    self.assertEqual(cursor.statement, "SELECT * FROM t1 ORDER BY id")
+

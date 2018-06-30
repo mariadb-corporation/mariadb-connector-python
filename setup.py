@@ -30,11 +30,11 @@ def assure_path_exists(path):
         if not os.path.exists(path):
                 os.makedirs(path)
 
-if sys.version_info[0] < 3:
-    print("Connector MariaDB/Python requires Python 3.x")
-    sys.exit(1)
+#if sys.version_info[0] < 3:
+#    print("Connector MariaDB/Python requires Python 3.x")
+#    sys.exit(1)
 
-subprocess.call('git submodule init && git submodule update', shell=True)
+#subprocess.call('git submodule init && git submodule update', shell=True)
 assure_path_exists('libmariadb/bld')
 subprocess.call('cd libmariadb/bld && cmake .. -DCMAKE_BUILD_TYPE=Debug && make -j4', shell=True)
 
@@ -60,7 +60,7 @@ setup(name='mariadb',
       version='0.1',
       description='Python MariaDB extension',
       author='Georg Richter',
-      ext_modules=[Extension('mariadb', ['src/mariadb.c', 'src/mariadb_connection.c', 'src/mariadb_methods.c', 'src/mariadb_exception.c', 'src/mariadb_cursor.c', 'src/mariadb_codecs.c'], 
+      ext_modules=[Extension('mariadb', ['src/mariadb.c', 'src/mariadb_connection.c', 'src/mariadb_methods.c', 'src/mariadb_exception.c', 'src/mariadb_cursor.c', 'src/mariadb_codecs.c', 'src/mariadb_field.c'],
       include_dirs=mariadb_includes,
       library_dirs= mariadb_lib_dirs,
       libraries= mariadb_libraries,

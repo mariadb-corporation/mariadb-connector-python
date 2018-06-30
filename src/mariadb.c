@@ -55,6 +55,10 @@ PyMODINIT_FUNC PyInit_mariadb(void)
   if (PyType_Ready(&Mariadb_Cursor_Type) == -1)
     goto error;
 
+  Py_TYPE(&Mariadb_Fieldinfo_Type) = &PyType_Type;
+  if (PyType_Ready(&Mariadb_Fieldinfo_Type) == -1)
+    goto error;
+
   /* Constants (used in executemany) */
   PyModule_AddIntConstant(module, "STMT_INDICATOR_NTS", -1);
   PyModule_AddIntConstant(module, "STMT_INDICATOR_NONE", 0);
@@ -100,7 +104,9 @@ PyMODINIT_FUNC PyInit_mariadb(void)
   Py_INCREF(&Mariadb_Connection_Type);
   PyModule_AddObject(module, "connection", (PyObject *)&Mariadb_Connection_Type);
   Py_INCREF(&Mariadb_Cursor_Type);
-  PyModule_AddObject(module, "connection.cursor", (PyObject *)&Mariadb_Cursor_Type);
+  PyModule_AddObject(module, "cursor", (PyObject *)&Mariadb_Cursor_Type);
+  Py_INCREF(&Mariadb_Fieldinfo_Type);
+  PyModule_AddObject(module, "fieldinfo", (PyObject *)&Mariadb_Fieldinfo_Type);
 
   return module;
 error:
