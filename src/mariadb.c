@@ -19,6 +19,7 @@
 
 #include "mariadb_python.h"
 #include <structmember.h>
+#include <datetime.h>
 
 int Mariadb_traverse(PyObject *self,
                      visitproc visit,
@@ -28,6 +29,12 @@ int Mariadb_traverse(PyObject *self,
 }
 
 PyObject *MariaDBInterfaceError;
+static PyObject *Mariadb_date_from_ticks(PyObject *self,
+                                         PyObject *args);
+static PyObject *Mariadb_time_from_ticks(PyObject *self,
+                                         PyObject *args);
+static PyObject *Mariadb_timestamp_from_ticks(PyObject *self,
+                                         PyObject *args);
 
 static PyMethodDef Mariadb_Methods[] =
 {
@@ -35,23 +42,16 @@ static PyMethodDef Mariadb_Methods[] =
   {"connect", (PyCFunction)Mariadb_connect,
      METH_VARARGS | METH_KEYWORDS,
      "Connect with a MySQL server"},
-  /* DBAPITypes 
-  {"NUMBER", (PyCFunction)Mariadb_NUMBER,
-    METH_VARARGS,
-    ""},
-  {"STRING", (PyCFunction)Mariadb_STRING,
-    METH_VARARGS,
-    ""},
-  {"BINARY", (PyCFunction)Mariadb_BINARY,
-    METH_VARARGS,
-    ""},
-  {"DATETIME", (PyCFunction)Mariadb_DATETIME,
-    METH_VARARGS,
-    ""},
-  {"ROWID", (PyCFunction)Mariadb_ROWID,
-    METH_VARARGS,
-    ""},
-    */
+  /* PEP-249 DB-API */
+  {"DateFromTicks", (PyCFunction)Mariadb_date_from_ticks,
+     METH_VARARGS,
+     "Get date from ticks"},
+  {"TimeFromTicks", (PyCFunction)Mariadb_time_from_ticks,
+     METH_VARARGS,
+     "Get time from ticks"},
+  {"TimestampFromTicks", (PyCFunction)Mariadb_timestamp_from_ticks,
+     METH_VARARGS,
+     "Get timestamp from ticks"},
   /* Todo: add methods for api functions which don't require
            a connection */
   {NULL} /* always last */
@@ -168,5 +168,71 @@ PyMODINIT_FUNC PyInit_mariadb(void)
 error:
   PyErr_SetString(PyExc_ImportError, "Mariadb module initialization failed");
   return NULL;
+}
+
+static PyObject *Mariadb_date_from_ticks(PyObject *module,
+                                         PyObject *args)
+{
+  uint64_t ticks= 0;
+  PyObject *Date;
+  struct tm *ts;
+  time_t epoch;
+
+  if (!PyDateTimeAPI)
+    PyDateTime_IMPORT;
+
+
+  if (!PyArg_ParseTuple(args, "K", &ticks))
+    return NULL;
+
+  epoch= (time_t)ticks;
+  ts= localtime(&epoch);
+
+  Date= PyDate_FromDate(ts->tm_year + 1900, ts->tm_mon + 1, ts->tm_mday);
+  return Date;
+}
+
+static PyObject *Mariadb_time_from_ticks(PyObject *module,
+                                         PyObject *args)
+{
+  uint64_t ticks= 0;
+  struct tm *ts;
+  time_t epoch;
+  PyObject *Time= NULL;
+
+  if (!PyDateTimeAPI)
+    PyDateTime_IMPORT;
+
+
+  if (!PyArg_ParseTuple(args, "K", &ticks))
+    return NULL;
+
+  epoch= (time_t)ticks;
+  ts= localtime(&epoch);
+
+  Time= PyTime_FromTime(ts->tm_hour, ts->tm_min, ts->tm_sec, 0);
+  return Time;
+}
+
+static PyObject *Mariadb_timestamp_from_ticks(PyObject *module,
+                                         PyObject *args)
+{
+  uint64_t ticks= 0;
+  PyObject *Timestamp;
+  struct tm *ts;
+  time_t epoch;
+
+  if (!PyDateTimeAPI)
+    PyDateTime_IMPORT;
+
+
+  if (!PyArg_ParseTuple(args, "K", &ticks))
+    return NULL;
+
+  epoch= (time_t)ticks;
+  ts= localtime(&epoch);
+
+  Timestamp= PyDateTime_FromDateAndTime(ts->tm_year + 1900, ts->tm_mon + 1, ts->tm_mday, ts->tm_hour, ts->tm_min, ts->tm_sec, 0);
+  return Timestamp;
 }
 
