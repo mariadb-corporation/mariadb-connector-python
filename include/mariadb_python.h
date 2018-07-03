@@ -35,6 +35,15 @@
 #endif /* L64 */
 #endif /* _WIN32 */
 
+enum enum_dataapi_groups
+{
+  DBAPI_NUMBER= 1,
+  DBAPI_STRING,
+  DBAPI_DATETIME,
+  DBAPI_BINARY,
+  DBAPI_ROWID
+};
+
 /* PEP-249: Connection object */
 typedef struct {
 	PyObject_HEAD
@@ -71,6 +80,7 @@ typedef struct {
 /* PEP-249: Cursor object */
 typedef struct {
   PyObject_HEAD
+  Mariadb_Connection *connection;
   MYSQL_STMT *stmt;
   PyObject *data;
   uint32_t array_size;
@@ -87,6 +97,8 @@ typedef struct {
   PyStructSequence_Desc sequence_desc;
   PyStructSequence_Field *sequence_fields;
   PyTypeObject *sequence_type;
+  unsigned long prefetch_rows;
+  unsigned long cursor_type;
   unsigned long row_number;
   uint8_t is_prepared;
   uint8_t is_buffered;
@@ -98,11 +110,18 @@ typedef struct
   PyObject_HEAD
 } Mariadb_Fieldinfo;
 
+typedef struct
+{
+  PyObject_HEAD
+  int32_t *types;
+} Mariadb_DBAPIType;
+
 typedef struct {
   ps_field_fetch_func func;
   int pack_len;
   unsigned long max_len;
 } Mariadb_Conversion;
+
 
 /* Exceptions */
 PyObject *Mariadb_InterfaceError;
@@ -110,9 +129,15 @@ PyObject *Mariadb_Error;
 PyObject *Mariadb_DatabaseError;
 PyObject *Mariadb_DataError;
 
+/* Object types */
 PyTypeObject Mariadb_Fieldinfo_Type;
 PyTypeObject Mariadb_Connection_Type;
 PyTypeObject Mariadb_Cursor_Type;
+PyTypeObject Mariadb_DBAPIType_Type;
+
+int Mariadb_traverse(PyObject *self,
+                     visitproc visit,
+                     void *arg);
 
 /* Function prototypes */
 void mariadb_throw_exception(void *handle,
@@ -121,6 +146,7 @@ void mariadb_throw_exception(void *handle,
                              const char *message,
                              ...);
 
+PyObject *Mariadb_DBAPIType_Object(uint32_t type);
 PyObject *Mariadb_affected_rows(Mariadb_Connection *self);
 PyObject *Mariadb_autocommit(Mariadb_Connection *self,
                              PyObject *toggle);
@@ -128,7 +154,6 @@ PyObject *Mariadb_rollback(Mariadb_Connection *self);
 PyObject *Mariadb_commit(Mariadb_Connection *self);
 PyObject *Mariadb_close(Mariadb_Connection *self);
 PyObject *Mariadb_connect( PyObject *self,PyObject *args,	PyObject *kwargs);
-PyObject *Mariadb_Cursor_initialize(Mariadb_Connection *self, PyObject *args, PyObject *kwargs);
 
 /* codecs prototypes  */
 uint8_t mariadb_check_bulk_parameters(Mariadb_Cursor *self,

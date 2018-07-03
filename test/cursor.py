@@ -221,4 +221,51 @@ class CursorTest(unittest.TestCase):
     cursor.executemany("INSERT INTO t1 VALUES (?,?,?)", params);
     cursor.execute("SELECT * FROM t1 ORDER BY id")
     self.assertEqual(cursor.statement, "SELECT * FROM t1 ORDER BY id")
+    del cursor
+
+  def test_multi_cursor(self):
+    cursor= self.connection.cursor()
+    cursor1= self.connection.cursor(cursor_type=1)
+    cursor2= self.connection.cursor(cursor_type=1)
+
+    cursor.execute("CREATE OR REPLACE TABLE t1 (a int)")
+    cursor.execute("INSERT INTO t1 VALUES (1),(2),(3),(4),(5),(6),(7),(8)")
+    del cursor
+
+    cursor1.execute("SELECT a FROM t1 ORDER BY a")
+    cursor2.execute("SELECT a FROM t1 ORDER BY a DESC")
+
+    for i in range (0,8):
+      self.assertEqual(cursor1.rownumber, i)
+      row1= cursor1.fetchone()
+      row2= cursor2.fetchone()
+      self.assertEqual(cursor1.rownumber, cursor2.rownumber)
+      self.assertEqual(row1[0]+row2[0], 9)
+
+    del cursor1
+    del cursor2
+
+  def test_connection_attr(self):
+    cursor= self.connection.cursor()
+    self.assertEqual(cursor.connection, self.connection)
+    del cursor
+
+  def test_dbapi_type(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE t1 (a int, b varchar(20), c blob, d datetime, e decimal)")
+    cursor.execute("INSERT INTO t1 VALUES (1, 'foo', 'blabla', now(), 10.2)");
+    cursor.execute("SELECT * FROM t1 ORDER BY a")
+    expected_typecodes= [
+      mariadb.NUMBER,
+      mariadb.STRING,
+      mariadb.BINARY,
+      mariadb.DATETIME,
+      mariadb.NUMBER
+    ]
+    row= cursor.fetchone()
+    typecodes= [row[1] for row in cursor.description()]
+    self.assertEqual(expected_typecodes, typecodes)
+    del cursor
+
+
 

@@ -21,6 +21,9 @@
 
 void Mariadb_dealloc(Mariadb_Connection *self);
 
+static PyObject *Mariadb_Connection_cursor(Mariadb_Connection *self,
+                                           PyObject *args,
+                                           PyObject *kwargs);
 /* todo: write more documentation, this is just a placeholder */
 static char mariadb_connection_documentation[] =
 "Returns a MariaDB connection object";
@@ -33,14 +36,14 @@ static PyMethodDef Mariadb_Connection_Methods[] =
     "Closes the connection"},
   {"connect", (PyCFunction)Mariadb_connect,
      METH_VARARGS | METH_KEYWORDS,
-     "Connect with a MySQL server"},
+     "Connect with a Mariadb server"},
   {"commit", (PyCFunction)Mariadb_commit,
      METH_NOARGS,
      "Commits the current transaction"},
   {"rollback", (PyCFunction)Mariadb_rollback,
      METH_NOARGS,
      "Rolls back the current transaction"},
-  {"cursor", (PyCFunction)Mariadb_Cursor_initialize,
+  {"cursor", (PyCFunction)Mariadb_Connection_cursor,
      METH_VARARGS | METH_KEYWORDS,
      "Creates a new cursor"},
   /* additional methods */
@@ -274,3 +277,14 @@ PyObject *Mariadb_close(Mariadb_Connection *self)
   return Py_None;
 }
 
+static PyObject *Mariadb_Connection_cursor(Mariadb_Connection *self,
+                                           PyObject *args,
+                                           PyObject *kwargs)
+{
+  PyObject *cursor= NULL;
+  PyObject *conn = NULL;
+
+  conn= Py_BuildValue("(O)", self);
+  cursor= PyObject_Call((PyObject *)&Mariadb_Cursor_Type, conn, kwargs);
+  return cursor;
+}

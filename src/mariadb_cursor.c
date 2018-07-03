@@ -33,6 +33,9 @@ static PyObject *Mariadb_Cursor_fetchone(Mariadb_Cursor *self);
 static PyObject *Mariadb_Cursor_fetchmany(Mariadb_Cursor *self,
                                      PyObject *args,
                                      PyObject *kwargs);
+static PyObject *Mariadb_Cursor_scroll(Mariadb_Cursor *self,
+                                       PyObject *args,
+                                       PyObject *kwargs);
 static PyObject *Mariadb_Cursor_fieldcount(Mariadb_Cursor *self);
 void field_fetch_callback(void *data, unsigned int column, unsigned char **row);
 static PyObject *mariadb_get_sequence_or_tuple(Mariadb_Cursor *self);
@@ -94,12 +97,23 @@ static PyMethodDef Mariadb_Cursor_Methods[] =
     "Required by PEP-249. Does nothing in MariaDB Connector/Python"},
   {"callproc", (PyCFunction)Mariadb_no_operation,
     METH_VARARGS,
-    "Required by PEP-249. Does nothing in MariaDB Connector/Python, use the execute method instead"},
+    "Required by PEP-249. Does nothing in MariaDB Connector/Python, use the execute method with syntax 'CALL {procedurename}' instead"},
+  {"next", (PyCFunction)Mariadb_Cursor_fetchone,
+    METH_NOARGS,
+    "Return the next row from the currently executing SQL statement using the same semantics as .fetchone()."},
+  {"scroll", (PyCFunction)Mariadb_Cursor_scroll,
+    METH_VARARGS | METH_KEYWORDS,
+    "Scroll the cursor in the result set to a new position according to mode"},
   {NULL} /* always last */
 };
 
 static struct PyMemberDef Mariadb_Cursor_Members[] =
 {
+  {"connection",
+   T_OBJECT,
+   offsetof(Mariadb_Cursor, connection),
+   READONLY,
+   "Reference to the connection object on which the cursor was created"},
   {"statement",
    T_STRING,
    offsetof(Mariadb_Cursor, statement),
@@ -128,32 +142,51 @@ static struct PyMemberDef Mariadb_Cursor_Members[] =
    {NULL}
 };
 
-
-PyObject * Mariadb_Cursor_initialize(Mariadb_Connection *self, PyObject *args,
+/* {{{ Mariadb_Cursor_initialize */
+static int Mariadb_Cursor_initialize(Mariadb_Cursor *self, PyObject *args,
                                      PyObject *kwargs)
 {
-  Mariadb_Cursor *cursor= (Mariadb_Cursor *)PyType_GenericAlloc(&Mariadb_Cursor_Type, 0);
-  char *key_words[]= {"named_tuple", NULL};
+  char *key_words[]= {"", "named_tuple", "prefetch_size", "cursor_type", NULL};
+  PyObject *connection;
   uint8_t is_named_tuple= 0;
+  unsigned long cursor_type= 0,
+                prefetch_rows= 0;
 
-  if (!cursor)
-    return 0;
+  if (!self)
+    return -1;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-        "|b", key_words, &is_named_tuple))
-    return NULL;
+        "O!|bkk", key_words, &Mariadb_Connection_Type, &connection,
+        &is_named_tuple, &prefetch_rows, &cursor_type))
+    return -1;
 
-	if (!(cursor->stmt = mysql_stmt_init(self->mysql)))
+  Py_INCREF(connection);
+  self->connection= (Mariadb_Connection *)connection;
+
+  if (cursor_type != CURSOR_TYPE_READ_ONLY &&
+      cursor_type != CURSOR_TYPE_NO_CURSOR)
   {
-		Py_DECREF(cursor);
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-		return NULL;
+    mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
+                            "Invalid value %ld for cursor_type", cursor_type);
+    return -1;
+  }
+
+	if (!(self->stmt = mysql_stmt_init(self->connection->mysql)))
+  {
+    mariadb_throw_exception(self->connection->mysql, Mariadb_InterfaceError, 0, NULL);
+		return -1;
 	}
 
-  cursor->is_named_tuple= is_named_tuple;
-  cursor->array_size= 1;
-	return (PyObject *) cursor;
+  self->cursor_type= cursor_type;
+  self->prefetch_rows= prefetch_rows;
+  self->is_named_tuple= is_named_tuple;
+  self->array_size= 1;
+
+  mysql_stmt_attr_set(self->stmt, STMT_ATTR_CURSOR_TYPE, &self->cursor_type);
+  mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREFETCH_ROWS, &self->prefetch_rows);
+	return 0;
 }
+/* }}} */
 
 static int Mariadb_Cursor_traverse(
 	Mariadb_Cursor *self,
@@ -166,7 +199,7 @@ static int Mariadb_Cursor_traverse(
 PyTypeObject Mariadb_Cursor_Type =
 {
   PyVarObject_HEAD_INIT(NULL, 0)
-	"mariadb.connection.cursor",
+	"mariadb.cursor",
 	sizeof(Mariadb_Cursor),
 	0,
 	(destructor)Mariadb_Cursor_dealloc, /* tp_dealloc */
@@ -533,6 +566,77 @@ PyObject *Mariadb_Cursor_fetchone(Mariadb_Cursor *self)
 }
 
 static
+PyObject *Mariadb_Cursor_scroll(Mariadb_Cursor *self, PyObject *args,
+                                   PyObject *kwargs)
+{
+  char *modestr= NULL;
+  PyObject *Pos;
+  long position= 0;
+  unsigned long long new_position= 0;
+  uint8_t mode= 0; /* default: relative */
+  char *kw_list[]= {"", "mode", NULL};
+  const char *scroll_modes[]= {"relative", "absolute", NULL};
+
+
+  MARIADB_CHECK_STMT(self);
+  if (PyErr_Occurred())
+    return NULL;
+
+  if (!mysql_stmt_field_count(self->stmt))
+  {
+    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+                            "Cursor doesn't have a result set");
+    return NULL;
+  }
+
+  if (!self->is_buffered)
+  {
+    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+                            "This method is available only for cursors with buffered result set or a read only cursor type");
+    return NULL;
+  }
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs,
+    "O!|s:scroll", kw_list, &PyLong_Type, &Pos, &modestr))
+    return NULL;
+
+  if (!(position= PyLong_AsLong(Pos)))
+  {
+    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+                            "Invalid position value 0");
+    return NULL;
+  }
+
+  while (scroll_modes[mode]) {
+    if (!strcmp(scroll_modes[mode], modestr))
+      break;
+    mode++;
+  };
+
+  if (!scroll_modes[mode]) {
+    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+                            "Invalid mode '%s'", modestr);
+    return NULL;
+  }
+
+  if (!mode) {
+    new_position= self->row_number + position;
+    if (new_position < 0 || new_position > mysql_stmt_num_rows(self->stmt))
+    {
+      mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+                            "Position value is out of range");
+      return NULL;
+    }
+  } else
+    new_position= position; /* absolute */
+
+  mysql_stmt_data_seek(self->stmt, new_position);
+  self->row_number= new_position;
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+static
 PyObject *Mariadb_Cursor_fetchmany(Mariadb_Cursor *self, PyObject *args,
                                    PyObject *kwargs)
 {
@@ -729,7 +833,6 @@ error:
   return NULL;
 }
 
-static
 PyObject *Mariadb_Cursor_nextset(Mariadb_Cursor *self)
 {
   MARIADB_CHECK_STMT(self);

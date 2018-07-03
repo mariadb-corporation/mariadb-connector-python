@@ -20,6 +20,13 @@
 #include "mariadb_python.h"
 #include <structmember.h>
 
+int Mariadb_traverse(PyObject *self,
+                     visitproc visit,
+                     void *arg)
+{
+	return 0;
+}
+
 PyObject *MariaDBInterfaceError;
 
 static PyMethodDef Mariadb_Methods[] =
@@ -28,6 +35,23 @@ static PyMethodDef Mariadb_Methods[] =
   {"connect", (PyCFunction)Mariadb_connect,
      METH_VARARGS | METH_KEYWORDS,
      "Connect with a MySQL server"},
+  /* DBAPITypes 
+  {"NUMBER", (PyCFunction)Mariadb_NUMBER,
+    METH_VARARGS,
+    ""},
+  {"STRING", (PyCFunction)Mariadb_STRING,
+    METH_VARARGS,
+    ""},
+  {"BINARY", (PyCFunction)Mariadb_BINARY,
+    METH_VARARGS,
+    ""},
+  {"DATETIME", (PyCFunction)Mariadb_DATETIME,
+    METH_VARARGS,
+    ""},
+  {"ROWID", (PyCFunction)Mariadb_ROWID,
+    METH_VARARGS,
+    ""},
+    */
   /* Todo: add methods for api functions which don't require
            a connection */
   {NULL} /* always last */
@@ -42,10 +66,31 @@ static struct PyModuleDef mariadb_module= {
   Mariadb_Methods
 };
 
+/*  constants */
+struct st_constants {
+  const char *name;
+  union {
+    long lvalue;
+    const char *strvalue;
+  } u;
+ };
+ struct st_constants int_constants[]= {
+  {"INDICATOR_NTS", {STMT_INDICATOR_NTS}},
+  {"INDICATOR_NONE", {STMT_INDICATOR_NONE}},
+  {"INDICATOR_NULL", {STMT_INDICATOR_NULL}},
+  {"INDICATOR_DEFAULT", {STMT_INDICATOR_DEFAULT}},
+  {"INDICATOR_IGNORE", {STMT_INDICATOR_IGNORE}},
+  {"INDICATOR_IGNORE_ROW", {STMT_INDICATOR_IGNORE_ROW}},
+  {"CURSOR_TYPE_READ_ONLY", {CURSOR_TYPE_READ_ONLY}},
+  {"CURSOR_TYPE_NONE", {CURSOR_TYPE_NO_CURSOR}},
+  {NULL, {0}} /* Always last */
+};
+
 /* MariaDB module initialization function */
 PyMODINIT_FUNC PyInit_mariadb(void)
 {
   PyObject *module= PyModule_Create(&mariadb_module);
+  struct st_constants *intvals= int_constants;
 
   Py_TYPE(&Mariadb_Connection_Type) = &PyType_Type;
   if (PyType_Ready(&Mariadb_Connection_Type) == -1)
@@ -59,14 +104,16 @@ PyMODINIT_FUNC PyInit_mariadb(void)
   if (PyType_Ready(&Mariadb_Fieldinfo_Type) == -1)
     goto error;
 
-  /* Constants (used in executemany) */
-  PyModule_AddIntConstant(module, "STMT_INDICATOR_NTS", -1);
-  PyModule_AddIntConstant(module, "STMT_INDICATOR_NONE", 0);
-  PyModule_AddIntConstant(module, "STMT_INDICATOR_NULL", 1);
-  PyModule_AddIntConstant(module, "STMT_INDICATOR_DEFAULT", 2);
-  PyModule_AddIntConstant(module, "STMT_INDICATOR_IGNORE", 3);
-  PyModule_AddIntConstant(module, "STMT_INDICATOR_IGNORE_ROW", 4);
+  Py_TYPE(&Mariadb_DBAPIType_Type) = &PyType_Type;
+  if (PyType_Ready(&Mariadb_DBAPIType_Type) == -1)
+    goto error;
 
+  /* Mariadb module constants */
+  while (intvals->name) {
+    PyModule_AddIntConstant(module, intvals->name,
+                                    intvals->u.lvalue);
+    intvals++;
+  }
 
   /* PEP-249: mandatory module globals */
   PyModule_AddObject(module, "apilevel", PyUnicode_FromString(MARIADB_PY_APILEVEL));
@@ -103,8 +150,17 @@ PyMODINIT_FUNC PyInit_mariadb(void)
 
   Py_INCREF(&Mariadb_Connection_Type);
   PyModule_AddObject(module, "connection", (PyObject *)&Mariadb_Connection_Type);
+  PyModule_AddObject(module, "NUMBER", Mariadb_DBAPIType_Object(DBAPI_NUMBER));
+  PyModule_AddObject(module, "BINARY", Mariadb_DBAPIType_Object(DBAPI_BINARY));
+  PyModule_AddObject(module, "STRING", Mariadb_DBAPIType_Object(DBAPI_STRING));
+  PyModule_AddObject(module, "DATETIME", Mariadb_DBAPIType_Object(DBAPI_DATETIME));
+  PyModule_AddObject(module, "ROWID", Mariadb_DBAPIType_Object(DBAPI_ROWID));
+
+
+
   Py_INCREF(&Mariadb_Cursor_Type);
   PyModule_AddObject(module, "cursor", (PyObject *)&Mariadb_Cursor_Type);
+
   Py_INCREF(&Mariadb_Fieldinfo_Type);
   PyModule_AddObject(module, "fieldinfo", (PyObject *)&Mariadb_Fieldinfo_Type);
 

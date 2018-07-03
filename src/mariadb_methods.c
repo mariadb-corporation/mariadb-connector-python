@@ -79,3 +79,13 @@ PyObject *Mariadb_autocommit(Mariadb_Connection *self,
   }
   Py_RETURN_NONE;
 }
+
+/* DBAPIType methods */
+PyObject *Mariadb_DBAPIType_Object(uint32_t type)
+{
+  PyObject *types= Py_BuildValue("(I)", (uint32_t)type);
+  PyObject *number= PyObject_CallObject((PyObject *)&Mariadb_DBAPIType_Type,
+                                        types);
+  Py_DECREF(types);
+  return number;
+}
