@@ -36,7 +36,7 @@ static PyObject *Mariadb_Cursor_scroll(Mariadb_Cursor *self,
                                        PyObject *args,
                                        PyObject *kwargs);
 static PyObject *Mariadb_Cursor_fieldcount(Mariadb_Cursor *self);
-void field_fetch_callback(void *data, unsigned int column, unsigned char **row, uint8_t is_null);
+void field_fetch_callback(void *data, unsigned int column, unsigned char **row);
 static PyObject *mariadb_get_sequence_or_tuple(Mariadb_Cursor *self);
 
 /* todo: write more documentation, this is just a placeholder */

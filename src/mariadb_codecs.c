@@ -20,13 +20,13 @@
 #include <datetime.h>
 
 /* User callback function */
-void field_fetch_callback(void *data, unsigned int column, unsigned char **row, uint8_t is_null)
+void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 {
   Mariadb_Cursor *self= (Mariadb_Cursor *)data;
   if (!PyDateTimeAPI)
     PyDateTime_IMPORT;
 
-  if (is_null)
+  if (!row)
   {
     Py_INCREF(Py_None);
     self->values[column]= Py_None;
