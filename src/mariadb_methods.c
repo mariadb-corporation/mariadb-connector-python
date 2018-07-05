@@ -62,17 +62,15 @@ PyObject *Mariadb_rollback(Mariadb_Connection *self)
 
 
 PyObject *Mariadb_autocommit(Mariadb_Connection *self,
-                             PyObject *toggle)
+                             PyObject *args)
 {
+  int autocommit;
   MARIADB_CHECK_CONNECTION(self);
 
-  if (Py_TYPE(toggle) != &PyBool_Type)
-  {
-    PyErr_SetString(PyExc_ValueError, "parameter must be boolean");
+  if (PyArg_ParseTuple(args, "p", &autocommit))
     return NULL;
-  }
 
-  if (mysql_autocommit(self->mysql, (toggle == Py_True) ? 1 : 0))
+  if (mysql_autocommit(self->mysql, autocommit))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
     return NULL;

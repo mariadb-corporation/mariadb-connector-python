@@ -264,15 +264,13 @@ Mariadb_dealloc(Mariadb_Connection *self)
 
 PyObject *Mariadb_close(Mariadb_Connection *self)
 {
-  if (self->mysql)
-  {
-    /* Todo: check if all the cursor stuff is deleted (when using prepared
-       statemnts this should be handled in mysql_close) */
-    Py_BEGIN_ALLOW_THREADS
-    mysql_close(self->mysql);
-    Py_END_ALLOW_THREADS
-    self->mysql= NULL;
-  }
+  MARIADB_CHECK_CONNECTION(self);
+  /* Todo: check if all the cursor stuff is deleted (when using prepared
+     statemnts this should be handled in mysql_close) */
+  Py_BEGIN_ALLOW_THREADS
+  mysql_close(self->mysql);
+  Py_END_ALLOW_THREADS
+  self->mysql= NULL;
   Py_INCREF(Py_None);
   return Py_None;
 }

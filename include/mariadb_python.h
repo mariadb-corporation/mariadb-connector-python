@@ -50,6 +50,7 @@ typedef struct {
 	PyObject_HEAD
 	MYSQL *mysql;
 	int open;
+  uint8_t is_buffered;
 } Mariadb_Connection;
 
 typedef struct {
@@ -94,12 +95,14 @@ typedef struct {
   MYSQL_BIND *bind;
   MYSQL_FIELD *fields;
   char *statement;
+  PyObject *description;
   PyObject **values;
   PyStructSequence_Desc sequence_desc;
   PyStructSequence_Field *sequence_fields;
   PyTypeObject *sequence_type;
   unsigned long prefetch_rows;
   unsigned long cursor_type;
+  int64_t affected_rows;
   unsigned long row_number;
   uint8_t is_prepared;
   uint8_t is_buffered;
@@ -174,9 +177,11 @@ uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 
 /* Helper macros */
 #define MARIADB_CHECK_CONNECTION(connection)\
-if (!connection || !connection->mysql)\
+if (!connection || !connection->mysql) {\
   mariadb_throw_exception(connection->mysql, Mariadb_Error, 0,\
-    "Invalid connection or not connected");
+    "Invalid connection or not connected");\
+    return NULL;\
+}
 
 #define MARIADB_FREE_MEM(a)\
 if (a) {\
