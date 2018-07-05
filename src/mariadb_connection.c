@@ -28,6 +28,24 @@ static PyObject *Mariadb_Connection_cursor(Mariadb_Connection *self,
 static char mariadb_connection_documentation[] =
 "Returns a MariaDB connection object";
 
+static PyObject *
+Mariadb_Connection_exception(PyObject *self, void *closure);
+#define GETTER_EXCEPTION(name, exception)\
+{ name,Mariadb_Connection_exception, NULL, "doc", &exception }
+
+static PyGetSetDef Mariadb_Connection_sets[]=
+{
+  GETTER_EXCEPTION("Error", Mariadb_Error),
+  GETTER_EXCEPTION("Warning", Mariadb_Warning),
+  GETTER_EXCEPTION("InterfaceError", Mariadb_InterfaceError),
+  GETTER_EXCEPTION("ProgrammingError", Mariadb_ProgrammingError),
+  GETTER_EXCEPTION("IntegrityError", Mariadb_IntegrityError),
+  GETTER_EXCEPTION("DatabaseError", Mariadb_DatabaseError),
+  GETTER_EXCEPTION("NotSupportedError", Mariadb_NotSupportedError),
+  GETTER_EXCEPTION("InternalError", Mariadb_InternalError),
+  GETTER_EXCEPTION("OperationalError", Mariadb_OperationalError),
+  {NULL}
+};
 static PyMethodDef Mariadb_Connection_Methods[] =
 {
   /* PEP-249 methods */
@@ -149,6 +167,8 @@ Mariadb_Connection_Initialize(Mariadb_Connection *self,
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
     return -1;
   }
+
+
   return 0;
 }
 
@@ -212,7 +232,7 @@ PyTypeObject Mariadb_Connection_Type = {
 	/* Attribute descriptor and subclassing stuff */
 	(struct PyMethodDef *)Mariadb_Connection_Methods, /* tp_methods */
 	(struct PyMemberDef *)Mariadb_Connection_Members, /* tp_members */
-	0, /* (struct getsetlist *) tp_getset; */
+	Mariadb_Connection_sets, /* (struct getsetlist *) tp_getset; */
 	0, /* (struct _typeobject *) tp_base; */
 	0, /* (PyObject *) tp_dict */
 	0, /* (descrgetfunc) tp_descr_get */
@@ -285,4 +305,13 @@ static PyObject *Mariadb_Connection_cursor(Mariadb_Connection *self,
   conn= Py_BuildValue("(O)", self);
   cursor= PyObject_Call((PyObject *)&Mariadb_Cursor_Type, conn, kwargs);
   return cursor;
+}
+
+static PyObject *
+Mariadb_Connection_exception(PyObject *self, void *closure)
+{
+    PyObject *exception = *(PyObject **)closure;
+
+    Py_INCREF(exception);
+    return exception;
 }

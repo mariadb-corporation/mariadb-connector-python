@@ -54,6 +54,13 @@ static char *mariadb_named_tuple_name= "Row";
 static char *mariadb_named_tuple_desc= "Named tupled row";
 static PyObject *Mariadb_no_operation(Mariadb_Cursor *,
                                       PyObject *);
+static PyObject *Mariadb_row_count(Mariadb_Cursor *self);
+
+static PyGetSetDef Mariadb_Cursor_sets[]=
+{
+  {"rowcount", (getter)Mariadb_row_count, NULL, "doc", NULL},
+  {NULL}
+};
 
 static PyMethodDef Mariadb_Cursor_Methods[] =
 {
@@ -122,11 +129,11 @@ static struct PyMemberDef Mariadb_Cursor_Members[] =
    offsetof(Mariadb_Cursor, lastrowid),
    READONLY,
    "row id of the last modified (inserted) row"},
-  {"rowcount",
+/*  {"rowcount",
    T_LONGLONG,
    offsetof(Mariadb_Cursor, affected_rows),
    READONLY,
-   "row id of the last modified (inserted) row"},
+   "row id of the last modified (inserted) row"}, */
   {"buffered",
    T_BYTE,
    offsetof(Mariadb_Cursor, is_buffered),
@@ -166,7 +173,6 @@ static int Mariadb_Cursor_initialize(Mariadb_Cursor *self, PyObject *args,
   Py_INCREF(connection);
   self->connection= (Mariadb_Connection *)connection;
   self->is_buffered= self->connection->is_buffered;
-  self->row_array_size= 1;
 
   if (cursor_type != CURSOR_TYPE_READ_ONLY &&
       cursor_type != CURSOR_TYPE_NO_CURSOR)
@@ -185,7 +191,7 @@ static int Mariadb_Cursor_initialize(Mariadb_Cursor *self, PyObject *args,
   self->cursor_type= cursor_type;
   self->prefetch_rows= prefetch_rows;
   self->is_named_tuple= is_named_tuple;
-  self->array_size= 1;
+  self->row_array_size= 1;
 
   mysql_stmt_attr_set(self->stmt, STMT_ATTR_CURSOR_TYPE, &self->cursor_type);
   mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREFETCH_ROWS, &self->prefetch_rows);
@@ -254,7 +260,7 @@ PyTypeObject Mariadb_Cursor_Type =
 	/* Attribute descriptor and subclassing stuff */
 	(struct PyMethodDef *)Mariadb_Cursor_Methods, /* tp_methods */
 	(struct PyMemberDef *)Mariadb_Cursor_Members, /* tp_members */
-	0, /* (struct getsetlist *) tp_getset; */
+  Mariadb_Cursor_sets,
 	0, /* (struct _typeobject *) tp_base; */
 	0, /* (PyObject *) tp_dict */
 	0, /* (descrgetfunc) tp_descr_get */
@@ -422,11 +428,6 @@ PyObject *Mariadb_Cursor_execute(Mariadb_Cursor *self,
     }
   }
   self->lastrowid= mysql_stmt_insert_id(self->stmt);
-  if (mysql_stmt_field_count(self->stmt))
-    self->affected_rows= mysql_stmt_num_rows(self->stmt);
-  else
-    self->affected_rows= mysql_stmt_affected_rows(self->stmt) ?
-       mysql_stmt_affected_rows(self->stmt) : -1;
 
   self->row_number= 0;
   if (mysql_stmt_field_count(self->stmt))
@@ -856,4 +857,20 @@ PyObject *Mariadb_Cursor_nextset(Mariadb_Cursor *self)
     return Py_None;
   }
   Py_RETURN_TRUE;
+}
+
+static PyObject *Mariadb_row_count(Mariadb_Cursor *self)
+{
+  int64_t row_count;
+
+  MARIADB_CHECK_STMT(self);
+  if (PyErr_Occurred())
+    return NULL;
+
+  if (mysql_stmt_field_count(self->stmt))
+    row_count= (int64_t)mysql_stmt_num_rows(self->stmt);
+  else
+    row_count= (mysql_stmt_affected_rows(self->stmt) > 0) ?
+                (int64_t)mysql_stmt_affected_rows(self->stmt) : -1;
+  return PyLong_FromLongLong(row_count);
 }

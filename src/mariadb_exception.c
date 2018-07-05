@@ -23,6 +23,12 @@ PyObject *Mariadb_Error;
 PyObject *Mariadb_InterfaceError;
 PyObject *Mariadb_DatabaseError;
 PyObject *Mariadb_DataError;
+PyObject *Mariadb_OperationalError;
+PyObject *Mariadb_Warning;
+PyObject *Mariadb_IntegrityError;
+PyObject *Mariadb_InternalError;
+PyObject *Mariadb_ProgrammingError;
+PyObject *Mariadb_NotSupportedError;
 
 /**
  mariadb_throw_exception()

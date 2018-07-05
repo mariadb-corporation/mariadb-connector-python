@@ -28,7 +28,6 @@ int Mariadb_traverse(PyObject *self,
 	return 0;
 }
 
-PyObject *MariaDBInterfaceError;
 static PyObject *Mariadb_date_from_ticks(PyObject *self,
                                          PyObject *args);
 static PyObject *Mariadb_time_from_ticks(PyObject *self,
@@ -106,6 +105,19 @@ struct st_constants {
   {NULL, {0}} /* Always last */
 };
 
+static void mariadb_add_exception(PyObject *module,
+                                  PyObject **exception,
+                                  const char *exception_name,
+                                  const char *object_name)
+{
+  *exception= PyErr_NewException(exception_name,
+                                 Mariadb_Error,
+                                 NULL);
+
+  Py_INCREF(*exception);
+  PyModule_AddObject(module, object_name, *exception);
+}
+
 /* MariaDB module initialization function */
 PyMODINIT_FUNC PyInit_mariadb(void)
 {
@@ -148,23 +160,28 @@ PyMODINIT_FUNC PyInit_mariadb(void)
   Py_INCREF(Mariadb_Error);
   PyModule_AddObject(module, "Error", Mariadb_Error);
 
-  Mariadb_InterfaceError= PyErr_NewException("mariadb.InterfaceError",
-                                             Mariadb_Error,
-                                             NULL);
+  mariadb_add_exception(module, &Mariadb_InterfaceError,
+                        "mariadb.InterfaceError", "InterfaceError");
+  mariadb_add_exception(module, &Mariadb_OperationalError,
+                        "mariadb.OperationalError", "OperationalError");
+  mariadb_add_exception(module, &Mariadb_Warning,
+                        "mariadb.Warning", "Warning");
+  mariadb_add_exception(module, &Mariadb_OperationalError,
+                        "mariadb.OperationalError", "OperationalError");
+  mariadb_add_exception(module, &Mariadb_IntegrityError,
+                        "mariadb.IntegrityError", "IntegrityError");
+  mariadb_add_exception(module, &Mariadb_InternalError,
+                        "mariadb.InternalError", "InternalError");
+  mariadb_add_exception(module, &Mariadb_ProgrammingError,
+                        "mariadb.ProgrammingError", "ProgrammingError");
+  mariadb_add_exception(module, &Mariadb_NotSupportedError,
+                        "mariadb.NotSupportedError", "NotSupportedError");
+  mariadb_add_exception(module, &Mariadb_DatabaseError,
+                        "mariadb.DatabaseError", "DatabaseError");
+  mariadb_add_exception(module, &Mariadb_DataError,
+                        "mariadb.DatabaseError.DataError", "DataError");
 
-  Py_INCREF(Mariadb_InterfaceError);
-  PyModule_AddObject(module, "InterfaceError", Mariadb_InterfaceError);
 
-  Mariadb_DatabaseError= PyErr_NewException("mariadb.DatabaseError",
-                                            Mariadb_Error,
-                                            NULL);
-  Py_INCREF(Mariadb_DatabaseError);
-  PyModule_AddObject(module, "DatabaseError", Mariadb_DatabaseError);
-
-  Mariadb_DataError= PyErr_NewException("mariadb.DatabaseError.DataError",
-                                         Mariadb_DatabaseError,
-                                         NULL);
-  Py_INCREF(Mariadb_DataError);
 
   PyModule_AddObject(module, "DatabaseError", Mariadb_DatabaseError);
 
@@ -203,7 +220,6 @@ static time_t get_ticks(PyObject *object)
 static PyObject *Mariadb_date_from_ticks(PyObject *module,
                                          PyObject *args)
 {
-  uint64_t ticks= 0;
   PyObject *o, *Date;
   struct tm *ts;
   time_t epoch;
@@ -225,7 +241,6 @@ static PyObject *Mariadb_date_from_ticks(PyObject *module,
 static PyObject *Mariadb_time_from_ticks(PyObject *module,
                                          PyObject *args)
 {
-  uint64_t ticks= 0;
   struct tm *ts;
   time_t epoch;
   PyObject *o, *Time= NULL;
@@ -247,7 +262,6 @@ static PyObject *Mariadb_time_from_ticks(PyObject *module,
 static PyObject *Mariadb_timestamp_from_ticks(PyObject *module,
                                          PyObject *args)
 {
-  uint64_t ticks= 0;
   PyObject *o,*Timestamp;
   struct tm *ts;
   time_t epoch;

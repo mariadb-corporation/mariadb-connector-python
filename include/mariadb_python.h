@@ -86,8 +86,8 @@ typedef struct {
   MYSQL_STMT *stmt;
   PyObject *data;
   uint32_t array_size;
-  uint32_t row_array_size;
   uint32_t param_count;
+  uint32_t row_array_size; /* for fetch many */
   Mariadb_ParamInfo *paraminfo;
   Mariadb_ParamValue *value;
   MYSQL_BIND *params;
@@ -132,6 +132,12 @@ PyObject *Mariadb_InterfaceError;
 PyObject *Mariadb_Error;
 PyObject *Mariadb_DatabaseError;
 PyObject *Mariadb_DataError;
+PyObject *Mariadb_OperationalError;
+PyObject *Mariadb_IntegrityError;
+PyObject *Mariadb_InternalError;
+PyObject *Mariadb_ProgrammingError;
+PyObject *Mariadb_NotSupportedError;
+PyObject *Mariadb_Warning;
 
 /* Object types */
 PyTypeObject Mariadb_Fieldinfo_Type;
