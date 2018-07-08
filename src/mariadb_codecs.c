@@ -19,10 +19,18 @@
 #include "mariadb_python.h"
 #include <datetime.h>
 
-/* User callback function */
+/* {{{ field_fetch_callback
+  This function was previously registered with mysql_stmt_attr_set and
+  STMT_ATTR_FIELD_FETCH_CALLBACK parameter. Instead of filling a bind buffer
+  MariaDB Connector/C sends raw data in row for the specified column. In case
+  of a NULL value row ptr will be NULL.
+
+  The cursor handle was also previously registered with mysql_stmt_attr_set
+  and STMT_ATTR_USER_DATA parameter and will be passed in data variable.
+*/
 void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 {
-  Mariadb_Cursor *self= (Mariadb_Cursor *)data;
+  MrdbCursor *self= (MrdbCursor *)data;
   if (!PyDateTimeAPI)
     PyDateTime_IMPORT;
 
@@ -198,10 +206,15 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
       break;
   }
 }
+/* }}} */
 
-/* {{{ mariadb_get_column_info */
+/* {{{ mariadb_get_column_info
+   This function analyzes the Python object and calculates the corresponding
+   MYSQL_TYPE, unsigned flag or NULL values and stores the information in
+   MrdbParamInfo pointer.
+*/
 static uint8_t mariadb_get_column_info(PyObject *obj,
-                                Mariadb_ParamInfo *paraminfo)
+                                MrdbParamInfo *paraminfo)
 {
   if (!PyDateTimeAPI)
     PyDateTime_IMPORT;
@@ -248,93 +261,8 @@ static uint8_t mariadb_get_column_info(PyObject *obj,
 }
 /* }}} */
 
-/*
-uint8_t mariadb_get_data(PyObject *obj,
-                                MYSQL_BIND *bind,
-                                Mariadb_BindParam *param)
-{
-  PyDateTime_IMPORT;
+/* {{{ mariadb_get_parameter 
 
-  if (mariadb_get_field_type(obj, &param->field_type))
-    return 1;
-
-  switch (param->field_type) {
-  case MYSQL_TYPE_TINY_INT:
-    bind->is_unsigned= param->is_unsigned= (_PyLong_Sign(obj) >= 0);
-    param->num.i8= (uint8_t)PyLong_AsLong(obj);
-    bind->buffer= &param->num.i8;
-    return 0;
-  case MYSQL_TYPE_SHORT:
-    bind->is_unsigned= param->is_unsigned= (_PyLong_Sign(obj) >= 0);
-    param->num.i16= (uint16_t)PyLong_AsLong(obj);
-    bind->buffer= &param->num.i16;
-    return 0;
-  case MYSQL_TYPE_LONG:
-    bind->is_unsigned= param->is_unsigned= (_PyLong_Sign(obj) >= 0);
-    param->num.i32= (uint32_t)PyLong_AsLong(obj);
-    bind->buffer= &param->num.i32;
-    return 0;
-  case MYSQL_TYPE_LONGLONG:
-    bind->is_unsigned= param->is_unsigned= (_PyLong_Sign(obj) >= 0);
-    param->num.i64= PyLong_AsLongLong(obj);
-    bind->buffer= &param->num.i64;
-    return 0;
-  case MYSQL_TYPE_DOUBLE:
-    param->num.dbl= (double)PyFloat_AS_DOUBLE(obj);
-    bind->buffer= &param->num.dbl;
-    return 0;
-  case MYSQL_TYPE_TINY_BLOB:
-  case MYSQL_TYPE_MEDIUM_BLOB:
-  case MYSQL_TYPE_BLOB:
-  case MYSQL_TYPE_LONG_BLOB:
-  {
-    Py_ssize_t s= PyBytes_GET_SIZE(obj);
-    bind->buffer_length= param->length= (unsigned long)s;
-    bind->buffer= param->buffer= (void *) PyBytes_AS_STRING(obj);
-    return 0;
-  }
-  case MYSQL_TYPE_DATE:
-    bind->buffer= &param->tm;
-    memset(&param->tm, 0, sizeof(MYSQL_TIME));
-    param->tm.year= PyDateTime_GET_YEAR(obj);
-    param->tm.month= PyDateTime_GET_MONTH(obj);
-    param->tm.day= PyDateTime_GET_DAY(obj);
-    param->tm.time_type= MYSQL_TIMESTAMP_DATE;
-    return 0;
-  case MYSQL_TYPE_TIME:
-    bind->buffer= &param->tm;
-    memset(&param->tm, 0, sizeof(MYSQL_TIME));
-    param->tm.hour= PyDateTime_TIME_GET_HOUR(obj);
-    param->tm.minute= PyDateTime_TIME_GET_MINUTE(obj);
-    param->tm.second= PyDateTime_TIME_GET_SECOND(obj);
-    param->tm.second_part= PyDateTime_TIME_GET_MICROSECOND(obj);
-    param->tm.time_type= MYSQL_TIMESTAMP_TIME;
-    return 0;
-  case MYSQL_TYPE_DATETIME:
-    bind->buffer= &param->tm;
-    memset(&param->tm, 0, sizeof(MYSQL_TIME));
-    param->tm.year= PyDateTime_GET_YEAR(obj);
-    param->tm.month= PyDateTime_GET_MONTH(obj);
-    param->tm.day= PyDateTime_GET_DAY(obj);
-    param->tm.hour= PyDateTime_DATE_GET_HOUR(obj);
-    param->tm.minute= PyDateTime_DATE_GET_MINUTE(obj);
-    param->tm.second= PyDateTime_DATE_GET_SECOND(obj);
-    param->tm.second_part= PyDateTime_DATE_GET_MICROSECOND(obj);
-    param->tm.time_type= MYSQL_TIMESTAMP_DATETIME;
-    return 0;
-  case MYSQL_TYPE_VAR_STRING:
-    bind->buffer= param->buffer= (void *)PyUnicode_AsUTF8AndSize(obj, (Py_ssize_t *)&param->length);
-    bind->buffer_length= (unsigned long)param->length;
-    return 0;
-  case MYSQL_TYPE_NULL:
-    return 0;
-  }
-  return 1;
-}
-*/
-
-/* {{{ mariadb_get_parameter */
-/**
   mariadb_get_parameter()
   @brief   Returns a bulk parameter which was passed to
            cursor.executemany() or a parameter which was
@@ -348,11 +276,11 @@ uint8_t mariadb_get_data(PyObject *obj,
   @return  0 on success, 1 on error
 
 */
-static uint8_t mariadb_get_parameter(Mariadb_Cursor *self,
+static uint8_t mariadb_get_parameter(MrdbCursor *self,
                                      uint8_t is_bulk,
                                      uint32_t row_nr,
                                      uint32_t column_nr,
-                                     Mariadb_ParamValue *param)
+                                     MrdbParamValue *param)
 {
   PyObject *row= NULL,
            *column= NULL;
@@ -428,21 +356,28 @@ static uint8_t mariadb_get_parameter(Mariadb_Cursor *self,
 }
 /* }}} */
 
-/* {{{ mariadb_get_parameter_info */
-static uint8_t mariadb_get_parameter_info(Mariadb_Cursor *self,
+/* {{{ mariadb_get_parameter_info
+   mariadb_get_parameter_info fills the MYSQL_BIND structure
+   with correct field_types for the Python objects.
+
+   In case of a bulk operation (executemany()) we will also optimize
+   the field type (e.g. by checking maxbit size for a PyLong).
+   If the types in this column differ we will return an error.
+*/
+static uint8_t mariadb_get_parameter_info(MrdbCursor *self,
                                    MYSQL_BIND *param,
                                    uint32_t column_nr)
 {
   uint32_t i, bits= 0;
-  Mariadb_ParamValue paramvalue;
-  Mariadb_ParamInfo pinfo;
+  MrdbParamValue paramvalue;
+  MrdbParamInfo pinfo;
 
   /* Assume unsigned */
   param->is_unsigned= 1;
 
   if (!self->array_size)
   {
-    memset(&pinfo, 0, sizeof(Mariadb_ParamInfo));
+    memset(&pinfo, 0, sizeof(MrdbParamInfo));
     if (mariadb_get_parameter(self, 0, 0, column_nr, &paramvalue))
       return 1;
     if (mariadb_get_column_info(paramvalue.value, &pinfo))
@@ -460,7 +395,7 @@ static uint8_t mariadb_get_parameter_info(Mariadb_Cursor *self,
   {
     if (mariadb_get_parameter(self, 1, i, column_nr, &paramvalue))
       return 1;
-    memset(&pinfo, 0, sizeof(Mariadb_ParamInfo));
+    memset(&pinfo, 0, sizeof(MrdbParamInfo));
     if (mariadb_get_column_info(paramvalue.value, &pinfo))
     {
       mariadb_throw_exception(NULL, Mariadb_DataError, 1,
@@ -516,8 +451,11 @@ static uint8_t mariadb_get_parameter_info(Mariadb_Cursor *self,
 }
 /* }}} */
 
-/* {{{ mariadb_check_bulk_parameters */
-uint8_t mariadb_check_bulk_parameters(Mariadb_Cursor *self,
+/* {{{ mariadb_check_bulk_parameters
+   This function validates the specified bulk parameters and
+   translates the field types to MYSQL_TYPE_*.
+*/
+uint8_t mariadb_check_bulk_parameters(MrdbCursor *self,
                                       PyObject *data)
 {
   uint32_t i;
@@ -560,11 +498,11 @@ uint8_t mariadb_check_bulk_parameters(Mariadb_Cursor *self,
     goto error;
   }
 
-  if (!(self->value= PyMem_RawCalloc(self->param_count, sizeof(Mariadb_ParamValue))))
+  if (!(self->value= PyMem_RawCalloc(self->param_count, sizeof(MrdbParamValue))))
   {
     mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
                             "Not enough memory (tried to allocated %lld bytes)",
-                            self->param_count * sizeof(Mariadb_ParamValue));
+                            self->param_count * sizeof(MrdbParamValue));
     goto error;
   }
 
@@ -582,7 +520,7 @@ error:
 /* }}} */
 
 /* {{{ mariadb_check_execute_parameters */
-uint8_t mariadb_check_execute_parameters(Mariadb_Cursor *self,
+uint8_t mariadb_check_execute_parameters(MrdbCursor *self,
                                          PyObject *data)
 {
   uint32_t i;
@@ -605,11 +543,11 @@ uint8_t mariadb_check_execute_parameters(Mariadb_Cursor *self,
     goto error;
   }
 
-  if (!(self->value= PyMem_RawCalloc(self->param_count, sizeof(Mariadb_ParamValue))))
+  if (!(self->value= PyMem_RawCalloc(self->param_count, sizeof(MrdbParamValue))))
   {
     mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
                             "Not enough memory (tried to allocated %lld bytes)",
-                            self->param_count * sizeof(Mariadb_ParamValue));
+                            self->param_count * sizeof(MrdbParamValue));
     goto error;
   }
 
@@ -638,7 +576,7 @@ error:
   @return 0 on succes, otherwise error
 */
 static uint8_t mariadb_param_to_bind(MYSQL_BIND *bind,
-                                     Mariadb_ParamValue *value)
+                                     MrdbParamValue *value)
 {
   if (value->indicator)
     bind->u.indicator[0]= value->indicator;
@@ -740,7 +678,7 @@ static uint8_t mariadb_param_to_bind(MYSQL_BIND *bind,
            must be registered via api function mysql_stmt_attr_set
            with STMT_ATTR_PARAM_CALLBACK option
 
-  @param   data[in]      A pointer to a Mariadb_Cursor object which was passed
+  @param   data[in]      A pointer to a MrdbCursor object which was passed
                          via mysql_stmt_attr_set before
            data[in][out] An array of bind structures
            data[in]      row number
@@ -749,7 +687,7 @@ static uint8_t mariadb_param_to_bind(MYSQL_BIND *bind,
 */
 uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
 {
-  Mariadb_Cursor *self= (Mariadb_Cursor *)data;
+  MrdbCursor *self= (MrdbCursor *)data;
   uint32_t i;
 
   if (!self)

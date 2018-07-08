@@ -49,7 +49,7 @@ static PyMethodDef Mariadb_Methods[] =
   {"Binary", (PyCFunction)Mariadb_binary,
      METH_VARARGS,
      "Returns a binary object"},
-  {"connect", (PyCFunction)Mariadb_connect,
+  {"connect", (PyCFunction)MrdbConnection_connect,
      METH_VARARGS | METH_KEYWORDS,
      "Connect with a MySQL server"},
   /* PEP-249 DB-API */
@@ -124,12 +124,12 @@ PyMODINIT_FUNC PyInit_mariadb(void)
   PyObject *module= PyModule_Create(&mariadb_module);
   struct st_constants *intvals= int_constants;
 
-  Py_TYPE(&Mariadb_Connection_Type) = &PyType_Type;
-  if (PyType_Ready(&Mariadb_Connection_Type) == -1)
+  Py_TYPE(&MrdbConnection_Type) = &PyType_Type;
+  if (PyType_Ready(&MrdbConnection_Type) == -1)
     goto error;
 
-  Py_TYPE(&Mariadb_Cursor_Type) = &PyType_Type;
-  if (PyType_Ready(&Mariadb_Cursor_Type) == -1)
+  Py_TYPE(&MrdbCursor_Type) = &PyType_Type;
+  if (PyType_Ready(&MrdbCursor_Type) == -1)
     goto error;
 
   Py_TYPE(&Mariadb_Fieldinfo_Type) = &PyType_Type;
@@ -185,8 +185,8 @@ PyMODINIT_FUNC PyInit_mariadb(void)
 
   PyModule_AddObject(module, "DatabaseError", Mariadb_DatabaseError);
 
-  Py_INCREF(&Mariadb_Connection_Type);
-  PyModule_AddObject(module, "connection", (PyObject *)&Mariadb_Connection_Type);
+  Py_INCREF(&MrdbConnection_Type);
+  PyModule_AddObject(module, "connection", (PyObject *)&MrdbConnection_Type);
   PyModule_AddObject(module, "NUMBER", Mariadb_DBAPIType_Object(DBAPI_NUMBER));
   PyModule_AddObject(module, "BINARY", Mariadb_DBAPIType_Object(DBAPI_BINARY));
   PyModule_AddObject(module, "STRING", Mariadb_DBAPIType_Object(DBAPI_STRING));
@@ -195,8 +195,8 @@ PyMODINIT_FUNC PyInit_mariadb(void)
 
 
 
-  Py_INCREF(&Mariadb_Cursor_Type);
-  PyModule_AddObject(module, "cursor", (PyObject *)&Mariadb_Cursor_Type);
+  Py_INCREF(&MrdbCursor_Type);
+  PyModule_AddObject(module, "cursor", (PyObject *)&MrdbCursor_Type);
 
   Py_INCREF(&Mariadb_Fieldinfo_Type);
   PyModule_AddObject(module, "fieldinfo", (PyObject *)&Mariadb_Fieldinfo_Type);

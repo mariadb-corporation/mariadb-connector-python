@@ -36,6 +36,8 @@
 #endif /* L64 */
 #endif /* _WIN32 */
 
+#define MAX_TPC_XID_SIZE 65
+
 enum enum_dataapi_groups
 {
   DBAPI_NUMBER= 1,
@@ -45,13 +47,22 @@ enum enum_dataapi_groups
   DBAPI_ROWID
 };
 
+enum enum_tpc_state
+{
+  TPC_STATE_NONE= 0,
+  TPC_STATE_XID,
+  TPC_STATE_PREPARE
+};
+
 /* PEP-249: Connection object */
 typedef struct {
 	PyObject_HEAD
 	MYSQL *mysql;
 	int open;
   uint8_t is_buffered;
-} Mariadb_Connection;
+  enum enum_tpc_state tpc_state;
+  char xid[MAX_TPC_XID_SIZE];
+} MrdbConnection;
 
 typedef struct {
   enum enum_field_types type;
@@ -66,7 +77,7 @@ typedef struct {
   size_t bits; /* for PyLong Object */
   uint8_t is_negative;
   uint8_t has_indicator;
-} Mariadb_ParamInfo;
+} MrdbParamInfo;
 
 typedef struct {
   PyObject *value;
@@ -77,19 +88,19 @@ typedef struct {
   void *buffer;
   unsigned char num[8];
   MYSQL_TIME tm;
-} Mariadb_ParamValue;
+} MrdbParamValue;
 
 /* PEP-249: Cursor object */
 typedef struct {
   PyObject_HEAD
-  Mariadb_Connection *connection;
+  MrdbConnection *connection;
   MYSQL_STMT *stmt;
   PyObject *data;
   uint32_t array_size;
   uint32_t param_count;
   uint32_t row_array_size; /* for fetch many */
-  Mariadb_ParamInfo *paraminfo;
-  Mariadb_ParamValue *value;
+  MrdbParamInfo *paraminfo;
+  MrdbParamValue *value;
   MYSQL_BIND *params;
   uint64_t lastrowid;
   MYSQL_BIND *bind;
@@ -107,7 +118,7 @@ typedef struct {
   uint8_t is_prepared;
   uint8_t is_buffered;
   uint8_t is_named_tuple;
-} Mariadb_Cursor;
+} MrdbCursor;
 
 typedef struct
 {
@@ -141,8 +152,8 @@ PyObject *Mariadb_Warning;
 
 /* Object types */
 PyTypeObject Mariadb_Fieldinfo_Type;
-PyTypeObject Mariadb_Connection_Type;
-PyTypeObject Mariadb_Cursor_Type;
+PyTypeObject MrdbConnection_Type;
+PyTypeObject MrdbCursor_Type;
 PyTypeObject Mariadb_DBAPIType_Type;
 
 int Mariadb_traverse(PyObject *self,
@@ -157,18 +168,26 @@ void mariadb_throw_exception(void *handle,
                              ...);
 
 PyObject *Mariadb_DBAPIType_Object(uint32_t type);
-PyObject *Mariadb_affected_rows(Mariadb_Connection *self);
-PyObject *Mariadb_autocommit(Mariadb_Connection *self,
+PyObject *MrdbConnection_affected_rows(MrdbConnection *self);
+PyObject *MrdbConnection_autocommit(MrdbConnection *self,
                              PyObject *toggle);
-PyObject *Mariadb_rollback(Mariadb_Connection *self);
-PyObject *Mariadb_commit(Mariadb_Connection *self);
-PyObject *Mariadb_close(Mariadb_Connection *self);
-PyObject *Mariadb_connect( PyObject *self,PyObject *args,	PyObject *kwargs);
+PyObject *MrdbConnection_rollback(MrdbConnection *self);
+PyObject *MrdbConnection_commit(MrdbConnection *self);
+PyObject *MrdbConnection_close(MrdbConnection *self);
+PyObject *MrdbConnection_connect( PyObject *self,PyObject *args,	PyObject *kwargs);
+
+/* TPC methods */
+PyObject *MrdbConnection_xid(MrdbConnection *self, PyObject *args);
+PyObject *MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args);
+PyObject *MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args);
+PyObject *MrdbConnection_tpc_rollback(MrdbConnection *self, PyObject *args);
+PyObject *MrdbConnection_tpc_prepare(MrdbConnection *self);
+PyObject *MrdbConnection_tpc_recover(MrdbConnection *self);
 
 /* codecs prototypes  */
-uint8_t mariadb_check_bulk_parameters(Mariadb_Cursor *self,
+uint8_t mariadb_check_bulk_parameters(MrdbCursor *self,
                                       PyObject *data);
-uint8_t mariadb_check_execute_parameters(Mariadb_Cursor *self,
+uint8_t mariadb_check_execute_parameters(MrdbCursor *self,
                                       PyObject *data);
 uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 /* Global defines */
@@ -178,10 +197,11 @@ uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 #define MARIADB_PY_PARAMSTYLE "qmark"
 #define MARIADB_PY_THREADSAFETY 1
 
+
+/* Helper macros */
 #define MARIADB_FEATURE_SUPPORTED(mysql,version)\
 (mysql_get_server_version((mysql)) >= (version))
 
-/* Helper macros */
 #define MARIADB_CHECK_CONNECTION(connection)\
 if (!connection || !connection->mysql) {\
   mariadb_throw_exception(connection->mysql, Mariadb_Error, 0,\
@@ -189,6 +209,12 @@ if (!connection || !connection->mysql) {\
     return NULL;\
 }
 
+#define MARIADB_CHECK_TPC(connection)\
+if (connection->tpc_state == TPC_STATE_NONE) {\
+  mariadb_throw_exception(connection->mysql, Mariadb_ProgrammingError, 0,\
+    "Transaction not started");\
+    return NULL;\
+}
 #define MARIADB_FREE_MEM(a)\
 if (a) {\
   PyMem_RawFree((a));\

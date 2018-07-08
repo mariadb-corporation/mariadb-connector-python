@@ -19,25 +19,25 @@
 
 #include <mariadb_python.h>
 
-static void Mariadb_Cursor_dealloc(Mariadb_Cursor *self);
-static PyObject *Mariadb_Cursor_close(Mariadb_Cursor *self);
-static PyObject *Mariadb_Cursor_execute(Mariadb_Cursor *self,
+static void MrdbCursor_dealloc(MrdbCursor *self);
+static PyObject *MrdbCursor_close(MrdbCursor *self);
+static PyObject *MrdbCursor_execute(MrdbCursor *self,
                                  PyObject *args, PyObject *kwargs);
-static PyObject *Mariadb_Cursor_nextset(Mariadb_Cursor *self);
-static PyObject *Mariadb_Cursor_executemany(Mariadb_Cursor *self,
+static PyObject *MrdbCursor_nextset(MrdbCursor *self);
+static PyObject *MrdbCursor_executemany(MrdbCursor *self,
                                      PyObject *args);
-static PyObject *Mariadb_Cursor_description(Mariadb_Cursor *self);
-static PyObject *Mariadb_Cursor_fetchall(Mariadb_Cursor *self);
-static PyObject *Mariadb_Cursor_fetchone(Mariadb_Cursor *self);
-static PyObject *Mariadb_Cursor_fetchmany(Mariadb_Cursor *self,
+static PyObject *MrdbCursor_description(MrdbCursor *self);
+static PyObject *MrdbCursor_fetchall(MrdbCursor *self);
+static PyObject *MrdbCursor_fetchone(MrdbCursor *self);
+static PyObject *MrdbCursor_fetchmany(MrdbCursor *self,
                                      PyObject *args,
                                      PyObject *kwargs);
-static PyObject *Mariadb_Cursor_scroll(Mariadb_Cursor *self,
+static PyObject *MrdbCursor_scroll(MrdbCursor *self,
                                        PyObject *args,
                                        PyObject *kwargs);
-static PyObject *Mariadb_Cursor_fieldcount(Mariadb_Cursor *self);
+static PyObject *MrdbCursor_fieldcount(MrdbCursor *self);
 void field_fetch_callback(void *data, unsigned int column, unsigned char **row);
-static PyObject *mariadb_get_sequence_or_tuple(Mariadb_Cursor *self);
+static PyObject *mariadb_get_sequence_or_tuple(MrdbCursor *self);
 
 /* todo: write more documentation, this is just a placeholder */
 static char mariadb_cursor_documentation[] =
@@ -52,41 +52,41 @@ else\
 
 static char *mariadb_named_tuple_name= "Row";
 static char *mariadb_named_tuple_desc= "Named tupled row";
-static PyObject *Mariadb_no_operation(Mariadb_Cursor *,
+static PyObject *Mariadb_no_operation(MrdbCursor *,
                                       PyObject *);
-static PyObject *Mariadb_row_count(Mariadb_Cursor *self);
+static PyObject *Mariadb_row_count(MrdbCursor *self);
 
-static PyGetSetDef Mariadb_Cursor_sets[]=
+static PyGetSetDef MrdbCursor_sets[]=
 {
   {"rowcount", (getter)Mariadb_row_count, NULL, "doc", NULL},
   {NULL}
 };
 
-static PyMethodDef Mariadb_Cursor_Methods[] =
+static PyMethodDef MrdbCursor_Methods[] =
 {
   /* PEP-249 methods */
-  {"close", (PyCFunction)Mariadb_Cursor_close,
+  {"close", (PyCFunction)MrdbCursor_close,
     METH_NOARGS,
     "Closes an open Cursor"},
-  {"execute", (PyCFunction)Mariadb_Cursor_execute,
+  {"execute", (PyCFunction)MrdbCursor_execute,
      METH_VARARGS | METH_KEYWORDS,
      "Executes a SQL statement"},
-  {"executemany", (PyCFunction)Mariadb_Cursor_executemany,
+  {"executemany", (PyCFunction)MrdbCursor_executemany,
      METH_VARARGS,
      "Executes a SQL statement by passing a list of values"},
-  {"fetchall", (PyCFunction)Mariadb_Cursor_fetchall,
+  {"fetchall", (PyCFunction)MrdbCursor_fetchall,
     METH_NOARGS,
     "Fetches all rows of a result set"},
-  {"fetchone", (PyCFunction)Mariadb_Cursor_fetchone,
+  {"fetchone", (PyCFunction)MrdbCursor_fetchone,
     METH_NOARGS,
     "Fetches the next row of a result set"},
-  {"fetchmany", (PyCFunction)Mariadb_Cursor_fetchmany,
+  {"fetchmany", (PyCFunction)MrdbCursor_fetchmany,
     METH_VARARGS | METH_KEYWORDS,
     "Fetches multiple rows of a result set"},
-  {"fieldcount", (PyCFunction)Mariadb_Cursor_fieldcount,
+  {"fieldcount", (PyCFunction)MrdbCursor_fieldcount,
     METH_NOARGS,
     "Returns number of columns in current result set"},
-  {"nextset", (PyCFunction)Mariadb_Cursor_nextset,
+  {"nextset", (PyCFunction)MrdbCursor_nextset,
    METH_NOARGS,
    "Will make the cursor skip to the next available result set, discarding any remaining rows from the current set."},
   {"setinputsizes", (PyCFunction)Mariadb_no_operation,
@@ -98,62 +98,62 @@ static PyMethodDef Mariadb_Cursor_Methods[] =
   {"callproc", (PyCFunction)Mariadb_no_operation,
     METH_VARARGS,
     "Required by PEP-249. Does nothing in MariaDB Connector/Python, use the execute method with syntax 'CALL {procedurename}' instead"},
-  {"next", (PyCFunction)Mariadb_Cursor_fetchone,
+  {"next", (PyCFunction)MrdbCursor_fetchone,
     METH_NOARGS,
     "Return the next row from the currently executing SQL statement using the same semantics as .fetchone()."},
-  {"scroll", (PyCFunction)Mariadb_Cursor_scroll,
+  {"scroll", (PyCFunction)MrdbCursor_scroll,
     METH_VARARGS | METH_KEYWORDS,
     "Scroll the cursor in the result set to a new position according to mode"},
   {NULL} /* always last */
 };
 
-static struct PyMemberDef Mariadb_Cursor_Members[] =
+static struct PyMemberDef MrdbCursor_Members[] =
 {
   {"connection",
    T_OBJECT,
-   offsetof(Mariadb_Cursor, connection),
+   offsetof(MrdbCursor, connection),
    READONLY,
    "Reference to the connection object on which the cursor was created"},
   {"statement",
    T_STRING,
-   offsetof(Mariadb_Cursor, statement),
+   offsetof(MrdbCursor, statement),
    READONLY,
    "The last executed statement"},
   {"description",
     T_OBJECT,
-    offsetof(Mariadb_Cursor, description),
+    offsetof(MrdbCursor, description),
     READONLY,
     "This read-only attribute is a sequence of 7-item sequences. Each of these sequences contains information describing one result column"},
   {"lastrowid",
    T_LONG,
-   offsetof(Mariadb_Cursor, lastrowid),
+   offsetof(MrdbCursor, lastrowid),
    READONLY,
    "row id of the last modified (inserted) row"},
 /*  {"rowcount",
    T_LONGLONG,
-   offsetof(Mariadb_Cursor, affected_rows),
+   offsetof(MrdbCursor, affected_rows),
    READONLY,
    "row id of the last modified (inserted) row"}, */
   {"buffered",
    T_BYTE,
-   offsetof(Mariadb_Cursor, is_buffered),
+   offsetof(MrdbCursor, is_buffered),
    0,
    "Stores the entire result set in memory"},
   {"rownumber",
    T_LONG,
-   offsetof(Mariadb_Cursor, row_number),
+   offsetof(MrdbCursor, row_number),
    READONLY,
    "Current row number in result set"},
   {"arraysize",
    T_LONG,
-   offsetof(Mariadb_Cursor, row_array_size),
+   offsetof(MrdbCursor, row_array_size),
    0,
    "the number of rows to fetch"},
    {NULL}
 };
 
-/* {{{ Mariadb_Cursor_initialize */
-static int Mariadb_Cursor_initialize(Mariadb_Cursor *self, PyObject *args,
+/* {{{ MrdbCursor_initialize */
+static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
                                      PyObject *kwargs)
 {
   char *key_words[]= {"", "named_tuple", "prefetch_size", "cursor_type", NULL};
@@ -166,12 +166,11 @@ static int Mariadb_Cursor_initialize(Mariadb_Cursor *self, PyObject *args,
     return -1;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-        "O!|bkk", key_words, &Mariadb_Connection_Type, &connection,
+        "O!|bkk", key_words, &MrdbConnection_Type, &connection,
         &is_named_tuple, &prefetch_rows, &cursor_type))
-    return -1;
 
   Py_INCREF(connection);
-  self->connection= (Mariadb_Connection *)connection;
+  self->connection= (MrdbConnection *)connection;
   self->is_buffered= self->connection->is_buffered;
 
   if (cursor_type != CURSOR_TYPE_READ_ONLY &&
@@ -199,21 +198,21 @@ static int Mariadb_Cursor_initialize(Mariadb_Cursor *self, PyObject *args,
 }
 /* }}} */
 
-static int Mariadb_Cursor_traverse(
-	Mariadb_Cursor *self,
+static int MrdbCursor_traverse(
+	MrdbCursor *self,
 	visitproc visit,
 	void *arg)
 {
 	return 0;
 }
 
-PyTypeObject Mariadb_Cursor_Type =
+PyTypeObject MrdbCursor_Type =
 {
   PyVarObject_HEAD_INIT(NULL, 0)
 	"mariadb.cursor",
-	sizeof(Mariadb_Cursor),
+	sizeof(MrdbCursor),
 	0,
-	(destructor)Mariadb_Cursor_dealloc, /* tp_dealloc */
+	(destructor)MrdbCursor_dealloc, /* tp_dealloc */
 	0, /*tp_print*/
 	0, /* tp_getattr */
 	0, /* tp_setattr */
@@ -242,7 +241,7 @@ PyTypeObject Mariadb_Cursor_Type =
 	mariadb_cursor_documentation, /* tp_doc Documentation string */
 
 	/* call function for all accessible objects */
-	(traverseproc)Mariadb_Cursor_traverse,/* tp_traverse */
+	(traverseproc)MrdbCursor_traverse,/* tp_traverse */
 
 	/* delete references to contained objects */
 	0, /* tp_clear */
@@ -258,15 +257,15 @@ PyTypeObject Mariadb_Cursor_Type =
 	0, /* (iternextfunc) tp_iternext */
 
 	/* Attribute descriptor and subclassing stuff */
-	(struct PyMethodDef *)Mariadb_Cursor_Methods, /* tp_methods */
-	(struct PyMemberDef *)Mariadb_Cursor_Members, /* tp_members */
-  Mariadb_Cursor_sets,
+	(struct PyMethodDef *)MrdbCursor_Methods, /* tp_methods */
+	(struct PyMemberDef *)MrdbCursor_Members, /* tp_members */
+  MrdbCursor_sets,
 	0, /* (struct _typeobject *) tp_base; */
 	0, /* (PyObject *) tp_dict */
 	0, /* (descrgetfunc) tp_descr_get */
 	0, /* (descrsetfunc) tp_descr_set */
 	0, /* (long) tp_dictoffset */
-	(initproc)Mariadb_Cursor_initialize, /* tp_init */
+	(initproc)MrdbCursor_initialize, /* tp_init */
 	PyType_GenericAlloc, //NULL, /* tp_alloc */
 	PyType_GenericNew, //NULL, /* tp_new */
 	NULL, /* tp_free Low-level free-memory routine */ 
@@ -275,14 +274,14 @@ PyTypeObject Mariadb_Cursor_Type =
 	0, /* (PyObject *) tp_defined */
 };
 
-static PyObject *Mariadb_no_operation(Mariadb_Cursor *self,
+static PyObject *Mariadb_no_operation(MrdbCursor *self,
                                       PyObject *args)
 {
   Py_INCREF(Py_None);
   return Py_None;
 }
 
-static uint8_t Mariadb_Cursor_isprepared(Mariadb_Cursor *self,
+static uint8_t MrdbCursor_isprepared(MrdbCursor *self,
                                          const char *statement,
                                          size_t statement_len)
 {
@@ -300,7 +299,7 @@ static uint8_t Mariadb_Cursor_isprepared(Mariadb_Cursor *self,
 }
 
 static
-void Mariadb_Cursor_clear(Mariadb_Cursor *self)
+void MrdbCursor_clear(MrdbCursor *self)
 {
   if (self->stmt) { 
     uint32_t val= 0;
@@ -321,7 +320,7 @@ void Mariadb_Cursor_clear(Mariadb_Cursor *self)
 }
 
 static
-void ma_cursor_close(Mariadb_Cursor *self)
+void ma_cursor_close(MrdbCursor *self)
 {
   if (self->stmt)
   {
@@ -332,25 +331,25 @@ void ma_cursor_close(Mariadb_Cursor *self)
     Py_END_ALLOW_THREADS
     self->stmt= NULL;
   }
-  Mariadb_Cursor_clear(self);
+  MrdbCursor_clear(self);
 }
 
 static
-PyObject * Mariadb_Cursor_close(Mariadb_Cursor *self)
+PyObject * MrdbCursor_close(MrdbCursor *self)
 {
   ma_cursor_close(self);
   Py_INCREF(Py_None);
   return Py_None;
 }
 
-void Mariadb_Cursor_dealloc(Mariadb_Cursor *self)
+void MrdbCursor_dealloc(MrdbCursor *self)
 {
 	ma_cursor_close(self);
   Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 static
-PyObject *Mariadb_Cursor_execute(Mariadb_Cursor *self,
+PyObject *MrdbCursor_execute(MrdbCursor *self,
                                  PyObject *args,
                                  PyObject *kwargs)
 {
@@ -372,9 +371,9 @@ PyObject *Mariadb_Cursor_execute(Mariadb_Cursor *self,
   self->is_buffered= is_buffered;
 
   /* Check if statement is already prepared */
-  if (!(self->is_prepared= Mariadb_Cursor_isprepared(self, statement, statement_len)))
+  if (!(self->is_prepared= MrdbCursor_isprepared(self, statement, statement_len)))
   {
-    Mariadb_Cursor_clear(self);
+    MrdbCursor_clear(self);
     self->statement= PyMem_RawMalloc(statement_len + 1);
     strncpy(self->statement, statement, statement_len);
     self->statement[statement_len]= 0;
@@ -467,12 +466,11 @@ PyObject *Mariadb_Cursor_execute(Mariadb_Cursor *self,
       }
       self->sequence_type= PyMem_RawCalloc(1,sizeof(PyTypeObject));
       PyStructSequence_InitType(self->sequence_type, &self->sequence_desc);
-//      self->sequence_type= PyStructSequence_NewType(&self->sequence_desc);
     }
     if (!(self->values= (PyObject**)PyMem_RawCalloc(mysql_stmt_field_count(self->stmt), sizeof(PyObject *))))
       goto error;
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_FIELD_FETCH_CALLBACK, field_fetch_callback);
-    self->description= Mariadb_Cursor_description(self);
+    self->description= MrdbCursor_description(self);
   }
   else {
     Py_INCREF(Py_None);
@@ -482,11 +480,11 @@ end:
   MARIADB_FREE_MEM(self->value);
   Py_RETURN_NONE;
 error:
-  Mariadb_Cursor_clear(self);
+  MrdbCursor_clear(self);
   return NULL;
 }
 
-PyObject *Mariadb_Cursor_fieldcount(Mariadb_Cursor *self)
+PyObject *MrdbCursor_fieldcount(MrdbCursor *self)
 {
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
@@ -496,7 +494,7 @@ PyObject *Mariadb_Cursor_fieldcount(Mariadb_Cursor *self)
 }
 
 static
-PyObject *Mariadb_Cursor_description(Mariadb_Cursor *self)
+PyObject *MrdbCursor_description(MrdbCursor *self)
 {
   PyObject *obj= NULL;
 
@@ -539,7 +537,7 @@ PyObject *Mariadb_Cursor_description(Mariadb_Cursor *self)
 }
 
 static
-PyObject *Mariadb_Cursor_fetchone(Mariadb_Cursor *self)
+PyObject *MrdbCursor_fetchone(MrdbCursor *self)
 {
   PyObject *row;
   uint32_t i;
@@ -571,7 +569,7 @@ PyObject *Mariadb_Cursor_fetchone(Mariadb_Cursor *self)
 }
 
 static
-PyObject *Mariadb_Cursor_scroll(Mariadb_Cursor *self, PyObject *args,
+PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
                                    PyObject *kwargs)
 {
   char *modestr= NULL;
@@ -642,7 +640,7 @@ PyObject *Mariadb_Cursor_scroll(Mariadb_Cursor *self, PyObject *args,
 }
 
 static
-PyObject *Mariadb_Cursor_fetchmany(Mariadb_Cursor *self, PyObject *args,
+PyObject *MrdbCursor_fetchmany(MrdbCursor *self, PyObject *args,
                                    PyObject *kwargs)
 {
   PyObject *List= NULL;
@@ -691,7 +689,7 @@ end:
   return List;
 }
 
-static PyObject *mariadb_get_sequence_or_tuple(Mariadb_Cursor *self)
+static PyObject *mariadb_get_sequence_or_tuple(MrdbCursor *self)
 {
   if (self->is_named_tuple)
     return PyStructSequence_New(self->sequence_type);
@@ -700,7 +698,7 @@ static PyObject *mariadb_get_sequence_or_tuple(Mariadb_Cursor *self)
 }
 
 static
-PyObject *Mariadb_Cursor_fetchall(Mariadb_Cursor *self)
+PyObject *MrdbCursor_fetchall(MrdbCursor *self)
 {
   PyObject *List;
 
@@ -742,7 +740,7 @@ PyObject *Mariadb_Cursor_fetchall(Mariadb_Cursor *self)
 /**
 */
 static
-uint8_t Mariadb_Cursor_executemany_fallback(Mariadb_Cursor *self,
+uint8_t MrdbCursor_executemany_fallback(MrdbCursor *self,
                                             const char *statement,
                                             size_t len)
 {
@@ -772,7 +770,7 @@ error:
   return 1;
 }
 
-PyObject *Mariadb_Cursor_executemany(Mariadb_Cursor *self,
+PyObject *MrdbCursor_executemany(MrdbCursor *self,
                                      PyObject *Args)
 {
   const char *statement= NULL;
@@ -788,9 +786,9 @@ PyObject *Mariadb_Cursor_executemany(Mariadb_Cursor *self,
                         &PyList_Type, &self->data))
     return NULL;
 
-  if (!(self->is_prepared= Mariadb_Cursor_isprepared(self, statement, statement_len)))
+  if (!(self->is_prepared= MrdbCursor_isprepared(self, statement, statement_len)))
   {
-    Mariadb_Cursor_clear(self);
+    MrdbCursor_clear(self);
     self->statement= PyMem_RawMalloc(statement_len + 1);
     strncpy(self->statement, statement, statement_len);
     self->statement[statement_len]= 0;
@@ -803,7 +801,7 @@ PyObject *Mariadb_Cursor_executemany(Mariadb_Cursor *self,
      we need to call a fallback routine */
   if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
   {
-    if (Mariadb_Cursor_executemany_fallback(self, statement, statement_len))
+    if (MrdbCursor_executemany_fallback(self, statement, statement_len))
       goto error;
     goto end;
   }
@@ -834,11 +832,11 @@ end:
   MARIADB_FREE_MEM(self->values);
   Py_RETURN_NONE;
 error:
-  Mariadb_Cursor_clear(self);
+  MrdbCursor_clear(self);
   return NULL;
 }
 
-PyObject *Mariadb_Cursor_nextset(Mariadb_Cursor *self)
+PyObject *MrdbCursor_nextset(MrdbCursor *self)
 {
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
@@ -859,7 +857,7 @@ PyObject *Mariadb_Cursor_nextset(Mariadb_Cursor *self)
   Py_RETURN_TRUE;
 }
 
-static PyObject *Mariadb_row_count(Mariadb_Cursor *self)
+static PyObject *Mariadb_row_count(MrdbCursor *self)
 {
   int64_t row_count;
 
