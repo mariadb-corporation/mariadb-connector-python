@@ -28,9 +28,11 @@
   The cursor handle was also previously registered with mysql_stmt_attr_set
   and STMT_ATTR_USER_DATA parameter and will be passed in data variable.
 */
+
 void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 {
   MrdbCursor *self= (MrdbCursor *)data;
+
   if (!PyDateTimeAPI)
     PyDateTime_IMPORT;
 
@@ -40,7 +42,6 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     self->values[column]= Py_None;
     return;
   }
-
   switch(self->fields[column].type) {
     case MYSQL_TYPE_NULL:
       Py_INCREF(Py_None);
@@ -578,10 +579,11 @@ error:
 static uint8_t mariadb_param_to_bind(MYSQL_BIND *bind,
                                      MrdbParamValue *value)
 {
-  if (value->indicator)
-    bind->u.indicator[0]= value->indicator;
   if (value->indicator > 0)
+  {
+    bind->u.indicator[0]= value->indicator;
     return 0;
+  }
 
   if (IS_NUM(bind->buffer_type))
     bind->buffer= value->num;

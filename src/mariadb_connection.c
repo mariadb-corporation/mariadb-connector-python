@@ -182,15 +182,24 @@ MrdbConnection_Initialize(MrdbConnection *self,
     mysql_optionsv(self->mysql, MYSQL_OPT_SSL_CRLPATH, ssl_crlpath);
   if (ssl_verify_cert)
     mysql_optionsv(self->mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (unsigned char *) &ssl_verify_cert);
-
+  Py_BEGIN_ALLOW_THREADS;
   if (!mysql_real_connect(self->mysql, host, user, password, schema, port,
                           socket, client_flags))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return -1;
+    goto end;
   }
 
-
+  /* make sure that we use a utf8 connection */
+  if (mysql_set_character_set(self->mysql, "utf8"))
+  {
+    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    goto end;
+  }
+end:
+  Py_END_ALLOW_THREADS;
+  if (PyErr_Occurred())
+    return -1;
   return 0;
 }
 
@@ -349,12 +358,16 @@ PyObject *MrdbConnection_commit(MrdbConnection *self)
         0, "rollback() is not allowed if a TPC transaction is active");
     return NULL;
   }
-
+  Py_BEGIN_ALLOW_THREADS;
   if (mysql_commit(self->mysql))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return NULL;
+    goto end;
   }
+end:
+  Py_END_ALLOW_THREADS;
+  if (PyErr_Occurred())
+    return NULL;
   Py_RETURN_NONE;
 } /* }}} */
 
@@ -370,11 +383,16 @@ PyObject *MrdbConnection_rollback(MrdbConnection *self)
     return NULL;
   }
 
+  Py_BEGIN_ALLOW_THREADS;
   if (mysql_rollback(self->mysql))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return NULL;
+    goto end;
   }
+end:
+  Py_END_ALLOW_THREADS;
+  if (PyErr_Occurred())
+    return NULL;
   Py_RETURN_NONE;
 }
 /* }}} */
@@ -389,11 +407,14 @@ PyObject *MrdbConnection_autocommit(MrdbConnection *self,
   if (PyArg_ParseTuple(args, "p", &autocommit))
     return NULL;
 
+  Py_BEGIN_ALLOW_THREADS;
   if (mysql_autocommit(self->mysql, autocommit))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return NULL;
   }
+  Py_END_ALLOW_THREADS;
+  if (PyErr_Occurred())
+    return NULL;
   Py_RETURN_NONE;
 }
 /* }}} */
@@ -438,6 +459,7 @@ PyObject *MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args)
        *format_id=0;
   long branch_qualifier= 0;
   char stmt[128];
+  int rc= 0;
 
   if (!PyArg_ParseTuple(args, "(ssi)", &format_id,
                                        &transaction_id,
@@ -446,7 +468,11 @@ PyObject *MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args)
 
   /* MariaDB ignores format_id and branch_qualifier */
   snprintf(stmt, 127, "XA BEGIN '%s'", transaction_id);
-  if (mysql_query(self->mysql, stmt))
+  Py_BEGIN_ALLOW_THREADS;
+  rc= mysql_query(self->mysql, stmt);
+  Py_END_ALLOW_THREADS;
+
+  if (rc)
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
     return NULL;
@@ -481,6 +507,7 @@ PyObject *MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
     return NULL;
   }
 
+  Py_BEGIN_ALLOW_THREADS;
   if (self->tpc_state < TPC_STATE_PREPARE)
   {
     snprintf(stmt, 127, "XA END '%s'", transaction_id ?
@@ -488,7 +515,7 @@ PyObject *MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
     if (mysql_query(self->mysql, stmt))
     {
       mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-      return NULL;
+      goto end;
     }
   }
   snprintf(stmt, 127, "XA COMMIT '%s' %s", transaction_id ?
@@ -497,9 +524,13 @@ PyObject *MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
   if (mysql_query(self->mysql, stmt))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return NULL;
+    goto end;
   }
+end:
+  Py_END_ALLOW_THREADS;
 
+  if (PyErr_Occurred())
+    return NULL;
   self->xid[0]= 0;
   self->tpc_state= TPC_STATE_NONE;
 
@@ -529,7 +560,7 @@ PyObject *MrdbConnection_tpc_rollback(MrdbConnection *self, PyObject *args)
        "transaction is not in prepared state");
     return NULL;
   }
-
+  Py_BEGIN_ALLOW_THREADS;
   if (self->tpc_state < TPC_STATE_PREPARE)
   {
     snprintf(stmt, 127, "XA END '%s'", transaction_id ? 
@@ -537,7 +568,7 @@ PyObject *MrdbConnection_tpc_rollback(MrdbConnection *self, PyObject *args)
     if (mysql_query(self->mysql, stmt))
     {
       mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-      return NULL;
+      goto end;
     }
   }
   snprintf(stmt, 127, "XA ROLLBACK '%s'", transaction_id ?
@@ -545,12 +576,16 @@ PyObject *MrdbConnection_tpc_rollback(MrdbConnection *self, PyObject *args)
   if (mysql_query(self->mysql, stmt))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return NULL;
+    goto end;
   }
+end:
+  Py_END_ALLOW_THREADS;
+
+  if (PyErr_Occurred())
+    return NULL;
 
   self->xid[0]= 0;
   self->tpc_state= TPC_STATE_NONE;
-
   Py_RETURN_NONE;
 }
 /* }}} */
@@ -569,23 +604,26 @@ PyObject *MrdbConnection_tpc_prepare(MrdbConnection *self)
        "transaction is already in prepared state");
     return NULL;
   }
-
   snprintf(stmt, 127, "XA END '%s'", self->xid);
+  Py_BEGIN_ALLOW_THREADS;
   if (mysql_query(self->mysql, stmt))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return NULL;
+    goto end;
   }
 
   snprintf(stmt, 127, "XA PREPARE '%s'", self->xid);
   if (mysql_query(self->mysql, stmt))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return NULL;
+    goto end;
   }
+end:
+  Py_END_ALLOW_THREADS;
+  if (PyErr_Occurred())
+    return NULL;
 
   self->tpc_state= TPC_STATE_PREPARE;
-
   Py_RETURN_NONE;
 }
 /* }}} */
@@ -600,16 +638,17 @@ PyObject *MrdbConnection_tpc_recover(MrdbConnection *self)
   MARIADB_CHECK_CONNECTION(self);
   MARIADB_CHECK_TPC(self);
 
+  Py_BEGIN_ALLOW_THREADS;
   if (mysql_query(self->mysql, "XA RECOVER"))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return NULL;
+    goto end;
   }
 
   if (!(result= mysql_store_result(self->mysql)))
   {
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
-    return NULL;
+    goto end;
   }
 
   if (!(List= PyList_New(0)))
@@ -630,6 +669,10 @@ PyObject *MrdbConnection_tpc_recover(MrdbConnection *self)
   }
 
   mysql_free_result(result);
+end:
+  Py_END_ALLOW_THREADS;
+  if (PyErr_Occurred())
+    return NULL;
   return List;
 }
 /* }}} */

@@ -114,33 +114,31 @@ class CursorTest(unittest.TestCase):
     self.assertRaises(mariadb.Error, cursor.fetchall)
 
     cursor.execute("SELECT id, name, city FROM t1 ORDER BY id")
-    self.assertEqual(0, cursor.rowcount())
+    self.assertEqual(0, cursor.rowcount)
     row = cursor.fetchall()
     self.assertEqual(row, params)
-    self.assertEqual(5, cursor.rowcount())
+    self.assertEqual(5, cursor.rowcount)
 
     cursor.execute("SELECT id, name, city FROM t1 ORDER BY id")
-    self.assertEqual(0, cursor.rowcount())
-    row= cursor.fetchmany(0)
-    self.assertEqual(row,[])
+    self.assertEqual(0, cursor.rowcount)
 
     row= cursor.fetchmany(1)
     self.assertEqual(row,[params[0]])
-    self.assertEqual(1, cursor.rowcount())
+    self.assertEqual(1, cursor.rowcount)
 
     row= cursor.fetchmany(2)
     self.assertEqual(row,([params[1], params[2]]))
-    self.assertEqual(3, cursor.rowcount())
+    self.assertEqual(3, cursor.rowcount)
 
     cursor.arraysize= 1
     row= cursor.fetchmany()
     self.assertEqual(row,[params[3]])
-    self.assertEqual(4, cursor.rowcount())
+    self.assertEqual(4, cursor.rowcount)
 
     cursor.arraysize= 2
     row= cursor.fetchmany()
     self.assertEqual(row,[params[4]])
-    self.assertEqual(5, cursor.rowcount())
+    self.assertEqual(5, cursor.rowcount)
     del cursor
 
   def test1_multi_result(self):
@@ -164,17 +162,17 @@ class CursorTest(unittest.TestCase):
   def test_buffered(self):
     cursor= self.connection.cursor()
     cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3", buffered=True)
-    self.assertEqual(cursor.rowcount(), 3)
+    self.assertEqual(cursor.rowcount, 3)
     del cursor
 
   def test_xfield_types(self):
     cursor= self.connection.cursor()
     fieldinfo= mariadb.fieldinfo()
     cursor.execute("CREATE OR REPLACE TABLE t1 (a tinyint not null auto_increment primary key, b smallint, c int, d bigint, e float, f decimal, g double, h char(10), i varchar(255), j blob, index(b))");
-    info= cursor.description()
+    info= cursor.description
     self.assertEqual(info, None)
     cursor.execute("SELECT * FROM t1")
-    info= cursor.description()
+    info= cursor.description
     self.assertEqual(fieldinfo.type(info[0]), "TINY")
     self.assertEqual(fieldinfo.type(info[1]), "SHORT")
     self.assertEqual(fieldinfo.type(info[2]), "LONG")
@@ -263,7 +261,7 @@ class CursorTest(unittest.TestCase):
       mariadb.NUMBER
     ]
     row= cursor.fetchone()
-    typecodes= [row[1] for row in cursor.description()]
+    typecodes= [row[1] for row in cursor.description]
     self.assertEqual(expected_typecodes, typecodes)
     del cursor
 

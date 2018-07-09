@@ -356,6 +356,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
   PyObject *Data= NULL;
   const char *statement= NULL;
   int statement_len= 0;
+  int rc= 0;
   uint8_t is_buffered= 0;
   static char *key_words[]= {"", "", "buffered", NULL};
 
@@ -402,14 +403,20 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_USER_DATA, (void *)self);
     mysql_stmt_bind_param(self->stmt, self->params);
 
-    if (mariadb_stmt_execute_direct(self->stmt, statement, statement_len))
+    Py_BEGIN_ALLOW_THREADS;
+    rc= mariadb_stmt_execute_direct(self->stmt, statement, statement_len);
+    Py_END_ALLOW_THREADS;
+    if (rc)
     {
       /* in case statement is not supported via binary protocol, we try
          to run the statement with text protocol */
       if (mysql_stmt_errno(self->stmt) == ER_UNSUPPORTED_PS)
       {
-        mysql_stmt_reset(self->stmt);
-        if (mysql_real_query(self->stmt->mysql, statement, statement_len))
+        Py_BEGIN_ALLOW_THREADS;
+        rc= mysql_real_query(self->stmt->mysql, statement, statement_len);
+        Py_END_ALLOW_THREADS;
+
+        if (rc)
         {
           mariadb_throw_exception(self->stmt->mysql, Mariadb_InterfaceError, 0, NULL);
           goto error;
@@ -420,7 +427,10 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
       goto error;
     }
   } else {
-    if (mysql_stmt_execute(self->stmt))
+    Py_BEGIN_ALLOW_THREADS;
+    rc= mysql_stmt_execute(self->stmt);
+    Py_END_ALLOW_THREADS;
+    if (rc)
     {
       mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, NULL);
       goto error;
@@ -552,7 +562,6 @@ PyObject *MrdbCursor_fetchone(MrdbCursor *self)
                             "Cursor doesn't have a result set");
     return NULL;
   }
-
   if (mysql_stmt_fetch(self->stmt))
   {
     Py_INCREF(Py_None);
@@ -701,7 +710,6 @@ static
 PyObject *MrdbCursor_fetchall(MrdbCursor *self)
 {
   PyObject *List;
-
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
     return NULL;
@@ -715,7 +723,6 @@ PyObject *MrdbCursor_fetchall(MrdbCursor *self)
 
   if (!(List= PyList_New(0)))
     return NULL;
-
   while (!mysql_stmt_fetch(self->stmt))
   {
     uint32_t j;
@@ -758,9 +765,17 @@ uint8_t MrdbCursor_executemany_fallback(MrdbCursor *self,
     if (mysql_stmt_bind_param(self->stmt, self->params))
       goto error;
     if (i==0)
+    {
+      Py_BEGIN_ALLOW_THREADS;
       rc= mariadb_stmt_execute_direct(self->stmt, statement, len);
+      Py_END_ALLOW_THREADS;
+    }
     else
+    {
+      Py_BEGIN_ALLOW_THREADS;
       rc= mysql_stmt_execute(self->stmt);
+      Py_END_ALLOW_THREADS;
+    }
     if (rc)
       goto error;
   }
@@ -775,6 +790,7 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
 {
   const char *statement= NULL;
   int statement_len= 0;
+  int rc;
 
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
@@ -815,13 +831,19 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
 
     mysql_stmt_bind_param(self->stmt, self->params);
 
-    if (mariadb_stmt_execute_direct(self->stmt, statement, statement_len))
+    Py_BEGIN_ALLOW_THREADS;
+    rc= mariadb_stmt_execute_direct(self->stmt, statement, statement_len);
+    Py_END_ALLOW_THREADS;
+    if (rc)
     {
       mariadb_throw_exception(self->stmt, Mariadb_DatabaseError, 1, NULL);
       goto error;
     }
   } else {
-    if (mysql_stmt_execute(self->stmt))
+    Py_BEGIN_ALLOW_THREADS;
+    rc= mysql_stmt_execute(self->stmt);
+    Py_END_ALLOW_THREADS;
+    if (rc)
     {
       mariadb_throw_exception(self->stmt, Mariadb_DatabaseError, 1, NULL);
       goto error;
@@ -839,6 +861,7 @@ error:
 PyObject *MrdbCursor_nextset(MrdbCursor *self)
 {
   MARIADB_CHECK_STMT(self);
+  int rc;
   if (PyErr_Occurred())
     return NULL;
 
@@ -849,7 +872,10 @@ PyObject *MrdbCursor_nextset(MrdbCursor *self)
     return NULL;
   }
 
-  if (mysql_stmt_next_result(self->stmt))
+  Py_BEGIN_ALLOW_THREADS;
+  rc= mysql_stmt_next_result(self->stmt);
+  Py_END_ALLOW_THREADS;
+  if (rc)
   {
     Py_INCREF(Py_None);
     return Py_None;
