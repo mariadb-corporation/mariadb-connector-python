@@ -24,6 +24,7 @@
 #include <mysql.h>
 #include <errmsg.h>
 #include <mysqld_error.h>
+#include <mariadb_dyncol.h>
 #include <time.h>
 
 #if defined(_WIN32) && defined(_MSVC)
@@ -38,6 +39,9 @@
 
 #define MAX_TPC_XID_SIZE 65
 
+/* Magic constant for checking dynamic columns */
+#define PYTHON_DYNCOL_VALUE 0xA378BD8E
+
 enum enum_dataapi_groups
 {
   DBAPI_NUMBER= 1,
@@ -45,6 +49,12 @@ enum enum_dataapi_groups
   DBAPI_DATETIME,
   DBAPI_BINARY,
   DBAPI_ROWID
+};
+
+enum enum_dyncol_type
+{
+  DYNCOL_LIST= 1,
+  DYNCOL_TUPLE
 };
 
 enum enum_tpc_state
@@ -75,6 +85,7 @@ typedef struct {
 typedef struct {
   enum enum_field_types type;
   size_t bits; /* for PyLong Object */
+  PyTypeObject *ob_type;
   uint8_t is_negative;
   uint8_t has_indicator;
 } MrdbParamInfo;
@@ -87,8 +98,14 @@ typedef struct {
   uint8_t free_me;
   void *buffer;
   unsigned char num[8];
+  DYNAMIC_COLUMN dyncol;
   MYSQL_TIME tm;
 } MrdbParamValue;
+
+typedef struct {
+  PyObject_HEAD
+  enum enum_indicator_type indicator;
+} MrdbIndicator;
 
 /* PEP-249: Cursor object */
 typedef struct {
@@ -152,6 +169,7 @@ PyObject *Mariadb_Warning;
 
 /* Object types */
 PyTypeObject Mariadb_Fieldinfo_Type;
+PyTypeObject MrdbIndicator_Type;
 PyTypeObject MrdbConnection_Type;
 PyTypeObject MrdbCursor_Type;
 PyTypeObject Mariadb_DBAPIType_Type;
@@ -167,6 +185,8 @@ void mariadb_throw_exception(void *handle,
                              const char *message,
                              ...);
 
+PyObject *MrdbIndicator_Object(uint32_t type);
+long MrdbIndicator_AsLong(PyObject *v);
 PyObject *Mariadb_DBAPIType_Object(uint32_t type);
 PyObject *MrdbConnection_affected_rows(MrdbConnection *self);
 PyObject *MrdbConnection_autocommit(MrdbConnection *self,
@@ -199,6 +219,10 @@ uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 
 
 /* Helper macros */
+
+#define MrdbIndicator_Check(a)\
+(Py_TYPE((a)) == &MrdbIndicator_Type)
+
 #define MARIADB_FEATURE_SUPPORTED(mysql,version)\
 (mysql_get_server_version((mysql)) >= (version))
 

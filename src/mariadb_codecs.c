@@ -19,6 +19,327 @@
 #include "mariadb_python.h"
 #include <datetime.h>
 
+
+/* {{{ mariadb_pydate_to_tm
+   converts a Python date/time/datetime object to MYSQL_TIME
+*/
+static void mariadb_pydate_to_tm(enum enum_field_types type,
+                                    PyObject *obj,
+                                    MYSQL_TIME *tm)
+{
+  if (!PyDateTimeAPI)
+    PyDateTime_IMPORT;
+  memset(tm, 0, sizeof(MYSQL_TIME));
+  if (type == MYSQL_TYPE_TIME ||
+      type == MYSQL_TYPE_DATETIME)
+  {
+    uint8_t is_time= PyTime_CheckExact(obj);
+    tm->hour= is_time ? PyDateTime_TIME_GET_HOUR(obj) :
+                        PyDateTime_DATE_GET_HOUR(obj);
+    tm->minute= is_time ? PyDateTime_TIME_GET_MINUTE(obj) :
+                          PyDateTime_DATE_GET_MINUTE(obj);
+    tm->second= is_time ? PyDateTime_TIME_GET_SECOND(obj) :
+                          PyDateTime_DATE_GET_SECOND(obj);
+    tm->second_part= is_time ? PyDateTime_TIME_GET_MICROSECOND(obj) :
+                               PyDateTime_DATE_GET_MICROSECOND(obj);
+    if (type == MYSQL_TYPE_TIME)
+    {
+      tm->time_type= MYSQL_TIMESTAMP_TIME;
+      return;
+    }
+  }
+  if (type == MYSQL_TYPE_DATE ||
+      type == MYSQL_TYPE_DATETIME)
+  {
+    tm->year= PyDateTime_GET_YEAR(obj);
+    tm->month= PyDateTime_GET_MONTH(obj);
+    tm->day= PyDateTime_GET_DAY(obj);
+    if (type == MYSQL_TYPE_DATE)
+      tm->time_type= MYSQL_TIMESTAMP_DATE;
+    else
+      tm->time_type= MYSQL_TIMESTAMP_DATETIME;
+  }
+}
+/* }}} */
+
+/* {{{ check_is_dyncol
+
+   Checks if the binary object is a dynamic column with the following
+   conditions:
+   - dyncol has names and is not stored in old format
+   - number of elements (columns) can't be zero
+   - first value is an integer
+   - 4 high bytes of integer = PYTHON_DYNCOL_VALUE
+ */
+static uint8_t check_is_dyncol(DYNAMIC_COLUMN *col)
+{
+  uint32_t count= 0;
+  DYNAMIC_COLUMN_VALUE val;
+  if (mariadb_dyncol_check(col) != ER_DYNCOL_OK ||
+      !mariadb_dyncol_has_names(col))
+    return 0;
+
+  if (mariadb_dyncol_column_count(col, &count) != ER_DYNCOL_OK ||
+      !count)
+    return 0;
+
+  if (mariadb_dyncol_get_num(col, 0, &val) != ER_DYNCOL_OK)
+    return 0;
+
+  if (val.type != DYN_COL_UINT ||
+     val.x.ulong_value >> 32 != PYTHON_DYNCOL_VALUE)
+    return 0;
+
+  return 1;
+}
+/* }}} */
+
+/* {{{ mariadb_dyncol_to_pyobj
+   converts a dynamic column to python object (list or tuple)
+
+   check if the dyncol is correct should be made before
+   calling this function
+ */
+static PyObject *mariadb_dyncol_to_pyobj(DYNAMIC_COLUMN *col)
+{
+  PyObject *pycol= NULL;
+  enum enum_dyncol_type type= 0;
+  uint32_t i, column_count;
+  DYNAMIC_COLUMN_VALUE dyncol_val;
+
+  /* First element contains the type */
+  if (mariadb_dyncol_get_num(col, 0, &dyncol_val) != ER_DYNCOL_OK)
+    return NULL;
+
+  type= dyncol_val.x.ulong_value - (dyncol_val.x.ulong_value << 32);
+  if (!type || type > DYNCOL_TUPLE)
+    return NULL;
+
+  if (mariadb_dyncol_column_count(col, &column_count) != ER_DYNCOL_OK)
+    return NULL;
+
+  column_count--;
+
+  if (type == DYNCOL_LIST)
+    pycol= PyList_New(column_count);
+  else if (type == DYNCOL_TUPLE)
+    pycol= PyTuple_New(column_count);
+
+  for (i=1; i <= column_count; i++)
+  {
+    PyObject *newval;
+    DYNAMIC_COLUMN_VALUE val;
+
+    if (mariadb_dyncol_get_num(col, i, &val) != ER_DYNCOL_OK)
+      goto error;
+
+    switch(val.type) {
+      case DYN_COL_NULL:
+        Py_INCREF(Py_None);
+        newval= Py_None;
+        break;
+      case DYN_COL_STRING:
+        newval= PyUnicode_FromStringAndSize(val.x.string.value.str,
+                                           val.x.string.value.length);
+        break;
+      case DYN_COL_INT:
+        newval= PyLong_FromLongLong(val.x.long_value);
+        break;
+      case DYN_COL_UINT:
+        newval= PyLong_FromUnsignedLongLong(val.x.ulong_value);
+        break;
+      case DYN_COL_DOUBLE:
+        newval= PyFloat_FromDouble(val.x.double_value);
+        break;
+      case DYN_COL_DYNCOL:
+        newval= mariadb_dyncol_to_pyobj((DYNAMIC_COLUMN *)&val.x.string.value);
+        break;
+      case DYN_COL_DATE:
+      case DYN_COL_TIME:
+      case DYN_COL_DATETIME:
+        {
+          MYSQL_TIME tm= val.x.time_value;
+          switch (tm.time_type) {
+          case MYSQL_TIMESTAMP_TIME:
+            newval= PyTime_FromTime(tm.hour, tm.minute, tm.second, tm.second_part);
+            break;
+          case MYSQL_TIMESTAMP_DATE:
+            newval= PyDate_FromDate(tm.year, tm.month, tm.day);
+            break;
+          case MYSQL_TIMESTAMP_DATETIME:
+            newval= PyDateTime_FromDateAndTime(tm.year, tm.month, tm.day, tm.hour, tm.minute,
+                                               tm.second, tm.second_part);
+            break;
+          default:
+            Py_INCREF(Py_None);
+            newval= Py_None;
+            break;
+          }
+        }
+        break;
+      default:
+        goto error;
+    }
+    if (newval)
+    {
+      if (type == DYNCOL_LIST)
+        PyList_SetItem(pycol, i - 1, newval);
+      else if (type == DYNCOL_TUPLE)
+        PyTuple_SetItem(pycol, i - 1, newval);
+    }
+  }
+  return pycol;
+
+error:
+  return NULL;
+}
+/* }}} */
+
+/* add_dynamic_key */
+static char *add_dynamic_key(char *keys, uint8_t size, uint32_t column)
+{
+  snprintf(keys + (column * size), size + 1, "%*d", size, column);
+  return keys + (column * size);
+}
+/* }}} */
+
+/* {{{ mariadb_pyobj_to_dyncol */
+static uint8_t mariadb_pyobj_to_dyncol(DYNAMIC_COLUMN *col,
+                                       PyObject *obj,
+                                       uint32_t level)
+{
+  enum enum_dyncol_type type= 0;
+  size_t size= 0;
+  char *keys= 0;
+  uint8_t rc= 1;
+  uint32_t i, keys_size, *column_vals= NULL;
+  MYSQL_LEX_STRING *column_keys= NULL;
+  DYNAMIC_COLUMN_VALUE *values= NULL;
+  DYNAMIC_COLUMN *new_column;
+
+  if (Py_TYPE(obj) == &PyList_Type)
+  {
+    type= DYNCOL_LIST;
+    size= PyList_Size(obj);
+  }
+  else if (Py_TYPE(obj) == &PyTuple_Type)
+  {
+    type= DYNCOL_TUPLE;
+    size= PyTuple_Size(obj);
+  }
+  else
+    return 1; /* other types not supported yet */
+
+  keys_size= (uint8_t)log10(size) + 1;
+
+  if (!(column_keys= (MYSQL_LEX_STRING *)PyMem_RawCalloc(size + 1, sizeof(MYSQL_LEX_STRING))))
+    goto end;
+
+  if (!(keys= (char *)PyMem_RawCalloc(1, (size + 1) * (size_t)keys_size + 1)))
+    goto end;
+
+  if (!(column_vals= (uint32_t *)PyMem_RawCalloc((size + 1), sizeof(uint32_t))))
+    goto end;
+
+  if (!(values = (DYNAMIC_COLUMN_VALUE *)PyMem_RawCalloc((size + 1), sizeof(DYNAMIC_COLUMN_VALUE))))
+    goto end;
+
+  /* First element always specifes the type (tuple or list) */
+  values[0].type= DYN_COL_UINT;
+  values[0].x.ulong_value= ((long long)PYTHON_DYNCOL_VALUE << 32) + type;
+  column_keys[0].str= add_dynamic_key(keys, keys_size, 0) ;
+  column_keys[0].length= keys_size;
+
+  for (i=0; i < size; i++)
+  {
+    PyObject *item;
+
+    if (type == DYNCOL_LIST)
+      item= PyList_GetItem(obj, i);
+    else
+      item= PyTuple_GetItem(obj, i);
+
+    if (Py_TYPE(item) == &PyLong_Type)
+    {
+      if (_PyLong_Sign(item) < 0)
+      {
+        values[i+1].type= DYN_COL_INT;
+        values[i+1].x.long_value= PyLong_AsLongLong(item);
+      } else {
+        values[i+1].type= DYN_COL_UINT;
+        values[i+1].x.ulong_value= PyLong_AsUnsignedLongLong(item);
+      }
+    } else if (Py_TYPE(item) == &PyFloat_Type)
+    {
+      values[i+1].type= DYN_COL_DOUBLE;
+      values[i+1].x.double_value= PyFloat_AsDouble(item);
+    } else if (Py_TYPE(item) == &PyUnicode_Type)
+    {
+      values[i+1].type= DYN_COL_STRING;
+      values[i+1].x.string.value.str= PyUnicode_AsUTF8AndSize(item,
+       (Py_ssize_t *)&values[i].x.string.value.length);
+      values[i+1].x.string.charset= ma_charset_utf8_general_ci;
+    } else if (Py_TYPE(item) == &PyBytes_Type)
+    {
+      values[i+1].type= DYN_COL_STRING;
+      values[i+1].x.string.value.length= (size_t)PyBytes_GET_SIZE(item);
+      values[i+1].x.string.value.str= PyBytes_AS_STRING(item);
+      values[i+1].x.string.charset= ma_charset_bin;
+    } else if (PyDate_CheckExact(item))
+    {
+      values[i+1].type= DYN_COL_DATE;
+      mariadb_pydate_to_tm(MYSQL_TYPE_DATE, item, &values[i+1].x.time_value);
+    } else if (PyTime_CheckExact(item))
+    {
+      values[i+1].type= DYN_COL_TIME;
+      mariadb_pydate_to_tm(MYSQL_TYPE_TIME, item, &values[i+1].x.time_value);
+    } else if (PyDateTime_CheckExact(item))
+    {
+      values[i+1].type= DYN_COL_DATETIME;
+      mariadb_pydate_to_tm(MYSQL_TYPE_DATETIME, item, &values[i+1].x.time_value);
+    } else if (Py_TYPE(item) == &PyList_Type ||
+               Py_TYPE(item) == &PyTuple_Type)
+    {
+      new_column= (DYNAMIC_COLUMN *)alloca(sizeof(DYNAMIC_COLUMN));
+      if (mariadb_pyobj_to_dyncol(new_column, item, level + 1))
+      {
+        goto end;
+      }
+      if (mariadb_dyncol_check(new_column) != ER_DYNCOL_OK)
+        goto end;
+      values[i+1].type= DYN_COL_DYNCOL;
+      values[i+1].x.string.value.str= new_column->str;
+      values[i+1].x.string.value.length= new_column->length;
+    } else
+      goto end;
+    column_keys[i+1].str= add_dynamic_key(keys, keys_size, i+1);
+    column_keys[i+1].length= keys_size;
+  }
+  /* now we can build our dynamic column */
+  mariadb_dyncol_init(col);
+  if (mariadb_dyncol_create_many_named(col, size + 1 , column_keys, values, 0) != ER_DYNCOL_OK)
+    goto end;
+  rc= 0;
+end:
+  if (rc)
+  {
+    /* in case of error make sure that we free dyncols */
+    for (i=0; i < size; i++)
+    {
+      if (values[i].type== DYN_COL_DYNCOL)
+        mariadb_dyncol_free((DYNAMIC_COLUMN *)values[i].x.string.value.str);
+    }
+  }
+  if (keys)
+    PyMem_RawFree(keys);
+  if (column_keys)
+    PyMem_RawFree(column_keys);
+  if (values)
+    PyMem_RawFree(values);
+  return rc;
+}
+/* }}} */
+
 /* {{{ field_fetch_callback
   This function was previously registered with mysql_stmt_attr_set and
   STMT_ATTR_FIELD_FETCH_CALLBACK parameter. Instead of filling a bind buffer
@@ -181,7 +502,22 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     {
       unsigned long length= mysql_net_field_length(row);
       if (self->fields[column].flags & BINARY_FLAG)
-        self->values[column]= PyBytes_FromStringAndSize((const char *)*row, (Py_ssize_t)length);
+      {
+        DYNAMIC_COLUMN dc;
+        uint8_t rc;
+
+        /* check if we have a DYNAMIC_COLUMN */
+        mariadb_dyncol_init(&dc);
+        dc.str= (char *)*row;
+        dc.length= length;
+
+        if ((rc= check_is_dyncol(&dc)))
+        {
+          self->values[column]= mariadb_dyncol_to_pyobj(&dc);
+        }
+        else
+          self->values[column]= PyBytes_FromStringAndSize((const char *)*row, (Py_ssize_t)length);
+      }
       else
         self->values[column]= PyUnicode_FromStringAndSize((const char *)*row, (Py_ssize_t)length);
  
@@ -209,6 +545,7 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 }
 /* }}} */
 
+
 /* {{{ mariadb_get_column_info
    This function analyzes the Python object and calculates the corresponding
    MYSQL_TYPE, unsigned flag or NULL values and stores the information in
@@ -219,6 +556,13 @@ static uint8_t mariadb_get_column_info(PyObject *obj,
 {
   if (!PyDateTimeAPI)
     PyDateTime_IMPORT;
+
+  if (obj == NULL)
+  {
+    paraminfo->type= MYSQL_TYPE_BLOB;
+    return 0;
+  }
+
   if (Py_TYPE(obj) == &PyLong_Type)
   {
     size_t b= _PyLong_NumBits(obj);
@@ -232,7 +576,9 @@ static uint8_t mariadb_get_column_info(PyObject *obj,
   {
     paraminfo->type= MYSQL_TYPE_DOUBLE;
     return 0;
-  } else if (Py_TYPE(obj) == &PyBytes_Type)
+  } else if (Py_TYPE(obj) == &PyBytes_Type ||
+             Py_TYPE(obj) == &PyList_Type ||
+             Py_TYPE(obj) == &PyTuple_Type)
   {
     paraminfo->type= MYSQL_TYPE_LONG_BLOB;
     return 0;
@@ -252,6 +598,11 @@ static uint8_t mariadb_get_column_info(PyObject *obj,
   {
     paraminfo->type= MYSQL_TYPE_VAR_STRING;
     return 0;
+  } else if (Py_TYPE(obj) == &PyTuple_Type ||
+             Py_TYPE(obj) == &PyList_Type)
+  {
+    paraminfo->type= MYSQL_TYPE_LONG_BLOB;
+    paraminfo->ob_type= Py_TYPE(obj);
   } else if (obj == Py_None)
   {
     paraminfo->type= MYSQL_TYPE_NULL;
@@ -317,42 +668,29 @@ static uint8_t mariadb_get_parameter(MrdbCursor *self,
     return 1;
   }
 
-  if (Py_TYPE(column) == &PyTuple_Type) /* (value, indicator) */
+  /* check if an indicator was passed */
+  if (MrdbIndicator_Check(column))
   {
-    PyObject *indicator;
-    PyObject *value;
-    if (PyTuple_Size(column) != 2)
-    {
-      mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
-      "Invalid tuple at row %d, column %d", row_nr, column_nr);
-      return 1;
-    }
     if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
     {
       mariadb_throw_exception(NULL, Mariadb_DataError, 0,
       "MariaDB %s doesn't support indicator variables. Required version is 10.2.6 or newer", mysql_get_server_info(self->stmt->mysql));
       return 1;
     }
-    value= PyTuple_GetItem(column, 0);
-    indicator= PyTuple_GetItem(column, 1);
-    if (Py_TYPE(indicator) != &PyLong_Type ||
-       (PyLong_AsLong(indicator) < STMT_INDICATOR_NTS ||
-        PyLong_AsLong(indicator) > STMT_INDICATOR_IGNORE_ROW))
+    param->indicator= MrdbIndicator_AsLong(column);
+    param->value= NULL; /* you can't have both indicator and value */
+  } else if (column == Py_None)
+  {
+    if (MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
     {
-      mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
-      "Invalid value for indicator at row %d, column %d", row_nr, column_nr);
-      return 1;
+      param->indicator= STMT_INDICATOR_NULL;
+      param->value= NULL;
     }
-    param->indicator= PyLong_AsLong(indicator);
-    param->value= value;
-    return 0;
-  }
-  else
+  }  else
+  {
     param->value= column;
-  if (param->value == Py_None)
-    param->indicator= STMT_INDICATOR_NULL;
-  else
     param->indicator= STMT_INDICATOR_NONE;
+  }
   return 0;
 }
 /* }}} */
@@ -618,43 +956,26 @@ static uint8_t mariadb_param_to_bind(MYSQL_BIND *bind,
       *(double *)value->num= (double)PyFloat_AsDouble(value->value);
       break;
     case MYSQL_TYPE_LONG_BLOB:
-      bind->buffer_length= (unsigned long)PyBytes_GET_SIZE(value->value);
-      bind->buffer= (void *) PyBytes_AS_STRING(value->value);
+      if (Py_TYPE(value->value) == &PyTuple_Type ||
+          Py_TYPE(value->value) == &PyList_Type)
+      {
+        if (value->dyncol.length)
+          mariadb_dyncol_free(&value->dyncol);
+        if (mariadb_pyobj_to_dyncol(&value->dyncol, value->value, 0))
+          return 1;
+        bind->buffer_length= (unsigned long)value->dyncol.length;
+        bind->buffer= (void *)value->dyncol.str;
+      } else
+      {
+        bind->buffer_length= (unsigned long)PyBytes_GET_SIZE(value->value);
+        bind->buffer= (void *) PyBytes_AS_STRING(value->value);
+      }
       break;
     case MYSQL_TYPE_DATE:
     case MYSQL_TYPE_TIME:
     case MYSQL_TYPE_DATETIME:
       bind->buffer= &value->tm;
-      memset(&value->tm, 0, sizeof(MYSQL_TIME));
-      if (bind->buffer_type == MYSQL_TYPE_TIME ||
-          bind->buffer_type == MYSQL_TYPE_DATETIME)
-      {
-        uint8_t is_time= PyTime_CheckExact(value->value);
-        value->tm.hour= is_time ? PyDateTime_TIME_GET_HOUR(value->value) :
-                                  PyDateTime_DATE_GET_HOUR(value->value);
-        value->tm.minute= is_time ? PyDateTime_TIME_GET_MINUTE(value->value) :
-                                  PyDateTime_DATE_GET_MINUTE(value->value);
-        value->tm.second= is_time ? PyDateTime_TIME_GET_SECOND(value->value) :
-                                  PyDateTime_DATE_GET_SECOND(value->value);
-        value->tm.second_part= is_time ? PyDateTime_TIME_GET_MICROSECOND(value->value) :
-                                  PyDateTime_DATE_GET_MICROSECOND(value->value);
-        if (bind->buffer_type == MYSQL_TYPE_TIME)
-        {
-          value->tm.time_type= MYSQL_TIMESTAMP_TIME;
-          break;
-        }
-      }
-      if (bind->buffer_type == MYSQL_TYPE_DATE ||
-          bind->buffer_type == MYSQL_TYPE_DATETIME)
-      {
-        value->tm.year= PyDateTime_GET_YEAR(value->value);
-        value->tm.month= PyDateTime_GET_MONTH(value->value);
-        value->tm.day= PyDateTime_GET_DAY(value->value);
-        if (bind->buffer_type == MYSQL_TYPE_DATE)
-          value->tm.time_type= MYSQL_TIMESTAMP_DATE;
-        else
-          value->tm.time_type= MYSQL_TIMESTAMP_DATETIME;
-      }
+      mariadb_pydate_to_tm(bind->buffer_type, value->value, &value->tm);
       break;
     case MYSQL_TYPE_VAR_STRING:
     {
@@ -700,7 +1021,9 @@ uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     if (mariadb_get_parameter(self, (self->array_size > 0), row_nr, i, &self->value[i]))
       return 1;
     if (self->value[i].indicator)
-      bind->u.indicator= &self->value[i].indicator;
+    {
+      bind[i].u.indicator= &self->value[i].indicator;
+    }
     if (self->value[i].indicator < 1)
     {
       if (mariadb_param_to_bind(&bind[i], &self->value[i]))

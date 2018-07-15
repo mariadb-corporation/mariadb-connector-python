@@ -265,5 +265,32 @@ class CursorTest(unittest.TestCase):
     self.assertEqual(expected_typecodes, typecodes)
     del cursor
 
+  def test_tuple(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE dyncol1 (a blob)");
+    tpl=(1,2,3)
+    cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl);
+    del cursor
+
+  def test_indicator(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE ind1 (a int, b int default 2,c int)");
+    vals= (mariadb.indicator_null, mariadb.indicator_default, 3)
+    cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", [vals])
+    cursor.execute("SELECT a, b, c FROM ind1")
+    row= cursor.fetchone()
+    self.assertEqual(row[0], None)
+    self.assertEqual(row[1], 2)
+    self.assertEqual(row[2], 3)
 
 
+  def test_tuple(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE dyncol1 (a blob)");
+    t= datetime.datetime(2018,6,20,12,22,31,123456)
+    val=([1,t,3,(1,2,3)],)
+    cursor.execute("INSERT INTO dyncol1 VALUES (?)", val);
+    cursor.execute("SELECT a FROM dyncol1")
+    row= cursor.fetchone()
+    self.assertEqual(row,val);
+    del cursor

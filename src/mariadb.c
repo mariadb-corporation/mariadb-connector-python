@@ -93,13 +93,8 @@ struct st_constants {
     const char *strvalue;
   } u;
  };
+
  struct st_constants int_constants[]= {
-  {"INDICATOR_NTS", {STMT_INDICATOR_NTS}},
-  {"INDICATOR_NONE", {STMT_INDICATOR_NONE}},
-  {"INDICATOR_NULL", {STMT_INDICATOR_NULL}},
-  {"INDICATOR_DEFAULT", {STMT_INDICATOR_DEFAULT}},
-  {"INDICATOR_IGNORE", {STMT_INDICATOR_IGNORE}},
-  {"INDICATOR_IGNORE_ROW", {STMT_INDICATOR_IGNORE_ROW}},
   {"CURSOR_TYPE_READ_ONLY", {CURSOR_TYPE_READ_ONLY}},
   {"CURSOR_TYPE_NONE", {CURSOR_TYPE_NO_CURSOR}},
   {NULL, {0}} /* Always last */
@@ -130,6 +125,10 @@ PyMODINIT_FUNC PyInit_mariadb(void)
 
   Py_TYPE(&MrdbCursor_Type) = &PyType_Type;
   if (PyType_Ready(&MrdbCursor_Type) == -1)
+    goto error;
+
+  Py_TYPE(&MrdbIndicator_Type) = &PyType_Type;
+  if (PyType_Ready(&MrdbIndicator_Type) == -1)
     goto error;
 
   Py_TYPE(&Mariadb_Fieldinfo_Type) = &PyType_Type;
@@ -187,6 +186,12 @@ PyMODINIT_FUNC PyInit_mariadb(void)
 
   Py_INCREF(&MrdbConnection_Type);
   PyModule_AddObject(module, "connection", (PyObject *)&MrdbConnection_Type);
+
+  PyModule_AddObject(module, "indicator_null", MrdbIndicator_Object(STMT_INDICATOR_NULL));
+  PyModule_AddObject(module, "indicator_default", MrdbIndicator_Object(STMT_INDICATOR_DEFAULT));
+  PyModule_AddObject(module, "indicator_ignore", MrdbIndicator_Object(STMT_INDICATOR_IGNORE));
+  PyModule_AddObject(module, "indicator_row", MrdbIndicator_Object(STMT_INDICATOR_IGNORE_ROW));
+
   PyModule_AddObject(module, "NUMBER", Mariadb_DBAPIType_Object(DBAPI_NUMBER));
   PyModule_AddObject(module, "BINARY", Mariadb_DBAPIType_Object(DBAPI_BINARY));
   PyModule_AddObject(module, "STRING", Mariadb_DBAPIType_Object(DBAPI_STRING));

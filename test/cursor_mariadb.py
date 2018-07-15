@@ -18,7 +18,7 @@ class CursorTest(unittest.TestCase):
     cursor.execute("CREATE OR REPLACE TABLE t1(a int not null auto_increment primary key, b int, c int, d varchar(20),e date)")
 #    cursor.execute("set @@autocommit=0");
     list_in= []
-    for i in range(1, 300000):
+    for i in range(1, 300001):
       row= (i,i,i,"bar", datetime.date(2019,1,1))
       list_in.append(row)
     cursor.executemany("INSERT INTO t1 VALUES (?,?,?,?,?)", list_in)

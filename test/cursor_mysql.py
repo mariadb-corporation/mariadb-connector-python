@@ -19,7 +19,7 @@ class CursorTest(unittest.TestCase):
     cursor.execute("SET @@autocommit=0");
     c = (1,2,3, "bar", datetime.date(2018,11,11))
     list_in= []
-    for i in range(1,300000):
+    for i in range(1,300001):
       row= (i,i,i,"bar", datetime.date(2019,1,1))
       list_in.append(row)
     cursor.executemany("INSERT INTO t1 VALUES (%s,%s,%s,%s,%s)", list_in)
