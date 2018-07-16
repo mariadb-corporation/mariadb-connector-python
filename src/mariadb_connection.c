@@ -104,8 +104,89 @@ static PyMethodDef MrdbConnection_Methods[] =
 
 static struct PyMemberDef MrdbConnection_Members[] =
 {
+  {"connection_id",
+   T_LONG,
+   offsetof(MrdbConnection, thread_id),
+   READONLY,
+   "Internal id of the connection."},
+  {"character_set",
+   T_OBJECT,
+   offsetof(MrdbConnection, charset),
+   READONLY,
+   "Client character set"},
+  {"collation",
+   T_OBJECT,
+   offsetof(MrdbConnection, collation),
+   READONLY,
+   "Client character set collation"},
+  {"database",
+   T_OBJECT,
+   offsetof(MrdbConnection, schema),
+   READONLY,
+   "Default schema (database)"},
+  {"dsn",
+   T_OBJECT,
+   offsetof(MrdbConnection, dsn),
+   READONLY,
+   "Data source name (dsn)"},
+  {"server_port",
+   T_INT,
+   offsetof(MrdbConnection, port),
+   READONLY,
+   "Database server TCP/IP port"},
+  {"unix_socket",
+   T_OBJECT,
+   offsetof(MrdbConnection, unix_socket),
+   READONLY,
+   "Unix socket name"},
+  {"server_name",
+   T_OBJECT,
+   offsetof(MrdbConnection, host),
+   READONLY,
+   "Name or address of database server"},
+  {"user",
+   T_OBJECT,
+   offsetof(MrdbConnection, user),
+   READONLY,
+   "user name"},
+  {"tls_cipher",
+   T_OBJECT,
+   offsetof(MrdbConnection, tls_cipher),
+   READONLY,
+   "TLS cipher suite in used by connection"},
+  {"tls_version",
+   T_OBJECT,
+   offsetof(MrdbConnection, tls_version),
+   READONLY,
+   "TLS protocol version used by connection"},
   {NULL} /* always last */
 };
+
+static void Mrdb_ConnAttrStr(MYSQL *mysql, PyObject **obj, enum mariadb_value attr)
+{
+  char *val= NULL;
+
+  if (mariadb_get_infov(mysql, attr, &val) || !val)
+    return;
+  *obj= PyUnicode_FromString(val);
+}
+
+void MrdbConnection_SetAttributes(MrdbConnection *self)
+{
+  MY_CHARSET_INFO cinfo;
+
+  Mrdb_ConnAttrStr(self->mysql, &self->host, MARIADB_CONNECTION_HOST);
+  Mrdb_ConnAttrStr(self->mysql, &self->user, MARIADB_CONNECTION_USER);
+  Mrdb_ConnAttrStr(self->mysql, &self->schema, MARIADB_CONNECTION_SCHEMA);
+  Mrdb_ConnAttrStr(self->mysql, &self->tls_cipher, MARIADB_CONNECTION_SSL_CIPHER);
+  Mrdb_ConnAttrStr(self->mysql, &self->tls_version, MARIADB_CONNECTION_TLS_VERSION);
+  Mrdb_ConnAttrStr(self->mysql, &self->unix_socket, MARIADB_CONNECTION_UNIX_SOCKET);
+  mariadb_get_infov(self->mysql, MARIADB_CONNECTION_PORT, &self->port);
+  self->thread_id= mysql_thread_id(self->mysql);
+  mariadb_get_infov(self->mysql, MARIADB_CONNECTION_MARIADB_CHARSET_INFO, &cinfo);
+  self->charset= PyUnicode_FromString(cinfo.csname);
+  self->collation= PyUnicode_FromString(cinfo.name);
+}
 
 static int
 MrdbConnection_Initialize(MrdbConnection *self,
@@ -115,42 +196,49 @@ MrdbConnection_Initialize(MrdbConnection *self,
   /* Todo: we need to support all dsn parameters, the current
            implementation is just a small subset.
   */
-  char *host= NULL, *user= NULL, *password= NULL, *schema= NULL,
+  char *dsn= NULL, *host=NULL, *user= NULL, *password= NULL, *schema= NULL,
        *socket= NULL, *init_command= NULL, *default_file= NULL,
        *default_group= NULL, *local_infile= NULL,
        *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
        *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL;
+  uint8_t ssl_enforce= 0;
   unsigned int client_flags= 0, port= 0;
   unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
       compress= 0, ssl_verify_cert= 0;
 
   static char *dsn_keys[]= {
-    "host", "user", "password", "database", "port", "socket",
+    "dsn", "host", "user", "password", "database", "port", "socket",
     "connect_timeout", "read_timeout", "write_timeout",
     "local_infile", "compress", "init_command",
     "default_file", "default_group",
     "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
     "ssl_cipher", "ssl_capath", "ssl_crlpath",
-    "ssl_verify_cert",
+    "ssl_verify_cert", "ssl",
     "client_flags"
   };
 
   if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-        "|ssssisiiiiissssssssssii:connect",
+        "|sssssisiiiiissssssssssipi:connect",
         dsn_keys,
-        &host, &user, &password, &schema, &port, &socket,
+        &dsn, &host, &user, &password, &schema, &port, &socket,
         &connect_timeout, &read_timeout, &write_timeout,
         &local_infile, &compress, &init_command,
         &default_file, &default_group,
         &ssl_key, &ssl_ca, &ssl_cert, &ssl_crl,
         &ssl_cipher, &ssl_capath, &ssl_crlpath,
-        &ssl_verify_cert,
+        &ssl_verify_cert, &ssl_enforce,
         &client_flags))
     return -1;
 
-  if (!(self->mysql= mysql_init(NULL)))
+  if (dsn)
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, 
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+                             "dsn keyword is not supported");
+    return -1;
+  }
+
+  if (!(self->mysql= mysql_init(NULL)))
+  {    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, 
     "Can't allocate memory for connection");
     return -1;
   }
@@ -170,7 +258,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     mysql_optionsv(self->mysql, MYSQL_OPT_WRITE_TIMEOUT, &write_timeout);
 
   /* set TLS/SSL options */
-  if (ssl_key || ssl_ca || ssl_cert || ssl_capath || ssl_cipher)
+  if (ssl_enforce || ssl_key || ssl_ca || ssl_cert || ssl_capath || ssl_cipher)
     mysql_ssl_set(self->mysql, (const char *)ssl_key,
                          (const char *)ssl_cert,
                          (const char *)ssl_ca,
@@ -196,10 +284,15 @@ MrdbConnection_Initialize(MrdbConnection *self,
     mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
     goto end;
   }
-end:
+
+  end:
   Py_END_ALLOW_THREADS;
   if (PyErr_Occurred())
     return -1;
+
+  /* set connection attributes */
+  MrdbConnection_SetAttributes(self);
+
   return 0;
 }
 

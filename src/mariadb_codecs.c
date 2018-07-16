@@ -195,7 +195,7 @@ error:
 }
 /* }}} */
 
-/* add_dynamic_key */
+/* {{{ add_dynamic_key */
 static char *add_dynamic_key(char *keys, uint8_t size, uint32_t column)
 {
   snprintf(keys + (column * size), size + 1, "%*d", size, column);
@@ -544,7 +544,6 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
   }
 }
 /* }}} */
-
 
 /* {{{ mariadb_get_column_info
    This function analyzes the Python object and calculates the corresponding

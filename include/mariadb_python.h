@@ -72,6 +72,17 @@ typedef struct {
   uint8_t is_buffered;
   enum enum_tpc_state tpc_state;
   char xid[MAX_TPC_XID_SIZE];
+  PyObject *dsn; /* always null */
+  PyObject *tls_cipher;
+  PyObject *tls_version;
+  PyObject *host;
+  PyObject *user;
+  PyObject *schema;
+  PyObject *unix_socket;
+  unsigned long thread_id;
+  int port;
+  PyObject *charset;
+  PyObject *collation;
 } MrdbConnection;
 
 typedef struct {
@@ -195,6 +206,7 @@ PyObject *MrdbConnection_rollback(MrdbConnection *self);
 PyObject *MrdbConnection_commit(MrdbConnection *self);
 PyObject *MrdbConnection_close(MrdbConnection *self);
 PyObject *MrdbConnection_connect( PyObject *self,PyObject *args,	PyObject *kwargs);
+void MrdbConnection_SetAttributes(MrdbConnection *self);
 
 /* TPC methods */
 PyObject *MrdbConnection_xid(MrdbConnection *self, PyObject *args);
@@ -231,7 +243,9 @@ if (!connection || !connection->mysql) {\
   mariadb_throw_exception(connection->mysql, Mariadb_Error, 0,\
     "Invalid connection or not connected");\
     return NULL;\
-}
+}\
+if ((connection)->thread_id != mysql_thread_id((connection)->mysql))\
+  MrdbConnection_SetAttributes((connection));
 
 #define MARIADB_CHECK_TPC(connection)\
 if (connection->tpc_state == TPC_STATE_NONE) {\
