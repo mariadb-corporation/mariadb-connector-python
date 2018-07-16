@@ -404,6 +404,12 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     mysql_stmt_bind_param(self->stmt, self->params);
 
     Py_BEGIN_ALLOW_THREADS;
+    if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
+    {
+      rc= mysql_stmt_prepare(self->stmt, statement, statement_len);
+      if (!rc)
+        rc= mysql_stmt_execute(self->stmt);
+    }
     rc= mariadb_stmt_execute_direct(self->stmt, statement, statement_len);
     Py_END_ALLOW_THREADS;
     if (rc)
@@ -744,7 +750,8 @@ PyObject *MrdbCursor_fetchall(MrdbCursor *self)
 }
 
 
-/**
+/* {{{ MrdbCursor_executemany_fallback
+   bulk execution for server < 10.2.6
 */
 static
 uint8_t MrdbCursor_executemany_fallback(MrdbCursor *self,
@@ -758,24 +765,18 @@ uint8_t MrdbCursor_executemany_fallback(MrdbCursor *self,
 
   for (i=0; i < self->array_size; i++)
   {
-    int rc;
+    int rc= 0;
     /* Load values */
     if (mariadb_param_update(self, self->params, i))
       return 1;
     if (mysql_stmt_bind_param(self->stmt, self->params))
       goto error;
+    Py_BEGIN_ALLOW_THREADS;
     if (i==0)
-    {
-      Py_BEGIN_ALLOW_THREADS;
-      rc= mariadb_stmt_execute_direct(self->stmt, statement, len);
-      Py_END_ALLOW_THREADS;
-    }
-    else
-    {
-      Py_BEGIN_ALLOW_THREADS;
+      rc= mysql_stmt_prepare(self->stmt, statement, len);
+    if (!rc)
       rc= mysql_stmt_execute(self->stmt);
-      Py_END_ALLOW_THREADS;
-    }
+    Py_END_ALLOW_THREADS;
     if (rc)
       goto error;
   }
@@ -784,6 +785,7 @@ error:
   mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, NULL);
   return 1;
 }
+/* }}} */
 
 PyObject *MrdbCursor_executemany(MrdbCursor *self,
                                      PyObject *Args)
