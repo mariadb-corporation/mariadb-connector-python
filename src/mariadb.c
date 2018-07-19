@@ -100,14 +100,33 @@ struct st_constants {
   {NULL, {0}} /* Always last */
 };
 
+static char exception_interface_doc[]= "Exception raised for errors that are related to the database interface "
+                                      "rather than the database itself";
+static char exception_warning_doc[]= "Exception raised for important warnings like data truncations while inserting, etc";
+static char exception_database_doc[]= "Exception raised for errors that are related to the database";
+static char exception_data_doc[] = "Exception raised for errors that are due to problems with the processed data "
+                                   "like division by zero, numeric value out of range, etc.";
+static char exception_operational_doc[] = "Exception raised for errors that are related to the database's operation "
+                                          "and not necessarily under the control of the programmer.";
+static char exception_integrity_doc[]= "Exception raised when the relational integrity of the database is affected, "
+                                       "e.g. a foreign key check fails";
+static char exception_internal_doc[]= "Exception raised when the database encounters an internal error, "
+                                      "e.g. the cursor is not valid anymore";
+static char exception_programming_doc[]= "Exception raised for programming errors, e.g. table not found or already "
+                                         "exists, syntax error in the SQL statement";
+static char exception_notsupported_doc[]= "Exception raised in case a method or database API was used which is not "
+                                          "supported by the database";
+
 static void mariadb_add_exception(PyObject *module,
                                   PyObject **exception,
                                   const char *exception_name,
+                                  char *doc,
                                   const char *object_name)
 {
-  *exception= PyErr_NewException(exception_name,
-                                 Mariadb_Error,
-                                 NULL);
+  *exception= PyErr_NewExceptionWithDoc(exception_name,
+                                        doc,
+                                        Mariadb_Error,
+                                        NULL);
 
   Py_INCREF(*exception);
   PyModule_AddObject(module, object_name, *exception);
@@ -160,29 +179,27 @@ PyMODINIT_FUNC PyInit_mariadb(void)
   PyModule_AddObject(module, "Error", Mariadb_Error);
 
   mariadb_add_exception(module, &Mariadb_InterfaceError,
-                        "mariadb.InterfaceError", "InterfaceError");
+                        "mariadb.InterfaceError", exception_interface_doc, "InterfaceError");
   mariadb_add_exception(module, &Mariadb_OperationalError,
-                        "mariadb.OperationalError", "OperationalError");
+                        "mariadb.OperationalError", exception_operational_doc, "OperationalError");
   mariadb_add_exception(module, &Mariadb_Warning,
-                        "mariadb.Warning", "Warning");
-  mariadb_add_exception(module, &Mariadb_OperationalError,
-                        "mariadb.OperationalError", "OperationalError");
+                        "mariadb.Warning", exception_warning_doc, "Warning");
   mariadb_add_exception(module, &Mariadb_IntegrityError,
-                        "mariadb.IntegrityError", "IntegrityError");
+                        "mariadb.IntegrityError", exception_integrity_doc, "IntegrityError");
   mariadb_add_exception(module, &Mariadb_InternalError,
-                        "mariadb.InternalError", "InternalError");
+                        "mariadb.InternalError", exception_internal_doc, "InternalError");
   mariadb_add_exception(module, &Mariadb_ProgrammingError,
-                        "mariadb.ProgrammingError", "ProgrammingError");
+                        "mariadb.ProgrammingError", exception_programming_doc, "ProgrammingError");
   mariadb_add_exception(module, &Mariadb_NotSupportedError,
-                        "mariadb.NotSupportedError", "NotSupportedError");
+                        "mariadb.NotSupportedError", exception_notsupported_doc, "NotSupportedError");
   mariadb_add_exception(module, &Mariadb_DatabaseError,
-                        "mariadb.DatabaseError", "DatabaseError");
+                        "mariadb.DatabaseError", exception_database_doc, "DatabaseError");
   mariadb_add_exception(module, &Mariadb_DataError,
-                        "mariadb.DatabaseError.DataError", "DataError");
+                        "mariadb.DatabaseError.DataError", exception_data_doc, "DataError");
 
 
 
-  PyModule_AddObject(module, "DatabaseError", Mariadb_DatabaseError);
+//  PyModule_AddObject(module, "DatabaseError", Mariadb_DatabaseError);
 
   Py_INCREF(&MrdbConnection_Type);
   PyModule_AddObject(module, "connection", (PyObject *)&MrdbConnection_Type);

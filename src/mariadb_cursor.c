@@ -123,7 +123,7 @@ static struct PyMemberDef MrdbCursor_Members[] =
     T_OBJECT,
     offsetof(MrdbCursor, description),
     READONLY,
-    "This read-only attribute is a sequence of 7-item sequences. Each of these sequences contains information describing one result column"},
+    "This read-only attribute is a sequence of 8-item sequences. Each of these sequences contains information describing one result column"},
   {"lastrowid",
    T_LONG,
    offsetof(MrdbCursor, lastrowid),
