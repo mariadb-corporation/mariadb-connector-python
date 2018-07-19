@@ -294,3 +294,9 @@ class CursorTest(unittest.TestCase):
     row= cursor.fetchone()
     self.assertEqual(row,val);
     del cursor
+
+  def test_reset(self):
+    cursor= self.connection.cursor()
+    cursor.execute("SELECT 1 UNION SELECT 2", buffered=False)
+    cursor.execute("SELECT 1 UNION SELECT 2")
+    del cursor

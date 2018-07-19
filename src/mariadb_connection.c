@@ -313,7 +313,7 @@ PyTypeObject MrdbConnection_Type = {
 	0, /*tp_print*/
 	0, /* tp_getattr */
 	0, /* tp_setattr */
-	0, /*tp_compare*/
+	0, /* PyAsyncMethods* */
   0, /* tp_repr */
 
 	/* Method suites for standard classes */
