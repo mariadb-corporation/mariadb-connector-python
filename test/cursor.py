@@ -283,7 +283,6 @@ class CursorTest(unittest.TestCase):
     self.assertEqual(row[1], 2)
     self.assertEqual(row[2], 3)
 
-
   def test_tuple(self):
     cursor= self.connection.cursor()
     cursor.execute("CREATE OR REPLACE TABLE dyncol1 (a blob)");
@@ -295,8 +294,21 @@ class CursorTest(unittest.TestCase):
     self.assertEqual(row,val);
     del cursor
 
+  def test_set(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE dyncol1 (a blob)");
+    t= datetime.datetime(2018,6,20,12,22,31,123456)
+    val=([1,t,3,(1,2,3), {1,2,3}],)
+    cursor.execute("INSERT INTO dyncol1 VALUES (?)", val);
+    cursor.execute("SELECT a FROM dyncol1")
+    row= cursor.fetchone()
+    self.assertEqual(row,val);
+    del cursor
+
   def test_reset(self):
     cursor= self.connection.cursor()
     cursor.execute("SELECT 1 UNION SELECT 2", buffered=False)
     cursor.execute("SELECT 1 UNION SELECT 2")
     del cursor
+
+

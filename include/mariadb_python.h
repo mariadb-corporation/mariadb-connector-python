@@ -54,7 +54,9 @@ enum enum_dataapi_groups
 enum enum_dyncol_type
 {
   DYNCOL_LIST= 1,
-  DYNCOL_TUPLE
+  DYNCOL_TUPLE,
+  DYNCOL_SET,
+  DYNCOL_LAST
 };
 
 enum enum_tpc_state

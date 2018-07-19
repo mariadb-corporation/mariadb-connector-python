@@ -112,7 +112,7 @@ static PyObject *mariadb_dyncol_to_pyobj(DYNAMIC_COLUMN *col)
     return NULL;
 
   type= dyncol_val.x.ulong_value - (dyncol_val.x.ulong_value << 32);
-  if (!type || type > DYNCOL_TUPLE)
+  if (!type || type >= DYNCOL_LAST)
     return NULL;
 
   if (mariadb_dyncol_column_count(col, &column_count) != ER_DYNCOL_OK)
@@ -124,6 +124,8 @@ static PyObject *mariadb_dyncol_to_pyobj(DYNAMIC_COLUMN *col)
     pycol= PyList_New(column_count);
   else if (type == DYNCOL_TUPLE)
     pycol= PyTuple_New(column_count);
+  else if (type == DYNCOL_SET)
+    pycol= PySet_New(NULL);
 
   for (i=1; i <= column_count; i++)
   {
@@ -186,6 +188,8 @@ static PyObject *mariadb_dyncol_to_pyobj(DYNAMIC_COLUMN *col)
         PyList_SetItem(pycol, i - 1, newval);
       else if (type == DYNCOL_TUPLE)
         PyTuple_SetItem(pycol, i - 1, newval);
+      else if (type == DYNCOL_SET)
+        PySet_Add(pycol, newval);
     }
   }
   return pycol;
@@ -216,6 +220,7 @@ static uint8_t mariadb_pyobj_to_dyncol(DYNAMIC_COLUMN *col,
   MYSQL_LEX_STRING *column_keys= NULL;
   DYNAMIC_COLUMN_VALUE *values= NULL;
   DYNAMIC_COLUMN *new_column;
+  PyObject *iterator= NULL;
 
   if (Py_TYPE(obj) == &PyList_Type)
   {
@@ -226,6 +231,12 @@ static uint8_t mariadb_pyobj_to_dyncol(DYNAMIC_COLUMN *col,
   {
     type= DYNCOL_TUPLE;
     size= PyTuple_Size(obj);
+  }
+  else if (Py_TYPE(obj) == &PySet_Type)
+  {
+    iterator= PyObject_GetIter(obj);
+    type= DYNCOL_SET;
+    size= PySet_Size(obj);
   }
   else
     return 1; /* other types not supported yet */
@@ -253,11 +264,14 @@ static uint8_t mariadb_pyobj_to_dyncol(DYNAMIC_COLUMN *col,
   for (i=0; i < size; i++)
   {
     PyObject *item;
-
     if (type == DYNCOL_LIST)
       item= PyList_GetItem(obj, i);
-    else
+    else if (type == DYNCOL_TUPLE)
       item= PyTuple_GetItem(obj, i);
+    else if (type == DYNCOL_SET)
+    {
+      item= PyIter_Next(iterator);
+    }
 
     if (Py_TYPE(item) == &PyLong_Type)
     {
@@ -298,6 +312,7 @@ static uint8_t mariadb_pyobj_to_dyncol(DYNAMIC_COLUMN *col,
       values[i+1].type= DYN_COL_DATETIME;
       mariadb_pydate_to_tm(MYSQL_TYPE_DATETIME, item, &values[i+1].x.time_value);
     } else if (Py_TYPE(item) == &PyList_Type ||
+               Py_TYPE(item) == &PySet_Type ||
                Py_TYPE(item) == &PyTuple_Type)
     {
       new_column= (DYNAMIC_COLUMN *)alloca(sizeof(DYNAMIC_COLUMN));
@@ -314,7 +329,10 @@ static uint8_t mariadb_pyobj_to_dyncol(DYNAMIC_COLUMN *col,
       goto end;
     column_keys[i+1].str= add_dynamic_key(keys, keys_size, i+1);
     column_keys[i+1].length= keys_size;
+
   }
+  if (iterator)
+    Py_DECREF(iterator);
   /* now we can build our dynamic column */
   mariadb_dyncol_init(col);
   if (mariadb_dyncol_create_many_named(col, size + 1 , column_keys, values, 0) != ER_DYNCOL_OK)
