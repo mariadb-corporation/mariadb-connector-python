@@ -113,7 +113,6 @@ typedef struct {
   uint8_t free_me;
   void *buffer;
   unsigned char num[8];
-  DYNAMIC_COLUMN dyncol;
   MYSQL_TIME tm;
 } MrdbParamValue;
 

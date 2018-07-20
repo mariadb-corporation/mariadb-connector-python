@@ -63,34 +63,30 @@ static void mariadb_pydate_to_tm(enum enum_field_types type,
 }
 /* }}} */
 
-/* {{{ check_is_dyncol
+/* {{{ mariadb_get_pickled
 
-   Checks if the binary object is a dynamic column with the following
+   Checks if the blob is a serialized (pickled) Python Object
+
    conditions:
-   - dyncol has names and is not stored in old format
-   - number of elements (columns) can't be zero
-   - first value is an integer
-   - 4 high bytes of integer = PYTHON_DYNCOL_VALUE
+   - First two bytes must be 0x8003
+   - Last Byte must be 0x2E
+   - unpickle must return success
  */
-static uint8_t check_is_dyncol(DYNAMIC_COLUMN *col, DYNAMIC_COLUMN_VALUE *val)
+static PyObject *mariadb_get_pickled(unsigned char *data, size_t length)
 {
-  uint32_t count= 0;
+  PyObject *obj= NULL;
+  if (length < 3)
+    return NULL;
+  if (*data == 0x80 && *(data +1) == 0x03 && *(data + length - 1) == 0x2E)
+  {
+    PyObject *byte= PyBytes_FromStringAndSize((char *)data, length);
+    obj= PyObject_CallMethod(Mrdb_Pickle, "loads", "O", byte);
 
-  if (mariadb_dyncol_check(col) != ER_DYNCOL_OK ||
-      !mariadb_dyncol_has_names(col))
-    return 0;
-
-  if (mariadb_dyncol_column_count(col, &count) != ER_DYNCOL_OK ||
-      count != 1)
-    return 0;
-
-  if (mariadb_dyncol_get_named(col, &pickle_key, val) != ER_DYNCOL_OK)
-    return 0;
-
-  if (val->type != DYN_COL_STRING)
-    return 0;
-
-  return 1;
+    if (PyErr_Occurred())
+      PyErr_Clear();
+    Py_DECREF(byte);
+  }
+  return obj;
 }
 /* }}} */
 
@@ -257,24 +253,7 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
       unsigned long length= mysql_net_field_length(row);
       if (self->fields[column].flags & BINARY_FLAG)
       {
-        DYNAMIC_COLUMN dc;
-        DYNAMIC_COLUMN_VALUE val;
-        uint8_t rc;
-
-        /* check if we have a DYNAMIC_COLUMN */
-        mariadb_dyncol_init(&dc);
-        dc.str= (char *)*row;
-        dc.length= length;
-
-        if ((rc= check_is_dyncol(&dc, &val)))
-        {
-          /* We got a serialized object which is stored in a dynamic column */
-          PyObject *byte= PyBytes_FromStringAndSize(val.x.string.value.str,
-                                                    val.x.string.value.length);
-          self->values[column]= PyObject_CallMethod(Mrdb_Pickle, "loads", "O", byte);
-          Py_DECREF(byte);
-        }
-        else
+        if (!(self->values[column]= mariadb_get_pickled(*row, (size_t)length)))
           self->values[column]= PyBytes_FromStringAndSize((const char *)*row, (Py_ssize_t)length);
       }
       else
@@ -715,20 +694,10 @@ static uint8_t mariadb_param_to_bind(MYSQL_BIND *bind,
     case MYSQL_TYPE_LONG_BLOB:
       if (Py_TYPE(value->value) != &PyBytes_Type)
       {
-        DYNAMIC_COLUMN_VALUE dynval;
         PyObject *dump= NULL;
-        if (value->dyncol.length)
-          mariadb_dyncol_free(&value->dyncol);
         dump= PyObject_CallMethod(Mrdb_Pickle, "dumps", "O", value->value);
-        mariadb_dyncol_init(&value->dyncol);
-        dynval.type= DYN_COL_STRING;
-        PyBytes_AsStringAndSize(dump, &dynval.x.string.value.str,
-                                (Py_ssize_t *)&dynval.x.string.value.length);
-        mariadb_dyncol_create_many_named(&value->dyncol, 1, &pickle_key,
-                                         &dynval, 0);
-        Py_DECREF(dump);
-        bind->buffer_length= (unsigned long)value->dyncol.length;
-        bind->buffer= (void *)value->dyncol.str;
+        bind->buffer_length= (unsigned long)PyBytes_GET_SIZE(dump);
+        bind->buffer= (void *) PyBytes_AS_STRING(dump);
       } else
       {
         bind->buffer_length= (unsigned long)PyBytes_GET_SIZE(value->value);

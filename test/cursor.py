@@ -313,4 +313,14 @@ class CursorTest(unittest.TestCase):
     cursor.execute("SELECT 1 UNION SELECT 2")
     del cursor
 
+  def test_fake_pickle(self):
+    cursor= self.connection.cursor()
+    cursor.execute("create or replace table t1 (a blob)")
+    k=bytes([0x80,0x03,0x00,0x2E])
+    cursor.execute("insert into t1 values (?)", (k,))
+    cursor.execute("select * from t1");
+    row= cursor.fetchone()
+    self.assertEqual(row[0])
+    del cursor
+
 
