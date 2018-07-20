@@ -19,6 +19,7 @@
 #include "mariadb_python.h"
 #include <datetime.h>
 
+MYSQL_LEX_STRING pickle_key= {"pickle", 6};
 
 /* {{{ mariadb_pydate_to_tm
    converts a Python date/time/datetime object to MYSQL_TIME
@@ -71,290 +72,25 @@ static void mariadb_pydate_to_tm(enum enum_field_types type,
    - first value is an integer
    - 4 high bytes of integer = PYTHON_DYNCOL_VALUE
  */
-static uint8_t check_is_dyncol(DYNAMIC_COLUMN *col)
+static uint8_t check_is_dyncol(DYNAMIC_COLUMN *col, DYNAMIC_COLUMN_VALUE *val)
 {
   uint32_t count= 0;
-  DYNAMIC_COLUMN_VALUE val;
+
   if (mariadb_dyncol_check(col) != ER_DYNCOL_OK ||
       !mariadb_dyncol_has_names(col))
     return 0;
 
   if (mariadb_dyncol_column_count(col, &count) != ER_DYNCOL_OK ||
-      !count)
+      count != 1)
     return 0;
 
-  if (mariadb_dyncol_get_num(col, 0, &val) != ER_DYNCOL_OK)
+  if (mariadb_dyncol_get_named(col, &pickle_key, val) != ER_DYNCOL_OK)
     return 0;
 
-  if (val.type != DYN_COL_UINT ||
-     val.x.ulong_value >> 32 != PYTHON_DYNCOL_VALUE)
+  if (val->type != DYN_COL_STRING)
     return 0;
 
   return 1;
-}
-/* }}} */
-
-/* {{{ mariadb_dyncol_to_pyobj
-   converts a dynamic column to python object (list or tuple)
-
-   check if the dyncol is correct should be made before
-   calling this function
- */
-static PyObject *mariadb_dyncol_to_pyobj(DYNAMIC_COLUMN *col)
-{
-  PyObject *pycol= NULL;
-  enum enum_dyncol_type type= 0;
-  uint32_t i, column_count;
-  DYNAMIC_COLUMN_VALUE dyncol_val;
-
-  /* First element contains the type */
-  if (mariadb_dyncol_get_num(col, 0, &dyncol_val) != ER_DYNCOL_OK)
-    return NULL;
-
-  type= dyncol_val.x.ulong_value - (dyncol_val.x.ulong_value << 32);
-  if (!type || type >= DYNCOL_LAST)
-    return NULL;
-
-  if (mariadb_dyncol_column_count(col, &column_count) != ER_DYNCOL_OK)
-    return NULL;
-
-  column_count--;
-
-  if (type == DYNCOL_LIST)
-    pycol= PyList_New(column_count);
-  else if (type == DYNCOL_TUPLE)
-    pycol= PyTuple_New(column_count);
-  else if (type == DYNCOL_SET)
-    pycol= PySet_New(NULL);
-
-  for (i=1; i <= column_count; i++)
-  {
-    PyObject *newval;
-    DYNAMIC_COLUMN_VALUE val;
-
-    if (mariadb_dyncol_get_num(col, i, &val) != ER_DYNCOL_OK)
-      goto error;
-
-    switch(val.type) {
-      case DYN_COL_NULL:
-        Py_INCREF(Py_None);
-        newval= Py_None;
-        break;
-      case DYN_COL_STRING:
-        newval= PyUnicode_FromStringAndSize(val.x.string.value.str,
-                                           val.x.string.value.length);
-        break;
-      case DYN_COL_INT:
-        newval= PyLong_FromLongLong(val.x.long_value);
-        break;
-      case DYN_COL_UINT:
-        newval= PyLong_FromUnsignedLongLong(val.x.ulong_value);
-        break;
-      case DYN_COL_DOUBLE:
-        newval= PyFloat_FromDouble(val.x.double_value);
-        break;
-      case DYN_COL_DYNCOL:
-        newval= mariadb_dyncol_to_pyobj((DYNAMIC_COLUMN *)&val.x.string.value);
-        break;
-      case DYN_COL_DATE:
-      case DYN_COL_TIME:
-      case DYN_COL_DATETIME:
-        {
-          MYSQL_TIME tm= val.x.time_value;
-          switch (tm.time_type) {
-          case MYSQL_TIMESTAMP_TIME:
-            newval= PyTime_FromTime(tm.hour, tm.minute, tm.second, tm.second_part);
-            break;
-          case MYSQL_TIMESTAMP_DATE:
-            newval= PyDate_FromDate(tm.year, tm.month, tm.day);
-            break;
-          case MYSQL_TIMESTAMP_DATETIME:
-            newval= PyDateTime_FromDateAndTime(tm.year, tm.month, tm.day, tm.hour, tm.minute,
-                                               tm.second, tm.second_part);
-            break;
-          default:
-            Py_INCREF(Py_None);
-            newval= Py_None;
-            break;
-          }
-        }
-        break;
-      default:
-        goto error;
-    }
-    if (newval)
-    {
-      if (type == DYNCOL_LIST)
-        PyList_SetItem(pycol, i - 1, newval);
-      else if (type == DYNCOL_TUPLE)
-        PyTuple_SetItem(pycol, i - 1, newval);
-      else if (type == DYNCOL_SET)
-        PySet_Add(pycol, newval);
-    }
-  }
-  return pycol;
-
-error:
-  return NULL;
-}
-/* }}} */
-
-/* {{{ add_dynamic_key */
-static char *add_dynamic_key(char *keys, uint8_t size, uint32_t column)
-{
-  snprintf(keys + (column * size), size + 1, "%*d", size, column);
-  return keys + (column * size);
-}
-/* }}} */
-
-/* {{{ mariadb_pyobj_to_dyncol */
-static uint8_t mariadb_pyobj_to_dyncol(DYNAMIC_COLUMN *col,
-                                       PyObject *obj,
-                                       uint32_t level)
-{
-  enum enum_dyncol_type type= 0;
-  size_t size= 0;
-  char *keys= 0;
-  uint8_t rc= 1;
-  uint32_t i, keys_size, *column_vals= NULL;
-  MYSQL_LEX_STRING *column_keys= NULL;
-  DYNAMIC_COLUMN_VALUE *values= NULL;
-  DYNAMIC_COLUMN *new_column;
-  PyObject *iterator= NULL;
-
-  if (Py_TYPE(obj) == &PyList_Type)
-  {
-    type= DYNCOL_LIST;
-    size= PyList_Size(obj);
-  }
-  else if (Py_TYPE(obj) == &PyTuple_Type)
-  {
-    type= DYNCOL_TUPLE;
-    size= PyTuple_Size(obj);
-  }
-  else if (Py_TYPE(obj) == &PySet_Type)
-  {
-    iterator= PyObject_GetIter(obj);
-    type= DYNCOL_SET;
-    size= PySet_Size(obj);
-  }
-  else
-    return 1; /* other types not supported yet */
-
-  keys_size= (uint8_t)log10(size) + 1;
-
-  if (!(column_keys= (MYSQL_LEX_STRING *)PyMem_RawCalloc(size + 1, sizeof(MYSQL_LEX_STRING))))
-    goto end;
-
-  if (!(keys= (char *)PyMem_RawCalloc(1, (size + 1) * (size_t)keys_size + 1)))
-    goto end;
-
-  if (!(column_vals= (uint32_t *)PyMem_RawCalloc((size + 1), sizeof(uint32_t))))
-    goto end;
-
-  if (!(values = (DYNAMIC_COLUMN_VALUE *)PyMem_RawCalloc((size + 1), sizeof(DYNAMIC_COLUMN_VALUE))))
-    goto end;
-
-  /* First element always specifes the type (tuple or list) */
-  values[0].type= DYN_COL_UINT;
-  values[0].x.ulong_value= ((long long)PYTHON_DYNCOL_VALUE << 32) + type;
-  column_keys[0].str= add_dynamic_key(keys, keys_size, 0) ;
-  column_keys[0].length= keys_size;
-
-  for (i=0; i < size; i++)
-  {
-    PyObject *item;
-    if (type == DYNCOL_LIST)
-      item= PyList_GetItem(obj, i);
-    else if (type == DYNCOL_TUPLE)
-      item= PyTuple_GetItem(obj, i);
-    else if (type == DYNCOL_SET)
-    {
-      item= PyIter_Next(iterator);
-    }
-
-    if (Py_TYPE(item) == &PyLong_Type)
-    {
-      if (_PyLong_Sign(item) < 0)
-      {
-        values[i+1].type= DYN_COL_INT;
-        values[i+1].x.long_value= PyLong_AsLongLong(item);
-      } else {
-        values[i+1].type= DYN_COL_UINT;
-        values[i+1].x.ulong_value= PyLong_AsUnsignedLongLong(item);
-      }
-    } else if (Py_TYPE(item) == &PyFloat_Type)
-    {
-      values[i+1].type= DYN_COL_DOUBLE;
-      values[i+1].x.double_value= PyFloat_AsDouble(item);
-    } else if (Py_TYPE(item) == &PyUnicode_Type)
-    {
-      values[i+1].type= DYN_COL_STRING;
-      values[i+1].x.string.value.str= PyUnicode_AsUTF8AndSize(item,
-       (Py_ssize_t *)&values[i].x.string.value.length);
-      values[i+1].x.string.charset= ma_charset_utf8_general_ci;
-    } else if (Py_TYPE(item) == &PyBytes_Type)
-    {
-      values[i+1].type= DYN_COL_STRING;
-      values[i+1].x.string.value.length= (size_t)PyBytes_GET_SIZE(item);
-      values[i+1].x.string.value.str= PyBytes_AS_STRING(item);
-      values[i+1].x.string.charset= ma_charset_bin;
-    } else if (PyDate_CheckExact(item))
-    {
-      values[i+1].type= DYN_COL_DATE;
-      mariadb_pydate_to_tm(MYSQL_TYPE_DATE, item, &values[i+1].x.time_value);
-    } else if (PyTime_CheckExact(item))
-    {
-      values[i+1].type= DYN_COL_TIME;
-      mariadb_pydate_to_tm(MYSQL_TYPE_TIME, item, &values[i+1].x.time_value);
-    } else if (PyDateTime_CheckExact(item))
-    {
-      values[i+1].type= DYN_COL_DATETIME;
-      mariadb_pydate_to_tm(MYSQL_TYPE_DATETIME, item, &values[i+1].x.time_value);
-    } else if (Py_TYPE(item) == &PyList_Type ||
-               Py_TYPE(item) == &PySet_Type ||
-               Py_TYPE(item) == &PyTuple_Type)
-    {
-      new_column= (DYNAMIC_COLUMN *)alloca(sizeof(DYNAMIC_COLUMN));
-      if (mariadb_pyobj_to_dyncol(new_column, item, level + 1))
-      {
-        goto end;
-      }
-      if (mariadb_dyncol_check(new_column) != ER_DYNCOL_OK)
-        goto end;
-      values[i+1].type= DYN_COL_DYNCOL;
-      values[i+1].x.string.value.str= new_column->str;
-      values[i+1].x.string.value.length= new_column->length;
-    } else
-      goto end;
-    column_keys[i+1].str= add_dynamic_key(keys, keys_size, i+1);
-    column_keys[i+1].length= keys_size;
-
-  }
-  if (iterator)
-    Py_DECREF(iterator);
-  /* now we can build our dynamic column */
-  mariadb_dyncol_init(col);
-  if (mariadb_dyncol_create_many_named(col, size + 1 , column_keys, values, 0) != ER_DYNCOL_OK)
-    goto end;
-  rc= 0;
-end:
-  if (rc)
-  {
-    /* in case of error make sure that we free dyncols */
-    for (i=0; i < size; i++)
-    {
-      if (values[i].type== DYN_COL_DYNCOL)
-        mariadb_dyncol_free((DYNAMIC_COLUMN *)values[i].x.string.value.str);
-    }
-  }
-  if (keys)
-    PyMem_RawFree(keys);
-  if (column_keys)
-    PyMem_RawFree(column_keys);
-  if (values)
-    PyMem_RawFree(values);
-  return rc;
 }
 /* }}} */
 
@@ -522,6 +258,7 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
       if (self->fields[column].flags & BINARY_FLAG)
       {
         DYNAMIC_COLUMN dc;
+        DYNAMIC_COLUMN_VALUE val;
         uint8_t rc;
 
         /* check if we have a DYNAMIC_COLUMN */
@@ -529,9 +266,13 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         dc.str= (char *)*row;
         dc.length= length;
 
-        if ((rc= check_is_dyncol(&dc)))
+        if ((rc= check_is_dyncol(&dc, &val)))
         {
-          self->values[column]= mariadb_dyncol_to_pyobj(&dc);
+          /* We got a serialized object which is stored in a dynamic column */
+          PyObject *byte= PyBytes_FromStringAndSize(val.x.string.value.str,
+                                                    val.x.string.value.length);
+          self->values[column]= PyObject_CallMethod(Mrdb_Pickle, "loads", "O", byte);
+          Py_DECREF(byte);
         }
         else
           self->values[column]= PyBytes_FromStringAndSize((const char *)*row, (Py_ssize_t)length);
@@ -593,9 +334,7 @@ static uint8_t mariadb_get_column_info(PyObject *obj,
   {
     paraminfo->type= MYSQL_TYPE_DOUBLE;
     return 0;
-  } else if (Py_TYPE(obj) == &PyBytes_Type ||
-             Py_TYPE(obj) == &PyList_Type ||
-             Py_TYPE(obj) == &PyTuple_Type)
+  } else if (Py_TYPE(obj) == &PyBytes_Type)
   {
     paraminfo->type= MYSQL_TYPE_LONG_BLOB;
     return 0;
@@ -615,14 +354,15 @@ static uint8_t mariadb_get_column_info(PyObject *obj,
   {
     paraminfo->type= MYSQL_TYPE_VAR_STRING;
     return 0;
-  } else if (Py_TYPE(obj) == &PyTuple_Type ||
-             Py_TYPE(obj) == &PyList_Type)
-  {
-    paraminfo->type= MYSQL_TYPE_LONG_BLOB;
-    paraminfo->ob_type= Py_TYPE(obj);
   } else if (obj == Py_None)
   {
     paraminfo->type= MYSQL_TYPE_NULL;
+    return 0;
+  }
+  else {
+    /* no corresponding object, so we will serialize it */
+    paraminfo->type= MYSQL_TYPE_LONG_BLOB;
+    paraminfo->ob_type= Py_TYPE(obj);
     return 0;
   }
 
@@ -739,7 +479,7 @@ static uint8_t mariadb_get_parameter_info(MrdbCursor *self,
     if (mariadb_get_column_info(paramvalue.value, &pinfo))
     {
       mariadb_throw_exception(NULL, Mariadb_DataError, 0,
-                              "Can't retrieve column information for paramter %s",
+                              "Can't retrieve column information for parameter %d",
                               column_nr);
       return 1;
     }
@@ -973,13 +713,20 @@ static uint8_t mariadb_param_to_bind(MYSQL_BIND *bind,
       *(double *)value->num= (double)PyFloat_AsDouble(value->value);
       break;
     case MYSQL_TYPE_LONG_BLOB:
-      if (Py_TYPE(value->value) == &PyTuple_Type ||
-          Py_TYPE(value->value) == &PyList_Type)
+      if (Py_TYPE(value->value) != &PyBytes_Type)
       {
+        DYNAMIC_COLUMN_VALUE dynval;
+        PyObject *dump= NULL;
         if (value->dyncol.length)
           mariadb_dyncol_free(&value->dyncol);
-        if (mariadb_pyobj_to_dyncol(&value->dyncol, value->value, 0))
-          return 1;
+        dump= PyObject_CallMethod(Mrdb_Pickle, "dumps", "O", value->value);
+        mariadb_dyncol_init(&value->dyncol);
+        dynval.type= DYN_COL_STRING;
+        PyBytes_AsStringAndSize(dump, &dynval.x.string.value.str,
+                                (Py_ssize_t *)&dynval.x.string.value.length);
+        mariadb_dyncol_create_many_named(&value->dyncol, 1, &pickle_key,
+                                         &dynval, 0);
+        Py_DECREF(dump);
         bind->buffer_length= (unsigned long)value->dyncol.length;
         bind->buffer= (void *)value->dyncol.str;
       } else

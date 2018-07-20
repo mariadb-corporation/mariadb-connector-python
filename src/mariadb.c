@@ -21,6 +21,8 @@
 #include <structmember.h>
 #include <datetime.h>
 
+PyObject *Mrdb_Pickle= NULL;
+
 int Mariadb_traverse(PyObject *self,
                      visitproc visit,
                      void *arg)
@@ -141,6 +143,9 @@ PyMODINIT_FUNC PyInit_mariadb(void)
   Py_TYPE(&MrdbConnection_Type) = &PyType_Type;
   if (PyType_Ready(&MrdbConnection_Type) == -1)
     goto error;
+
+  /* we need pickle for object serialization */
+  Mrdb_Pickle= PyImport_ImportModule("pickle");
 
   Py_TYPE(&MrdbCursor_Type) = &PyType_Type;
   if (PyType_Ready(&MrdbCursor_Type) == -1)

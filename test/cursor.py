@@ -3,6 +3,7 @@
 import mariadb
 import datetime
 import unittest
+import collections
 
 class CursorTest(unittest.TestCase):
 
@@ -42,14 +43,14 @@ class CursorTest(unittest.TestCase):
 
     cursor.execute("insert into t1 values (?,?,?,?,?,?)", (c1,c2,c3,c4,c5,c6))
 
-#    cursor.execute("select * from t1")
-#    row= cursor.fetchone()
-#    self.assertEqual(row[0],c1)
-#    self.assertEqual(row[1],c2)
-#    self.assertEqual(row[2],c3)
-#    self.assertEqual(row[3],c4)
-#    self.assertEqual(row[4],c5)
-#    self.assertEqual(row[5],c6)
+    cursor.execute("select * from t1")
+    row= cursor.fetchone()
+    self.assertEqual(row[0],c1)
+    self.assertEqual(row[1],c2)
+    self.assertEqual(row[2],c3)
+    self.assertEqual(row[3],c4)
+    self.assertEqual(row[4],c5)
+    self.assertEqual(row[5],c6)
     del cursor
 
   def test_string(self):
@@ -106,7 +107,7 @@ class CursorTest(unittest.TestCase):
     cursor.executemany("INSERT INTO t1 VALUES (?,?,?)", params);
 
     #test Errors
-#   # a) if no select was executed
+    # a) if no select was executed
     self.assertRaises(mariadb.Error, cursor.fetchall)
     #b ) if cursor was not executed
     del cursor
@@ -298,7 +299,8 @@ class CursorTest(unittest.TestCase):
     cursor= self.connection.cursor()
     cursor.execute("CREATE OR REPLACE TABLE dyncol1 (a blob)");
     t= datetime.datetime(2018,6,20,12,22,31,123456)
-    val=([1,t,3,(1,2,3), {1,2,3}],)
+    a= collections.OrderedDict([('apple', 4), ('banana', 3), ('orange', 2), ('pear', 1),  ('4',3), (4,4)])
+    val=([1,t,3,(1,2,3), {1,2,3},a],)
     cursor.execute("INSERT INTO dyncol1 VALUES (?)", val);
     cursor.execute("SELECT a FROM dyncol1")
     row= cursor.fetchone()

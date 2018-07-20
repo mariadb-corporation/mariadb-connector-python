@@ -56,6 +56,8 @@ enum enum_dyncol_type
   DYNCOL_LIST= 1,
   DYNCOL_TUPLE,
   DYNCOL_SET,
+  DYNCOL_DICT,
+  DYNCOL_ODICT,
   DYNCOL_LAST
 };
 
@@ -179,6 +181,8 @@ PyObject *Mariadb_InternalError;
 PyObject *Mariadb_ProgrammingError;
 PyObject *Mariadb_NotSupportedError;
 PyObject *Mariadb_Warning;
+
+PyObject *Mrdb_Pickle;
 
 /* Object types */
 PyTypeObject Mariadb_Fieldinfo_Type;
