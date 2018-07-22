@@ -55,10 +55,13 @@ static char *mariadb_named_tuple_desc= "Named tupled row";
 static PyObject *Mariadb_no_operation(MrdbCursor *,
                                       PyObject *);
 static PyObject *Mariadb_row_count(MrdbCursor *self);
+static PyObject *MrdbCursor_warnings(MrdbCursor *self);
 
 static PyGetSetDef MrdbCursor_sets[]=
 {
   {"rowcount", (getter)Mariadb_row_count, NULL, "doc", NULL},
+  {"warnings", (getter)MrdbCursor_warnings, NULL,
+   "Number of warnings which were produced from last execute() call", NULL},
   {NULL}
 };
 
@@ -449,7 +452,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
 
         if (rc)
         {
-          mariadb_throw_exception(self->stmt->mysql, Mariadb_InterfaceError, 0, NULL);
+          mariadb_throw_exception(self->stmt->mysql, Mariadb_DatabaseError, 0, NULL);
           goto error;
         }
         /* if we have a result set, we can't process it - so we will return
@@ -470,7 +473,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         goto end;
       }
       /* throw exception from statement handle */
-      mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, NULL);
+      mariadb_throw_exception(self->stmt, Mariadb_DatabaseError, 1, NULL);
       goto error;
     }
   } else {
@@ -480,7 +483,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     Py_END_ALLOW_THREADS;
     if (rc)
     {
-      mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, NULL);
+      mariadb_throw_exception(self->stmt, Mariadb_DatabaseError, 1, NULL);
       goto error;
     }
   }
@@ -994,3 +997,10 @@ static PyObject *Mariadb_row_count(MrdbCursor *self)
   return PyLong_FromLongLong(row_count);
 }
 /* }}} */
+
+static PyObject *MrdbCursor_warnings(MrdbCursor *self)
+{
+  MARIADB_CHECK_STMT(self);
+
+  return PyLong_FromLong((long)mysql_stmt_warning_count(self->stmt));
+}

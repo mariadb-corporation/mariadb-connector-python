@@ -29,4 +29,3 @@ class CursorTest(unittest.TestCase):
     print("rows fetched", len(list_out))
     self.assertEqual(list_in,list_out)
     cursor.close()
-

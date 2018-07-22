@@ -44,7 +44,7 @@ if sys.platform != "win32":
   libs = mariadb_config("libs_sys")
   mariadb_version= mariadb_config("cc_version")
   if mariadb_version[0] < "3.0.6":
-    print("Connector MariaDB/Pythin requires MariaDB Connector/C 3.0.6 or newer")
+    print("Connector MariaDB/Python requires MariaDB Connector/C 3.0.6 or newer")
     sys.exit(1)
   mariadb_libraries= [dequote(c[2:])
            for c in libs

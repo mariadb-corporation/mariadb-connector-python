@@ -80,10 +80,7 @@ typedef struct {
   PyObject *tls_cipher;
   PyObject *tls_version;
   PyObject *host;
-  PyObject *user;
-  PyObject *schema;
   PyObject *unix_socket;
-  unsigned long thread_id;
   int port;
   PyObject *charset;
   PyObject *collation;
@@ -205,8 +202,14 @@ PyObject *MrdbIndicator_Object(uint32_t type);
 long MrdbIndicator_AsLong(PyObject *v);
 PyObject *Mariadb_DBAPIType_Object(uint32_t type);
 PyObject *MrdbConnection_affected_rows(MrdbConnection *self);
+PyObject *MrdbConnection_ping(MrdbConnection *self);
+PyObject *MrdbConnection_kill(MrdbConnection *self, PyObject *args);
+PyObject *MrdbConnection_reconnect(MrdbConnection *self);
+PyObject *MrdbConnection_reset(MrdbConnection *self);
 PyObject *MrdbConnection_autocommit(MrdbConnection *self,
-                             PyObject *toggle);
+                             PyObject *args);
+PyObject *MrdbConnection_change_user(MrdbConnection *self,
+                                     PyObject *args);
 PyObject *MrdbConnection_rollback(MrdbConnection *self);
 PyObject *MrdbConnection_commit(MrdbConnection *self);
 PyObject *MrdbConnection_close(MrdbConnection *self);
@@ -243,14 +246,12 @@ uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 #define MARIADB_FEATURE_SUPPORTED(mysql,version)\
 (mysql_get_server_version((mysql)) >= (version))
 
-#define MARIADB_CHECK_CONNECTION(connection)\
+#define MARIADB_CHECK_CONNECTION(connection, ret)\
 if (!connection || !connection->mysql) {\
   mariadb_throw_exception(connection->mysql, Mariadb_Error, 0,\
     "Invalid connection or not connected");\
-    return NULL;\
-}\
-if ((connection)->thread_id != mysql_thread_id((connection)->mysql))\
-  MrdbConnection_SetAttributes((connection));
+    return (ret);\
+}
 
 #define MARIADB_CHECK_TPC(connection)\
 if (connection->tpc_state == TPC_STATE_NONE) {\
