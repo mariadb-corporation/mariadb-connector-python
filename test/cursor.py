@@ -341,3 +341,20 @@ class CursorTest(unittest.TestCase):
     cursor.execute("SET NAMES utf8mb4")
     cursor.execute("SELECT * FROM `tt` WHERE `test` LIKE 'jj' COLLATE utf8mb4_unicode_ci")
     del cursor
+
+  def test_conpy_8(self):
+    cursor=self.connection.cursor()
+    sql= """
+           CREATE OR REPLACE PROCEDURE p1()
+           BEGIN
+             SELECT 1 FROM DUAL UNION SELECT 0 FROM DUAL;
+             SELECT 2 FROM DUAL;
+           END
+         """
+    cursor.execute(sql)
+    cursor.execute("call p1()")
+
+    cursor.nextset()
+    row= cursor.fetchone()
+    self.assertEqual(row[0],2);
+    del cursor

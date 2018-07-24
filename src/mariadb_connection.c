@@ -341,7 +341,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
 
   /* make sure that we use a utf8 connection */
   Py_BEGIN_ALLOW_THREADS;
-  rc= mysql_set_character_set(self->mysql, "utf8");
+  rc= mysql_set_character_set(self->mysql, "utf8mb4");
   Py_END_ALLOW_THREADS;
   if (rc)
   {
