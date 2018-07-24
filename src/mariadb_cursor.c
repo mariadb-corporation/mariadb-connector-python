@@ -685,7 +685,7 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
   }
 
   if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-    "O!|s:scroll", kw_list, &PyLong_Type, &Pos, &modestr))
+    "O!|s", kw_list, &PyLong_Type, &Pos, &modestr))
     return NULL;
 
   if (!(position= PyLong_AsLong(Pos)))
@@ -695,11 +695,15 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
     return NULL;
   }
 
-  while (scroll_modes[mode]) {
-    if (!strcmp(scroll_modes[mode], modestr))
-      break;
-    mode++;
-  };
+  if (modestr != NULL)
+  {
+    while (scroll_modes[mode]) {
+      if (!strcmp(scroll_modes[mode], modestr))
+        break;
+      mode++;
+    };
+  } else
+    mode= 0;
 
   if (!scroll_modes[mode]) {
     mariadb_throw_exception(NULL, Mariadb_DataError, 0,

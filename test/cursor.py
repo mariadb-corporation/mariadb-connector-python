@@ -164,6 +164,9 @@ class CursorTest(unittest.TestCase):
     cursor= self.connection.cursor()
     cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3", buffered=True)
     self.assertEqual(cursor.rowcount, 3)
+    cursor.scroll(1)
+    row= cursor.fetchone()
+    self.assertEqual(row[0],2) 
     del cursor
 
   def test_xfield_types(self):
