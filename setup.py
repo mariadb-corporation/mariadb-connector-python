@@ -32,7 +32,7 @@ else:
   static_lib = "libmariadb/bld/libmariadb/%s/mysqlclient.lib" % build_type
 
 setup(name='mariadb',
-      version='0.1.1',
+      version='0.9.1',
       description='Python MariaDB extension',
       author='Georg Richter',
       url='http://www.mariadb.com',
