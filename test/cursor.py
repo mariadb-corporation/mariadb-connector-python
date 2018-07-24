@@ -320,7 +320,21 @@ class CursorTest(unittest.TestCase):
     cursor.execute("insert into t1 values (?)", (k,))
     cursor.execute("select * from t1");
     row= cursor.fetchone()
-    self.assertEqual(row[0])
+    self.assertEqual(row[0],k)
     del cursor
 
+  def test_no_result(self):
+    cursor= self.connection.cursor()
+    cursor.execute("set @a:=1")
+    try:
+      row= cursor.fetchone()
+    except mariadb.ProgrammingError:
+      pass
+    del cursor
 
+  def test_collate(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS `tt` (`test` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci")
+    cursor.execute("SET NAMES utf8mb4")
+    cursor.execute("SELECT * FROM `tt` WHERE `test` LIKE 'jj' COLLATE utf8mb4_unicode_ci")
+    del cursor

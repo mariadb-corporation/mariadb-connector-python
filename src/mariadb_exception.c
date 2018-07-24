@@ -19,16 +19,62 @@
 
 #include <mariadb_python.h>
 
-PyObject *Mariadb_Error;
-PyObject *Mariadb_InterfaceError;
-PyObject *Mariadb_DatabaseError;
-PyObject *Mariadb_DataError;
-PyObject *Mariadb_OperationalError;
-PyObject *Mariadb_Warning;
-PyObject *Mariadb_IntegrityError;
-PyObject *Mariadb_InternalError;
-PyObject *Mariadb_ProgrammingError;
-PyObject *Mariadb_NotSupportedError;
+
+struct st_error_map {
+  char  sqlstate[3];
+  uint8_t type;
+};
+
+static PyObject *get_exception_type(const char *sqlstate)
+{
+  if (!sqlstate || strlen(sqlstate) != 5)
+    return NULL;
+
+  if (!strncmp(sqlstate, "40", 2))
+    return Mariadb_InternalError;
+
+  if (!strncmp(sqlstate, "21", 2) ||
+      !strncmp(sqlstate, "22", 2) ||
+      !strncmp(sqlstate, "02", 2))
+    return Mariadb_DataError;
+
+  if (!strncmp(sqlstate, "07", 2) ||
+      !strncmp(sqlstate, "2B", 2) ||
+      !strncmp(sqlstate, "2D", 2) ||
+      !strncmp(sqlstate, "33", 2) ||
+      !strncmp(sqlstate, "HY", 2))
+    return Mariadb_DatabaseError;
+
+  if (!strncmp(sqlstate, "23", 2) ||
+      !strncmp(sqlstate, "XA", 2))
+    return Mariadb_IntegrityError;
+
+  if (!strncmp(sqlstate, "0A", 2))
+    return Mariadb_NotSupportedError;
+
+  if (!strncmp(sqlstate, "44", 2))
+    return Mariadb_InternalError;
+  if (!strncmp(sqlstate, "0K", 2) ||
+      !strncmp(sqlstate, "08", 2) ||
+      !strncmp(sqlstate, "HZ", 2))
+    return Mariadb_OperationalError;
+
+  if (!strncmp(sqlstate, "24", 2) ||
+      !strncmp(sqlstate, "25", 2) ||
+      !strncmp(sqlstate, "26", 2) ||
+      !strncmp(sqlstate, "27", 2) ||
+      !strncmp(sqlstate, "28", 2) ||
+      !strncmp(sqlstate, "2A", 2) ||
+      !strncmp(sqlstate, "2C", 2) ||
+      !strncmp(sqlstate, "34", 2) ||
+      !strncmp(sqlstate, "35", 2) ||
+      !strncmp(sqlstate, "3C", 2) ||
+      !strncmp(sqlstate, "3D", 2) ||
+      !strncmp(sqlstate, "3F", 2) ||
+      !strncmp(sqlstate, "37", 2))
+    return Mariadb_ProgrammingError;
+  return NULL;
+}
 
 /**
  mariadb_throw_exception()
@@ -56,19 +102,8 @@ void mariadb_throw_exception(void *handle,
   PyObject *SqlState= 0;
   PyObject *Exception= 0;
 
-  /* We need to check first:
-     - invalid handle
-     - not connected (we should have an additional mysql_optionsv() option,
-       which tells us if the connection object is connected, so we don't have
-       to access internals like mysql->net.pvio)
-     - errno= 0
-  */
-  if (!handle)
-  {
-  }
-
-  if (!exception_type)
-    exception_type= Mariadb_InterfaceError;
+  //if (!exception_type)
+//    exception_type= Mariadb_InterfaceError;
 
   if (message)
   {
@@ -79,6 +114,11 @@ void mariadb_throw_exception(void *handle,
     va_end(ap);
   } else
   {
+    exception_type= get_exception_type(is_statement ? mysql_stmt_sqlstate((MYSQL_STMT*) handle) : mysql_sqlstate((MYSQL *)handle));
+
+    if (!exception_type)
+      exception_type= Mariadb_DatabaseError;
+ 
     ErrorNo= PyLong_FromLong(is_statement ?
                           mysql_stmt_errno((MYSQL_STMT *)handle) : mysql_errno((MYSQL *)handle));
     ErrorMsg= PyUnicode_FromString(is_statement ?

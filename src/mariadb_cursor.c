@@ -181,14 +181,14 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
   if (cursor_type != CURSOR_TYPE_READ_ONLY &&
       cursor_type != CURSOR_TYPE_NO_CURSOR)
   {
-    mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
+    mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                             "Invalid value %ld for cursor_type", cursor_type);
     return -1;
   }
 
 	if (!(self->stmt = mysql_stmt_init(self->connection->mysql)))
   {
-    mariadb_throw_exception(self->connection->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->connection->mysql, Mariadb_OperationalError, 0, NULL);
 		return -1;
 	}
 
@@ -452,7 +452,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
 
         if (rc)
         {
-          mariadb_throw_exception(self->stmt->mysql, Mariadb_DatabaseError, 0, NULL);
+          mariadb_throw_exception(self->stmt->mysql, NULL, 0, NULL);
           goto error;
         }
         /* if we have a result set, we can't process it - so we will return
@@ -467,13 +467,13 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
           if ((result= mysql_store_result(self->stmt->mysql)))
             mysql_free_result(result);
 
-          mariadb_throw_exception(NULL, Mariadb_DatabaseError, 0, "This command is not supported by MariaDB Connector/Python");
+          mariadb_throw_exception(NULL, Mariadb_NotSupportedError, 0, "This command is not supported by MariaDB Connector/Python");
           goto error;
         }
         goto end;
       }
       /* throw exception from statement handle */
-      mariadb_throw_exception(self->stmt, Mariadb_DatabaseError, 1, NULL);
+      mariadb_throw_exception(self->stmt, NULL, 1, NULL);
       goto error;
     }
   } else {
@@ -483,7 +483,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     Py_END_ALLOW_THREADS;
     if (rc)
     {
-      mariadb_throw_exception(self->stmt, Mariadb_DatabaseError, 1, NULL);
+      mariadb_throw_exception(self->stmt, NULL, 1, NULL);
       goto error;
     }
   }
@@ -501,7 +501,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     {
       if (mysql_stmt_store_result(self->stmt))
       {
-        mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, NULL);
+        mariadb_throw_exception(self->stmt, NULL, 1, NULL);
         goto error;
       }
       self->affected_rows= mysql_stmt_num_rows(self->stmt);
@@ -595,7 +595,7 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
                                 self->fields[i].flags)))
       {
         Py_XDECREF(obj);
-        mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
+        mariadb_throw_exception(NULL, Mariadb_OperationalError, 0,
            "Can't build descriptor record");
         return NULL;
       }
@@ -624,7 +624,7 @@ PyObject *MrdbCursor_fetchone(MrdbCursor *self)
 
   if (!mysql_stmt_field_count(self->stmt))
   {
-    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
     return NULL;
   }
@@ -671,14 +671,14 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
 
   if (!mysql_stmt_field_count(self->stmt))
   {
-    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
     return NULL;
   }
 
   if (!self->is_buffered)
   {
-    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                             "This method is available only for cursors with buffered result set "
                             "or a read only cursor type");
     return NULL;
@@ -690,7 +690,7 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
 
   if (!(position= PyLong_AsLong(Pos)))
   {
-    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+    mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                             "Invalid position value 0");
     return NULL;
   }
@@ -702,7 +702,7 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
   };
 
   if (!scroll_modes[mode]) {
-    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+    mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                             "Invalid mode '%s'", modestr);
     return NULL;
   }
@@ -711,7 +711,7 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
     new_position= self->row_number + position;
     if (new_position < 0 || new_position > mysql_stmt_num_rows(self->stmt))
     {
-      mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+      mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                             "Position value is out of range");
       return NULL;
     }
@@ -745,7 +745,7 @@ PyObject *MrdbCursor_fetchmany(MrdbCursor *self, PyObject *args,
 
   if (!mysql_stmt_field_count(self->stmt))
   {
-    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+    mariadb_throw_exception(0, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
     return NULL;
   }
@@ -801,7 +801,7 @@ PyObject *MrdbCursor_fetchall(MrdbCursor *self)
 
   if (!mysql_stmt_field_count(self->stmt))
   {
-    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
     return NULL;
   }
@@ -861,7 +861,7 @@ uint8_t MrdbCursor_executemany_fallback(MrdbCursor *self,
   }
   return 0;
 error:
-  mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, NULL);
+  mariadb_throw_exception(self->stmt, NULL, 1, NULL);
   return 1;
 }
 /* }}} */
@@ -926,7 +926,7 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
     Py_END_ALLOW_THREADS;
     if (rc)
     {
-      mariadb_throw_exception(self->stmt, Mariadb_DatabaseError, 1, NULL);
+      mariadb_throw_exception(self->stmt, NULL, 1, NULL);
       goto error;
     }
   } else {
@@ -935,7 +935,7 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
     Py_END_ALLOW_THREADS;
     if (rc)
     {
-      mariadb_throw_exception(self->stmt, Mariadb_DatabaseError, 1, NULL);
+      mariadb_throw_exception(self->stmt, NULL, 1, NULL);
       goto error;
     }
   }
@@ -961,7 +961,7 @@ PyObject *MrdbCursor_nextset(MrdbCursor *self)
 
   if (!mysql_stmt_field_count(self->stmt))
   {
-    mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1,
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
     return NULL;
   }

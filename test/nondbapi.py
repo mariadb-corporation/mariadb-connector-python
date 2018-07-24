@@ -90,6 +90,10 @@ class CursorTest(unittest.TestCase):
     self.assertEqual(conn.warnings, cursor.warnings)
     del cursor
 
+  def test_server_infos(self):
+    self.assertTrue(self.connection.server_info)
+    self.assertTrue(self.connection.server_version > 0);
+
   def test_escape(self):
     cursor= self.connection.cursor()
     cursor.execute("CREATE OR REPLACE TABLE t1 (a varchar(100))")

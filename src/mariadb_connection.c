@@ -42,6 +42,8 @@ static PyObject *MrdbConnection_getdb(MrdbConnection *self, void *closure);
 static int MrdbConnection_setdb(MrdbConnection *self, PyObject *arg, void *closure);
 static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
                                               PyObject *args);
+static PyObject *MrdbConnection_server_version(MrdbConnection *self);
+static PyObject *MrdbConnection_server_info(MrdbConnection *self);
 
 static PyObject *MrdbConnection_warnings(MrdbConnection *self);
 static PyGetSetDef MrdbConnection_sets[]=
@@ -53,6 +55,11 @@ static PyGetSetDef MrdbConnection_sets[]=
                      "reconnect automatically if connection dropped", NULL},
   {"user", (getter)MrdbConnection_getuser, NULL, "user nane", NULL},
   {"warnings", (getter)MrdbConnection_warnings, NULL, "number of warnings which were produced from last running connection command", NULL},
+  {"server_version", (getter)MrdbConnection_server_version, NULL,
+    "Numeric version of connected server. The form of the version number is "
+    "VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH",
+    NULL},
+  {"server_info", (getter)MrdbConnection_server_info, NULL, "Name and version of connected server", NULL},
   GETTER_EXCEPTION("Error", Mariadb_Error),
   GETTER_EXCEPTION("Warning", Mariadb_Warning),
   GETTER_EXCEPTION("InterfaceError", Mariadb_InterfaceError),
@@ -290,7 +297,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
   }
 
   if (!(self->mysql= mysql_init(NULL)))
-  {    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, 
+  {    mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 0, 
     "Can't allocate memory for connection");
     return -1;
   }
@@ -328,7 +335,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
   Py_END_ALLOW_THREADS;
   if (mysql_errno(self->mysql))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 
@@ -338,7 +345,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
   Py_END_ALLOW_THREADS;
   if (rc)
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 end:
@@ -509,7 +516,7 @@ PyObject *MrdbConnection_commit(MrdbConnection *self)
   Py_BEGIN_ALLOW_THREADS;
   if (mysql_commit(self->mysql))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 end:
@@ -534,7 +541,7 @@ PyObject *MrdbConnection_rollback(MrdbConnection *self)
   Py_BEGIN_ALLOW_THREADS;
   if (mysql_rollback(self->mysql))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 end:
@@ -558,7 +565,7 @@ PyObject *MrdbConnection_autocommit(MrdbConnection *self,
   Py_BEGIN_ALLOW_THREADS;
   if (mysql_autocommit(self->mysql, autocommit))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
   }
   Py_END_ALLOW_THREADS;
   if (PyErr_Occurred())
@@ -622,7 +629,7 @@ PyObject *MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args)
 
   if (rc)
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     return NULL;
   }
   self->tpc_state= TPC_STATE_XID;
@@ -650,7 +657,7 @@ PyObject *MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
 
   if (!args && self->tpc_state != TPC_STATE_PREPARE)
   {
-    mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
        "transaction is not in prepared state");
     return NULL;
   }
@@ -662,7 +669,7 @@ PyObject *MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
              transaction_id : self->xid);
     if (mysql_query(self->mysql, stmt))
     {
-      mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+      mariadb_throw_exception(self->mysql, NULL, 0, NULL);
       goto end;
     }
   }
@@ -671,7 +678,7 @@ PyObject *MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
            self->tpc_state < TPC_STATE_PREPARE ? "ONE PHASE" : "");
   if (mysql_query(self->mysql, stmt))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 end:
@@ -704,7 +711,7 @@ PyObject *MrdbConnection_tpc_rollback(MrdbConnection *self, PyObject *args)
 
   if (!args && self->tpc_state != TPC_STATE_PREPARE)
   {
-    mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
        "transaction is not in prepared state");
     return NULL;
   }
@@ -715,7 +722,7 @@ PyObject *MrdbConnection_tpc_rollback(MrdbConnection *self, PyObject *args)
              transaction_id : self->xid);
     if (mysql_query(self->mysql, stmt))
     {
-      mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+      mariadb_throw_exception(self->mysql, NULL, 0, NULL);
       goto end;
     }
   }
@@ -723,7 +730,7 @@ PyObject *MrdbConnection_tpc_rollback(MrdbConnection *self, PyObject *args)
            transaction_id : self->xid);
   if (mysql_query(self->mysql, stmt))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 end:
@@ -748,7 +755,7 @@ PyObject *MrdbConnection_tpc_prepare(MrdbConnection *self)
 
   if (self->tpc_state == TPC_STATE_PREPARE)
   {
-    mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
        "transaction is already in prepared state");
     return NULL;
   }
@@ -756,14 +763,14 @@ PyObject *MrdbConnection_tpc_prepare(MrdbConnection *self)
   Py_BEGIN_ALLOW_THREADS;
   if (mysql_query(self->mysql, stmt))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 
   snprintf(stmt, 127, "XA PREPARE '%s'", self->xid);
   if (mysql_query(self->mysql, stmt))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 end:
@@ -789,13 +796,13 @@ PyObject *MrdbConnection_tpc_recover(MrdbConnection *self)
   Py_BEGIN_ALLOW_THREADS;
   if (mysql_query(self->mysql, "XA RECOVER"))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 
   if (!(result= mysql_store_result(self->mysql)))
   {
-    mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     goto end;
   }
 
@@ -836,7 +843,7 @@ PyObject *MrdbConnection_ping(MrdbConnection *self)
 
   if (rc)
   {
-    mariadb_throw_exception(self->mysql, Mariadb_DatabaseError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     return NULL;
   }
   Py_RETURN_NONE;
@@ -862,7 +869,7 @@ PyObject *MrdbConnection_change_user(MrdbConnection *self,
 
   if (rc)
   {
-    mariadb_throw_exception(self->mysql, Mariadb_DatabaseError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     return NULL;
   }
   Py_RETURN_NONE;
@@ -918,6 +925,7 @@ static PyObject *MrdbConnection_getreconnect(MrdbConnection *self,
 }
 /* }}} */
 
+/* MrdbConnection_setreconnect */
 static int MrdbConnection_setreconnect(MrdbConnection *self,
                                              PyObject *args,
                                              void *closure)
@@ -937,7 +945,9 @@ static int MrdbConnection_setreconnect(MrdbConnection *self,
   mysql_optionsv(self->mysql, MYSQL_OPT_RECONNECT, &reconnect);
   return 0;
 }
+/* }}} */
 
+/* {{{ MrdbConnection_getuser */
 static PyObject *MrdbConnection_getuser(MrdbConnection *self, void *closure)
 {
   PyObject *p;
@@ -948,9 +958,10 @@ static PyObject *MrdbConnection_getuser(MrdbConnection *self, void *closure)
   mariadb_get_infov(self->mysql, MARIADB_CONNECTION_USER, &user);
   p= PyUnicode_FromString(user);
   return p;
-
 }
+/* }}} */
 
+/* {{{ MrdbConnection_setdb */
 static int MrdbConnection_setdb(MrdbConnection *self, PyObject *db,
                                  void *closure)
 {
@@ -964,7 +975,6 @@ static int MrdbConnection_setdb(MrdbConnection *self, PyObject *db,
     PyErr_SetString(PyExc_TypeError, "Argument must be string");
     return -1;
   }
-  
   schema= PyUnicode_AsUTF8(db);
 
   Py_BEGIN_ALLOW_THREADS;
@@ -978,7 +988,9 @@ static int MrdbConnection_setdb(MrdbConnection *self, PyObject *db,
   }
   return 0;
 }
+/* }}} */
 
+/* {{{ MrdbConnection_getdb */
 static PyObject *MrdbConnection_getdb(MrdbConnection *self, void *closure)
 {
   PyObject *p;
@@ -990,7 +1002,9 @@ static PyObject *MrdbConnection_getdb(MrdbConnection *self, void *closure)
   p= PyUnicode_FromString(db);
   return p;
 }
+/* }}} */
 
+/* {{{ MrdbConnection_reconnect */
 PyObject *MrdbConnection_reconnect(MrdbConnection *self)
 {
   int rc;
@@ -1012,12 +1026,14 @@ PyObject *MrdbConnection_reconnect(MrdbConnection *self)
 
   if (rc)
   {
-    mariadb_throw_exception(self->mysql, Mariadb_DatabaseError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     return NULL;
   }
   Py_RETURN_NONE;
 }
+/* }}} */
 
+/* {{{ MrdbConnection_reset */
 PyObject *MrdbConnection_reset(MrdbConnection *self)
 {
   int rc;
@@ -1029,19 +1045,23 @@ PyObject *MrdbConnection_reset(MrdbConnection *self)
 
   if (rc)
   {
-    mariadb_throw_exception(self->mysql, Mariadb_DatabaseError, 0, NULL);
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
     return NULL;
   }
   Py_RETURN_NONE;
 }
+/* }}} */
 
+/* {{{ MrdbConnection_warnings */
 static PyObject *MrdbConnection_warnings(MrdbConnection *self)
 {
   MARIADB_CHECK_CONNECTION(self, NULL);
 
   return PyLong_FromLong((long)mysql_warning_count(self->mysql));
 }
+/* }}} */
 
+/* {{{ MrdbConnection_escape_string */
 static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
                                               PyObject *args)
 {
@@ -1062,7 +1082,22 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
   to_length= mysql_real_escape_string(self->mysql, to, from, from_length);
   new_string= PyUnicode_FromStringAndSize(to, to_length);
   return new_string;
-
-
-
 }
+/* }}} */
+
+/* {{{ MrdbConnection_server_version */
+static PyObject *MrdbConnection_server_version(MrdbConnection *self)
+{
+  MARIADB_CHECK_CONNECTION(self, NULL);
+  return PyLong_FromLong((long)mysql_get_server_version(self->mysql));
+}
+/* }}} */
+
+/* {{{ MrdbConnection_server_info */
+static PyObject *MrdbConnection_server_info(MrdbConnection *self)
+{
+  MARIADB_CHECK_CONNECTION(self, NULL);
+  return PyUnicode_FromString(mysql_get_server_info(self->mysql));
+}
+/* }}} */
+

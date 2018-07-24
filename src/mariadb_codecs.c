@@ -19,8 +19,6 @@
 #include "mariadb_python.h"
 #include <datetime.h>
 
-MYSQL_LEX_STRING pickle_key= {"pickle", 6};
-
 /* {{{ mariadb_pydate_to_tm
    converts a Python date/time/datetime object to MYSQL_TIME
 */

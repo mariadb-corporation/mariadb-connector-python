@@ -24,7 +24,6 @@
 #include <mysql.h>
 #include <errmsg.h>
 #include <mysqld_error.h>
-#include <mariadb_dyncol.h>
 #include <time.h>
 
 #if defined(_WIN32) && defined(_MSVC)
