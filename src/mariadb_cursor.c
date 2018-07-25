@@ -56,12 +56,18 @@ static PyObject *Mariadb_no_operation(MrdbCursor *,
                                       PyObject *);
 static PyObject *Mariadb_row_count(MrdbCursor *self);
 static PyObject *MrdbCursor_warnings(MrdbCursor *self);
+static PyObject *MrdbCursor_getbuffered(MrdbCursor *self);
+static int MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg);
+
 
 static PyGetSetDef MrdbCursor_sets[]=
 {
   {"rowcount", (getter)Mariadb_row_count, NULL, "doc", NULL},
   {"warnings", (getter)MrdbCursor_warnings, NULL,
    "Number of warnings which were produced from last execute() call", NULL},
+  {"buffered", (getter)MrdbCursor_getbuffered, (setter)MrdbCursor_setbuffered,
+   "When True all result sets are immediately transferred and the connection "
+   "between client and server is no longer blocked. Default value is False."},
   {NULL}
 };
 
@@ -157,22 +163,25 @@ static struct PyMemberDef MrdbCursor_Members[] =
      named_tuple (Boolean): return rows as named tuple instead of tuple
      prefetch_size:         Prefetch size for readonly cursors
      cursor_type:           Type of cursor: CURSOR_TYPE_READONLY or CURSOR_TYPE_NONE (default)
+     buffered:              buffered or unbuffered result sets
 */
 static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
                                      PyObject *kwargs)
 {
-  char *key_words[]= {"", "named_tuple", "prefetch_size", "cursor_type", NULL};
+  char *key_words[]= {"", "named_tuple", "prefetch_size", "cursor_type", 
+                      "buffered", NULL};
   PyObject *connection;
   uint8_t is_named_tuple= 0;
   unsigned long cursor_type= 0,
                 prefetch_rows= 0;
+  uint8_t is_buffered= 0;
 
   if (!self)
     return -1;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-        "O!|bkk", key_words, &MrdbConnection_Type, &connection,
-        &is_named_tuple, &prefetch_rows, &cursor_type))
+        "O!|bkkb", key_words, &MrdbConnection_Type, &connection,
+        &is_named_tuple, &prefetch_rows, &cursor_type, &is_buffered))
 
   Py_INCREF(connection);
   self->connection= (MrdbConnection *)connection;
@@ -300,7 +309,8 @@ static uint8_t MrdbCursor_isprepared(MrdbCursor *self,
 {
   if (self->statement)
   {
-    if (!memcmp(statement, self->statement, statement_len))
+    if (self->statement_len == statement_len &&
+        !memcmp(statement, self->statement, statement_len))
     {
       enum mysql_stmt_state state;
       mysql_stmt_attr_get(self->stmt, STMT_ATTR_STATE, &state);
@@ -387,6 +397,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
   int statement_len= 0;
   int rc= 0;
   uint8_t is_buffered= 0;
+  uint32_t i;
   static char *key_words[]= {"", "", "buffered", NULL};
 
   MARIADB_CHECK_STMT(self);
@@ -407,7 +418,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     MrdbCursor_clear(self);
     self->statement= PyMem_RawMalloc(statement_len + 1);
     strncpy(self->statement, statement, statement_len);
-    self->statement[statement_len]= 0;
+    self->statement_len= (unsigned long)statement_len;
   }
 
   if (Data)
@@ -513,7 +524,6 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     memcpy(self->fields, fields, sizeof(MYSQL_FIELD) * mysql_stmt_field_count(self->stmt));
     mysql_free_result(res);
     if (self->is_named_tuple) {
-      uint32_t i;
       if (!(self->sequence_fields= (PyStructSequence_Field *)
              PyMem_RawCalloc(mysql_stmt_field_count(self->stmt) + 1,
                              sizeof(PyStructSequence_Field))))
@@ -583,14 +593,26 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
 
     for (i=0; i < mysql_stmt_field_count(self->stmt); i++)
     {
+      uint32_t precision= 0;
+      uint32_t display_size= self->fields[i].max_length;
+      MARIADB_CHARSET_INFO *cinfo;
+      cinfo= mariadb_get_charset_by_nr(self->fields[i].charsetnr);
+
+      if (cinfo && cinfo->char_maxlen > 1)
+        display_size /= cinfo->char_maxlen;
+
+      if (self->fields[i].decimals)
+        precision= self->fields[i].max_length - 1;
+
       PyObject *desc;
       if (!(desc= Py_BuildValue("(sIIIIIII)",
                                 self->fields[i].name,
                                 self->fields[i].type,
                                 self->fields[i].max_length,
                                 self->fields[i].length,
-                                self->fields[i].length,
-                                self->fields[i].decimals,
+                                precision,
+                                IS_NUM(self->fields[i].type) ?
+                                self->fields[i].decimals: 0,
                                 !IS_NOT_NULL(self->fields[i].flags),
                                 self->fields[i].flags)))
       {
@@ -1008,3 +1030,26 @@ static PyObject *MrdbCursor_warnings(MrdbCursor *self)
 
   return PyLong_FromLong((long)mysql_stmt_warning_count(self->stmt));
 }
+
+/* {{{ MrdbCursor_getbuffered */
+static PyObject *MrdbCursor_getbuffered(MrdbCursor *self)
+{
+  if (self->is_buffered)
+    Py_RETURN_TRUE;
+  Py_RETURN_FALSE;
+}
+/* }}} */
+
+/* {{{ MrdbCursor_setbuffered */
+static int MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg)
+{
+  if (!arg || Py_TYPE(arg) != &PyBool_Type)
+  {
+    PyErr_SetString(PyExc_TypeError, "Argument must be boolean");
+    return -1;
+  }
+
+  self->is_buffered= PyObject_IsTrue(arg);
+  return 0;
+}
+/* }}} */

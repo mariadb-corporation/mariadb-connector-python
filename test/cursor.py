@@ -358,3 +358,20 @@ class CursorTest(unittest.TestCase):
     row= cursor.fetchone()
     self.assertEqual(row[0],2);
     del cursor
+
+  def test_conpy_7(self):
+    cursor=self.connection.cursor()
+    stmt= "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
+    cursor.execute(stmt, buffered=True)
+    cursor.scroll(2, mode='relative')
+    row= cursor.fetchone()
+    self.assertEqual(row[0],3)
+    cursor.scroll(-2, mode='relative')
+    row= cursor.fetchone()
+    print(row)
+    del cursor
+
+  def test_compy_9(self):
+    cursor=self.connection.cursor(buffered=True)
+    cursor.execute("SELECT 'utf8mb4', 123.5678")
+    print(cursor.description) 
