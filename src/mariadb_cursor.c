@@ -331,9 +331,9 @@ void MrdbCursor_clear(MrdbCursor *self)
 {
   if (self->stmt) { 
     uint32_t val= 0;
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_USER_DATA, 0);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_PARAM_READ, 0);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_FIELD_FETCH_CALLBACK, 0);
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, 0);
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, 0);
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, 0);
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &val);
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &val);
   }
@@ -419,6 +419,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     self->statement= PyMem_RawMalloc(statement_len + 1);
     strncpy(self->statement, statement, statement_len);
     self->statement_len= (unsigned long)statement_len;
+    self->statement[statement_len]= 0;
   }
 
   if (Data)
@@ -437,7 +438,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
   if (!self->is_prepared)
   {
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->param_count);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_USER_DATA, (void *)self);
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
     mysql_stmt_bind_param(self->stmt, self->params);
 
     Py_BEGIN_ALLOW_THREADS;
@@ -542,7 +543,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     }
     if (!(self->values= (PyObject**)PyMem_RawCalloc(mysql_stmt_field_count(self->stmt), sizeof(PyObject *))))
       goto error;
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_FIELD_FETCH_CALLBACK, field_fetch_callback);
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
     self->description= MrdbCursor_description(self);
   }
   else {
@@ -942,8 +943,8 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
   if (!self->is_prepared)
   {
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->param_count);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_USER_DATA, (void *)self);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_PARAM_READ, mariadb_param_update);
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, mariadb_param_update);
 
     mysql_stmt_bind_param(self->stmt, self->params);
 
