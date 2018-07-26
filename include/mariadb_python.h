@@ -134,7 +134,6 @@ typedef struct {
   MYSQL_FIELD *fields;
   char *statement;
   unsigned long statement_len;
-  PyObject *description;
   PyObject **values;
   PyStructSequence_Desc sequence_desc;
   PyStructSequence_Field *sequence_fields;

@@ -368,10 +368,18 @@ class CursorTest(unittest.TestCase):
     self.assertEqual(row[0],3)
     cursor.scroll(-2, mode='relative')
     row= cursor.fetchone()
-    print(row)
     del cursor
 
   def test_compy_9(self):
-    cursor=self.connection.cursor(buffered=True)
-    cursor.execute("SELECT 'utf8mb4', 123.5678")
-    print(cursor.description) 
+    cursor=self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE t1 (a varchar(20), b double(6,3), c double)");
+    cursor.execute("INSERT INTO t1 VALUES ('€uro', 123.345, 12345.678)")
+    cursor.execute("SELECT a,b,c FROM t1")
+    cursor.fetchone()
+    d= cursor.description;
+    self.assertEqual(d[0][2], 4);  # 4 code points only
+    self.assertEqual(d[0][3], -1); # variable length
+    self.assertEqual(d[1][2], 7);  # length=precision +  1
+    self.assertEqual(d[1][4], 6);  # precision
+    self.assertEqual(d[1][5], 3);  # decimals
+    del cursor

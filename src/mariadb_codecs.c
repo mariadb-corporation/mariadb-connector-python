@@ -249,6 +249,8 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     case MYSQL_TYPE_LONG_BLOB:
     {
       unsigned long length= mysql_net_field_length(row);
+      if (length > self->fields[column].max_length)
+        self->fields[column].max_length= length;
       if (self->fields[column].flags & BINARY_FLAG)
       {
         if (!(self->values[column]= mariadb_get_pickled(*row, (size_t)length)))
@@ -271,8 +273,13 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     case MYSQL_TYPE_ENUM:
     {
       unsigned long length;
+      Py_ssize_t utf8len;
       length= mysql_net_field_length(row);
+
       self->values[column]= PyUnicode_FromStringAndSize((const char *)*row, (Py_ssize_t)length);
+      utf8len= PyUnicode_GET_LENGTH(self->values[column]);
+      if (utf8len > self->fields[column].max_length)
+        self->fields[column].max_length= utf8len;
       *row+= length;
     }
     default:

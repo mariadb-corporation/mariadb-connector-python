@@ -62,6 +62,10 @@ static int MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg);
 
 static PyGetSetDef MrdbCursor_sets[]=
 {
+  {"description", (getter)MrdbCursor_description, NULL,
+   "This read-only attribute is a sequence of 8-item sequences. "
+   "Each of these sequences contains information describing one result column",
+   NULL},
   {"rowcount", (getter)Mariadb_row_count, NULL, "doc", NULL},
   {"warnings", (getter)MrdbCursor_warnings, NULL,
    "Number of warnings which were produced from last execute() call", NULL},
@@ -128,11 +132,6 @@ static struct PyMemberDef MrdbCursor_Members[] =
    offsetof(MrdbCursor, statement),
    READONLY,
    "The last executed statement"},
-  {"description",
-    T_OBJECT,
-    offsetof(MrdbCursor, description),
-    READONLY,
-    "This read-only attribute is a sequence of 8-item sequences. Each of these sequences contains information describing one result column"},
   {"lastrowid",
    T_LONG,
    offsetof(MrdbCursor, lastrowid),
@@ -339,7 +338,7 @@ void MrdbCursor_clear(MrdbCursor *self)
   }
 
   MARIADB_FREE_MEM(self->sequence_fields);
-  MARIADB_FREE_MEM(self->fields);
+  self->fields= NULL;
   MARIADB_FREE_MEM(self->values);
   MARIADB_FREE_MEM(self->bind);
   MARIADB_FREE_MEM(self->statement);
@@ -506,9 +505,6 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
   self->row_number= 0;
   if (mysql_stmt_field_count(self->stmt))
   {
-    MYSQL_RES *res= mysql_stmt_result_metadata(self->stmt);
-    MYSQL_FIELD *fields= mysql_fetch_fields(res);
-
     if (self->is_buffered)
     {
       if (mysql_stmt_store_result(self->stmt))
@@ -519,11 +515,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
       self->affected_rows= mysql_stmt_num_rows(self->stmt);
     }
 
-    /* store metadata field information */
-    if (!(self->fields= (MYSQL_FIELD *)PyMem_RawCalloc(mysql_stmt_field_count(self->stmt), sizeof(MYSQL_FIELD))))
-      goto error;
-    memcpy(self->fields, fields, sizeof(MYSQL_FIELD) * mysql_stmt_field_count(self->stmt));
-    mysql_free_result(res);
+    self->fields= mariadb_stmt_fetch_fields(self->stmt);
     if (self->is_named_tuple) {
       if (!(self->sequence_fields= (PyStructSequence_Field *)
              PyMem_RawCalloc(mysql_stmt_field_count(self->stmt) + 1,
@@ -544,11 +536,6 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     if (!(self->values= (PyObject**)PyMem_RawCalloc(mysql_stmt_field_count(self->stmt), sizeof(PyObject *))))
       goto error;
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
-    self->description= MrdbCursor_description(self);
-  }
-  else {
-    Py_INCREF(Py_None);
-    self->description= Py_None;
   }
 end:
   MARIADB_FREE_MEM(self->value);
@@ -595,26 +582,29 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
     for (i=0; i < mysql_stmt_field_count(self->stmt); i++)
     {
       uint32_t precision= 0;
-      uint32_t display_size= self->fields[i].max_length;
-      MARIADB_CHARSET_INFO *cinfo;
-      cinfo= mariadb_get_charset_by_nr(self->fields[i].charsetnr);
-
-      if (cinfo && cinfo->char_maxlen > 1)
-        display_size /= cinfo->char_maxlen;
+      uint32_t decimals= 0;
+      unsigned long display_length= self->fields[i].max_length;
+      long packed_len= mysql_ps_fetch_functions[self->fields[i].type].pack_len;
 
       if (self->fields[i].decimals)
-        precision= self->fields[i].max_length - 1;
+      {
+        if (self->fields[i].decimals < 31)
+        {
+          decimals= self->fields[i].decimals;
+          precision= self->fields[i].length;
+          display_length= precision + 1;
+        }
+      }
 
       PyObject *desc;
-      if (!(desc= Py_BuildValue("(sIIIIIII)",
+      if (!(desc= Py_BuildValue("(sIIiIIOI)",
                                 self->fields[i].name,
                                 self->fields[i].type,
-                                self->fields[i].max_length,
-                                self->fields[i].length,
+                                display_length,
+                                packed_len >= 0 ? packed_len : -1,
                                 precision,
-                                IS_NUM(self->fields[i].type) ?
-                                self->fields[i].decimals: 0,
-                                !IS_NOT_NULL(self->fields[i].flags),
+                                decimals,
+                                PyBool_FromLong(!IS_NOT_NULL(self->fields[i].flags)),
                                 self->fields[i].flags)))
       {
         Py_XDECREF(obj);
@@ -1001,6 +991,7 @@ PyObject *MrdbCursor_nextset(MrdbCursor *self)
     Py_INCREF(Py_None);
     return Py_None;
   }
+  self->fields= mariadb_stmt_fetch_fields(self->stmt);
   Py_RETURN_TRUE;
 }
 /* }}} */
