@@ -277,6 +277,8 @@ class CursorTest(unittest.TestCase):
     del cursor
 
   def test_indicator(self):
+    if self.connection.server_version < 100206:
+      self.skipTest("Requires server version >= 10.2.6")
     cursor= self.connection.cursor()
     cursor.execute("CREATE OR REPLACE TABLE ind1 (a int, b int default 2,c int)");
     vals= (mariadb.indicator_null, mariadb.indicator_default, 3)
@@ -382,4 +384,38 @@ class CursorTest(unittest.TestCase):
     self.assertEqual(d[1][2], 7);  # length=precision +  1
     self.assertEqual(d[1][4], 6);  # precision
     self.assertEqual(d[1][5], 3);  # decimals
+    del cursor
+
+  def test_conpy_15(self):
+    cursor=self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE t1 (a int not null auto_increment primary key, b varchar(20))");
+    self.assertEqual(cursor.lastrowid, 0)
+    cursor.execute("INSERT INTO t1 VALUES (null, 'foo')")
+    self.assertEqual(cursor.lastrowid, 1)
+    cursor.execute("SELECT LAST_INSERT_ID()")
+    row= cursor.fetchone()
+    self.assertEqual(row[0], 1)
+    vals= [(3, "bar"), (4, "this")]
+    cursor.executemany("INSERT INTO t1 VALUES (?,?)", vals)
+    self.assertEqual(cursor.lastrowid, 4)
+    # Bug MDEV-16847
+    # cursor.execute("SELECT LAST_INSERT_ID()")
+    # row= cursor.fetchone()
+    # self.assertEqual(row[0], 4)
+
+    # Bug MDEV-16593
+    # vals= [(None, "bar"), (None, "foo")]
+    # cursor.executemany("INSERT INTO t1 VALUES (?,?)", vals)
+    # self.assertEqual(cursor.lastrowid, 6)
+    del cursor
+
+  def test_conpy_14(self):
+    cursor=self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE t1 (a int not null auto_increment primary key, b varchar(20))");
+    self.assertEqual(cursor.rowcount, -1)
+    cursor.execute("INSERT INTO t1 VALUES (null, 'foo')")
+    self.assertEqual(cursor.rowcount, 1)
+    vals= [(3, "bar"), (4, "this")]
+    cursor.executemany("INSERT INTO t1 VALUES (?,?)", vals)
+    self.assertEqual(cursor.rowcount, 2)
     del cursor

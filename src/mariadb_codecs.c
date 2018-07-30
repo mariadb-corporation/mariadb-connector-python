@@ -273,7 +273,7 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     case MYSQL_TYPE_ENUM:
     {
       unsigned long length;
-      Py_ssize_t utf8len;
+      unsigned long utf8len;
       length= mysql_net_field_length(row);
 
       self->values[column]= PyUnicode_FromStringAndSize((const char *)*row, (Py_ssize_t)length);

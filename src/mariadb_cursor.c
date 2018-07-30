@@ -58,10 +58,13 @@ static PyObject *Mariadb_row_count(MrdbCursor *self);
 static PyObject *MrdbCursor_warnings(MrdbCursor *self);
 static PyObject *MrdbCursor_getbuffered(MrdbCursor *self);
 static int MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg);
+static PyObject *MrdbCursor_lastrowid(MrdbCursor *self);
 
 
 static PyGetSetDef MrdbCursor_sets[]=
 {
+  {"lastrowid", (getter)MrdbCursor_lastrowid, NULL,
+   "row id of the last modified (inserted) row"},
   {"description", (getter)MrdbCursor_description, NULL,
    "This read-only attribute is a sequence of 8-item sequences. "
    "Each of these sequences contains information describing one result column",
@@ -132,11 +135,6 @@ static struct PyMemberDef MrdbCursor_Members[] =
    offsetof(MrdbCursor, statement),
    READONLY,
    "The last executed statement"},
-  {"lastrowid",
-   T_LONG,
-   offsetof(MrdbCursor, lastrowid),
-   READONLY,
-   "row id of the last modified (inserted) row"},
   {"buffered",
    T_BYTE,
    offsetof(MrdbCursor, is_buffered),
@@ -328,7 +326,7 @@ static uint8_t MrdbCursor_isprepared(MrdbCursor *self,
 static
 void MrdbCursor_clear(MrdbCursor *self)
 {
-  if (self->stmt) { 
+  if (self->stmt) {
     uint32_t val= 0;
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, 0);
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, 0);
@@ -339,6 +337,7 @@ void MrdbCursor_clear(MrdbCursor *self)
 
   MARIADB_FREE_MEM(self->sequence_fields);
   self->fields= NULL;
+  self->row_count= self->affected_rows= 0;
   MARIADB_FREE_MEM(self->values);
   MARIADB_FREE_MEM(self->bind);
   MARIADB_FREE_MEM(self->statement);
@@ -498,11 +497,10 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
       goto error;
     }
   }
-  /* save insert id */
-  self->lastrowid= mysql_stmt_insert_id(self->stmt);
 
   /* reset row number */
   self->row_number= 0;
+  self->row_count= mysql_stmt_affected_rows(self->stmt);
   if (mysql_stmt_field_count(self->stmt))
   {
     if (self->is_buffered)
@@ -841,7 +839,7 @@ PyObject *MrdbCursor_fetchall(MrdbCursor *self)
     }
     PyList_Append(List, Row);
   }
-  self->affected_rows= mysql_stmt_num_rows(self->stmt);
+  self->row_count= mysql_stmt_num_rows(self->stmt);
   return List;
 }
 /* }}} */
@@ -859,6 +857,8 @@ uint8_t MrdbCursor_executemany_fallback(MrdbCursor *self,
   if (mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->param_count))
     goto error;
 
+  self->row_count= 0;
+
   for (i=0; i < self->array_size; i++)
   {
     int rc= 0;
@@ -875,6 +875,7 @@ uint8_t MrdbCursor_executemany_fallback(MrdbCursor *self,
     Py_END_ALLOW_THREADS;
     if (rc)
       goto error;
+    self->row_count+= mysql_stmt_affected_rows(self->stmt);
   }
   return 0;
 error:
@@ -956,7 +957,6 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
       goto error;
     }
   }
-  self->lastrowid= mysql_stmt_insert_id(self->stmt);
 end:
   MARIADB_FREE_MEM(self->values);
   Py_RETURN_NONE;
@@ -1009,9 +1009,13 @@ static PyObject *Mariadb_row_count(MrdbCursor *self)
 
   if (mysql_stmt_field_count(self->stmt))
     row_count= (int64_t)mysql_stmt_num_rows(self->stmt);
-  else
-    row_count= (mysql_stmt_affected_rows(self->stmt) > 0) ?
+  else {
+    if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
+      row_count= self->row_count > 0 ? self->row_count : -1;
+    else
+      row_count= (mysql_stmt_affected_rows(self->stmt) > 0) ?
                 (int64_t)mysql_stmt_affected_rows(self->stmt) : -1;
+  }
   return PyLong_FromLongLong(row_count);
 }
 /* }}} */
@@ -1043,5 +1047,13 @@ static int MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg)
 
   self->is_buffered= PyObject_IsTrue(arg);
   return 0;
+}
+/* }}} */
+
+/* {{{ MrdbCursor_lastrowid */
+static PyObject *MrdbCursor_lastrowid(MrdbCursor *self)
+{
+  MARIADB_CHECK_STMT(self);
+  return PyLong_FromUnsignedLongLong(mysql_stmt_insert_id(self->stmt));
 }
 /* }}} */

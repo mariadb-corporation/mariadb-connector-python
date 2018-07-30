@@ -129,7 +129,6 @@ typedef struct {
   MrdbParamInfo *paraminfo;
   MrdbParamValue *value;
   MYSQL_BIND *params;
-  uint64_t lastrowid;
   MYSQL_BIND *bind;
   MYSQL_FIELD *fields;
   char *statement;
@@ -141,6 +140,7 @@ typedef struct {
   unsigned long prefetch_rows;
   unsigned long cursor_type;
   int64_t affected_rows;
+  int64_t row_count;
   unsigned long row_number;
   uint8_t is_prepared;
   uint8_t is_buffered;
