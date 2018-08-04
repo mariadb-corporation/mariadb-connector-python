@@ -38,6 +38,8 @@ static PyObject *MrdbCursor_scroll(MrdbCursor *self,
 static PyObject *MrdbCursor_fieldcount(MrdbCursor *self);
 void field_fetch_callback(void *data, unsigned int column, unsigned char **row);
 static PyObject *mariadb_get_sequence_or_tuple(MrdbCursor *self);
+static PyObject * MrdbCursor_iter(PyObject *self);
+static PyObject * MrdbCursor_iternext(PyObject *self);
 
 /* todo: write more documentation, this is just a placeholder */
 static char mariadb_cursor_documentation[] =
@@ -150,6 +152,11 @@ static struct PyMemberDef MrdbCursor_Members[] =
    offsetof(MrdbCursor, row_array_size),
    0,
    "the number of rows to fetch"},
+   {"closed",
+   T_BOOL,
+   offsetof(MrdbCursor, is_closed),
+   READONLY,
+   "Indicates if the cursor is closed and can't be reused"},
    {NULL}
 };
 
@@ -264,8 +271,8 @@ PyTypeObject MrdbCursor_Type =
 	0, /* (long) tp_weaklistoffset */
 
 	/* Iterators */
-	0, /* (getiterfunc) tp_iter */
-	0, /* (iternextfunc) tp_iternext */
+	(getiterfunc)MrdbCursor_iter,
+	(iternextfunc)MrdbCursor_iternext,
 
 	/* Attribute descriptor and subclassing stuff */
 	(struct PyMethodDef *)MrdbCursor_Methods, /* tp_methods */
@@ -356,13 +363,14 @@ void ma_cursor_close(MrdbCursor *self)
   if (self->stmt)
   {
     /* Todo: check if all the cursor stuff is deleted (when using prepared
-       statemnts this should be handled in mysql_close) */
+       statemnts this should be handled in mysql_stmt_close) */
     Py_BEGIN_ALLOW_THREADS
     mysql_stmt_close(self->stmt);
     Py_END_ALLOW_THREADS
     self->stmt= NULL;
   }
   MrdbCursor_clear(self);
+  self->is_closed= 1;
 }
 
 static
@@ -1057,3 +1065,29 @@ static PyObject *MrdbCursor_lastrowid(MrdbCursor *self)
   return PyLong_FromUnsignedLongLong(mysql_stmt_insert_id(self->stmt));
 }
 /* }}} */
+
+/* iterator protocol */
+
+static PyObject *
+MrdbCursor_iter(PyObject *self)
+{
+  MARIADB_CHECK_STMT(((MrdbCursor *)self));
+  Py_INCREF(self);
+  return self;
+}
+
+static PyObject *
+MrdbCursor_iternext(PyObject *self)
+{
+    PyObject *res;
+
+    res= MrdbCursor_fetchone((MrdbCursor *)self);
+
+    if (res && res == Py_None)
+    {
+      Py_DECREF(res);
+      res= NULL;
+    }
+    return res;
+}
+

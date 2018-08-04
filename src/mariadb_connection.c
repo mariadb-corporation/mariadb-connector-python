@@ -46,8 +46,12 @@ static PyObject *MrdbConnection_server_version(MrdbConnection *self);
 static PyObject *MrdbConnection_server_info(MrdbConnection *self);
 
 static PyObject *MrdbConnection_warnings(MrdbConnection *self);
+static PyObject *MrdbConnection_getautocommit(MrdbConnection *self);
+static int MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg, void *closure);
+
 static PyGetSetDef MrdbConnection_sets[]=
 {
+  {"autocommit", (getter)MrdbConnection_getautocommit, (setter)MrdbConnection_setautocommit, "Toggles autocommit mode on or off"},
   {"connection_id", (getter)MrdbConnection_getid, NULL, "connection id", NULL},
   {"database", (getter)MrdbConnection_getdb, (setter)MrdbConnection_setdb, "database in use", NULL},
   {"auto_reconnect", (getter)MrdbConnection_getreconnect,
@@ -127,12 +131,6 @@ static PyMethodDef MrdbConnection_Methods[] =
     "Returns a transaction ID object suitable for passing to the .tpc_*() "
     "methods of this connection" },
   /* additional methods */
-  {
-    "auto_commit",
-    (PyCFunction)MrdbConnection_autocommit,
-    METH_VARARGS,
-    "Toggles autocommit mode on or off"
-  },
   { "ping",
     (PyCFunction)MrdbConnection_ping,
     METH_NOARGS,
@@ -545,28 +543,6 @@ PyObject *MrdbConnection_rollback(MrdbConnection *self)
     goto end;
   }
 end:
-  Py_END_ALLOW_THREADS;
-  if (PyErr_Occurred())
-    return NULL;
-  Py_RETURN_NONE;
-}
-/* }}} */
-
-/* {{{ Mariadb_autocommit */
-PyObject *MrdbConnection_autocommit(MrdbConnection *self,
-                                        PyObject *args)
-{
-  int autocommit;
-  MARIADB_CHECK_CONNECTION(self, NULL);
-
-  if (PyArg_ParseTuple(args, "p", &autocommit))
-    return NULL;
-
-  Py_BEGIN_ALLOW_THREADS;
-  if (mysql_autocommit(self->mysql, autocommit))
-  {
-    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-  }
   Py_END_ALLOW_THREADS;
   if (PyErr_Occurred())
     return NULL;
@@ -1101,3 +1077,40 @@ static PyObject *MrdbConnection_server_info(MrdbConnection *self)
 }
 /* }}} */
 
+/* {{{ MrdbConnection_setautocommit */
+static int MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg,
+                                 void *closure)
+{
+  int rc= 0;
+
+  MARIADB_CHECK_CONNECTION(self, -1);
+
+  if (!arg || Py_TYPE(arg) != &PyBool_Type)
+  {
+    PyErr_SetString(PyExc_TypeError, "Argument must be boolean");
+    return -1;
+  }
+  Py_BEGIN_ALLOW_THREADS;
+  rc= mysql_autocommit(self->mysql, PyObject_IsTrue(arg));
+  Py_END_ALLOW_THREADS;
+
+  if (rc)
+  {
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+    return -1;
+  }
+  return 0;
+}
+/* }}} */
+
+/* MrdbConnection_getautocommit */
+static PyObject *MrdbConnection_getautocommit(MrdbConnection *self)
+{
+  uint32_t server_status;
+  MARIADB_CHECK_CONNECTION(self, NULL);
+
+  mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
+  if (server_status & SERVER_STATUS_AUTOCOMMIT)
+    Py_RETURN_TRUE;
+  Py_RETURN_FALSE;
+}

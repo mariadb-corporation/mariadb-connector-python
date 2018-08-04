@@ -73,6 +73,7 @@ typedef struct {
 	MYSQL *mysql;
 	int open;
   uint8_t is_buffered;
+  uint8_t is_closed;
   enum enum_tpc_state tpc_state;
   char xid[MAX_TPC_XID_SIZE];
   PyObject *dsn; /* always null */
@@ -145,6 +146,7 @@ typedef struct {
   uint8_t is_prepared;
   uint8_t is_buffered;
   uint8_t is_named_tuple;
+  uint8_t is_closed;
 } MrdbCursor;
 
 typedef struct
@@ -265,9 +267,11 @@ if (a) {\
 }
 
 #define MARIADB_CHECK_STMT(cursor)\
-if (!cursor || !cursor->stmt || !cursor->stmt->mysql)\
-  mariadb_throw_exception(cursor->stmt, Mariadb_Error, 1,\
-    "Invalid cursor or not connected");
+if (!cursor || !cursor->stmt || !cursor->stmt->mysql || (cursor)->is_closed) {\
+  (cursor)->is_closed= 1;\
+  mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
+    "Invalid cursor or not connected");\
+}
 
 /* MariaDB protocol macros */
 #define int1store(T,A) *((int8_t*) (T)) = (A)

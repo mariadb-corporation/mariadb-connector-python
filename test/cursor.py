@@ -419,3 +419,29 @@ class CursorTest(unittest.TestCase):
     cursor.executemany("INSERT INTO t1 VALUES (?,?)", vals)
     self.assertEqual(cursor.rowcount, 2)
     del cursor
+
+  def test_closed(self):
+    cursor= self.connection.cursor()
+    cursor.close()
+    cursor.close()
+    self.assertEqual(cursor.closed, True)
+    try:
+      cursor.execute("set @a:=1")
+    except mariadb.ProgrammingError:
+      pass
+    del cursor
+
+  def test_emptycursor(self):
+    cursor= self.connection.cursor()
+    try:
+      cursor.execute("")
+    except mariadb.DatabaseError:
+      pass
+    del cursor
+
+  def test_iterator(self):
+    cursor= self.connection.cursor()
+    cursor.execute("select 1 union select 2 union select 3 union select 4 union select 5")
+    for i, row in enumerate(cursor):
+      self.assertEqual(i+1, cursor.rownumber)
+      self.assertEqual(i+1, row[0])
