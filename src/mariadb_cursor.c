@@ -61,6 +61,7 @@ static PyObject *MrdbCursor_warnings(MrdbCursor *self);
 static PyObject *MrdbCursor_getbuffered(MrdbCursor *self);
 static int MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg);
 static PyObject *MrdbCursor_lastrowid(MrdbCursor *self);
+static PyObject *MrdbCursor_closed(MrdbCursor *self);
 
 
 static PyGetSetDef MrdbCursor_sets[]=
@@ -74,6 +75,8 @@ static PyGetSetDef MrdbCursor_sets[]=
   {"rowcount", (getter)Mariadb_row_count, NULL, "doc", NULL},
   {"warnings", (getter)MrdbCursor_warnings, NULL,
    "Number of warnings which were produced from last execute() call", NULL},
+  {"closed", (getter)MrdbCursor_closed, NULL,
+   "Indicates if the cursor is closed and can't be reused", NULL},
   {"buffered", (getter)MrdbCursor_getbuffered, (setter)MrdbCursor_setbuffered,
    "When True all result sets are immediately transferred and the connection "
    "between client and server is no longer blocked. Default value is False."},
@@ -152,11 +155,6 @@ static struct PyMemberDef MrdbCursor_Members[] =
    offsetof(MrdbCursor, row_array_size),
    0,
    "the number of rows to fetch"},
-   {"closed",
-   T_BOOL,
-   offsetof(MrdbCursor, is_closed),
-   READONLY,
-   "Indicates if the cursor is closed and can't be reused"},
    {NULL}
 };
 
@@ -1068,6 +1066,7 @@ static PyObject *MrdbCursor_lastrowid(MrdbCursor *self)
 
 /* iterator protocol */
 
+/* {{{ MrdbCursor_iter */
 static PyObject *
 MrdbCursor_iter(PyObject *self)
 {
@@ -1075,7 +1074,9 @@ MrdbCursor_iter(PyObject *self)
   Py_INCREF(self);
   return self;
 }
+/* }}} */
 
+/* {{{ MrdbCursor_iternext */
 static PyObject *
 MrdbCursor_iternext(PyObject *self)
 {
@@ -1090,4 +1091,19 @@ MrdbCursor_iternext(PyObject *self)
     }
     return res;
 }
+/* }}} */
+
+/* {{{ MrdbCursor_closed */
+static PyObject *MrdbCursor_closed(MrdbCursor *self)
+{
+  if (!self || !self->stmt || !self->stmt->mysql ||
+      mysql_stmt_errno(self->stmt) == CR_STMT_CLOSED ||
+      self->is_closed)
+  {
+    self->is_closed= 1;
+    Py_RETURN_TRUE;
+  }
+  Py_RETURN_FALSE;
+}
+/* }}} */
 

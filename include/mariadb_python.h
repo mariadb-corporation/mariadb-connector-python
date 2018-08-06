@@ -267,7 +267,7 @@ if (a) {\
 }
 
 #define MARIADB_CHECK_STMT(cursor)\
-if (!cursor || !cursor->stmt || !cursor->stmt->mysql || (cursor)->is_closed) {\
+if (!(cursor)->stmt || !(cursor)->stmt->mysql || mysql_stmt_errno((cursor)->stmt) == CR_STMT_CLOSED || (cursor)->is_closed) {\
   (cursor)->is_closed= 1;\
   mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
     "Invalid cursor or not connected");\

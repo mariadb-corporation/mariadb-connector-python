@@ -445,3 +445,28 @@ class CursorTest(unittest.TestCase):
     for i, row in enumerate(cursor):
       self.assertEqual(i+1, cursor.rownumber)
       self.assertEqual(i+1, row[0])
+
+  def test_update_bulk(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE t1 (a int primary key, b int)")
+    vals= [(i,) for i in range(1000)]
+    cursor.executemany("INSERT INTO t1 VALUES (?, NULL)", vals);
+    self.assertEqual(cursor.rowcount, 1000)
+    self.connection.autocommit= False
+    cursor.executemany("UPDATE t1 SET b=2 WHERE a=?", vals);
+    self.connection.commit()
+    self.assertEqual(cursor.rowcount, 1000)
+    self.connection.autocommit= True
+    self.connection.autocommit= False
+    del cursor
+
+  def test_conpy21(self):
+    conn= mariadb.connection(default_file='default.cnf')
+    cursor=conn.cursor()
+    self.assertFalse(cursor.closed)
+    conn.close()
+    self.assertTrue(cursor.closed)
+    del cursor, conn
+
+
+
