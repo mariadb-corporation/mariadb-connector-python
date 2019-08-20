@@ -9,6 +9,8 @@ from distutils.core import setup, Extension
 
 if os.name == "posix":
   from mariadb_posix import get_config
+if os.name == "windows":
+  from mariadb_windows import get_config
 
 cfg= get_config()
 
