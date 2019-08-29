@@ -1,5 +1,3 @@
-#!/usr/bin/env python -O
-
 import mariadb
 import datetime
 import unittest
