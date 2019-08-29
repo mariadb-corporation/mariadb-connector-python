@@ -136,7 +136,7 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def _connect(self):
         try:
-            return self.driver.connect(database="test")
+            return self.driver.connect(default_file='default.cnf')
         except AttributeError:
             self.fail("No connect method found in self.driver module")
 
