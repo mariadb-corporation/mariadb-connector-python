@@ -263,7 +263,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
   unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
       compress= 0, ssl_verify_cert= 0;
 
-  static char *dsn_keys[]= {
+  char *dsn_keys[]= {
     "dsn", "host", "user", "password", "database", "port", "socket",
     "connect_timeout", "read_timeout", "write_timeout",
     "local_infile", "compress", "init_command",
@@ -271,7 +271,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
     "ssl_cipher", "ssl_capath", "ssl_crlpath",
     "ssl_verify_cert", "ssl",
-    "client_flags"
+    "client_flags", NULL
   };
 
   if (!PyArg_ParseTupleAndKeywords(args, dsnargs,

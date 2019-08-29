@@ -6,7 +6,6 @@ import unittest
 import collections
 
 class CursorTest(unittest.TestCase):
-
   def setUp(self):
     self.connection= mariadb.connection(default_file='default.cnf')
 

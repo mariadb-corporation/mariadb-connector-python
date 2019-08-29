@@ -25,6 +25,7 @@
 #include <errmsg.h>
 #include <mysqld_error.h>
 #include <time.h>
+#include <malloc.h>
 
 #if defined(_WIN32) && defined(_MSVC)
 #ifndef L64
@@ -278,7 +279,7 @@ if (!(cursor)->stmt || !(cursor)->stmt->mysql || mysql_stmt_errno((cursor)->stmt
 #define uint1korr(A)   (*(((uint8_t*)(A))))
 #if defined(__i386__) || defined(_WIN32)
 #define sint2korr(A)	(*((int16_t *) (A)))
-#define sint3korr(A)	((int32) ((((unsigned char) (A)[2]) & 128) ? \
+#define sint3korr(A)	((int32_t) ((((unsigned char) (A)[2]) & 128) ? \
 				  (((uint32_t) 255L << 24) | \
 				   (((uint32_t) (unsigned char) (A)[2]) << 16) |\
 				   (((uint32_t) (unsigned char) (A)[1]) << 8) | \
@@ -314,7 +315,7 @@ if (!(cursor)->stmt || !(cursor)->stmt->mysql || mysql_stmt_errno((cursor)->stmt
                          (((unsigned long long) ((unsigned char) (A)[4])) << 32) +       \
                          (((unsigned long long) ((unsigned char) (A)[5])) << 40))
 #define uint8_tkorr(A)	(*((unsigned long long *) (A)))
-#define sint8korr(A)	(*(( *) (A)))
+#define sint8korr(A)	(*((long long *) (A)))
 #define int2store(T,A)	*((uint16_t*) (T))= (uint16_t) (A)
 #define int3store(T,A)  do { *(T)=  (unsigned char) ((A));\
                             *(T+1)=(unsigned char) (((uint) (A) >> 8));\
@@ -547,3 +548,7 @@ do { doubleget_union _tmp; \
 
 
 #endif /* __i386__ OR _WIN32 */
+
+#ifdef _WIN32
+//#define alloca _malloca
+#endif
