@@ -124,6 +124,7 @@ typedef struct {
   PyObject_HEAD
   MrdbConnection *connection;
   MYSQL_STMT *stmt;
+  MYSQL_RES *result;
   PyObject *data;
   uint32_t array_size;
   uint32_t param_count;
@@ -148,6 +149,7 @@ typedef struct {
   uint8_t is_buffered;
   uint8_t is_named_tuple;
   uint8_t is_closed;
+  uint8_t is_text;
 } MrdbCursor;
 
 typedef struct
@@ -261,6 +263,7 @@ if (connection->tpc_state == TPC_STATE_NONE) {\
     "Transaction not started");\
     return NULL;\
 }
+
 #define MARIADB_FREE_MEM(a)\
 if (a) {\
   PyMem_RawFree((a));\
@@ -268,7 +271,8 @@ if (a) {\
 }
 
 #define MARIADB_CHECK_STMT(cursor)\
-if (!(cursor)->stmt || !(cursor)->stmt->mysql || mysql_stmt_errno((cursor)->stmt) == CR_STMT_CLOSED || (cursor)->is_closed) {\
+if (!cursor->stmt || !cursor->stmt->mysql || cursor->is_closed)\
+{\
   (cursor)->is_closed= 1;\
   mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
     "Invalid cursor or not connected");\
