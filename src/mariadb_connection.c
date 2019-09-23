@@ -257,7 +257,8 @@ MrdbConnection_Initialize(MrdbConnection *self,
        *socket= NULL, *init_command= NULL, *default_file= NULL,
        *default_group= NULL, *local_infile= NULL,
        *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
-       *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL;
+       *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
+       *charset= NULL;
   uint8_t ssl_enforce= 0;
   unsigned int client_flags= 0, port= 0;
   unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
@@ -271,7 +272,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
     "ssl_cipher", "ssl_capath", "ssl_crlpath",
     "ssl_verify_cert", "ssl",
-    "client_flags", NULL
+    "client_flags", "charset", NULL
   };
 
   if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
@@ -284,7 +285,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
         &ssl_key, &ssl_ca, &ssl_cert, &ssl_crl,
         &ssl_cipher, &ssl_capath, &ssl_crlpath,
         &ssl_verify_cert, &ssl_enforce,
-        &client_flags))
+        &client_flags, &charset))
     return -1;
 
   if (dsn)
@@ -503,6 +504,7 @@ MrdbConnection_exception(PyObject *self, void *closure)
 /* {{{ MrdbConnection_commit */
 PyObject *MrdbConnection_commit(MrdbConnection *self)
 {
+  int rc= 0;
   MARIADB_CHECK_CONNECTION(self, NULL);
 
   if (self->tpc_state != TPC_STATE_NONE)
@@ -512,21 +514,20 @@ PyObject *MrdbConnection_commit(MrdbConnection *self)
     return NULL;
   }
   Py_BEGIN_ALLOW_THREADS;
-  if (mysql_commit(self->mysql))
+  rc= mysql_commit(self->mysql);
+  Py_END_ALLOW_THREADS;
+  if (rc)
   {
     mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-    goto end;
-  }
-end:
-  Py_END_ALLOW_THREADS;
-  if (PyErr_Occurred())
     return NULL;
+  }
   Py_RETURN_NONE;
 } /* }}} */
 
 /* {{{ MrdbConnection_rollback */
 PyObject *MrdbConnection_rollback(MrdbConnection *self)
 {
+  int rc= 0;
   MARIADB_CHECK_CONNECTION(self, NULL);
 
   if (self->tpc_state != TPC_STATE_NONE)
@@ -537,15 +538,14 @@ PyObject *MrdbConnection_rollback(MrdbConnection *self)
   }
 
   Py_BEGIN_ALLOW_THREADS;
-  if (mysql_rollback(self->mysql))
+  rc= mysql_rollback(self->mysql);
+  Py_END_ALLOW_THREADS;
+  if (rc)
   {
     mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-    goto end;
-  }
-end:
-  Py_END_ALLOW_THREADS;
-  if (PyErr_Occurred())
     return NULL;
+  }
+
   Py_RETURN_NONE;
 }
 /* }}} */

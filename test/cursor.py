@@ -8,8 +8,10 @@ import collections
 class CursorTest(unittest.TestCase):
   def setUp(self):
     self.connection= mariadb.connection(default_file='default.cnf')
+    self.connection.autocommit= False
 
   def tearDown(self):
+    self.connection.rollback()
     del self.connection
 
   def test_date(self):
@@ -97,13 +99,13 @@ class CursorTest(unittest.TestCase):
 
   def test_fetchmany(self):
     cursor= self.connection.cursor()
-    cursor.execute("CREATE OR REPLACE TABLE t1 (id int, name varchar(64), city varchar(64))");
+    cursor.execute("CREATE OR REPLACE TABLE t01 (id int, name varchar(64), city varchar(64))");
     params= [(1, u"Jack",  u"Boston"),
            (2, u"Martin",  u"Ohio"),
            (3, u"James",  u"Washington"),
            (4, u"Rasmus",  u"Helsinki"),
            (5, u"Andrey",  u"Sofia")]
-    cursor.executemany("INSERT INTO t1 VALUES (?,?,?)", params);
+    cursor.executemany("INSERT INTO t01 VALUES (?,?,?)", params);
 
     #test Errors
     # a) if no select was executed
@@ -113,13 +115,13 @@ class CursorTest(unittest.TestCase):
     cursor= self.connection.cursor()
     self.assertRaises(mariadb.Error, cursor.fetchall)
 
-    cursor.execute("SELECT id, name, city FROM t1 ORDER BY id")
+    cursor.execute("SELECT id, name, city FROM t01 ORDER BY id")
     self.assertEqual(0, cursor.rowcount)
     row = cursor.fetchall()
     self.assertEqual(row, params)
     self.assertEqual(5, cursor.rowcount)
 
-    cursor.execute("SELECT id, name, city FROM t1 ORDER BY id")
+    cursor.execute("SELECT id, name, city FROM t01 ORDER BY id")
     self.assertEqual(0, cursor.rowcount)
 
     row= cursor.fetchmany(1)
@@ -410,6 +412,7 @@ class CursorTest(unittest.TestCase):
 
   def test_conpy_14(self):
     cursor=self.connection.cursor()
+    self.assertEqual(cursor.rowcount, -1)
     cursor.execute("CREATE OR REPLACE TABLE t1 (a int not null auto_increment primary key, b varchar(20))");
     self.assertEqual(cursor.rowcount, -1)
     cursor.execute("INSERT INTO t1 VALUES (null, 'foo')")
@@ -456,8 +459,17 @@ class CursorTest(unittest.TestCase):
     self.connection.commit()
     self.assertEqual(cursor.rowcount, 1000)
     self.connection.autocommit= True
-    self.connection.autocommit= False
     del cursor
+
+  def test_multi_execute(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE t1 (a int auto_increment primary key, b int)")
+    self.connection.autocommit= False
+    for i in range(1,1000):
+      cursor.execute("INSERT INTO t1 VALUES (?,1)", (i,))
+    self.connection.autocommit= True
+    del cursor
+    
 
   def test_conpy21(self):
     conn= mariadb.connection(default_file='default.cnf')

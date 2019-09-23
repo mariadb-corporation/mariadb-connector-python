@@ -36,6 +36,7 @@ static PyObject *MrdbCursor_scroll(MrdbCursor *self,
                                        PyObject *args,
                                        PyObject *kwargs);
 static PyObject *MrdbCursor_fieldcount(MrdbCursor *self);
+void field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column);
 void field_fetch_callback(void *data, unsigned int column, unsigned char **row);
 static PyObject *mariadb_get_sequence_or_tuple(MrdbCursor *self);
 static PyObject * MrdbCursor_iter(PyObject *self);
@@ -44,6 +45,25 @@ static PyObject * MrdbCursor_iternext(PyObject *self);
 /* todo: write more documentation, this is just a placeholder */
 static char mariadb_cursor_documentation[] =
 "Returns a MariaDB cursor object";
+
+#define CURSOR_SET_STATEMENT(a,s,l)\
+MARIADB_FREE_MEM((a)->statement);\
+(a)->statement= PyMem_RawMalloc((l)+ 1);\
+strncpy((a)->statement, (s), (l));\
+(a)->statement_len= (unsigned long)(l);\
+(a)->statement[(l)]= 0;
+
+#define CURSOR_FIELD_COUNT(a)\
+((a)->is_text ? mysql_field_count((a)->connection->mysql) : (a)->stmt ? mysql_stmt_field_count((a)->stmt) : 0)
+
+#define CURSOR_AFFECTED_ROWS(a)\
+((a)->is_text ? mysql_affected_rows((a)->connection->mysql) : (a)->stmt ? mysql_stmt_affected_rows((a)->stmt) : 0)
+
+#define CURSOR_INSERT_ID(a)\
+((a)->is_text ? mysql_insert_id((a)->connection->mysql) : (a)->stmt ? mysql_stmt_insert_id((a)->stmt) : 0)
+
+#define CURSOR_NUM_ROWS(a)\
+((a)->is_text ? mysql_num_rows((a)->result) : (a)->stmt ? mysql_stmt_num_rows((a)->stmt) : 0)
 
 #define MARIADB_SET_SEQUENCE_OR_TUPLE_ITEM(self, row, column)\
 if ((self)->is_named_tuple)\
@@ -185,10 +205,6 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
         "O!|bkkb", key_words, &MrdbConnection_Type, &connection,
         &is_named_tuple, &prefetch_rows, &cursor_type, &is_buffered))
 
-  Py_INCREF(connection);
-  self->connection= (MrdbConnection *)connection;
-  self->is_buffered= self->connection->is_buffered;
-
   if (cursor_type != CURSOR_TYPE_READ_ONLY &&
       cursor_type != CURSOR_TYPE_NO_CURSOR)
   {
@@ -197,16 +213,31 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
     return -1;
   }
 
-	if (!(self->stmt = mysql_stmt_init(self->connection->mysql)))
+  Py_INCREF(connection);
+  self->connection= (MrdbConnection *)connection;
+  self->is_buffered= self->connection->is_buffered;
+
+  if (!(self->stmt= mysql_stmt_init(self->connection->mysql)))
   {
-    mariadb_throw_exception(self->connection->mysql, Mariadb_OperationalError, 0, NULL);
-		return -1;
-	}
+    mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
+    return -1;
+  }
 
   self->cursor_type= cursor_type;
   self->prefetch_rows= prefetch_rows;
   self->is_named_tuple= is_named_tuple;
   self->row_array_size= 1;
+
+  if (self->cursor_type || self->prefetch_rows)
+  {
+  	if (!(self->stmt = mysql_stmt_init(self->connection->mysql)))
+    {
+      mariadb_throw_exception(self->connection->mysql, Mariadb_OperationalError, 0, NULL);
+  		return -1;
+	  }
+  }
+  else
+    return 0;
 
   mysql_stmt_attr_set(self->stmt, STMT_ATTR_CURSOR_TYPE, &self->cursor_type);
   mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREFETCH_ROWS, &self->prefetch_rows);
@@ -331,13 +362,26 @@ static uint8_t MrdbCursor_isprepared(MrdbCursor *self,
 static
 void MrdbCursor_clear(MrdbCursor *self)
 {
-  if (self->stmt) {
+  if (!self->is_text && self->stmt) {
     uint32_t val= 0;
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, 0);
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, 0);
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, 0);
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &val);
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &val);
+  }
+
+  if (self->is_text)
+  {
+    if (self->result)
+    { 
+      mysql_free_result(self->result);
+      self->result= 0;
+      self->is_text= 0;
+    }
+    /* clear also pending result sets */
+    if (self->connection->mysql)
+      while (!mysql_next_result(self->connection->mysql));
   }
 
   MARIADB_FREE_MEM(self->sequence_fields);
@@ -348,6 +392,7 @@ void MrdbCursor_clear(MrdbCursor *self)
   MARIADB_FREE_MEM(self->statement);
   MARIADB_FREE_MEM(self->value);
   MARIADB_FREE_MEM(self->params);
+
 }
 /* }}} */
 
@@ -358,7 +403,7 @@ void MrdbCursor_clear(MrdbCursor *self)
 static
 void ma_cursor_close(MrdbCursor *self)
 {
-  if (self->stmt)
+  if (!self->is_text && self->stmt)
   {
     /* Todo: check if all the cursor stuff is deleted (when using prepared
        statemnts this should be handled in mysql_stmt_close) */
@@ -375,6 +420,7 @@ static
 PyObject * MrdbCursor_close(MrdbCursor *self)
 {
   ma_cursor_close(self);
+  self->is_closed= 1;
   Py_INCREF(Py_None);
   return Py_None;
 }
@@ -387,6 +433,83 @@ void MrdbCursor_dealloc(MrdbCursor *self)
   Py_TYPE(self)->tp_free((PyObject*)self);
 }
 /* }}} */
+
+static int Mrdb_GetFieldInfo(MrdbCursor *self)
+{
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
+
+  self->row_number= 0;
+
+  self->row_count= CURSOR_AFFECTED_ROWS(self);
+
+  if (field_count)
+  {
+    if (self->is_text)
+    {
+      self->result= (self->is_buffered) ? mysql_store_result(self->connection->mysql) :
+                                          mysql_use_result(self->connection->mysql);
+      if (!self->result)
+      {
+        mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
+        return 1;
+      }
+    }
+    else if (self->is_buffered)
+    {
+      if (mysql_stmt_store_result(self->stmt))
+      {
+        mariadb_throw_exception(self->stmt, NULL, 1, NULL);
+        return 1;
+      }
+    }
+
+    self->affected_rows= CURSOR_AFFECTED_ROWS(self);
+
+    self->fields= (self->is_text) ? mysql_fetch_fields(self->result) :
+                                    mariadb_stmt_fetch_fields(self->stmt);
+
+    if (self->is_named_tuple) {
+      int i;
+      if (!(self->sequence_fields= (PyStructSequence_Field *)
+             PyMem_RawCalloc(field_count + 1,
+                             sizeof(PyStructSequence_Field))))
+        return 1;
+      self->sequence_desc.name= mariadb_named_tuple_name;
+      self->sequence_desc.doc= mariadb_named_tuple_desc;
+      self->sequence_desc.fields= self->sequence_fields;
+      self->sequence_desc.n_in_sequence= field_count;
+
+
+      for (i=0; i < field_count; i++)
+      {
+        self->sequence_fields[i].name= self->fields[i].name;
+      }
+      self->sequence_type= PyMem_RawCalloc(1,sizeof(PyTypeObject));
+      PyStructSequence_InitType(self->sequence_type, &self->sequence_desc);
+    }
+  }
+  return 0;
+}
+
+static int MrdbCursor_InitResultSet(MrdbCursor *self)
+{
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
+
+  MARIADB_FREE_MEM(self->sequence_fields);
+  MARIADB_FREE_MEM(self->values);
+
+  if (self->result)
+    mysql_free_result(self->result);
+
+  if (Mrdb_GetFieldInfo(self))
+    return 1;
+
+  if (!(self->values= (PyObject**)PyMem_RawCalloc(field_count, sizeof(PyObject *))))
+    return 1;
+  if (!self->is_text)
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
+  return 0;
+}
 
 /* {{{ MrdbCursor_execute
        PEP-249 execute() method
@@ -401,7 +524,6 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
   int statement_len= 0;
   int rc= 0;
   uint8_t is_buffered= 0;
-  uint32_t i;
   static char *key_words[]= {"", "", "buffered", NULL};
 
   MARIADB_CHECK_STMT(self);
@@ -416,132 +538,117 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
   /* defaukt was set to 0 before */
   self->is_buffered= is_buffered;
 
-  /* Check if statement is already prepared */
-  if (!(self->is_prepared= MrdbCursor_isprepared(self, statement, statement_len)))
+  /* if there are no parameters specified, we execute the statement in text protocol */
+  if (!Data && !self->cursor_type)
   {
+    /* in case statement was executed before, we need to clear, since we don't use 
+       binary protocol */
     MrdbCursor_clear(self);
-    self->statement= PyMem_RawMalloc(statement_len + 1);
-    strncpy(self->statement, statement, statement_len);
-    self->statement_len= (unsigned long)statement_len;
-    self->statement[statement_len]= 0;
-  }
-
-  if (Data)
-  {
-    self->array_size= 0;
-    self->data= Data;
-    if (mariadb_check_execute_parameters(self, Data))
-      goto error;
-
-    self->data= Data;
-
-    /* Load values */
-    if (mariadb_param_update(self, self->params, 0))
-      goto error;
-  }
-  if (!self->is_prepared)
-  {
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->param_count);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
-    mysql_stmt_bind_param(self->stmt, self->params);
-
     Py_BEGIN_ALLOW_THREADS;
-    if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
-    {
-      rc= mysql_stmt_prepare(self->stmt, statement, statement_len);
-      if (!rc)
-        rc= mysql_stmt_execute(self->stmt);
-    }
-    else
-      rc= mariadb_stmt_execute_direct(self->stmt, statement, statement_len);
+    rc= mysql_real_query(self->connection->mysql, statement, statement_len);
     Py_END_ALLOW_THREADS;
-
     if (rc)
     {
-      /* in case statement is not supported via binary protocol, we try
-         to run the statement with text protocol */
-      if (mysql_stmt_errno(self->stmt) == ER_UNSUPPORTED_PS)
+      mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
+      goto error;
+    }
+    self->is_text= 1;
+    CURSOR_SET_STATEMENT(self, statement, statement_len);
+  }
+  else
+  {
+    self->is_text= 0;
+    if (!(self->is_prepared= MrdbCursor_isprepared(self, statement, statement_len)))
+    {
+      MrdbCursor_clear(self);
+      CURSOR_SET_STATEMENT(self, statement, statement_len);
+    }
+
+    if (Data)
+    {
+      self->array_size= 0;
+      self->data= Data;
+      if (mariadb_check_execute_parameters(self, Data))
+        goto error;
+
+      self->data= Data;
+
+      /* Load values */
+      if (mariadb_param_update(self, self->params, 0))
+        goto error;
+    }
+    if (!self->is_prepared)
+    {
+      mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->param_count);
+      mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
+      mysql_stmt_bind_param(self->stmt, self->params);
+
+      Py_BEGIN_ALLOW_THREADS;
+      if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
       {
-        Py_BEGIN_ALLOW_THREADS;
-        rc= mysql_real_query(self->stmt->mysql, statement, statement_len);
-        Py_END_ALLOW_THREADS;
-
-        if (rc)
-        {
-          mariadb_throw_exception(self->stmt->mysql, NULL, 0, NULL);
-          goto error;
-        }
-        /* if we have a result set, we can't process it - so we will return
-           an error. (XA RECOVER is the only command which returns a result set
-           and can't be prepared) */
-        if (mysql_field_count(self->stmt->mysql))
-        {
-          MYSQL_RES *result;
-
-          /* we need to clear the result first, otherwise the cursor remains
-             in usuable state (query out of order) */
-          if ((result= mysql_store_result(self->stmt->mysql)))
-            mysql_free_result(result);
-
-          mariadb_throw_exception(NULL, Mariadb_NotSupportedError, 0, "This command is not supported by MariaDB Connector/Python");
-          goto error;
-        }
-        goto end;
+        rc= mysql_stmt_prepare(self->stmt, statement, statement_len);
+        if (!rc)
+          rc= mysql_stmt_execute(self->stmt);
       }
-      /* throw exception from statement handle */
-      mariadb_throw_exception(self->stmt, NULL, 1, NULL);
-      goto error;
-    }
-  } else {
-    /* We are already prepared, so just reexecute statement */
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_stmt_execute(self->stmt);
-    Py_END_ALLOW_THREADS;
-    if (rc)
-    {
-      mariadb_throw_exception(self->stmt, NULL, 1, NULL);
-      goto error;
-    }
-  }
+      else
+        rc= mariadb_stmt_execute_direct(self->stmt, statement, statement_len);
+      Py_END_ALLOW_THREADS;
 
-  /* reset row number */
-  self->row_number= 0;
-  self->row_count= mysql_stmt_affected_rows(self->stmt);
-  if (mysql_stmt_field_count(self->stmt))
-  {
-    if (self->is_buffered)
-    {
-      if (mysql_stmt_store_result(self->stmt))
+      if (rc)
+      {
+        /* in case statement is not supported via binary protocol, we try
+           to run the statement with text protocol */
+        if (mysql_stmt_errno(self->stmt) == ER_UNSUPPORTED_PS)
+        {
+          Py_BEGIN_ALLOW_THREADS;
+          self->is_text= 0;
+          rc= mysql_real_query(self->connection->mysql, statement, statement_len);
+          Py_END_ALLOW_THREADS;
+
+          if (rc)
+          {
+            mariadb_throw_exception(self->stmt->mysql, NULL, 0, NULL);
+            goto error;
+          }
+          /* if we have a result set, we can't process it - so we will return
+             an error. (XA RECOVER is the only command which returns a result set
+             and can't be prepared) */
+          if (mysql_field_count(self->stmt->mysql))
+          {
+            MYSQL_RES *result;
+
+            /* we need to clear the result first, otherwise the cursor remains
+               in usuable state (query out of order) */
+            if ((result= mysql_store_result(self->stmt->mysql)))
+              mysql_free_result(result);
+
+            mariadb_throw_exception(NULL, Mariadb_NotSupportedError, 0, "This command is not supported by MariaDB Connector/Python");
+            goto error;
+          }
+          goto end;
+        }
+        /* throw exception from statement handle */
+        mariadb_throw_exception(self->stmt, NULL, 1, NULL);
+        goto error;
+      }
+    } else {
+      /* We are already prepared, so just reexecute statement */
+      mysql_stmt_bind_param(self->stmt, self->params);
+      Py_BEGIN_ALLOW_THREADS;
+      rc= mysql_stmt_execute(self->stmt);
+      Py_END_ALLOW_THREADS;
+      if (rc)
       {
         mariadb_throw_exception(self->stmt, NULL, 1, NULL);
         goto error;
       }
-      self->affected_rows= mysql_stmt_num_rows(self->stmt);
     }
-
-    self->fields= mariadb_stmt_fetch_fields(self->stmt);
-    if (self->is_named_tuple) {
-      if (!(self->sequence_fields= (PyStructSequence_Field *)
-             PyMem_RawCalloc(mysql_stmt_field_count(self->stmt) + 1,
-                             sizeof(PyStructSequence_Field))))
-        goto error;
-      self->sequence_desc.name= mariadb_named_tuple_name;
-      self->sequence_desc.doc= mariadb_named_tuple_desc;
-      self->sequence_desc.fields= self->sequence_fields;
-      self->sequence_desc.n_in_sequence= mysql_stmt_field_count(self->stmt);
-
-      for (i=0; i < mysql_stmt_field_count(self->stmt); i++)
-      {
-        self->sequence_fields[i].name= self->fields[i].name;
-      }
-      self->sequence_type= PyMem_RawCalloc(1,sizeof(PyTypeObject));
-      PyStructSequence_InitType(self->sequence_type, &self->sequence_desc);
-    }
-    if (!(self->values= (PyObject**)PyMem_RawCalloc(mysql_stmt_field_count(self->stmt), sizeof(PyObject *))))
-      goto error;
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
   }
+
+  if (MrdbCursor_InitResultSet(self))
+    goto error;
 end:
+  self->is_prepared= 1;
   MARIADB_FREE_MEM(self->value);
   Py_RETURN_NONE;
 error:
@@ -557,7 +664,7 @@ PyObject *MrdbCursor_fieldcount(MrdbCursor *self)
   if (PyErr_Occurred())
     return NULL;
 
-  return PyLong_FromLong((long)mysql_stmt_field_count(self->stmt));
+  return PyLong_FromLong((long)CURSOR_FIELD_COUNT(self));
 }
 /* }}} */
 
@@ -571,19 +678,21 @@ static
 PyObject *MrdbCursor_description(MrdbCursor *self)
 {
   PyObject *obj= NULL;
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
 
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
     return NULL;
 
-  if (self->fields && mysql_stmt_field_count(self->stmt))
+
+  if (self->fields && field_count)
   {
     uint32_t i;
 
-    if (!(obj= PyTuple_New(mysql_stmt_field_count(self->stmt))))
+    if (!(obj= PyTuple_New(field_count)))
       return NULL;
 
-    for (i=0; i < mysql_stmt_field_count(self->stmt); i++)
+    for (i=0; i < field_count; i++)
     {
       uint32_t precision= 0;
       uint32_t decimals= 0;
@@ -626,6 +735,31 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
 }
 /* }}} */
 
+static int MrdbCursor_fetchinternal(MrdbCursor *self)
+{
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
+  MYSQL_ROW row;
+  int rc;
+  unsigned int i;
+
+  if (!self->is_text)
+  {
+    rc= mysql_stmt_fetch(self->stmt);
+    if (rc == MYSQL_NO_DATA)
+      return 1;
+    return 0;
+  }
+
+  if (!(row= mysql_fetch_row(self->result)))
+    return 1;
+
+  for (i= 0; i < field_count; i++)
+  {
+    field_fetch_fromtext(self, row[i], i);
+  }
+  return 0;
+}
+
 /* {{{ MrdbCursor_fetchone
    PEP-249 fetchone() method
 */
@@ -634,26 +768,29 @@ PyObject *MrdbCursor_fetchone(MrdbCursor *self)
 {
   PyObject *row;
   uint32_t i;
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
 
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
     return NULL;
 
-  if (!mysql_stmt_field_count(self->stmt))
+  if (!field_count)
   {
     mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
     return NULL;
   }
-  if (mysql_stmt_fetch(self->stmt))
+
+  if (MrdbCursor_fetchinternal(self))
   {
     Py_INCREF(Py_None);
     return Py_None;
   }
+
   self->row_number++;
   if (!(row= mariadb_get_sequence_or_tuple(self)))
     return NULL;
-  for (i= 0; i < mysql_stmt_field_count(self->stmt); i++)
+  for (i= 0; i < field_count; i++)
   {
     MARIADB_SET_SEQUENCE_OR_TUPLE_ITEM(self, row, i);
   }
@@ -686,7 +823,7 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
   if (PyErr_Occurred())
     return NULL;
 
-  if (!mysql_stmt_field_count(self->stmt))
+  if (!CURSOR_FIELD_COUNT(self))
   {
     mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
@@ -730,7 +867,7 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
 
   if (!mode) {
     new_position= self->row_number + position;
-    if (new_position < 0 || new_position > mysql_stmt_num_rows(self->stmt))
+    if (new_position < 0 || new_position > CURSOR_NUM_ROWS(self))
     {
       mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                             "Position value is out of range");
@@ -739,7 +876,10 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
   } else
     new_position= position; /* absolute */
 
-  mysql_stmt_data_seek(self->stmt, new_position);
+  if (!self->is_text)
+    mysql_stmt_data_seek(self->stmt, new_position);
+  else
+    mysql_data_seek(self->result, new_position);
   self->row_number= new_position;
   Py_INCREF(Py_None);
   return Py_None;
@@ -759,12 +899,13 @@ PyObject *MrdbCursor_fetchmany(MrdbCursor *self, PyObject *args,
   uint32_t i;
   unsigned long rows= 0;
   static char *kw_list[]= {"size", NULL};
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
 
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
     return NULL;
 
-  if (!mysql_stmt_field_count(self->stmt))
+  if (!field_count)
   {
     mariadb_throw_exception(0, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
@@ -788,12 +929,12 @@ PyObject *MrdbCursor_fetchmany(MrdbCursor *self, PyObject *args,
   {
     uint32_t j;
     PyObject *Row;
-    if (mysql_stmt_fetch(self->stmt))
+    if (MrdbCursor_fetchinternal(self))
       goto end;
-    self->affected_rows= mysql_stmt_num_rows(self->stmt);
+    self->affected_rows= CURSOR_NUM_ROWS(self);
     if (!(Row= mariadb_get_sequence_or_tuple(self)))
       return NULL;
-    for (j=0; j < mysql_stmt_field_count(self->stmt); j++)
+    for (j=0; j < field_count; j++)
       MARIADB_SET_SEQUENCE_OR_TUPLE_ITEM(self, Row, j);
     PyList_Append(List, Row);
   }
@@ -803,10 +944,11 @@ end:
 
 static PyObject *mariadb_get_sequence_or_tuple(MrdbCursor *self)
 {
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
   if (self->is_named_tuple)
     return PyStructSequence_New(self->sequence_type);
   else
-    return PyTuple_New(mysql_stmt_field_count(self->stmt));
+    return PyTuple_New(field_count);
 }
 /* }}} */
 
@@ -816,11 +958,12 @@ static
 PyObject *MrdbCursor_fetchall(MrdbCursor *self)
 {
   PyObject *List;
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
     return NULL;
 
-  if (!mysql_stmt_field_count(self->stmt))
+  if (!field_count)
   {
     mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
@@ -829,7 +972,8 @@ PyObject *MrdbCursor_fetchall(MrdbCursor *self)
 
   if (!(List= PyList_New(0)))
     return NULL;
-  while (!mysql_stmt_fetch(self->stmt))
+
+  while (!MrdbCursor_fetchinternal(self))
   {
     uint32_t j;
     PyObject *Row;
@@ -839,13 +983,14 @@ PyObject *MrdbCursor_fetchall(MrdbCursor *self)
     if (!(Row= mariadb_get_sequence_or_tuple(self)))
       return NULL;
 
-    for (j=0; j < mysql_stmt_field_count(self->stmt); j++)
+    for (j=0; j < field_count; j++)
     {
       MARIADB_SET_SEQUENCE_OR_TUPLE_ITEM(self, Row, j)
     }
     PyList_Append(List, Row);
   }
-  self->row_count= mysql_stmt_num_rows(self->stmt);
+  self->row_count= (self->is_text) ? mysql_num_rows(self->result) : 
+                                     mysql_stmt_num_rows(self->stmt);
   return List;
 }
 /* }}} */
@@ -919,13 +1064,13 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
   if (!(self->is_prepared= MrdbCursor_isprepared(self, statement, statement_len)))
   {
     MrdbCursor_clear(self);
-    self->statement= PyMem_RawMalloc(statement_len + 1);
-    strncpy(self->statement, statement, statement_len);
-    self->statement[statement_len]= 0;
+    CURSOR_SET_STATEMENT(self, statement, statement_len);
   }
+  self->is_text= 0;
 
   if (mariadb_check_bulk_parameters(self, self->data))
     goto error;
+
 
   /* If the server doesn't support bulk execution (< 10.2.6),
      we need to call a fallback routine */
@@ -982,7 +1127,7 @@ PyObject *MrdbCursor_nextset(MrdbCursor *self)
   if (PyErr_Occurred())
     return NULL;
 
-  if (!mysql_stmt_field_count(self->stmt))
+  if (!CURSOR_FIELD_COUNT(self))
   {
     mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                             "Cursor doesn't have a result set");
@@ -990,14 +1135,30 @@ PyObject *MrdbCursor_nextset(MrdbCursor *self)
   }
 
   Py_BEGIN_ALLOW_THREADS;
-  rc= mysql_stmt_next_result(self->stmt);
+  if (!self->is_text)
+    rc= mysql_stmt_next_result(self->stmt);
+  else
+  {
+    if (self->result)
+    {
+      mysql_free_result(self->result);
+      self->result= NULL;
+    }
+    rc= mysql_next_result(self->connection->mysql);
+  }
   Py_END_ALLOW_THREADS;
   if (rc)
   {
     Py_INCREF(Py_None);
     return Py_None;
   }
-  self->fields= mariadb_stmt_fetch_fields(self->stmt);
+  if (CURSOR_FIELD_COUNT(self))
+  {
+    if (MrdbCursor_InitResultSet(self))
+      return NULL; 
+  }
+  else
+    self->fields= 0;
   Py_RETURN_TRUE;
 }
 /* }}} */
@@ -1013,14 +1174,17 @@ static PyObject *Mariadb_row_count(MrdbCursor *self)
   if (PyErr_Occurred())
     return NULL;
 
-  if (mysql_stmt_field_count(self->stmt))
-    row_count= (int64_t)mysql_stmt_num_rows(self->stmt);
-  else {
-    if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
-      row_count= self->row_count > 0 ? self->row_count : -1;
-    else
-      row_count= (mysql_stmt_affected_rows(self->stmt) > 0) ?
-                (int64_t)mysql_stmt_affected_rows(self->stmt) : -1;
+  /* PEP-249 requires to return -1 if the cursor was not executed before */
+  if (!self->statement)
+    return PyLong_FromLongLong(-1);
+
+  if (CURSOR_FIELD_COUNT(self))
+    row_count= CURSOR_NUM_ROWS(self);
+  else 
+  {
+    row_count= CURSOR_AFFECTED_ROWS(self);
+    if (!row_count)
+      row_count= -1;
   }
   return PyLong_FromLongLong(row_count);
 }
@@ -1060,7 +1224,7 @@ static int MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg)
 static PyObject *MrdbCursor_lastrowid(MrdbCursor *self)
 {
   MARIADB_CHECK_STMT(self);
-  return PyLong_FromUnsignedLongLong(mysql_stmt_insert_id(self->stmt));
+  return PyLong_FromUnsignedLongLong(CURSOR_INSERT_ID(self));
 }
 /* }}} */
 
@@ -1096,13 +1260,8 @@ MrdbCursor_iternext(PyObject *self)
 /* {{{ MrdbCursor_closed */
 static PyObject *MrdbCursor_closed(MrdbCursor *self)
 {
-  if (!self || !self->stmt || !self->stmt->mysql ||
-      mysql_stmt_errno(self->stmt) == CR_STMT_CLOSED ||
-      self->is_closed)
-  {
-    self->is_closed= 1;
+  if (self->is_closed || !self->stmt || self->stmt->mysql == NULL)
     Py_RETURN_TRUE;
-  }
   Py_RETURN_FALSE;
 }
 /* }}} */

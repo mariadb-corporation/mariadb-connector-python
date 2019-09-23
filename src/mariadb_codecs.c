@@ -88,6 +88,97 @@ static PyObject *mariadb_get_pickled(unsigned char *data, size_t length)
 }
 /* }}} */
 
+void field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
+{
+  MYSQL_TIME tm;
+  unsigned long *length;
+
+  if (!PyDateTimeAPI)
+    PyDateTime_IMPORT;
+
+  if (!data)
+  {
+    Py_INCREF(Py_None);
+    self->values[column]= Py_None;
+    return;
+  }
+
+  length= mysql_fetch_lengths(self->result);
+
+  switch (self->fields[column].type)
+  {
+    case MYSQL_TYPE_NULL:
+      Py_INCREF(Py_None);
+      self->values[column]= Py_None;
+      break;
+    case MYSQL_TYPE_TINY:
+    case MYSQL_TYPE_SHORT:
+    case MYSQL_TYPE_YEAR:
+    case MYSQL_TYPE_INT24:
+    case MYSQL_TYPE_LONG:
+    case MYSQL_TYPE_LONGLONG:
+      self->values[column]= PyLong_FromString(data, NULL, 0);
+      break;
+    case MYSQL_TYPE_FLOAT:  
+    case MYSQL_TYPE_DOUBLE: 
+    {
+      double d= atof(data);
+      self->values[column]= PyFloat_FromDouble(d);
+      break;
+    }
+    case MYSQL_TYPE_TIME:
+      memset(&tm, 0, sizeof(MYSQL_TIME));
+      sscanf(data, "%d:%d:%d.%ld", &tm.hour, &tm.minute, &tm.second, &tm.second_part );
+      self->values[column]= PyTime_FromTime((int)tm.hour, (int)tm.minute, (int)tm.second, (int)tm.second_part);
+      break;
+    case MYSQL_TYPE_DATE:
+      memset(&tm, 0, sizeof(MYSQL_TIME));
+      sscanf(data, "%d-%d-%d", &tm.year, &tm.month, &tm.day);
+      self->values[column]= PyDate_FromDate(tm.year, tm.month, tm.day);
+      break;
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+      memset(&tm, 0, sizeof(MYSQL_TIME));
+      sscanf(data, "%d-%d-%d %d:%d:%d.%ld", &tm.year, &tm.month, &tm.day, &tm.hour, &tm.minute, &tm.second, &tm.second_part);
+      self->values[column]= PyDateTime_FromDateAndTime(tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.second_part);
+      break;
+    case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_MEDIUM_BLOB:
+    case MYSQL_TYPE_BLOB:
+    case MYSQL_TYPE_LONG_BLOB:
+      if (length[column] > self->fields[column].max_length)
+        self->fields[column].max_length= length[column];
+      if (self->fields[column].flags & BINARY_FLAG)
+      {
+        if (!(self->values[column]= mariadb_get_pickled((unsigned char *)data, (size_t)length[column])))
+          self->values[column]= PyBytes_FromStringAndSize((const char *)data, (Py_ssize_t)length[column]);
+      }
+      else
+        self->values[column]= PyUnicode_FromStringAndSize((const char *)data, (Py_ssize_t)length[column]);
+      break;
+    case MYSQL_TYPE_GEOMETRY:
+    case MYSQL_TYPE_STRING:
+    case MYSQL_TYPE_VAR_STRING:
+    case MYSQL_TYPE_JSON:
+    case MYSQL_TYPE_VARCHAR:
+    case MYSQL_TYPE_DECIMAL:
+    case MYSQL_TYPE_NEWDECIMAL:
+    case MYSQL_TYPE_SET:
+    case MYSQL_TYPE_ENUM:
+    {
+      unsigned long utf8len;
+
+      self->values[column]= PyUnicode_FromStringAndSize((const char *)data, (Py_ssize_t)length[column]);
+      utf8len= PyUnicode_GET_LENGTH(self->values[column]);
+      if (utf8len > self->fields[column].max_length)
+        self->fields[column].max_length= utf8len;
+      break;
+    }
+    default:
+      break;
+  } 
+}
+
 /* {{{ field_fetch_callback
   This function was previously registered with mysql_stmt_attr_set and
   STMT_ATTR_FIELD_FETCH_CALLBACK parameter. Instead of filling a bind buffer
