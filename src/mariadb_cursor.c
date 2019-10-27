@@ -386,7 +386,9 @@ void MrdbCursor_clear(MrdbCursor *self)
 
   MARIADB_FREE_MEM(self->sequence_fields);
   self->fields= NULL;
-  self->row_count= self->affected_rows= 0;
+  self->row_count= 0;
+  self->affected_rows= 0;
+  self->param_count= 0;
   MARIADB_FREE_MEM(self->values);
   MARIADB_FREE_MEM(self->bind);
   MARIADB_FREE_MEM(self->statement);
@@ -1061,6 +1063,12 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
                         &PyList_Type, &self->data))
     return NULL;
 
+  if (!self->data)
+  {
+    PyErr_SetString(PyExc_TypeError, "No data provided");
+    return NULL;
+  }
+
   if (!(self->is_prepared= MrdbCursor_isprepared(self, statement, statement_len)))
   {
     MrdbCursor_clear(self);
@@ -1168,7 +1176,7 @@ PyObject *MrdbCursor_nextset(MrdbCursor *self)
 */
 static PyObject *Mariadb_row_count(MrdbCursor *self)
 {
-  int64_t row_count;
+  int64_t row_count= 0;
 
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())

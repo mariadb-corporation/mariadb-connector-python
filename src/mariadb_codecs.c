@@ -650,7 +650,6 @@ uint8_t mariadb_check_bulk_parameters(MrdbCursor *self,
 
     if (!self->param_count && !self->is_prepared)
       self->param_count= PyTuple_Size(obj);
-
     if (!self->param_count ||
         self->param_count != PyTuple_Size(obj))
     {

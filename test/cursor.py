@@ -193,6 +193,21 @@ class CursorTest(unittest.TestCase):
     self.assertEqual(fieldinfo.flag(info[9]), "BLOB | BINARY")
     del cursor
 
+  def test_bulk_delete(self):
+    cursor= self.connection.cursor()
+    cursor.execute("CREATE OR REPLACE TABLE bulk_delete (id int, name varchar(64), city varchar(64))");
+    params= [(1, u"Jack",  u"Boston"),
+           (2, u"Martin",  u"Ohio"),
+           (3, u"James",  u"Washington"),
+           (4, u"Rasmus",  u"Helsinki"),
+           (5, u"Andrey",  u"Sofia")]
+    cursor.executemany("INSERT INTO bulk_delete VALUES (?,?,?)", params)
+    self.assertEqual(cursor.rowcount, 5)
+    params= [(1,2)]
+    cursor.executemany("DELETE FROM bulk_delete WHERE id=?", params)
+    self.assertEqual(cursor.rowcount, 2)
+
+
   def test_named_tuple(self):
     cursor= self.connection.cursor(named_tuple=1)
     cursor.execute("CREATE OR REPLACE TABLE t1 (id int, name varchar(64), city varchar(64))");
