@@ -17,7 +17,8 @@
    51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 *************************************************************************************/
 
-#include <mariadb_python.h>
+#include "mariadb_python.h"
+#include "docs/connection.h"
 
 void MrdbConnection_dealloc(MrdbConnection *self);
 
@@ -75,45 +76,39 @@ static PyGetSetDef MrdbConnection_sets[]=
   GETTER_EXCEPTION("OperationalError", Mariadb_OperationalError),
   {NULL}
 };
+
 static PyMethodDef MrdbConnection_Methods[] =
 {
   /* PEP-249 methods */
   {"close", (PyCFunction)MrdbConnection_close,
     METH_NOARGS,
-    "Closes the connection"},
+    connection_close__doc__},
   {"connect", (PyCFunction)MrdbConnection_connect,
      METH_VARARGS | METH_KEYWORDS,
-     "Connect with a Mariadb server"},
+     connection_connect__doc__},
   {"commit", (PyCFunction)MrdbConnection_commit,
      METH_NOARGS,
-     "Commits the current transaction"},
+     connection_commit__doc__},
   {"rollback", (PyCFunction)MrdbConnection_rollback,
      METH_NOARGS,
-     "Rolls back the current transaction"},
+     connection_rollback__doc__},
   {"cursor", (PyCFunction)MrdbConnection_cursor,
      METH_VARARGS | METH_KEYWORDS,
-     "Creates a new cursor"},
+     connection_cursor__doc__},
     /*TPC methods */
   {"tpc_begin",
     (PyCFunction)MrdbConnection_tpc_begin,
     METH_VARARGS,
-    "Begins a TPC transaction with the given transaction ID xid."},
+    connection_tpc_begin__doc__},
   {"tpc_commit",
     (PyCFunction)MrdbConnection_tpc_commit,
     METH_VARARGS,
-    "When called with no arguments, .tpc_commit() commits a TPC transaction "
-    "previously prepared with .tpc_prepare()."
-    "If .tpc_commit() is called prior to .tpc_prepare(), a single phase commit "
-    "is performed. A transaction manager may choose to do this if only a "
-    "single resource is participating in the global transaction."
-    "When called with a transaction ID xid, the database commits the given "
-    "transaction. If an invalid transaction ID is provided, a ProgrammingError "
-    "will be raised. This form should be called outside of a transaction, and "
-    "is intended for use in recovery."},
+    connection_tpc_commit__doc__,
+  },
   {"tpc_prepare",
     (PyCFunction)MrdbConnection_tpc_prepare,
     METH_NOARGS,
-    "Performs the first phase of a transaction started with .tpc_begin()"},
+    connection_tpc_prepare__doc__,},
   {"tpc_recover",
     (PyCFunction)MrdbConnection_tpc_recover,
     METH_NOARGS,
@@ -276,7 +271,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
   };
 
   if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-        "|sssssisiiiiissssssssssipi:connect",
+        "|sssssisiiipissssssssssipi:connect",
         dsn_keys,
         &dsn, &host, &user, &password, &schema, &port, &socket,
         &connect_timeout, &read_timeout, &write_timeout,

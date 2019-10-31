@@ -26,6 +26,7 @@
 #include <mysqld_error.h>
 #include <time.h>
 #include <malloc.h>
+#include <docs/common.h>
 
 #if defined(_WIN32) && defined(_MSVC)
 #ifndef L64

@@ -16,8 +16,10 @@
    or write to the Free Software Foundation, Inc.,
    51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 *************************************************************************************/
+#define MARIADB_CONNECTION
 
 #include "mariadb_python.h"
+#include "docs/module.h"
 #include <structmember.h>
 #include <datetime.h>
 
@@ -50,29 +52,29 @@ static PyMethodDef Mariadb_Methods[] =
   /* PEP-249: mandatory */
   {"Binary", (PyCFunction)Mariadb_binary,
      METH_VARARGS,
-     "Returns a binary object"},
+     module_binary__doc__},
   {"connect", (PyCFunction)MrdbConnection_connect,
      METH_VARARGS | METH_KEYWORDS,
-     "Connect with a MySQL server"},
+     module_connect__doc__},
   /* PEP-249 DB-API */
   {"DateFromTicks", (PyCFunction)Mariadb_date_from_ticks,
      METH_VARARGS,
-     "Get date from ticks"},
+     module_DateFromTicks__doc__},
   {"TimeFromTicks", (PyCFunction)Mariadb_time_from_ticks,
      METH_VARARGS,
-     "Get time from ticks"},
+     module_TimeFromTicks__doc__},
   {"TimestampFromTicks", (PyCFunction)Mariadb_timestamp_from_ticks,
      METH_VARARGS,
-     "Get timestamp from ticks"},
+     module_TimestampFromTicks__doc__},
   {"Date", (PyCFunction)Mariadb_date,
      METH_VARARGS,
-     "Constructs an object holding a date value"},
+     module_Date__doc__},
   {"Time", (PyCFunction)Mariadb_time,
      METH_VARARGS,
-     "Constructs an object holding a time value"},
+     module_Time__doc__},
   {"Timestamp", (PyCFunction)Mariadb_timestamp,
      METH_VARARGS,
-     "Constructs an object holding a time value"},
+     module_Timestamp__doc__},
   /* Todo: add methods for api functions which don't require
            a connection */
   {NULL} /* always last */
