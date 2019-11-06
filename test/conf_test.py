@@ -3,6 +3,7 @@
 
 import os
 
+
 def conf():
     d = {
         "user": os.environ.get('TEST_USER', 'root'),
