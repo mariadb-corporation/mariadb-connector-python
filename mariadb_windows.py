@@ -30,14 +30,13 @@ def get_config():
                 connector_key = OpenKey(local_reg,
                                         'SOFTWARE\\MariaDB Corporation\\MariaDB Connector C 64-bit',
                                         access=KEY_READ | KEY_WOW64_64KEY)
-
             cc_version = QueryValueEx(connector_key, "Version")
             if cc_version[0] < required_version:
                 print(
                          "MariaDB Connector/Python requires MariaDB Connector/C >= %s (found version: %s") \
                      % (required_version, cc_version[0])
                 sys.exit(2)
-            cc_instdir = QueryValueEx(Key, "InstallDir")
+            cc_instdir = QueryValueEx(connector_key, "InstallDir")
 
         except:
             print("Could not find InstallationDir of MariaDB Connector/C. "

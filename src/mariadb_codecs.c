@@ -169,7 +169,7 @@ void field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
       unsigned long utf8len;
 
       self->values[column]= PyUnicode_FromStringAndSize((const char *)data, (Py_ssize_t)length[column]);
-      utf8len= PyUnicode_GET_LENGTH(self->values[column]);
+      utf8len= (unsigned long)PyUnicode_GET_LENGTH(self->values[column]);
       if (utf8len > self->fields[column].max_length)
         self->fields[column].max_length= utf8len;
       break;
@@ -237,7 +237,7 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
       long long l= sint8korr(*row);
       self->values[column]= (self->fields[column].flags & UNSIGNED_FLAG) ?
            PyLong_FromUnsignedLongLong((unsigned long long)l) :
-           PyLong_FromLong(l);
+           PyLong_FromLongLong(l);
       *row+= 8;
       break;
     }
@@ -368,7 +368,7 @@ void field_fetch_callback(void *data, unsigned int column, unsigned char **row)
       length= mysql_net_field_length(row);
 
       self->values[column]= PyUnicode_FromStringAndSize((const char *)*row, (Py_ssize_t)length);
-      utf8len= PyUnicode_GET_LENGTH(self->values[column]);
+      utf8len= (unsigned long)PyUnicode_GET_LENGTH(self->values[column]);
       if (utf8len > self->fields[column].max_length)
         self->fields[column].max_length= utf8len;
       *row+= length;
@@ -509,7 +509,7 @@ static uint8_t mariadb_get_parameter(MrdbCursor *self,
       "MariaDB %s doesn't support indicator variables. Required version is 10.2.6 or newer", mysql_get_server_info(self->stmt->mysql));
       return 1;
     }
-    param->indicator= MrdbIndicator_AsLong(column);
+    param->indicator= (char)MrdbIndicator_AsLong(column);
     param->value= NULL; /* you can't have both indicator and value */
   } else if (column == Py_None)
   {
@@ -559,7 +559,7 @@ static uint8_t mariadb_get_parameter_info(MrdbCursor *self,
       return 1;
     }
     param->buffer_type= pinfo.type;
-    bits= pinfo.bits;
+    bits= (uint32_t)pinfo.bits;
   }
 
   for (i=0; i < self->array_size; i++)
@@ -580,7 +580,7 @@ static uint8_t mariadb_get_parameter_info(MrdbCursor *self,
     if (pinfo.type == MYSQL_TYPE_LONGLONG)
     {
       if (pinfo.bits > bits)
-        bits= pinfo.bits;
+        bits= (uint32_t)pinfo.bits;
     }
 
 
@@ -631,7 +631,7 @@ uint8_t mariadb_check_bulk_parameters(MrdbCursor *self,
 {
   uint32_t i;
 
-  if (!(self->array_size= PyList_Size(data)))
+  if (!(self->array_size= (uint32_t)PyList_Size(data)))
   {
     mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, 
     "Empty parameter list. At least one row must be specified");
@@ -649,7 +649,7 @@ uint8_t mariadb_check_bulk_parameters(MrdbCursor *self,
     }
 
     if (!self->param_count && !self->is_prepared)
-      self->param_count= PyTuple_Size(obj);
+      self->param_count= (uint32_t)PyTuple_Size(obj);
     if (!self->param_count ||
         self->param_count != PyTuple_Size(obj))
     {
@@ -695,7 +695,7 @@ uint8_t mariadb_check_execute_parameters(MrdbCursor *self,
 {
   uint32_t i;
   if (!self->is_prepared)
-    self->param_count= PyTuple_Size(data);
+    self->param_count= (uint32_t)PyTuple_Size(data);
 
   if (!self->param_count)
   {

@@ -471,7 +471,7 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
                                     mariadb_stmt_fetch_fields(self->stmt);
 
     if (self->is_named_tuple) {
-      int i;
+      unsigned int i;
       if (!(self->sequence_fields= (PyStructSequence_Field *)
              PyMem_RawCalloc(field_count + 1,
                              sizeof(PyStructSequence_Field))))
@@ -882,7 +882,7 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
     mysql_stmt_data_seek(self->stmt, new_position);
   else
     mysql_data_seek(self->result, new_position);
-  self->row_number= new_position;
+  self->row_number= (unsigned long)new_position;
   Py_INCREF(Py_None);
   return Py_None;
 }
@@ -1022,7 +1022,7 @@ uint8_t MrdbCursor_executemany_fallback(MrdbCursor *self,
       goto error;
     Py_BEGIN_ALLOW_THREADS;
     if (i==0)
-      rc= mysql_stmt_prepare(self->stmt, statement, len);
+      rc= mysql_stmt_prepare(self->stmt, statement, (unsigned long)len);
     if (!rc)
       rc= mysql_stmt_execute(self->stmt);
     Py_END_ALLOW_THREADS;
