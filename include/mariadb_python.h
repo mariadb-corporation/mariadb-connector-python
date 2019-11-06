@@ -16,6 +16,7 @@
    or write to the Free Software Foundation, Inc.,
    51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 *************************************************************************************/
+#define PY_SSIZE_T_CLEAN
 #include "Python.h"
 #include "bytesobject.h"
 #include "structmember.h"

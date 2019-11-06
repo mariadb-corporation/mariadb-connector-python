@@ -1,0 +1,69 @@
+sudo: true
+language: python
+dist: bionic
+
+services:
+- docker
+
+addons:
+  hosts:
+  - mariadb.example.com
+
+before_install:
+- chmod +x .travis/script.sh
+- sudo apt-get install software-properties-common
+- sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+- sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://mirrors.accretive-networks.net/mariadb/repo/10.4/ubuntu bionic main'
+- sudo apt-get remove --purge mysql*
+- sudo apt update
+- sudo apt-get install -f libmariadb3 libmariadb-dev libssl1.1
+- sudo apt-get install -f
+
+install:
+  - wget -qO- 'https://github.com/tianon/pgp-happy-eyeballs/raw/master/hack-my-builds.sh' | bash
+  # generate SSL certificates
+  - mkdir tmp
+  - chmod +x .travis/gen-ssl.sh
+  - chmod +x .travis/build/build.sh
+  - chmod +x .travis/build/docker-entrypoint.sh
+  - chmod 777 .travis/build/
+  - .travis/gen-ssl.sh mariadb.example.com tmp
+  - export PROJ_PATH=`pwd`
+  - export SSLCERT=$PROJ_PATH/tmp
+  - export TEST_SSL_CA_FILE=$SSLCERT/server.crt
+  - export TEST_SSL_CLIENT_KEY_FILE=$SSLCERT/client.key
+  - export TEST_SSL_CLIENT_CERT_FILE=$SSLCERT/client.crt
+  - export TEST_SSL_CLIENT_KEYSTORE_FILE=$SSLCERT/client-keystore.p12
+
+env:
+  global:
+  - TEST_PORT=3305
+  - TEST_HOST=mariadb.example.com
+
+
+matrix:
+  include:
+  - python: "2.7"
+    env: DB=mariadb:10.4
+  - python: "3.6"
+    env: DB=mariadb:10.4
+  - python: "3.8"
+    env: DB=mariadb:10.4
+  - env: DB=mariadb:10.4 MAXSCALE_VERSION=2.2.9 TEST_PORT=4007 TEST_USER=bob TEXT_DATABASE=test2 SKIP_LEAK=1
+  - env: DB=mariadb:5.5
+  - env: DB=mariadb:10.0
+  - env: DB=mariadb:10.1
+  - env: DB=mariadb:10.2
+  - env: DB=mariadb:10.3
+  - env: DB=mysql:5.5
+  - env: DB=mysql:5.6
+  - env: DB=mysql:5.7
+
+notifications:
+  email: false
+
+script:
+- python setup.py build
+- python setup.py install
+- npm install nyc -g
+- .travis/script.sh
