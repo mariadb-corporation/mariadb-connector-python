@@ -11,5 +11,6 @@ def create_connection(additional_conf=None):
     if additional_conf is None:
         c = {key: value for (key, value) in (default_conf.items())}
     else:
-        c = {key: value for (key, value) in (default_conf.items() + additional_conf.items())}
+        c = {key: value for (key, value) in (list(default_conf.items()) + list(
+            additional_conf.items()))}
     return mariadb.connect(**c)

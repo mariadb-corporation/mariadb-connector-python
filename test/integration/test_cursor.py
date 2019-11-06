@@ -518,12 +518,39 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_conpy21(self):
-        conn = mariadb.connection(default_file='default.cnf')
+        conn = self.connection
         cursor = conn.cursor()
         self.assertFalse(cursor.closed)
         conn.close()
         self.assertTrue(cursor.closed)
         del cursor, conn
+
+    def test_utf8(self):
+        # F0 9F 98 8E 😎 unicode 6 smiling face with sunglasses
+        # F0 9F 8C B6 🌶 unicode 7 hot pepper
+        # F0 9F 8E A4 🎤 unicode 8 no microphones
+        # F0 9F A5 82 🥂 unicode 9 champagne glass
+        con = create_connection({"charset": "utf8mb4"})
+        cursor = con.cursor()
+        cursor.execute(
+            "CREATE TEMPORARY TABLE `test_utf8` (`test` blob)")
+        cursor.execute("INSERT INTO test_utf8 VALUES (?)", ("😎🌶🎤🥂",))
+        cursor.execute("SELECT * FROM test_utf8")
+        row = cursor.fetchone()
+        self.assertEqual(row[0], b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82")
+        del cursor, con
+
+    def test_latin2(self):
+        con = create_connection({"charset": "cp1251"})
+        cursor = con.cursor()
+        cursor.execute(
+            "CREATE TEMPORARY TABLE `test_latin2` (`test` blob)")
+        cursor.execute("INSERT INTO test_latin2 VALUES (?)", ("©°",))
+        cursor.execute("SELECT * FROM test_latin2")
+        row = cursor.fetchone()
+        self.assertEqual(row[0], b"\xA9\xB0")
+        del cursor, con
+
 
 
 if __name__ == '__main__':
