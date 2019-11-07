@@ -4,8 +4,6 @@
 import os
 import unittest
 
-import mariadb
-
 from test.base_test import create_connection
 from test.conf_test import conf
 
@@ -29,8 +27,9 @@ class TestConnection(unittest.TestCase):
         f.write("database=%s\n" % default_conf["database"])
         f.close()
 
-        new_conn = mariadb.connect(default_file="./client.cnf")
+        new_conn = create_connection({"user": default_conf["user"], "default_file": "./client.cnf"})
         self.assertEqual(new_conn.database, default_conf["database"])
+        os.remove("client.cnf")
         del new_conn
 
     def test_autocommit(self):
@@ -52,6 +51,29 @@ class TestConnection(unittest.TestCase):
         conn.database = default_conf["database"]
         self.assertEqual(conn.database, default_conf["database"])
 
+
+    def test_non_utf8_charset(self):
+        try:
+            create_connection({"charset": "cp1251"})
+            self.fail("must have throw exception")
+        except self.connection.ProgrammingError as err:
+            self.assertEqual(str(err), "charset 'cp1251' not permitted")
+            pass
+
+    def test_default_charset(self):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT @@character_set_client as a")
+        row = cursor.fetchone()
+        self.assertEqual(row[0], "utf8mb4")
+        del cursor
+
+    def test_wrong_charset(self):
+        try:
+            create_connection({"charset": "wrong charset"})
+            self.fail("must have throw exception")
+        except self.connection.ProgrammingError as err:
+            self.assertEqual(str(err), "Unknown charset value 'wrong charset'")
+            pass
 
 if __name__ == '__main__':
     unittest.main()

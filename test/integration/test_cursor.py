@@ -307,13 +307,12 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(expected_typecodes, typecodes)
         del cursor
 
-    # CRASHING
-    # def test_tuple(self):
-    #     cursor = self.connection.cursor()
-    #     cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)")
-    #     tpl = (1, 2, 3)
-    #     cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
-    #     del cursor
+    def test_tuple(self):
+        cursor = self.connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)")
+        tpl = (1, 2, 3)
+        cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
+        del cursor
 
     def test_indicator(self):
         if self.connection.server_version < 100206:
@@ -328,17 +327,17 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[1], 2)
         self.assertEqual(row[2], 3)
 
-    # CRASHING
-    # def test_tuple2(self):
-    #     cursor = self.connection.cursor()
-    #     cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)");
-    #     t = datetime.datetime(2018, 6, 20, 12, 22, 31, 123456)
-    #     val = ([1, t, 3, (1, 2, 3)],)
-    #     cursor.execute("INSERT INTO dyncol1 VALUES (?)", val);
-    #     cursor.execute("SELECT a FROM dyncol1")
-    #     row = cursor.fetchone()
-    #     self.assertEqual(row, val);
-    #     del cursor
+    def test_tuple2(self):
+        cursor = self.connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)")
+        t = datetime.datetime(2018, 6, 20, 12, 22, 31, 123456)
+        val = ([1, t, 3, (1, 2, 3)],)
+        cursor.execute("INSERT INTO dyncol1 VALUES (?)", val)
+        cursor.execute("SELECT a FROM dyncol1")
+        row = cursor.fetchone()
+
+        self.assertEqual(row, val)
+        del cursor
 
     def test_set(self):
         cursor = self.connection.cursor()
@@ -512,7 +511,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute(
             "CREATE TEMPORARY TABLE test_multi_execute (a int auto_increment primary key, b int)")
         self.connection.autocommit = False
-        for i in range(1, 1000):
+        for i in range(1, 100):
             cursor.execute("INSERT INTO test_multi_execute VALUES (?,1)", (i,))
         self.connection.autocommit = True
         del cursor
@@ -539,18 +538,6 @@ class TestCursor(unittest.TestCase):
         row = cursor.fetchone()
         self.assertEqual(row[0], b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82")
         del cursor, con
-
-    def test_latin2(self):
-        con = create_connection({"charset": "cp1251"})
-        cursor = con.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE `test_latin2` (`test` blob)")
-        cursor.execute("INSERT INTO test_latin2 VALUES (?)", ("©°",))
-        cursor.execute("SELECT * FROM test_latin2")
-        row = cursor.fetchone()
-        self.assertEqual(row[0], b"\xA9\xB0")
-        del cursor, con
-
 
 
 if __name__ == '__main__':

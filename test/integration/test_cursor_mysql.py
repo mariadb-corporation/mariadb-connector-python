@@ -15,25 +15,26 @@ class CursorMySQLTest(unittest.TestCase):
     def tearDown(self):
         del self.connection
 
-    def test_parameter(self):
-        cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE test_parameter(a int auto_increment primary key not "
-                       "null, b int, c int, d varchar(20),e date)")
-        cursor.execute("SET @@autocommit=0")
-        c = (1, 2, 3, "bar", datetime.date(2018, 11, 11))
-        list_in = []
-        for i in range(1, 300001):
-            row = (i, i, i, "bar", datetime.date(2019, 1, 1))
-            list_in.append(row)
-        cursor.executemany("INSERT INTO test_parameter VALUES (%s,%s,%s,%s,%s)", list_in)
-        print("rows inserted:", len(list_in))
-        self.connection.commit()
-        cursor.execute("SELECT * FROM test_parameter order by a")
-        list_out = cursor.fetchall()
-        print("rows fetched: ", len(list_out))
-        self.assertEqual(list_in, list_out)
-
-        cursor.close()
+    # TODO support %s query format
+    # def test_parameter(self):
+    #     cursor = self.connection.cursor()
+    #     cursor.execute("CREATE TEMPORARY TABLE test_parameter(a int auto_increment primary key not "
+    #                    "null, b int, c int, d varchar(20),e date)")
+    #     cursor.execute("SET @@autocommit=0")
+    #     c = (1, 2, 3, "bar", datetime.date(2018, 11, 11))
+    #     list_in = []
+    #     for i in range(1, 300001):
+    #         row = (i, i, i, "bar", datetime.date(2019, 1, 1))
+    #         list_in.append(row)
+    #     cursor.executemany("INSERT INTO test_parameter VALUES (%s,%s,%s,%s,%s)", list_in)
+    #     print("rows inserted:", len(list_in))
+    #     self.connection.commit()
+    #     cursor.execute("SELECT * FROM test_parameter order by a")
+    #     list_out = cursor.fetchall()
+    #     print("rows fetched: ", len(list_out))
+    #     self.assertEqual(list_in, list_out)
+    #
+    #     cursor.close()
 
 
 if __name__ == '__main__':

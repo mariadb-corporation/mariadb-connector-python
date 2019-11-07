@@ -248,14 +248,14 @@ MrdbConnection_Initialize(MrdbConnection *self,
   /* Todo: we need to support all dsn parameters, the current
            implementation is just a small subset.
   */
-  char *dsn= NULL, *host=NULL, *user= NULL, *password= NULL, *schema= NULL,
+  char *dsn= NULL, *host= "127.0.0.1", *user= NULL, *password= NULL, *schema= NULL,
        *socket= NULL, *init_command= NULL, *default_file= NULL,
        *default_group= NULL, *local_infile= NULL,
        *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
        *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
-       *charset= NULL;
+       *charset= "utf8mb4";
   uint8_t ssl_enforce= 0;
-  unsigned int client_flags= 0, port= 0;
+  unsigned int client_flags= 0, port= 3306;
   unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
       compress= 0, ssl_verify_cert= 0;
 
@@ -296,6 +296,27 @@ MrdbConnection_Initialize(MrdbConnection *self,
     return -1;
   }
 
+  if (charset)
+  {
+    const MARIADB_CHARSET_INFO *cs;
+    if ((cs= mariadb_get_charset_by_name(charset)))
+    {
+        if (strcmp(cs->csname, "utf8") && strcmp(cs->csname, "utf8mb4"))
+        {
+            char err[128];
+            snprintf(err, 127, "charset '%s' not permitted", charset);
+            mariadb_throw_exception(self->mysql, Mariadb_ProgrammingError, 0, err);
+            goto end;
+        }
+        mysql_optionsv(self->mysql, MYSQL_SET_CHARSET_NAME, charset);
+    } else {
+        char err[128];
+        snprintf(err, 127, "Unknown charset value '%s'", charset);
+        mariadb_throw_exception(self->mysql, Mariadb_ProgrammingError, 0, err);
+        goto end;
+    }
+  }
+
   /* read defaults from configuration file(s) */
   if (default_file)
     mysql_optionsv(self->mysql, MYSQL_READ_DEFAULT_FILE, default_file);
@@ -333,15 +354,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
     goto end;
   }
 
-  /* make sure that we use a utf8 connection */
-  Py_BEGIN_ALLOW_THREADS;
-  rc= mysql_set_character_set(self->mysql, "utf8mb4");
-  Py_END_ALLOW_THREADS;
-  if (rc)
-  {
-    mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-    goto end;
-  }
 end:
   if (PyErr_Occurred())
     return -1;
