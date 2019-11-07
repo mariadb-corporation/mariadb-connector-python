@@ -1176,6 +1176,9 @@ PyObject *MrdbCursor_nextset(MrdbCursor *self)
 */
 static PyObject *Mariadb_row_count(MrdbCursor *self)
 {
+  if (self->row_count)
+    return  PyLong_FromLongLong(self->row_count);
+
   int64_t row_count= 0;
 
   MARIADB_CHECK_STMT(self);

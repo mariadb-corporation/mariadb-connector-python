@@ -20,7 +20,7 @@ class TestCursor(unittest.TestCase):
         del self.connection
 
     def test_date(self):
-        if self.connection.server_version < 50500:
+        if self.connection.server_version < 50600:
             self.skipTest("microsecond not supported")
 
         cursor = self.connection.cursor()
@@ -212,6 +212,9 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_bulk_delete(self):
+        if self.connection.server_version < 100200:
+            self.skipTest("bulk not supported")
+
         cursor = self.connection.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE bulk_delete (id int, name varchar(64), city varchar(64))");
@@ -464,7 +467,11 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.rowcount, 1)
         vals = [(3, "bar"), (4, "this")]
         cursor.executemany("INSERT INTO test_conpy_14 VALUES (?,?)", vals)
-        self.assertEqual(cursor.rowcount, 2)
+        rowcount = cursor.rowcount;
+        self.assertEqual(rowcount, 2)
+        cursor.execute("SELECT * FROM test_conpy_14")
+        row = cursor.fetchall()
+        self.assertEqual(row, [(1, "foo"), (3, "bar"), (4, "this")])
         del cursor
 
     def test_closed(self):
@@ -494,6 +501,9 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(i + 1, row[0])
 
     def test_update_bulk(self):
+        if self.connection.server_version < 100200:
+            self.skipTest("bulk not supported")
+
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_update_bulk (a int primary key, b int)")
         vals = [(i,) for i in range(1000)]
