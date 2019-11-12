@@ -56,6 +56,9 @@ strncpy((a)->statement, (s), (l));\
 #define CURSOR_FIELD_COUNT(a)\
 ((a)->is_text ? mysql_field_count((a)->connection->mysql) : (a)->stmt ? mysql_stmt_field_count((a)->stmt) : 0)
 
+#define CURSOR_WARNING_COUNT(a)\
+((a)->is_text ? mysql_warning_count((a)->connection->mysql) : (a)->stmt ? mysql_warning_count((a)->stmt) : 0)
+
 #define CURSOR_AFFECTED_ROWS(a)\
 ((a)->is_text ? mysql_affected_rows((a)->connection->mysql) : (a)->stmt ? mysql_stmt_affected_rows((a)->stmt) : 0)
 
@@ -1202,7 +1205,7 @@ static PyObject *MrdbCursor_warnings(MrdbCursor *self)
 {
   MARIADB_CHECK_STMT(self);
 
-  return PyLong_FromLong((long)mysql_stmt_warning_count(self->stmt));
+  return PyLong_FromLong((long)CURSOR_WARNING_COUNT(self));
 }
 
 /* {{{ MrdbCursor_getbuffered */
