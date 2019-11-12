@@ -69,6 +69,8 @@ PyDoc_STRVAR(
   "tpc_begin(xid)\n"
   "--\n"
   "\n"
+  "Parameter:\n"
+  "xid: xid object which was created by .xid()\n\n"
   "Begins a TPC transaction with the given transaction ID xid.\n\n"
   "This method should be called outside of a transaction\n"
   "(i.e. nothing may have executed since the last .commit()\n"
@@ -83,6 +85,8 @@ PyDoc_STRVAR(
   "tpc_prepare(xid)\n"
   "--\n"
   "\n"
+  "Parameter:\n"
+  "xid: xid object which was created by .xid()\n\n"
   "Performs the first phase of a transaction started with .tpc_begin().\n"
   "A ProgrammingError will be raised if this method outside of a TPC\n"
   "transaction.\n\n"
@@ -95,6 +99,8 @@ PyDoc_STRVAR(
   "tpc_commit([xid])\n"
   "--\n"
   "\n"
+  "Optional parameter:\n"
+  "xid: xid object which was created by .xid()\n\n"
   "When called with no arguments, .tpc_commit() commits a TPC transaction\n" 
   "previously prepared with .tpc_prepare().\n\n"
   "If .tpc_commit() is called prior to .tpc_prepare(), a single phase commit\n"
@@ -104,4 +110,49 @@ PyDoc_STRVAR(
   "transaction. If an invalid transaction ID is provided, a ProgrammingError\n"
   "will be raised. This form should be called outside of a transaction, and\n"
   "is intended for use in recovery."
+);
+
+PyDoc_STRVAR(
+  connection_tpc_recover__doc__,
+  "tpc_recover()\n"
+  "--\n"
+  "\n"
+  "Returns a list of pending transaction IDs suitable for use with\n"
+  ".tpc_commit(xid) or .tpc_rollback(xid)."
+);
+
+PyDoc_STRVAR(
+  connection_tpc_rollback__doc__,
+  "tpc_rollback([xid])\n"
+  "--\n"
+  "\n"
+  "Optional parameter:\n"
+  "xid: xid object which was created by .xid()\n\n"
+  "When called with no arguments, .tpc_rollback() rolls back a TPC\n"
+  "transaction. It may be called before or after .tpc_prepare().\n\n"
+  "When called with a transaction ID xid, it rolls back the given\n"
+  "transaction.\n\n"
+);
+
+PyDoc_STRVAR(
+  connection_xid__doc__, 
+  "xid(format_id, global_transaction_id, branch_qualifier)\n"
+  "--\n"
+  "\n"
+  "Parameters:\n"
+  "format_id: string xid object which was created by .xid()\n\n"
+  "Returns a transaction ID object suitable for passing to the .tpc_*()\n"
+  "methods of this connection\n"
+);
+
+PyDoc_STRVAR(
+  connection_ping__doc__, 
+  "ping()\n"
+  "--\n"
+  "\n"
+  "Checks if the connection to the database server is still available.\n\n"
+  "If auto reconnect was set to true, an attempt will be made to reconnect\n"
+  "to the database server in case the connection\n"
+  "was lost\n\n"
+  "If the connection is not available an InterfaceError will be raised."
 );

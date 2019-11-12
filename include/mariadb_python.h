@@ -207,7 +207,7 @@ PyObject *MrdbIndicator_Object(uint32_t type);
 long MrdbIndicator_AsLong(PyObject *v);
 PyObject *Mariadb_DBAPIType_Object(uint32_t type);
 PyObject *MrdbConnection_affected_rows(MrdbConnection *self);
-PyObject *MrdbConnection_ping(MrdbConnection *self);
+PyObject *MrdbConnection_ping(MrdbConnection *self, PyObject *args);
 PyObject *MrdbConnection_kill(MrdbConnection *self, PyObject *args);
 PyObject *MrdbConnection_reconnect(MrdbConnection *self);
 PyObject *MrdbConnection_reset(MrdbConnection *self);

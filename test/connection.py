@@ -30,3 +30,18 @@ class CursorTest(unittest.TestCase):
     self.assertEqual(conn.database, "test1")
     conn.database= "test"
     self.assertEqual(conn.database, "test")
+
+  def test_ping(self):
+    conn= self.connection
+    cursor= conn.cursor()
+    oldid= conn.connection_id
+    
+    try:
+      cursor.execute("KILL {id}".format(id=oldid))
+    except mariadb.DatabaseError:
+      pass
+
+    conn.auto_reconnect= True
+    conn.ping()
+    self.assertNotEqual(oldid, conn.connection_id)
+    self.assertNotEqual(0, conn.connection_id)
