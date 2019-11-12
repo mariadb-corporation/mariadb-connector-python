@@ -30,9 +30,9 @@ static uint8_t check_keyword(char* ofs, char* end, char* keyword, size_t keylen)
 {
   int i;
 
-  if (end - ofs < keylen + 1)
+  if ((size_t)(end - ofs) < keylen + 1)
     return 0;
-  for (i = 0; i < keylen; i++)
+  for (i = 0; i < (int)keylen; i++)
     if (toupper(*(ofs + i)) != keyword[i])
       return 0;
   if (!IS_WHITESPACE(*(ofs + keylen)))
@@ -40,7 +40,7 @@ static uint8_t check_keyword(char* ofs, char* end, char* keyword, size_t keylen)
   return 1;
 }
 
-void Mrdb_Parser_end(Mrdb_Parser* p)
+void MrdbParser_end(MrdbParser* p)
 {
   if (p)
   {
@@ -49,14 +49,14 @@ void Mrdb_Parser_end(Mrdb_Parser* p)
   }
 }
 
-Mrdb_Parser *Mrdb_Parser_init(const char *statement, size_t length)
+MrdbParser *MrdbParser_init(const char *statement, size_t length)
 {
-  Mrdb_Parser *p;
+  MrdbParser *p;
 
   if (!statement || !length)
     return NULL;
 
-  if ((p= PyMem_RawCalloc(1, sizeof(Mrdb_Parser))))
+  if ((p= PyMem_RawCalloc(1, sizeof(MrdbParser))))
   { 
     if (!(p->statement.str = PyMem_RawCalloc(1, length + 1)))
     {
@@ -70,7 +70,7 @@ Mrdb_Parser *Mrdb_Parser_init(const char *statement, size_t length)
 }
 
 
-void Mrdb_Parser_parse(Mrdb_Parser *p, uint8_t is_batch)
+void MrdbParser_parse(MrdbParser *p, uint8_t is_batch)
 {
   char *a, *end;
   char lastchar= 0;
