@@ -265,7 +265,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     };
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiipissssssssssipi:connect",
+                "|sssssisiiipissssssssssipis:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -798,7 +798,7 @@ end:
 /* }}} */
 
 /* {{{ MrdbConnection_ping */
-PyObject *MrdbConnection_ping(MrdbConnection *self, PyObject *args)
+PyObject *MrdbConnection_ping(MrdbConnection *self)
 {
     int rc;
 

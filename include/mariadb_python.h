@@ -16,6 +16,7 @@
    or write to the Free Software Foundation, Inc.,
    51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 *************************************************************************************/
+#define PY_SSIZE_T_CLEAN
 #include "Python.h"
 #include "bytesobject.h"
 #include "structmember.h"
@@ -68,6 +69,25 @@ enum enum_tpc_state
   TPC_STATE_XID,
   TPC_STATE_PREPARE
 };
+
+
+typedef struct st_lex_str {
+  char *str;
+  size_t length;
+} MrdbString;
+
+typedef struct st_parser {
+  MrdbString statement;
+  uint8_t in_literal[3];
+  uint8_t in_comment;
+  uint8_t in_values;
+  uint8_t is_insert;
+  uint8_t comment_eol;
+  uint32_t param_count;
+  uint32_t key_count;
+  char* value_ofs;
+  MrdbString *keys;
+} Mrdb_Parser;
 
 /* PEP-249: Connection object */
 typedef struct {
@@ -151,6 +171,7 @@ typedef struct {
   uint8_t is_named_tuple;
   uint8_t is_closed;
   uint8_t is_text;
+  Mrdb_Parser *parser;
 } MrdbCursor;
 
 typedef struct
@@ -207,7 +228,7 @@ PyObject *MrdbIndicator_Object(uint32_t type);
 long MrdbIndicator_AsLong(PyObject *v);
 PyObject *Mariadb_DBAPIType_Object(uint32_t type);
 PyObject *MrdbConnection_affected_rows(MrdbConnection *self);
-PyObject *MrdbConnection_ping(MrdbConnection *self, PyObject *args);
+PyObject *MrdbConnection_ping(MrdbConnection *self);
 PyObject *MrdbConnection_kill(MrdbConnection *self, PyObject *args);
 PyObject *MrdbConnection_reconnect(MrdbConnection *self);
 PyObject *MrdbConnection_reset(MrdbConnection *self);
@@ -235,6 +256,13 @@ uint8_t mariadb_check_bulk_parameters(MrdbCursor *self,
 uint8_t mariadb_check_execute_parameters(MrdbCursor *self,
                                       PyObject *data);
 uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
+
+/* parser prototypes */
+Mrdb_Parser *Mrdb_Parser_init(const char *statement, size_t length);
+void Mrdb_Parser_end(Mrdb_Parser *p);
+void Mrdb_Parser_parse(Mrdb_Parser *p, uint8_t is_batch);
+
+
 /* Global defines */
 
 
