@@ -694,7 +694,7 @@ uint8_t mariadb_check_execute_parameters(MrdbCursor *self,
                                          PyObject *data)
 {
   uint32_t i;
-  if (!self->is_prepared)
+  if (!self->param_count)
     self->param_count= (uint32_t)PyTuple_Size(data);
 
   if (!self->param_count)
@@ -704,7 +704,7 @@ uint8_t mariadb_check_execute_parameters(MrdbCursor *self,
     return 1;
   }
 
-  if (!self->is_prepared &&
+  if (!self->params &&
       !(self->params= PyMem_RawCalloc(self->param_count, sizeof(MYSQL_BIND))))
   {
     mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,

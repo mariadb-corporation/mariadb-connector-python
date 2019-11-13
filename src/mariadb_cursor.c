@@ -57,10 +57,10 @@ strncpy((a)->statement, (s), (l));\
 ((a)->is_text ? mysql_field_count((a)->connection->mysql) : (a)->stmt ? mysql_stmt_field_count((a)->stmt) : 0)
 
 #define CURSOR_WARNING_COUNT(a)\
-((a)->is_text ? mysql_warning_count((a)->connection->mysql) : (a)->stmt ? mysql_stmt_warning_count((a)->stmt) : 0)
+(((a)->is_text) ? (long)mysql_warning_count((a)->connection->mysql) : ((a)->stmt) ? (long)mysql_stmt_warning_count((a)->stmt) : 0L)
 
 #define CURSOR_AFFECTED_ROWS(a)\
-((a)->is_text ? mysql_affected_rows((a)->connection->mysql) : (a)->stmt ? mysql_stmt_affected_rows((a)->stmt) : 0)
+(int64_t)((a)->is_text ? mysql_affected_rows((a)->connection->mysql) : (a)->stmt ? mysql_stmt_affected_rows((a)->stmt) : 0)
 
 #define CURSOR_INSERT_ID(a)\
 ((a)->is_text ? mysql_insert_id((a)->connection->mysql) : (a)->stmt ? mysql_stmt_insert_id((a)->stmt) : 0)
@@ -339,29 +339,6 @@ static PyObject *Mariadb_no_operation(MrdbCursor *self,
 }
 /* }}} */
 
-/* {{{ MrdbCursor_isprepared
-  If the same statement was executed before, we don't need to
-  reprepare it and can just execute it.
-*/
-static uint8_t MrdbCursor_isprepared(MrdbCursor *self,
-                                     const char *statement,
-                                     size_t statement_len)
-{
-  if (self->statement)
-  {
-    if (self->statement_len == statement_len &&
-        !memcmp(statement, self->statement, statement_len))
-    {
-      enum mysql_stmt_state state;
-      mysql_stmt_attr_get(self->stmt, STMT_ATTR_STATE, &state);
-      if (state >= MYSQL_STMT_PREPARED)
-        return 1;
-    }
-  }
-  return 0;
-}
-/* }}} */
-
 /* {{{ MrdbCursor_clear
    Resets statement attributes  and frees
    associated memory
@@ -427,7 +404,7 @@ void ma_cursor_close(MrdbCursor *self)
     self->stmt= NULL;
   }
   MrdbCursor_clear(self);
-  Mrdb_Parser_end(self->parser);
+  MrdbParser_end(self->parser);
   self->is_closed= 1;
 }
 
@@ -556,7 +533,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
   /* If we don't have a prepared cursor, we need to end/free parser */
   if (!self->is_prepared && self->parser)
   {
-    Mrdb_Parser_end(self->parser);
+    MrdbParser_end(self->parser);
     self->parser= NULL;
   }
 
@@ -565,7 +542,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
   {
     /* in case statement was executed before, we need to clear, since we don't use 
        binary protocol */
-    Mrdb_Parser_end(self->parser);
+    MrdbParser_end(self->parser);
     self->parser= NULL;
     MrdbCursor_clear(self);
     Py_BEGIN_ALLOW_THREADS;
@@ -592,14 +569,14 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     if (!self->is_prepared && self->statement)
     {
       MrdbCursor_clear(self);
-      Mrdb_Parser_end(self->parser);
+      MrdbParser_end(self->parser);
       self->parser= NULL;
     }
 
     if (!self->parser)
     {
-      self->parser= Mrdb_Parser_init(statement, statement_len);
-      Mrdb_Parser_parse(self->parser, 0);
+      self->parser= MrdbParser_init(statement, statement_len);
+      MrdbParser_parse(self->parser, 0);
       CURSOR_SET_STATEMENT(self, statement, statement_len);
     }
 
@@ -692,7 +669,7 @@ end:
   MARIADB_FREE_MEM(self->value);
   Py_RETURN_NONE;
 error:
-  Mrdb_Parser_end(self->parser);
+  MrdbParser_end(self->parser);
   self->parser= NULL;
   MrdbCursor_clear(self);
   return NULL;
@@ -1062,13 +1039,16 @@ uint8_t MrdbCursor_executemany_fallback(MrdbCursor *self,
       goto error;
     Py_BEGIN_ALLOW_THREADS;
     if (i==0)
-      rc= mysql_stmt_prepare(self->stmt, statement, (unsigned long)len);
+    {
+      rc= mysql_stmt_prepare(self->stmt, self->parser->statement.str, 
+                             (unsigned long)self->parser->statement.length);
+    }
     if (!rc)
       rc= mysql_stmt_execute(self->stmt);
     Py_END_ALLOW_THREADS;
     if (rc)
       goto error;
-    self->row_count+= mysql_stmt_affected_rows(self->stmt);
+    self->row_count++;
   }
   return 0;
 error:
@@ -1118,18 +1098,18 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
   if (!self->is_prepared && self->statement)
   {
     MrdbCursor_clear(self);
-    Mrdb_Parser_end(self->parser);
+    MrdbParser_end(self->parser);
     self->parser= NULL;
   }
   self->is_text= 0;
 
   if (!self->parser)
   {
-    if (!(self->parser= Mrdb_Parser_init(statement, (size_t)statement_len)))
+    if (!(self->parser= MrdbParser_init(statement, (size_t)statement_len)))
     {
       exit(-1);
     }
-    Mrdb_Parser_parse(self->parser, 0);
+    MrdbParser_parse(self->parser, 1);
     CURSOR_SET_STATEMENT(self, statement, statement_len);
   }
 
@@ -1180,7 +1160,7 @@ end:
   Py_RETURN_NONE;
 error:
   MrdbCursor_clear(self);
-  Mrdb_Parser_end(self->parser);
+  MrdbParser_end(self->parser);
   self->parser= NULL;
   return NULL;
 }
@@ -1251,7 +1231,7 @@ static PyObject *Mariadb_row_count(MrdbCursor *self)
     row_count= CURSOR_NUM_ROWS(self);
   else 
   {
-    row_count= CURSOR_AFFECTED_ROWS(self);
+    row_count= self->row_count ? self->row_count : CURSOR_AFFECTED_ROWS(self);
     if (!row_count)
       row_count= -1;
   }

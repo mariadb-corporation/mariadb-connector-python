@@ -222,7 +222,7 @@ class TestCursor(unittest.TestCase):
                   (5, u"Andrey", u"Sofia")]
         cursor.executemany("INSERT INTO bulk_delete VALUES (?,?,?)", params)
         self.assertEqual(cursor.rowcount, 5)
-        params = [(1, 2)]
+        params = [(1,), (2,)]
         cursor.executemany("DELETE FROM bulk_delete WHERE id=?", params)
         self.assertEqual(cursor.rowcount, 2)
 
@@ -550,6 +550,17 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT * FROM test_latin2")
         row = cursor.fetchone()
         self.assertEqual(row[0], b"\xA9\xB0")
+        del cursor, con
+
+    def test_conpy27(self):
+        con= create_connection()
+        cursor= con.cursor(prepared=True)
+        cursor.execute("SELECT ?", (1,))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        cursor.execute("SELECT ?, ?, ?", ('foo',))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 'foo')
         del cursor, con
 
 

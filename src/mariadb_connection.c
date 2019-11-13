@@ -944,7 +944,7 @@ static int MrdbConnection_setdb(MrdbConnection *self, PyObject *db,
         PyErr_SetString(PyExc_TypeError, "Argument must be string");
         return -1;
     }
-    schema= PyUnicode_AsUTF8(db);
+    schema= (char *)PyUnicode_AsUTF8(db);
 
     Py_BEGIN_ALLOW_THREADS;
     rc= mysql_select_db(self->mysql, schema);
@@ -1046,7 +1046,7 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
     if (!PyArg_ParseTuple(args, "O!", &PyUnicode_Type, &string))
         return NULL;
 
-    from= PyUnicode_AsUTF8AndSize(string, (Py_ssize_t *)&from_length);
+    from= (char *)PyUnicode_AsUTF8AndSize(string, (Py_ssize_t *)&from_length);
     to= (char *)alloca(from_length * 2 + 1);
     to_length= mysql_real_escape_string(self->mysql, to, from, from_length);
     new_string= PyUnicode_FromStringAndSize(to, to_length);

@@ -70,7 +70,6 @@ enum enum_tpc_state
   TPC_STATE_PREPARE
 };
 
-
 typedef struct st_lex_str {
   char *str;
   size_t length;
@@ -87,7 +86,7 @@ typedef struct st_parser {
   uint32_t key_count;
   char* value_ofs;
   MrdbString *keys;
-} Mrdb_Parser;
+} MrdbParser;
 
 /* PEP-249: Connection object */
 typedef struct {
@@ -171,7 +170,7 @@ typedef struct {
   uint8_t is_named_tuple;
   uint8_t is_closed;
   uint8_t is_text;
-  Mrdb_Parser *parser;
+  MrdbParser *parser;
 } MrdbCursor;
 
 typedef struct
@@ -258,9 +257,9 @@ uint8_t mariadb_check_execute_parameters(MrdbCursor *self,
 uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 
 /* parser prototypes */
-Mrdb_Parser *Mrdb_Parser_init(const char *statement, size_t length);
-void Mrdb_Parser_end(Mrdb_Parser *p);
-void Mrdb_Parser_parse(Mrdb_Parser *p, uint8_t is_batch);
+rdbParser *MrdbParser_init(const char *statement, size_t length);
+void MrdbParser_end(MrdbParser *p);
+void MrdbParser_parse(MrdbParser *p, uint8_t is_batch);
 
 
 /* Global defines */
