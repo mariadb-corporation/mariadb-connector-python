@@ -222,11 +222,6 @@ PyMODINIT_FUNC PyInit_mariadb(void)
   PyModule_AddObject(module, "DATETIME", Mariadb_DBAPIType_Object(DBAPI_DATETIME));
   PyModule_AddObject(module, "ROWID", Mariadb_DBAPIType_Object(DBAPI_ROWID));
 
-
-
-  Py_INCREF(&MrdbCursor_Type);
-  PyModule_AddObject(module, "cursor", (PyObject *)&MrdbCursor_Type);
-
   Py_INCREF(&Mariadb_Fieldinfo_Type);
   PyModule_AddObject(module, "fieldinfo", (PyObject *)&Mariadb_Fieldinfo_Type);
 

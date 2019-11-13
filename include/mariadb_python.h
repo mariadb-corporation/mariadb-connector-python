@@ -257,7 +257,7 @@ uint8_t mariadb_check_execute_parameters(MrdbCursor *self,
 uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 
 /* parser prototypes */
-rdbParser *MrdbParser_init(const char *statement, size_t length);
+MrdbParser *MrdbParser_init(const char *statement, size_t length);
 void MrdbParser_end(MrdbParser *p);
 void MrdbParser_parse(MrdbParser *p, uint8_t is_batch);
 
