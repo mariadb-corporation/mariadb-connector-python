@@ -493,11 +493,24 @@ static uint8_t mariadb_get_parameter(MrdbCursor *self,
   else
     row= self->data;
 
-  if (!(column= PyTuple_GetItem(row, column_nr)))
+  if (self->parser->paramstyle != PYFORMAT)
   {
-    mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
-    "Can't access column number %d at row %d", column_nr + 1, row_nr + 1);
-    return 1;
+    if (!(column= PyTuple_GetItem(row, column_nr)))
+    {
+      mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
+      "Can't access column number %d at row %d", column_nr + 1, row_nr + 1);
+      return 1;
+    }
+  } else
+  {
+    PyObject *key= PyUnicode_FromString(self->parser->keys[column_nr].str);
+    if (!PyDict_Contains(row, key))
+    {
+      mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
+      "Can't find key '%s' in parameter data", self->parser->keys[column_nr]);
+      return 1;
+    }
+    column= PyDict_GetItem(row, key);
   }
 
   /* check if an indicator was passed */
@@ -641,17 +654,27 @@ uint8_t mariadb_check_bulk_parameters(MrdbCursor *self,
   for (i=0; i < self->array_size; i++)
   {
     PyObject *obj= PyList_GetItem(data, i);
-    if (Py_TYPE(obj) != &PyTuple_Type)
+    if (self->parser->paramstyle != PYFORMAT &&
+        Py_TYPE(obj) != &PyTuple_Type)
     {
       mariadb_throw_exception(NULL, Mariadb_DataError, 0,
       "Invalid parameter type in row %d. (Row data must be provided as tuple(s))", i+1);
       return 1;
     }
+    if (self->parser->paramstyle == PYFORMAT &&
+        Py_TYPE(obj) != &PyDict_Type)
+    {
+      mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+      "Invalid parameter type in row %d. (Row data must be provided as dict)", i+1);
+      return 1;
+    }
 
     if (!self->param_count && !self->is_prepared)
-      self->param_count= (uint32_t)PyTuple_Size(obj);
+      self->param_count= self->parser->param_count;
+
     if (!self->param_count ||
-        self->param_count != PyTuple_Size(obj))
+        (self->parser->paramstyle != PYFORMAT && 
+         self->param_count != PyTuple_Size(obj)))
     {
       mariadb_throw_exception(self->stmt, Mariadb_DataError, 1, 
       "Invalid number of parameters in row %d", i+1);
@@ -695,7 +718,7 @@ uint8_t mariadb_check_execute_parameters(MrdbCursor *self,
 {
   uint32_t i;
   if (!self->param_count)
-    self->param_count= (uint32_t)PyTuple_Size(data);
+    self->param_count= self->parser->param_count;
 
   if (!self->param_count)
   {

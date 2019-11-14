@@ -70,6 +70,14 @@ enum enum_tpc_state
   TPC_STATE_PREPARE
 };
 
+enum enum_paramstyle
+{
+  NONE=0,
+  QMARK,
+  FORMAT,
+  PYFORMAT
+};
+
 typedef struct st_lex_str {
   char *str;
   size_t length;
@@ -85,6 +93,7 @@ typedef struct st_parser {
   uint32_t param_count;
   uint32_t key_count;
   char* value_ofs;
+  enum enum_paramstyle paramstyle;
   MrdbString *keys;
 } MrdbParser;
 
@@ -259,7 +268,7 @@ uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 /* parser prototypes */
 MrdbParser *MrdbParser_init(const char *statement, size_t length);
 void MrdbParser_end(MrdbParser *p);
-void MrdbParser_parse(MrdbParser *p, uint8_t is_batch);
+uint8_t MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_len);
 
 
 /* Global defines */

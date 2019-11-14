@@ -44,6 +44,13 @@ void MrdbParser_end(MrdbParser* p)
 {
   if (p)
   {
+    if (p->keys)
+    {
+      uint32_t i;
+      for (i=0; i < p->param_count; i++)
+        MARIADB_FREE_MEM(p->keys[i].str);
+      MARIADB_FREE_MEM(p->keys);
+    }
     MARIADB_FREE_MEM(p->statement.str);
     MARIADB_FREE_MEM(p);
   }
@@ -69,16 +76,34 @@ MrdbParser *MrdbParser_init(const char *statement, size_t length)
   return p;
 }
 
+static void parser_error(char *errmsg, size_t errmsg_len, const char *errstr)
+{
+  if (errmsg_len)
+  {
+    strncpy(errmsg, errstr, errmsg_len - 1);
+  }
+}
 
-void MrdbParser_parse(MrdbParser *p, uint8_t is_batch)
+uint8_t MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_len)
 {
   char *a, *end;
   char lastchar= 0;
   uint8_t i;
 
-  if (!p || !p->statement.str)
-    return;
+  if (errmsg_len)
+    *errmsg= 0;
 
+  if (!p)
+  {
+    parser_error(errmsg, errmsg_len, "Parser not initialized");
+    return 1;
+  }
+
+  if (!p->statement.str || !p->statement.length)
+  {
+    parser_error(errmsg, errmsg_len, "Invalid (empty) statement");
+    return 1;
+  }
   a= p->statement.str;
   end= a + p->statement.length - 1;
 
@@ -151,16 +176,28 @@ void MrdbParser_parse(MrdbParser *p, uint8_t is_batch)
     /* parmastyle = qmark */
     if (*a == '?')
     {
+      if (p->paramstyle && p->paramstyle != QMARK)
+      {
+        parser_error(errmsg, errmsg_len, "Mixing different parameter styles is not supported");
+        return 1;
+      }
+      p->paramstyle= QMARK;
       p->param_count++;
       a++;
       continue;
     }
 
-    /* paramstype = pyformat */
     if (*a == '%' && lastchar != '\\')
     {
+      /* paramstyle format */
       if (*(a+1) == 's' || *(a+1) == 'd')
       {
+        if (p->paramstyle && p->paramstyle != FORMAT)
+        {
+          parser_error(errmsg, errmsg_len, "Mixing different parameter styles is not supported");
+          return 1;
+        }
+        p->paramstyle= FORMAT;
         *a= '?';
         memmove(a+1, a+2, end - a);
         end--;
@@ -174,9 +211,40 @@ void MrdbParser_parse(MrdbParser *p, uint8_t is_batch)
         if (val_end)
         {
           int keylen= val_end - a + 1;
+          if (p->paramstyle && p->paramstyle != PYFORMAT)
+          {
+            parser_error(errmsg, errmsg_len, "Mixing different parameter styles is not supported");
+            return 1;
+          }
+          p->paramstyle= PYFORMAT;
           *a= '?';
           p->param_count++;
+          if (p->keys)
+          {
+            MrdbString *m;
+            if (!(m= PyMem_RawRealloc(p->keys, p->param_count * sizeof(MrdbString))))
+            {
+              parser_error(errmsg, errmsg_len, "Not enough memory");
+              return 1;
+            }
+            p->keys= m;
+          }
+          else {
+            if (!(p->keys= PyMem_RawMalloc(sizeof(MrdbString))))
+            {
+              parser_error(errmsg, errmsg_len, "Not enough memory");
+              return 1;
+            }
+          }
+          if (!(p->keys[p->param_count - 1].str= PyMem_RawCalloc(1, keylen - 2)))
+          {
+            parser_error(errmsg, errmsg_len, "Not enough memory");
+            return 1;
+          }
+          memcpy(p->keys[p->param_count - 1].str, a + 2, keylen - 3);
+          p->keys[p->param_count - 1].length= keylen - 3;
           memmove(a+1, val_end+2, end - a - keylen);
+          a+= 1;
           end -= keylen;
           continue;
         }
@@ -208,4 +276,5 @@ void MrdbParser_parse(MrdbParser *p, uint8_t is_batch)
   }
   /* Update length */
   p->statement.length= end - p->statement.str + 1;
+  return 0;
 }

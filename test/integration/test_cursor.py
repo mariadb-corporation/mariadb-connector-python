@@ -226,6 +226,39 @@ class TestCursor(unittest.TestCase):
         cursor.executemany("DELETE FROM bulk_delete WHERE id=?", params)
         self.assertEqual(cursor.rowcount, 2)
 
+    def test_pyformat(self):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "CREATE TEMPORARY TABLE pyformat (id int, name varchar(64), city varchar(64))");
+        params = [{"id" : 1, "name" : u"Jack", "city" : u"Boston"},
+                  {"id" : 2, "name" : u"Martin", "city" : u"Ohio"},
+                  {"id" : 3, "name" : u"James", "city" : u"Washington"},
+                  {"id" : 4, "name" : u"Rasmus", "city" : u"Helsinki"},
+                  {"id" : 5, "name" : u"Andrey", "city" : u"Sofia"}]
+        cursor.executemany("INSERT INTO pyformat VALUES (%(id)s,%(name)s,%(city)s)", params)
+        self.assertEqual(cursor.rowcount, 5)
+        cursor.execute("commit")
+        cursor.execute("SELECT name FROM pyformat WHERE id=5")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "Andrey")
+
+    def test_format(self):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "CREATE TEMPORARY TABLE pyformat (id int, name varchar(64), city varchar(64))");
+        params = [(1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia")]
+        cursor.executemany("INSERT INTO pyformat VALUES (%s,%s,%s)", params)
+        self.assertEqual(cursor.rowcount, 5)
+        cursor.execute("commit")
+        cursor.execute("SELECT name FROM pyformat WHERE id=5")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "Andrey")
+
+
     def test_named_tuple(self):
         cursor = self.connection.cursor(named_tuple=1)
         cursor.execute(

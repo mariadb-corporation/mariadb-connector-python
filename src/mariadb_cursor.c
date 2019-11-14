@@ -517,13 +517,14 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
   int rc= 0;
   uint8_t is_buffered= 0;
   static char *key_words[]= {"", "", "buffered", NULL};
+  char errmsg[128];
 
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
     return NULL;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-        "s#|O!$b", key_words, &statement, &statement_len, &PyTuple_Type, &Data,
+        "s#|O$b", key_words, &statement, &statement_len, /* &PyTuple_Type, */ &Data,
         &is_buffered))
     return NULL;
 
@@ -576,12 +577,29 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     if (!self->parser)
     {
       self->parser= MrdbParser_init(statement, statement_len);
-      MrdbParser_parse(self->parser, 0);
+      if (MrdbParser_parse(self->parser, 0, errmsg, 128))
+      {
+        PyErr_SetString(Mariadb_ProgrammingError, errmsg);
+        goto error;
+      }
       CURSOR_SET_STATEMENT(self, statement, statement_len);
     }
 
     if (Data)
     {
+      if (self->parser->paramstyle == PYFORMAT)
+      {
+        if (Py_TYPE(Data) != &PyDict_Type)
+        {
+          PyErr_SetString(PyExc_TypeError, "argument 2 must be dict");
+          goto error;
+        }
+      }
+      else if (Py_TYPE(Data) != &PyTuple_Type)
+      {
+        PyErr_SetString(PyExc_TypeError, "argument 2 must be tuple!");
+        goto error;
+      }
       self->array_size= 0;
       self->data= Data;
       if (mariadb_check_execute_parameters(self, Data))
@@ -1073,6 +1091,7 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
   Py_ssize_t statement_len= 0;
   int rc;
   uint8_t do_prepare= 1;
+  char errmsg[128];
 
   MARIADB_CHECK_STMT(self);
   if (PyErr_Occurred())
@@ -1109,7 +1128,11 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
     {
       exit(-1);
     }
-    MrdbParser_parse(self->parser, 1);
+    if (MrdbParser_parse(self->parser, 1, errmsg, 128))
+    {
+       PyErr_SetString(Mariadb_ProgrammingError, errmsg);
+       goto error;
+    }
     CURSOR_SET_STATEMENT(self, statement, statement_len);
   }
 
