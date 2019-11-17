@@ -114,7 +114,20 @@ typedef struct {
   int port;
   PyObject *charset;
   PyObject *collation;
+  char *poolname;
+  uint8_t status;
 } MrdbConnection;
+
+typedef struct {
+  char *pool_name;
+  uint32_t pool_size;
+  char *host;
+  char *user;
+  char *passwd;
+  char *database;
+  uint32_t port;
+  MrdbConnection *connection;
+} MrdbConnectionPool;
 
 typedef struct {
   enum enum_field_types type;

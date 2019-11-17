@@ -26,12 +26,7 @@ static PyObject *MrdbConnection_cursor(MrdbConnection *self,
        PyObject *args,
        PyObject *kwargs);
 /* todo: write more documentation, this is just a placeholder */
-static char mariadb_connection_documentation[] =
-"Returns a MariaDB connection object";
 
-static PyObject *MrdbConnection_exception(PyObject *self, void *closure);
-#define GETTER_EXCEPTION(name, exception)\
-{ name,MrdbConnection_exception, NULL, "doc", &exception }
 static PyObject *MrdbConnection_getid(MrdbConnection *self, void *closure);
 static PyObject *MrdbConnection_getuser(MrdbConnection *self, void *closure);
 static PyObject *MrdbConnection_getreconnect(MrdbConnection *self,
@@ -52,28 +47,21 @@ static int MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg, voi
 
 static PyGetSetDef MrdbConnection_sets[]=
 {
-    {"autocommit", (getter)MrdbConnection_getautocommit, (setter)MrdbConnection_setautocommit, "Toggles autocommit mode on or off"},
-    {"connection_id", (getter)MrdbConnection_getid, NULL, "connection id", NULL},
-    {"database", (getter)MrdbConnection_getdb, (setter)MrdbConnection_setdb, "database in use", NULL},
-    {"auto_reconnect", (getter)MrdbConnection_getreconnect,
-        (setter)MrdbConnection_setreconnect,
-        "reconnect automatically if connection dropped", NULL},
-    {"user", (getter)MrdbConnection_getuser, NULL, "user nane", NULL},
-    {"warnings", (getter)MrdbConnection_warnings, NULL, "number of warnings which were produced from last running connection command", NULL},
+    {"autocommit", (getter)MrdbConnection_getautocommit, (setter)MrdbConnection_setautocommit, 
+      connection_autocommit__doc__, NULL},
+    {"connection_id", (getter)MrdbConnection_getid, NULL,
+      connection_connection_id__doc__, NULL},
+    {"database", (getter)MrdbConnection_getdb, (setter)MrdbConnection_setdb,
+     connection_database__doc__, NULL},
+    {"auto_reconnect", (getter)MrdbConnection_getreconnect, (setter)MrdbConnection_setreconnect,
+     connection_auto_reconnect__doc__, NULL},
+    {"user", (getter)MrdbConnection_getuser, NULL, connection_user__doc__, NULL},
+    {"warnings", (getter)MrdbConnection_warnings, NULL,
+     connection_warnings__doc__, NULL},
     {"server_version", (getter)MrdbConnection_server_version, NULL,
-        "Numeric version of connected server. The form of the version number is "
-            "VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH",
-        NULL},
-    {"server_info", (getter)MrdbConnection_server_info, NULL, "Name and version of connected server", NULL},
-    GETTER_EXCEPTION("Error", Mariadb_Error),
-    GETTER_EXCEPTION("Warning", Mariadb_Warning),
-    GETTER_EXCEPTION("InterfaceError", Mariadb_InterfaceError),
-    GETTER_EXCEPTION("ProgrammingError", Mariadb_ProgrammingError),
-    GETTER_EXCEPTION("IntegrityError", Mariadb_IntegrityError),
-    GETTER_EXCEPTION("DatabaseError", Mariadb_DatabaseError),
-    GETTER_EXCEPTION("NotSupportedError", Mariadb_NotSupportedError),
-    GETTER_EXCEPTION("InternalError", Mariadb_InternalError),
-    GETTER_EXCEPTION("OperationalError", Mariadb_OperationalError),
+     connection_server_version__doc__, NULL},
+    {"server_info", (getter)MrdbConnection_server_info, NULL, 
+     connection_server_info__doc__, NULL},
     {NULL}
 };
 
@@ -130,37 +118,27 @@ static PyMethodDef MrdbConnection_Methods[] =
     { "change_user",
         (PyCFunction)MrdbConnection_change_user,
         METH_VARARGS,
-        "Changes the user and default database of the current connection. "
-            "In order to successfully change users a valid username and password "
-            "parameters must be provided and that user must have sufficient "
-            "permissions to access the desired database. If for any reason "
-            "authorization fails, the current user authentication will remain."
+        connection_change_user__doc__
     },
     { "kill",
         (PyCFunction)MrdbConnection_kill,
         METH_VARARGS,
-        "This function is used to ask the server to kill a MariaDB thread "
-            "specified by the processid parameter. This value must be retrieved "
-            "by SHOW PROCESSLIST."
+        connection_kill__doc__
     },
     { "reconnect",
         (PyCFunction)MrdbConnection_reconnect,
         METH_NOARGS,
-        "tries to reconnect to a server in case the connection died due to timeout "
-            "or other errors. It uses the same credentials which were specified in "
-            "connect() method."
+        connection_reconnect__doc__
     },
     { "reset",
         (PyCFunction)MrdbConnection_reset,
         METH_NOARGS,
-        "Resets the current connection and clears session state and pending "
-            "results. Open cursors will become invalid and cannot be used anymore."
+        connection_reset__doc__,
     },
     { "escape_string",
         (PyCFunction)MrdbConnection_escape_string,
         METH_VARARGS,
-        "This function is used to create a legal SQL string that you can use in "
-            "an SQL statement. The given string is encoded to an escaped SQL string."
+        connection_escape_string__doc__
     },
     {NULL} /* alwa+ys last */
 };
@@ -248,6 +226,8 @@ MrdbConnection_Initialize(MrdbConnection *self,
          *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
          *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
          *charset= NULL;
+    char *pool_name= 0;
+    uint32_t pool_size= 0;
     uint8_t ssl_enforce= 0;
     unsigned int client_flags= 0, port= 0;
     unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
@@ -261,11 +241,11 @@ MrdbConnection_Initialize(MrdbConnection *self,
         "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
         "ssl_cipher", "ssl_capath", "ssl_crlpath",
         "ssl_verify_cert", "ssl",
-        "client_flags", "charset", NULL
+        "client_flags", "charset", "pool_name", "pool_size", NULL
     };
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiipissssssssssipis:connect",
+                "|sssssisiiipissssssssssipissi:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -385,7 +365,7 @@ PyTypeObject MrdbConnection_Type = {
 
     /* (tp_flags) Flags to define presence of optional/expanded features */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
-    mariadb_connection_documentation, /* tp_doc Documentation string */
+    connection__doc__, /* tp_doc Documentation string */
 
     /* call function for all accessible objects */
     (traverseproc)MrdbConnection_traverse, /* tp_traverse */
@@ -479,15 +459,6 @@ static PyObject *MrdbConnection_cursor(MrdbConnection *self,
     conn= Py_BuildValue("(O)", self);
     cursor= PyObject_Call((PyObject *)&MrdbCursor_Type, conn, kwargs);
     return cursor;
-}
-
-    static PyObject *
-MrdbConnection_exception(PyObject *self, void *closure)
-{
-    PyObject *exception = *(PyObject **)closure;
-
-    Py_INCREF(exception);
-    return exception;
 }
 
 /* {{{ MrdbConnection_commit */

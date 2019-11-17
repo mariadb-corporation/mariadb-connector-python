@@ -18,6 +18,7 @@
 *************************************************************************************/
 
 #include <mariadb_python.h>
+#include <docs/cursor.h>
 
 static void MrdbCursor_dealloc(MrdbCursor *self);
 static PyObject *MrdbCursor_close(MrdbCursor *self);
@@ -90,19 +91,17 @@ static PyObject *MrdbCursor_closed(MrdbCursor *self);
 static PyGetSetDef MrdbCursor_sets[]=
 {
   {"lastrowid", (getter)MrdbCursor_lastrowid, NULL,
-   "row id of the last modified (inserted) row"},
+    cursor_lastrowid__doc__, NULL},
   {"description", (getter)MrdbCursor_description, NULL,
-   "This read-only attribute is a sequence of 8-item sequences. "
-   "Each of these sequences contains information describing one result column",
-   NULL},
-  {"rowcount", (getter)Mariadb_row_count, NULL, "doc", NULL},
+    cursor_description__doc__, NULL},
+  {"rowcount", (getter)Mariadb_row_count, NULL,
+    cursor_rowcount__doc__, NULL},
   {"warnings", (getter)MrdbCursor_warnings, NULL,
-   "Number of warnings which were produced from last execute() call", NULL},
+    cursor_warnings__doc__, NULL},
   {"closed", (getter)MrdbCursor_closed, NULL,
-   "Indicates if the cursor is closed and can't be reused", NULL},
+    cursor_closed__doc__, NULL},
   {"buffered", (getter)MrdbCursor_getbuffered, (setter)MrdbCursor_setbuffered,
-   "When True all result sets are immediately transferred and the connection "
-   "between client and server is no longer blocked. Default value is False."},
+    cursor_buffered__doc__, NULL},
   {NULL}
 };
 
@@ -111,43 +110,43 @@ static PyMethodDef MrdbCursor_Methods[] =
   /* PEP-249 methods */
   {"close", (PyCFunction)MrdbCursor_close,
     METH_NOARGS,
-    "Closes an open Cursor"},
+    cursor_close__doc__},
   {"execute", (PyCFunction)MrdbCursor_execute,
-     METH_VARARGS | METH_KEYWORDS,
-     "Executes a SQL statement"},
+    METH_VARARGS | METH_KEYWORDS,
+    cursor_execute__doc__,},
   {"executemany", (PyCFunction)MrdbCursor_executemany,
-     METH_VARARGS,
-     "Executes a SQL statement by passing a list of values"},
+    METH_VARARGS,
+    cursor_executemany__doc__ }, 
   {"fetchall", (PyCFunction)MrdbCursor_fetchall,
     METH_NOARGS,
-    "Fetches all rows of a result set"},
+    cursor_fetchall__doc__},
   {"fetchone", (PyCFunction)MrdbCursor_fetchone,
     METH_NOARGS,
-    "Fetches the next row of a result set"},
+    cursor_fetchone__doc__,},
   {"fetchmany", (PyCFunction)MrdbCursor_fetchmany,
     METH_VARARGS | METH_KEYWORDS,
-    "Fetches multiple rows of a result set"},
+    cursor_fetchmany__doc__},
   {"fieldcount", (PyCFunction)MrdbCursor_fieldcount,
     METH_NOARGS,
-    "Returns number of columns in current result set"},
+    cursor_field_count__doc__},
   {"nextset", (PyCFunction)MrdbCursor_nextset,
    METH_NOARGS,
-   "Will make the cursor skip to the next available result set, discarding any remaining rows from the current set."},
+   cursor_nextset__doc__},
   {"setinputsizes", (PyCFunction)Mariadb_no_operation,
     METH_VARARGS,
-    "Required by PEP-249. Does nothing in MariaDB Connector/Python"},
+    cursor_setinputsizes__doc__},
   {"setoutputsize", (PyCFunction)Mariadb_no_operation,
     METH_VARARGS,
-    "Required by PEP-249. Does nothing in MariaDB Connector/Python"},
+    cursor_setoutputsize__doc__},
   {"callproc", (PyCFunction)Mariadb_no_operation,
     METH_VARARGS,
-    "Required by PEP-249. Does nothing in MariaDB Connector/Python, use the execute method with syntax 'CALL {procedurename}' instead"},
+    cursor_callproc__doc__},
   {"next", (PyCFunction)MrdbCursor_fetchone,
     METH_NOARGS,
-    "Return the next row from the currently executing SQL statement using the same semantics as .fetchone()."},
+    cursor_next__doc__},
   {"scroll", (PyCFunction)MrdbCursor_scroll,
     METH_VARARGS | METH_KEYWORDS,
-    "Scroll the cursor in the result set to a new position according to mode"},
+    cursor_scroll__doc__},
   {NULL} /* always last */
 };
 
@@ -157,27 +156,27 @@ static struct PyMemberDef MrdbCursor_Members[] =
    T_OBJECT,
    offsetof(MrdbCursor, connection),
    READONLY,
-   "Reference to the connection object on which the cursor was created"},
+   cursor_connection__doc__},
   {"statement",
    T_STRING,
    offsetof(MrdbCursor, statement),
    READONLY,
-   "The last executed statement"},
+   cursor_statement__doc__},
   {"buffered",
    T_BYTE,
    offsetof(MrdbCursor, is_buffered),
    0,
-   "Stores the entire result set in memory"},
+   cursor_buffered__doc__},
   {"rownumber",
    T_LONG,
    offsetof(MrdbCursor, row_number),
    READONLY,
-   "Current row number in result set"},
+   cursor_rownumber__doc__},
   {"arraysize",
    T_LONG,
    offsetof(MrdbCursor, row_array_size),
    0,
-   "the number of rows to fetch"},
+   cursor_arraysize__doc__},
    {NULL}
 };
 

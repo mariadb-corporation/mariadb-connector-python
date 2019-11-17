@@ -22,6 +22,12 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
+  connection__doc__,
+  "The Connection class is used to open and manage a connection to a\n"
+  "database server"
+);
+
+PyDoc_STRVAR(
   connection_close__doc__,
   "close()\n"
   "--\n"
@@ -51,7 +57,7 @@ PyDoc_STRVAR(
   "\n"
   "Causes the database to roll back to the start of any pending transaction\n\n"
   "Closing a connection without committing the changes first will cause an\n"
-  "implicit rollback to be performed.\n\\n"
+  "implicit rollback to be performed.\n\n"
   "Note that rollback() will not work as expected if autocommit mode was set to True\n"
   "or the storage engine does not support transactions."
 );
@@ -146,6 +152,64 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
+  connection_change_user__doc__,
+  "change_user(user, password, database)\n"
+  "--\n"
+  "\n"
+  "Parameters:\n"
+  "user: string\n"
+  "password: string\n"
+  "database: string\n\n"
+  "Changes the user and default database of the current connection.\n"
+  "In order to successfully change users a valid username and password\n"
+  "parameters must be provided and that user must have sufficient\n"
+  "permissions to access the desired database. If for any reasonßn"
+  "authorization fails, the current user authentication will remain."
+);
+
+PyDoc_STRVAR(
+  connection_reconnect__doc__,
+  "reconnect()\n"
+  "--\n"
+  "\n"
+  "tries to reconnect to a server in case the connection died due to timeout\n"
+  "or other errors. It uses the same credentials which were specified in\n"
+  "connect() method."
+);
+
+PyDoc_STRVAR(
+  connection_reset__doc__,
+  "reset()\n"
+  "--\n"
+  "\n"
+  "Resets the current connection and clears session state and pending\n"
+  "results. Open cursors will become invalid and cannot be used anymore."
+);
+
+PyDoc_STRVAR(
+  connection_escape_string__doc__,
+  "escape_string(statement)\n"
+  "--\n"
+  "\n"
+  "Parameters:\n"
+  "statement: string\n\n"
+  "This function is used to create a legal SQL string that you can use in\n"
+  "an SQL statement. The given string is encoded to an escaped SQL string."
+);
+
+PyDoc_STRVAR(
+  connection_kill__doc__,
+  "kill(connection_id)\n"
+  "--\n"
+  "\n"
+  "Parameters:\n"
+  "connection_id: integer\n\n"
+  "This function is used to ask the server to kill a database connection"
+  "specified by the processid parameter. This value must be retrieved "
+  "by SHOW PROCESSLIST sql command."
+);
+
+PyDoc_STRVAR(
   connection_ping__doc__, 
   "ping()\n"
   "--\n"
@@ -155,4 +219,68 @@ PyDoc_STRVAR(
   "to the database server in case the connection\n"
   "was lost\n\n"
   "If the connection is not available an InterfaceError will be raised."
+);
+
+PyDoc_STRVAR(
+  connection_autocommit__doc__,
+  "(read/write)\n\n"
+  "Toggles autocommit mode on or off for the current database connection.\n\n"
+  "Autocommit mode only affects operations on transactional table types.\n"
+  "Be aware that rollback() will not work, if autocommit mode was switched\n"
+  "on.\n\n"
+  "By default autocommit mode is set to False."
+);
+
+PyDoc_STRVAR(
+  connection_connection_id__doc__,
+  "(read only)\n\n"
+  "returns the (thread) id for the current connection.\n\n"
+  "If reconnect was set to True, the id might change if the client\n"
+  "reconnects to the database server"
+);
+
+PyDoc_STRVAR(
+  connection_database__doc__,
+  "(read/write)\n\n"
+  "Returns or sets the default database for the current connection\n\n"
+  "If the used datbase will not change, the preffered way is to specify\n"
+  "the default database in connect() method."
+);
+
+PyDoc_STRVAR(
+  connection_auto_reconnect__doc__,
+  "(read/write)\n\n"
+  "Enable or disable automatic reconnection to the server if the connection\n"
+  "is found to have been lost.\n\n"
+  "When enabled, client tries to reconnect to a database server in case\n"
+  "the connection to a database server died due to timeout or other errors."
+);
+
+PyDoc_STRVAR(
+  connection_user__doc__,
+  "(read only)\n\n"
+  "Returns the user name for the current connection."
+);
+
+PyDoc_STRVAR(
+  connection_warnings__doc__,
+  "(read only)\n\n"
+  "Returns the number of warnings from the last executed statement, or zero\n"
+  "if there are no warnings.\n\n"
+  "If SQL_MODE TRADITIONAL is enabled an error instead of a warning will be\n"
+  "returned. To retrieve warnings use the cursor method execute(\"SHOW WARNINGS\").\n"
+);
+
+PyDoc_STRVAR(
+  connection_server_version__doc__,
+  "(read only)\n\n"
+  "Returns numeric version of connected database server. The form of the version\n"
+  "number is VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH"
+);
+
+PyDoc_STRVAR(
+  connection_server_info__doc__,
+  "(read only)\n\n"
+  "Returns the alphanumeric version of connected database. Tthe numeric version\n"
+  "can be obtained with server_version property."
 );
