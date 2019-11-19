@@ -7,17 +7,22 @@ services:
 
 addons:
   hosts:
-  - mariadb.example.com
+    - mariadb.example.com
 
 before_install:
-- chmod +x .travis/script.sh
-- sudo apt-get install software-properties-common
-- sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-- sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://mirrors.accretive-networks.net/mariadb/repo/10.4/ubuntu bionic main'
-- sudo apt-get remove --purge mysql*
-- sudo apt update
-- sudo apt-get install -f libmariadb3 libmariadb-dev libssl1.1
-- sudo apt-get install -f
+  - chmod +x .travis/script.sh
+  - sudo apt-get install software-properties-common
+  - sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+  - sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://mirrors.accretive-networks.net/mariadb/repo/10.4/ubuntu bionic main'
+  - sudo apt-get remove --purge mysql*
+  - sudo apt update
+  - sudo apt-get install -f libmariadb3 libmariadb-dev libssl1.1
+  - sudo apt-get install -f
+  - git clone https://github.com/pyenv/pyenv.git ~/.pyenv
+  - export PYENV_ROOT="$HOME/.pyenv"
+  - export PATH="$PYENV_ROOT/bin:$PATH"
+  - echo $PATH
+  - eval "$(pyenv init -)"
 
 install:
   - wget -qO- 'https://github.com/tianon/pgp-happy-eyeballs/raw/master/hack-my-builds.sh' | bash
@@ -43,27 +48,23 @@ env:
 
 matrix:
   include:
-  - python: "2.7"
-    env: DB=mariadb:10.4
-  - python: "3.6"
-    env: DB=mariadb:10.4
-  - python: "3.8"
-    env: DB=mariadb:10.4
-  - env: DB=mariadb:10.4 MAXSCALE_VERSION=2.2.9 TEST_PORT=4007 TEST_USER=bob TEXT_DATABASE=test2 SKIP_LEAK=1
-  - env: DB=mariadb:5.5
-  - env: DB=mariadb:10.0
-  - env: DB=mariadb:10.1
-  - env: DB=mariadb:10.2
-  - env: DB=mariadb:10.3
-  - env: DB=mysql:5.5
-  - env: DB=mysql:5.6
-  - env: DB=mysql:5.7
+  - env: DB=mariadb:10.4 PYTHON_VER="3.6.0"
+  - env: DB=mariadb:10.4 PYTHON_VER="3.8.0"
+  - env: DB=mariadb:10.4 PYTHON_VER="pypy3.6-7.2.0"
+  - env: DB=mariadb:10.4 PYTHON_VER="miniconda3-4.3.30"
+  - env: DB=mariadb:10.4 BENCH=1
+  - env: DB=mariadb:10.4 PYTHON_VER="3.6.0" MAXSCALE_VERSION=2.2.9 TEST_PORT=4007 TEST_USER=bob TEXT_DATABASE=test2 SKIP_LEAK=1
+  - env: DB=mariadb:5.5 PYTHON_VER="3.6.0"
+  - env: DB=mariadb:10.0 PYTHON_VER="3.6.0"
+  - env: DB=mariadb:10.1 PYTHON_VER="3.6.0"
+  - env: DB=mariadb:10.2 PYTHON_VER="3.6.0"
+  - env: DB=mariadb:10.3 PYTHON_VER="3.6.0"
+  - env: DB=mysql:5.5 PYTHON_VER="3.6.0"
+  - env: DB=mysql:5.6 PYTHON_VER="3.6.0"
+  - env: DB=mysql:5.7 PYTHON_VER="3.6.0"
 
 notifications:
   email: false
 
 script:
-- python setup.py build
-- python setup.py install
-- npm install nyc -g
-- .travis/script.sh
+  - .travis/script.sh
