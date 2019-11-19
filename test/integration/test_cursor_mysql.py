@@ -26,11 +26,9 @@ class CursorMySQLTest(unittest.TestCase):
             row = (i, i, i, "bar", datetime.date(2019, 1, 1))
             list_in.append(row)
         cursor.executemany("INSERT INTO test_parameter VALUES (%s,%s,%s,%s,%s)", list_in)
-        print("rows inserted:", len(list_in))
         self.connection.commit()
         cursor.execute("SELECT * FROM test_parameter order by a")
         list_out = cursor.fetchall()
-        print("rows fetched: ", len(list_out))
         self.assertEqual(list_in, list_out)
 
         cursor.close()

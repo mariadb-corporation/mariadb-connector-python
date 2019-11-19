@@ -222,6 +222,7 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
   self->is_buffered= is_buffered ? is_buffered : self->connection->is_buffered;
 
   self->is_prepared= is_prepared;
+  self->is_text= 0;
 
   if (!(self->stmt= mysql_stmt_init(self->connection->mysql)))
   {

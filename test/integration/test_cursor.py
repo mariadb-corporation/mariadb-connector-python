@@ -19,6 +19,11 @@ class TestCursor(unittest.TestCase):
     def tearDown(self):
         del self.connection
 
+    def test_multiple_close(self):
+        cursor = self.connection.cursor()
+        cursor.close()
+        del cursor
+
     def test_date(self):
         if self.connection.server_version < 50500:
             self.skipTest("microsecond not supported")
