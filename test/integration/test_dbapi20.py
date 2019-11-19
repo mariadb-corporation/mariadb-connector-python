@@ -19,6 +19,7 @@ __author__ = 'Stuart Bishop <zen@shangri-la.dropbear.id.au>'
 
 import time
 import unittest
+import os
 
 import mariadb as mariadb
 
@@ -409,6 +410,8 @@ class DatabaseAPI20Test(unittest.TestCase):
                          )
 
     def test_executemany(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
         con = self._connect()
         try:
             cur = con.cursor()

@@ -32,6 +32,7 @@ class TestConnection(unittest.TestCase):
         new_conn = mariadb.connect(user=default_conf["user"], default_file="./client.cnf")
         self.assertEqual(new_conn.database, default_conf["database"])
         del new_conn
+        os.remove("client.cnf")
 
     def test_autocommit(self):
         conn = self.connection
@@ -39,9 +40,17 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn.autocommit, True)
         conn.autocommit = False
         self.assertEqual(conn.autocommit, False)
-        conn.reset()
+        # revert
+        conn.autocommit = True
 
     def test_schema(self):
+        if self.connection.server_version < 100103:
+            self.skipTest("CREATE OR REPLACE SCHEMA not supported")
+        if self.connection.server_version < 100202:
+            self.skipTest("session tracking not supported")
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't tell schema change for now")
+
         default_conf = conf()
         conn = self.connection
         self.assertEqual(conn.database, default_conf["database"])
@@ -53,6 +62,8 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn.database, default_conf["database"])
 
     def test_ping(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE wrong thread id")
         conn = self.connection
         cursor = conn.cursor()
         oldid = conn.connection_id

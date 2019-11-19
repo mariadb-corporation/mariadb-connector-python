@@ -86,9 +86,8 @@ if [ -n "$BENCH" ] ; then
 
   python -m pyperf compare_to mysql_bench_pypy3_6.json mariadb_bench_pypy3_6.json --table
 
-  python -m pyperf compare_to mysql_bench.json mariadb_bench.json mariadb_bench_pypy3_6.json \
-    mysql_bench_pypy3_6.json mariadb_bench_miniconda3_4_3_30.json \
-    mysql_bench_miniconda3_4_3_30.json --table
+  python -m pyperf compare_to mysql_bench.json mariadb_bench.json mysql_bench_pypy3_6.json mariadb_bench_pypy3_6.json \
+    mysql_bench_miniconda3_4_3_30.json mariadb_bench_miniconda3_4_3_30.json --table
 else
   pyenv install $PYTHON_VER
   export PYENV_VERSION=$PYTHON_VER

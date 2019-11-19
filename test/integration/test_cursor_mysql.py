@@ -3,6 +3,7 @@
 
 import datetime
 import unittest
+import os
 
 from test.base_test import create_connection
 
@@ -16,6 +17,9 @@ class CursorMySQLTest(unittest.TestCase):
         del self.connection
 
     def test_parameter(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_parameter(a int auto_increment primary key not "
                        "null, b int, c int, d varchar(20),e date)")
