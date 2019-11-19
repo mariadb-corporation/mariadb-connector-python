@@ -6,6 +6,7 @@ import unittest
 
 from test.base_test import create_connection
 
+
 class CursorMySQLTest(unittest.TestCase):
 
     def setUp(self):

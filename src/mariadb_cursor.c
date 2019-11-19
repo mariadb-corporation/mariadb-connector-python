@@ -396,14 +396,18 @@ void ma_cursor_close(MrdbCursor *self)
   if (!self->is_text && self->stmt)
   {
     /* Todo: check if all the cursor stuff is deleted (when using prepared
-       statemnts this should be handled in mysql_stmt_close) */
+       statements this should be handled in mysql_stmt_close) */
     Py_BEGIN_ALLOW_THREADS
     mysql_stmt_close(self->stmt);
     Py_END_ALLOW_THREADS
     self->stmt= NULL;
   }
   MrdbCursor_clear(self);
-  MrdbParser_end(self->parser);
+  if (self->parser)
+  {
+     MrdbParser_end(self->parser);
+     self->parser= NULL;
+  }
   self->is_closed= 1;
 }
 
@@ -420,7 +424,7 @@ PyObject * MrdbCursor_close(MrdbCursor *self)
 /*{{{ MrDBCursor_dealloc */
 void MrdbCursor_dealloc(MrdbCursor *self)
 {
-	ma_cursor_close(self);
+  ma_cursor_close(self);
   Py_TYPE(self)->tp_free((PyObject*)self);
 }
 /* }}} */
@@ -527,7 +531,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         &is_buffered))
     return NULL;
 
-  /* defaukt was set to 0 before */
+  /* default was set to 0 before */
   self->is_buffered= is_buffered;
 
   /* If we don't have a prepared cursor, we need to end/free parser */

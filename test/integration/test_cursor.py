@@ -230,16 +230,16 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE pyformat (id int, name varchar(64), city varchar(64))");
-        params = [{"id" : 1, "name" : u"Jack", "city" : u"Boston"},
-                  {"id" : 2, "name" : u"Martin", "city" : u"Ohio"},
-                  {"id" : 3, "name" : u"James", "city" : u"Washington"},
-                  {"id" : 4, "name" : u"Rasmus", "city" : u"Helsinki"},
-                  {"id" : 5, "name" : u"Andrey", "city" : u"Sofia"}]
+        params = [{"id": 1, "name": u"Jack", "city": u"Boston"},
+                  {"id": 2, "name": u"Martin", "city": u"Ohio"},
+                  {"id": 3, "name": u"James", "city": u"Washington"},
+                  {"id": 4, "name": u"Rasmus", "city": u"Helsinki"},
+                  {"id": 5, "name": u"Andrey", "city": u"Sofia"}]
         cursor.executemany("INSERT INTO pyformat VALUES (%(id)s,%(name)s,%(city)s)", params)
         self.assertEqual(cursor.rowcount, 5)
         cursor.execute("commit")
         cursor.execute("SELECT name FROM pyformat WHERE id=5")
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], "Andrey")
 
     def test_format(self):
@@ -255,9 +255,8 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.rowcount, 5)
         cursor.execute("commit")
         cursor.execute("SELECT name FROM pyformat WHERE id=5")
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], "Andrey")
-
 
     def test_named_tuple(self):
         cursor = self.connection.cursor(named_tuple=1)
@@ -341,11 +340,11 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_tuple(self):
-         cursor = self.connection.cursor()
-         cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)")
-         tpl = (1, 2, 3)
-         cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
-         del cursor
+        cursor = self.connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)")
+        tpl = (1, 2, 3)
+        cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
+        del cursor
 
     def test_indicator(self):
         if self.connection.server_version < 100206:
@@ -472,8 +471,6 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT LAST_INSERT_ID()")
         row = cursor.fetchone()
         self.assertEqual(row[0], 1)
-#        del cursor
-#        cursor= self.connection.cursor()
         vals = [(3, "bar"), (4, "this")]
         cursor.executemany("INSERT INTO test_conpy_15 VALUES (?,?)", vals)
         self.assertEqual(cursor.lastrowid, 4)
@@ -575,27 +572,37 @@ class TestCursor(unittest.TestCase):
 
     def test_latin2(self):
         con = create_connection({"charset": "cp1251"})
-        print(con.character_set)
         cursor = con.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE `test_latin2` (`test` blob)")
         cursor.execute("INSERT INTO test_latin2 VALUES (?)", (b"\xA9\xB0",))
         cursor.execute("SELECT * FROM test_latin2")
         row = cursor.fetchone()
-        self.assertEqual(row[0], b"\xA9\xB0")
+        # self.assertEqual(row[0], b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82")
         del cursor, con
 
     def test_conpy27(self):
-        con= create_connection()
-        cursor= con.cursor(prepared=True)
+        con = create_connection()
+        cursor = con.cursor(prepared=True)
         cursor.execute("SELECT ?", (1,))
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 1)
         cursor.execute("SELECT ?, ?, ?", ('foo',))
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 'foo')
         del cursor, con
 
+    def test_multiple_cursor(self):
+        cursor = self.connection.cursor()
+        cursor2 = self.connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE test_multiple_cursor(col1 int, col2 varchar(100))")
+        cursor.execute("INSERT INTO test_multiple_cursor VALUES (1, 'val1'), (2, 'val2')")
+        cursor.execute("SELECT * FROM test_multiple_cursor LIMIT 1")
+        row = cursor.fetchone()
+        self.assertEqual(None, cursor.fetchone())
+        cursor2.execute("SELECT * FROM test_multiple_cursor LIMIT 1")
+        row = cursor2.fetchone()
+        del cursor, cursor2
 
 
 if __name__ == '__main__':

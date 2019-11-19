@@ -158,255 +158,255 @@ class DatabaseAPI20Test(unittest.TestCase):
         except AttributeError:
             self.fail("Driver doesn't define apilevel")
 
-#   def test_threadsafety(self):
-#       try:
-#           # Must exist
-#           threadsafety = self.driver.threadsafety
-#           # Must be a valid value
-#           self.assertTrue(threadsafety in (0, 1, 2, 3))
-#       except AttributeError:
-#           self.fail("Driver doesn't define threadsafety")
+    #   def test_threadsafety(self):
+    #       try:
+    #           # Must exist
+    #           threadsafety = self.driver.threadsafety
+    #           # Must be a valid value
+    #           self.assertTrue(threadsafety in (0, 1, 2, 3))
+    #       except AttributeError:
+    #           self.fail("Driver doesn't define threadsafety")
 
-#   def test_paramstyle(self):
-#       try:
-#           # Must exist
-#           paramstyle = self.driver.paramstyle
-#           # Must be a valid value
-#           self.assertTrue(paramstyle in (
-#               'qmark', 'numeric', 'named', 'format', 'pyformat'
-#           ))
-#       except AttributeError:
-#           self.fail("Driver doesn't define paramstyle")
+    #   def test_paramstyle(self):
+    #       try:
+    #           # Must exist
+    #           paramstyle = self.driver.paramstyle
+    #           # Must be a valid value
+    #           self.assertTrue(paramstyle in (
+    #               'qmark', 'numeric', 'named', 'format', 'pyformat'
+    #           ))
+    #       except AttributeError:
+    #           self.fail("Driver doesn't define paramstyle")
 
-#   def test_Exceptions(self):
-#       # Make sure required exceptions exist, and are in the
-#       # defined hierarchy.
-#       self.assertTrue(issubclass(self.driver.Warning, Exception))
-#       self.assertTrue(issubclass(self.driver.Error, Exception))
-#       self.assertTrue(
-#           issubclass(self.driver.InterfaceError, self.driver.Error)
-#       )
-#       self.assertTrue(
-#           issubclass(self.driver.DatabaseError, self.driver.Error)
-#       )
-#       self.assertTrue(
-#           issubclass(self.driver.OperationalError, self.driver.Error)
-#       )
-#       self.assertTrue(
-#           issubclass(self.driver.IntegrityError, self.driver.Error)
-#       )
-#       self.assertTrue(
-#           issubclass(self.driver.InternalError, self.driver.Error)
-#       )
-#       self.assertTrue(
-#           issubclass(self.driver.ProgrammingError, self.driver.Error)
-#       )
-#       self.assertTrue(
-#           issubclass(self.driver.NotSupportedError, self.driver.Error)
-#       )
+    #   def test_Exceptions(self):
+    #       # Make sure required exceptions exist, and are in the
+    #       # defined hierarchy.
+    #       self.assertTrue(issubclass(self.driver.Warning, Exception))
+    #       self.assertTrue(issubclass(self.driver.Error, Exception))
+    #       self.assertTrue(
+    #           issubclass(self.driver.InterfaceError, self.driver.Error)
+    #       )
+    #       self.assertTrue(
+    #           issubclass(self.driver.DatabaseError, self.driver.Error)
+    #       )
+    #       self.assertTrue(
+    #           issubclass(self.driver.OperationalError, self.driver.Error)
+    #       )
+    #       self.assertTrue(
+    #           issubclass(self.driver.IntegrityError, self.driver.Error)
+    #       )
+    #       self.assertTrue(
+    #           issubclass(self.driver.InternalError, self.driver.Error)
+    #       )
+    #       self.assertTrue(
+    #           issubclass(self.driver.ProgrammingError, self.driver.Error)
+    #       )
+    #       self.assertTrue(
+    #           issubclass(self.driver.NotSupportedError, self.driver.Error)
+    #       )
 
-#   def test_ExceptionsAsConnectionAttributes(self):
-#       # OPTIONAL EXTENSION
-#       # Test for the optional DB API 2.0 extension, where the exceptions
-#       # are exposed as attributes on the Connection object
-#       # I figure this optional extension will be implemented by any
-#       # driver author who is using this test suite, so it is enabled
-#       # by default.
-#       con = self._connect()
-#       drv = self.driver
-#       self.assertTrue(con.Warning is drv.Warning)
-#       self.assertTrue(con.Error is drv.Error)
-#       self.assertTrue(con.InterfaceError is drv.InterfaceError)
-#       self.assertTrue(con.DatabaseError is drv.DatabaseError)
-#       self.assertTrue(con.OperationalError is drv.OperationalError)
-#       self.assertTrue(con.IntegrityError is drv.IntegrityError)
-#       self.assertTrue(con.InternalError is drv.InternalError)
-#       self.assertTrue(con.ProgrammingError is drv.ProgrammingError)
-#       self.assertTrue(con.NotSupportedError is drv.NotSupportedError)
+    #   def test_ExceptionsAsConnectionAttributes(self):
+    #       # OPTIONAL EXTENSION
+    #       # Test for the optional DB API 2.0 extension, where the exceptions
+    #       # are exposed as attributes on the Connection object
+    #       # I figure this optional extension will be implemented by any
+    #       # driver author who is using this test suite, so it is enabled
+    #       # by default.
+    #       con = self._connect()
+    #       drv = self.driver
+    #       self.assertTrue(con.Warning is drv.Warning)
+    #       self.assertTrue(con.Error is drv.Error)
+    #       self.assertTrue(con.InterfaceError is drv.InterfaceError)
+    #       self.assertTrue(con.DatabaseError is drv.DatabaseError)
+    #       self.assertTrue(con.OperationalError is drv.OperationalError)
+    #       self.assertTrue(con.IntegrityError is drv.IntegrityError)
+    #       self.assertTrue(con.InternalError is drv.InternalError)
+    #       self.assertTrue(con.ProgrammingError is drv.ProgrammingError)
+    #       self.assertTrue(con.NotSupportedError is drv.NotSupportedError)
 
-#   def test_commit(self):
-#       con = self._connect()
-#       try:
-#           # Commit must work, even if it doesn't do anything
-#           con.commit()
-#       finally:
-#           con.close()
+    #   def test_commit(self):
+    #       con = self._connect()
+    #       try:
+    #           # Commit must work, even if it doesn't do anything
+    #           con.commit()
+    #       finally:
+    #           con.close()
 
-#   def test_rollback(self):
-#       con = self._connect()
-#       # If rollback is defined, it should either work or throw
-#       # the documented exception
-#       if hasattr(con, 'rollback'):
-#           try:
-#               con.rollback()
-#           except self.driver.NotSupportedError:
-#               pass
+    #   def test_rollback(self):
+    #       con = self._connect()
+    #       # If rollback is defined, it should either work or throw
+    #       # the documented exception
+    #       if hasattr(con, 'rollback'):
+    #           try:
+    #               con.rollback()
+    #           except self.driver.NotSupportedError:
+    #               pass
 
-#   def test_cursor(self):
-#       con = self._connect()
-#       try:
-#           cur = con.cursor()
-#       finally:
-#           con.close()
+    #   def test_cursor(self):
+    #       con = self._connect()
+    #       try:
+    #           cur = con.cursor()
+    #       finally:
+    #           con.close()
 
-#   def test_cursor_isolation(self):
-#       con = self._connect()
-#       try:
-#           # Make sure cursors created from the same connection have
-#           # the documented transaction isolation level
-#           cur1 = con.cursor()
-#           cur2 = con.cursor()
-#           self.executeDDL1(cur1)
-#           cur1.execute("insert into %sbooze values ('Victoria Bitter')" % (
-#               self.table_prefix
-#           ))
-#           cur2.execute("select name from %sbooze" % self.table_prefix)
-#           booze = cur2.fetchall()
-#           self.assertEqual(len(booze), 1)
-#           self.assertEqual(len(booze[0]), 1)
-#           self.assertEqual(booze[0][0], 'Victoria Bitter')
-#       finally:
-#           con.close()
+    #   def test_cursor_isolation(self):
+    #       con = self._connect()
+    #       try:
+    #           # Make sure cursors created from the same connection have
+    #           # the documented transaction isolation level
+    #           cur1 = con.cursor()
+    #           cur2 = con.cursor()
+    #           self.executeDDL1(cur1)
+    #           cur1.execute("insert into %sbooze values ('Victoria Bitter')" % (
+    #               self.table_prefix
+    #           ))
+    #           cur2.execute("select name from %sbooze" % self.table_prefix)
+    #           booze = cur2.fetchall()
+    #           self.assertEqual(len(booze), 1)
+    #           self.assertEqual(len(booze[0]), 1)
+    #           self.assertEqual(booze[0][0], 'Victoria Bitter')
+    #       finally:
+    #           con.close()
 
-#   def test_description(self):
-#       con = self._connect()
-#       try:
-#           cur = con.cursor()
-#           self.executeDDL1(cur)
-#           self.assertEqual(cur.description, None,
-#                            'cursor.description should be none after executing a '
-#                            'statement that can return no rows (such as DDL)'
-#                            )
-#           cur.execute('select name from %sbooze' % self.table_prefix)
-#           self.assertEqual(len(cur.description), 1,
-#                            'cursor.description describes too many columns'
-#                            )
-#           self.assertEqual(len(cur.description[0]), 8,
-#                            'cursor.description[x] tuples must have 8 elements'
-#                            )
-#           self.assertEqual(cur.description[0][0].lower(), 'name',
-#                            'cursor.description[x][0] must return column name'
-#                            )
-#           self.assertEqual(cur.description[0][1], self.driver.STRING,
-#                            'cursor.description[x][1] must return column type. Got %r'
-#                            % cur.description[0][1]
-#                            )
+    #   def test_description(self):
+    #       con = self._connect()
+    #       try:
+    #           cur = con.cursor()
+    #           self.executeDDL1(cur)
+    #           self.assertEqual(cur.description, None,
+    #                            'cursor.description should be none after executing a '
+    #                            'statement that can return no rows (such as DDL)'
+    #                            )
+    #           cur.execute('select name from %sbooze' % self.table_prefix)
+    #           self.assertEqual(len(cur.description), 1,
+    #                            'cursor.description describes too many columns'
+    #                            )
+    #           self.assertEqual(len(cur.description[0]), 8,
+    #                            'cursor.description[x] tuples must have 8 elements'
+    #                            )
+    #           self.assertEqual(cur.description[0][0].lower(), 'name',
+    #                            'cursor.description[x][0] must return column name'
+    #                            )
+    #           self.assertEqual(cur.description[0][1], self.driver.STRING,
+    #                            'cursor.description[x][1] must return column type. Got %r'
+    #                            % cur.description[0][1]
+    #                            )
 
-#           # Make sure self.description gets reset
-#           self.executeDDL2(cur)
-#           self.assertEqual(cur.description, None,
-#                            'cursor.description not being set to None when executing '
-#                            'no-result statements (eg. DDL)'
-#                            )
-#       finally:
-#           con.close()
+    #           # Make sure self.description gets reset
+    #           self.executeDDL2(cur)
+    #           self.assertEqual(cur.description, None,
+    #                            'cursor.description not being set to None when executing '
+    #                            'no-result statements (eg. DDL)'
+    #                            )
+    #       finally:
+    #           con.close()
 
-#   def test_rowcount(self):
-#       con = self._connect()
-#       try:
-#           cur = con.cursor()
-#           self.executeDDL1(cur)
-#           self.assertEqual(cur.rowcount, -1,
-#                            'cursor.rowcount should be -1 after executing no-result '
-#                            'statements'
-#                            )
-#           cur.execute("insert into %sbooze values ('Victoria Bitter')" % (
-#               self.table_prefix
-#           ))
-#           self.assertTrue(cur.rowcount in (-1, 1),
-#                           'cursor.rowcount should == number or rows inserted, or '
-#                           'set to -1 after executing an insert statement'
-#                           )
-#           cur.execute("select name from %sbooze" % self.table_prefix, buffered=True)
-#           self.assertTrue(cur.rowcount in (-1, 1),
-#                           'cursor.rowcount should == number of rows returned, or '
-#                           'set to -1 after executing a select statement'
-#                           )
-#           self.executeDDL2(cur)
-#           self.assertEqual(cur.rowcount, -1,
-#                            'cursor.rowcount not being reset to -1 after executing '
-#                            'no-result statements'
-#                            )
-#       finally:
-#           con.close()
+    #   def test_rowcount(self):
+    #       con = self._connect()
+    #       try:
+    #           cur = con.cursor()
+    #           self.executeDDL1(cur)
+    #           self.assertEqual(cur.rowcount, -1,
+    #                            'cursor.rowcount should be -1 after executing no-result '
+    #                            'statements'
+    #                            )
+    #           cur.execute("insert into %sbooze values ('Victoria Bitter')" % (
+    #               self.table_prefix
+    #           ))
+    #           self.assertTrue(cur.rowcount in (-1, 1),
+    #                           'cursor.rowcount should == number or rows inserted, or '
+    #                           'set to -1 after executing an insert statement'
+    #                           )
+    #           cur.execute("select name from %sbooze" % self.table_prefix, buffered=True)
+    #           self.assertTrue(cur.rowcount in (-1, 1),
+    #                           'cursor.rowcount should == number of rows returned, or '
+    #                           'set to -1 after executing a select statement'
+    #                           )
+    #           self.executeDDL2(cur)
+    #           self.assertEqual(cur.rowcount, -1,
+    #                            'cursor.rowcount not being reset to -1 after executing '
+    #                            'no-result statements'
+    #                            )
+    #       finally:
+    #           con.close()
 
-#   lower_func = 'lower'
+    #   lower_func = 'lower'
 
-#   def test_close(self):
-#       con = self._connect()
-#       try:
-#           cur = con.cursor()
-#       finally:
-#           con.close()
+    #   def test_close(self):
+    #       con = self._connect()
+    #       try:
+    #           cur = con.cursor()
+    #       finally:
+    #           con.close()
 
-#       # cursor.execute should raise an Error if called after connection
-#       # closed
-#       self.assertRaises(self.driver.Error, self.executeDDL1, cur)
+    #       # cursor.execute should raise an Error if called after connection
+    #       # closed
+    #       self.assertRaises(self.driver.Error, self.executeDDL1, cur)
 
-#       # connection.commit should raise an Error if called after connection'
-#       # closed.'
-#       self.assertRaises(self.driver.Error, con.commit)
+    #       # connection.commit should raise an Error if called after connection'
+    #       # closed.'
+    #       self.assertRaises(self.driver.Error, con.commit)
 
-#       # connection.close should raise an Error if called more than once
-#       self.assertRaises(self.driver.Error, con.close)
+    #       # connection.close should raise an Error if called more than once
+    #       self.assertRaises(self.driver.Error, con.close)
 
-#   def test_execute(self):
-#       con = self._connect()
-#       try:
-#           cur = con.cursor()
-#           self._paraminsert(cur)
-#       finally:
-#           con.close()
+    #   def test_execute(self):
+    #       con = self._connect()
+    #       try:
+    #           cur = con.cursor()
+    #           self._paraminsert(cur)
+    #       finally:
+    #           con.close()
 
-#   def _paraminsert(self, cur):
-#       self.executeDDL1(cur)
-#       cur.execute("insert into %sbooze values ('Victoria Bitter')" % (
-#           self.table_prefix
-#       ))
-#       self.assertTrue(cur.rowcount in (-1, 1))
+    #   def _paraminsert(self, cur):
+    #       self.executeDDL1(cur)
+    #       cur.execute("insert into %sbooze values ('Victoria Bitter')" % (
+    #           self.table_prefix
+    #       ))
+    #       self.assertTrue(cur.rowcount in (-1, 1))
 
-#       if self.driver.paramstyle == 'qmark':
-#           cur.execute(
-#               'insert into %sbooze values (?)' % self.table_prefix,
-#               ("Cooper's",)
-#           )
-#       elif self.driver.paramstyle == 'numeric':
-#           cur.execute(
-#               'insert into %sbooze values (:1)' % self.table_prefix,
-#               ("Cooper's",)
-#           )
-#       elif self.driver.paramstyle == 'named':
-#           cur.execute(
-#               'insert into %sbooze values (:beer)' % self.table_prefix,
-#               {'beer': "Cooper's"}
-#           )
-#       elif self.driver.paramstyle == 'format':
-#           cur.execute(
-#               'insert into %sbooze values (%%s)' % self.table_prefix,
-#               ("Cooper's",)
-#           )
-#       elif self.driver.paramstyle == 'pyformat':
-#           cur.execute(
-#               'insert into %sbooze values (%%(beer)s)' % self.table_prefix,
-#               {'beer': "Cooper's"}
-#           )
-#       else:
-#           self.fail('Invalid paramstyle')
-#       self.assertTrue(cur.rowcount in (-1, 1))
+    #       if self.driver.paramstyle == 'qmark':
+    #           cur.execute(
+    #               'insert into %sbooze values (?)' % self.table_prefix,
+    #               ("Cooper's",)
+    #           )
+    #       elif self.driver.paramstyle == 'numeric':
+    #           cur.execute(
+    #               'insert into %sbooze values (:1)' % self.table_prefix,
+    #               ("Cooper's",)
+    #           )
+    #       elif self.driver.paramstyle == 'named':
+    #           cur.execute(
+    #               'insert into %sbooze values (:beer)' % self.table_prefix,
+    #               {'beer': "Cooper's"}
+    #           )
+    #       elif self.driver.paramstyle == 'format':
+    #           cur.execute(
+    #               'insert into %sbooze values (%%s)' % self.table_prefix,
+    #               ("Cooper's",)
+    #           )
+    #       elif self.driver.paramstyle == 'pyformat':
+    #           cur.execute(
+    #               'insert into %sbooze values (%%(beer)s)' % self.table_prefix,
+    #               {'beer': "Cooper's"}
+    #           )
+    #       else:
+    #           self.fail('Invalid paramstyle')
+    #       self.assertTrue(cur.rowcount in (-1, 1))
 
-#       cur.execute('select name from %sbooze' % self.table_prefix)
-#       res = cur.fetchall()
-#       self.assertEqual(len(res), 2, 'cursor.fetchall returned too few rows')
-#       beers = [res[0][0], res[1][0]]
-#       beers.sort()
-#       self.assertEqual(beers[0], "Cooper's",
-#                        'cursor.fetchall retrieved incorrect data, or data inserted '
-#                        'incorrectly'
-#                        )
-#       self.assertEqual(beers[1], "Victoria Bitter",
-#                        'cursor.fetchall retrieved incorrect data, or data inserted '
-#                        'incorrectly'
-#                        )
+    #       cur.execute('select name from %sbooze' % self.table_prefix)
+    #       res = cur.fetchall()
+    #       self.assertEqual(len(res), 2, 'cursor.fetchall returned too few rows')
+    #       beers = [res[0][0], res[1][0]]
+    #       beers.sort()
+    #       self.assertEqual(beers[0], "Cooper's",
+    #                        'cursor.fetchall retrieved incorrect data, or data inserted '
+    #                        'incorrectly'
+    #                        )
+    #       self.assertEqual(beers[1], "Victoria Bitter",
+    #                        'cursor.fetchall retrieved incorrect data, or data inserted '
+    #                        'incorrectly'
+    #                        )
 
     def test_executemany(self):
         con = self._connect()
@@ -790,5 +790,5 @@ class DatabaseAPI20Test(unittest.TestCase):
 #                       )
 
 
-#f __name__ == '__main__':
+# f __name__ == '__main__':
 #   unittest.main()
