@@ -81,6 +81,7 @@ static char *mariadb_named_tuple_desc= "Named tupled row";
 static PyObject *Mariadb_no_operation(MrdbCursor *,
                                       PyObject *);
 static PyObject *Mariadb_row_count(MrdbCursor *self);
+static PyObject *Mariadb_row_number(MrdbCursor *self);
 static PyObject *MrdbCursor_warnings(MrdbCursor *self);
 static PyObject *MrdbCursor_getbuffered(MrdbCursor *self);
 static int MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg);
@@ -102,6 +103,8 @@ static PyGetSetDef MrdbCursor_sets[]=
     cursor_closed__doc__, NULL},
   {"buffered", (getter)MrdbCursor_getbuffered, (setter)MrdbCursor_setbuffered,
     cursor_buffered__doc__, NULL},
+  {"rownumber", (getter)Mariadb_row_number, NULL,
+    cursor_rownumber__doc__, NULL},
   {NULL}
 };
 
@@ -167,11 +170,6 @@ static struct PyMemberDef MrdbCursor_Members[] =
    offsetof(MrdbCursor, is_buffered),
    0,
    cursor_buffered__doc__},
-  {"rownumber",
-   T_LONG,
-   offsetof(MrdbCursor, row_number),
-   READONLY,
-   cursor_rownumber__doc__},
   {"arraysize",
    T_LONG,
    offsetof(MrdbCursor, row_array_size),
@@ -1263,6 +1261,20 @@ static PyObject *Mariadb_row_count(MrdbCursor *self)
       row_count= -1;
   }
   return PyLong_FromLongLong(row_count);
+}
+/* }}} */
+
+/* {{{ Mariadb_row_number
+   PEP-249: rownumber attribute
+*/
+static PyObject *Mariadb_row_number(MrdbCursor *self)
+{
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
+  if (!field_count) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }
+  return PyLong_FromLongLong(self->row_number);
 }
 /* }}} */
 

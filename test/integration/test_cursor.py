@@ -671,5 +671,38 @@ class TestCursor(unittest.TestCase):
         del cursor, cursor2
 
 
+    def test_inaccurate_rownumber(self):
+        cursor = self.connection.cursor()
+        self.assertEqual(cursor.rownumber, None)
+        stmt = "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
+        cursor.execute(stmt, buffered=True)
+        self.assertEqual(cursor.rownumber, 0)
+        cursor.scroll(2, mode='absolute')
+        self.assertEqual(cursor.rownumber, 2)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 3)
+
+        cursor.execute("DO 1")
+        self.assertEqual(cursor.rownumber, None)
+
+        cursor.execute("DO ?", (2,))
+        self.assertEqual(cursor.rownumber, None)
+
+        cursor.execute("SELECT 1")
+        self.assertEqual(cursor.rownumber, 0)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 1)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 1)
+
+        cursor.execute("SELECT ?", (1,))
+        self.assertEqual(cursor.rownumber, 0)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 1)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 1)
+
+        del cursor
+
 if __name__ == '__main__':
     unittest.main()
