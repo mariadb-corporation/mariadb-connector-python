@@ -467,15 +467,42 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 2);
         del cursor
 
-    def test_conpy_7(self):
+    def test_scroll(self):
         cursor = self.connection.cursor()
         stmt = "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
         cursor.execute(stmt, buffered=True)
+
+        try:
+            cursor.scroll(0)
+        except mariadb.DataError:
+            pass
+
         cursor.scroll(2, mode='relative')
         row = cursor.fetchone()
         self.assertEqual(row[0], 3)
-        cursor.scroll(-2, mode='relative')
+        cursor.scroll(-3, mode='relative')
         row = cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        cursor.scroll(1)
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 3)
+
+        try:
+            cursor.scroll(1)
+        except mariadb.DatabaseError:
+            pass
+
+        cursor.scroll(0, mode='absolute')
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 1)
+
+        cursor.scroll(2, mode='absolute')
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 3)
+
+        cursor.scroll(-2, mode='absolute')
+        self.assertEqual(None, cursor.fetchone())
+
         del cursor
 
     def test_compy_9(self):

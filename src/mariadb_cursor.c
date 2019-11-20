@@ -883,13 +883,6 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
     "O!|s", kw_list, &PyLong_Type, &Pos, &modestr))
     return NULL;
 
-  if (!(position= PyLong_AsLong(Pos)))
-  {
-    mariadb_throw_exception(NULL, Mariadb_DataError, 0,
-                            "Invalid position value 0");
-    return NULL;
-  }
-
   if (modestr != NULL)
   {
     while (scroll_modes[mode]) {
@@ -903,6 +896,13 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
   if (!scroll_modes[mode]) {
     mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                             "Invalid mode '%s'", modestr);
+    return NULL;
+  }
+
+  if (!(position= PyLong_AsLong(Pos)) && !mode)
+  {
+    mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+                            "Invalid position value 0");
     return NULL;
   }
 
