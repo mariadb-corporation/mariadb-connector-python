@@ -6,10 +6,11 @@ from winreg import *
 
 
 class MariaDBConfiguration():
-    lib_dirs = ""
-    libs = ""
-    version = ""
-    includes = ""
+    lib_dirs = []
+    libs = []
+    version = []
+    includes = []
+    extra_objects = []
 
 
 def get_config():
@@ -17,7 +18,8 @@ def get_config():
 
     try:
         static= os.environ["MARIADB_STATIC"]
-    except KeyErrror:
+    except KeyError:
+        static= 0
 
     try:
         config_prg = os.environ["MARIADB_CC_INSTALL_DIR"]
