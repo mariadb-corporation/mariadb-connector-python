@@ -11,6 +11,8 @@ if os.name == "nt":
 
 cfg = get_config()
 
+print(cfg.extra_objects)
+
 setup(name='mariadb',
       version='0.9.1',
       classifiers = [

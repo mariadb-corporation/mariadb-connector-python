@@ -5,10 +5,11 @@ import sys
 
 
 class MariaDBConfiguration():
-    lib_dirs = ""
-    libs = ""
-    version = ""
-    includes = ""
+    lib_dirs = []
+    libs = []
+    version = []
+    includes = []
+    extra_objects = []
 
 
 def mariadb_config(config, option):
@@ -34,11 +35,17 @@ def dequote(s):
 def get_config():
     required_version = "3.1.0"
     no_env = 0
+    static = 0
 
     try:
         config_prg = os.environ["MARIADB_CONFIG"]
     except KeyError:
         config_prg = 'mariadb_config'
+
+    try:
+        static = os.environ["MARIADB_STATIC"]
+    except KeyError:
+        static = 0
 
     cc_version = mariadb_config(config_prg, "cc_version")
     if cc_version[0] < required_version:
@@ -50,9 +57,13 @@ def get_config():
 
     libs = mariadb_config(config_prg, "libs")
     cfg.lib_dirs = [dequote(i[2:]) for i in libs if i.startswith("-L")]
+
     cfg.libs = [dequote(i[2:]) for i in libs if i.startswith("-l")]
     includes = mariadb_config(config_prg, "include")
     mariadb_includes = [dequote(i[2:]) for i in includes if i.startswith("-I")]
     mariadb_includes.extend(["./include"])
+    if static:
+      cfg.extra_objects = ['{}/lib{}.a'.format(cfg.lib_dirs[0], l) for l in ["mariadbclient"]]
+      cfg.libs = []
     cfg.includes = mariadb_includes
     return cfg

@@ -40,6 +40,7 @@
 #endif /* _WIN32 */
 
 #define MAX_TPC_XID_SIZE 65
+#define POOL_DEFAULT_SIZE 5
 
 /* Magic constant for checking dynamic columns */
 #define PYTHON_DYNCOL_VALUE 0xA378BD8E
@@ -97,6 +98,8 @@ typedef struct st_parser {
   MrdbString *keys;
 } MrdbParser;
 
+struct mrdb_pool;
+
 /* PEP-249: Connection object */
 typedef struct {
 	PyObject_HEAD
@@ -114,20 +117,24 @@ typedef struct {
   int port;
   PyObject *charset;
   PyObject *collation;
-  char *poolname;
+  struct mrdb_pool *pool;
+  uint8_t inuse;
   uint8_t status;
 } MrdbConnection;
 
-typedef struct {
+typedef struct mrdb_pool{
+	PyObject_HEAD
   char *pool_name;
+  size_t pool_name_length;
   uint32_t pool_size;
-  char *host;
-  char *user;
-  char *passwd;
-  char *database;
-  uint32_t port;
-  MrdbConnection *connection;
-} MrdbConnectionPool;
+  uint8_t reset_session;
+  uint32_t idle_timeout;
+  uint32_t acquire_timeout;
+  PyObject *configuration;
+  MrdbConnection **connection;
+  uint32_t connection_cnt;
+  uint16_t max_size;
+} MrdbPool;
 
 typedef struct {
   enum enum_field_types type;
@@ -218,6 +225,7 @@ PyObject *Mariadb_InterfaceError;
 PyObject *Mariadb_Error;
 PyObject *Mariadb_DatabaseError;
 PyObject *Mariadb_DataError;
+PyObject *Mariadb_PoolError;
 PyObject *Mariadb_OperationalError;
 PyObject *Mariadb_IntegrityError;
 PyObject *Mariadb_InternalError;
@@ -228,6 +236,7 @@ PyObject *Mariadb_Warning;
 PyObject *Mrdb_Pickle;
 
 /* Object types */
+PyTypeObject MrdbPool_Type;
 PyTypeObject Mariadb_Fieldinfo_Type;
 PyTypeObject MrdbIndicator_Type;
 PyTypeObject MrdbConnection_Type;
@@ -263,6 +272,10 @@ PyObject *MrdbConnection_close(MrdbConnection *self);
 PyObject *MrdbConnection_connect( PyObject *self,PyObject *args,	PyObject *kwargs);
 void MrdbConnection_SetAttributes(MrdbConnection *self);
 
+/* Pooling */
+PyObject *MrdbPool_add(PyObject *self, PyObject *args, PyObject *kwargs);
+PyObject *MrdbPool_getconnection(MrdbPool *self);
+
 /* TPC methods */
 PyObject *MrdbConnection_xid(MrdbConnection *self, PyObject *args);
 PyObject *MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args);
@@ -291,6 +304,7 @@ uint8_t MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t e
 #define MARIADB_PY_PARAMSTYLE "qmark"
 #define MARIADB_PY_THREADSAFETY 1
 
+#define MAX_POOL_SIZE 64
 
 /* Helper macros */
 
@@ -301,8 +315,8 @@ uint8_t MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t e
 (mysql_get_server_version((mysql)) >= (version))
 
 #define MARIADB_CHECK_CONNECTION(connection, ret)\
-if (!connection || !connection->mysql) {\
-  mariadb_throw_exception(connection->mysql, Mariadb_Error, 0,\
+if (!(connection) || !(connection)->mysql) {\
+  mariadb_throw_exception((connection)->mysql, Mariadb_Error, 0,\
     "Invalid connection or not connected");\
     return (ret);\
 }
@@ -327,6 +341,16 @@ if (!cursor->stmt || !cursor->stmt->mysql || cursor->is_closed)\
   mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
     "Invalid cursor or not connected");\
 }
+
+#define pooling_keywords "pool_name", "pool_size", "reset_session", "idle_timeout", "acquire_timeout"
+#define connection_keywords "dsn", "host", "user", "password", "database", "port", "socket",\
+        "connect_timeout", "read_timeout", "write_timeout",\
+        "local_infile", "compress", "init_command",\
+        "default_file", "default_group",\
+        "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",\
+        "ssl_cipher", "ssl_capath", "ssl_crlpath",\
+        "ssl_verify_cert", "ssl",\
+        "client_flags", "charset"
 
 /* MariaDB protocol macros */
 #define int1store(T,A) *((int8_t*) (T)) = (A)

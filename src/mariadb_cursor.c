@@ -208,6 +208,14 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
         "O!|bkkbb", key_words, &MrdbConnection_Type, &connection,
         &is_named_tuple, &prefetch_rows, &cursor_type, &is_buffered,
         &is_prepared))
+    return -1;
+
+  if (!((MrdbConnection *)connection)->mysql)
+  {
+    mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+                            "Connection isn't valid anymore");
+    return -1;
+  }
 
   if (cursor_type != CURSOR_TYPE_READ_ONLY &&
       cursor_type != CURSOR_TYPE_NO_CURSOR)

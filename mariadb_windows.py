@@ -16,6 +16,10 @@ def get_config():
     required_version = "3.1.0"
 
     try:
+        static= os.environ["MARIADB_STATIC"]
+    except KeyErrror:
+
+    try:
         config_prg = os.environ["MARIADB_CC_INSTALL_DIR"]
         cc_version = ["", ""]
         cc_instdir = [config_prg, ""]
@@ -49,5 +53,9 @@ def get_config():
     cfg.version = cc_version[0]
     cfg.includes = [".\\include", cc_instdir[0] + "\\include", cc_instdir[0] + "\\include\\mysql"]
     cfg.lib_dirs = [cc_instdir[0] + "\\lib"]
-    cfg.libs = ["mariadbclient", "ws2_32", "advapi32", "kernel32", "shlwapi", "crypt32"]
+    cfg.libs = ["ws2_32", "advapi32", "kernel32", "shlwapi", "crypt32"]
+    if static:
+      cfg.libs.append("libmariadb")
+    else:
+      cfg.libs.append("mariadbclient")
     return cfg
