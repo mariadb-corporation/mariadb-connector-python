@@ -553,7 +553,7 @@ static uint8_t mariadb_get_parameter_info(MrdbCursor *self,
                                    uint32_t column_nr)
 {
   uint32_t i, bits= 0;
-  MrdbParamValue paramvalue;
+  MrdbParamValue paramvalue= {};
   MrdbParamInfo pinfo;
 
   /* Assume unsigned */
