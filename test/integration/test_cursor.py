@@ -576,7 +576,7 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         try:
             cursor.execute("")
-        except mariadb.DatabaseError:
+        except mariadb.ProgrammingError:
             pass
         del cursor
 

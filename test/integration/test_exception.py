@@ -40,11 +40,11 @@ class TestException(unittest.TestCase):
     def test_conn_timeout_exception(self):
         start = datetime.today()
         try:
-            create_connection({"connect_timeout": 1, "host": "google.com"})
+            create_connection({"connect_timeout": 1, "host": "google.com", "port": 443})
         except mariadb.DatabaseError as err:
             self.assertEqual(err.sqlstate, "HY000")
-            self.assertEqual(err.errno, 2002)
-            self.assertTrue(err.errmsg.find("Can't connect to MySQL server on 'google.com'") > -1)
+            self.assertEqual(err.errno, 2013)
+            self.assertTrue(err.errmsg.find("Lost connection to MySQL server at 'handshake: reading inital communication packet'") > -1)
             end = datetime.today()
             difference = end - start
             self.assertEqual(difference.days, 0)
