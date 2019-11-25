@@ -14,7 +14,7 @@ cfg = get_config()
 print(cfg.extra_objects)
 
 setup(name='mariadb',
-      version='0.9.1',
+      version='0.9.4',
       classifiers = [
           'Development Status :: 3 - Alpha',
           'Environment :: Console',
