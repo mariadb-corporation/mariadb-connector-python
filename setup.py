@@ -2,7 +2,7 @@
 
 import os
 
-from distutils.core import setup, Extension
+from setuptools import setup, Extension
 
 if os.name == "posix":
     from mariadb_posix import get_config
@@ -47,6 +47,8 @@ setup(name='mariadb',
                                          'src/mariadb_dbapitype.c', 'src/mariadb_indicator.c'],
                              include_dirs=cfg.includes,
                              library_dirs=cfg.lib_dirs,
-                             libraries=cfg.libs
+                             libraries=cfg.libs,
+                             extra_compile_args = cfg.extra_compile_args,
+                             extra_link_args = cfg.extra_link_args
                              )],
       )

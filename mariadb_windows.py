@@ -11,6 +11,8 @@ class MariaDBConfiguration():
     version = []
     includes = []
     extra_objects = []
+    extra_compile_args= []
+    extra_link_args= []
 
 
 def get_config():
@@ -57,7 +59,8 @@ def get_config():
     cfg.lib_dirs = [cc_instdir[0] + "\\lib"]
     cfg.libs = ["ws2_32", "advapi32", "kernel32", "shlwapi", "crypt32"]
     if static:
-      cfg.libs.append("libmariadb")
+        cfg.libs.append("mariadbclient")
     else:
-      cfg.libs.append("mariadbclient")
+        cfg.libs.append("libmariadb")
+    cfg.extra_link_args= ["/NODEFAULTLIB:LIBCMT"]
     return cfg
