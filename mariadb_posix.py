@@ -24,7 +24,7 @@ def mariadb_config(config, option):
             data = []
         if rc / 256 > 1:
             raise EnvironmentError(
-                "mariadb_config not found.\nMake sure that MariaDB Connector/C is installed (e.g. on Debian or Ubuntu 'sudo apt-get install libmariadb-dev'\nIf mariadb_config is not installed in a default path, please set the environment variable MARIADB_CONFIG which points to the location of mariadb_config utility, e.g. MARIADB_CONFIG=/opt/mariadb/bin/mariadb_config")
+                "mariadb_config not found.\nPlease make sure, that MariaDB Connector/C is installed on your system, edit the configuration file 'site.cfg' and set the 'mariadb_config'\noption, which should point to the mariadb_config utility.")
     return data
 
 
