@@ -29,6 +29,12 @@
 #include <malloc.h>
 #include <docs/common.h>
 
+#define REQUIRED_CC_VERSION 30103
+
+#if MARIADB_PACKAGE_VERSION_ID < REQUIRED_CC_VERSION
+#error Minimum required version of MariaDB Connector/C is 3.1.3
+#endif
+
 #if defined(_WIN32) && defined(_MSVC)
 #ifndef L64
 #define L64(x) x##i64

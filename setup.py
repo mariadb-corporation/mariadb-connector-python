@@ -3,13 +3,19 @@
 import os
 
 from setuptools import setup, Extension
+from configparser import ConfigParser
+
+# read settings from site.cfg 
+c= ConfigParser()
+c.read(['site.cfg'])
+options= dict(c.items('cc_options'))
 
 if os.name == "posix":
     from mariadb_posix import get_config
 if os.name == "nt":
     from mariadb_windows import get_config
 
-cfg = get_config()
+cfg = get_config(options)
 
 print(cfg.extra_objects)
 
