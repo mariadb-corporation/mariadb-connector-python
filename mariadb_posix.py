@@ -10,6 +10,8 @@ class MariaDBConfiguration():
     version = []
     includes = []
     extra_objects = []
+    extra_compile_args = []
+    extra_link_args = []
 
 
 def mariadb_config(config, option):
@@ -32,20 +34,13 @@ def dequote(s):
     return s
 
 
-def get_config():
-    required_version = "3.1.0"
+def get_config(options):
+    required_version = "3.1.3"
     no_env = 0
-    static = 0
+    static = options["link_static"]
 
-    try:
-        config_prg = os.environ["MARIADB_CONFIG"]
-    except KeyError:
-        config_prg = 'mariadb_config'
 
-    try:
-        static = os.environ["MARIADB_STATIC"]
-    except KeyError:
-        static = 0
+    config_prg= options["mariadb_config"]
 
     cc_version = mariadb_config(config_prg, "cc_version")
     if cc_version[0] < required_version:
