@@ -4,7 +4,7 @@
   </a>
 </p>
 
-# MariaDB python connector
+# MariaDB Connector/Python
 
 [![License (LGPL version 2.1)][licence-image]][licence-url]
 [![Python 3.6][python-image]][python-url]
@@ -15,7 +15,7 @@ database servers based on PEP-249.
 ## Prerequisites
 
 * Python 3.6 (or newer). Older Python 3 versions might work, but aren't tested.
-* MariaDB Connector/C, minimum required version is 3.1
+* MariaDB Connector/C, minimum required version is 3.1.3
 
 [licence-image]:https://img.shields.io/badge/license-GNU%20LGPL%20version%202.1-green.svg?style=flat-square
 [licence-url]:http://opensource.org/licenses/LGPL-2.1
