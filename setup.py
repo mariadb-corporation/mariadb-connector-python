@@ -17,8 +17,6 @@ if os.name == "nt":
 
 cfg = get_config(options)
 
-print(cfg.extra_objects)
-
 setup(name='mariadb',
       version='0.9.4',
       python_requires='>=3.6',
@@ -42,7 +40,7 @@ setup(name='mariadb',
           'Topic :: Database'
       ],
       description='Python MariaDB extension',
-      long_description='MariaDB Connector/Python, a DBAPI 2.0 (PEP-249) database driver for connecting to MariaDB and MySQL database servers.'
+      long_description='MariaDB Connector/Python, a DBAPI 2.0 (PEP-249) database driver for connecting to MariaDB and MySQL database servers.',
       author='Georg Richter',
       license='LGPL 2.1',
       url='https://www.github.com/MariaDB/mariadb-connector-python',
