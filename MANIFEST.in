@@ -5,4 +5,5 @@ include mariadb_windows.py
 include mariadb_posix.py
 include MANIFEST.in
 include MANIFEST
-include README.in
+include README.md
+include site.cfg
