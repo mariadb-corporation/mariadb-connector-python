@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os
+import subprocess
 import sys
 
 
@@ -39,13 +39,17 @@ def get_config(options):
     no_env = 0
     static = options["link_static"]
 
-
-    config_prg= options["mariadb_config"]
+    try:
+        config_prg = options["mariadb_config"]
+        subprocess.call([config_prg, "--version"])
+    except FileNotFoundError:
+        # using default from path
+        config_prg = "mariadb_config"
 
     cc_version = mariadb_config(config_prg, "cc_version")
     if cc_version[0] < required_version:
         print ('MariaDB Connector/Python requires MariaDB Connector/C >= %s, found version %s' % (
-        required_version, cc_version[0]))
+            required_version, cc_version[0]))
         sys.exit(2)
     cfg = MariaDBConfiguration()
     cfg.version = cc_version[0]
@@ -58,7 +62,7 @@ def get_config(options):
     mariadb_includes = [dequote(i[2:]) for i in includes if i.startswith("-I")]
     mariadb_includes.extend(["./include"])
     if static:
-      cfg.extra_objects = ['{}/lib{}.a'.format(cfg.lib_dirs[0], l) for l in ["mariadbclient"]]
-      cfg.libs = []
+        cfg.extra_objects = ['{}/lib{}.a'.format(cfg.lib_dirs[0], l) for l in ["mariadbclient"]]
+        cfg.libs = []
     cfg.includes = mariadb_includes
     return cfg
