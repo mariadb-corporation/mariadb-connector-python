@@ -520,7 +520,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
 {
   PyObject *Data= NULL;
   const char *statement= NULL;
-  int statement_len= 0;
+  Py_ssize_t statement_len= 0;
   int rc= 0;
   uint8_t is_buffered= 0;
   static char *key_words[]= {"", "", "buffered", NULL};
@@ -531,7 +531,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     return NULL;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-        "s#|O$b", key_words, &statement, &statement_len, /* &PyTuple_Type, */ &Data,
+        "s#|Ob", key_words, &statement, &statement_len, &Data,
         &is_buffered))
     return NULL;
 

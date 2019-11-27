@@ -85,7 +85,7 @@ static int MrdbPool_initialize(MrdbPool *self, PyObject *args,
   PyObject *pool_kwargs= NULL;
   PyObject *conn_kwargs= NULL;
   char *pool_name= NULL;
-  size_t pool_name_length= 0;
+  Py_ssize_t pool_name_length= 0;
   uint32_t pool_size= 5;
   uint8_t reset_session= 1;
   uint32_t idle_timeout= 1800;

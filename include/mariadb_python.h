@@ -22,6 +22,7 @@
 #include "structmember.h"
 #include "structseq.h"
 #include <stdarg.h>
+#include <stdint.h>
 #include <mysql.h>
 #include <errmsg.h>
 #include <mysqld_error.h>
