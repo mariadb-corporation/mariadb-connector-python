@@ -30,4 +30,5 @@ def get_config(options):
     else:
         cfg.libs.append("libmariadb")
     cfg.extra_link_args= ["/NODEFAULTLIB:LIBCMT"]
+    cfg.extra_compile_args=["\"-DDEFAULT_PLUGINS_SUBDIR=\\\"\"" + options["install_dir"].replace(""'\\', '/') + "/lib/plugin\"\\\"\""]
     return cfg
