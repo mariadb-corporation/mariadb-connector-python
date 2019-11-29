@@ -29,9 +29,10 @@ class TestConnection(unittest.TestCase):
         f.write("database=%s\n" % default_conf["database"])
         f.close()
 
-        new_conn = mariadb.connect(default_file="./client.cnf")
+        new_conn = mariadb.connect(user=default_conf["user"], default_file="./client.cnf")
         self.assertEqual(new_conn.database, default_conf["database"])
         del new_conn
+        os.remove("client.cnf")
 
     def test_autocommit(self):
         conn = self.connection
@@ -39,9 +40,17 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn.autocommit, True)
         conn.autocommit = False
         self.assertEqual(conn.autocommit, False)
-        conn.reset()
+        # revert
+        conn.autocommit = True
 
     def test_schema(self):
+        if self.connection.server_version < 100103:
+            self.skipTest("CREATE OR REPLACE SCHEMA not supported")
+        if self.connection.server_version < 100202:
+            self.skipTest("session tracking not supported")
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't tell schema change for now")
+
         default_conf = conf()
         conn = self.connection
         self.assertEqual(conn.database, default_conf["database"])
@@ -51,6 +60,23 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn.database, "test1")
         conn.database = default_conf["database"]
         self.assertEqual(conn.database, default_conf["database"])
+
+    def test_ping(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE wrong thread id")
+        conn = self.connection
+        cursor = conn.cursor()
+        oldid = conn.connection_id
+
+        try:
+            cursor.execute("KILL {id}".format(id=oldid))
+        except mariadb.DatabaseError:
+            pass
+
+        conn.auto_reconnect = True
+        conn.ping()
+        self.assertNotEqual(oldid, conn.connection_id)
+        self.assertNotEqual(0, conn.connection_id)
 
 
 if __name__ == '__main__':

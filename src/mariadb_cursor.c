@@ -81,6 +81,7 @@ static char *mariadb_named_tuple_desc= "Named tupled row";
 static PyObject *Mariadb_no_operation(MrdbCursor *,
                                       PyObject *);
 static PyObject *Mariadb_row_count(MrdbCursor *self);
+static PyObject *Mariadb_row_number(MrdbCursor *self);
 static PyObject *MrdbCursor_warnings(MrdbCursor *self);
 static PyObject *MrdbCursor_getbuffered(MrdbCursor *self);
 static int MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg);
@@ -102,6 +103,8 @@ static PyGetSetDef MrdbCursor_sets[]=
     cursor_closed__doc__, NULL},
   {"buffered", (getter)MrdbCursor_getbuffered, (setter)MrdbCursor_setbuffered,
     cursor_buffered__doc__, NULL},
+  {"rownumber", (getter)Mariadb_row_number, NULL,
+    cursor_rownumber__doc__, NULL},
   {NULL}
 };
 
@@ -167,11 +170,6 @@ static struct PyMemberDef MrdbCursor_Members[] =
    offsetof(MrdbCursor, is_buffered),
    0,
    cursor_buffered__doc__},
-  {"rownumber",
-   T_LONG,
-   offsetof(MrdbCursor, row_number),
-   READONLY,
-   cursor_rownumber__doc__},
   {"arraysize",
    T_LONG,
    offsetof(MrdbCursor, row_array_size),
@@ -222,6 +220,7 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
   self->is_buffered= is_buffered ? is_buffered : self->connection->is_buffered;
 
   self->is_prepared= is_prepared;
+  self->is_text= 0;
 
   if (!(self->stmt= mysql_stmt_init(self->connection->mysql)))
   {
@@ -396,14 +395,18 @@ void ma_cursor_close(MrdbCursor *self)
   if (!self->is_text && self->stmt)
   {
     /* Todo: check if all the cursor stuff is deleted (when using prepared
-       statemnts this should be handled in mysql_stmt_close) */
+       statements this should be handled in mysql_stmt_close) */
     Py_BEGIN_ALLOW_THREADS
     mysql_stmt_close(self->stmt);
     Py_END_ALLOW_THREADS
     self->stmt= NULL;
   }
   MrdbCursor_clear(self);
-  MrdbParser_end(self->parser);
+  if (self->parser)
+  {
+     MrdbParser_end(self->parser);
+     self->parser= NULL;
+  }
   self->is_closed= 1;
 }
 
@@ -420,7 +423,7 @@ PyObject * MrdbCursor_close(MrdbCursor *self)
 /*{{{ MrDBCursor_dealloc */
 void MrdbCursor_dealloc(MrdbCursor *self)
 {
-	ma_cursor_close(self);
+  ma_cursor_close(self);
   Py_TYPE(self)->tp_free((PyObject*)self);
 }
 /* }}} */
@@ -527,7 +530,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         &is_buffered))
     return NULL;
 
-  /* defaukt was set to 0 before */
+  /* default was set to 0 before */
   self->is_buffered= is_buffered;
 
   /* If we don't have a prepared cursor, we need to end/free parser */
@@ -878,13 +881,6 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
     "O!|s", kw_list, &PyLong_Type, &Pos, &modestr))
     return NULL;
 
-  if (!(position= PyLong_AsLong(Pos)))
-  {
-    mariadb_throw_exception(NULL, Mariadb_DataError, 0,
-                            "Invalid position value 0");
-    return NULL;
-  }
-
   if (modestr != NULL)
   {
     while (scroll_modes[mode]) {
@@ -898,6 +894,13 @@ PyObject *MrdbCursor_scroll(MrdbCursor *self, PyObject *args,
   if (!scroll_modes[mode]) {
     mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                             "Invalid mode '%s'", modestr);
+    return NULL;
+  }
+
+  if (!(position= PyLong_AsLong(Pos)) && !mode)
+  {
+    mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+                            "Invalid position value 0");
     return NULL;
   }
 
@@ -1258,6 +1261,20 @@ static PyObject *Mariadb_row_count(MrdbCursor *self)
       row_count= -1;
   }
   return PyLong_FromLongLong(row_count);
+}
+/* }}} */
+
+/* {{{ Mariadb_row_number
+   PEP-249: rownumber attribute
+*/
+static PyObject *Mariadb_row_number(MrdbCursor *self)
+{
+  unsigned int field_count= CURSOR_FIELD_COUNT(self);
+  if (!field_count) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }
+  return PyLong_FromLongLong(self->row_number);
 }
 /* }}} */
 

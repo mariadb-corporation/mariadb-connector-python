@@ -30,8 +30,6 @@ static PyObject *get_exception_type(const char *sqlstate)
   if (!sqlstate || strlen(sqlstate) != 5)
     return NULL;
 
-  if (!strncmp(sqlstate, "40", 2))
-    return Mariadb_InternalError;
 
   if (!strncmp(sqlstate, "21", 2) ||
       !strncmp(sqlstate, "22", 2) ||
@@ -52,8 +50,10 @@ static PyObject *get_exception_type(const char *sqlstate)
   if (!strncmp(sqlstate, "0A", 2))
     return Mariadb_NotSupportedError;
 
-  if (!strncmp(sqlstate, "44", 2))
+  if (!strncmp(sqlstate, "40", 2) ||
+      !strncmp(sqlstate, "44", 2))
     return Mariadb_InternalError;
+
   if (!strncmp(sqlstate, "0K", 2) ||
       !strncmp(sqlstate, "08", 2) ||
       !strncmp(sqlstate, "HZ", 2))
@@ -66,12 +66,15 @@ static PyObject *get_exception_type(const char *sqlstate)
       !strncmp(sqlstate, "28", 2) ||
       !strncmp(sqlstate, "2A", 2) ||
       !strncmp(sqlstate, "2C", 2) ||
+      !strncmp(sqlstate, "2F", 2) ||
       !strncmp(sqlstate, "34", 2) ||
       !strncmp(sqlstate, "35", 2) ||
       !strncmp(sqlstate, "3C", 2) ||
       !strncmp(sqlstate, "3D", 2) ||
       !strncmp(sqlstate, "3F", 2) ||
-      !strncmp(sqlstate, "37", 2))
+      !strncmp(sqlstate, "37", 2) ||
+      !strncmp(sqlstate, "42", 2) ||
+      !strncmp(sqlstate, "70", 2))
     return Mariadb_ProgrammingError;
   return NULL;
 }
