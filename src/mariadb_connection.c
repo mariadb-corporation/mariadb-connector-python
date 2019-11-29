@@ -239,7 +239,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
          *default_group= NULL, *local_infile= NULL,
          *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
          *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
-         *charset= NULL;
+         *charset= NULL, *plugin_dir= NULL;
     char *pool_name= 0;
     uint32_t pool_size= 0;
     uint8_t ssl_enforce= 0;
@@ -255,12 +255,12 @@ MrdbConnection_Initialize(MrdbConnection *self,
         "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
         "ssl_cipher", "ssl_capath", "ssl_crlpath",
         "ssl_verify_cert", "ssl",
-        "client_flags", "charset", "pool_name", "pool_size", NULL 
+        "client_flags", "charset", "pool_name", "pool_size", "plugin_dir", NULL
     };
 
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiipissssssssssipissi:connect",
+                "|sssssisiiipissssssssssipissis:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -269,12 +269,12 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_key, &ssl_ca, &ssl_cert, &ssl_crl,
                 &ssl_cipher, &ssl_capath, &ssl_crlpath,
                 &ssl_verify_cert, &ssl_enforce,
-                &client_flags, &charset, &pool_name, &pool_size))
+                &client_flags, &charset, &pool_name, &pool_size, &plugin_dir))
         return -1;
 
     if (dsn)
     {
-        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
                 "dsn keyword is not supported");
         return -1;
     }
@@ -292,7 +292,13 @@ MrdbConnection_Initialize(MrdbConnection *self,
     if (!(self->mysql= mysql_init(NULL)))
     {    mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 0, 
             "Can't allocate memory for connection");
-    return -1;
+        return -1;
+    }
+
+    if (plugin_dir) {
+        mysql_optionsv(self->mysql, MYSQL_PLUGIN_DIR, plugin_dir);
+    } else if (DEFAULT_PLUGINS_SUBDIR) {
+        mysql_optionsv(self->mysql, MYSQL_PLUGIN_DIR, DEFAULT_PLUGINS_SUBDIR);
     }
 
     /* read defaults from configuration file(s) */
@@ -328,7 +334,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     Py_END_ALLOW_THREADS;
     if (mysql_errno(self->mysql))
     {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        mariadb_throw_exception(self->mysql, NULL, 1, NULL);
         goto end;
     }
 

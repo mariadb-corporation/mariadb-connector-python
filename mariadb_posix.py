@@ -57,6 +57,9 @@ def get_config(options):
     libs = mariadb_config(config_prg, "libs")
     cfg.lib_dirs = [dequote(i[2:]) for i in libs if i.startswith("-L")]
 
+    #Just set value to none to use default
+    cfg.extra_compile_args=["-DDEFAULT_PLUGINS_SUBDIR"]
+
     cfg.libs = [dequote(i[2:]) for i in libs if i.startswith("-l")]
     includes = mariadb_config(config_prg, "include")
     mariadb_includes = [dequote(i[2:]) for i in includes if i.startswith("-I")]
