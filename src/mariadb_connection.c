@@ -484,8 +484,16 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
 
     if (self->pool)
     {
-       if (!mysql_reset_connection(self->mysql))
+       int rc= 0;
+       pthread_mutex_lock(&self->pool->lock);
+       if (self->pool->reset_session)
+         rc= mysql_reset_connection(self->mysql);
+       if (!rc)
+       {
          self->inuse= 0;
+         clock_gettime(CLOCK_MONOTONIC_RAW, &self->last_used);
+       }
+       pthread_mutex_unlock(&self->pool->lock);
        return Py_None;
     }
 

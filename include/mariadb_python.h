@@ -30,6 +30,25 @@
 #include <malloc.h>
 #include <docs/common.h>
 
+
+#if defined(_WIN32)
+#include <windows.h>
+typedef CRITICAL_SECTION pthread_mutex_t;
+#define pthread_mutex_init(A,B)  InitializeCriticalSection(A)
+#define pthread_mutex_lock(A)	 (EnterCriticalSection(A),0)
+#define pthread_mutex_unlock(A)  LeaveCriticalSection(A)
+#define pthread_mutex_destroy(A) DeleteCriticalSection(A)
+#define pthread_self() GetCurrentThreadId()
+#else
+#include <pthread.h>
+#endif /* defined(_WIN32) */
+
+#ifdef _WIN32
+int clock_gettime(int dummy, struct timespec *ct);
+#define CLOCK_MONOTONIC_RAW 1
+#endif
+
+
 #define REQUIRED_CC_VERSION 30103
 
 #if MARIADB_PACKAGE_VERSION_ID < REQUIRED_CC_VERSION
@@ -127,10 +146,12 @@ typedef struct {
   struct mrdb_pool *pool;
   uint8_t inuse;
   uint8_t status;
+  struct timespec last_used;
 } MrdbConnection;
 
 typedef struct mrdb_pool{
 	PyObject_HEAD
+  pthread_mutex_t lock;
   char *pool_name;
   size_t pool_name_length;
   uint32_t pool_size;
@@ -312,6 +333,9 @@ uint8_t MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t e
 #define MARIADB_PY_THREADSAFETY 1
 
 #define MAX_POOL_SIZE 64
+
+#define TIMEDIFF(a,b)\
+((a).tv_sec * 1E09 + (a).tv_nsec) - ((b).tv_sec * 1E09 + (b).tv_nsec)
 
 /* Helper macros */
 

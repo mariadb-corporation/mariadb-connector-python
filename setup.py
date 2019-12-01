@@ -54,6 +54,7 @@ setup(name='mariadb',
                              library_dirs=cfg.lib_dirs,
                              libraries=cfg.libs,
                              extra_compile_args = cfg.extra_compile_args,
-                             extra_link_args = cfg.extra_link_args
+                             extra_link_args = cfg.extra_link_args,
+                             extra_objects= cfg.extra_objects
                              )],
       )
