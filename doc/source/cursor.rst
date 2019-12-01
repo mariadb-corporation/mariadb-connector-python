@@ -13,7 +13,7 @@ The cursor class
 
     To check if a cursor is still valid, the *close* attribute needs to be checked.
 
-    .. method:: execute(statement, [data, [\*\*kwargs]])
+    .. method:: execute(statement[, data [, \*\*kwargs]])
        
        Parameters in SQL statement may be provided as sequence or mapping and will be bound
        to variables in the operation. Variables are specified as question
@@ -88,7 +88,7 @@ The cursor class
        Will make the cursor skip to the next available result set,
        discarding any remaining rows from the current set.
 
-    .. method:: scroll(value, [mode='relative'])
+    .. method:: scroll(value[, mode='relative'])
 
        Scroll the cursor in the result set to a new position according to mode.
        

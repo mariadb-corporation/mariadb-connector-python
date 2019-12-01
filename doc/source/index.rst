@@ -18,6 +18,7 @@ client library for client server communication.
    module
    connection
    cursor
+   pool
 
 Module
 ======
