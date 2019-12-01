@@ -136,6 +136,7 @@ static int MrdbPool_initialize(MrdbPool *self, PyObject *args,
       goto error;
   }
 
+  pthread_mutex_init(&self->lock, NULL);
   self->pool_name= strdup(pool_name);
   self->pool_name_length= pool_name_length;
   self->pool_size= pool_size;
@@ -157,6 +158,7 @@ static int MrdbPool_initialize(MrdbPool *self, PyObject *args,
       if (!(self->connection[i]= 
          (MrdbConnection *)MrdbConnection_connect(NULL, args, self->configuration)))
         goto error;
+      clock_gettime(CLOCK_MONOTONIC_RAW, &self->connection[i]->last_used);
       Py_INCREF(self->connection[i]);
       self->connection[i]->pool= self;
     }
@@ -284,6 +286,7 @@ void MrdbPool_dealloc(MrdbPool *self)
   self->pool_size= 0;
   MARIADB_FREE_MEM(self->connection);
   self->connection= NULL;
+  pthread_mutex_destroy(&self->lock);
 
   Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -311,22 +314,41 @@ MrdbPool_add(
 PyObject *MrdbPool_getconnection(MrdbPool *self)
 {
   uint32_t i;
+  MrdbConnection *conn= NULL;
+  uint64_t tdiff= 0;
+  struct timespec now;
+
+  clock_gettime(CLOCK_MONOTONIC_RAW, &now);
+
+  pthread_mutex_lock(&self->lock);
 
   for (i=0; i < self->pool_size; i++)
   {
-    if (!self->connection[i]->inuse)
+    if (self->connection[i] && !self->connection[i]->inuse)
     {
-      if (self->connection[i] && !mysql_ping(self->connection[i]->mysql))
+      if (self->connection[i])
       {
-        self->connection[i]->inuse= 1;
-        return (PyObject *)self->connection[i];
-      } else {
-        self->connection[i]->pool= NULL;
-        MrdbConnection_close(self->connection[i]);
-        self->connection[i]= NULL;
-      }
+        if (!mysql_ping(self->connection[i]->mysql))
+        {
+          uint64_t t= TIMEDIFF(now, self->connection[i]->last_used);
+          if (t >= tdiff)
+          {
+            conn= self->connection[i];
+            tdiff= t;
+          }
+        } else {
+          self->connection[i]->pool= NULL;
+          MrdbConnection_close(self->connection[i]);
+          self->connection[i]= NULL;
+        }
+      }  
     }
   }
+  if (conn)
+    conn->inuse= 1;
+  pthread_mutex_unlock(&self->lock);
+  if (conn)
+    return (PyObject *)conn;
   mariadb_throw_exception(NULL, Mariadb_PoolError, 0,
                           "No more connections from pool '%s' available",
                           self->pool_name);
@@ -335,11 +357,6 @@ PyObject *MrdbPool_getconnection(MrdbPool *self)
 
 static PyObject *MrdbPool_setconfig(MrdbPool *self, PyObject *args, PyObject *kwargs)
 {
-/*  PyObject *conf= NULL;
-
-  if (!PyArg_ParseTuple(args, "O!", &PyDict_Type, &conf)) 
-    return NULL;
-*/
   self->configuration= kwargs;
   Py_RETURN_NONE;
 }
@@ -368,6 +385,7 @@ static PyObject * MrdbPool_addconnection(MrdbPool *self, PyObject *args)
     return NULL;
   }
 
+  pthread_mutex_lock(&self->lock);
   for (i=0; i < self->pool_size; i++)
   {
     if (!self->connection[i])
@@ -377,10 +395,14 @@ static PyObject * MrdbPool_addconnection(MrdbPool *self, PyObject *args)
         return NULL;
       self->connection[i]= conn; 
       self->connection[i]->inuse= 0;
+      clock_gettime(CLOCK_MONOTONIC_RAW, &self->connection[i]->last_used);
       conn->pool= self;
+      pthread_mutex_unlock(&self->lock);
       Py_RETURN_NONE;
     }
   }
+
+  pthread_mutex_unlock(&self->lock);
 
   mariadb_throw_exception(NULL, Mariadb_PoolError, 0,
                           "Couldn't add connection to pool '%s' (no free slot available).",

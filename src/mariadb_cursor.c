@@ -1172,6 +1172,7 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
     Py_END_ALLOW_THREADS;
     if (rc)
     {
+      printf("Error: %s\n", mysql_stmt_error(self->stmt));
       mariadb_throw_exception(self->stmt, NULL, 1, NULL);
       goto error;
     }
@@ -1181,6 +1182,7 @@ PyObject *MrdbCursor_executemany(MrdbCursor *self,
     Py_END_ALLOW_THREADS;
     if (rc)
     {
+      printf("rc=%d Error: %s\n", rc, mysql_stmt_error(self->stmt));
       mariadb_throw_exception(self->stmt, NULL, 1, NULL);
       goto error;
     }

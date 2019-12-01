@@ -47,11 +47,13 @@ class TestPooling(unittest.TestCase):
            connections.append(pool.get_connection())
         try:
             x= pool.get_connection()
+            print("ok")
         except mariadb.PoolError:
             pass
         for c in connections:
             c.close()
         x= pool.get_connection()
+        print("ok")
         del pool
 
     def test_connection_pool_add(self):

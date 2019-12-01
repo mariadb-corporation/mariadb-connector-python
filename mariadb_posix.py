@@ -55,14 +55,16 @@ def get_config(options):
     cfg.version = cc_version[0]
 
     libs = mariadb_config(config_prg, "libs")
+    extra_libs= mariadb_config(config_prg, "libs_sys")
     cfg.lib_dirs = [dequote(i[2:]) for i in libs if i.startswith("-L")]
 
     cfg.libs = [dequote(i[2:]) for i in libs if i.startswith("-l")]
     includes = mariadb_config(config_prg, "include")
     mariadb_includes = [dequote(i[2:]) for i in includes if i.startswith("-I")]
     mariadb_includes.extend(["./include"])
-    if static:
+    if static.lower() == "on":
+        cfg.extra_link_args= ["-u mysql_ps_fetch_functions"]
         cfg.extra_objects = ['{}/lib{}.a'.format(cfg.lib_dirs[0], l) for l in ["mariadbclient"]]
-        cfg.libs = []
+        cfg.libs = [dequote(i[2:]) for i in extra_libs if i.startswith("-l")]
     cfg.includes = mariadb_includes
     return cfg

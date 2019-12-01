@@ -42,7 +42,7 @@ def get_config(options):
                   print("MariaDB Connector/Python requires MariaDB Connector/C >= %s (found version: %s") \
                        % (required_version, cc_version[0])
                   sys.exit(2)
-              mariadb_dir = QueryValueEx(connector_key, "InstallDir")
+              mariadb_dir = QueryValueEx(connector_key, "InstallDir")[0]
 
           except:
               print("Could not find InstallationDir of MariaDB Connector/C. "
@@ -50,10 +50,10 @@ def get_config(options):
                     "MariaDB Connector/C by setting the environment variable MARIADB_CC_INSTALL_DIR.")
               sys.exit(3)
 
-    print("Found MariaDB Connector/C in '%s'" % mariadb_dir[0])
+    print("Found MariaDB Connector/C in '%s'" % mariadb_dir)
     cfg = MariaDBConfiguration()
-    cfg.includes = [".\\include", mariadb_dir[0] + "\\include", mariadb_dir[0] + "\\include\\mysql"]
-    cfg.lib_dirs = [mariadb_dir[0] + "\\lib"]
+    cfg.includes = [".\\include", mariadb_dir + "\\include", mariadb_dir + "\\include\\mysql"]
+    cfg.lib_dirs = [mariadb_dir + "\\lib"]
     cfg.libs = ["ws2_32", "advapi32", "kernel32", "shlwapi", "crypt32"]
     if static.lower() == "on":
         cfg.libs.append("mariadbclient")

@@ -885,4 +885,41 @@ uint8_t mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
   }
   return 0;
 }
+
+#ifdef _WIN32
+
+/* windows equivalent for clock_gettime.
+   Code based on https://stackoverflow.com/questions/5404277/porting-clock-gettime-to-windows
+*/
+
+static uint8_t g_first_time = 1;
+static LARGE_INTEGER g_counts_per_sec;
+
+int clock_gettime(int dummy, struct timespec *ct)
+{
+  LARGE_INTEGER count;
+
+  if (g_first_time)
+  {
+    g_first_time = 0;
+
+    if (0 == QueryPerformanceFrequency(&g_counts_per_sec))
+    {
+      g_counts_per_sec.QuadPart = 0;
+    }
+  }
+
+  if ((NULL == ct) || (g_counts_per_sec.QuadPart <= 0) ||
+      (0 == QueryPerformanceCounter(&count)))
+  {
+    return -1;
+  }
+
+  ct->tv_sec = count.QuadPart / g_counts_per_sec.QuadPart;
+  ct->tv_nsec = ((count.QuadPart % g_counts_per_sec.QuadPart) * 1E09) / g_counts_per_sec.QuadPart;
+
+  return 0;
+}
+
+#endif
 /* }}} */
