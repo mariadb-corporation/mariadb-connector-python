@@ -32,6 +32,33 @@ The cursor class
        same connection will fail, unless the entire result set was read. For buffering
        the entire result set an additional parameter *buffered=True* must be specified.
 
+    .. method:: callproc(procedure_name, args=())
+
+       Executes a stored procedure. The args sequence must contain an entry for
+       each parameter the procedure expects.
+       Input/Output or Output parameters have to be retrieved by .fetch methods,
+       the .sp_outparams attribute indicates if the result set contains output
+       parameters.
+       
+       Example::
+       
+           >>>cursor.execute("CREATE PROCEDURE p1(IN i1 VAR  CHAR(20), OUT o2 VARCHAR(40))"
+                             "BEGIN"
+                             "  SELECT 'hello'"
+                             "  o2:= 'test'"
+                             "END")
+           >>>cursor.callproc('p1', ('foo', 0))
+           >>> cursor.sp_outparams
+           False
+           >>> cursor.fetchone()
+           ('hello',)
+           >>> cursor.nextset()
+           True
+           >>> cursor.sp_outparams
+           True
+           >>> cursor.fetchone()
+           ('test',)
+
     .. method:: executemany(statement, data)
        
        Exactly behaves like .execute() but accepts a list of tuples, where each
@@ -146,6 +173,11 @@ The cursor class
        statement or if the modified table does not have a column with the
        AUTO_INCREMENT attribute and LAST_INSERT_ID was not used, the returned
        value will be zero
+
+    .. data:: sp_outparams
+
+       This read-only attribute undicates if the current result set contains inout
+       or out parameters from a previously executed stored procedure.
 
     .. data:: rowcount
 
