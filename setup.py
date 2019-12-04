@@ -18,7 +18,7 @@ if os.name == "nt":
 cfg = get_config(options)
 
 setup(name='mariadb',
-      version='0.9.41',
+      version='0.9.4',
       python_requires='>=3.6',
       classifiers = [
           'Development Status :: 3 - Alpha',

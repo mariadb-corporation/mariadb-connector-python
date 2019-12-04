@@ -20,10 +20,11 @@ client library for client server communication.
    cursor
    pool
 
+======
 Module
 ======
 
-
+==================
 Indices and tables
 ==================
 

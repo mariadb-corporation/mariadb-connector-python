@@ -27,7 +27,7 @@
 #include <errmsg.h>
 #include <mysqld_error.h>
 #include <time.h>
-#include <malloc.h>
+//#include <malloc.h>
 #include <docs/common.h>
 
 
@@ -249,27 +249,27 @@ typedef struct {
 
 
 /* Exceptions */
-PyObject *Mariadb_InterfaceError;
-PyObject *Mariadb_Error;
-PyObject *Mariadb_DatabaseError;
-PyObject *Mariadb_DataError;
-PyObject *Mariadb_PoolError;
-PyObject *Mariadb_OperationalError;
-PyObject *Mariadb_IntegrityError;
-PyObject *Mariadb_InternalError;
-PyObject *Mariadb_ProgrammingError;
-PyObject *Mariadb_NotSupportedError;
-PyObject *Mariadb_Warning;
+extern PyObject *Mariadb_InterfaceError;
+extern PyObject *Mariadb_Error;
+extern PyObject *Mariadb_DatabaseError;
+extern PyObject *Mariadb_DataError;
+extern PyObject *Mariadb_PoolError;
+extern PyObject *Mariadb_OperationalError;
+extern PyObject *Mariadb_IntegrityError;
+extern PyObject *Mariadb_InternalError;
+extern PyObject *Mariadb_ProgrammingError;
+extern PyObject *Mariadb_NotSupportedError;
+extern PyObject *Mariadb_Warning;
 
-PyObject *Mrdb_Pickle;
+extern PyObject *Mrdb_Pickle;
 
 /* Object types */
-PyTypeObject MrdbPool_Type;
-PyTypeObject Mariadb_Fieldinfo_Type;
-PyTypeObject MrdbIndicator_Type;
-PyTypeObject MrdbConnection_Type;
-PyTypeObject MrdbCursor_Type;
-PyTypeObject Mariadb_DBAPIType_Type;
+extern PyTypeObject MrdbPool_Type;
+extern PyTypeObject Mariadb_Fieldinfo_Type;
+extern PyTypeObject MrdbIndicator_Type;
+extern PyTypeObject MrdbConnection_Type;
+extern PyTypeObject MrdbCursor_Type;
+extern PyTypeObject Mariadb_DBAPIType_Type;
 
 int Mariadb_traverse(PyObject *self,
                      visitproc visit,
