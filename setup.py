@@ -2,23 +2,29 @@
 
 import os
 
-from distutils.core import setup, Extension
+from setuptools import setup, Extension
+from configparser import ConfigParser
+
+# read settings from site.cfg 
+c= ConfigParser()
+c.read(['site.cfg'])
+options= dict(c.items('cc_options'))
 
 if os.name == "posix":
     from mariadb_posix import get_config
 if os.name == "nt":
     from mariadb_windows import get_config
 
-cfg = get_config()
+cfg = get_config(options)
 
 setup(name='mariadb',
-      version='0.9.1',
+      version='0.9.41',
+      python_requires='>=3.6',
       classifiers = [
           'Development Status :: 3 - Alpha',
           'Environment :: Console',
           'Environment :: MacOS X',
           'Environment :: Win32 (MS Windows)',
-          'Environment :: Posix',
           'License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)',
           'Programming Language :: C',
           'Programming Language :: Python',
@@ -34,6 +40,7 @@ setup(name='mariadb',
           'Topic :: Database'
       ],
       description='Python MariaDB extension',
+      long_description='MariaDB Connector/Python, a DBAPI 2.0 (PEP-249) database driver for connecting to MariaDB and MySQL database servers.',
       author='Georg Richter',
       license='LGPL 2.1',
       url='https://www.github.com/MariaDB/mariadb-connector-python',
@@ -41,9 +48,13 @@ setup(name='mariadb',
                                          'src/mariadb_exception.c', 'src/mariadb_cursor.c',
                                          'src/mariadb_codecs.c', 'src/mariadb_field.c',
                                          'src/mariadb_parser.c',
+                                         'src/mariadb_pooling.c',
                                          'src/mariadb_dbapitype.c', 'src/mariadb_indicator.c'],
                              include_dirs=cfg.includes,
                              library_dirs=cfg.lib_dirs,
-                             libraries=cfg.libs
+                             libraries=cfg.libs,
+                             extra_compile_args = cfg.extra_compile_args,
+                             extra_link_args = cfg.extra_link_args,
+                             extra_objects= cfg.extra_objects
                              )],
       )

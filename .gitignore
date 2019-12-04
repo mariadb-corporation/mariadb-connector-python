@@ -1,32 +1,18 @@
-# Prerequisites
-*.d
+# Keep empty directories:
+# Keep empty directories: >> .gitignore/.git*
 
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
+# Compiled Static libraries
 *.lib
 *.a
 *.la
+*.lai
 *.lo
 
-# Shared objects (inc. Windows DLLs)
-*.dll
+# Compiled Dynamic libraries
 *.so
 *.so.*
 *.dylib
+*.dll
 
 # Executables
 *.exe
@@ -36,18 +22,24 @@
 *.x86_64
 *.hex
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+*.dgcov
+.*.swp
+.gdb_history
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
-client.cnf
+#VS files/directories
+*.vcxproj
+*.filters
+*.user
+ipch
+*.sln
+*.suo
+*.sdf
+Win32
+x64
+*.dir
+Debug
+Release
+RelWithDebInfo
+
+#vim backups
+*.*~

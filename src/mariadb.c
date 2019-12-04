@@ -24,6 +24,8 @@
 #include <datetime.h>
 
 PyObject *Mrdb_Pickle= NULL;
+PyObject *cnx_pool= NULL;
+extern uint16_t max_pool_size;
 
 int Mariadb_traverse(PyObject *self,
                      visitproc visit,
@@ -56,6 +58,9 @@ static PyMethodDef Mariadb_Methods[] =
   {"connect", (PyCFunction)MrdbConnection_connect,
      METH_VARARGS | METH_KEYWORDS,
      module_connect__doc__},
+  {"ConnectionPool", (PyCFunction)MrdbPool_add,
+     METH_VARARGS | METH_KEYWORDS,
+     "todo!!"}, 
   /* PEP-249 DB-API */
   {"DateFromTicks", (PyCFunction)Mariadb_date_from_ticks,
      METH_VARARGS,
@@ -110,6 +115,7 @@ static char exception_warning_doc[]= "Exception raised for important warnings li
 static char exception_database_doc[]= "Exception raised for errors that are related to the database";
 static char exception_data_doc[] = "Exception raised for errors that are due to problems with the processed data "
                                    "like division by zero, numeric value out of range, etc.";
+static char exception_pool_doc[] = "Exeception rasied for errors related to ConnectionPool class.";
 static char exception_operational_doc[] = "Exception raised for errors that are related to the database's operation "
                                           "and not necessarily under the control of the programmer.";
 static char exception_integrity_doc[]= "Exception raised when the relational integrity of the database is affected, "
@@ -151,6 +157,10 @@ PyMODINIT_FUNC PyInit_mariadb(void)
 
   Py_TYPE(&MrdbCursor_Type) = &PyType_Type;
   if (PyType_Ready(&MrdbCursor_Type) == -1)
+    goto error;
+
+  Py_TYPE(&MrdbPool_Type) = &PyType_Type;
+  if (PyType_Ready(&MrdbPool_Type) == -1)
     goto error;
 
   Py_TYPE(&MrdbIndicator_Type) = &PyType_Type;
@@ -203,13 +213,16 @@ PyMODINIT_FUNC PyInit_mariadb(void)
                         "mariadb.DatabaseError", exception_database_doc, "DatabaseError");
   mariadb_add_exception(module, &Mariadb_DataError,
                         "mariadb.DatabaseError.DataError", exception_data_doc, "DataError");
-
-
-
-//  PyModule_AddObject(module, "DatabaseError", Mariadb_DatabaseError);
+  mariadb_add_exception(module, &Mariadb_PoolError,
+                        "mariadb.PoolError", exception_pool_doc, "PoolError");
 
   Py_INCREF(&MrdbConnection_Type);
   PyModule_AddObject(module, "connection", (PyObject *)&MrdbConnection_Type);
+  cnx_pool= PyDict_New();
+  Py_INCREF(&MrdbPool_Type);
+  PyModule_AddObject(module, "ConnectionPool", (PyObject *)&MrdbPool_Type);
+  PyModule_AddObject(module, "_CONNECTION_POOLS", cnx_pool);
+  
 
   PyModule_AddObject(module, "indicator_null", MrdbIndicator_Object(STMT_INDICATOR_NULL));
   PyModule_AddObject(module, "indicator_default", MrdbIndicator_Object(STMT_INDICATOR_DEFAULT));

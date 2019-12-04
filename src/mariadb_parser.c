@@ -65,7 +65,7 @@ MrdbParser *MrdbParser_init(const char *statement, size_t length)
 
   if ((p= PyMem_RawCalloc(1, sizeof(MrdbParser))))
   { 
-    if (!(p->statement.str = PyMem_RawCalloc(1, length + 1)))
+    if (!(p->statement.str = (char *)PyMem_RawCalloc(1, length + 1)))
     {
       MARIADB_FREE_MEM(p);
       return NULL;

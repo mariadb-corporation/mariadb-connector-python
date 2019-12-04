@@ -704,5 +704,50 @@ class TestCursor(unittest.TestCase):
 
         del cursor
 
+    def test_sp1(self):
+        con= create_connection()
+        cursor= con.cursor()
+        cursor.execute("DROP PROCEDURE IF EXISTS p1")
+        cursor.execute("CREATE PROCEDURE p1( )\nBEGIN\n SELECT 1;\nEND")
+        cursor.callproc("p1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        cursor.execute("DROP PROCEDURE IF EXISTS p1")
+
+    def test_sp2(self):
+        con= create_connection()
+        cursor= con.cursor()
+        cursor.execute("DROP PROCEDURE IF EXISTS p2")
+        cursor.execute("CREATE PROCEDURE p2(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\n SET o1:=CONCAT(s1,s2);\nEND")
+        cursor.callproc("p2", ("foo", "bar", 1))
+        self.assertEqual(cursor.sp_outparams, True)
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "foobar")
+        cursor.nextset()
+        del cursor
+        cursor=con.cursor()
+        cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
+        self.assertEqual(cursor.sp_outparams, True)
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "foobar")
+        cursor.execute("DROP PROCEDURE IF EXISTS p2")
+        del cursor, con
+
+    def test_sp3(self):
+        con= create_connection()
+        cursor= con.cursor()
+        cursor.execute("DROP PROCEDURE IF EXISTS p3")
+        cursor.execute("CREATE PROCEDURE p3(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\n SELECT '1';SET o1:=CONCAT(s1,s2);\nEND")
+        cursor.callproc("p3", ("foo", "bar", 1))
+        self.assertEqual(cursor.sp_outparams, False)
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "1")
+        cursor.nextset()
+        self.assertEqual(cursor.sp_outparams, True)
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "foobar")
+        cursor.execute("DROP PROCEDURE IF EXISTS p3")
+        del cursor, con
+
 if __name__ == '__main__':
     unittest.main()

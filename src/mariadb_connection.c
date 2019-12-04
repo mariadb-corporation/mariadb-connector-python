@@ -22,10 +22,15 @@
 
 void MrdbConnection_dealloc(MrdbConnection *self);
 
+extern PyObject *cnx_pool;
+
 static PyObject *MrdbConnection_cursor(MrdbConnection *self,
        PyObject *args,
        PyObject *kwargs);
-/* todo: write more documentation, this is just a placeholder */
+
+static PyObject *MrdbConnection_exception(PyObject *self, void *closure);
+#define GETTER_EXCEPTION(name, exception, doc)\
+{ name,MrdbConnection_exception, NULL, doc, &exception }
 
 static PyObject *MrdbConnection_getid(MrdbConnection *self, void *closure);
 static PyObject *MrdbConnection_getuser(MrdbConnection *self, void *closure);
@@ -62,6 +67,15 @@ static PyGetSetDef MrdbConnection_sets[]=
      connection_server_version__doc__, NULL},
     {"server_info", (getter)MrdbConnection_server_info, NULL, 
      connection_server_info__doc__, NULL},
+    GETTER_EXCEPTION("Error", Mariadb_Error, ""),
+    GETTER_EXCEPTION("Warning", Mariadb_Warning, ""),
+    GETTER_EXCEPTION("InterfaceError", Mariadb_InterfaceError, ""),
+    GETTER_EXCEPTION("ProgrammingError", Mariadb_ProgrammingError, ""),
+    GETTER_EXCEPTION("IntegrityError", Mariadb_IntegrityError, ""),
+    GETTER_EXCEPTION("DatabaseError", Mariadb_DatabaseError, ""),
+    GETTER_EXCEPTION("NotSupportedError", Mariadb_NotSupportedError, ""),
+    GETTER_EXCEPTION("InternalError", Mariadb_InternalError, ""),
+    GETTER_EXCEPTION("OperationalError", Mariadb_OperationalError, ""),
     {NULL}
 };
 
@@ -211,10 +225,10 @@ void MrdbConnection_SetAttributes(MrdbConnection *self)
     self->collation= PyUnicode_FromString(cinfo.name);
 }
 
-    static int
+static int
 MrdbConnection_Initialize(MrdbConnection *self,
-        PyObject *args,
-        PyObject *dsnargs)
+                          PyObject *args,
+                          PyObject *dsnargs)
 {
     int rc;
     /* Todo: we need to support all dsn parameters, the current
@@ -225,7 +239,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
          *default_group= NULL, *local_infile= NULL,
          *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
          *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
-         *charset= NULL;
+         *charset= NULL, *plugin_dir= NULL;
     char *pool_name= 0;
     uint32_t pool_size= 0;
     uint8_t ssl_enforce= 0;
@@ -241,11 +255,12 @@ MrdbConnection_Initialize(MrdbConnection *self,
         "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
         "ssl_cipher", "ssl_capath", "ssl_crlpath",
         "ssl_verify_cert", "ssl",
-        "client_flags", "charset", "pool_name", "pool_size", NULL
+        "client_flags", "charset", "pool_name", "pool_size", "plugin_dir", NULL
     };
 
+
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiipissssssssssipissi:connect",
+                "|sssssisiiipissssssssssipissis:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -254,20 +269,38 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_key, &ssl_ca, &ssl_cert, &ssl_crl,
                 &ssl_cipher, &ssl_capath, &ssl_crlpath,
                 &ssl_verify_cert, &ssl_enforce,
-                &client_flags, &charset))
+                &client_flags, &charset, &pool_name, &pool_size, &plugin_dir))
         return -1;
 
     if (dsn)
     {
-        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
                 "dsn keyword is not supported");
         return -1;
     }
 
+    /* do we need pooling? */
+    if (pool_name)
+    {
+      /* check if pool exists */
+      if (PyDict_Contains(cnx_pool, PyUnicode_FromString(pool_name)))
+      {
+        /* get connection from pool */
+      }
+    }
+
     if (!(self->mysql= mysql_init(NULL)))
-    {    mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 0, 
+    {    mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
             "Can't allocate memory for connection");
-    return -1;
+        return -1;
+    }
+
+    if (plugin_dir) {
+        mysql_optionsv(self->mysql, MYSQL_PLUGIN_DIR, plugin_dir);
+    } else {
+        #if defined(DEFAULT_PLUGINS_SUBDIR)
+        mysql_optionsv(self->mysql, MYSQL_PLUGIN_DIR, DEFAULT_PLUGINS_SUBDIR);
+        #endif
     }
 
     /* read defaults from configuration file(s) */
@@ -303,7 +336,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     Py_END_ALLOW_THREADS;
     if (mysql_errno(self->mysql))
     {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        mariadb_throw_exception(self->mysql, NULL, 1, NULL);
         goto end;
     }
 
@@ -313,7 +346,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     Py_END_ALLOW_THREADS;
     if (rc)
     {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        mariadb_throw_exception(self->mysql, NULL, 1, NULL);
         goto end;
     }
 end:
@@ -401,13 +434,29 @@ PyTypeObject MrdbConnection_Type = {
     0, /* (PyObject *) tp_defined */
 };
 
-    PyObject *
+PyObject *
 MrdbConnection_connect(
         PyObject *self,
         PyObject *args,
         PyObject *kwargs)
 {
     MrdbConnection *c;
+    PyObject *pn= NULL,
+             *pool= NULL;
+
+
+    /* if pool name exists, we need to return a connection from pool */
+    if ((pn= PyDict_GetItemString(kwargs, "pool_name")))
+    {
+      if ((pool = PyDict_GetItem(cnx_pool, pn)))
+      {
+        return MrdbPool_getconnection((MrdbPool *)pool);
+      }
+      if ((pool = MrdbPool_add(self, args, kwargs)))
+      {
+        return MrdbPool_getconnection((MrdbPool *)pool);
+      }
+    }
 
     if (!(c= (MrdbConnection *)PyType_GenericAlloc(&MrdbConnection_Type, 1)))
         return NULL;
@@ -421,8 +470,7 @@ MrdbConnection_connect(
 }
 
 /* destructor of MariaDB Connection object */
-    void
-MrdbConnection_dealloc(MrdbConnection *self)
+void MrdbConnection_dealloc(MrdbConnection *self)
 {
     if (self)
     {
@@ -441,10 +489,26 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
     MARIADB_CHECK_CONNECTION(self, NULL);
     /* Todo: check if all the cursor stuff is deleted (when using prepared
        statemnts this should be handled in mysql_close) */
+
+    if (self->pool)
+    {
+       int rc= 0;
+       pthread_mutex_lock(&self->pool->lock);
+       if (self->pool->reset_session)
+         rc= mysql_reset_connection(self->mysql);
+       if (!rc)
+       {
+         self->inuse= 0;
+         clock_gettime(CLOCK_MONOTONIC_RAW, &self->last_used);
+       }
+       pthread_mutex_unlock(&self->pool->lock);
+       return Py_None;
+    }
+
     Py_BEGIN_ALLOW_THREADS
-        mysql_close(self->mysql);
+    mysql_close(self->mysql);
     Py_END_ALLOW_THREADS
-        self->mysql= NULL;
+    self->mysql= NULL;
     Py_INCREF(Py_None);
     return Py_None;
 }
@@ -459,6 +523,15 @@ static PyObject *MrdbConnection_cursor(MrdbConnection *self,
     conn= Py_BuildValue("(O)", self);
     cursor= PyObject_Call((PyObject *)&MrdbCursor_Type, conn, kwargs);
     return cursor;
+}
+
+static PyObject *
+MrdbConnection_exception(PyObject *self, void *closure)
+{
+    PyObject *exception = *(PyObject **)closure;
+
+    Py_INCREF(exception);
+    return exception;
 }
 
 /* {{{ MrdbConnection_commit */

@@ -129,6 +129,35 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
+  cursor_callproc__doc__,
+  "callproc(procedure_name, args=())\n"
+  "--\n"
+  "\n"
+  "Executes a stored procedure. The args sequence must contain an entry for\n"
+  "each parameter the procedure expects.\n"
+  "Input/Output or Output parameters have to be retrieved by .fetch methods,\n"
+  "the .sp_outparams attribute indicates if the result set contains output\n"
+  "parameters\n\n"
+  "Example:\n\n"
+  ">>>cursor.execute(\"CREATE PROCEDURE p1(IN i1 VAR  CHAR(20), OUT o2 VARCHAR(40))\"\n"
+  "                \"BEGIN\"\n"
+  "                \"  SELECT 'hello'\"\n"
+  "                \"  o2:= 'test'\"\n"
+  "                \"END\")\n"
+  ">>>cursor.callproc('p1', ('foo', 0))\n"
+  ">>> cursor.sp_outparams\n"
+  "False\n"
+  ">>> cursor.fetchone()\n"
+  "('hello',)\n"
+  ">>> cursor.nextset()\n"
+  "True\n"
+  ">>> cursor.sp_outparams\n"
+  "True\n"
+  ">>> cursor.fetchone()\n"
+  "('test',)"
+);
+
+PyDoc_STRVAR(
   cursor_fetchone__doc__,
   "fetchone()\n"
   "--\n"
@@ -184,15 +213,6 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
-  cursor_callproc__doc__,
-  "callproc()\n"
-  "--\n"
-  "\n"
-  "Required by PEP-249. Does nothing in MariaDB Connector/Python,\n"
-  "use the execute method with syntax 'CALL {procedurename}' instead"
-);
-
-PyDoc_STRVAR(
   cursor_next__doc__,
   "next()\n"
   "--\n"
@@ -237,4 +257,11 @@ PyDoc_STRVAR(
   cursor_arraysize__doc__,
   "(read/write)\n\n"
   "the number of rows to fetch"
+);
+
+PyDoc_STRVAR(
+  cursor_sp_outparam__doc__,
+  "(read)\n\n"
+  "Indicates if the current result set contains inout or out parameter\n"
+  "from a previous executed stored procedure."
 );
