@@ -472,8 +472,8 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT LAST_INSERT_ID()")
         row = cursor.fetchone()
         self.assertEqual(row[0], 1)
-         del cursor
-         cursor= self.connection.cursor()
+        del cursor
+        cursor= self.connection.cursor()
         vals = [(3, "bar"), (4, "this")]
         cursor.executemany("INSERT INTO test_conpy_15 VALUES (?,?)", vals)
         self.assertEqual(cursor.lastrowid, 4)
@@ -641,5 +641,5 @@ class TestCursor(unittest.TestCase):
         cursor.execute("DROP PROCEDURE IF EXISTS p3")
         del cursor, con
 
- f __name__ == '__main__':
+if __name__ == '__main__':
     unittest.main()
