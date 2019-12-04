@@ -54,6 +54,7 @@ def get_config(options):
     cfg = MariaDBConfiguration()
     cfg.version = cc_version[0]
 
+    plugindir= mariadb_config(config_prg, "plugindir")
     libs = mariadb_config(config_prg, "libs")
     extra_libs= mariadb_config(config_prg, "libs_sys")
     cfg.lib_dirs = [dequote(i[2:]) for i in libs if i.startswith("-L")]
@@ -67,4 +68,5 @@ def get_config(options):
         cfg.extra_objects = ['{}/lib{}.a'.format(cfg.lib_dirs[0], l) for l in ["mariadbclient"]]
         cfg.libs = [dequote(i[2:]) for i in extra_libs if i.startswith("-l")]
     cfg.includes = mariadb_includes
+    cfg.extra_compile_args= ["-DDEFAULT_PLUGINS_SUBDIR=\"%s\"" % plugindir[0]]
     return cfg
