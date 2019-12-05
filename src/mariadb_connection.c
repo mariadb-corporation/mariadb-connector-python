@@ -336,7 +336,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     Py_END_ALLOW_THREADS;
     if (mysql_errno(self->mysql))
     {
-        mariadb_throw_exception(self->mysql, NULL, 1, NULL);
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
         goto end;
     }
 
@@ -346,7 +346,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     Py_END_ALLOW_THREADS;
     if (rc)
     {
-        mariadb_throw_exception(self->mysql, NULL, 1, NULL);
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
         goto end;
     }
 end:
