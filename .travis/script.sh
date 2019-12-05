@@ -53,5 +53,49 @@ if [ -z "$MAXSCALE_VERSION" ] ; then
 
 fi
 
-python -m unittest discover -v
+if [ -n "$BENCH" ] ; then
+  pyenv install pypy3.6-7.2.0
+  pyenv install miniconda3-4.3.30
+  pyenv install 3.8.0
+
+
+  export PYENV_VERSION=3.8.0
+  python setup.py build
+  python setup.py install
+  pip install mysql-connector-python pyperf
+  python bench_mariadb.py -o mariadb_bench.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
+  python bench_mysql.py -o mysql_bench.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
+
+  python -m pyperf compare_to mysql_bench.json mariadb_bench.json --table
+
+  export PYENV_VERSION=miniconda3-4.3.30
+  python setup.py build
+  python setup.py install
+  pip install mysql-connector-python pyperf
+  python bench_mariadb.py -o mariadb_bench_miniconda3_4_3_30.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
+  python bench_mysql.py -o mysql_bench_miniconda3_4_3_30.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
+
+  python -m pyperf compare_to mysql_bench_miniconda3_4_3_30.json mariadb_bench_miniconda3_4_3_30.json --table
+
+  export PYENV_VERSION=pypy3.6-7.2.0
+  python setup.py build
+  python setup.py install
+  pip install mysql-connector-python pyperf
+  python bench_mariadb.py -o mariadb_bench_pypy3_6.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
+  python bench_mysql.py -o mysql_bench_pypy3_6.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
+
+  python -m pyperf compare_to mysql_bench_pypy3_6.json mariadb_bench_pypy3_6.json --table
+
+  python -m pyperf compare_to mysql_bench.json mariadb_bench.json mysql_bench_pypy3_6.json mariadb_bench_pypy3_6.json \
+    mysql_bench_miniconda3_4_3_30.json mariadb_bench_miniconda3_4_3_30.json --table
+else
+  pyenv install $PYTHON_VER
+  export PYENV_VERSION=$PYTHON_VER
+
+  python setup.py build
+  python setup.py install
+
+  python -m unittest discover -v
+fi
+
 

@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-
+import os
 import mariadb
 
 from test.base_test import create_connection
@@ -19,6 +19,9 @@ class CursorTest(unittest.TestCase):
         del self.connection
 
     def test_ping(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE return wrong thread id")
+
         new_conn = create_connection()
         id = new_conn.connection_id;
         self.connection.kill(id)
@@ -37,13 +40,19 @@ class CursorTest(unittest.TestCase):
         del new_conn
 
     def test_change_user(self):
-        cursor = self.connection.cursor()
-        cursor.execute("create or replace user foo@localhost")
-        cursor.execute("GRANT ALL on testp.* TO foo@localhost")
-        new_conn = create_connection()
+        if self.connection.server_version < 100103:
+            self.skipTest("CREATE OR REPLACE USER not supported")
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't get new user immediately")
+
         default_conf = conf()
+        cursor = self.connection.cursor()
+        cursor.execute("create or replace user foo")
+        cursor.execute("GRANT ALL on `" + default_conf["database"] + "`.* TO foo")
+        new_conn = create_connection()
         new_conn.change_user("foo", "", default_conf["database"])
         self.assertEqual("foo", new_conn.user)
+        cursor.execute("drop user foo")
         del new_conn
         del cursor
 
@@ -57,6 +66,9 @@ class CursorTest(unittest.TestCase):
         del new_conn
 
     def test_reset(self):
+        if self.connection.server_version < 100204:
+            self.skipTest("RESET not supported")
+
         cursor = self.connection.cursor()
         cursor.execute("SELECT 1 UNION SELECT 2")
         try:

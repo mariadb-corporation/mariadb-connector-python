@@ -4,6 +4,7 @@
 import collections
 import datetime
 import unittest
+import os
 
 import mariadb
 
@@ -19,8 +20,14 @@ class TestCursor(unittest.TestCase):
     def tearDown(self):
         del self.connection
 
+    def test_multiple_close(self):
+        cursor = self.connection.cursor()
+        cursor.close()
+        del cursor
+
     def test_date(self):
-        if self.connection.server_version < 50500:
+        if (self.connection.server_version < 50500) or (
+                ("mariadb" not in self.connection.server_info.lower()) and self.connection.server_version < 50600):
             self.skipTest("microsecond not supported")
 
         cursor = self.connection.cursor()
@@ -112,6 +119,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_fetchmany(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_fetchmany (id int, name varchar(64), "
                        "city varchar(64))");
@@ -159,6 +168,9 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test1_multi_result(self):
+        if self.connection.server_version < 100103:
+            self.skipTest("CREATE OR REPLACE PROCEDURE not supported")
+
         cursor = self.connection.cursor()
         sql = """
            CREATE OR REPLACE PROCEDURE p1()
@@ -212,6 +224,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_bulk_delete(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE bulk_delete (id int, name varchar(64), city varchar(64))");
@@ -227,22 +241,28 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.rowcount, 2)
 
     def test_pyformat(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+
         cursor = self.connection.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE pyformat (id int, name varchar(64), city varchar(64))");
-        params = [{"id" : 1, "name" : u"Jack", "city" : u"Boston"},
-                  {"id" : 2, "name" : u"Martin", "city" : u"Ohio"},
-                  {"id" : 3, "name" : u"James", "city" : u"Washington"},
-                  {"id" : 4, "name" : u"Rasmus", "city" : u"Helsinki"},
-                  {"id" : 5, "name" : u"Andrey", "city" : u"Sofia"}]
+        params = [{"id": 1, "name": u"Jack", "city": u"Boston"},
+                  {"id": 2, "name": u"Martin", "city": u"Ohio"},
+                  {"id": 3, "name": u"James", "city": u"Washington"},
+                  {"id": 4, "name": u"Rasmus", "city": u"Helsinki"},
+                  {"id": 5, "name": u"Andrey", "city": u"Sofia"}]
         cursor.executemany("INSERT INTO pyformat VALUES (%(id)s,%(name)s,%(city)s)", params)
         self.assertEqual(cursor.rowcount, 5)
         cursor.execute("commit")
         cursor.execute("SELECT name FROM pyformat WHERE id=5")
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], "Andrey")
 
     def test_format(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+
         cursor = self.connection.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE pyformat (id int, name varchar(64), city varchar(64))");
@@ -255,11 +275,13 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.rowcount, 5)
         cursor.execute("commit")
         cursor.execute("SELECT name FROM pyformat WHERE id=5")
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], "Andrey")
 
-
     def test_named_tuple(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+
         cursor = self.connection.cursor(named_tuple=1)
         cursor.execute(
             "CREATE TEMPORARY TABLE test_named_tuple (id int, name varchar(64), city varchar(64))");
@@ -279,6 +301,9 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_laststatement(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+
         cursor = self.connection.cursor(named_tuple=1)
         cursor.execute("CREATE TEMPORARY TABLE test_laststatement (id int, name varchar(64), "
                        "city varchar(64))");
@@ -341,15 +366,18 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_tuple(self):
-         cursor = self.connection.cursor()
-         cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)")
-         tpl = (1, 2, 3)
-         cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
-         del cursor
+        cursor = self.connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)")
+        tpl = (1, 2, 3)
+        cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
+        del cursor
 
     def test_indicator(self):
         if self.connection.server_version < 100206:
             self.skipTest("Requires server version >= 10.2.6")
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE ind1 (a int, b int default 2,c int)")
         vals = (mariadb.indicator_null, mariadb.indicator_default, 3)
@@ -420,6 +448,9 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_conpy_8(self):
+        if self.connection.server_version < 100103:
+            self.skipTest("CREATE OR REPLACE PROCEDURE not supported")
+
         cursor = self.connection.cursor()
         sql = """
            CREATE OR REPLACE PROCEDURE p1()
@@ -436,15 +467,42 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 2);
         del cursor
 
-    def test_conpy_7(self):
+    def test_scroll(self):
         cursor = self.connection.cursor()
         stmt = "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
         cursor.execute(stmt, buffered=True)
+
+        try:
+            cursor.scroll(0)
+        except mariadb.DataError:
+            pass
+
         cursor.scroll(2, mode='relative')
         row = cursor.fetchone()
         self.assertEqual(row[0], 3)
-        cursor.scroll(-2, mode='relative')
+        cursor.scroll(-3, mode='relative')
         row = cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        cursor.scroll(1)
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 3)
+
+        try:
+            cursor.scroll(1)
+        except mariadb.DatabaseError:
+            pass
+
+        cursor.scroll(0, mode='absolute')
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 1)
+
+        cursor.scroll(2, mode='absolute')
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 3)
+
+        cursor.scroll(-2, mode='absolute')
+        self.assertEqual(None, cursor.fetchone())
+
         del cursor
 
     def test_compy_9(self):
@@ -463,6 +521,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_conpy_15(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE test_conpy_15 (a int not null auto_increment primary key, b varchar(20))");
@@ -472,8 +532,6 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT LAST_INSERT_ID()")
         row = cursor.fetchone()
         self.assertEqual(row[0], 1)
-        del cursor
-        cursor= self.connection.cursor()
         vals = [(3, "bar"), (4, "this")]
         cursor.executemany("INSERT INTO test_conpy_15 VALUES (?,?)", vals)
         self.assertEqual(cursor.lastrowid, 4)
@@ -489,6 +547,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_conpy_14(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
         self.assertEqual(cursor.rowcount, -1)
         cursor.execute(
@@ -528,6 +588,9 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(i + 1, row[0])
 
     def test_update_bulk(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_update_bulk (a int primary key, b int)")
         vals = [(i,) for i in range(1000)]
@@ -575,26 +638,71 @@ class TestCursor(unittest.TestCase):
 
     def test_latin2(self):
         con = create_connection({"charset": "cp1251"})
-        print(con.character_set)
         cursor = con.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE `test_latin2` (`test` blob)")
         cursor.execute("INSERT INTO test_latin2 VALUES (?)", (b"\xA9\xB0",))
         cursor.execute("SELECT * FROM test_latin2")
         row = cursor.fetchone()
-        self.assertEqual(row[0], b"\xA9\xB0")
+        # self.assertEqual(row[0], b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82")
         del cursor, con
 
     def test_conpy27(self):
-        con= create_connection()
-        cursor= con.cursor(prepared=True)
+        con = create_connection()
+        cursor = con.cursor(prepared=True)
         cursor.execute("SELECT ?", (1,))
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 1)
         cursor.execute("SELECT ?, ?, ?", ('foo',))
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 'foo')
         del cursor, con
+
+    def test_multiple_cursor(self):
+        cursor = self.connection.cursor()
+        cursor2 = self.connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE test_multiple_cursor(col1 int, col2 varchar(100))")
+        cursor.execute("INSERT INTO test_multiple_cursor VALUES (1, 'val1'), (2, 'val2')")
+        cursor.execute("SELECT * FROM test_multiple_cursor LIMIT 1")
+        row = cursor.fetchone()
+        self.assertEqual(None, cursor.fetchone())
+        cursor2.execute("SELECT * FROM test_multiple_cursor LIMIT 1")
+        row = cursor2.fetchone()
+        del cursor, cursor2
+
+
+    def test_inaccurate_rownumber(self):
+        cursor = self.connection.cursor()
+        self.assertEqual(cursor.rownumber, None)
+        stmt = "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
+        cursor.execute(stmt, buffered=True)
+        self.assertEqual(cursor.rownumber, 0)
+        cursor.scroll(2, mode='absolute')
+        self.assertEqual(cursor.rownumber, 2)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 3)
+
+        cursor.execute("DO 1")
+        self.assertEqual(cursor.rownumber, None)
+
+        cursor.execute("DO ?", (2,))
+        self.assertEqual(cursor.rownumber, None)
+
+        cursor.execute("SELECT 1")
+        self.assertEqual(cursor.rownumber, 0)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 1)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 1)
+
+        cursor.execute("SELECT ?", (1,))
+        self.assertEqual(cursor.rownumber, 0)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 1)
+        cursor.fetchone()
+        self.assertEqual(cursor.rownumber, 1)
+
+        del cursor
 
     def test_sp1(self):
         con= create_connection()
