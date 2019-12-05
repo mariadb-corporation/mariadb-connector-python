@@ -70,7 +70,7 @@ class TestConnection(unittest.TestCase):
 
         try:
             cursor.execute("KILL {id}".format(id=oldid))
-        except mariadb.DatabaseError:
+        except mariadb.ProgrammingError:
             pass
 
         conn.auto_reconnect = True
