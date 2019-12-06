@@ -48,7 +48,7 @@ class CursorTest(unittest.TestCase):
         default_conf = conf()
         cursor = self.connection.cursor()
         cursor.execute("create or replace user foo@'%'")
-        cursor.execute("GRANT ALL on `" + default_conf["database"] + "`.* TO foo@localhost")
+        cursor.execute("GRANT ALL on `" + default_conf["database"] + "`.* TO foo@'%'")
         new_conn = create_connection()
         new_conn.change_user("foo", "", default_conf["database"])
         self.assertEqual("foo", new_conn.user)
