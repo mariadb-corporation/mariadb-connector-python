@@ -79,6 +79,7 @@ class TestConnection(unittest.TestCase):
         self.assertNotEqual(0, conn.connection_id)
 
     def test_ed25519(self):
+        default_conf = conf()
         if os.environ.get("MAXSCALE_VERSION"):
             self.skipTest("MAXSCALE doesn't support ed25519 for now")
         if self.connection.server_version < 100122:
@@ -87,23 +88,23 @@ class TestConnection(unittest.TestCase):
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("INSTALL SONAME 'auth_ed25519'")
-        cursor.execute("DROP USER IF EXISTS verificationEd25519AuthPlugin")
+        cursor.execute("DROP USER IF EXISTS eduser")
         if self.connection.server_version < 100400:
-            cursor.execute("CREATE USER verificationEd25519AuthPlugin@'%' IDENTIFIED VIA ed25519 "
+            cursor.execute("CREATE USER eduser@'%' IDENTIFIED VIA ed25519 "
                            "USING '6aW9C7ENlasUfymtfMvMZZtnkCVlcb1ssxOLJ0kj/AA'")
         else:
-            cursor.execute("CREATE USER verificationEd25519AuthPlugin@'%' IDENTIFIED VIA ed25519 "
+            cursor.execute("CREATE USER eduser@'%' IDENTIFIED VIA ed25519 "
                            "USING PASSWORD('MySup8%rPassw@ord')")
-        cursor.execute("GRANT ALL on *.* to verificationEd25519AuthPlugin@'%'")
-        conn2 = create_connection({"user": "verificationEd25519AuthPlugin", "password":
+        cursor.execute("GRANT ALL on " + default_conf["database"] + ".* to eduser@'%'")
+        conn2 = create_connection({"user": "eduser", "password":
             "MySup8%rPassw@ord"})
-        cursor.execute("DROP USER IF EXISTS verificationEd25519AuthPlugin")
+        cursor.execute("DROP USER IF EXISTS eduser")
         try:
-            create_connection({"user": "verificationEd25519AuthPlugin", "password": "MySup8%rPassw@ord", "plugin_dir": "wrong_plugin_dir"})
+            create_connection({"user": "eduser", "password": "MySup8%rPassw@ord", "plugin_dir": "wrong_plugin_dir"})
             self.fail("wrong plugin directory, must not have found authentication plugin")
         except (mariadb.DatabaseError, mariadb.ProgrammingError):
             pass
-        cursor.execute("DROP USER IF EXISTS verificationEd25519AuthPlugin")
+        cursor.execute("DROP USER IF EXISTS eduser")
         del cursor, conn2
 
 if __name__ == '__main__':
