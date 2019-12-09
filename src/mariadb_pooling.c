@@ -264,6 +264,8 @@ void MrdbPool_dealloc(MrdbPool *self)
 {
   uint32_t i;
 
+  pthread_mutex_lock(&self->lock);
+
   if (self->pool_name)
   {
     if (PyDict_Contains(cnx_pool, PyUnicode_FromString(self->pool_name)))
@@ -286,6 +288,7 @@ void MrdbPool_dealloc(MrdbPool *self)
   self->pool_size= 0;
   MARIADB_FREE_MEM(self->connection);
   self->connection= NULL;
+  pthread_mutex_unlock(&self->lock);
   pthread_mutex_destroy(&self->lock);
 
   Py_TYPE(self)->tp_free((PyObject*)self);
