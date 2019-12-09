@@ -26,16 +26,29 @@ installed from source distribution package or github.
   from MariaDB Connector/C package).
 - For Posix systems: TLS libraries, e.g. GnuTLS or OpenSSL (default)
 
+On Posix system make sure that the path environment variable contains the directory which
+contains the mariadb_config utility. On Windows systems you need to set the environment 
+variable MARIADB_CC_INSTALL_DIR, which contains the directory of your MariaDB Connector/C
+installation.
+
+Once everything is in place, run
+
+.. code-block:: console
+
+    $ pip3 install mariadb
+
+or if you downloaded the source package
+
+.. code-block:: console
+
+    $ python setup.py build
+    $ python setup.py install
 
 Binary installation
 -------------------
-MariaDB Connector/C is also available from PyPi as wheel packages for Linux, Windows and MacOS.
+MariaDB Connector/C is also available from PyPi as wheel packages for Windows.
 These binary packages are not intended for production use, since there might be several limitations
 and bottlenecks, e.g.:
-
-- Binaries for Posix systems come with their own version of libraries which will be used regardless
-  of other libraries installed on the system. This might lead to unexpected results, e.g. when using
-  different OpenSSL libraries.
 
 - Dynamic MariaDB plugins (e.g. authentication plugins) are not part of the package and must
   be installed separetly by installing MariaDB Connector/C or MariaDB Server package.
@@ -44,7 +57,22 @@ Make sure you have an up to date version of pip and install it with
 
 .. code-block:: console
 
-    $ pip install mariadb-binary
+    $ pip3 install mariadb-binary
 
+Test suite
+----------
 
+If you have installed the sources, after successful build you can run the test suite
+from the source directory.
 
+.. code-block:: console
+
+    $ python -m unittest discover -v
+
+You can configure the connection parameters by using the following environment variables
+
+* TEST_USER (default root)
+* TEST_PASSWORD
+* TEST_DATABASE (default 'testp')
+* TEST_HOST (default 'localhost')
+* TEST_PORT (default 3306)
