@@ -30,11 +30,11 @@ class TestException(unittest.TestCase):
 
     def test_db_unknown_exception(self):
         try:
-            create_connection({"database": "Unknown"})
+            create_connection({"database": "unknown"})
         except mariadb.ProgrammingError as err:
             self.assertEqual(err.sqlstate, "42000")
             self.assertEqual(err.errno, 1049)
-            self.assertTrue(err.errmsg.find("Unknown database 'Unknown'") > -1)
+            self.assertTrue(err.errmsg.find("Unknown database 'unknown'") > -1)
             pass
 
     def test_conn_timeout_exception(self):
