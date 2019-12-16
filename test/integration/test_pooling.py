@@ -94,10 +94,13 @@ class TestPooling(unittest.TestCase):
     def test_pool_getter(self):
         default_conf= conf()
         conn= mariadb.connect(pool_name="getter_test", pool_size=4, **default_conf)
-        p= mariadb._CONNECTION_POOLS["getter_test"];
+        p= mariadb._CONNECTION_POOLS["getter_test"]
         self.assertEqual(p.pool_name, "getter_test")
         self.assertEqual(p.pool_size, 4)
-        self.assertEqual(p.pool_reset_connection, True)
+        if default_conf["pool_reset_connection"] is None:
+            self.assertEqual(p.pool_reset_connection, True)
+        else:
+            self.assertEqual(p.pool_reset_connection, default_conf["pool_reset_connection"])
         self.assertEqual(p.max_size, 64)
         del mariadb._CONNECTION_POOLS["getter_test"]
 
@@ -106,6 +109,7 @@ class TestPooling(unittest.TestCase):
         conn= mariadb.connect(pool_name="reset_test", pool_size=1, **default_conf)
         cursor= conn.cursor()
         cursor.execute("SELECT 1")
+        cursor.close()
         conn.close()
         conn= mariadb.connect(pool_name="reset_test")
         cursor= conn.cursor()
