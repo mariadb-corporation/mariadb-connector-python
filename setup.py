@@ -5,6 +5,12 @@ import os
 from setuptools import setup, Extension
 from configparser import ConfigParser
 
+# read the contents of your README file
+from os import path
+this_directory = path.abspath(path.dirname(__file__))
+with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
+
 # read settings from site.cfg 
 c= ConfigParser()
 c.read(['site.cfg'])
@@ -17,8 +23,10 @@ if os.name == "nt":
 
 cfg = get_config(options)
 
+
+
 setup(name='mariadb',
-      version='0.9.5',
+      version='0.9.51',
       python_requires='>=3.6',
       classifiers = [
           'Development Status :: 3 - Alpha',
@@ -40,10 +48,16 @@ setup(name='mariadb',
           'Topic :: Database'
       ],
       description='Python MariaDB extension',
-      long_description='MariaDB Connector/Python, a DBAPI 2.0 (PEP-249) database driver for connecting to MariaDB and MySQL database servers.',
+      long_description=long_description,
+      long_description_content_type='text/markdown',
       author='Georg Richter',
       license='LGPL 2.1',
-      url='https://www.github.com/MariaDB/mariadb-connector-python',
+      url='https://www.github.com/mariadb-corporation/mariadb-connector-python',
+      project_urls={
+         "Bug Tracker": "https://jira.mariadb.org/",
+         "Documentation": "https://github.com/mariadb-corporation/mariadb-connector-python/wiki",
+         "Source Code": "https://www.github.com/mariadb-corporation/mariadb-connector-python",
+      },
       ext_modules=[Extension('mariadb', ['src/mariadb.c', 'src/mariadb_connection.c',
                                          'src/mariadb_exception.c', 'src/mariadb_cursor.c',
                                          'src/mariadb_codecs.c', 'src/mariadb_field.c',
