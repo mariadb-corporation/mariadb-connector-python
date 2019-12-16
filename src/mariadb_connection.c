@@ -243,6 +243,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     char *pool_name= 0;
     uint32_t pool_size= 0;
     uint8_t ssl_enforce= 0;
+    uint8_t reset_session= 1;
     unsigned int client_flags= 0, port= 0;
     unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
@@ -255,12 +256,13 @@ MrdbConnection_Initialize(MrdbConnection *self,
         "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
         "ssl_cipher", "ssl_capath", "ssl_crlpath",
         "ssl_verify_cert", "ssl",
-        "client_flags", "charset", "pool_name", "pool_size", "plugin_dir", NULL
+        "client_flags", "charset", "pool_name", "pool_size", "pool_reset_connection", "plugin_dir",
+        NULL
     };
 
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiipissssssssssipissis:connect",
+                "|sssssisiiipissssssssssipissibs:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -269,7 +271,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_key, &ssl_ca, &ssl_cert, &ssl_crl,
                 &ssl_cipher, &ssl_capath, &ssl_crlpath,
                 &ssl_verify_cert, &ssl_enforce,
-                &client_flags, &charset, &pool_name, &pool_size, &plugin_dir))
+                &client_flags, &charset, &pool_name, &pool_size, &reset_session, &plugin_dir))
         return -1;
 
     if (dsn)

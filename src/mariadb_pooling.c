@@ -329,22 +329,19 @@ PyObject *MrdbPool_getconnection(MrdbPool *self)
   {
     if (self->connection[i] && !self->connection[i]->inuse)
     {
-      if (self->connection[i])
+      if (!mysql_ping(self->connection[i]->mysql))
       {
-        if (!mysql_ping(self->connection[i]->mysql))
+        uint64_t t= TIMEDIFF(now, self->connection[i]->last_used);
+        if (t >= tdiff)
         {
-          uint64_t t= TIMEDIFF(now, self->connection[i]->last_used);
-          if (t >= tdiff)
-          {
-            conn= self->connection[i];
-            tdiff= t;
-          }
-        } else {
-          self->connection[i]->pool= NULL;
-          MrdbConnection_close(self->connection[i]);
-          self->connection[i]= NULL;
+          conn= self->connection[i];
+          tdiff= t;
         }
-      }  
+      } else {
+        self->connection[i]->pool= NULL;
+        MrdbConnection_close(self->connection[i]);
+        self->connection[i]= NULL;
+      }
     }
   }
   if (conn)
