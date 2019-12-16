@@ -27,7 +27,6 @@
 #include <errmsg.h>
 #include <mysqld_error.h>
 #include <time.h>
-//#include <malloc.h>
 #include <docs/common.h>
 
 
@@ -39,6 +38,7 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 #define pthread_mutex_unlock(A)  LeaveCriticalSection(A)
 #define pthread_mutex_destroy(A) DeleteCriticalSection(A)
 #define pthread_self() GetCurrentThreadId()
+#include <malloc.h>
 #else
 #include <pthread.h>
 #endif /* defined(_WIN32) */
