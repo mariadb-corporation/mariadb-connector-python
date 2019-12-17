@@ -6,10 +6,12 @@ import datetime
 import unittest
 
 import mariadb
+import platform
 
 from test.base_test import create_connection, conf
 
 
+@unittest.skipIf(platform.python_implementation() == "PyPy", "skip pooling tests for PyPy")
 class TestPooling(unittest.TestCase):
 
     def setUp(self):
