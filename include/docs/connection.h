@@ -284,8 +284,3 @@ PyDoc_STRVAR(
   "Returns the alphanumeric version of connected database. Tthe numeric version\n"
   "can be obtained with server_version property."
 );
-
-PyDoc_STRVAR(
-  connection_exception_OperationalError__doc__,
-  "(read only)\n\n"
-);
