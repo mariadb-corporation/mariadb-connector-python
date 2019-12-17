@@ -83,11 +83,14 @@ class TestConnection(unittest.TestCase):
         if os.environ.get("MAXSCALE_VERSION"):
             self.skipTest("MAXSCALE doesn't support ed25519 for now")
         if self.connection.server_version < 100122:
-            self.skipTest("ed25519 now supported")
+            self.skipTest("ed25519 not supported")
 
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute("INSTALL SONAME 'auth_ed25519'")
+        try:
+            cursor.execute("INSTALL SONAME 'auth_ed25519'")
+        except mariadb.DatabaseError:
+            self.skipTest("Server couldn't load auth_ed25519")
         cursor.execute("DROP USER IF EXISTS eduser")
         if self.connection.server_version < 100400:
             cursor.execute("CREATE USER eduser@'%' IDENTIFIED VIA ed25519 "
