@@ -99,10 +99,10 @@ class TestPooling(unittest.TestCase):
         p= mariadb._CONNECTION_POOLS["getter_test"]
         self.assertEqual(p.pool_name, "getter_test")
         self.assertEqual(p.pool_size, 4)
-        if default_conf["pool_reset_connection"] is None:
-            self.assertEqual(p.pool_reset_connection, True)
-        else:
+        if "pool_reset_connection" in default_conf:
             self.assertEqual(p.pool_reset_connection, default_conf["pool_reset_connection"])
+        else:
+            self.assertEqual(p.pool_reset_connection, True)
         self.assertEqual(p.max_size, 64)
         del mariadb._CONNECTION_POOLS["getter_test"]
 

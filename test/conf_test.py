@@ -13,8 +13,6 @@ def conf():
     }
     if os.environ.get('TEST_RESET_SESSION'):
         d["pool_reset_connection"] = int(os.environ.get('TEST_RESET_SESSION', '1'))
-    else:
-        d["pool_reset_connection"] = False
     if os.environ.get('TEST_PASSWORD'):
         d["password"] = os.environ.get('TEST_PASSWORD')
     return d
