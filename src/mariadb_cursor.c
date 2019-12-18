@@ -566,7 +566,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     self->parser= NULL;
     MrdbCursor_clear(self);
     Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_real_query(self->connection->mysql, statement, statement_len);
+    rc= mysql_real_query(self->connection->mysql, statement, (unsigned long)statement_len);
     Py_END_ALLOW_THREADS;
     if (rc)
     {
@@ -657,7 +657,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         {
           Py_BEGIN_ALLOW_THREADS;
           self->is_text= 0;
-          rc= mysql_real_query(self->connection->mysql, statement, statement_len);
+          rc= mysql_real_query(self->connection->mysql, statement, (unsigned long)statement_len);
           Py_END_ALLOW_THREADS;
 
           if (rc)
@@ -1402,7 +1402,7 @@ static PyObject *MrdbCursor_callproc(MrdbCursor *self, PyObject *args)
     return NULL;
 
   if (data)
-    param_count= PyTuple_Size(data);
+    param_count= (uint32_t)PyTuple_Size(data);
 
   stmt_len= sp_len + 5 + 3 + param_count * 2 + 1;
   if (!(stmt= (char *)PyMem_RawCalloc(1, stmt_len)))

@@ -210,7 +210,7 @@ uint8_t MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t e
         char *val_end= strstr(a+1, ")s");
         if (val_end)
         {
-          int keylen= val_end - a + 1;
+          ssize_t keylen= val_end - a + 1;
           if (p->paramstyle && p->paramstyle != PYFORMAT)
           {
             parser_error(errmsg, errmsg_len, "Mixing different parameter styles is not supported");

@@ -335,7 +335,7 @@ uint8_t MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t e
 #define MAX_POOL_SIZE 64
 
 #define TIMEDIFF(a,b)\
-((a).tv_sec * 1E09 + (a).tv_nsec) - ((b).tv_sec * 1E09 + (b).tv_nsec)
+((a).tv_sec * (uint64_t)1E09 + (a).tv_nsec) - ((b).tv_sec * (uint64_t)1E09 + (b).tv_nsec)
 
 /* Helper macros */
 

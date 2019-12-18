@@ -1094,7 +1094,7 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
 
     from= (char *)PyUnicode_AsUTF8AndSize(string, (Py_ssize_t *)&from_length);
     to= (char *)alloca(from_length * 2 + 1);
-    to_length= mysql_real_escape_string(self->mysql, to, from, from_length);
+    to_length= mysql_real_escape_string(self->mysql, to, from, (unsigned long)from_length);
     new_string= PyUnicode_FromStringAndSize(to, to_length);
     return new_string;
 }
