@@ -1,5 +1,5 @@
 /*****************************************************************************
-  Copyright (C) 2018,2019 Georg Richter and MariaDB Corporation AB
+  Copyright (C) 2018-2020 Georg Richter and MariaDB Corporation AB
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Library General Public
@@ -15,58 +15,83 @@
   License along with this library; if not see <http://www.gnu.org/licenses>
   or write to the Free Software Foundation, Inc.,
   51 Franklin St., Fifth Floor, Boston, MA 02110, USA
- *******************************************************************************/
+ *****************************************************************************/
 
 #include "mariadb_python.h"
 #include "docs/connection.h"
 
-void MrdbConnection_dealloc(MrdbConnection *self);
+void
+MrdbConnection_dealloc(MrdbConnection *self);
 
 extern PyObject *cnx_pool;
 
-static PyObject *MrdbConnection_cursor(MrdbConnection *self,
-       PyObject *args,
-       PyObject *kwargs);
+static PyObject 
+*MrdbConnection_cursor(MrdbConnection *self, PyObject *args, PyObject *kwargs);
 
-static PyObject *MrdbConnection_exception(PyObject *self, void *closure);
+static PyObject 
+*MrdbConnection_exception(PyObject *self, void *closure);
+
 #define GETTER_EXCEPTION(name, exception, doc)\
 { name,MrdbConnection_exception, NULL, doc, &exception }
 
-static PyObject *MrdbConnection_getid(MrdbConnection *self, void *closure);
-static PyObject *MrdbConnection_getuser(MrdbConnection *self, void *closure);
-static PyObject *MrdbConnection_getreconnect(MrdbConnection *self,
-        void *closure);
-static int MrdbConnection_setreconnect(MrdbConnection *self,
-        PyObject *args,
-        void *closure);
-static PyObject *MrdbConnection_getdb(MrdbConnection *self, void *closure);
-static int MrdbConnection_setdb(MrdbConnection *self, PyObject *arg, void *closure);
-static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
-        PyObject *args);
-static PyObject *MrdbConnection_server_version(MrdbConnection *self);
-static PyObject *MrdbConnection_server_info(MrdbConnection *self);
+static PyObject *
+MrdbConnection_getid(MrdbConnection *self, void *closure);
 
-static PyObject *MrdbConnection_warnings(MrdbConnection *self);
-static PyObject *MrdbConnection_getautocommit(MrdbConnection *self);
-static int MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg, void *closure);
+static PyObject *
+MrdbConnection_getuser(MrdbConnection *self, void *closure);
 
-static PyGetSetDef MrdbConnection_sets[]=
+static PyObject *
+MrdbConnection_getreconnect(MrdbConnection *self, void *closure);
+
+static int
+MrdbConnection_setreconnect(MrdbConnection *self, PyObject *args,
+                            void *closure);
+static PyObject *
+MrdbConnection_getdb(MrdbConnection *self, void *closure);
+
+static int
+MrdbConnection_setdb(MrdbConnection *self, PyObject *arg, void *closure);
+
+static PyObject *
+MrdbConnection_escape_string(MrdbConnection *self, PyObject *args);
+
+static PyObject *
+MrdbConnection_server_version(MrdbConnection *self);
+
+static PyObject *
+MrdbConnection_server_info(MrdbConnection *self);
+
+static PyObject *
+MrdbConnection_warnings(MrdbConnection *self);
+
+static PyObject *
+MrdbConnection_getautocommit(MrdbConnection *self);
+
+static int
+MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg,
+                             void *closure);
+
+static PyGetSetDef
+MrdbConnection_sets[]=
 {
-    {"autocommit", (getter)MrdbConnection_getautocommit, (setter)MrdbConnection_setautocommit, 
-      connection_autocommit__doc__, NULL},
+    {"autocommit", (getter)MrdbConnection_getautocommit,
+        (setter)MrdbConnection_setautocommit, 
+        connection_autocommit__doc__, NULL},
     {"connection_id", (getter)MrdbConnection_getid, NULL,
-      connection_connection_id__doc__, NULL},
+        connection_connection_id__doc__, NULL},
     {"database", (getter)MrdbConnection_getdb, (setter)MrdbConnection_setdb,
-     connection_database__doc__, NULL},
-    {"auto_reconnect", (getter)MrdbConnection_getreconnect, (setter)MrdbConnection_setreconnect,
-     connection_auto_reconnect__doc__, NULL},
-    {"user", (getter)MrdbConnection_getuser, NULL, connection_user__doc__, NULL},
+        connection_database__doc__, NULL},
+    {"auto_reconnect", (getter)MrdbConnection_getreconnect,
+        (setter)MrdbConnection_setreconnect,
+        connection_auto_reconnect__doc__, NULL},
+    {"user", (getter)MrdbConnection_getuser, NULL, connection_user__doc__, 
+        NULL},
     {"warnings", (getter)MrdbConnection_warnings, NULL,
-     connection_warnings__doc__, NULL},
+        connection_warnings__doc__, NULL},
     {"server_version", (getter)MrdbConnection_server_version, NULL,
-     connection_server_version__doc__, NULL},
+        connection_server_version__doc__, NULL},
     {"server_info", (getter)MrdbConnection_server_info, NULL, 
-     connection_server_info__doc__, NULL},
+        connection_server_info__doc__, NULL},
     GETTER_EXCEPTION("Error", Mariadb_Error, ""),
     GETTER_EXCEPTION("Warning", Mariadb_Warning, ""),
     GETTER_EXCEPTION("InterfaceError", Mariadb_InterfaceError, ""),
@@ -79,7 +104,8 @@ static PyGetSetDef MrdbConnection_sets[]=
     {NULL}
 };
 
-static PyMethodDef MrdbConnection_Methods[] =
+static PyMethodDef
+MrdbConnection_Methods[] =
 {
     /* PEP-249 methods */
     {"close", (PyCFunction)MrdbConnection_close,
@@ -157,7 +183,8 @@ static PyMethodDef MrdbConnection_Methods[] =
     {NULL} /* alwa+ys last */
 };
 
-static struct PyMemberDef MrdbConnection_Members[] =
+static struct
+PyMemberDef MrdbConnection_Members[] =
 {
     {"character_set",
         T_OBJECT,
@@ -202,12 +229,15 @@ static struct PyMemberDef MrdbConnection_Members[] =
     {NULL} /* always last */
 };
 
-static void Mrdb_ConnAttrStr(MYSQL *mysql, PyObject **obj, enum mariadb_value attr)
+static void
+Mrdb_ConnAttrStr(MYSQL *mysql, PyObject **obj, enum mariadb_value attr)
 {
     char *val= NULL;
 
     if (mariadb_get_infov(mysql, attr, &val) || !val)
+    {
         return;
+    }
     *obj= PyUnicode_FromString(val);
 }
 
@@ -216,24 +246,25 @@ void MrdbConnection_SetAttributes(MrdbConnection *self)
     MY_CHARSET_INFO cinfo;
 
     Mrdb_ConnAttrStr(self->mysql, &self->host, MARIADB_CONNECTION_HOST);
-    Mrdb_ConnAttrStr(self->mysql, &self->tls_cipher, MARIADB_CONNECTION_SSL_CIPHER);
-    Mrdb_ConnAttrStr(self->mysql, &self->tls_version, MARIADB_CONNECTION_TLS_VERSION);
-    Mrdb_ConnAttrStr(self->mysql, &self->unix_socket, MARIADB_CONNECTION_UNIX_SOCKET);
+    Mrdb_ConnAttrStr(self->mysql, &self->tls_cipher,
+                     MARIADB_CONNECTION_SSL_CIPHER);
+    Mrdb_ConnAttrStr(self->mysql, &self->tls_version,
+                     MARIADB_CONNECTION_TLS_VERSION);
+    Mrdb_ConnAttrStr(self->mysql, &self->unix_socket,
+                     MARIADB_CONNECTION_UNIX_SOCKET);
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_PORT, &self->port);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_MARIADB_CHARSET_INFO, &cinfo);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_MARIADB_CHARSET_INFO,
+                      &cinfo);
     self->charset= PyUnicode_FromString(cinfo.csname);
     self->collation= PyUnicode_FromString(cinfo.name);
 }
 
 static int
 MrdbConnection_Initialize(MrdbConnection *self,
-                          PyObject *args,
-                          PyObject *dsnargs)
+        PyObject *args,
+        PyObject *dsnargs)
 {
     int rc;
-    /* Todo: we need to support all dsn parameters, the current
-       implementation is just a small subset.
-     */
     char *dsn= NULL, *host=NULL, *user= NULL, *password= NULL, *schema= NULL,
          *socket= NULL, *init_command= NULL, *default_file= NULL,
          *default_group= NULL, *local_infile= NULL,
@@ -256,7 +287,8 @@ MrdbConnection_Initialize(MrdbConnection *self,
         "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
         "ssl_cipher", "ssl_capath", "ssl_crlpath",
         "ssl_verify_cert", "ssl",
-        "client_flags", "charset", "pool_name", "pool_size", "pool_reset_connection", "plugin_dir",
+        "client_flags", "charset", "pool_name", "pool_size", 
+        "pool_reset_connection", "plugin_dir",
         NULL
     };
 
@@ -271,8 +303,11 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_key, &ssl_ca, &ssl_cert, &ssl_crl,
                 &ssl_cipher, &ssl_capath, &ssl_crlpath,
                 &ssl_verify_cert, &ssl_enforce,
-                &client_flags, &charset, &pool_name, &pool_size, &reset_session, &plugin_dir))
+                &client_flags, &charset, &pool_name, &pool_size,
+                &reset_session, &plugin_dir))
+    {
         return -1;
+    }
 
     if (dsn)
     {
@@ -284,25 +319,25 @@ MrdbConnection_Initialize(MrdbConnection *self,
     /* do we need pooling? */
     if (pool_name)
     {
-      /* check if pool exists */
-      if (PyDict_Contains(cnx_pool, PyUnicode_FromString(pool_name)))
-      {
-        /* get connection from pool */
-      }
+        /* check if pool exists */
+        if (PyDict_Contains(cnx_pool, PyUnicode_FromString(pool_name)))
+        {
+            /* get connection from pool */
+        }
     }
 
     if (!(self->mysql= mysql_init(NULL)))
     {    mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
             "Can't allocate memory for connection");
-        return -1;
+    return -1;
     }
 
     if (plugin_dir) {
         mysql_optionsv(self->mysql, MYSQL_PLUGIN_DIR, plugin_dir);
     } else {
-        #if defined(DEFAULT_PLUGINS_SUBDIR)
+#if defined(DEFAULT_PLUGINS_SUBDIR)
         mysql_optionsv(self->mysql, MYSQL_PLUGIN_DIR, DEFAULT_PLUGINS_SUBDIR);
-        #endif
+#endif
     }
 
     /* read defaults from configuration file(s) */
@@ -436,7 +471,7 @@ PyTypeObject MrdbConnection_Type = {
     0, /* (PyObject *) tp_defined */
 };
 
-PyObject *
+    PyObject *
 MrdbConnection_connect(
         PyObject *self,
         PyObject *args,
@@ -450,14 +485,14 @@ MrdbConnection_connect(
     /* if pool name exists, we need to return a connection from pool */
     if ((pn= PyDict_GetItemString(kwargs, "pool_name")))
     {
-      if ((pool = PyDict_GetItem(cnx_pool, pn)))
-      {
-        return MrdbPool_getconnection((MrdbPool *)pool);
-      }
-      if ((pool = MrdbPool_add(self, args, kwargs)))
-      {
-        return MrdbPool_getconnection((MrdbPool *)pool);
-      }
+        if ((pool = PyDict_GetItem(cnx_pool, pn)))
+        {
+            return MrdbPool_getconnection((MrdbPool *)pool);
+        }
+        if ((pool = MrdbPool_add(self, args, kwargs)))
+        {
+            return MrdbPool_getconnection((MrdbPool *)pool);
+        }
     }
 
     if (!(c= (MrdbConnection *)PyType_GenericAlloc(&MrdbConnection_Type, 1)))
@@ -479,7 +514,7 @@ void MrdbConnection_dealloc(MrdbConnection *self)
         if (self->mysql)
         {
             Py_BEGIN_ALLOW_THREADS
-                mysql_close(self->mysql);
+            mysql_close(self->mysql);
             Py_END_ALLOW_THREADS
         }
         Py_TYPE(self)->tp_free((PyObject*)self);
@@ -494,17 +529,19 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
 
     if (self->pool)
     {
-       int rc= 0;
-       pthread_mutex_lock(&self->pool->lock);
-       if (self->pool->reset_session)
-         rc= mysql_reset_connection(self->mysql);
-       if (!rc)
-       {
-         self->inuse= 0;
-         clock_gettime(CLOCK_MONOTONIC_RAW, &self->last_used);
-       }
-       pthread_mutex_unlock(&self->pool->lock);
-       return Py_None;
+        int rc= 0;
+        pthread_mutex_lock(&self->pool->lock);
+        if (self->pool->reset_session)
+        {
+            rc= mysql_reset_connection(self->mysql);
+        }
+        if (!rc)
+        {
+            self->inuse= 0;
+            clock_gettime(CLOCK_MONOTONIC_RAW, &self->last_used);
+        }
+        pthread_mutex_unlock(&self->pool->lock);
+        return Py_None;
     }
 
     Py_BEGIN_ALLOW_THREADS
@@ -536,8 +573,8 @@ MrdbConnection_exception(PyObject *self, void *closure)
     return exception;
 }
 
-/* {{{ MrdbConnection_commit */
-PyObject *MrdbConnection_commit(MrdbConnection *self)
+PyObject *
+MrdbConnection_commit(MrdbConnection *self)
 {
     int rc= 0;
     MARIADB_CHECK_CONNECTION(self, NULL);
@@ -557,10 +594,10 @@ PyObject *MrdbConnection_commit(MrdbConnection *self)
         return NULL;
     }
     Py_RETURN_NONE;
-} /* }}} */
+}
 
-/* {{{ MrdbConnection_rollback */
-PyObject *MrdbConnection_rollback(MrdbConnection *self)
+PyObject *
+MrdbConnection_rollback(MrdbConnection *self)
 {
     int rc= 0;
     MARIADB_CHECK_CONNECTION(self, NULL);
@@ -583,10 +620,9 @@ PyObject *MrdbConnection_rollback(MrdbConnection *self)
 
     Py_RETURN_NONE;
 }
-/* }}} */
 
-/* {{{ DBAPIType Object */
-PyObject *Mariadb_DBAPIType_Object(uint32_t type)
+PyObject *
+Mariadb_DBAPIType_Object(uint32_t type)
 {
     PyObject *types= Py_BuildValue("(I)", (uint32_t)type);
     PyObject *number= PyObject_CallObject((PyObject *)&Mariadb_DBAPIType_Type,
@@ -594,10 +630,9 @@ PyObject *Mariadb_DBAPIType_Object(uint32_t type)
     Py_DECREF(types);
     return number;
 }
-/* }}} */
 
-/*{{{ Mariadb_xid */
-PyObject *MrdbConnection_xid(MrdbConnection *self, PyObject *args)
+PyObject *
+MrdbConnection_xid(MrdbConnection *self, PyObject *args)
 {
     PyObject *xid= NULL;
     char     *format_id= NULL,
@@ -607,19 +642,22 @@ PyObject *MrdbConnection_xid(MrdbConnection *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "ssi", &format_id,
                 &transaction_id,
                 &branch_qualifier))
+    {
         return NULL;
+    }
 
     if (!(xid= Py_BuildValue("(ssi)", format_id,
                     transaction_id,
                     branch_qualifier)))
+    {
         return NULL;
+    }
 
     return xid;
 }
-/* }}} */
 
-/* {{{ MrdbConnection_tpc_begin */
-PyObject *MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args)
+PyObject *
+MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args)
 {
     char *transaction_id= 0,
          *format_id=0;
@@ -630,7 +668,9 @@ PyObject *MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "(ssi)", &format_id,
                 &transaction_id,
                 &branch_qualifier))
+    {
         return NULL;
+    }
 
     /* MariaDB ignores format_id and branch_qualifier */
     snprintf(stmt, 127, "XA BEGIN '%s'", transaction_id);
@@ -648,10 +688,9 @@ PyObject *MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args)
 
     Py_RETURN_NONE;
 }
-/* }}} */
 
-/* {{{ MrdbConnection_tpc_commit */
-PyObject *MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
+PyObject *
+MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
 {
     char *transaction_id= 0,
          *format_id=0;
@@ -664,7 +703,9 @@ PyObject *MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "|(ssi)", &format_id,
                 &transaction_id,
                 &branch_qualifier))
+    {
         return NULL;
+    }
 
     if (!args && self->tpc_state != TPC_STATE_PREPARE)
     {
