@@ -6,7 +6,6 @@ import pyperf, os
 from benchmarks.benchmark.do_1 import do1
 from benchmarks.benchmark.fetch import *
 
-from benchmarks.benchmark.select_str import test_str
 from benchmarks.benchmark.select_1 import select_1
 from benchmarks.benchmark.select_param import select_param
 from benchmarks.benchmark.select_10_cols_from_seq_1_to_10000 import \

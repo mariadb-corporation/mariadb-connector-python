@@ -5,10 +5,10 @@
 
 import importlib
 
-from test.conf_test import conf, dbmodule
+from test.conf_test import conf, glob
 from benchmarks.setup_db import init_db, end_db
 
-module= dbmodule();
+module= glob();
 dbdrv = importlib.import_module(module["module"])
 
 def main():

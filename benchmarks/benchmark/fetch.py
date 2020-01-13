@@ -7,9 +7,8 @@ def str_fetchall(loops, conn):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()
-    a= (1,)
     for value in range_it:
-        cursor.execute('select col1,col2,col3 from str_test WHERE 1=?', a)
+        cursor.execute('select col1,col2,col3 from str_test')
         row= cursor.fetchall()
         del row
     del cursor
@@ -19,9 +18,8 @@ def str_fetchloop(loops, conn):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()
-    a= (1,)
     for value in range_it:
-        cursor.execute('select col1,col2,col3 from str_test WHERE 1=?', a)
+        cursor.execute('select col1,col2,col3 from str_test')
         row= cursor.fetchone()
         while row is not None:
             row= cursor.fetchone()
@@ -32,9 +30,8 @@ def num_fetchall(loops, conn):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()
-    a= (1,)
     for value in range_it:
-        cursor.execute('select col1,col2,col3,col4,col5 from num_test WHERE 1=?', a)
+        cursor.execute('select col1,col2,col3,col4,col5 from num_test')
         row= cursor.fetchall()
         del row
     del cursor
@@ -44,9 +41,8 @@ def num_fetchloop(loops, conn):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()
-    a= (1,)
     for value in range_it:
-        cursor.execute('select col1,col2,col3,col4,col5 from num_test WHERE 1=?', a)
+        cursor.execute('select col1,col2,col3,col4,col5 from num_test')
         row= cursor.fetchone()
         while row is not None:
             row= cursor.fetchone()
