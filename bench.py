@@ -7,12 +7,11 @@ import importlib
 
 from benchmarks.internal_bench import test_suite
 from benchmarks.internal_bench import run_test
-from test.conf_test import conf
+from test.conf_test import conf, glob
 
-import os
 
-module= os.environ.get('TEST_MODULE', 'mariadb'),
-dbdrv = importlib.import_module(module[0])
+module= glob();
+dbdrv = importlib.import_module(module["module"])
 
 
 def main():
