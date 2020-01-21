@@ -1055,7 +1055,10 @@ static PyObject *MrdbConnection_getdb(MrdbConnection *self, void *closure)
     MARIADB_CHECK_CONNECTION(self, NULL);
 
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SCHEMA, &db);
-    p= PyUnicode_FromString(db);
+    if (db)
+      p= PyUnicode_FromString(db);
+    else
+      p= Py_None;
     return p;
 }
 /* }}} */
