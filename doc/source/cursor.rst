@@ -86,7 +86,7 @@ Cursor methods
 
    Fetches all rows of a pending result set and returns a list of tuples.
 
-   If the cursor was created with option *namedTuple=True* the result will be a list of named tuples.
+   If the cursor was created with option *named_tuple=True* the result will be a list of named tuples.
 
 .. method:: fetchmany(size)
 
@@ -97,13 +97,13 @@ Cursor methods
    If it is not given, the cursor's arraysize determines the number of
    rows to be fetched.
 
-   If the cursor was created with option *namedTuple=True* the result will be a list of named tuples.
+   If the cursor was created with option *named_tuple=True* the result will be a list of named tuples.
 
 .. method:: fetchone()
 
    Fetches next row of a pending result set and returns a tuple.
 
-   If the cursor was created with option *namedTuple=True* the result will be a named tuple.
+   If the cursor was created with option *named_tuple=True* the result will be a named tuple.
 
 .. method:: fieldcount()
 
