@@ -8,6 +8,7 @@ import mariadb
 
 from test.base_test import create_connection
 from test.conf_test import conf
+import platform
 
 
 class TestConnection(unittest.TestCase):
@@ -17,6 +18,15 @@ class TestConnection(unittest.TestCase):
 
     def tearDown(self):
         del self.connection
+
+    def test_conpy36(self):
+        if platform.system() == "Windows":
+            self.skipTest("unix_socket not supported on Windows")
+        default_conf = conf()
+        try:
+           conn= mariadb.connect(user=default_conf["user"], unix_socket="/does_not_exist/x.sock")
+        except mariadb.DatabaseError:
+           pass
 
     def test_connection_default_file(self):
         if os.path.exists("client.cnf"):

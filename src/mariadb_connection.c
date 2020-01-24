@@ -280,7 +280,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
                  compress= 0, ssl_verify_cert= 0;
 
     char *dsn_keys[]= {
-        "dsn", "host", "user", "password", "database", "port", "socket",
+        "dsn", "host", "user", "password", "database", "port", "unix_socket",
         "connect_timeout", "read_timeout", "write_timeout",
         "local_infile", "compress", "init_command",
         "default_file", "default_group",
