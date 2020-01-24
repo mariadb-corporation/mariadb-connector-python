@@ -189,8 +189,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_buffered(self):
-        cursor = self.connection.cursor()
-        cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3", buffered=True)
+        cursor = self.connection.cursor(buffered=True)
+        cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
         self.assertEqual(cursor.rowcount, 3)
         cursor.scroll(1)
         row = cursor.fetchone()
@@ -239,6 +239,7 @@ class TestCursor(unittest.TestCase):
         params = [(1,), (2,)]
         cursor.executemany("DELETE FROM bulk_delete WHERE id=?", params)
         self.assertEqual(cursor.rowcount, 2)
+        del cursor
 
     def test_pyformat(self):
         if os.environ.get("MAXSCALE_VERSION"):
@@ -388,33 +389,9 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[1], 2)
         self.assertEqual(row[2], 3)
 
-    def test_tuple2(self):
-        cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)");
-        t = datetime.datetime(2018, 6, 20, 12, 22, 31, 123456)
-        val = ([1, t, 3, (1, 2, 3)],)
-        cursor.execute("INSERT INTO dyncol1 VALUES (?)", val);
-        cursor.execute("SELECT a FROM dyncol1")
-        row = cursor.fetchone()
-        self.assertEqual(row, val);
-        del cursor
-
-    def test_set(self):
-        cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)")
-        t = datetime.datetime(2018, 6, 20, 12, 22, 31, 123456)
-        a = collections.OrderedDict(
-            [('apple', 4), ('banana', 3), ('orange', 2), ('pear', 1), ('4', 3), (4, 4)])
-        val = ([1, t, 3, (1, 2, 3), {1, 2, 3}, a],)
-        cursor.execute("INSERT INTO dyncol1 VALUES (?)", val)
-        cursor.execute("SELECT a FROM dyncol1")
-        row = cursor.fetchone()
-        self.assertEqual(row, val)
-        del cursor
-
     def test_reset(self):
         cursor = self.connection.cursor()
-        cursor.execute("SELECT 1 UNION SELECT 2", buffered=False)
+        cursor.execute("SELECT 1 UNION SELECT 2")
         cursor.execute("SELECT 1 UNION SELECT 2")
         del cursor
 
@@ -467,10 +444,20 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 2);
         del cursor
 
-    def test_scroll(self):
+    def test_conpy34(self):
         cursor = self.connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20), b varchar(20))")
+        try:
+            cursor.execute("INSERT INTO test.t1(fname, sname) VALUES (?, ?)", (("Walker", "Percy"), ("Flannery", "O'Connor")))
+        except mariadb.DataError:
+            pass
+        del cursor
+     
+
+    def test_scroll(self):
+        cursor = self.connection.cursor(buffered=True)
         stmt = "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
-        cursor.execute(stmt, buffered=True)
+        cursor.execute(stmt)
 
         try:
             cursor.scroll(0)
@@ -672,10 +659,10 @@ class TestCursor(unittest.TestCase):
 
 
     def test_inaccurate_rownumber(self):
-        cursor = self.connection.cursor()
+        cursor = self.connection.cursor(buffered=True)
         self.assertEqual(cursor.rownumber, None)
         stmt = "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
-        cursor.execute(stmt, buffered=True)
+        cursor.execute(stmt)
         self.assertEqual(cursor.rownumber, 0)
         cursor.scroll(2, mode='absolute')
         self.assertEqual(cursor.rownumber, 2)
@@ -748,6 +735,17 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], "foobar")
         cursor.execute("DROP PROCEDURE IF EXISTS p3")
         del cursor, con
+
+    def test_conpy35(self):
+        con= create_connection()
+        cursor= con.cursor(cursor_type=mariadb.CURSOR_TYPE_READ_ONLY)
+        cursor= con.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE t1(col1 int, col2 varchar(100))")
+        cursor.execute("INSERT INTO t1 VALUES (1, 'val1'), (2, 'val2')")
+        cursor.execute("SELECT * FROM t1")
+        cursor.fetchone()
+        cursor.fetchone()
+        del cursor
 
 if __name__ == '__main__':
     unittest.main()

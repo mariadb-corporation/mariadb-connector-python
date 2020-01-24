@@ -475,10 +475,8 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
         return 0;
     }
     else {
-        /* no corresponding object, so we will serialize it */
-        paraminfo->type= MYSQL_TYPE_LONG_BLOB;
-        paraminfo->ob_type= Py_TYPE(obj);
-        return 0;
+        /* no corresponding object, return error  */
+        return 2;
     }
 
     return 1;
@@ -605,14 +603,25 @@ mariadb_get_parameter_info(MrdbCursor *self,
 
     if (!self->array_size)
     {
+        uint8_t rc;
         memset(&pinfo, 0, sizeof(MrdbParamInfo));
         if (mariadb_get_parameter(self, 0, 0, column_nr, &paramvalue))
             return 1;
-        if (mariadb_get_column_info(paramvalue.value, &pinfo))
+        if ((rc= mariadb_get_column_info(paramvalue.value, &pinfo)))
         {
-            mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+            if (rc == 1)
+            {
+                mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                     "Can't retrieve column information for parameter %d",
-                    column_nr);
+                     column_nr);
+            }
+            if (rc == 2)
+            {
+                mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+                    "Data type '%s' in column %d not supported in MariaDB",
+                     Py_TYPE(paramvalue.value)->tp_name, column_nr);
+            }
+       
             return 1;
         }
         param->buffer_type= pinfo.type;

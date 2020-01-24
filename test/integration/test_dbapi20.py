@@ -305,7 +305,7 @@ class DatabaseAPI20Test(unittest.TestCase):
     def test_rowcount(self):
         con = self._connect()
         try:
-            cur = con.cursor()
+            cur = con.cursor(buffered=True)
             self.executeDDL1(cur)
             self.assertEqual(cur.rowcount, -1,
                              'cursor.rowcount should be -1 after executing no-result '
@@ -318,7 +318,7 @@ class DatabaseAPI20Test(unittest.TestCase):
                             'cursor.rowcount should == number or rows inserted, or '
                             'set to -1 after executing an insert statement'
                             )
-            cur.execute("select name from %sbooze" % self.table_prefix, buffered=True)
+            cur.execute("select name from %sbooze" % self.table_prefix)
             self.assertTrue(cur.rowcount in (-1, 1),
                             'cursor.rowcount should == number of rows returned, or '
                             'set to -1 after executing a select statement'
@@ -467,7 +467,7 @@ class DatabaseAPI20Test(unittest.TestCase):
     def test_fetchone(self):
         con = self._connect()
         try:
-            cur = con.cursor()
+            cur = con.cursor(buffered=True)
 
             # cursor.fetchone should raise an Error if called before
             # executing a select-type query
@@ -492,7 +492,7 @@ class DatabaseAPI20Test(unittest.TestCase):
             ))
             self.assertRaises(self.driver.Error, cur.fetchone)
 
-            cur.execute('select name from %sbooze' % self.table_prefix, buffered=True)
+            cur.execute('select name from %sbooze' % self.table_prefix)
             r = cur.fetchone()
             self.assertEqual(len(r), 1,
                              'cursor.fetchone should have retrieved a single row'

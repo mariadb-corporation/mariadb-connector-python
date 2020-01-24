@@ -557,7 +557,7 @@ static int MrdbCursor_InitResultSet(MrdbCursor *self)
 /* {{{ MrdbCursor_execute
    PEP-249 execute() method
  */
-    static
+static
 PyObject *MrdbCursor_execute(MrdbCursor *self,
         PyObject *args,
         PyObject *kwargs)
@@ -566,7 +566,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     const char *statement= NULL;
     Py_ssize_t statement_len= 0;
     int rc= 0;
-    uint8_t is_buffered= 0;
+    int8_t is_buffered= -1;
     static char *key_words[]= {"", "", "buffered", NULL};
     char errmsg[128];
 
@@ -575,12 +575,8 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         return NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-                "s#|Ob", key_words, &statement, &statement_len, &Data,
-                &is_buffered))
+                "s#|Ob", key_words, &statement, &statement_len, &Data, &is_buffered))
         return NULL;
-
-    /* default was set to 0 before */
-    self->is_buffered= is_buffered;
 
     /* If we don't have a prepared cursor, we need to end/free parser */
     if (!self->is_prepared && self->parser)
@@ -588,6 +584,9 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         MrdbParser_end(self->parser);
         self->parser= NULL;
     }
+
+    if (is_buffered != -1)
+      self->is_buffered= is_buffered;
 
     /* if there are no parameters specified, we execute the statement in text protocol */
     if (!Data && !self->cursor_type)
