@@ -124,8 +124,8 @@ Cursor methods
    Scroll the cursor in the result set to a new position according to mode.
    
    If mode is relative, value is taken as offset to the current
-   position in the result set, if set to absolute (defult), value states an absolute
-   target position.
+   position in the result set, if set to absolute, value states an absolute
+   target position. The default setting for mode is *'relative'*.
 
 .. method: setinputsizes()
 
