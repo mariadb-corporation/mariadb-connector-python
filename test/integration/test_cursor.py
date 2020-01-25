@@ -738,13 +738,18 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy35(self):
         con= create_connection()
-        cursor= con.cursor(cursor_type=mariadb.CURSOR_TYPE_READ_ONLY)
-        cursor= con.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE t1(col1 int, col2 varchar(100))")
-        cursor.execute("INSERT INTO t1 VALUES (1, 'val1'), (2, 'val2')")
-        cursor.execute("SELECT * FROM t1")
-        cursor.fetchone()
-        cursor.fetchone()
+        cursor = con.cursor(cursor_type=mariadb.CURSOR_TYPE_READ_ONLY)
+        cursor.execute("CREATE TEMPORARY table sample (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(64))");
+
+        for name in ('foo', 'bar', 'baz'):
+            cursor.execute("INSERT INTO sample SET name = ?", (name,))
+        self.assertEqual(cursor.lastrowid, 3)
+
+        cursor.execute("SELECT * FROM sample ORDER BY id")
+        i= 0
+        for row in cursor:
+            i= i+1
+            self.assertEqual(row[0], i)
         del cursor
 
 if __name__ == '__main__':

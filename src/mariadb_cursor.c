@@ -390,20 +390,28 @@ static PyObject *Mariadb_no_operation(MrdbCursor *self,
    associated memory
  */
     static
-void MrdbCursor_clear(MrdbCursor *self)
+void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
 {
 
     if (!self->is_text && self->stmt) {
-        uint32_t val= 0;
-        mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, 0);
-        mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, 0);
-        mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, 0);
-        mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &val);
-        mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &val);
-
         mysql_stmt_free_result(self->stmt);
         while (!mysql_stmt_next_result(self->stmt))
             mysql_stmt_free_result(self->stmt);
+
+        if (new_stmt)
+        {
+          mysql_stmt_close(self->stmt);
+          self->stmt= mysql_stmt_init(self->connection->mysql);
+        }
+        else {
+            uint32_t val= 0;
+
+            mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, 0);
+            mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, 0);
+            mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, 0);
+            mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &val);
+            mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &val);
+        }
 
     }
 
@@ -446,11 +454,11 @@ void ma_cursor_close(MrdbCursor *self)
         /* Todo: check if all the cursor stuff is deleted (when using prepared
            statements this should be handled in mysql_stmt_close) */
         Py_BEGIN_ALLOW_THREADS
-            mysql_stmt_close(self->stmt);
+        mysql_stmt_close(self->stmt);
         Py_END_ALLOW_THREADS
-            self->stmt= NULL;
+        self->stmt= NULL;
     }
-    MrdbCursor_clear(self);
+    MrdbCursor_clear(self, 0);
     if (self->parser)
     {
         MrdbParser_end(self->parser);
@@ -595,7 +603,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
            binary protocol */
         MrdbParser_end(self->parser);
         self->parser= NULL;
-        MrdbCursor_clear(self);
+        MrdbCursor_clear(self, 0);
         Py_BEGIN_ALLOW_THREADS;
         rc= mysql_real_query(self->connection->mysql, statement, (unsigned long)statement_len);
         Py_END_ALLOW_THREADS;
@@ -619,7 +627,10 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         /* if cursor type is not prepared, we need to clear the cursor first */
         if (!self->is_prepared && self->statement)
         {
-            MrdbCursor_clear(self);
+            uint8_t new_stmt= 1;
+            if (!strcmp(self->statement, statement))
+              new_stmt= 0;
+            MrdbCursor_clear(self, new_stmt);
             MrdbParser_end(self->parser);
             self->parser= NULL;
         }
@@ -739,7 +750,7 @@ end:
 error:
     MrdbParser_end(self->parser);
     self->parser= NULL;
-    MrdbCursor_clear(self);
+    MrdbCursor_clear(self, 0);
     return NULL;
 }
 /* }}} */
@@ -1203,7 +1214,7 @@ MrdbCursor_executemany(MrdbCursor *self,
     /* if cursor type is not prepared, we need to clear the cursor first */
     if (!self->is_prepared && self->statement)
     {
-        MrdbCursor_clear(self);
+        MrdbCursor_clear(self, 0);
         MrdbParser_end(self->parser);
         self->parser= NULL;
     }
@@ -1270,7 +1281,7 @@ end:
     MARIADB_FREE_MEM(self->values);
     Py_RETURN_NONE;
 error:
-    MrdbCursor_clear(self);
+    MrdbCursor_clear(self, 0);
     MrdbParser_end(self->parser);
     self->parser= NULL;
     return NULL;
