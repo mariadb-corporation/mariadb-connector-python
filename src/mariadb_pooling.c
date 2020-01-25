@@ -116,7 +116,7 @@ MrdbPool_initialize(MrdbPool *self, PyObject *args, PyObject *kwargs)
     }
 
     /* check if pool already exists */
-    if ((pn= PyDict_GetItemString(kwargs, "pool_name")))
+    if (kwargs && (pn= PyDict_GetItemString(kwargs, "pool_name")))
     {
         if (PyDict_Contains(cnx_pool, pn))
         {
@@ -124,6 +124,11 @@ MrdbPool_initialize(MrdbPool *self, PyObject *args, PyObject *kwargs)
                     "Pool '%s' already exists", PyUnicode_AsUTF8(pn));
             return -1;
         }
+    }
+    else {
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+                "No pool name specified");
+        return -1;
     }
 
     while(PyDict_Next(kwargs, &pos, &key, &value))
