@@ -104,7 +104,6 @@ MrdbPool_initialize(MrdbPool *self, PyObject *args, PyObject *kwargs)
     uint32_t pool_size= 5;
     uint8_t reset_session= 1;
     uint32_t idle_timeout= 1800;
-    //  uint32_t acquire_timeout= 10000;
     uint32_t i;
     PyObject *pn;
     PyObject *key, *value;
@@ -313,12 +312,15 @@ MrdbPool_dealloc(MrdbPool *self)
         {
             self->connection[i]->pool= NULL;
             MrdbConnection_close(self->connection[i]);
+            Py_DECREF(self->connection[i]);
             self->connection[i]= NULL;
         }
     }
     self->pool_size= 0;
     MARIADB_FREE_MEM(self->connection);
     self->connection= NULL;
+
+
     pthread_mutex_unlock(&self->lock);
     pthread_mutex_destroy(&self->lock);
 
@@ -396,6 +398,20 @@ MrdbPool_getconnection(MrdbPool *self)
 static PyObject 
 *MrdbPool_setconfig(MrdbPool *self, PyObject *args, PyObject *kwargs)
 {
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+
+    while(PyDict_Next(kwargs, &pos, &key, &value))
+    {
+        const char *utf8key= PyUnicode_AsUTF8(key);
+        if (!strncmp(utf8key, "pool", 4))
+        {
+            mariadb_throw_exception(NULL, Mariadb_PoolError, 0,
+            "Invalid parameter '%s'. Only DSN parameters are supported",
+            utf8key);
+            return NULL;
+        }
+    }
     self->configuration= kwargs;
     Py_RETURN_NONE;
 }
@@ -438,6 +454,7 @@ MrdbPool_addconnection(MrdbPool *self, PyObject *args)
             {
                 return NULL;
             }
+            Py_INCREF(conn);
             self->connection[i]= conn; 
             self->connection[i]->inuse= 0;
             clock_gettime(CLOCK_MONOTONIC_RAW, &self->connection[i]->last_used);

@@ -126,6 +126,22 @@ class TestPooling(unittest.TestCase):
         self.assertEqual(row[0], 2)
         del mariadb._CONNECTION_POOLS["reset_test"]
 
+    def test_conpy40(self):
+        default_conf= conf()
+        pool = mariadb.ConnectionPool(pool_name = 'pool1')
+
+        try:
+            pool.set_config(pool_size = 3)
+        except mariadb.PoolError:
+            pass
+
+        pool.set_config(**default_conf)
+
+        for j in range(3):
+            c = mariadb.connect(**default_conf)
+            pool.add_connection(c)
+        del pool
+
     def test_pool_add(self):
         default_conf= conf()
         pool= mariadb.ConnectionPool(pool_name="test")

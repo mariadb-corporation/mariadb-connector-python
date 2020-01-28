@@ -327,9 +327,10 @@ MrdbConnection_Initialize(MrdbConnection *self,
     }
 
     if (!(self->mysql= mysql_init(NULL)))
-    {    mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
+    {
+        mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
             "Can't allocate memory for connection");
-    return -1;
+        return -1;
     }
 
     if (plugin_dir) {
