@@ -19,11 +19,11 @@ sys.setrecursionlimit(1500)
 # -- Project information -----------------------------------------------------
 
 project = 'MariaDB Connector/Python'
-copyright = '2019, Georg Richter'
+copyright = '2019,2020 MariaDB Corporation and Georg Richter'
 author = 'Georg Richter'
 
 # The full version, including alpha/beta/rc tags
-release = '0.9.4'
+release = '0.9.53'
 
 
 # -- General configuration ---------------------------------------------------

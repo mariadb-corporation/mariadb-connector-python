@@ -55,6 +55,9 @@
 "    certificates for trusted Certificate Authorities (CAs) to use for TLS.\n"\
 "    This option requires that you use the absolute path, not a relative\n"\
 "    path.\n\n"\
+"ssl_capath: string\n"\
+"    Defines a path to a directory that contains one or more PEM files that\n"\
+"    contains one X509 certificate for a trusted Certificate Authority (CA)\n\n"\
 "ssl_cipher: string\n"\
 "    Defines a list of permitted cipher suites to use for TLS\n\n"\
 "ssl_crl_path: string\n"\
@@ -63,5 +66,5 @@
 "    the absolute path, not a relative path.\n\n"\
 "ssl_verify_server_cert: boolean\n"\
 "    Enables server certificate verification.\n\n"\
-"ssl_enforce: Boolen\n"\
+"ssl_enforce: Boolean\n"\
 "    Always use a secure TLS connection\n\n"
