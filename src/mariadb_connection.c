@@ -267,15 +267,16 @@ MrdbConnection_Initialize(MrdbConnection *self,
     int rc;
     char *dsn= NULL, *host=NULL, *user= NULL, *password= NULL, *schema= NULL,
          *socket= NULL, *init_command= NULL, *default_file= NULL,
-         *default_group= NULL, *local_infile= NULL,
+         *default_group= NULL,
          *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
          *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
-         *charset= NULL, *plugin_dir= NULL;
+         *plugin_dir= NULL;
     char *pool_name= 0;
     uint32_t pool_size= 0;
     uint8_t ssl_enforce= 0;
     uint8_t reset_session= 1;
     unsigned int client_flags= 0, port= 0;
+    int local_infile= 3;
     unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
 
@@ -287,14 +288,14 @@ MrdbConnection_Initialize(MrdbConnection *self,
         "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
         "ssl_cipher", "ssl_capath", "ssl_crlpath",
         "ssl_verify_cert", "ssl",
-        "client_flags", "charset", "pool_name", "pool_size", 
+        "client_flags", "pool_name", "pool_size", 
         "pool_reset_connection", "plugin_dir",
         NULL
     };
 
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiipissssssssssipissibs:connect",
+                "|sssssisiiibissssssssssipisibs:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -303,7 +304,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_key, &ssl_ca, &ssl_cert, &ssl_crl,
                 &ssl_cipher, &ssl_capath, &ssl_crlpath,
                 &ssl_verify_cert, &ssl_enforce,
-                &client_flags, &charset, &pool_name, &pool_size,
+                &client_flags, &pool_name, &pool_size,
                 &reset_session, &plugin_dir))
     {
         return -1;
@@ -331,6 +332,11 @@ MrdbConnection_Initialize(MrdbConnection *self,
         mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
             "Can't allocate memory for connection");
         return -1;
+    }
+
+    if (local_infile != 3)
+    {
+        mysql_optionsv(self->mysql, MYSQL_OPT_LOCAL_INFILE, &local_infile);
     }
 
     if (plugin_dir) {
