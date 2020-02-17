@@ -53,6 +53,38 @@ class TestConnection(unittest.TestCase):
         # revert
         conn.autocommit = True
 
+    def test_local_infile(self):
+        default_conf= conf()
+        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], local_infile=False)
+        cursor=new_conn.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
+        try:
+            cursor.execute("LOAD DATA LOCAL INFILE 'x.x' INTO TABLE t1")
+        except mariadb.ProgrammingError:
+            pass
+        del cursor
+        del new_conn
+
+    def test_init_command(self):
+        default_conf= conf()
+        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], init_command="SET @a:=1")
+        cursor=new_conn.cursor()
+        cursor.execute("SELECT @a")
+        row=cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        del cursor
+        del new_conn
+
+    def test_compress(self):
+        default_conf= conf()
+        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], compress=True)
+        cursor=new_conn.cursor()
+        cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
+        row=cursor.fetchone()
+        self.assertEqual(row[1], "ON")
+        del cursor
+        del new_conn
+
     def test_schema(self):
         if self.connection.server_version < 100103:
             self.skipTest("CREATE OR REPLACE SCHEMA not supported")

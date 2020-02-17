@@ -276,7 +276,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     uint8_t ssl_enforce= 0;
     uint8_t reset_session= 1;
     unsigned int client_flags= 0, port= 0;
-    int local_infile= 3;
+    unsigned int local_infile= 0xFF;
     unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
 
@@ -295,7 +295,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
 
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiibissssssssssipisibs:connect",
+                "|sssssisiiibbssssssssssipisibs:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -334,9 +334,19 @@ MrdbConnection_Initialize(MrdbConnection *self,
         return -1;
     }
 
-    if (local_infile != 3)
+    if (local_infile != 0xFF)
     {
         mysql_optionsv(self->mysql, MYSQL_OPT_LOCAL_INFILE, &local_infile);
+    }
+
+    if (compress)
+    {
+        mysql_optionsv(self->mysql, MYSQL_OPT_COMPRESS, 1);
+    }
+
+    if (init_command)
+    {
+        mysql_optionsv(self->mysql, MYSQL_INIT_COMMAND, init_command);
     }
 
     if (plugin_dir) {
