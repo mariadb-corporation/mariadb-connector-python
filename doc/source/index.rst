@@ -20,6 +20,7 @@ client library for client server communication.
    connection
    cursor
    pool
+   license
 
 
 ------------------
