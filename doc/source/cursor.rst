@@ -1,230 +1,224 @@
 The cursor class
 ====================
 
-.. sectionauthor:: Georg Richter <georg@mariadb.com>
-
 .. class:: mariadb.cursor
 
-    Cursors can be used to execute SQL commands within a database session. Cursors
-    objects are created by the :func:`cursor` method.
+  Cursors can be used to execute SQL commands within a database session. Cursors
+  objects are created by the :func:`cursor` method.
 
-    Cursors are bound to the connection for their entire lifetime. If a connection was
-    closed or dropped all cursor objects bound to this connection became invalid.
+  Cursors are bound to the connection for their entire lifetime. If a connection was
+  closed or dropped all cursor objects bound to this connection became invalid.
 
-    To check if a cursor is still valid, the :data:`~closed` attribute needs to be checked.
+  To check if a cursor is still valid, the :data:`~closed` attribute needs to be checked.
 
 --------------
 Cursor methods
 --------------
 
-.. method:: execute(statement[, data [, \*\*kwargs]])
-       
-   Parameters in SQL statement may be provided as sequence or mapping and will be bound
-   to variables in the operation. Variables are specified as question
-   marks (paramstyle='qmark'), however for compatibility reasons |MCP|
-   also supports the 'format' and 'pyformat' paramstyles
-   with the restriction, that different paramstyles can't be mixed within.
-   a statement
+  .. method:: execute(statement[, data [, \*\*kwargs]])
+         
+    Parameters in SQL statement may be provided as sequence or mapping and will be bound
+    to variables in the operation. Variables are specified as question
+    marks (paramstyle='qmark'), however for compatibility reasons |MCP|
+    also supports the 'format' and 'pyformat' paramstyles
+    with the restriction, that different paramstyles can't be mixed within.
+    a statement
 
-   A reference to the operation will be retained by the cursor.
-   If the cursor was created with attribute prepared=True the statement
-   string for following execute operations will be ignored:
-   This is most effective for algorithms where the same operation is used,
-   but different parameters are bound to it (many times).
+    A reference to the operation will be retained by the cursor.
+    If the cursor was created with attribute prepared=True the statement
+    string for following execute operations will be ignored:
+    This is most effective for algorithms where the same operation is used,
+    but different parameters are bound to it (many times).
 
-   By default result sets will not be buffered, so further operations on the
-   same connection will fail, unless the entire result set was read. For buffering
-   the entire result set an additional parameter *buffered=True* must be specified.
+    By default result sets will not be buffered, so further operations on the
+    same connection will fail, unless the entire result set was read. For buffering
+    the entire result set an additional parameter *buffered=True* must be specified.
 
-.. method:: callproc(procname, [ args]))
+  .. method:: callproc(procname, [ args]))
 
-   Executes a stored procedure. 
+    Executes a stored procedure. 
 
-   Input/Output or Output parameters have to be retrieved by .fetch methods,
-   the :data:`~sp_outparams` attribute indicates if the result set contains output
-   parameters.
+    Input/Output or Output parameters have to be retrieved by .fetch methods,
+    the :data:`~sp_outparams` attribute indicates if the result set contains output
+    parameters.
 
-   :param procname: The name of the stored procedure
-   :paramtype procname: string
-   :param args: A sequence which mist contain an entry for each parameter the procedure expects.
-   :paramtype args: sequence
-   
-   Example:
+    :param procname: The name of the stored procedure
+    :type procname: string
+    :param args: A sequence which mist contain an entry for each parameter the procedure expects.
+    :type args: sequence
 
-   .. code-block:: python 
+    Example:
 
-     >>>cursor.execute("CREATE PROCEDURE p1(IN i1 VAR  CHAR(20), OUT o2 VARCHAR(40))"
-                       "BEGIN"
-                       "  SELECT 'hello'"
-                       "  o2:= 'test'"
-                       "END")
-     >>>cursor.callproc('p1', ('foo', 0))
-     >>> cursor.sp_outparams
-     False
-     >>> cursor.fetchone()
-     ('hello',)
-     >>> cursor.nextset()
-     True
-     >>> cursor.sp_outparams
-     True
-     >>> cursor.fetchone()
-     ('test',)
+    .. code-block:: python 
 
-.. method:: executemany(statement, data)
-   
-   Exactly behaves like .execute() but accepts a list of tuples, where each
-   tuple represents data of a row within a table.
-   .executemany() only supports DML (insert, update, delete) statements.
+      >>>cursor.execute("CREATE PROCEDURE p1(IN i1 VAR  CHAR(20), OUT o2 VARCHAR(40))"
+                        "BEGIN"
+                        "  SELECT 'hello'"
+                        "  o2:= 'test'"
+                        "END")
+      >>>cursor.callproc('p1', ('foo', 0))
+      >>> cursor.sp_outparams
+      False
+      >>> cursor.fetchone()
+      ('hello',)
+      >>> cursor.nextset()
+      True
+      >>> cursor.sp_outparams
+      True
+      >>> cursor.fetchone()
+      ('test',)
 
-  :param statement: A DML SQL statement
-  :paramtype statement: string
-  :param data: Data to be used for place holders
-  :paramtype data: list
+  .. method:: executemany(statement, data)
+     
+    Exactly behaves like .execute() but accepts a list of tuples, where each
+    tuple represents data of a row within a table.
+    .executemany() only supports DML (insert, update, delete, replace) statements.
 
-   The following example will insert 3 rows:
+    :param statement: A DML SQL statement
+    :type statement: string
+    :param data: Data to be used for place holders
 
-   .. code-block:: python 
+    The following example will insert 3 rows:
 
-     data= [
-         (1, 'Michael', 'Widenius')
-         (2, 'Diego', 'Dupin')
-         (3, 'Lawrin', 'Novitsky')
-     ]
-     cursor.execute("INSERT INTO colleagues VALUES (?, ?, ?)", data)
+    .. code-block:: python 
 
+      data= [
+          (1, 'Michael', 'Widenius')
+          (2, 'Diego', 'Dupin')
+          (3, 'Lawrin', 'Novitsky')
+      ]
+      cursor.executemany("INSERT INTO colleagues VALUES (?, ?, ?)", data)
 
-   .. note::
-      Indicator objects can only be used when connecting to a MariaDB Server 10.2 or
-      newer. Older versions of MariaDB and MySQL servers don't support this feature.
+    .. note::
+      Indicator objects can only be used when connecting to a MariaDB Server 10.2 or newer. Older versions of MariaDB and MySQL servers don't support this feature.
 
-.. method:: fetchall()
+  .. method:: fetchall()
 
-   Fetches all rows of a pending result set and returns a list of tuples.
+    Fetches all rows of a pending result set and returns a list of tuples.
 
-   If the cursor was created with option *named_tuple=True* the result will be a list of named tuples.
+    If the cursor was created with option *named_tuple=True* the result will be a list of named tuples.
 
-.. method:: fetchmany(size)
+  .. method:: fetchmany(size)
 
-   Fetch the next set of rows of a query result, returning a list of tuples
-   An empty list is returned when no more rows are available.
+    Fetch the next set of rows of a query result, returning a list of tuples
+    An empty list is returned when no more rows are available.
 
-   :param size:  The number of rows to fetch per call. If it is not given, the cursor's arraysize determines the number of rows to be fetched.
-   :paramtype size: integer
+    :param size:  The number of rows to fetch per call. If it is not given, the cursor's arraysize determines the number of rows to be fetched.
+    :type size: integer
 
-   If the cursor was created with option *named_tuple=True* the result will be a list of named tuples.
+    If the cursor was created with option *named_tuple=True* the result will be a list of named tuples.
 
-.. method:: fetchone()
+  .. method:: fetchone()
 
-   Fetches next row of a pending result set and returns a tuple.
+    Fetches next row of a pending result set and returns a tuple.
 
-   If the cursor was created with option *named_tuple=True* the result will be a named tuple.
+    If the cursor was created with option *named_tuple=True* the result will be a named tuple.
 
-.. method:: fieldcount()
+  .. method:: fieldcount()
 
-   Returns the number of fields (columns) within a result set.
+    Returns the number of fields (columns) within a result set.
 
-.. method:: next()
+  .. method:: next()
 
-   Return the next row from the currently executing SQL statement
-   using the same semantics as fetchone().
+    Return the next row from the currently executing SQL statement
+    using the same semantics as fetchone().
 
-.. method:: nextset()
+  .. method:: nextset()
 
-   Will make the cursor skip to the next available result set,
-   discarding any remaining rows from the current set.
+    Will make the cursor skip to the next available result set,
+    discarding any remaining rows from the current set.
 
-.. method:: scroll(value[, mode='relative'])
+  .. method:: scroll(value[, mode='relative'])
 
-   Scroll the cursor in the result set to a new position according to mode.
+    Scroll the cursor in the result set to a new position according to mode.
 
-   :param value: New position in the result set
-   :paramtype value: integer
-   :param mode: Scroll mode, posslible values are 'absolute' or 'relative'. Defaults to 'relative'.
-   :paramtype mode: string
-   
-   If mode is relative, value is taken as offset to the current
-   position in the result set, if set to absolute, value states an absolute
-   target position. 
+    :param value: New position in the result set
+    :type value: integer
+    :param mode: Scroll mode, posslible values are 'absolute' or 'relative'. Defaults to 'relative'.
+    :type mode: string
 
-.. method: setinputsizes()
+    If mode is relative, value is taken as offset to the current
+    position in the result set, if set to absolute, value states an absolute
+    target position. 
 
-   Required by PEP-249. Does nothing in MariaDB Connector/Python
+  .. method: setinputsizes()
 
-.. method: setoutputsize()
+    Required by PEP-249. Does nothing in MariaDB Connector/Python
 
-   Required by PEP-249. Does nothing in MariaDB Connector/Python
+  .. method: setoutputsize()
+
+    Required by PEP-249. Does nothing in MariaDB Connector/Python
 
 -----------------
 Cursor attributes
 -----------------
 
-.. data:: arraysize
+  .. data:: arraysize
 
-   This read/write attribute specifies the number of rows to fetch at a time with .fetchmany(). It defaults to 1 meaning to fetch a single row at a time
+    This read/write attribute specifies the number of rows to fetch at a time with .fetchmany(). It defaults to 1 meaning to fetch a single row at a time
 
-.. data:: buffered
+  .. data:: buffered
 
-   When set to *True* all result sets are immediately transferred and the connection
-   between client and server is no longer blocked. Default value is False.
+    When set to *True* all result sets are immediately transferred and the connection
+    between client and server is no longer blocked. Default value is False.
 
-.. data:: closed
+  .. data:: closed
 
-   Indicates if the cursor is closed (e.g. if connection dropped) and can't be reused.
+    Indicates if the cursor is closed (e.g. if connection dropped) and can't be reused.
 
-.. data:: connection
+  .. data:: connection
 
-   Returns a reference to the connection object on which the cursor was created.
+    Returns a reference to the connection object on which the cursor was created.
 
-.. data:: description
+  .. data:: description
 
-   This read-only attribute is a sequence of 7-item sequences.
+    This read-only attribute is a sequence of 7-item sequences.
 
-   Each of these sequences contains information describing one result column:
+    Each of these sequences contains information describing one result column:
 
-   - name
-   - type_code
-   - display_size
-   - internal_size
-   - precision
-   - scale
-   - null_ok
-  
-   This attribute will be None for operations that do not return rows or if the cursor has
-   not had an operation invoked via the .execute*() method yet 
+    - name
+    - type_code
+    - display_size
+    - internal_size
+    - precision
+    - scale
+    - null_ok
 
-.. data:: lastrowid
+    This attribute will be None for operations that do not return rows or if the cursor has
+    not had an operation invoked via the .execute*() method yet 
 
-   This read only attribute of the ID generated by a query on a table with a column having
-   the AUTO_INCREMENT attribute or the value for the last usage of
-   LAST_INSERT_ID(expr). If the last query wasn't an INSERT or UPDATE
-   statement or if the modified table does not have a column with the
-   AUTO_INCREMENT attribute and LAST_INSERT_ID was not used, the returned
-   value will be zero
+  .. data:: lastrowid
 
-.. data:: sp_outparams
+    This read only attribute of the ID generated by a query on a table with a column having
+    the AUTO_INCREMENT attribute or the value for the last usage of
+    LAST_INSERT_ID(expr). If the last query wasn't an INSERT or UPDATE
+    statement or if the modified table does not have a column with the
+    AUTO_INCREMENT attribute and LAST_INSERT_ID was not used, the returned
+    value will be zero
 
-   This read-only attribute undicates if the current result set contains inout
-   or out parameters from a previously executed stored procedure.
+  .. data:: sp_outparams
 
-.. data:: rowcount
+    This read-only attribute undicates if the current result set contains inout
+    or out parameters from a previously executed stored procedure.
 
-   This read-only attribute specifies the number of rows that the last
-   execute*() produced (for DQL statements like SELECT) or affected
-   (for DML statements like UPDATE or INSERT).
-   The return value is -1 in case no .execute*() has been performed
-   on the cursor or the rowcount of the last operation cannot be
-   determined by the interface.
+  .. data:: rowcount
 
-.. data:: statement
+    This read-only attribute specifies the number of rows that the last
+    execute*() produced (for DQL statements like SELECT) or affected
+    (for DML statements like UPDATE or INSERT).
+    The return value is -1 in case no .execute*() has been performed
+    on the cursor or the rowcount of the last operation cannot be
+    determined by the interface.
 
-   This ready only attribute returns the last executed SQL statement.
+  .. data:: statement
 
-.. data:: warnings
+    This ready only attribute returns the last executed SQL statement.
 
-   Returns the number of warnings from the last executed statement, or zero
-   if there are no warnings.
-   
-   .. note::
+  .. data:: warnings
 
-       If SQL_MODE TRADITIONAL is enabled an error instead of a warning will be
-       returned. To retrieve warnings use the cursor method execute("SHOW WARNINGS").
+    Returns the number of warnings from the last executed statement, or zero
+    if there are no warnings.
+
+    .. note::
+
+      If SQL_MODE TRADITIONAL is enabled an error instead of a warning will be returned. To retrieve warnings use the cursor method execute("SHOW WARNINGS").
