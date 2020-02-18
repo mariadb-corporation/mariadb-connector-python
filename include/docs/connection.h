@@ -24,7 +24,7 @@ PyDoc_STRVAR(
 PyDoc_STRVAR(
   connection__doc__,
   "The Connection class is used to open and manage a connection to a\n"
-  "database server"
+  "MariaDB or compatible database server"
 );
 
 PyDoc_STRVAR(

@@ -18,7 +18,7 @@
 *************************************************************************************/
 PyDoc_STRVAR(
   module_binary__doc__,
-  "binary(string)\n"
+  "Binary(string)\n"
   "--\n"
   "\n"
   "This function constructs an object capable of holding a binary (long)\n"

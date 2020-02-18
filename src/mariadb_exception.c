@@ -42,7 +42,6 @@ static PyObject *get_exception_type(const char *sqlstate)
   if (!sqlstate || strlen(sqlstate) != 5)
     return NULL;
 
-
   if (!strncmp(sqlstate, "21", 2) ||
       !strncmp(sqlstate, "22", 2) ||
       !strncmp(sqlstate, "02", 2))
@@ -88,6 +87,7 @@ static PyObject *get_exception_type(const char *sqlstate)
       !strncmp(sqlstate, "42", 2) ||
       !strncmp(sqlstate, "70", 2))
     return Mariadb_ProgrammingError;
+
   return NULL;
 }
 

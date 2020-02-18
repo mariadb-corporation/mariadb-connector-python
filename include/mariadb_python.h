@@ -65,7 +65,7 @@ int clock_gettime(int dummy, struct timespec *ct);
 #endif /* L64 */
 #endif /* _WIN32 */
 
-#define MAX_TPC_XID_SIZE 65
+#define MAX_TPC_XID_SIZE 64
 #define POOL_DEFAULT_SIZE 5
 
 /* Magic constant for checking dynamic columns */
@@ -134,7 +134,7 @@ typedef struct {
     uint8_t is_buffered;
     uint8_t is_closed;
     enum enum_tpc_state tpc_state;
-    char xid[MAX_TPC_XID_SIZE];
+    char xid[150]; /* large enough, to hold 2 * MAX_TPC_XID size + integer value */
     PyObject *dsn; /* always null */
     PyObject *tls_cipher;
     PyObject *tls_version;

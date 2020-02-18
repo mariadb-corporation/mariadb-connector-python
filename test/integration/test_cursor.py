@@ -613,7 +613,7 @@ class TestCursor(unittest.TestCase):
         # F0 9F 8C B6 🌶 unicode 7 hot pepper
         # F0 9F 8E A4 🎤 unicode 8 no microphones
         # F0 9F A5 82 🥂 unicode 9 champagne glass
-        con = create_connection({"charset": "utf8mb4"})
+        con = create_connection()
         cursor = con.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE `test_utf8` (`test` blob)")
@@ -621,17 +621,6 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT * FROM test_utf8")
         row = cursor.fetchone()
         self.assertEqual(row[0], b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82")
-        del cursor, con
-
-    def test_latin2(self):
-        con = create_connection({"charset": "cp1251"})
-        cursor = con.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE `test_latin2` (`test` blob)")
-        cursor.execute("INSERT INTO test_latin2 VALUES (?)", (b"\xA9\xB0",))
-        cursor.execute("SELECT * FROM test_latin2")
-        row = cursor.fetchone()
-        # self.assertEqual(row[0], b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82")
         del cursor, con
 
     def test_conpy27(self):

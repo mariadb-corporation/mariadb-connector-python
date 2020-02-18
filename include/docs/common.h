@@ -4,24 +4,24 @@
 "\n"\
 "Establishes a connection to a database server and returns a connection\n"\
 "object.\n\n"\
-"Connection attributes:\n"\
+"Connection parameters are provided as a set of keyword arguments:\n"\
 "----------------------\n"\
-"user: string\n"\
-"    username used to authenticate with the database server\n\n"\
-"password: string\n"\
-"    password to authenticate\n\n"\
 "host: string\n"\
-"    host name or IP address of the database server\n\n"\
+"    The host name or IP address of the database server\n\n"\
+"user: string\n"\
+"    The username used to authenticate with the database server\n\n"\
+"password: string\n"\
+"    The password of the given user\n\n"\
 "database: string\n"\
-"    database (schema) name to used when connecting with the database\n"\
+"    database (schema) name to use when connecting with the database\n"\
 "    server\n\n"\
 "unix_socket: string\n"\
-"    location of the unix socket file\n\n"\
+"    The location of the unix socket file to use instead of using an IP port\n"\
+"    to connect. If socket authentication is enabled, this can also be used\n"\
+"    in place of a password.\n\n"\
 "port: integer\n"\
 "    port number of the database server. If not specified the default\n"\
-"    value (=3306) will be used.\n\n"\
-"charset: string\n"\
-"    default character set to be used\n\n"\
+"    value of 3306 will be used.\n\n"\
 "connect_timeout: integer\n"\
 "    connect timeout in seconds\n\n"\
 "read_timeout: integer\n"\
@@ -67,4 +67,4 @@
 "ssl_verify_server_cert: boolean\n"\
 "    Enables server certificate verification.\n\n"\
 "ssl_enforce: Boolean\n"\
-"    Always use a secure TLS connection\n\n"
+"    The connection must use TLS security or it will fail.\n\n"
