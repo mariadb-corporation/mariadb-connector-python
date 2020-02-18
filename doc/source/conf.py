@@ -44,6 +44,8 @@ exclude_patterns = []
 
 pygments_style = 'sphinx'
 
+master_doc = 'index'
+
 
 # -- Options for HTML output -------------------------------------------------
 
