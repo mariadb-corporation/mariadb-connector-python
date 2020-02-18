@@ -9,8 +9,7 @@ The connection class
    Handles the connection to a MariaDB or MySQL database server. It encapsulates
    a database session.
 
-   Connections are created using the factory function
-   `mariadb.connect()`.
+   Connections are created using the method :func:`~mariadb.connect()`.
 
 -----------------------
 Connection constructors 
@@ -20,18 +19,30 @@ Connection constructors
 
    Returns a new cursor object using the current connection.
  
-   Supported parameters:
- 
-   - `named_tuple` -- when set to `True` results from fetch methods will be returned as named tuple.
-   - `cursor_type` -- when set to `CURSOR_TYPE_READ_ONLY`, server side cursor will be used.
-   - `prefetch_size` -- The number of rows prefetched. This option will be ignored, if *cursor_type* is not `CURSOR_TYPE_READ_ONLY`
-   - `buffered` -- when set to `True` the entire result set from a SELECT/SHOW statement will be stored in client memory
-   - `prepared` -- when set to `True` cursor will remain in prepared state after the first *execute()* method was called. Further calls to *execute()* method will ignore the sql statement.
+   Supported keywords:
+
+   - **named_tuple** (bool): When set to `True` results from fetch methods will be returned as named tuple.
+   - **cursor_type** (type): When set to `CURSOR_TYPE_READ_ONLY`, server side cursor will be used.
+   - **prefetch_size** (integer): The number of rows prefetched. This option will be ignored, if *cursor_type* is not `CURSOR_TYPE_READ_ONLY`
+   - **buffered** (bool): When set to `True` the entire result set from a SELECT/SHOW statement will be stored in client memory
+   - **prepared** (bool): When set to `True` cursor will remain in prepared state after the first :func:`~cursor.execute` method was called. Further calls to *execute()* method will ignore the sql statement.
+
+   :return: Returns a cursor or raises an exception if an error occured.
+   :rtype: mariadb.cursor object
 
 .. method:: xid(format_id, global_transaction_id, branch_qualifier)
 
-   Returns a transaction ID object suitable for passing to the tpc
-   methods of this connection
+   :param format_id: Format id. If not set default value `1` will be used.
+   :type format_id: integer
+
+   :param global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.
+   :type global transaction_id: string
+
+   :param branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.
+   :type branch_qualifier: string
+
+   :return: Returns a transaction ID object suitable for passing to the tpc methods of this connection
+   :rtype: A dictionary representing a transaction ID.
 
 ------------------
 Connection methods 
@@ -53,7 +64,14 @@ Commit any pending transaction to the database.
    parameters must be provided and that user must have sufficient
    permissions to access the desired database.
 
-   If for any reason authorization fails, the current user authentication will remain.
+   :param user: The user name for server authentication
+   :paramtype user: string
+   :param password: The passoword of the user
+   :paramtype password: string
+   :param database: The default database
+   :paramtype database: string
+
+   If for any reason authorization fails an exception will be raised and the current user authentication will remain.
 
 .. method:: close()
 
@@ -65,69 +83,38 @@ Commit any pending transaction to the database.
    use the connection. If the connection was obtained by *ConnectionPool*,
    the connection will not be closed but returned to the pool.
 
-.. method: connect(\*\*kwargs)
-
-   Establishes a connection to a database server.
-   object.
-
-   The connection parameters have to be provided as a set of keyword arguments::
-
-      connection.connect(user="myuser", host="localhost", database="test", password="secret")
-
-   The supported connection parameters are:
-
-   - user -- username used to authenticate with the database server
-   - password -- password to authenticate
-   - host -- host name or IP address of the database server
-   - database -- database (schema) name to used when connecting with the database server
-   - unix_socket -- location of the unix socket file
-   - port -- port number of the database server. If not specified the default value (=3306) will be used.
-   - charset -- default character set to be used
-   - connect_timeout -- connect timeout in seconds
-   - read_timeout -- read timeout in seconds
-   - write_timeout -- write timeout in seconds
-   - local_infile -- Enables or disables the use of LOAD DATA LOCAL INFILE statements.
-   - compress -- Uses the compressed protocol for client server communication. If the
-       server doesn't support compressed protocol, the default protocol will
-       be used
-   - init_command -- Command(s) which will be executed when connecting and reconnecting to
-       the database server
-   - default_file -- Read options from the specified option file. If the file is an empty
-       string, default configuration file(s) will be used
-   - default_group -- Read options from the specified group
-   - ssl_key -- Defines a path to a private key file to use for TLS. This option
-       requires that you use the absolute path, not a relative path. The specified key must be in PEM format
-   - ssl_cert -- Defines a path to the X509 certificate file to use for TLS.
-       This option requires that you use the absolute path, not a relative path. The X609 certificate must be in PEM format.
-   - ssl_ca -- Defines a path to a PEM file that should contain one or more X509
-       certificates for trusted Certificate Authorities (CAs) to use for TLS.
-       This option requires that you use the absolute path, not a relative
-       path.
-   - ssl_cipher -- Defines a list of permitted cipher suites to use for TLS
-   - ssl_crl_path -- Defines a path to a PEM file that should contain one or more revoked
-       X509 certificates to use for TLS. This option requires that you use
-       the absolute path, not a relative path.
-   - ssl_verify_server_cert -- Enables server certificate verification.
-   - ssl_enforce -- Always use a secure TLS connection
-
-.. method:: escape_string(string)
+.. method:: escape_string(escape_str)
    
    This function is used to create a legal SQL string that you can use in
    an SQL statement. The given string is encoded and returned as an escaped string.
 
+   :param escape_str: The string that is to be escaped.
+   :paramtype escape_str: string
+
+   :returns: the escaped string or NULL on error.
+   :rtype: string
+
 .. method:: kill(thread_id)
 
    This function is used to ask the server to terminate a database connection, specified
-   by the *thread_id* parameter. This value must be retrieved by 'SHOW PROCESSLIST' sql command.
+   by the *thread_id* parameter. 
+
+   :param thread_id: An id which represents a database connection.
+   :paramtype thread_id: integer
+
+.. note::
+   A thread_id from other connections can be determined by executing the SQL statement ``SHOW PROCESSLIST``
+
+   The thread_id of the current connection the current connection is stored in :data:`connection_id` attribute.
 
 .. method:: ping()
 
    Checks if the connection to the database server is still available.
-  
+
    .. note::
 
-       If auto reconnect was set to true, an attempt will be made to reconnect
-       to the database server in case the connection  was lost
+       If :data:`~auto_reconnect` was set to True, an attempt will be made to reconnect
+       to the database server in case the connection was lost
 
    If the connection is not available an InterfaceError will be raised.
 
@@ -135,7 +122,7 @@ Commit any pending transaction to the database.
 
    tries to reconnect to a server in case the connection died due to timeout
    or other errors. It uses the same credentials which were specified in
-   *connect()* method.
+   :func:`module.connect()` method.
 
 .. method:: reset()
 
@@ -156,7 +143,7 @@ Commit any pending transaction to the database.
        or the storage engine does not support transactions.
 
 
-.. method:: tpc_begin(xid)
+.. method:: tpc_begin([xid])
 
    Begins a TPC transaction with the given transaction ID xid, which
    was created by xid() method.
@@ -169,7 +156,10 @@ Commit any pending transaction to the database.
    the TPC transaction. A ProgrammingError is raised, if the application
    calls commit() or rollback() during an active TPC transaction.
 
-.. method:: tpc_commit(xid)
+   :param xid: A transaction id which was previously created by :func:`xid` method.
+   :paramtype xid: Dictionary
+
+.. method:: tpc_commit([xid])
 
    When called with no arguments, tpc_commit() commits a TPC transaction
    previously prepared with tpc_prepare().
@@ -193,7 +183,7 @@ Commit any pending transaction to the database.
    After calling tpc_prepare(), no statements can be executed until
    tpc_commit() or tpc_rollback() have been called.
 
- .. method:: tpc_recover()
+.. method:: tpc_recover()
 
    Returns a list of pending transaction IDs suitable for use with
    tpc_commit(xid) or tpc_rollback(xid).
@@ -201,7 +191,7 @@ Commit any pending transaction to the database.
 .. method:: tpc_rollback([ xid])
    
    When called with no arguments, .tpc_rollback() rolls back a TPC
-   transaction. It may be called before or after .tpc_prepare().
+   transaction. It may be called before or after :func:`tpc_prepare`.
    
    When called with a transaction ID xid, it rolls back the given
    transaction.
@@ -218,6 +208,8 @@ Connection attributes
    When enabled, client tries to reconnect to a database server in case
    the connection to a database server died due to timeout or other errors.
 
+   :return: 
+
 .. data:: autocommit
 
    Toggles autocommit mode on or off for the current database connection.
@@ -228,7 +220,7 @@ Connection attributes
    
    By default autocommit mode is set to False.
 
-.. data:: |  character_set
+.. data:: character_set
 
    Returns the character set used for the connection
 
@@ -240,7 +232,7 @@ Connection attributes
    
    Returns the (thread) id for the current connection.
   
-   If reconnect was set to True, the id might change if the client
+   If :data:`~auto_reconnect` was set to True, the id might change if the client
    reconnects to the database server
 
 .. data:: database
@@ -248,7 +240,7 @@ Connection attributes
    Returns or sets the default database for the current connection
    
    If the used datbase will not change, the preffered way is to specify
-   the default database in connect() method.
+   the default database when establishing the connection.
 
 .. data:: server_info
    
@@ -291,5 +283,5 @@ Connection attributes
    
    .. note::
 
-       If SQL_MODE TRADITIONAL is enabled an error instead of a warning will be
-       returned. To retrieve warnings use the cursor method execute("SHOW WARNINGS".
+       If the sql mode ``TRADITIONAL`` is enabled an error instead of a warning will be
+       returned. To retrieve warnings the SQL statement ``SHOW WARNINGS`` has to be used.

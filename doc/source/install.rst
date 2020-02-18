@@ -27,15 +27,13 @@ installed from source distribution package or github.
 - For Posix systems: TLS libraries, e.g. GnuTLS or OpenSSL (default)
 
 On Posix system make sure that the path environment variable contains the directory which
-contains the mariadb_config utility. On Windows systems you need to set the environment 
-variable MARIADB_CC_INSTALL_DIR, which contains the directory of your MariaDB Connector/C
-installation.
+contains the mariadb_config utility.
 
 Once everything is in place, run
 
 .. code-block:: console
 
-    $ pip3 install mariadb
+    $ pip3 install -pre mariadb
 
 or if you downloaded the source package
 
@@ -46,7 +44,7 @@ or if you downloaded the source package
 
 Binary installation
 -------------------
-MariaDB Connector/C is also available from PyPi as wheel packages for Windows.
+MariaDB Connector/Python is also available from PyPi as wheel packages for Windows.
 These binary packages are not intended for production use, since there might be several limitations
 and bottlenecks, e.g.:
 
@@ -57,7 +55,7 @@ Make sure you have an up to date version of pip and install it with
 
 .. code-block:: console
 
-    $ pip3 install mariadb-binary
+    $ pip3 install -pre mariadb
 
 Test suite
 ----------

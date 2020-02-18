@@ -3,15 +3,15 @@ The cursor class
 
 .. sectionauthor:: Georg Richter <georg@mariadb.com>
 
-.. class:: cursor
+.. class:: mariadb.cursor
 
     Cursors can be used to execute SQL commands within a database session. Cursors
-    objects are created by the connection.cursor() method.
+    objects are created by the :func:`cursor` method.
 
     Cursors are bound to the connection for their entire lifetime. If a connection was
     closed or dropped all cursor objects bound to this connection became invalid.
 
-    To check if a cursor is still valid, the *close* attribute needs to be checked.
+    To check if a cursor is still valid, the :data:`~closed` attribute needs to be checked.
 
 --------------
 Cursor methods
@@ -36,47 +36,62 @@ Cursor methods
    same connection will fail, unless the entire result set was read. For buffering
    the entire result set an additional parameter *buffered=True* must be specified.
 
-.. method:: callproc(procedure_name, args=())
+.. method:: callproc(procname, [ args]))
 
-   Executes a stored procedure. The args sequence must contain an entry for
-   each parameter the procedure expects.
+   Executes a stored procedure. 
+
    Input/Output or Output parameters have to be retrieved by .fetch methods,
-   the .sp_outparams attribute indicates if the result set contains output
+   the :data:`~sp_outparams` attribute indicates if the result set contains output
    parameters.
+
+   :param procname: The name of the stored procedure
+   :paramtype procname: string
+   :param args: A sequence which mist contain an entry for each parameter the procedure expects.
+   :paramtype args: sequence
    
-   Example::
-   
-       >>>cursor.execute("CREATE PROCEDURE p1(IN i1 VAR  CHAR(20), OUT o2 VARCHAR(40))"
-                         "BEGIN"
-                         "  SELECT 'hello'"
-                         "  o2:= 'test'"
-                         "END")
-       >>>cursor.callproc('p1', ('foo', 0))
-       >>> cursor.sp_outparams
-       False
-       >>> cursor.fetchone()
-       ('hello',)
-       >>> cursor.nextset()
-       True
-       >>> cursor.sp_outparams
-       True
-       >>> cursor.fetchone()
-       ('test',)
+   Example:
+
+   .. code-block:: python 
+
+     >>>cursor.execute("CREATE PROCEDURE p1(IN i1 VAR  CHAR(20), OUT o2 VARCHAR(40))"
+                       "BEGIN"
+                       "  SELECT 'hello'"
+                       "  o2:= 'test'"
+                       "END")
+     >>>cursor.callproc('p1', ('foo', 0))
+     >>> cursor.sp_outparams
+     False
+     >>> cursor.fetchone()
+     ('hello',)
+     >>> cursor.nextset()
+     True
+     >>> cursor.sp_outparams
+     True
+     >>> cursor.fetchone()
+     ('test',)
 
 .. method:: executemany(statement, data)
    
    Exactly behaves like .execute() but accepts a list of tuples, where each
    tuple represents data of a row within a table.
    .executemany() only supports DML (insert, update, delete) statements.
-   
-   The following example will insert 3 rows:::
-   
-       data= [
-          (1, 'Michael', 'Widenius')
-          (2, 'Diego', 'Dupin')
-          (3, 'Lawrin', 'Novitsky')
-       ]
-       cursor.execute("INSERT INTO colleagues VALUES (?, ?, ?)", data)
+
+  :param statement: A DML SQL statement
+  :paramtype statement: string
+  :param data: Data to be used for place holders
+  :paramtype data: list
+
+   The following example will insert 3 rows:
+
+   .. code-block:: python 
+
+     data= [
+         (1, 'Michael', 'Widenius')
+         (2, 'Diego', 'Dupin')
+         (3, 'Lawrin', 'Novitsky')
+     ]
+     cursor.execute("INSERT INTO colleagues VALUES (?, ?, ?)", data)
+
 
    .. note::
       Indicator objects can only be used when connecting to a MariaDB Server 10.2 or
@@ -92,10 +107,9 @@ Cursor methods
 
    Fetch the next set of rows of a query result, returning a list of tuples
    An empty list is returned when no more rows are available.
-   
-   The number of rows to fetch per call is specified by the *size* parameter.
-   If it is not given, the cursor's arraysize determines the number of
-   rows to be fetched.
+
+   :param size:  The number of rows to fetch per call. If it is not given, the cursor's arraysize determines the number of rows to be fetched.
+   :paramtype size: integer
 
    If the cursor was created with option *named_tuple=True* the result will be a list of named tuples.
 
@@ -122,10 +136,15 @@ Cursor methods
 .. method:: scroll(value[, mode='relative'])
 
    Scroll the cursor in the result set to a new position according to mode.
+
+   :param value: New position in the result set
+   :paramtype value: integer
+   :param mode: Scroll mode, posslible values are 'absolute' or 'relative'. Defaults to 'relative'.
+   :paramtype mode: string
    
    If mode is relative, value is taken as offset to the current
    position in the result set, if set to absolute, value states an absolute
-   target position. The default setting for mode is *'relative'*.
+   target position. 
 
 .. method: setinputsizes()
 

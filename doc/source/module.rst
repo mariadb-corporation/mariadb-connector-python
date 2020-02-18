@@ -16,45 +16,50 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
     Establishes a connection to a database server and returns a new connection
     object.
 
-    The connection parameters have to be provided as a set of keyword arguments::
+    The connection parameters have to be provided as a set of keyword arguments.
 
-       connection= mariadb.connect(user="myuser", host="localhost", database="test", password="secret")
+   The supported connection keywords are:
 
-    The supported connection parameters are:
+   - **user** (string): The username used to authenticate with the database server, defaults to current user
+   - **pasword** (string): The password of the given user
+   - **host** (string): The host name or IP address of the database server
+   - **database** (string): The database (schema) name to used when connecting with the database server
+   - **unix_socket** (string): The location of the unix socket file to use instead of using an IP port to connect.  If socket authentication is enabled, this can also be used in place of a password.
+   - **port** (integer): The port number of the database server. If not specified the default value (=3306) will be used.
+   - **connect_timeout** (integer): The connect timeout in seconds
+   - **read_timeout** (integer): The read timeout in seconds
+   - **write_timeout** (integer): The write timeout in seconds
+   - **local_infile** (bool): Enables or disables the use of LOAD DATA LOCAL INFILE statements.
+   - **compress** (bool) -- Uses the compressed protocol for client server communication. If the
+       server doesn't support compressed protocol, the default protocol will
+       be used
+   - **init_command** (string): Specifies one or more commands to execute when connecting and reconnecting to the database server.
+   - **default_file** (string): Read options from the specified option file. If the file is an empty string, default configuration file(s) will be used
+   - **default_group** (string): -- Read options from the specified group
+   - **ssl_key** (string): Defines a path to a private key file to use for TLS. This option
+       requires that you use the absolute path, not a relative path. The specified key must be in PEM format
+   - **ssl_cert** (string): Defines a path to the X509 certificate file to use for TLS.  This option requires that you use the absolute path, not a relative path. The X609 certificate must be in PEM format.
+   - **ssl_ca** (string): Defines a path to a PEM file that should contain one or more X509 certificates for trusted Certificate Authorities (CAs) to use for TLS.  This option requires that you use the absolute path, not a relative path.
+   - **ssl_capath** (string):  Defines a path to a directory that contains one or more PEM files that contains one X509 certificate for a trusted Certificate Authority (CA)
+   - **ssl_cipher** (string):  Defines a list of permitted cipher suites to use for TLS
+   - **ssl_crl_path** (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.
+   - **ssl_verify_server_cert** (bool): Enables server certificate verification.
+   - **ssl_enforce** (bool): Always use a secure TLS connection
 
-    - user -- username used to authenticate with the database server
-    - password -- password to authenticate
-    - host -- host name or IP address of the database server
-    - database -- database (schema) name to used when connecting with the database server
-    - unix_socket -- location of the unix socket file
-    - port -- port number of the database server. If not specified the default value (=3306) will be used.
-    - charset -- default character set to be used
-    - connect_timeout -- connect timeout in seconds
-    - read_timeout -- read timeout in seconds
-    - write_timeout -- write timeout in seconds
-    - local_infile -- Enables or disables the use of LOAD DATA LOCAL INFILE statements.
-    - compress -- Uses the compressed protocol for client server communication. If the
-        server doesn't support compressed protocol, the default protocol will
-        be used
-    - init_command -- Command(s) which will be executed when connecting and reconnecting to
-        the database server
-    - default_file -- Read options from the specified option file. If the file is an empty
-        string, default configuration file(s) will be used
-    - default_group -- Read options from the specified group
-    - ssl_key -- Defines a path to a private key file to use for TLS. This option
-        requires that you use the absolute path, not a relative path. The specified key must be in PEM format
-    - ssl_cert -- Defines a path to the X509 certificate file to use for TLS.
-        This option requires that you use the absolute path, not a relative path. The X609 certificate must be in PEM format.
-    - ssl_ca -- Defines a path to a PEM file that should contain one or more X509
-        certificates for trusted Certificate Authorities (CAs) to use for TLS.
-        This option requires that you use the absolute path, not a relative
-        path.
-    - ssl_cipher -- Defines a list of permitted cipher suites to use for TLS
-    - ssl_crl_path -- Defines a path to a PEM file that should contain one or more revoked
-        X509 certificates to use for TLS. This option requires that you use
-        the absolute path, not a relative path.
-    - ssl_verify_server_cert -- Enables server certificate verification.
-    - ssl_enforce -- Always use a secure TLS connection
+
+   :return: Returns a connection or raises an error if the connection between client and server couldn't be established.
+
+   :rtype: mariadb.connection object
+
+
+   :Example:
+
+   The connection parameters have to be provided as a set of keyword arguments::
+
+      import mariadb
+
+      connection= mariadb.connect(user="myuser", host="localhost", database="test", password="secret")
+
 
 .. function:: 
     ConnectionPool(\*\*kwargs)

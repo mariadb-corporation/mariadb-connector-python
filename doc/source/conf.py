@@ -23,7 +23,7 @@ copyright = '2019,2020 MariaDB Corporation and Georg Richter'
 author = 'Georg Richter'
 
 # The full version, including alpha/beta/rc tags
-release = '0.9.53'
+release = '0.9.54 beta'
 
 
 # -- General configuration ---------------------------------------------------
@@ -31,7 +31,7 @@ release = '0.9.53'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx_markdown_builder'
+extensions = ['sphinx.ext.autodoc', 'sphinx_markdown_builder', 'sphinx.ext.intersphinx',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -41,6 +41,8 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
+
+pygments_style = 'sphinx'
 
 
 # -- Options for HTML output -------------------------------------------------
