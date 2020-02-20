@@ -725,6 +725,16 @@ class TestCursor(unittest.TestCase):
         cursor.execute("DROP PROCEDURE IF EXISTS p3")
         del cursor, con
 
+    def test_conpy42(self):
+        con= create_connection()
+        cursor = con.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE conpy42(a GEOMETRY)")
+        cursor.execute("INSERT INTO conpy42 VALUES (PointFromText('point(1 1)'))")
+        cursor.execute("SELECT a FROM conpy42")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], b'\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?')
+        del cursor
+
     def test_conpy35(self):
         con= create_connection()
         cursor = con.cursor(cursor_type=mariadb.CURSOR_TYPE_READ_ONLY)

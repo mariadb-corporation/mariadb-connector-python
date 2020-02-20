@@ -158,6 +158,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         case MYSQL_TYPE_MEDIUM_BLOB:
         case MYSQL_TYPE_BLOB:
         case MYSQL_TYPE_LONG_BLOB:
+        case MYSQL_TYPE_GEOMETRY:
             if (length[column] > self->fields[column].max_length)
             {
                 self->fields[column].max_length= length[column];
@@ -179,7 +180,6 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
                                                 (Py_ssize_t)length[column]);
             }
             break;
-        case MYSQL_TYPE_GEOMETRY:
         case MYSQL_TYPE_STRING:
         case MYSQL_TYPE_VAR_STRING:
         case MYSQL_TYPE_JSON:
