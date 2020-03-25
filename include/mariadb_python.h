@@ -39,9 +39,19 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 #define pthread_mutex_destroy(A) DeleteCriticalSection(A)
 #define pthread_self() GetCurrentThreadId()
 #include <malloc.h>
+#define ULONG_LONG_MAX _UI64_MAX
 #else
 #include <pthread.h>
+#include <limits.h>
 #endif /* defined(_WIN32) */
+
+#ifndef MIN
+#define MIN(a,b) (a) < (b) ? (a) : (b)
+#endif
+
+#ifndef MAX
+#define MAX(a,b) (a) > (b) ? (a) : (b)
+#endif
 
 #ifdef _WIN32
 int clock_gettime(int dummy, struct timespec *ct);

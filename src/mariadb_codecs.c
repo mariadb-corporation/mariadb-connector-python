@@ -93,6 +93,240 @@ mariadb_get_pickled(unsigned char *data, size_t length)
     return obj;
 }
 
+static unsigned long long my_strtoull(const char *str, size_t len, const char **end, int *err)
+{
+  unsigned long long val = 0;
+  const char *p = str;
+  const char *end_str = p + len;
+
+  for (; p < end_str; p++)
+  {
+    if (*p < '0' || *p > '9')
+      break;
+
+    if (val > ULONG_LONG_MAX /10 || val*10 > ULONG_LONG_MAX - (*p - '0'))
+    {
+      *err = ERANGE;
+      break;
+    }
+    val = val * 10 + *p -'0';
+  }
+
+  if (p == str)
+    /* Did not parse anything.*/
+    *err = ERANGE;
+
+  *end = p;
+  return val;
+}
+
+/*
+  strtoui() version, that works for non-null terminated strings
+*/
+static unsigned int my_strtoui(const char *str, size_t len, const char **end, int *err)
+{
+  unsigned long long ull = my_strtoull(str, len, end, err);
+  if (ull > UINT_MAX)
+    *err = ERANGE;
+  return (unsigned int)ull;
+}
+
+/*
+  Parse time, in MySQL format.
+
+  the input string needs is in form "hour:minute:second[.fraction]"
+  hour, minute and second can have leading zeroes or not,
+  they are not necessarily 2 chars.
+
+  Hour must be < 838, minute < 60, second < 60
+  Only 6 places of fraction are considered, the value is truncated after 6 places.
+*/
+static const unsigned int frac_mul[] = { 1000000,100000,10000,1000,100,10 };
+
+static int parse_time(const char *str, size_t length, const char **end_ptr, MYSQL_TIME *tm)
+{
+  int err= 0;
+  const char *p = str;
+  const char *end = str + length;
+  size_t frac_len;
+  int ret=1;
+
+  tm->hour = my_strtoui(p, end-p, &p, &err);
+  if (err || tm->hour > 838 || p == end || *p != ':' )
+    goto end;
+
+  p++;
+  tm->minute = my_strtoui(p, end-p, &p, &err);
+  if (err || tm->minute > 59 || p == end || *p != ':')
+    goto end;
+
+  p++;
+  tm->second = my_strtoui(p, end-p, &p, &err);
+  if (err || tm->second > 59)
+    goto end;
+
+  ret = 0;
+  tm->second_part = 0;
+
+  if (p == end)
+    goto end;
+
+  /* Check for fractional part*/
+  if (*p != '.')
+    goto end;
+
+  p++;
+  frac_len = MIN(6,end-p);
+
+  tm->second_part = my_strtoui(p, frac_len, &p, &err);
+  if (err)
+    goto end;
+
+  if (frac_len < 6)
+    tm->second_part *= frac_mul[frac_len];
+
+  ret = 0;
+
+  /* Consume whole fractional part, even after 6 digits.*/
+  p += frac_len;
+  while(p < *end_ptr)
+  {
+    if (*p < '0' || *p > '9')
+      break;
+    p++;
+  }
+end:
+  *end_ptr = p;
+  return ret;
+}
+
+
+/*
+  Parse date, in MySQL format.
+
+  The input string needs is in form "year-month-day"
+  year, month and day can have leading zeroes or not,
+  they do not have fixed length.
+
+  Year must be < 10000, month < 12, day < 32
+
+  Years with 2 digits, are coverted to values 1970-2069 according to 
+  usual rules:
+
+  00-69 is converted to 2000-2069.
+  70-99 is converted to 1970-1999.
+*/
+static int parse_date(const char *str, size_t length, const char **end_ptr, MYSQL_TIME *tm)
+{
+  int err = 0;
+  const char *p = str;
+  const char *end = str + length;
+  int ret = 1;
+
+  tm->year = my_strtoui(p, end - p, &p, &err);
+  if (err || tm->year > 9999 || p == end || *p != '-')
+    goto end;
+
+  if (p - str == 2) // 2-digit year
+    tm->year += (tm->year >= 70) ? 1900 : 2000;
+
+  p++;
+  tm->month = my_strtoui(p,end -p, &p, &err);
+  if (err || tm->month > 12 || p == end || *p != '-')
+    goto end;
+
+  p++;
+  tm->day = my_strtoui(p, end -p , &p, &err);
+  if (err || tm->day > 31)
+    goto end;
+
+  ret = 0;
+
+end:
+  *end_ptr = p;
+  return ret;
+}
+
+int Py_str_to_TIME(const char *str, size_t length, MYSQL_TIME *tm)
+{
+  const char *p = str;
+  const char *end = str + length;
+  int is_time = 0;
+
+  if (!p)
+    goto error;
+
+  while (p < end && isspace(*p))
+    p++;
+  while (p < end && isspace(end[-1]))
+    end--;
+
+  if (end -p < 5)
+    goto error;
+
+  if (*p == '-')
+  {
+    tm->neg = 1;
+    /* Only TIME can't be negative.*/
+    is_time = 1;
+    p++;
+  }
+  else
+  {
+    int i;
+    tm->neg = 0;
+    /*
+      Date parsing (in server) accepts leading zeroes, thus position of the delimiters
+      is not fixed. Scan the string to find out what we need to parse.
+    */
+    for (i = 1; p + i < end; i++)
+    {
+      if(p[i] == '-' || p [i] == ':')
+      {
+        is_time = p[i] == ':';
+        break;
+      }
+    }
+  }
+
+  if (is_time)
+  {
+    if (parse_time(p, end - p, &p, tm))
+      goto error;
+    
+    tm->year = tm->month = tm->day = 0;
+    tm->time_type = MYSQL_TIMESTAMP_TIME;
+    return 0;
+  }
+
+  if (parse_date(p, end - p, &p, tm))
+    goto error;
+
+  if (p == end || p[0] != ' ')
+  {
+    tm->hour = tm->minute = tm->second = tm->second_part = 0;
+    tm->time_type = MYSQL_TIMESTAMP_DATE;
+    return 0;
+  }
+
+  /* Skip space. */
+  p++;
+  if (parse_time(p, end - p, &p, tm))
+    goto error;
+
+  /* In DATETIME, hours must be < 24.*/
+  if (tm->hour > 23)
+   goto error;
+
+  tm->time_type = MYSQL_TIMESTAMP_DATETIME;
+  return 0;
+
+error:
+  memset(tm, 0, sizeof(*tm));
+  tm->time_type = MYSQL_TIMESTAMP_ERROR;
+  return 1;
+}
+ 
 void
 field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
 {
@@ -134,25 +368,24 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             self->values[column]= PyFloat_FromDouble(d);
             break;
         }
-        case MYSQL_TYPE_TIME: 
-            memset(&tm, 0, sizeof(MYSQL_TIME));
-            sscanf(data, "%d:%d:%d.%ld", &tm.hour, &tm.minute,
-                   &tm.second, &tm.second_part );
-            self->values[column]= PyTime_FromTime((int)tm.hour, (int)tm.minute, 
-                                    (int)tm.second, (int)tm.second_part);
-            break;
+        case MYSQL_TYPE_TIME:
         case MYSQL_TYPE_DATE:
-            memset(&tm, 0, sizeof(MYSQL_TIME));
-            sscanf(data, "%d-%d-%d", &tm.year, &tm.month, &tm.day);
-            self->values[column]= PyDate_FromDate(tm.year, tm.month, tm.day);
-            break;
         case MYSQL_TYPE_DATETIME:
         case MYSQL_TYPE_TIMESTAMP:
             memset(&tm, 0, sizeof(MYSQL_TIME));
-            sscanf(data, "%d-%d-%d %d:%d:%d.%ld", &tm.year, &tm.month, &tm.day, 
-                   &tm.hour, &tm.minute, &tm.second, &tm.second_part);
-            self->values[column]= PyDateTime_FromDateAndTime(tm.year, tm.month, 
-                       tm.day, tm.hour, tm.minute, tm.second, tm.second_part);
+            Py_str_to_TIME(data, strlen(data), &tm);
+            if (self->fields[column].type == MYSQL_TYPE_TIME)
+            {
+              self->values[column]= PyTime_FromTime((int)tm.hour, (int)tm.minute, 
+                                      (int)tm.second, (int)tm.second_part);
+            } else if (self->fields[column].type == MYSQL_TYPE_DATE)
+            {
+              self->values[column]= PyDate_FromDate(tm.year, tm.month, tm.day);
+            } else 
+            {
+              self->values[column]= PyDateTime_FromDateAndTime(tm.year, tm.month, 
+                         tm.day, tm.hour, tm.minute, tm.second, tm.second_part);
+            }
             break;
         case MYSQL_TYPE_TINY_BLOB:
         case MYSQL_TYPE_MEDIUM_BLOB:
