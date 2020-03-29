@@ -492,19 +492,19 @@ class TestCursor(unittest.TestCase):
 
         del cursor
 
-    def test_compy_9(self):
+    def test_conpy_9(self):
         cursor = self.connection.cursor()
         cursor.execute(
-            "CREATE TEMPORARY TABLE test_compy_9 (a varchar(20), b double(6,3), c double)");
-        cursor.execute("INSERT INTO test_compy_9 VALUES ('€uro', 123.345, 12345.678)")
+            "CREATE TEMPORARY TABLE test_compy_9 (a varchar(20), b double(5,2), c double)");
+        cursor.execute("INSERT INTO test_compy_9 VALUES ('€uro', -123.34, 12345.678)")
         cursor.execute("SELECT a,b,c FROM test_compy_9")
         cursor.fetchone()
         d = cursor.description;
-        self.assertEqual(d[0][2], 4);  # 4 code points only
-        self.assertEqual(d[0][3], -1);  # variable length
-        self.assertEqual(d[1][2], 7);  # length=precision +  1
-        self.assertEqual(d[1][4], 6);  # precision
-        self.assertEqual(d[1][5], 3);  # decimals
+        self.assertEqual(d[0][2], 20);  # 20 code points
+        self.assertEqual(d[0][3], 80);  # 80 characters
+        self.assertEqual(d[1][2], 6);  # length=precision +  1
+        self.assertEqual(d[1][4], 5);  # precision
+        self.assertEqual(d[1][5], 2);  # scale
         del cursor
 
     def test_conpy_15(self):

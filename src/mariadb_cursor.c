@@ -794,8 +794,21 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
         {
             uint32_t precision= 0;
             uint32_t decimals= 0;
-            unsigned long display_length= self->fields[i].max_length;
-            long packed_len= mysql_ps_fetch_functions[self->fields[i].type].pack_len;
+            MY_CHARSET_INFO cs;
+            unsigned long display_length;
+            long packed_len= 0;
+
+            display_length= self->fields[i].max_length > self->fields[i].length ? 
+                            self->fields[i].max_length : self->fields[i].length;
+            mysql_get_character_set_info(self->connection->mysql, &cs);
+            if (cs.mbmaxlen > 1)
+            {
+              packed_len= display_length;
+              display_length/= cs.mbmaxlen;
+            }
+            else {
+              packed_len= mysql_ps_fetch_functions[self->fields[i].type].pack_len;
+            }
 
             if (self->fields[i].decimals)
             {
