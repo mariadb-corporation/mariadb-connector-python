@@ -26,7 +26,7 @@ cfg = get_config(options)
 
 
 setup(name='mariadb',
-      version='0.9.55',
+      version='0.9.56',
       python_requires='>=3.6',
       classifiers = [
           'Development Status :: 4 - Beta',
@@ -55,7 +55,7 @@ setup(name='mariadb',
       url='https://www.github.com/mariadb-corporation/mariadb-connector-python',
       project_urls={
          "Bug Tracker": "https://jira.mariadb.org/",
-         "Documentation": "https://mariadb-connectorpython.readthedocs.io/en/latest/",
+         "Documentation": "https://github.com/mariadb-corporation/mariadb-connector-python/wiki",
          "Source Code": "https://www.github.com/mariadb-corporation/mariadb-connector-python",
       },
       ext_modules=[Extension('mariadb', ['src/mariadb.c', 'src/mariadb_connection.c',
