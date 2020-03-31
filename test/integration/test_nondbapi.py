@@ -44,6 +44,13 @@ class CursorTest(unittest.TestCase):
             self.skipTest("CREATE OR REPLACE USER not supported")
         if os.environ.get("MAXSCALE_VERSION"):
             self.skipTest("MAXSCALE doesn't get new user immediately")
+        if self.connection.server_name == "localhost":
+            curs= self.connection.cursor(buffered=True)
+            curs.execute("select * from information_schema.plugins where plugin_name='unix_socket' and plugin_status='ACTIVE'")
+            if curs.rowcount > 0:
+                del curs
+                self.skipTest("unix_socket is active")
+            del curs
 
         default_conf = conf()
         cursor = self.connection.cursor()

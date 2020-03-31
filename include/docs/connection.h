@@ -284,3 +284,15 @@ PyDoc_STRVAR(
   "Returns the alphanumeric version of connected database. Tthe numeric version\n"
   "can be obtained with server_version property."
 );
+
+PyDoc_STRVAR(
+  connection_enter__doc__,
+  "(read)\n\n"
+  "returns a copy of the connection"
+);
+
+PyDoc_STRVAR(
+  connection_exit__doc__,
+  "--\n"
+  "closes the connection"
+);

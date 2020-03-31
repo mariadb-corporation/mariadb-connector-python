@@ -763,5 +763,17 @@ class TestCursor(unittest.TestCase):
         del cursor
         del con
 
+    def test_conpy46(self):
+        con= create_connection()
+        with con.cursor() as cursor:
+           cursor.execute("SELECT 'foo'")
+           row= cursor.fetchone()
+        self.assertEqual(row[0], "foo")
+        try:
+           cursor.execute("SELECT 'bar'")
+        except mariadb.ProgrammingError:
+            pass
+        del con
+
 if __name__ == '__main__':
     unittest.main()

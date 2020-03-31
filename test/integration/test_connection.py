@@ -128,6 +128,14 @@ class TestConnection(unittest.TestCase):
             self.skipTest("ed25519 not supported")
 
         conn = self.connection
+        curs = conn.cursor(buffered=True)
+
+        if self.connection.server_name == "localhost":
+          curs.execute("select * from information_schema.plugins where plugin_name='unix_socket' and plugin_status='ACTIVE'")
+          if curs.rowcount > 0:
+              del curs
+              self.skipTest("unix_socket is active")
+
         cursor = conn.cursor()
         try:
             cursor.execute("INSTALL SONAME 'auth_ed25519'")
@@ -151,6 +159,21 @@ class TestConnection(unittest.TestCase):
             pass
         cursor.execute("DROP USER IF EXISTS eduser")
         del cursor, conn2
+
+    def test_conpy46(self):
+        with create_connection() as con:
+            with con.cursor() as cursor:
+                cursor.execute("SELECT 'foo'")
+                row= cursor.fetchone()
+                self.assertEqual(row[0], "foo")
+            try:
+                cursor.execute("SELECT 'bar'")
+            except mariadb.ProgrammingError:
+                pass
+        try:
+            cursor= con.cursor()
+        except mariadb.ProgrammingError:
+            pass
 
 if __name__ == '__main__':
     unittest.main()

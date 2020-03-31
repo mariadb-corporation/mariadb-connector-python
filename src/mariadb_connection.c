@@ -28,8 +28,13 @@ extern PyObject *cnx_pool;
 static PyObject 
 *MrdbConnection_cursor(MrdbConnection *self, PyObject *args, PyObject *kwargs);
 
-static PyObject 
-*MrdbConnection_exception(PyObject *self, void *closure);
+static PyObject *
+MrdbConnection_enter(MrdbConnection *self, PyObject *args __attribute__((unused)));
+static PyObject *
+MrdbConnection_exit(MrdbConnection *self, PyObject *args __attribute__((unused)));
+
+static PyObject *
+MrdbConnection_exception(PyObject *self, void *closure);
 
 #define GETTER_EXCEPTION(name, exception, doc)\
 { name,MrdbConnection_exception, NULL, doc, &exception }
@@ -180,6 +185,10 @@ MrdbConnection_Methods[] =
         METH_VARARGS,
         connection_escape_string__doc__
     },
+    {"__enter__", (PyCFunction)MrdbConnection_enter,
+        METH_NOARGS, connection_enter__doc__},
+    {"__exit__", (PyCFunction)MrdbConnection_exit,
+        METH_VARARGS, connection_exit__doc__},
     {NULL} /* alwa+ys last */
 };
 
@@ -1274,6 +1283,28 @@ static PyObject *MrdbConnection_getautocommit(MrdbConnection *self)
     Py_RETURN_FALSE;
 }
 /* }}} */
+
+static PyObject *
+MrdbConnection_enter(MrdbConnection *self, PyObject *args __attribute__((unused)))
+{
+    Py_INCREF(self);
+    return (PyObject *)self;
+}
+
+static PyObject *
+MrdbConnection_exit(MrdbConnection *self, PyObject *args __attribute__((unused)))
+{
+    PyObject *rc= NULL,
+             *tmp= NULL;
+
+    if ((tmp= PyObject_CallMethod((PyObject *)self, "close", "")))
+    {
+        rc= Py_None;
+        Py_INCREF(rc);
+    }
+    Py_XDECREF(tmp);
+    return rc;
+}
 
 /* vim: set tabstop=4 */
 /* vim: set shiftwidth=4 */
