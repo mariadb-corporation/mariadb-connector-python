@@ -685,6 +685,9 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
             paraminfo->is_negative= 1;
         paraminfo->type= MYSQL_TYPE_LONGLONG;
         return 0;
+    } else if (Py_TYPE(obj) == &PyBool_Type) {
+        paraminfo->type= MYSQL_TYPE_TINY;
+        return 0;
     } else if (Py_TYPE(obj) == &PyFloat_Type) {
         paraminfo->type= MYSQL_TYPE_DOUBLE;
         return 0;
