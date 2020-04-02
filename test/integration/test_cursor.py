@@ -775,5 +775,17 @@ class TestCursor(unittest.TestCase):
             pass
         del con
 
+    def test_conpy47(self):
+        con= create_connection()
+        cursor=con.cursor()
+        cursor.execute("SELECT ?", (True, ))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        cursor.execute("SELECT ?", (False, ))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 0)
+        del con
+
+
 if __name__ == '__main__':
     unittest.main()
