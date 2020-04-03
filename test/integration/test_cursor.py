@@ -786,6 +786,22 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 0)
         del con
 
+    def test_conpy49(self):
+        con= create_connection()
+        cur=con.cursor()
+        cur.execute("select %s", [True])
+        row= cur.fetchone()
+        self.assertEqual(row[0], 1)
+        cur.execute("create temporary table t1 (a int)")
+        cur.executemany("insert into t1 values (%s)", [[1],(2,)])
+        cur.execute("select a from t1")
+        row= cur.fetchone()
+        self.assertEqual(row[0], 1)
+        row= cur.fetchone()
+        self.assertEqual(row[0], 2)
+        del con
+ 
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -662,7 +662,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
                     goto error;
                 }
             }
-            else if (Py_TYPE(Data) != &PyTuple_Type)
+            else if (Py_TYPE(Data) != &PyTuple_Type && Py_TYPE(Data) != &PyList_Type)
             {
                 PyErr_SetString(PyExc_TypeError, "argument 2 must be tuple!");
                 goto error;
