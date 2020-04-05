@@ -726,6 +726,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
 
                         /* we need to clear the result first, otherwise the cursor remains
                            in usuable state (query out of order) */
+
                         if ((result= mysql_store_result(self->stmt->mysql)))
                             mysql_free_result(result);
 

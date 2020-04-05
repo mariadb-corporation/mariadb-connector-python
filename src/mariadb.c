@@ -26,6 +26,8 @@
 
 PyObject *Mrdb_Pickle= NULL;
 PyObject *cnx_pool= NULL;
+PyObject *decimal_module= NULL,
+         *decimal_type= NULL;
 extern uint16_t max_pool_size;
 
 int
@@ -142,6 +144,13 @@ PyMODINIT_FUNC PyInit_mariadb(void)
 
     Py_TYPE(&MrdbConnection_Type) = &PyType_Type;
     if (PyType_Ready(&MrdbConnection_Type) == -1)
+    {
+        goto error;
+    }
+
+    /* Import Decimal support (CONPY-49) */
+    if (!(decimal_module= PyImport_ImportModule("decimal")) ||
+        !(decimal_type= PyObject_GetAttrString(decimal_module, "Decimal")))
     {
         goto error;
     }

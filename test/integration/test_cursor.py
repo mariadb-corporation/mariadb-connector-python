@@ -5,6 +5,7 @@ import collections
 import datetime
 import unittest
 import os
+from decimal import Decimal
 
 import mariadb
 
@@ -786,7 +787,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 0)
         del con
 
-    def test_conpy49(self):
+    def test_conpy48(self):
         con= create_connection()
         cur=con.cursor()
         cur.execute("select %s", [True])
@@ -834,6 +835,15 @@ class TestCursor(unittest.TestCase):
         cur.execute("drop table if exists temp")
         del con
 
+    def test_conpy49(self):
+        con= create_connection()
+        cur=con.cursor()
+        cur.execute("create temporary table t1 (a decimal(10,2))")
+        cur.execute("insert into t1 values (?)", (Decimal('10.2'),))
+        cur.execute("select a from t1")
+        row=cur.fetchone()
+        self.assertEqual(row[0], Decimal('10.20'))
+        del con
 
 if __name__ == '__main__':
     unittest.main()

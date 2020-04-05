@@ -273,6 +273,8 @@ extern PyObject *Mariadb_NotSupportedError;
 extern PyObject *Mariadb_Warning;
 
 extern PyObject *Mrdb_Pickle;
+extern PyObject *decimal_module,
+                *decimal_type;
 
 /* Object types */
 extern PyTypeObject MrdbPool_Type;

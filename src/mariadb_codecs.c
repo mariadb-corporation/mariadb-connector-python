@@ -413,12 +413,19 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
                                                 (Py_ssize_t)length[column]);
             }
             break;
+        case MYSQL_TYPE_NEWDECIMAL:
+        {
+            PyObject *decimal;
+
+            decimal= PyObject_CallFunction(decimal_type, "s", (const char *)data);
+            self->values[column]= decimal;
+            break;
+        }
         case MYSQL_TYPE_STRING:
         case MYSQL_TYPE_VAR_STRING:
         case MYSQL_TYPE_JSON:
         case MYSQL_TYPE_VARCHAR:
         case MYSQL_TYPE_DECIMAL:
-        case MYSQL_TYPE_NEWDECIMAL:
         case MYSQL_TYPE_SET:
         case MYSQL_TYPE_ENUM:
         {
@@ -703,11 +710,16 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
     } else if (PyDateTime_CheckExact(obj)) {
         paraminfo->type= MYSQL_TYPE_DATETIME;
         return 0;
-    } else if (Py_TYPE(obj) == &PyUnicode_Type) {
+   } else if (Py_TYPE(obj) == &PyUnicode_Type) {
         paraminfo->type= MYSQL_TYPE_VAR_STRING;
         return 0;
     } else if (obj == Py_None) {
         paraminfo->type= MYSQL_TYPE_NULL;
+        return 0;
+    } else if (!strcmp(Py_TYPE(obj)->tp_name, "decimal.Decimal")) {
+        /* CINPY-49: C-API has no correspondent data type for DECUMAL column type,
+           so we need to convert decimal.Decimal Object to string during callback */
+        paraminfo->type= MYSQL_TYPE_NEWDECIMAL;
         return 0;
     }
     else {
@@ -868,7 +880,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
             if (rc == 2)
             {
                 mariadb_throw_exception(NULL, Mariadb_DataError, 0,
-                    "Data type '%s' in column %d not supported in MariaDB",
+                    "Data type '%s' in column %d not supported in MariaDB Connector/Python",
                      Py_TYPE(paramvalue.value)->tp_name, column_nr);
             }
        
@@ -1174,9 +1186,19 @@ mariadb_param_to_bind(MYSQL_BIND *bind,
             bind->buffer= &value->tm;
             mariadb_pydate_to_tm(bind->buffer_type, value->value, &value->tm);
             break;
+        case MYSQL_TYPE_NEWDECIMAL:
+            {
+                Py_ssize_t len;
+                PyObject *obj= PyObject_Str(value->value);
+                bind->buffer= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
+                bind->buffer_length= (unsigned long)len;
+                Py_DECREF(obj);
+            }
+            break;
         case MYSQL_TYPE_VAR_STRING:
             {
                 Py_ssize_t len;
+
                 bind->buffer= (void *)PyUnicode_AsUTF8AndSize(value->value, &len);
                 bind->buffer_length= (unsigned long)len;
                 break;
