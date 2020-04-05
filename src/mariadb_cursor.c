@@ -402,6 +402,9 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     if (!self->is_text && self->stmt) {
         mysql_stmt_free_result(self->stmt);
 
+        /* CONPY-52: avoid possible double free */
+        self->result= NULL;
+
         while (!mysql_stmt_next_result(self->stmt))
             mysql_stmt_free_result(self->stmt);
 
@@ -556,6 +559,7 @@ static int MrdbCursor_InitResultSet(MrdbCursor *self)
     if (self->result)
     {
         mysql_free_result(self->result);
+        self->result= NULL;
     }
 
     if (Mrdb_GetFieldInfo(self))
