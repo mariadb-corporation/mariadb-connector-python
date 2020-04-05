@@ -800,8 +800,19 @@ class TestCursor(unittest.TestCase):
         row= cur.fetchone()
         self.assertEqual(row[0], 2)
         del con
- 
 
+    def test_conpy51(self):
+        con= create_connection()
+        cur=con.cursor(buffered=True)
+        cur.execute('create temporary table temp (a int unsigned)')
+        cur.execute('insert into temp values (1), (2), (3)')
+        cur.execute('select a from temp order by a')
+        con.commit()
+        row= cur.fetchall()
+        self.assertEqual(row[0][0], 1)
+        self.assertEqual(row[1][0], 2)
+        self.assertEqual(row[2][0], 3)
+        del con
 
 if __name__ == '__main__':
     unittest.main()

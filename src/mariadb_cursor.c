@@ -401,6 +401,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
 
     if (!self->is_text && self->stmt) {
         mysql_stmt_free_result(self->stmt);
+
         while (!mysql_stmt_next_result(self->stmt))
             mysql_stmt_free_result(self->stmt);
 
@@ -493,13 +494,10 @@ void MrdbCursor_dealloc(MrdbCursor *self)
 
 static int Mrdb_GetFieldInfo(MrdbCursor *self)
 {
-    unsigned int field_count= CURSOR_FIELD_COUNT(self);
-
     self->row_number= 0;
-
     self->row_count= CURSOR_AFFECTED_ROWS(self);
 
-    if (field_count)
+    if (self->field_count)
     {
         if (self->is_text)
         {
@@ -528,16 +526,16 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
         if (self->is_named_tuple) {
             unsigned int i;
             if (!(self->sequence_fields= (PyStructSequence_Field *)
-                        PyMem_RawCalloc(field_count + 1,
+                        PyMem_RawCalloc(self->field_count + 1,
                             sizeof(PyStructSequence_Field))))
                 return 1;
             self->sequence_desc.name= mariadb_named_tuple_name;
             self->sequence_desc.doc= mariadb_named_tuple_desc;
             self->sequence_desc.fields= self->sequence_fields;
-            self->sequence_desc.n_in_sequence= field_count;
+            self->sequence_desc.n_in_sequence= self->field_count;
 
 
-            for (i=0; i < field_count; i++)
+            for (i=0; i < self->field_count; i++)
             {
                 self->sequence_fields[i].name= self->fields[i].name;
             }
@@ -550,18 +548,20 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
 
 static int MrdbCursor_InitResultSet(MrdbCursor *self)
 {
-    unsigned int field_count= CURSOR_FIELD_COUNT(self);
+    self->field_count= CURSOR_FIELD_COUNT(self);
 
     MARIADB_FREE_MEM(self->sequence_fields);
     MARIADB_FREE_MEM(self->values);
 
     if (self->result)
+    {
         mysql_free_result(self->result);
+    }
 
     if (Mrdb_GetFieldInfo(self))
         return 1;
 
-    if (!(self->values= (PyObject**)PyMem_RawCalloc(field_count, sizeof(PyObject *))))
+    if (!(self->values= (PyObject**)PyMem_RawCalloc(self->field_count, sizeof(PyObject *))))
         return 1;
     if (!self->is_text)
         mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
@@ -768,7 +768,7 @@ PyObject *MrdbCursor_fieldcount(MrdbCursor *self)
     if (PyErr_Occurred())
         return NULL;
 
-    return PyLong_FromLong((long)CURSOR_FIELD_COUNT(self));
+    return PyLong_FromLong((long)self->field_count);
 }
 /* }}} */
 
@@ -782,7 +782,7 @@ PyObject *MrdbCursor_fieldcount(MrdbCursor *self)
 PyObject *MrdbCursor_description(MrdbCursor *self)
 {
     PyObject *obj= NULL;
-    unsigned int field_count= CURSOR_FIELD_COUNT(self);
+    unsigned int field_count= self->field_count;
 
     MARIADB_CHECK_STMT(self);
     if (PyErr_Occurred())
@@ -854,7 +854,7 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
 
 static int MrdbCursor_fetchinternal(MrdbCursor *self)
 {
-    unsigned int field_count= CURSOR_FIELD_COUNT(self);
+    unsigned int field_count= self->field_count;
     MYSQL_ROW row;
     int rc;
     unsigned int i;
@@ -884,7 +884,7 @@ MrdbCursor_fetchone(MrdbCursor *self)
 {
     PyObject *row;
     uint32_t i;
-    unsigned int field_count= CURSOR_FIELD_COUNT(self);
+    unsigned int field_count= self->field_count;
 
     MARIADB_CHECK_STMT(self);
     if (PyErr_Occurred())
@@ -938,7 +938,7 @@ MrdbCursor_scroll(MrdbCursor *self,
         return NULL;
     }
 
-    if (!CURSOR_FIELD_COUNT(self))
+    if (!self->field_count)
     {
         mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                 "Cursor doesn't have a result set");
@@ -1020,7 +1020,7 @@ MrdbCursor_fetchmany(MrdbCursor *self,
     uint32_t i;
     unsigned long rows= 0;
     static char *kw_list[]= {"size", NULL};
-    unsigned int field_count= CURSOR_FIELD_COUNT(self);
+    unsigned int field_count= self->field_count;
 
     MARIADB_CHECK_STMT(self);
     if (PyErr_Occurred())
@@ -1083,13 +1083,12 @@ end:
 static PyObject *
 mariadb_get_sequence_or_tuple(MrdbCursor *self)
 {
-    unsigned int field_count= CURSOR_FIELD_COUNT(self);
     if (self->is_named_tuple)
     {
         return PyStructSequence_New(self->sequence_type);
     }
     else {
-        return PyTuple_New(field_count);
+        return PyTuple_New(self->field_count);
     }
 }
 
@@ -1097,7 +1096,7 @@ static PyObject *
 MrdbCursor_fetchall(MrdbCursor *self)
 {
     PyObject *List;
-    unsigned int field_count= CURSOR_FIELD_COUNT(self);
+    unsigned int field_count= self->field_count;
     MARIADB_CHECK_STMT(self);
     if (PyErr_Occurred())
     {
@@ -1316,8 +1315,8 @@ MrdbCursor_nextset(MrdbCursor *self)
     {
         return NULL;
     }
-
-    if (!CURSOR_FIELD_COUNT(self))
+/* hmmm */
+    if (!self->field_count)
     {
         mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                 "Cursor doesn't have a result set");
@@ -1373,7 +1372,7 @@ Mariadb_row_count(MrdbCursor *self)
         return PyLong_FromLongLong(-1);
     }
 
-    if (CURSOR_FIELD_COUNT(self))
+    if (self->field_count)
     {
         row_count= CURSOR_NUM_ROWS(self);
     }
@@ -1388,7 +1387,7 @@ Mariadb_row_count(MrdbCursor *self)
 static PyObject *
 Mariadb_row_number(MrdbCursor *self)
 {
-    unsigned int field_count= CURSOR_FIELD_COUNT(self);
+    unsigned int field_count= self->field_count;
     if (!field_count) {
         Py_INCREF(Py_None);
         return Py_None;

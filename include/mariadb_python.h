@@ -231,6 +231,7 @@ typedef struct {
     unsigned long cursor_type;
     int64_t affected_rows;
     int64_t row_count;
+    uint32_t field_count;
     unsigned long row_number;
     uint8_t is_prepared;
     uint8_t is_buffered;
