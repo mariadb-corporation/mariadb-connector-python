@@ -53,6 +53,10 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 #define MAX(a,b) (a) > (b) ? (a) : (b)
 #endif
 
+#if !defined(__GNUC__) && !defined(__clang__)
+#define __attribute__(A)
+#endif
+
 #ifdef _WIN32
 int clock_gettime(int dummy, struct timespec *ct);
 #define CLOCK_MONOTONIC_RAW 1
