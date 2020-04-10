@@ -587,6 +587,7 @@ static PyObject *MrdbConnection_cursor(MrdbConnection *self,
 
     conn= Py_BuildValue("(O)", self);
     cursor= PyObject_Call((PyObject *)&MrdbCursor_Type, conn, kwargs);
+    Py_DECREF(conn);
     return cursor;
 }
 

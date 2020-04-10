@@ -808,6 +808,7 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
             MY_CHARSET_INFO cs;
             unsigned long display_length;
             long packed_len= 0;
+            PyObject *desc;
 
             display_length= self->fields[i].max_length > self->fields[i].length ? 
                             self->fields[i].max_length : self->fields[i].length;
@@ -831,7 +832,6 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
                 }
             }
 
-            PyObject *desc;
             if (!(desc= Py_BuildValue("(sIIiIIOI)",
                             self->fields[i].name,
                             self->fields[i].type,
