@@ -64,10 +64,19 @@ PyDoc_STRVAR(
 
 PyDoc_STRVAR(
   connection_cursor__doc__,
-  "cursor()\n"
+  "cursor(self, buffered=None, dictionary=None, named_tuple=None, cursor_type=mariadb.CURSOR_TYPE_NONE,\n"
+  "       prepared=None, prefetch_rows=1)\n"
   "--\n"
   "\n"
-  "Return a new cursor object for the current connection."
+  "Returns a new cursor object for the current connection.\n\n"
+  "By default the result will be unbuffered, which means before executing another\n"
+  "statement with the same connection the entire result set must be fetched.\n\n"
+  "fetch methods of the cursor class by default return result set values as a tuple, unless\n"
+  "named_tuple or dictionary was specified. The latter one exists for compatibility reasons\n"
+  "and should be avoided due to possible inconsistency in case two or more fields in a\n"
+  "result sets have the same name.\n\n"
+  "If cursor_type is set to mariadb.CURSOR_TYPE_READ_ONLY, a cursor is opened for the\n"
+  "statement invoked with cursors execute() method."
 );
 
 PyDoc_STRVAR(

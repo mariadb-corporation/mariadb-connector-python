@@ -115,7 +115,7 @@ struct st_constants {
     } u;
 };
 
-struct st_constants int_constants[]= {
+static struct st_constants int_constants[]= {
     {"CURSOR_TYPE_READ_ONLY", {CURSOR_TYPE_READ_ONLY}},
     {"CURSOR_TYPE_NONE", {CURSOR_TYPE_NO_CURSOR}},
     {NULL, {0}} /* Always last */
@@ -193,7 +193,7 @@ PyMODINIT_FUNC PyInit_mariadb(void)
         PyModule_AddIntConstant(module, intvals->name,
                 intvals->u.lvalue);
         intvals++;
-    }
+    } 
 
     /* PEP-249: mandatory module globals */
     PyModule_AddObject(module, "apilevel",

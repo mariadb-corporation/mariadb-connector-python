@@ -101,17 +101,6 @@ strncpy((a)->statement, (s), (l));\
 #define CURSOR_NUM_ROWS(a)\
     ((a)->is_text ? mysql_num_rows((a)->result) : (a)->stmt ? mysql_stmt_num_rows((a)->stmt) : 0)
 
-#define MARIADB_SET_SEQUENCE_OR_TUPLE_ITEM(self, row, column)\
-if ((self)->is_named_tuple)\
-{\
-    PyStructSequence_SET_ITEM((row), (column),\
-     (self)->values[(column)]);\
-}\
-else {\
-    PyTuple_SET_ITEM((row), (column), (self)->values[(column)]);\
-}
-
-
 static char *mariadb_named_tuple_name= "Row";
 static char *mariadb_named_tuple_desc= "Named tupled row";
 static PyObject *Mariadb_no_operation(MrdbCursor *,
@@ -236,10 +225,11 @@ buffered:              buffered or unbuffered result sets
 static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
         PyObject *kwargs)
 {
-    char *key_words[]= {"", "named_tuple", "prefetch_size", "cursor_type", 
+    char *key_words[]= {"", "named_tuple", "dictionary", "prefetch_size", "cursor_type", 
         "buffered", "prepared", NULL};
     PyObject *connection;
     uint8_t is_named_tuple= 0;
+    uint8_t is_dictionary= 0;
     unsigned long cursor_type= 0,
                   prefetch_rows= 0;
     uint8_t is_buffered= 0;
@@ -249,8 +239,8 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
         return -1;
 
     if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-                "O!|bkkbb", key_words, &MrdbConnection_Type, &connection,
-                &is_named_tuple, &prefetch_rows, &cursor_type, &is_buffered,
+                "O!|bbkkbb", key_words, &MrdbConnection_Type, &connection,
+                &is_named_tuple, &is_dictionary, &prefetch_rows, &cursor_type, &is_buffered,
                 &is_prepared))
         return -1;
 
@@ -269,6 +259,22 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
         return -1;
     }
 
+    if (is_named_tuple && is_dictionary)
+    {
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+                "Results can be returned either as named tuple or as dictionary, but not as both.");
+        return -1;
+    }
+
+    if (is_named_tuple)
+    {
+        self->result_format= RESULT_NAMED_TUPLE;
+    } else if (is_dictionary)
+    {
+        self->result_format= RESULT_DICTIONARY;
+    }
+   
+
     Py_INCREF(connection);
     self->connection= (MrdbConnection *)connection;
     self->is_buffered= is_buffered ? is_buffered : self->connection->is_buffered;
@@ -284,7 +290,6 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
 
     self->cursor_type= cursor_type;
     self->prefetch_rows= prefetch_rows;
-    self->is_named_tuple= is_named_tuple;
     self->row_array_size= 1;
 
     if (self->cursor_type || self->prefetch_rows)
@@ -452,6 +457,21 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
 }
 /* }}} */
 
+static void ma_set_result_column_value(MrdbCursor *self, PyObject *row, uint32_t column)
+{
+    switch (self->result_format) {
+        case RESULT_NAMED_TUPLE:
+            PyStructSequence_SET_ITEM(row, column, self->values[column]);
+            break;
+        case RESULT_DICTIONARY:
+            PyDict_SetItemString(row, self->fields[column].name, self->values[column]); 
+            break;
+        default:
+            PyTuple_SET_ITEM(row, column, (self)->values[column]);
+    }
+}
+
+
 /* {{{ ma_cursor_close 
    closes the statement handle of current cursor. After call to
    cursor_close the cursor can't be reused anymore
@@ -526,7 +546,7 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
         self->fields= (self->is_text) ? mysql_fetch_fields(self->result) :
             mariadb_stmt_fetch_fields(self->stmt);
 
-        if (self->is_named_tuple) {
+        if (self->result_format == RESULT_NAMED_TUPLE) {
             unsigned int i;
             if (!(self->sequence_fields= (PyStructSequence_Field *)
                         PyMem_RawCalloc(self->field_count + 1,
@@ -918,7 +938,7 @@ MrdbCursor_fetchone(MrdbCursor *self)
 
     for (i= 0; i < field_count; i++)
     {
-        MARIADB_SET_SEQUENCE_OR_TUPLE_ITEM(self, row, i);
+        ma_set_result_column_value(self, row, i);
     }
     return row;
 }
@@ -1077,7 +1097,7 @@ MrdbCursor_fetchmany(MrdbCursor *self,
         }
         for (j=0; j < field_count; j++)
         {
-            MARIADB_SET_SEQUENCE_OR_TUPLE_ITEM(self, Row, j);
+            ma_set_result_column_value(self, Row, j);
         }
         PyList_Append(List, Row);
     }
@@ -1088,12 +1108,14 @@ end:
 static PyObject *
 mariadb_get_sequence_or_tuple(MrdbCursor *self)
 {
-    if (self->is_named_tuple)
+    switch (self->result_format)
     {
-        return PyStructSequence_New(self->sequence_type);
-    }
-    else {
-        return PyTuple_New(self->field_count);
+        case RESULT_NAMED_TUPLE:
+            return PyStructSequence_New(self->sequence_type);
+        case RESULT_DICTIONARY:
+            return PyDict_New();
+        default:
+            return PyTuple_New(self->field_count);
     }
 }
 
@@ -1134,7 +1156,7 @@ MrdbCursor_fetchall(MrdbCursor *self)
 
         for (j=0; j < field_count; j++)
         {
-            MARIADB_SET_SEQUENCE_OR_TUPLE_ITEM(self, Row, j)
+            ma_set_result_column_value(self, Row, j);
         }
         PyList_Append(List, Row);
     }

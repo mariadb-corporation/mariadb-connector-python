@@ -94,6 +94,13 @@ enum enum_dataapi_groups
     DBAPI_ROWID
 };
 
+enum enum_result_format
+{
+    RESULT_TUPLE= 0,
+    RESULT_NAMED_TUPLE,
+    RESULT_DICTIONARY
+};
+
 enum enum_dyncol_type
 {
     DYNCOL_LIST= 1,
@@ -237,9 +244,11 @@ typedef struct {
     int64_t row_count;
     uint32_t field_count;
     unsigned long row_number;
+    enum enum_result_format result_format;
     uint8_t is_prepared;
     uint8_t is_buffered;
-    uint8_t is_named_tuple;
+/*    uint8_t is_named_tuple;
+    uint8_t is_dictionary; */
     uint8_t is_closed;
     uint8_t is_text;
     MrdbParser *parser;

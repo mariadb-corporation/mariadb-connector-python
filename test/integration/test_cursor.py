@@ -845,5 +845,15 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], Decimal('10.20'))
         del con
 
+    def test_conpy56(self):
+        con= create_connection()
+        cur=con.cursor(dictionary=True)
+        cur.execute("select 'foo' as bar, 'bar' as foo")
+        row= cur.fetchone()
+        self.assertEqual(row["foo"], "bar")
+        self.assertEqual(row["bar"], "foo")
+        del con
+ 
+
 if __name__ == '__main__':
     unittest.main()

@@ -44,7 +44,7 @@ class TestException(unittest.TestCase):
         except mariadb.DatabaseError as err:
             self.assertEqual(err.sqlstate, "HY000")
             self.assertEqual(err.errno, 2002)
-            self.assertTrue(err.errmsg.find("Can't connect to MySQL server on '8.8.8.8'") > -1)
+            self.assertTrue(err.errmsg.find("server on '8.8.8.8'") > -1)
             end = datetime.today()
             difference = end - start
             self.assertEqual(difference.days, 0)
