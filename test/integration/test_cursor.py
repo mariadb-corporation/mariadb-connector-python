@@ -853,7 +853,17 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row["foo"], "bar")
         self.assertEqual(row["bar"], "foo")
         del con
- 
+
+    def test_conpy53(self):
+        con= create_connection()
+        cur=con.cursor()
+        cur.execute("select 1", ())
+        row=cur.fetchone()
+        self.assertEqual(row[0], 1)
+        cur.execute("select 1", [])
+        row=cur.fetchone()
+        self.assertEqual(row[0], 1)
+        del con 
 
 if __name__ == '__main__':
     unittest.main()

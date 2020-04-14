@@ -592,6 +592,21 @@ static int MrdbCursor_InitResultSet(MrdbCursor *self)
     return 0;
 }
 
+static Py_ssize_t  mrdb_cursor_data_param_count(PyObject *data)
+{
+  if (!data)
+    return 0;
+
+  if (Py_TYPE(data) == &PyTuple_Type)
+  {
+    return PyTuple_Size(data);
+  } else if (Py_TYPE(data) == &PyList_Type)
+  {
+    return PyList_Size(data);
+  }
+  return 0;
+}
+
 /* {{{ MrdbCursor_execute
    PEP-249 execute() method
  */
@@ -627,7 +642,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
       self->is_buffered= is_buffered;
 
     /* if there are no parameters specified, we execute the statement in text protocol */
-    if (!Data && !self->cursor_type)
+    if (!mrdb_cursor_data_param_count(Data) && !self->cursor_type)
     {
         /* in case statement was executed before, we need to clear, since we don't use 
            binary protocol */
@@ -688,7 +703,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
             }
             else if (Py_TYPE(Data) != &PyTuple_Type && Py_TYPE(Data) != &PyList_Type)
             {
-                PyErr_SetString(PyExc_TypeError, "argument 2 must be tuple!");
+                PyErr_SetString(PyExc_TypeError, "Argument 2 must be Tuple or List!");
                 goto error;
             }
             self->array_size= 0;
