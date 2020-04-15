@@ -26,7 +26,7 @@ cfg = get_config(options)
 
 
 setup(name='mariadb',
-      version='0.9.57',
+      version='0.9.58',
       python_requires='>=3.6',
       classifiers = [
           'Development Status :: 4 - Beta',
