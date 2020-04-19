@@ -592,7 +592,7 @@ static int MrdbCursor_InitResultSet(MrdbCursor *self)
     return 0;
 }
 
-static Py_ssize_t  mrdb_cursor_data_param_count(PyObject *data)
+static Py_ssize_t data_count(PyObject *data)
 {
   if (!data)
     return 0;
@@ -603,6 +603,9 @@ static Py_ssize_t  mrdb_cursor_data_param_count(PyObject *data)
   } else if (Py_TYPE(data) == &PyList_Type)
   {
     return PyList_Size(data);
+  } else if (Py_TYPE(data) == &PyDict_Type)
+  {
+    return PyDict_Size(data);
   }
   return 0;
 }
@@ -642,7 +645,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
       self->is_buffered= is_buffered;
 
     /* if there are no parameters specified, we execute the statement in text protocol */
-    if (!mrdb_cursor_data_param_count(Data) && !self->cursor_type)
+    if (!data_count(Data) && !self->cursor_type)
     {
         /* in case statement was executed before, we need to clear, since we don't use 
            binary protocol */
