@@ -200,6 +200,41 @@ end:
   return ret;
 }
 
+static uint8_t check_date(uint16_t year, uint8_t month, uint8_t day)
+{
+  uint8_t is_leap= 0;
+
+  if (year < 1 || year > 9999)
+      return 0;
+  if (month < 1 || month > 12)
+      return 0;
+  if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))
+      is_leap= 1;
+  if (month == 2)
+  {
+    if (is_leap && day > 29)
+        return 0;
+    if (!is_leap && day > 28)
+        return 0;
+  }
+  if ((month == 4 || month == 6 || month == 9 || month == 11) && day > 30)
+      return 0;
+  return 1;
+}
+
+static uint8_t check_time(int8_t hour, int8_t minute, int8_t seconds, int32_t microseconds)
+{
+  if (hour < 0 || hour > 23)
+      return 0;
+  if (minute < 0 || minute > 59)
+      return 0;
+  if (seconds < 0 || seconds > 59)
+      return 0;
+  if (microseconds < 0 || microseconds > 999999)
+      return 0;
+  return 1;
+}
+
 
 /*
   Parse date, in MySQL format.
@@ -376,15 +411,37 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             Py_str_to_TIME(data, strlen(data), &tm);
             if (self->fields[column].type == MYSQL_TYPE_TIME)
             {
-              self->values[column]= PyTime_FromTime((int)tm.hour, (int)tm.minute, 
-                                      (int)tm.second, (int)tm.second_part);
+                if (check_time(tm.hour, tm.minute, tm.second, tm.second_part))
+                {
+                    self->values[column]= PyTime_FromTime((int)tm.hour, (int)tm.minute,
+                                          (int)tm.second, (int)tm.second_part);
+                }
+                else {
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
+                }
             } else if (self->fields[column].type == MYSQL_TYPE_DATE)
             {
-              self->values[column]= PyDate_FromDate(tm.year, tm.month, tm.day);
+                if (check_date(tm.year, tm.month, tm.day))
+                {
+                    self->values[column]= PyDate_FromDate(tm.year, tm.month, tm.day);
+                }
+                else {
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
+                }
             } else 
             {
-              self->values[column]= PyDateTime_FromDateAndTime(tm.year, tm.month, 
-                         tm.day, tm.hour, tm.minute, tm.second, tm.second_part);
+                if (check_date(tm.year, tm.month, tm.day) &&
+                    check_time(tm.hour, tm.minute, tm.second, tm.second_part))
+                {
+                    self->values[column]= PyDateTime_FromDateAndTime(tm.year, tm.month,
+                               tm.day, tm.hour, tm.minute, tm.second, tm.second_part);
+                }
+                else {
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
+                }
             }
             break;
         case MYSQL_TYPE_TINY_BLOB:

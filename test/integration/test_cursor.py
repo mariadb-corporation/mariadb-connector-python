@@ -879,5 +879,15 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[1][0], 2)
         del con
 
+    def test_conpy59(self):
+        con= create_connection()
+        cursor=con.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a date)")
+        cursor.execute("INSERT INTO t1 VALUES('0000-01-01')")
+        cursor.execute("SELECT a FROM t1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], None)
+        del con
+
 if __name__ == '__main__':
     unittest.main()
