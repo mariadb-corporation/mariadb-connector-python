@@ -918,5 +918,14 @@ class TestCursor(unittest.TestCase):
  
         del cursor
 
+    def test_conpy62(self):
+        con= create_connection()
+        cur = con.cursor()
+        con= create_connection()
+        query = "select round(.75 * (? / 3), 2) as val"
+        cur.execute(query,[5])
+        row= cur.fetchone()
+        self.assertEqual(row[0], Decimal(1.25))
+
 if __name__ == '__main__':
     unittest.main()

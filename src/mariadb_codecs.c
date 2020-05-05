@@ -473,7 +473,6 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         case MYSQL_TYPE_NEWDECIMAL:
         {
             PyObject *decimal;
-
             decimal= PyObject_CallFunction(decimal_type, "s", (const char *)data);
             self->values[column]= decimal;
             break;
@@ -692,13 +691,24 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 *row+= length;
                 break;
             }
+        case MYSQL_TYPE_NEWDECIMAL:
+            {
+                unsigned long length= mysql_net_field_length(row);
+
+                if (length > 0)
+                {
+                    self->values[column]= PyObject_CallFunction(decimal_type, "s", (const char *)*row);
+                } else {
+                    self->values[column]= PyObject_CallFunction(decimal_type, "s", "0");
+                }
+                break;
+            }
         case MYSQL_TYPE_GEOMETRY:
         case MYSQL_TYPE_STRING:
         case MYSQL_TYPE_VAR_STRING:
         case MYSQL_TYPE_JSON:
         case MYSQL_TYPE_VARCHAR:
         case MYSQL_TYPE_DECIMAL:
-        case MYSQL_TYPE_NEWDECIMAL:
         case MYSQL_TYPE_SET:
         case MYSQL_TYPE_ENUM:
             {

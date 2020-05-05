@@ -941,7 +941,6 @@ MrdbCursor_fetchone(MrdbCursor *self)
                 "Cursor doesn't have a result set");
         return NULL;
     }
-
     if (MrdbCursor_fetchinternal(self))
     {
         Py_INCREF(Py_None);
