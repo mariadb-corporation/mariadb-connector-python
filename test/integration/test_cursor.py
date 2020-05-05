@@ -382,9 +382,13 @@ class TestCursor(unittest.TestCase):
 
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE ind1 (a int, b int default 2,c int)")
-        vals = (mariadb.indicator_null, mariadb.indicator_default, 3)
-        cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", [vals])
+        vals = [(1,4,3),(mariadb.indicator_null, mariadb.indicator_default, 3)]
+        cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
         cursor.execute("SELECT a, b, c FROM ind1")
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        self.assertEqual(row[1], 4)
+        self.assertEqual(row[2], 3)
         row = cursor.fetchone()
         self.assertEqual(row[0], None)
         self.assertEqual(row[1], 2)
@@ -888,6 +892,31 @@ class TestCursor(unittest.TestCase):
         row= cursor.fetchone()
         self.assertEqual(row[0], None)
         del con
+
+    def test_conpy61(self):
+        con= create_connection()
+        cursor=con.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE ind1 (a int, b int default 2,c int)")
+        vals = [(1,4,3),(None, 2, 3)]
+        cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
+        cursor.execute("SELECT a, b, c FROM ind1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        row= cursor.fetchone()
+        self.assertEqual(row[0], None)
+        cursor.execute("DELETE FROM ind1")
+        vals=[(1,4,3), (mariadb.indicator_null, mariadb.indicator_default, None)]
+
+        cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
+        cursor.execute("SELECT a, b, c FROM ind1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        row= cursor.fetchone()
+        self.assertEqual(row[0], None)
+        self.assertEqual(row[1], 2)
+        self.assertEqual(row[2], None)
+ 
+        del cursor
 
 if __name__ == '__main__':
     unittest.main()

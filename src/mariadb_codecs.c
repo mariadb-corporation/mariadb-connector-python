@@ -946,13 +946,12 @@ mariadb_get_parameter_info(MrdbCursor *self,
         param->buffer_type= pinfo.type;
         bits= (uint32_t)pinfo.bits;
     }
-
-    for (i=0; i < self->array_size; i++)
+    else for (i=0; i < self->array_size; i++)
     {
         if (mariadb_get_parameter(self, 1, i, column_nr, &paramvalue))
             return 1;
         memset(&pinfo, 0, sizeof(MrdbParamInfo));
-        if (mariadb_get_column_info(paramvalue.value, &pinfo))
+        if (mariadb_get_column_info(paramvalue.value, &pinfo) && !paramvalue.indicator)
         {
             mariadb_throw_exception(NULL, Mariadb_DataError, 1,
                     "Invalid parameter type at row %d, column %d",
@@ -980,11 +979,12 @@ mariadb_get_parameter_info(MrdbCursor *self,
         else {
             /* except for NULL the parameter types must match */
             if (param->buffer_type != pinfo.type &&
-                    pinfo.type != MYSQL_TYPE_NULL)
+                    pinfo.type != MYSQL_TYPE_NULL &&
+                    !paramvalue.indicator)
             {
                 if ((param->buffer_type == MYSQL_TYPE_TINY ||
-                            param->buffer_type == MYSQL_TYPE_SHORT ||
-                            param->buffer_type == MYSQL_TYPE_LONG) &&
+                     param->buffer_type == MYSQL_TYPE_SHORT ||
+                     param->buffer_type == MYSQL_TYPE_LONG) &&
                         pinfo.type == MYSQL_TYPE_LONGLONG)
                     break;
                 mariadb_throw_exception(NULL, Mariadb_DataError, 1,
