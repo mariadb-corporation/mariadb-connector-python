@@ -697,10 +697,14 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 
                 if (length > 0)
                 {
-                    self->values[column]= PyObject_CallFunction(decimal_type, "s", (const char *)*row);
+                    char *tmp= alloca(length + 1);
+                    memcpy(tmp, (const char *)*row, length);
+                    tmp[length]= 0;
+                    self->values[column]= PyObject_CallFunction(decimal_type, "s", tmp);
                 } else {
                     self->values[column]= PyObject_CallFunction(decimal_type, "s", "0");
                 }
+                *row+= length;
                 break;
             }
         case MYSQL_TYPE_GEOMETRY:
