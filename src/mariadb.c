@@ -140,6 +140,7 @@ static void mariadb_add_exception(PyObject *module,
 PyMODINIT_FUNC PyInit_mariadb(void)
 {
     PyObject *module= PyModule_Create(&mariadb_module);
+    PyObject *version_info;
     struct st_constants *intvals= int_constants;
 
     Py_TYPE(&MrdbConnection_Type) = &PyType_Type;
@@ -193,7 +194,31 @@ PyMODINIT_FUNC PyInit_mariadb(void)
         PyModule_AddIntConstant(module, intvals->name,
                 intvals->u.lvalue);
         intvals++;
-    } 
+    }
+
+    /* PEP-396: Module version numbers */
+    PyModule_AddObject(module, "__version__",
+                       PyUnicode_FromString(PY_MARIADB_VERSION));
+
+    if (!(version_info= PyTuple_New(5)))
+    {
+        goto error;
+    }
+    if (PyTuple_SetItem(version_info, 0, PyLong_FromLong(PY_MARIADB_MAJOR_VERSION)) ||
+        PyTuple_SetItem(version_info, 1, PyLong_FromLong(PY_MARIADB_MINOR_VERSION)) ||
+        PyTuple_SetItem(version_info, 2, PyLong_FromLong(PY_MARIADB_PATCH_VERSION)) ||
+        PyTuple_SetItem(version_info, 3, PyUnicode_FromString(PY_MARIADB_PRE_RELEASE_SEGMENT)) ||
+        PyTuple_SetItem(version_info, 4, PyLong_FromLong(0L)))
+    {
+        goto error;
+    }
+
+    PyModule_AddObject(module, "__version_info__", version_info);
+ 
+
+
+    PyModule_AddObject(module, "__author__",
+                       PyUnicode_FromString(PY_MARIADB_AUTHORS));
 
     /* PEP-249: mandatory module globals */
     PyModule_AddObject(module, "apilevel",
