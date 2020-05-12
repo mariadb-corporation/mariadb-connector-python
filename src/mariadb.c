@@ -207,7 +207,7 @@ PyMODINIT_FUNC PyInit_mariadb(void)
     if (PyTuple_SetItem(version_info, 0, PyLong_FromLong(PY_MARIADB_MAJOR_VERSION)) ||
         PyTuple_SetItem(version_info, 1, PyLong_FromLong(PY_MARIADB_MINOR_VERSION)) ||
         PyTuple_SetItem(version_info, 2, PyLong_FromLong(PY_MARIADB_PATCH_VERSION)) ||
-        PyTuple_SetItem(version_info, 3, PyUnicode_FromString(PY_MARIADB_PRE_RELEASE_SEGMENT)) ||
+        PyTuple_SetItem(version_info, 3, PyUnicode_FromString(TOSTRING(PY_MARIADB_PRE_RELEASE_SEGMENT))) ||
         PyTuple_SetItem(version_info, 4, PyLong_FromLong(0L)))
     {
         goto error;
@@ -215,11 +215,6 @@ PyMODINIT_FUNC PyInit_mariadb(void)
 
     PyModule_AddObject(module, "__version_info__", version_info);
  
-
-
-    PyModule_AddObject(module, "__author__",
-                       PyUnicode_FromString(PY_MARIADB_AUTHORS));
-
     /* PEP-249: mandatory module globals */
     PyModule_AddObject(module, "apilevel",
                        PyUnicode_FromString(MARIADB_PY_APILEVEL));
