@@ -509,7 +509,7 @@ MrdbConnection_connect(
 
 
     /* if pool name exists, we need to return a connection from pool */
-    if ((pn= PyDict_GetItemString(kwargs, "pool_name")))
+    if (kwargs && (pn= PyDict_GetItemString(kwargs, "pool_name")))
     {
         if ((pool = PyDict_GetItem(cnx_pool, pn)))
         {
