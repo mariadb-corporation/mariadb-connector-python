@@ -37,12 +37,10 @@ PY_MARIADB_VERSION= "%s.%s.%s" % (PY_MARIADB_MAJOR_VERSION, PY_MARIADB_MINOR_VER
 # Since we increase patch version even for alpha/beta/rc, pre release nr will be always zero.
 PY_MARIADB_PRE_RELEASE_NR=0
 
-define_macros.append(("PY_MARIADB_VERSION", "\"%s\"" % PY_MARIADB_VERSION))
 define_macros.append(("PY_MARIADB_MAJOR_VERSION", PY_MARIADB_MAJOR_VERSION))
 define_macros.append(("PY_MARIADB_MINOR_VERSION", PY_MARIADB_MINOR_VERSION))
 define_macros.append(("PY_MARIADB_PATCH_VERSION", PY_MARIADB_PATCH_VERSION))
-define_macros.append(("PY_MARIADB_PRE_RELEASE_SEGMENT", "\"%s\"" % PY_MARIADB_PRE_RELEASE_SEGMENT))
-define_macros.append(("PY_MARIADB_AUTHORS", "\"%s\"" % PY_MARIADB_AUTHORS))
+define_macros.append(("PY_MARIADB_PRE_RELEASE_SEGMENT", PY_MARIADB_PRE_RELEASE_SEGMENT))
 
 setup(name='mariadb',
       version=PY_MARIADB_VERSION,

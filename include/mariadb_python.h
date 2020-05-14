@@ -79,6 +79,12 @@ int clock_gettime(int dummy, struct timespec *ct);
 #endif /* L64 */
 #endif /* _WIN32 */
 
+#define STRINGIFY(n) #n
+#define TOSTRING(n) STRINGIFY(n)
+
+#define PY_MARIADB_VERSION TOSTRING(PY_MARIADB_MAJOR_VERSION) "." \
+        TOSTRING(PY_MARIADB_MINOR_VERSION) "." TOSTRING(PY_MARIADB_PATCH_VERSION)
+
 #define MAX_TPC_XID_SIZE 64
 #define POOL_DEFAULT_SIZE 5
 
