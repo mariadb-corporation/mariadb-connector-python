@@ -141,13 +141,13 @@ class TestCursor(unittest.TestCase):
         self.assertRaises(mariadb.Error, cursor.fetchall)
 
         cursor.execute("SELECT id, name, city FROM test_fetchmany ORDER BY id")
-        self.assertEqual(0, cursor.rowcount)
+        self.assertEqual(-1, cursor.rowcount)
         row = cursor.fetchall()
         self.assertEqual(row, params)
         self.assertEqual(5, cursor.rowcount)
 
         cursor.execute("SELECT id, name, city FROM test_fetchmany ORDER BY id")
-        self.assertEqual(0, cursor.rowcount)
+        self.assertEqual(-1, cursor.rowcount)
 
         row = cursor.fetchmany(1)
         self.assertEqual(row, [params[0]])
@@ -926,6 +926,18 @@ class TestCursor(unittest.TestCase):
         cur.execute(query,[5])
         row= cur.fetchone()
         self.assertEqual(row[0], Decimal(1.25))
+
+    def test_conpy67(self):
+        con= create_connection()
+        cur = con.cursor()
+        cur.execute("SELECT 1")
+        self.assertEqual(cur.rowcount, -1)
+        del cur
+        cur = con.cursor()
+        cur.execute("SELECT 1 WHERE 1=2")
+        self.assertEqual(cur.rowcount, -1)
+        cur.fetchall()
+        self.assertEqual(cur.rowcount, 0)
 
 if __name__ == '__main__':
     unittest.main()

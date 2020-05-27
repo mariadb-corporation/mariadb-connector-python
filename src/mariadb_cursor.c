@@ -429,6 +429,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
         }
 
     }
+    self->fetched= 0;
 
     if (self->is_text)
     {
@@ -901,6 +902,8 @@ static int MrdbCursor_fetchinternal(MrdbCursor *self)
     MYSQL_ROW row;
     int rc;
     unsigned int i;
+
+    self->fetched= 1;
 
     if (!self->is_text)
     {
@@ -1418,7 +1421,13 @@ Mariadb_row_count(MrdbCursor *self)
 
     if (self->field_count)
     {
-        row_count= CURSOR_NUM_ROWS(self);
+        if (!self->is_buffered && !self->fetched)
+        {
+            row_count= -1;
+        } else
+        {
+            row_count= CURSOR_NUM_ROWS(self);
+        }
     }
     else {
         row_count= self->row_count ? self->row_count : CURSOR_AFFECTED_ROWS(self);

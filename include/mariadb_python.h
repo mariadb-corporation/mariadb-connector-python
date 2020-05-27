@@ -253,8 +253,7 @@ typedef struct {
     enum enum_result_format result_format;
     uint8_t is_prepared;
     uint8_t is_buffered;
-/*    uint8_t is_named_tuple;
-    uint8_t is_dictionary; */
+    uint8_t fetched;
     uint8_t is_closed;
     uint8_t is_text;
     MrdbParser *parser;
