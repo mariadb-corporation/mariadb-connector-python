@@ -76,6 +76,29 @@ class TestPooling(unittest.TestCase):
             pass
         del pool
 
+    def test_conpy69(self):
+        conn= create_connection()
+        cursor1= conn.cursor()
+        cursor1.execute("CREATE SCHEMA IF NOT EXISTS 中文考试");
+        default_conf= conf()
+        default_conf["database"]= "中文考试"
+        pool= mariadb.ConnectionPool(pool_name="test2")
+        pool.set_config(**default_conf)
+        for i in range(1,6):
+            pool.add_connection()
+        conn= mariadb.connect(pool_name="test2")
+        cursor= conn.cursor()
+        cursor.execute("select database()")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "中文考试")
+        cursor.execute("CREATE TABLE t1 (a varchar(255)) character set utf8mb4")
+        cursor.execute("insert into t1 values (?)", ("123.45 中文考试",))
+        cursor.execute("select a from t1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "123.45 中文考试")
+        cursor1.execute("DROP SCHEMA 中文考试");
+        del pool
+
     def test__CONNECTION_POOLS(self):
         default_conf= conf()
         pool= mariadb.ConnectionPool(pool_name="test", **default_conf)

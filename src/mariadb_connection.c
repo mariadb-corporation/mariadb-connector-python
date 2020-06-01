@@ -273,7 +273,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
         PyObject *args,
         PyObject *dsnargs)
 {
-    int rc;
     char *dsn= NULL, *host=NULL, *user= NULL, *password= NULL, *schema= NULL,
          *socket= NULL, *init_command= NULL, *default_file= NULL,
          *default_group= NULL,
@@ -343,6 +342,13 @@ MrdbConnection_Initialize(MrdbConnection *self,
         return -1;
     }
 
+    if (mysql_options(self->mysql, MYSQL_SET_CHARSET_NAME, "utf8mb4"))
+    {
+        mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
+            "Can't set default character set utf8mb4");
+        return -1;
+    }
+
     if (local_infile != 0xFF)
     {
         mysql_optionsv(self->mysql, MYSQL_OPT_LOCAL_INFILE, &local_infile);
@@ -403,15 +409,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
         goto end;
     }
 
-    /* make sure that we use a utf8 connection */
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_set_character_set(self->mysql, "utf8mb4");
-    Py_END_ALLOW_THREADS;
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        goto end;
-    }
 end:
     if (PyErr_Occurred())
         return -1;
