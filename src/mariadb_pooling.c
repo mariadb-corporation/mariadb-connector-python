@@ -401,6 +401,12 @@ static PyObject
     PyObject *key, *value;
     Py_ssize_t pos = 0;
 
+    if (!kwargs || Py_TYPE(kwargs) != &PyDict_Type)
+    {
+        PyErr_SetString(PyExc_TypeError, "Argument must be dictionary");
+        return NULL;
+    }
+
     while(PyDict_Next(kwargs, &pos, &key, &value))
     {
         const char *utf8key= PyUnicode_AsUTF8(key);
