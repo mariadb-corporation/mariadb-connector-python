@@ -959,6 +959,8 @@ mariadb_get_parameter_info(MrdbCursor *self,
         }
         param->buffer_type= pinfo.type;
         bits= (uint32_t)pinfo.bits;
+        if (pinfo.is_negative)
+            param->is_unsigned= 0;
     }
     else for (i=0; i < self->array_size; i++)
     {
