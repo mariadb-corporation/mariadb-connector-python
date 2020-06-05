@@ -7,16 +7,13 @@ Installation
 
 Prerequisites
 -------------
-
 - Python 3 (minimum supported version is 3.6)
 - MariaDB Server 10.x or MySQL Server
 - MariaDB Connector/C 3.1.5 or newer
 
-:: _build-prerequisites:
 
 Build prerequisites
 ^^^^^^^^^^^^^^^^^^^
-
 The following build prerequisites are required to install or build MariaDB Connector/Python.
 For Windows operating platforms the pypi.org download page provides binary versions.
 
@@ -55,11 +52,10 @@ Make sure you have an up to date version of pip and install it with
 
 .. code-block:: console
 
-    $ pip3 install -pre mariadb
+    $ pip3 install mariadb
 
 Test suite
 ----------
-
 If you have installed the sources, after successful build you can run the test suite
 from the source directory.
 

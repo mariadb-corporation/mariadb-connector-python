@@ -1,0 +1,181 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Release notes &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="License" href="license.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="license.html" title="License"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="release-notes">
+<span id="id1"></span><h1>Release notes<a class="headerlink" href="#release-notes" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="mariadb-connector-python-0-9-59-beta">
+<h2>MariaDB Connector/Python 0.9.59 beta<a class="headerlink" href="#mariadb-connector-python-0-9-59-beta" title="Permalink to this headline">¶</a></h2>
+<p>Release date: May 26th 2020</p>
+<p>Notable Updates:</p>
+<ul class="simple">
+<li><p>CONPY-64: Fixed crash when a connection was established without parameters</p></li>
+<li><p>CONPY-66: Fixed windows build</p></li>
+<li><p>CONPY-62: Fixed String to Decimal conversion (binary protocol)</p></li>
+<li><p>CONPY-63: Implemented version and version_info for module</p></li>
+</ul>
+</div>
+<div class="section" id="mariadb-connector-python-0-9-58-beta">
+<h2>MariaDB Connector/Python 0.9.58 beta<a class="headerlink" href="#mariadb-connector-python-0-9-58-beta" title="Permalink to this headline">¶</a></h2>
+<p>Release date: May 6th 2020</p>
+<p>Notable Updates:</p>
+<ul class="simple">
+<li><p>CONPY-62: When using binary protocol (which is forced when using a placeholder), the type NEW_DECIMAL was ignored and internally converted as string instead of Decimal</p></li>
+<li><p>CONPY-61: Fixed bug in execute_many when using NULL values or indicator variables</p></li>
+<li><p>CONPY-59: Fixed bug when converting invalid date “0000-00-00”. Instead of raising an exception it will be converted to None value.</p></li>
+<li><p>CONPY-58: Fixed parameter error when using paramstyle PyFormat.</p></li>
+</ul>
+</div>
+<div class="section" id="mariadb-connector-python-0-9-57-beta">
+<h2>MariaDB Connector/Python 0.9.57 beta<a class="headerlink" href="#mariadb-connector-python-0-9-57-beta" title="Permalink to this headline">¶</a></h2>
+<p>Release date: April 15th 2020</p>
+<p>Notable Updates:</p>
+<ul class="simple">
+<li><p>Build: Posix builds don’t link statically against Connector/C anymore.</p></li>
+<li><p>CONPY-53: Allow empty parameter sequence in execute() method</p></li>
+<li><p>CONPY-56: Support dictionary option in cursor: Added anoptional boolean parameter ‘dictionary’ for cursor class. When dictionary parameter was set to true, the fetch operations will return rows from result set as Dict.</p></li>
+<li><p>CONPY-55: Fixed memory leak when opening/closing cursor.</p></li>
+</ul>
+</div>
+<div class="section" id="mariadb-connector-python-0-9-56-beta">
+<h2>MariaDB Connector/Python 0.9.56 beta<a class="headerlink" href="#mariadb-connector-python-0-9-56-beta" title="Permalink to this headline">¶</a></h2>
+<p>Release date: April 6th 2020</p>
+<p>Notable Updates:</p>
+<ul class="simple">
+<li><p>CONPY-46: Implemented __enter__() and __exit__() methods for with statement (PEP-343). These methods are available now for connection and cursor class.</p></li>
+<li><p>CONPY-47: When sending parameters PyBool_Type wasn’t supported. In case a boolean type (True/False) will be provided as a parameter, it will be converted to a tinyint (MYSQL_TYPE_TINY).</p></li>
+<li><p>CONPY-48: Accept List of parameters for execute() method</p></li>
+<li><p>CONPY-49: Added support for Decimal type When retrieving data with column type MYSQL_TYPE_NEWDECIMAL Connector/Python now loads the decimal module and converts data from string into Pythons decimal.Decimal type.  Wnen sending a decimal.Decimal parameter, value will be converted to string and send with type MYSQL_TYPE_NEWDECIMAL to server.</p></li>
+<li><p>CONPY-51: Store field_count internelly for buffered cursors to prevent overriding/clearing the value by connection methods which directly send commands to database server.</p></li>
+<li><p>CONPY-52: Fixed double free of resultset.</p></li>
+</ul>
+</div>
+<div class="section" id="mariadb-connector-python-0-9-55-beta">
+<h2>MariaDB Connector/Python 0.9.55 beta<a class="headerlink" href="#mariadb-connector-python-0-9-55-beta" title="Permalink to this headline">¶</a></h2>
+<p>Release date: March 30th 2020</p>
+<p>Notable Updates:</p>
+<ul class="simple">
+<li><p>CONPY-9: Fixed description (character length/code points and precision scale)</p></li>
+<li><p>CONPY-45: Fixed conversion from time and datetime column types</p></li>
+<li><p>CONPY-32: Fixed crash when fetching GEOMETRY columns</p></li>
+</ul>
+</div>
+<div class="section" id="mariadb-connector-python-0-9-54-beta">
+<h2>MariaDB Connector/Python 0.9.54 beta<a class="headerlink" href="#mariadb-connector-python-0-9-54-beta" title="Permalink to this headline">¶</a></h2>
+<p>Release date: Feb 18th 2020</p>
+<p>Notable Updates:</p>
+<ul class="simple">
+<li><p>Fixed parameter sequence when creating a xid object</p></li>
+<li><p>Added ssl_capath in connect() method</p></li>
+<li><p>CONPY-40: ConnectionPool._setconfig now accepts only DSN parameters</p></li>
+<li><p>CONPY-35: Close and reinitialize statement if the cursor was reused with a different SQL statement</p></li>
+<li><p>CONPY-34: If a python object can’t be converted to a corresponding data type, an exception will be raised.</p></li>
+<li><p>CONPY-39: If no pool_name was provided, an exception will be raised.</p></li>
+<li><p>CONPY-33: Segfault when using auto completion in python shell</p></li>
+<li><p>CONPY-37: Corrected option name: named_tuple</p></li>
+<li><p>CONPY-36: connection key word socket was renamed to unix_socket</p></li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Release notes</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-python-0-9-59-beta">MariaDB Connector/Python 0.9.59 beta</a></li>
+<li><a class="reference internal" href="#mariadb-connector-python-0-9-58-beta">MariaDB Connector/Python 0.9.58 beta</a></li>
+<li><a class="reference internal" href="#mariadb-connector-python-0-9-57-beta">MariaDB Connector/Python 0.9.57 beta</a></li>
+<li><a class="reference internal" href="#mariadb-connector-python-0-9-56-beta">MariaDB Connector/Python 0.9.56 beta</a></li>
+<li><a class="reference internal" href="#mariadb-connector-python-0-9-55-beta">MariaDB Connector/Python 0.9.55 beta</a></li>
+<li><a class="reference internal" href="#mariadb-connector-python-0-9-54-beta">MariaDB Connector/Python 0.9.54 beta</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="license.html"
+                        title="previous chapter">License</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/release.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="license.html" title="License"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.4.3.
+    </div>
+  </body>
+</html>
