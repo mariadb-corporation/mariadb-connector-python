@@ -939,5 +939,19 @@ class TestCursor(unittest.TestCase):
         cur.fetchall()
         self.assertEqual(cur.rowcount, 0)
 
+    def test_negative_numbers(self):
+        con= create_connection()
+        cur = con.cursor()
+        cur.execute("drop table if exists t1")
+        cur.execute("create table t1(a tinyint, b int, c bigint)")
+        cur.execute("insert into t1 values (?,?,?)", (-1, -300, -2147483649))
+        cur.execute("select a, b, c FROM t1")
+        row= cur.fetchone()
+        self.assertEqual(row[0], -1) 
+        self.assertEqual(row[1], -300) 
+        self.assertEqual(row[2], -2147483649)
+        del cur
+        con.close()
+
 if __name__ == '__main__':
     unittest.main()
