@@ -142,6 +142,11 @@ PyMODINIT_FUNC PyInit_mariadb(void)
     PyObject *module= PyModule_Create(&mariadb_module);
     PyObject *version_info;
     struct st_constants *intvals= int_constants;
+    const char *pre_release="";
+
+#ifdef PY_MARIADB_PRE_RELEASE_SEGMENT
+    pre_release= PY_MARIADB_PRE_RELEASE_SEGMENT;
+#endif
 
     Py_TYPE(&MrdbConnection_Type) = &PyType_Type;
     if (PyType_Ready(&MrdbConnection_Type) == -1)
@@ -207,7 +212,7 @@ PyMODINIT_FUNC PyInit_mariadb(void)
     if (PyTuple_SetItem(version_info, 0, PyLong_FromLong(PY_MARIADB_MAJOR_VERSION)) ||
         PyTuple_SetItem(version_info, 1, PyLong_FromLong(PY_MARIADB_MINOR_VERSION)) ||
         PyTuple_SetItem(version_info, 2, PyLong_FromLong(PY_MARIADB_PATCH_VERSION)) ||
-        PyTuple_SetItem(version_info, 3, PyUnicode_FromString(TOSTRING(PY_MARIADB_PRE_RELEASE_SEGMENT))) ||
+        PyTuple_SetItem(version_info, 3, PyUnicode_FromString(pre_release)) ||
         PyTuple_SetItem(version_info, 4, PyLong_FromLong(0L)))
     {
         goto error;
