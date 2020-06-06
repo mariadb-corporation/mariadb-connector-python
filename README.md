@@ -23,7 +23,7 @@ MariaDB Connector/Python source code is hosted on [Github](https://github.com/ma
 
 ## Documentation
 
-MariaDB Connector/Python documentation can be found in [Github Wiki](https://github.com/mariadb-corporation/mariadb-connector-python/wiki)
+MariaDB Connector/Python documentation can be found on [Github Pages](https://mariadb-corporation.github.io/mariadb-connector-python/)
 
 ## Bugs
 
