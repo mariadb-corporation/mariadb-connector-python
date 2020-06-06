@@ -143,8 +143,6 @@ PyMODINIT_FUNC PyInit_mariadb(void)
     PyObject *version_info;
     struct st_constants *intvals= int_constants;
 
-    printf("loading mariadb\n");
-
     Py_TYPE(&MrdbConnection_Type) = &PyType_Type;
     if (PyType_Ready(&MrdbConnection_Type) == -1)
     {

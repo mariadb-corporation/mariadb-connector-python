@@ -72,7 +72,7 @@ setup(name='mariadb',
       url='https://www.github.com/mariadb-corporation/mariadb-connector-python',
       project_urls={
          "Bug Tracker": "https://jira.mariadb.org/",
-         "Documentation": "https://github.com/mariadb-corporation/mariadb-connector-python/wiki",
+         "Documentation": "https://mariadb-corporation.github.io/mariadb-connector-python/",
          "Source Code": "https://www.github.com/mariadb-corporation/mariadb-connector-python",
       },
       ext_modules=[Extension('mariadb', ['src/mariadb.c', 'src/mariadb_connection.c',
