@@ -58,25 +58,6 @@ closed or dropped all cursor objects bound to this connection became invalid.</p
 <div class="section" id="cursor-methods">
 <h2>Cursor methods<a class="headerlink" href="#cursor-methods" title="Permalink to this headline">¶</a></h2>
 <dl class="method">
-<dt id="execute">
-<code class="sig-name descname">execute</code><span class="sig-paren">(</span><em class="sig-param">statement</em><span class="optional">[</span>, <em class="sig-param">data</em><span class="optional">[</span>, <em class="sig-param">**kwargs</em><span class="optional">]</span><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#execute" title="Permalink to this definition">¶</a></dt>
-<dd><p>Parameters in SQL statement may be provided as sequence or mapping and will be bound
-to variables in the operation. Variables are specified as question
-marks (paramstyle=’qmark’), however for compatibility reasons MariaDB Connector/Python
-also supports the ‘format’ and ‘pyformat’ paramstyles
-with the restriction, that different paramstyles can’t be mixed within.
-a statement</p>
-<p>A reference to the operation will be retained by the cursor.
-If the cursor was created with attribute prepared=True the statement
-string for following execute operations will be ignored:
-This is most effective for algorithms where the same operation is used,
-but different parameters are bound to it (many times).</p>
-<p>By default result sets will not be buffered, so further operations on the
-same connection will fail, unless the entire result set was read. For buffering
-the entire result set an additional parameter <em>buffered=True</em> must be specified.</p>
-</dd></dl>
-
-<dl class="method">
 <dt id="callproc">
 <code class="sig-name descname">callproc</code><span class="sig-paren">(</span><em class="sig-param">procname, [ args])</em><span class="sig-paren">)</span><a class="headerlink" href="#callproc" title="Permalink to this definition">¶</a></dt>
 <dd><p>Executes a stored procedure.</p>
@@ -87,7 +68,7 @@ parameters.</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>procname</strong> (<em>string</em>) – The name of the stored procedure</p></li>
-<li><p><strong>args</strong> (<em>sequence</em>) – A sequence which mist contain an entry for each parameter the procedure expects.</p></li>
+<li><p><strong>args</strong> (<em>sequence</em>) – A sequence which must contain an entry for each parameter the procedure expects.</p></li>
 </ul>
 </dd>
 </dl>
@@ -110,6 +91,34 @@ parameters.</p>
 <span class="go">(&#39;test&#39;,)</span>
 </pre></div>
 </div>
+</dd></dl>
+
+<dl class="method">
+<dt id="execute">
+<code class="sig-name descname">execute</code><span class="sig-paren">(</span><em class="sig-param">statement[, data [, buffered=False]</em><span class="sig-paren">)</span><a class="headerlink" href="#execute" title="Permalink to this definition">¶</a></dt>
+<dd><p>Executes a SQL statement.</p>
+<p>Parameters in SQL statement may be provided as sequence or mapping and will be bound
+to variables in the operation. Variables are specified as question
+marks (paramstyle=’qmark’), however for compatibility reasons MariaDB Connector/Python
+also supports the ‘format’ and ‘pyformat’ paramstyles
+with the restriction, that different paramstyles can’t be mixed within.
+a statement</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>statement</strong> – SQL statement</p></li>
+<li><p><strong>args</strong> (<em>sequence</em>) – A sequence which must contain an entry for each parameter the statement expects.</p></li>
+</ul>
+</dd>
+</dl>
+<p>A reference to the operation will be retained by the cursor.
+If the cursor was created with attribute prepared=True the statement
+string for following execute operations will be ignored:
+This is most effective for algorithms where the same operation is used,
+but different parameters are bound to it (many times).</p>
+<p>By default result sets will not be buffered, so further operations on the
+same connection will fail, unless the entire result set was read. For buffering
+the entire result set an additional parameter <em>buffered=True</em> must be specified.</p>
 </dd></dl>
 
 <dl class="method">

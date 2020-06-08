@@ -15,6 +15,7 @@ client library for client server communication.
    :caption: Contents:
 
    install
+   usage
    module
    connection
    cursor

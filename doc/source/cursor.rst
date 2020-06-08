@@ -15,25 +15,6 @@ The cursor class
 Cursor methods
 --------------
 
-.. method:: execute(statement[, data [, \*\*kwargs]])
-       
-  Parameters in SQL statement may be provided as sequence or mapping and will be bound
-  to variables in the operation. Variables are specified as question
-  marks (paramstyle='qmark'), however for compatibility reasons |MCP|
-  also supports the 'format' and 'pyformat' paramstyles
-  with the restriction, that different paramstyles can't be mixed within.
-  a statement
-
-  A reference to the operation will be retained by the cursor.
-  If the cursor was created with attribute prepared=True the statement
-  string for following execute operations will be ignored:
-  This is most effective for algorithms where the same operation is used,
-  but different parameters are bound to it (many times).
-
-  By default result sets will not be buffered, so further operations on the
-  same connection will fail, unless the entire result set was read. For buffering
-  the entire result set an additional parameter *buffered=True* must be specified.
-
 .. method:: callproc(procname, [ args]))
 
   Executes a stored procedure. 
@@ -44,7 +25,7 @@ Cursor methods
 
   :param procname: The name of the stored procedure
   :type procname: string
-  :param args: A sequence which mist contain an entry for each parameter the procedure expects.
+  :param args: A sequence which must contain an entry for each parameter the procedure expects.
   :type args: sequence
 
   Example:
@@ -67,6 +48,34 @@ Cursor methods
     True
     >>> cursor.fetchone()
     ('test',)
+
+.. method:: execute(statement[, data [, buffered=False])
+
+  Executes a SQL statement.
+
+  Parameters in SQL statement may be provided as sequence or mapping and will be bound
+  to variables in the operation. Variables are specified as question
+  marks (paramstyle='qmark'), however for compatibility reasons |MCP|
+  also supports the 'format' and 'pyformat' paramstyles
+  with the restriction, that different paramstyles can't be mixed within.
+  a statement
+
+  :param statement: SQL statement
+  :type procname: string
+  :param args: A sequence which must contain an entry for each parameter the statement expects.
+  :type args: sequence
+       
+  A reference to the operation will be retained by the cursor.
+  If the cursor was created with attribute prepared=True the statement
+  string for following execute operations will be ignored:
+  This is most effective for algorithms where the same operation is used,
+  but different parameters are bound to it (many times).
+
+  By default result sets will not be buffered, so further operations on the
+  same connection will fail, unless the entire result set was read. For buffering
+  the entire result set an additional parameter *buffered=True* must be specified.
+
+
 
 .. method:: executemany(statement, data)
    
