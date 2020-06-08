@@ -135,9 +135,19 @@ tuple represents data of a row within a table.
 <span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="s2">&quot;INSERT INTO colleagues VALUES (?, ?, ?)&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>To insert special values like NULL or a column default, you need to specify indicators:</p>
+<ul class="simple">
+<li><p>mariadb.indicator_null is used for NULL values</p></li>
+<li><p>mariadb.indicator_ignore is used to skip update of a column.</p></li>
+<li><p>mariadb.indicator_default is used for a default value (insert/update)</p></li>
+<li><p>mariadb.indicator_row is used to skip update/insert of the entire row.</p></li>
+</ul>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Indicator objects can only be used when connecting to a MariaDB Server 10.2 or newer. Older versions of MariaDB and MySQL servers don’t support this feature.</p>
+<ul class="simple">
+<li><p>All values for a column must have the same data type.</p></li>
+<li><p>Indicators can only be used when connecting to a MariaDB Server 10.2 or newer. Older versions of MariaDB and MySQL servers don’t support this feature.</p></li>
+</ul>
 </div>
 </dd></dl>
 

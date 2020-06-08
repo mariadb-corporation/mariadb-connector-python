@@ -89,8 +89,18 @@ Cursor methods
     ]
     cursor.executemany("INSERT INTO colleagues VALUES (?, ?, ?)", data)
 
+  To insert special values like NULL or a column default, you need to specify indicators:
+
+  - mariadb.indicator_null is used for NULL values
+  - mariadb.indicator_ignore is used to skip update of a column.
+  - mariadb.indicator_default is used for a default value (insert/update)
+  - mariadb.indicator_row is used to skip update/insert of the entire row.
+
   .. note::
-    Indicator objects can only be used when connecting to a MariaDB Server 10.2 or newer. Older versions of MariaDB and MySQL servers don't support this feature.
+
+    - All values for a column must have the same data type.
+    - Indicators can only be used when connecting to a MariaDB Server 10.2 or newer. Older versions of MariaDB and MySQL servers don't support this feature.
+
 
 .. method:: fetchall()
 
