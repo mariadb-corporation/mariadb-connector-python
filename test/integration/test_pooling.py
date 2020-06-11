@@ -22,8 +22,8 @@ class TestPooling(unittest.TestCase):
         del self.connection
 
     def test_connection_pools(self):
-        pool= mariadb.ConnectionPool(pool_name="test")
-        self.assertEqual(mariadb._CONNECTION_POOLS["test"], pool)
+        pool= mariadb.ConnectionPool(pool_name="test_connection")
+        self.assertEqual(mariadb._CONNECTION_POOLS["test_connection"], pool)
         del pool
         self.assertEqual(mariadb._CONNECTION_POOLS, {})
 
@@ -34,40 +34,48 @@ class TestPooling(unittest.TestCase):
             pass
 
     def test_connection_pool_conf(self):
-        pool= mariadb.ConnectionPool(pool_name="test")
+        pool= mariadb.ConnectionPool(pool_name="test_conf")
         default_conf= conf()
         conn= create_connection()
         try:
             pool.add_connection(conn)
         except mariadb.PoolError:
             pass
-        pool.set_config(**default_conf)
+        try:
+            pool.set_config(**default_conf)
+        except:
+            del pool
+            raise
+
         pool.add_connection(conn)
         c= pool.get_connection()
         self.assertEqual(c, conn)
         del pool
-    
+
     def test_connection_pool_maxconn(self):
         default_conf= conf()
-        pool= mariadb.ConnectionPool(pool_name="test1", **default_conf)
+        pool= mariadb.ConnectionPool(pool_name="test_max_size", **default_conf)
         connections= []
         for i in range(1, 6):
            connections.append(pool.get_connection())
         try:
             x= pool.get_connection()
-            print("ok")
         except mariadb.PoolError:
             pass
         for c in connections:
             c.close()
         x= pool.get_connection()
-        print("ok")
         del pool
 
     def test_connection_pool_add(self):
         default_conf= conf()
-        pool= mariadb.ConnectionPool(pool_name="test1")
-        pool.set_config(**default_conf)
+        pool= mariadb.ConnectionPool(pool_name="test_connection_pool_add")
+        try:
+            pool.set_config(**default_conf)
+        except:
+            del pool
+            raise
+
         for i in range(1,6):
             pool.add_connection()
         try:
@@ -79,14 +87,19 @@ class TestPooling(unittest.TestCase):
     def test_conpy69(self):
         conn= create_connection()
         cursor1= conn.cursor()
-        cursor1.execute("CREATE SCHEMA IF NOT EXISTS 中文考试");
+        cursor1.execute("CREATE SCHEMA IF NOT EXISTS 中文考试")
         default_conf= conf()
         default_conf["database"]= "中文考试"
-        pool= mariadb.ConnectionPool(pool_name="test2")
-        pool.set_config(**default_conf)
+        pool= mariadb.ConnectionPool(pool_name="test_conpy69")
+        try:
+            pool.set_config(**default_conf)
+        except:
+            del pool
+            raise
+
         for i in range(1,6):
             pool.add_connection()
-        conn= mariadb.connect(pool_name="test2")
+        conn= mariadb.connect(pool_name="test_conpy69")
         cursor= conn.cursor()
         cursor.execute("select database()")
         row= cursor.fetchone()
@@ -96,13 +109,13 @@ class TestPooling(unittest.TestCase):
         cursor.execute("select a from t1")
         row= cursor.fetchone()
         self.assertEqual(row[0], "123.45 中文考试")
-        cursor1.execute("DROP SCHEMA 中文考试");
+        cursor1.execute("DROP SCHEMA 中文考试")
         del pool
 
     def test__CONNECTION_POOLS(self):
         default_conf= conf()
-        pool= mariadb.ConnectionPool(pool_name="test", **default_conf)
-        conn= mariadb.connect(pool_name="test")
+        pool= mariadb.ConnectionPool(pool_name="test_use", **default_conf)
+        conn= mariadb.connect(pool_name="test_use")
         cursor= conn.cursor()
         cursor.execute("SELECT 1")
         row= cursor.fetchone()
@@ -151,14 +164,18 @@ class TestPooling(unittest.TestCase):
 
     def test_conpy40(self):
         default_conf= conf()
-        pool = mariadb.ConnectionPool(pool_name = 'pool1')
+        pool = mariadb.ConnectionPool(pool_name = 'test_conpy40')
 
         try:
             pool.set_config(pool_size = 3)
         except mariadb.PoolError:
             pass
 
-        pool.set_config(**default_conf)
+        try:
+            pool.set_config(**default_conf)
+        except:
+            del pool
+            raise
 
         for j in range(3):
             c = mariadb.connect(**default_conf)
@@ -167,35 +184,12 @@ class TestPooling(unittest.TestCase):
 
     def test_pool_add(self):
         default_conf= conf()
-        pool= mariadb.ConnectionPool(pool_name="test")
-        pool1= mariadb.ConnectionPool(pool_name="test1")
-        pool.set_config(**default_conf)
-        pool1.set_config(**default_conf)
-        conn= create_connection()
-        pool.add_connection(conn)
+        pool= mariadb.ConnectionPool(pool_name="test_pool_add")
         try:
-           pool.add_connection(conn)
-        except mariadb.PoolError as e:
-           pass
-        try:
-           pool1.add_connection(conn)
-        except mariadb.PoolError as e:
-           pass
-        del pool, pool1
-
-    def test_conpy_72(self):
-        default_conf= conf() 
-        try:
-            pool = mariadb.ConnectionPool(
-                  user="admin",
-                  password="admin_passwd1",
-                  host=default_conf["host"],
-                  port=default_conf["port"],
-                  pool_name="web-app",
-                  pool_size=20
-               )
+          mariadb.ConnectionPool(pool_name="test_pool_add")
         except mariadb.ProgrammingError as e:
-            pass
+           pass
+        del pool
 
 if __name__ == '__main__':
     unittest.main()

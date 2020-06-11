@@ -787,8 +787,8 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
     } else if (obj == Py_None) {
         paraminfo->type= MYSQL_TYPE_NULL;
         return 0;
-    } else if (!strcmp(Py_TYPE(obj)->tp_name, "decimal.Decimal")) {
-        /* CINPY-49: C-API has no correspondent data type for DECUMAL column type,
+    } else if (!strcmp(Py_TYPE(obj)->tp_name, "decimal.Decimal") || !strcmp(Py_TYPE(obj)->tp_name, "Decimal")) {
+        /* CONPY-49: C-API has no correspondent data type for DECIMAL column type,
            so we need to convert decimal.Decimal Object to string during callback */
         paraminfo->type= MYSQL_TYPE_NEWDECIMAL;
         return 0;

@@ -16,6 +16,8 @@ def conf():
         "database": os.environ.get('TEST_DATABASE', 'testp'),
         "port": int(os.environ.get('TEST_PORT', '3306')),
     }
+    if os.environ.get('TEST_RESET_SESSION'):
+        d["pool_reset_connection"] = int(os.environ.get('TEST_RESET_SESSION', '1'))
     if os.environ.get('TEST_PASSWORD'):
         d["password"] = os.environ.get('TEST_PASSWORD')
     return d
