@@ -55,7 +55,7 @@ class TestCA(unittest.TestCase):
             cursor = con.cursor()
             cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
             cursor.execute("INSERT INTO t1 VALUES (1),(2)")
-            del cursor
+            cursor.close()
             con.tpc_commit()
         finally:
             con.close()
@@ -67,7 +67,7 @@ class TestCA(unittest.TestCase):
             con.tpc_begin(xid)
             cursor = con.cursor()
             cursor.execute("SELECT 1")
-            del cursor
+            cursor.close()
             con.tpc_rollback()
         finally:
             con.close()
@@ -79,7 +79,7 @@ class TestCA(unittest.TestCase):
             con.tpc_begin(xid)
             cursor = con.cursor()
             cursor.execute("SELECT 1")
-            del cursor
+            cursor.close()
             con.tpc_prepare()
             con.tpc_commit()
         finally:
@@ -92,7 +92,7 @@ class TestCA(unittest.TestCase):
             con.tpc_begin(xid)
             cursor = con.cursor()
             cursor.execute("SELECT 1")
-            del cursor
+            cursor.close()
             con.tpc_prepare()
             con.tpc_rollback()
         finally:
@@ -106,7 +106,7 @@ class TestCA(unittest.TestCase):
             cursor = con.cursor()
             cursor.execute("BEGIN")
             cursor.execute("SELECT 1")
-            del cursor
+            cursor.close()
             self.assertRaises(mariadb.IntegrityError,
                               con.tpc_begin, xid)
         finally:

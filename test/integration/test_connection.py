@@ -24,7 +24,7 @@ class TestConnection(unittest.TestCase):
             self.skipTest("unix_socket not supported on Windows")
         default_conf = conf()
         try:
-           conn= mariadb.connect(user=default_conf["user"], unix_socket="/does_not_exist/x.sock")
+           conn= mariadb.connect(user=default_conf["user"], unix_socket="/does_not_exist/x.sock", port=default_conf["port"], host=default_conf["host"])
         except mariadb.DatabaseError:
            pass
 
@@ -55,7 +55,7 @@ class TestConnection(unittest.TestCase):
 
     def test_local_infile(self):
         default_conf= conf()
-        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], local_infile=False)
+        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], local_infile=False, port=default_conf["port"], host=default_conf["host"])
         cursor=new_conn.cursor()
         cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
         try:
@@ -67,7 +67,7 @@ class TestConnection(unittest.TestCase):
 
     def test_init_command(self):
         default_conf= conf()
-        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], init_command="SET @a:=1")
+        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], init_command="SET @a:=1", port=default_conf["port"], host=default_conf["host"])
         cursor=new_conn.cursor()
         cursor.execute("SELECT @a")
         row=cursor.fetchone()
@@ -77,11 +77,14 @@ class TestConnection(unittest.TestCase):
 
     def test_compress(self):
         default_conf= conf()
-        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], compress=True)
+        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], compress=True, port=default_conf["port"], host=default_conf["host"])
         cursor=new_conn.cursor()
         cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
         row=cursor.fetchone()
-        self.assertEqual(row[1], "ON")
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.assertEqual(row[1], "OFF")
+        else:
+            self.assertEqual(row[1], "ON")
         del cursor
         del new_conn
 
@@ -112,7 +115,7 @@ class TestConnection(unittest.TestCase):
 
         try:
             cursor.execute("KILL {id}".format(id=oldid))
-        except mariadb.ProgrammingError:
+        except:
             pass
 
         conn.auto_reconnect = True

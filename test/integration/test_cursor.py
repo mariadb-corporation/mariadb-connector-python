@@ -457,7 +457,7 @@ class TestCursor(unittest.TestCase):
         except mariadb.DataError:
             pass
         del cursor
-     
+
 
     def test_scroll(self):
         cursor = self.connection.cursor(buffered=True)
@@ -915,7 +915,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], None)
         self.assertEqual(row[1], 2)
         self.assertEqual(row[2], None)
- 
+
         del cursor
 
     def test_conpy62(self):
@@ -932,9 +932,11 @@ class TestCursor(unittest.TestCase):
         cur = con.cursor()
         cur.execute("SELECT 1")
         self.assertEqual(cur.rowcount, -1)
-        del cur
+        cur.close()
+
         cur = con.cursor()
-        cur.execute("SELECT 1 WHERE 1=2")
+        cur.execute("CREATE TEMPORARY TABLE test_conpy67 (a int)")
+        cur.execute("SELECT * from test_conpy67")
         self.assertEqual(cur.rowcount, -1)
         cur.fetchall()
         self.assertEqual(cur.rowcount, 0)
@@ -947,8 +949,8 @@ class TestCursor(unittest.TestCase):
         cur.execute("insert into t1 values (?,?,?)", (-1, -300, -2147483649))
         cur.execute("select a, b, c FROM t1")
         row= cur.fetchone()
-        self.assertEqual(row[0], -1) 
-        self.assertEqual(row[1], -300) 
+        self.assertEqual(row[0], -1)
+        self.assertEqual(row[1], -300)
         self.assertEqual(row[2], -2147483649)
         del cur
         con.close()
