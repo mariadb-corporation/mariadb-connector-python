@@ -183,5 +183,19 @@ class TestPooling(unittest.TestCase):
            pass
         del pool, pool1
 
+    def test_conpy_72(self):
+        default_conf= conf() 
+        try:
+            pool = mariadb.ConnectionPool(
+                  user="admin",
+                  password="admin_passwd1",
+                  host=default_conf["host"],
+                  port=default_conf["port"],
+                  pool_name="web-app",
+                  pool_size=20
+               )
+        except mariadb.ProgrammingError as e:
+            pass
+
 if __name__ == '__main__':
     unittest.main()

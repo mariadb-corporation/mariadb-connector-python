@@ -207,9 +207,11 @@ error:
             {
                 self->connection[i]->pool= 0;
                 MrdbConnection_close(self->connection[i]);
+                self->connection[i]= NULL;
             }
         }
     }
+    self->pool_size= 0;
     MARIADB_FREE_MEM(self->connection);
     return -1;
 }
@@ -306,14 +308,17 @@ MrdbPool_dealloc(MrdbPool *self)
         self->pool_name= NULL;
     }
 
-    for (i=0; i < self->pool_size; i++)
+    if (self->connection)
     {
-        if (self->connection[i])
+        for (i=0; i < self->pool_size; i++)
         {
-            self->connection[i]->pool= NULL;
-            MrdbConnection_close(self->connection[i]);
-            Py_DECREF(self->connection[i]);
-            self->connection[i]= NULL;
+            if (self->connection[i])
+            {
+                self->connection[i]->pool= NULL;
+                MrdbConnection_close(self->connection[i]);
+                Py_DECREF(self->connection[i]);
+                self->connection[i]= NULL;
+            }
         }
     }
     self->pool_size= 0;
