@@ -934,7 +934,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cur.rowcount, -1)
         del cur
         cur = con.cursor()
-        cur.execute("SELECT 1 WHERE 1=2")
+        cur.execute("SELECT 1 FROM DUAL LIMIT 0")
         self.assertEqual(cur.rowcount, -1)
         cur.fetchall()
         self.assertEqual(cur.rowcount, 0)
