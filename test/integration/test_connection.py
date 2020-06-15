@@ -76,6 +76,8 @@ class TestConnection(unittest.TestCase):
         del new_conn
 
     def test_compress(self):
+        if os.environ.get("TRAVIS"):
+            self.skipTest("Skip test on TRAVIS")
         default_conf= conf()
         new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], compress=True)
         cursor=new_conn.cursor()
