@@ -723,12 +723,21 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         }
         if (do_prepare)
         {
+            ulong extended_server_capabilities= 0;
+
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->param_count);
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
             mysql_stmt_bind_param(self->stmt, self->params);
 
+            mariadb_get_infov(self->stmt->mysql,
+                              MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES,
+                              &extended_server_capabilities);
+
             Py_BEGIN_ALLOW_THREADS;
-            if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
+            /* execute_direct was implemented together with bulk operations, so we need
+               to check if MARIADB_CLIENT_STMT_BULK_OPERATIONS is set in extended server
+               capabilities */
+            if (!(extended_server_capabilities & (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32)))
             {
                 rc= mysql_stmt_prepare(self->stmt, self->parser->statement.str, 
                         (unsigned long)self->parser->statement.length);
@@ -1252,6 +1261,7 @@ MrdbCursor_executemany(MrdbCursor *self,
     uint8_t do_prepare= 1;
     char errmsg[128];
     MARIADB_CHECK_STMT(self);
+    unsigned long extended_server_capabilities= 0;
 
     if (PyErr_Occurred())
     {
@@ -1305,7 +1315,10 @@ MrdbCursor_executemany(MrdbCursor *self,
 
     /* If the server doesn't support bulk execution (< 10.2.6),
        we need to call a fallback routine */
-    if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
+    mariadb_get_infov(self->stmt->mysql, 
+                      MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES,
+                      &extended_server_capabilities);
+    if (!(extended_server_capabilities & (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32)))
     {
         if (MrdbCursor_executemany_fallback(self, self->parser->statement.str, 
                     self->parser->statement.length))

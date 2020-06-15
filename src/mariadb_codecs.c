@@ -837,8 +837,11 @@ mariadb_get_parameter(MrdbCursor *self,
 {
     PyObject *row= NULL,
              *column= NULL;
+    ulong extended_server_capabilities= 0;
 
-
+    mariadb_get_infov(self->stmt->mysql, 
+                      MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES,
+                      &extended_server_capabilities);
     if (is_bulk)
     {
         /* check if row_nr and column_nr are in the range from
@@ -889,7 +892,7 @@ mariadb_get_parameter(MrdbCursor *self,
     /* check if an indicator was passed */
     if (MrdbIndicator_Check(column))
     {
-        if (!MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
+        if (!(extended_server_capabilities & (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32)))
         {
             mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                     "MariaDB %s doesn't support indicator variables. "\
@@ -900,7 +903,7 @@ mariadb_get_parameter(MrdbCursor *self,
         param->indicator= (char)MrdbIndicator_AsLong(column);
         param->value= NULL; /* you can't have both indicator and value */
     } else if (column == Py_None) {
-        if (MARIADB_FEATURE_SUPPORTED(self->stmt->mysql, 100206))
+        if (extended_server_capabilities & (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32))
         {
             param->indicator= STMT_INDICATOR_NULL;
             param->value= NULL;

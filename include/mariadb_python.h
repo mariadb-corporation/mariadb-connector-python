@@ -424,9 +424,6 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
 #define MrdbIndicator_Check(a)\
     (Py_TYPE((a)) == &MrdbIndicator_Type)
 
-#define MARIADB_FEATURE_SUPPORTED(mysql,version)\
-    (mysql_get_server_version((mysql)) >= (version))
-
 #define MARIADB_CHECK_CONNECTION(connection, ret)\
     if (!(connection) || !(connection)->mysql)\
     {\
