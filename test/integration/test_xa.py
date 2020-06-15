@@ -3,6 +3,7 @@
 
 import collections
 import datetime
+import time
 import unittest
 import os
 
@@ -21,26 +22,27 @@ class TestCA(unittest.TestCase):
         del self.connection
 
     def test_xid(self):
-        xid= self.connection.xid(1, "foo", "bar")
+        con= create_connection()
+        xid= con.xid(1, "foo", "bar")
         self.assertEqual(xid, (1, "foo","bar"))
 
         #default for format_id is 1
-        xid= self.connection.xid(0, "foo", "bar")
+        xid= con.xid(0, "foo", "bar")
         self.assertEqual(xid, (1, "foo","bar"))
 
         #parameter too long:
         try:
-            xid= self.connection.xid(0, "a" * 65, "bar")
+            xid= con.xid(0, "a" * 65, "bar")
         except mariadb.ProgrammingError:
             pass
         try:
-            xid= self.connection.xid(0, "foo", "b" * 65)
+            xid= con.xid(0, "foo", "b" * 65)
         except mariadb.ProgrammingError:
             pass
 
 
     def test_tpc_begin(self):
-        con= self.connection
+        con= create_connection()
         xid= con.xid(0, "1234567890", "2345")
         try:
             con.tpc_begin(xid)
@@ -48,7 +50,7 @@ class TestCA(unittest.TestCase):
             pass
         
     def test_tpc_commit(self):
-        con = self.connection
+        con = create_connection()
         xid= con.xid(0, "1234567891", "2345")
         try:
             con.tpc_begin(xid)
@@ -61,7 +63,7 @@ class TestCA(unittest.TestCase):
             con.close()
 
     def test_tpc_rollback_without_prepare(self):
-        con = self.connection
+        con = create_connection()
         try:
             xid = con.xid(0, "1234567892", "2345")
             con.tpc_begin(xid)
@@ -73,7 +75,7 @@ class TestCA(unittest.TestCase):
             con.close()
 
     def test_tpc_commit_with_prepare(self):
-        con = self.connection
+        con = create_connection()
         try:
             xid = con.xid(0, "1234567893", "2345")
             con.tpc_begin(xid)
@@ -86,7 +88,7 @@ class TestCA(unittest.TestCase):
             con.close()
 
     def test_tpc_rollback_with_prepare(self):
-        con = self.connection
+        con = create_connection()
         try:
             xid = con.xid(0, "1234567894", "2345")
             con.tpc_begin(xid)
@@ -99,7 +101,7 @@ class TestCA(unittest.TestCase):
             con.close()
 
     def test_tpc_begin_in_transaction_fails(self):
-        con = self.connection
+        con = create_connection()
         try:
             xid = con.xid(0, "1234567895", "2345")
 
@@ -113,7 +115,7 @@ class TestCA(unittest.TestCase):
             con.close()
 
     def test_commit_in_tpc_fails(self):
-        con = self.connection
+        con = create_connection()
         try:
             xid = con.xid(0, "1234567897", "2345")
             con.tpc_begin(xid)
@@ -125,7 +127,7 @@ class TestCA(unittest.TestCase):
     def test_rollback_in_tpc_fails(self):
         # calling rollback() within a TPC transaction fails with
         # ProgrammingError.
-        con = self.connection
+        con = create_connection()
         try:
             xid = con.xid(0, "1234567898", "2345")
             con.tpc_begin(xid)
