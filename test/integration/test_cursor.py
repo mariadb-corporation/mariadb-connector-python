@@ -968,7 +968,6 @@ class TestCursor(unittest.TestCase):
         rows= cur.fetchall()
         self.assertEqual(row[3][0], None);
         del cur
-con.close()
 
 if __name__ == '__main__':
     unittest.main()
