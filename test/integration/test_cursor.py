@@ -966,7 +966,7 @@ class TestCursor(unittest.TestCase):
         cur.executemany("INSERT INTO t1 VALUES (?)", vals)
         cur.execute("select a from t1 order by a")
         rows= cur.fetchall()
-        self.assertEqual(row[3][0], None);
+        self.assertEqual(rows[0][0], None);
         del cur
 
 if __name__ == '__main__':

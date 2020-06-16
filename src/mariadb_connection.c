@@ -298,12 +298,13 @@ MrdbConnection_Initialize(MrdbConnection *self,
         "ssl_verify_cert", "ssl",
         "client_flags", "pool_name", "pool_size", 
         "pool_reset_connection", "plugin_dir",
+        "username", "db", "password",
         NULL
     };
 
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiibbssssssssssipisibs:connect",
+                "|sssssisiiibbssssssssssipisibssss:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -313,7 +314,8 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_cipher, &ssl_capath, &ssl_crlpath,
                 &ssl_verify_cert, &ssl_enforce,
                 &client_flags, &pool_name, &pool_size,
-                &reset_session, &plugin_dir))
+                &reset_session, &plugin_dir,
+                &user, &schema, &password))
     {
         return -1;
     }
