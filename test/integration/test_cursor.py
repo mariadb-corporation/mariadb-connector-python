@@ -11,6 +11,8 @@ import mariadb
 
 from test.base_test import create_connection
 
+server_indicator_version= 100206
+
 
 class TestCursor(unittest.TestCase):
 
@@ -375,7 +377,7 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_indicator(self):
-        if self.connection.server_version < 100206:
+        if self.connection.server_version < server_indicator_version:
             self.skipTest("Requires server version >= 10.2.6")
         if os.environ.get("MAXSCALE_VERSION"):
             self.skipTest("MAXSCALE doesn't support BULK yet")
@@ -895,6 +897,8 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy61(self):
         con= create_connection()
+        if self.connection.server_version < server_indicator_version:
+            self.skipTest("Requires server version >= 10.2.6")
         cursor=con.cursor()
         cursor.execute("CREATE TEMPORARY TABLE ind1 (a int, b int default 2,c int)")
         vals = [(1,4,3),(None, 2, 3)]
@@ -906,7 +910,6 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], None)
         cursor.execute("DELETE FROM ind1")
         vals=[(1,4,3), (mariadb.indicator_null, mariadb.indicator_default, None)]
-
         cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
         cursor.execute("SELECT a, b, c FROM ind1")
         row= cursor.fetchone()

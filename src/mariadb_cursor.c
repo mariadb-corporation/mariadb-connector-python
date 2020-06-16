@@ -1205,6 +1205,10 @@ MrdbCursor_executemany_fallback(MrdbCursor *self,
     uint32_t i;
     int rc= 0;
 
+    rc= mysql_query(self->stmt->mysql, "BEGIN");
+    if (!rc)
+        goto error_mysql;
+
     if (mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->param_count))
     {
         goto error;
@@ -1219,6 +1223,7 @@ MrdbCursor_executemany_fallback(MrdbCursor *self,
         {
             return 1;
         }
+        
         if (mysql_stmt_bind_param(self->stmt, self->params))
         {
             goto error;
@@ -1240,7 +1245,12 @@ MrdbCursor_executemany_fallback(MrdbCursor *self,
         }
         self->row_count++;
     }
-    return 0;
+    rc= mysql_query(self->stmt->mysql, "COMMIT");
+    if (!rc)
+      return 0;
+error_mysql:
+    mariadb_throw_exception(self->stmt->mysql, NULL, 0, NULL);
+    return 1;
 error:
     mariadb_throw_exception(self->stmt, NULL, 1, NULL);
     return 1;

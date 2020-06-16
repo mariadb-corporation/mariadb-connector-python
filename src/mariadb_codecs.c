@@ -750,7 +750,7 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
 
     if (obj == NULL)
     {
-        paraminfo->type= MYSQL_TYPE_BLOB;
+        paraminfo->type= MYSQL_TYPE_NULL;
         return 0;
     }
 
@@ -903,10 +903,10 @@ mariadb_get_parameter(MrdbCursor *self,
         param->indicator= (char)MrdbIndicator_AsLong(column);
         param->value= NULL; /* you can't have both indicator and value */
     } else if (column == Py_None) {
+        param->value= NULL;
         if (extended_server_capabilities & (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32))
         {
             param->indicator= STMT_INDICATOR_NULL;
-            param->value= NULL;
         }
     } 
     else {
@@ -1199,6 +1199,9 @@ mariadb_param_to_bind(MYSQL_BIND *bind,
         bind->u.indicator[0]= value->indicator;
         return 0;
     }
+
+    if (!value->value)
+      bind->buffer_type= MYSQL_TYPE_NULL;
 
     if (IS_NUM(bind->buffer_type))
         bind->buffer= value->num;
