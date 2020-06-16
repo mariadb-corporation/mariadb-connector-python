@@ -896,6 +896,8 @@ class TestCursor(unittest.TestCase):
         del con
 
     def test_conpy61(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
         con= create_connection()
         if self.connection.server_version < server_indicator_version:
             self.skipTest("Requires server version >= 10.2.6")
