@@ -1206,7 +1206,7 @@ MrdbCursor_executemany_fallback(MrdbCursor *self,
     int rc= 0;
 
     rc= mysql_query(self->stmt->mysql, "BEGIN");
-    if (!rc)
+    if (rc)
         goto error_mysql;
 
     if (mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->param_count))
