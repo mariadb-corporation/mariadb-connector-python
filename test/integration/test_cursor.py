@@ -794,6 +794,8 @@ class TestCursor(unittest.TestCase):
         del con
 
     def test_conpy48(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
         con= create_connection()
         cur=con.cursor()
         cur.execute("select %s", [True])
@@ -872,6 +874,8 @@ class TestCursor(unittest.TestCase):
         del con
 
     def test_conpy58(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
         con= create_connection()
         cursor=con.cursor()
         cursor.execute("SELECT %(val)s", {"val" : 3})
@@ -959,6 +963,8 @@ class TestCursor(unittest.TestCase):
         con.close()
 
     def test_none_val(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
         con= create_connection()
         cur = con.cursor()
         cur.execute("CREATE TEMPORARY TABLE t1 (a int)")
