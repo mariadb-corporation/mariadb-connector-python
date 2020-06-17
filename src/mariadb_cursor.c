@@ -668,8 +668,6 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     {
         uint8_t do_prepare= 1;
 
-        self->is_text= 0;
-
         if (self->is_prepared && self->statement)
             do_prepare= 0;
 
@@ -683,6 +681,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
             MrdbParser_end(self->parser);
             self->parser= NULL;
         }
+        self->is_text= 0;
 
         if (!self->parser)
         {
