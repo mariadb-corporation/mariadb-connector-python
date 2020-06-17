@@ -415,10 +415,21 @@ static PyObject
     while(PyDict_Next(kwargs, &pos, &key, &value))
     {
         const char *utf8key= PyUnicode_AsUTF8(key);
-        if (!strncmp(utf8key, "pool", 4))
+        uint8_t i=0, found=0;
+
+        while (dsn_keys[i])
+        {
+          if (!strcmp(utf8key, dsn_keys[i]))
+          {
+              found= 1;
+              break;
+          }
+          i++;
+        }
+        if (!found)
         {
             mariadb_throw_exception(NULL, Mariadb_PoolError, 0,
-            "Invalid parameter '%s'. Only DSN parameters are supported",
+            "Invalid DSN parameter '%s'",
             utf8key);
             return NULL;
         }

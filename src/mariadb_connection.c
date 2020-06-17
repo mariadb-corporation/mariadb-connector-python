@@ -20,6 +20,20 @@
 #include "mariadb_python.h"
 #include "docs/connection.h"
 
+char *dsn_keys[]= {
+    "dsn", "host", "user", "password", "database", "port", "unix_socket",
+    "connect_timeout", "read_timeout", "write_timeout",
+    "local_infile", "compress", "init_command",
+    "default_file", "default_group",
+    "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
+    "ssl_cipher", "ssl_capath", "ssl_crlpath",
+    "ssl_verify_cert", "ssl",
+    "client_flags", "pool_name", "pool_size", 
+    "pool_reset_connection", "plugin_dir",
+    "username", "db", "password",
+    NULL
+};
+
 void
 MrdbConnection_dealloc(MrdbConnection *self);
 
@@ -287,21 +301,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
     unsigned int local_infile= 0xFF;
     unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
-
-    char *dsn_keys[]= {
-        "dsn", "host", "user", "password", "database", "port", "unix_socket",
-        "connect_timeout", "read_timeout", "write_timeout",
-        "local_infile", "compress", "init_command",
-        "default_file", "default_group",
-        "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
-        "ssl_cipher", "ssl_capath", "ssl_crlpath",
-        "ssl_verify_cert", "ssl",
-        "client_flags", "pool_name", "pool_size", 
-        "pool_reset_connection", "plugin_dir",
-        "username", "db", "password",
-        NULL
-    };
-
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
                 "|sssssisiiibbssssssssssipisibssss:connect",

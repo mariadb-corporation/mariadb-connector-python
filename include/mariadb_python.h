@@ -276,6 +276,7 @@ typedef struct {
     unsigned long max_len;
 } Mariadb_Conversion;
 
+extern char *dsn_keys[];
 
 /* Exceptions */
 extern PyObject *Mariadb_InterfaceError;
