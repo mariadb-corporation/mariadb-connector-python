@@ -65,6 +65,8 @@ class CursorTest(unittest.TestCase):
         del cursor
 
     def test_reconnect(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE wrong thread id")
         new_conn = create_connection()
         conn1_id = new_conn.connection_id
         self.connection.kill(conn1_id)
