@@ -252,6 +252,17 @@ PyMemberDef MrdbConnection_Members[] =
     {NULL} /* always last */
 };
 
+static void MrdbConnection_GetCapabilities(MrdbConnection *self)
+{
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_CAPABILITIES,
+        &self->server_capabilities);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES,
+        &self->extended_server_capabilities);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_CLIENT_CAPABILITIES,
+        &self->client_capabilities);
+}
+
+
 static void
 Mrdb_ConnAttrStr(MYSQL *mysql, PyObject **obj, enum mariadb_value attr)
 {
@@ -416,6 +427,8 @@ end:
 
     /* set connection attributes */
     MrdbConnection_SetAttributes(self);
+    /* get capabilities */
+    MrdbConnection_GetCapabilities(self);
 
     return 0;
 }
@@ -1171,6 +1184,8 @@ PyObject *MrdbConnection_reconnect(MrdbConnection *self)
         mariadb_throw_exception(self->mysql, NULL, 0, NULL);
         return NULL;
     }
+    /* get capabilities */
+    MrdbConnection_GetCapabilities(self);
     Py_RETURN_NONE;
 }
 /* }}} */

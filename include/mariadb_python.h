@@ -174,6 +174,10 @@ typedef struct {
     uint8_t inuse;
     uint8_t status;
     struct timespec last_used;
+    /* capabilities */
+    unsigned long client_capabilities;
+    unsigned long server_capabilities;
+    unsigned long extended_server_capabilities;
 } MrdbConnection;
 
 typedef struct mrdb_pool{
