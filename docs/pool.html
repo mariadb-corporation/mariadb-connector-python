@@ -71,7 +71,13 @@ connection is available.</p>
 <dl class="method">
 <dt id="ConnectionPool.set_config">
 <code class="sig-name descname">set_config</code><span class="sig-paren">(</span><em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#ConnectionPool.set_config" title="Permalink to this definition">¶</a></dt>
-<dd><p>Sets the connection configuration for the connection pool.</p>
+<dd><p>Sets the connection configuration for the connection pool. For valid connection
+arguments see <a class="reference internal" href="module.html#mariadb.connect" title="mariadb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">mariadb.connect()</span></code></a> method.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method doesn’t create connections in the pool. To fill the pool one has to use
+the <a class="reference internal" href="#ConnectionPool.add_connection" title="ConnectionPool.add_connection"><code class="xref py py-func docutils literal notranslate"><span class="pre">add_connection()</span></code></a> ḿethod.</p>
+</div>
 </dd></dl>
 
 <dl class="data">

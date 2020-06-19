@@ -30,7 +30,7 @@ char *dsn_keys[]= {
     "ssl_verify_cert", "ssl",
     "client_flags", "pool_name", "pool_size", 
     "pool_reset_connection", "plugin_dir",
-    "username", "db", "password",
+    "username", "db", "passwd",
     NULL
 };
 

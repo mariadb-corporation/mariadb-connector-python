@@ -26,7 +26,13 @@ The ConnectionPool class
 
     .. method:: set_config(\*\*kwargs)
 
-       Sets the connection configuration for the connection pool. 
+       Sets the connection configuration for the connection pool. For valid connection
+       arguments see :func:`mariadb.connect` method.
+
+       .. note::
+       
+         This method doesn't create connections in the pool. To fill the pool one has to use
+         the :func:`add_connection` ḿethod.
 
     .. data:: max_size
 

@@ -20,10 +20,10 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
 
    The supported connection keywords are:
 
-   - **user** (string): The username used to authenticate with the database server, defaults to current user
-   - **pasword** (string): The password of the given user
+   - **user**, **username** (string): The username used to authenticate with the database server, defaults to current user
+   - **password**, **passwd** (string): The password of the given user
    - **host** (string): The host name or IP address of the database server
-   - **database** (string): The database (schema) name to used when connecting with the database server
+   - **database**, **db** (string): The database (schema) name to used when connecting with the database server
    - **unix_socket** (string): The location of the unix socket file to use instead of using an IP port to connect.  If socket authentication is enabled, this can also be used in place of a password.
    - **port** (integer): The port number of the database server. If not specified the default value (=3306) will be used.
    - **connect_timeout** (integer): The connect timeout in seconds

@@ -9,10 +9,13 @@
 "host: string\n"\
 "    The host name or IP address of the database server\n\n"\
 "user: string\n"\
+"username: string\n"\
 "    The username used to authenticate with the database server\n\n"\
 "password: string\n"\
+"passwd: string\n"\
 "    The password of the given user\n\n"\
 "database: string\n"\
+"db: string\n"\
 "    database (schema) name to use when connecting with the database\n"\
 "    server\n\n"\
 "unix_socket: string\n"\
