@@ -1169,6 +1169,7 @@ PyObject *MrdbConnection_reconnect(MrdbConnection *self)
     MARIADB_CHECK_CONNECTION(self, NULL);
 
     mysql_get_option(self->mysql, MYSQL_OPT_RECONNECT, &save_reconnect);
+    /* coverity[copy_paste_error] */
     if (!save_reconnect)
         mysql_optionsv(self->mysql, MYSQL_OPT_RECONNECT, &reconnect);
 

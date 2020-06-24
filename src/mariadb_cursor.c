@@ -1034,13 +1034,14 @@ MrdbCursor_scroll(MrdbCursor *self,
 
     if (!mode) 
    {
-        new_position= self->row_number + position;
-        if (new_position < 0 || new_position > CURSOR_NUM_ROWS(self))
+        if ((long long)self->row_number + position < 0 ||
+            self->row_number + position > CURSOR_NUM_ROWS(self))
         {
             mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                     "Position value is out of range");
             return NULL;
         }
+        new_position= self->row_number + position;
     } 
     else {
         new_position= position; /* absolute */

@@ -843,9 +843,7 @@ mariadb_get_parameter(MrdbCursor *self,
         /* check if row_nr and column_nr are in the range from
            0 to (value - 1) */
         if (row_nr > (self->array_size - 1) ||
-                column_nr > (self->param_count - 1) ||
-                row_nr < 0 ||
-                column_nr < 0)
+                column_nr > (self->param_count - 1))
         {
             mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
                     "Can't access data at row %d, column %d",

@@ -239,6 +239,7 @@ Mariadb_Fieldinfo_getflag(Mariadb_Fieldinfo *self, PyObject *args)
     PyObject *data= NULL;
     PyObject *flag= NULL;
     char str_flag[512]= {0};
+    char *p, *end;
 
     if (!PyArg_ParseTuple(args, "O!", &PyTuple_Type, &data))
     {
@@ -267,21 +268,28 @@ Mariadb_Fieldinfo_getflag(Mariadb_Fieldinfo *self, PyObject *args)
         goto end;
     }
 
+    p= &str_flag[0];
+    end= p + 511;
+
     while(flag_name[i].name)
     {
         if (flag_val & flag_name[i].flag)
         {
-            if (!str_flag[0])
+            if (str_flag[0] &&
+                end - p > 3)
             {
-                strcat(str_flag, flag_name[i].name);
+                strcpy(p, " | ");
+                p+= 3;
             }
-            else {
-                strcat(str_flag, " | ");
-                strcat(str_flag, flag_name[i].name);
+            if ((ssize_t)strlen(flag_name[i].name) < end - p)
+            {
+                strcpy(p, flag_name[i].name);
+                p+= strlen(flag_name[i].name);
             }
         }
         i++;
     }
+    *p= 0;
 end:
     return PyUnicode_FromString(str_flag);
 }
