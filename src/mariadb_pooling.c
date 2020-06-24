@@ -474,6 +474,7 @@ MrdbPool_addconnection(MrdbPool *self, PyObject *args)
                 (!(conn = (MrdbConnection *)MrdbConnection_connect(NULL, args,
                                                                    self->configuration))))
             {
+                pthread_mutex_unlock(&self->lock);
                 return NULL;
             }
             Py_INCREF(conn);
