@@ -54,7 +54,11 @@ PyDoc_STRVAR(
   "\n"
   "Parameter:\n"
   "configuration: dictionary\n\n"
-  "Sets the connection configuration for the connection pool."
+  "Sets the connection configuration for the connection pool.\n"
+  "For valid connection arguments check the mariadb.connect() method.\n\n"
+  "Note: This method doesn't create connections in the pool.\n"
+  "To fill the pool one has to use add_connection() ḿethod."
+
 );
 
 PyDoc_STRVAR(
