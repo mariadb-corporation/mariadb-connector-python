@@ -8,6 +8,11 @@
 
 [![License (LGPL version 2.1)][licence-image]][licence-url]
 [![Python 3.6][python-image]][python-url]
+[![Build Status](https://travis-ci.org/mariadb-corporation/mariadb-connector-python.svg?branch=master)](https://travis-ci.org/mariadb-corporation/mariadb-connector-python)
+<a href="https://scan.coverity.com/projects/mariadb-connector-python">
+  <img alt="Coverity Scan Build Status"
+       src="https://scan.coverity.com/projects/21386/badge.svg"/>
+</a>
 
 MariaDB Connector/Python enables python programs to access MariaDB and MySQL databases, using an API
 which is compliant with the Python DB API 2.0 (PEP-249). It is written in C and uses MariaDB Connector/C
