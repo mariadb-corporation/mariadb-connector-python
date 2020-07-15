@@ -6,7 +6,6 @@ import pyperf
 
 def bulk(loops, conn):
     cursor = conn.cursor()
-    cursor.execute("DROP TABLE IF EXISTS test_update_bulk")
     cursor.execute("CREATE TEMPORARY TABLE test_update_bulk (a int primary key, b int)")
 #    conn.autocommit= False
     t0 = pyperf.perf_counter()

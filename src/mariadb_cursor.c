@@ -1538,12 +1538,15 @@ static PyObject *
 MrdbCursor_sp_outparams(MrdbCursor *self)
 {
     if (!self->is_closed && self->stmt && 
-            self->stmt->mysql && 
-            (self->stmt->mysql->server_status & SERVER_PS_OUT_PARAMS))
+            self->stmt->mysql)
     {
-        Py_RETURN_TRUE;
+        uint32_t server_status;
+        mariadb_get_infov(self->stmt->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
+        if (server_status & SERVER_PS_OUT_PARAMS)
+        {
+            Py_RETURN_TRUE;
+        }
     }
-
     Py_RETURN_FALSE;
 }
 
