@@ -2,6 +2,7 @@
 
 import subprocess
 import sys
+from packaging import version
 
 
 class MariaDBConfiguration():
@@ -35,7 +36,7 @@ def dequote(s):
 
 
 def get_config(options):
-    required_version = "3.1.3"
+    required_version = "3.1.5"
     no_env = 0
     static = options["link_static"]
 
@@ -47,7 +48,7 @@ def get_config(options):
         config_prg = "mariadb_config"
 
     cc_version = mariadb_config(config_prg, "cc_version")
-    if cc_version[0] < required_version:
+    if version.parse(cc_version[0]) < version.parse(required_version):
         print ('MariaDB Connector/Python requires MariaDB Connector/C >= %s, found version %s' % (
             required_version, cc_version[0]))
         sys.exit(2)
