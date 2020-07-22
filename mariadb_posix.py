@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 import subprocess
+from distutils.version import StrictVersion
 import sys
-from packaging import version
+# from packaging import version
 
 
 class MariaDBConfiguration():
@@ -48,7 +49,7 @@ def get_config(options):
         config_prg = "mariadb_config"
 
     cc_version = mariadb_config(config_prg, "cc_version")
-    if version.parse(cc_version[0]) < version.parse(required_version):
+    if StrictVersion(cc_version[0]) < StrictVersion(required_version):
         print ('MariaDB Connector/Python requires MariaDB Connector/C >= %s, found version %s' % (
             required_version, cc_version[0]))
         sys.exit(2)
