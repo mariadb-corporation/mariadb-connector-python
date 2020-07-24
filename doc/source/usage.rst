@@ -98,16 +98,18 @@ In certain situations, for example when inserting default values or NULL, specia
 .. code-block:: python
    :linenos:
 
+   from mariadb.constants import *
+
    cursor.execute("CREATE TABLE cakes(id int, cake varchar(100), price decimal(10,2) default 1.99)")
 
    sql= "INSERT INTO cakes (id, cake, price) VALUES (?,?)"
-   data= [(1, "Cherry Cake", 2.10), (2, "Apple Cake", mariadb.indicator_default)]
+   data= [(1, "Cherry Cake", 2.10), (2, "Apple Cake", INDICATOR.default)]
    cursor.executemany(sql, data)
 
 Beside the default indicator which inserts the default value of 1.99, the following indicators are supported:
-   * indicator_ignore: Ignores the value (only update commands)
-   * indicator_null: Value is NULL
-   * indicator_row: Don't update or insert row
+   * INDICATOR.IGNORE: Ignores the value (only update commands)
+   * INDICATOR.NULL: Value is NULL
+   * INDICATOR.IGNORE_ROW: Don't update or insert row
 
 .. note::
   * Mixing different parameter styles is not supported and will raise an exception
@@ -119,6 +121,33 @@ Beside the default indicator which inserts the default value of 1.99, the follow
 Supported Data types
 --------------------
 
+Several standard python types are converted into SQL types and returned as Python objects when a statement is executed.
 
+.. list-table:: Supported Data Types
+    :align: left
+    :header-rows: 1
 
-
+    * - Python type
+      - SQL type
+    * - None
+      - NULL
+    * - Bool
+      - TINYINT
+    * - Float, Double
+      - DOUBLE
+    * - Decimal
+      - DECIMAL
+    * - Long
+      - TINYINT, SMALLINT, INT, BIGINT
+    * - String
+      - VARCHAR, VARSTRING, TEXT
+    * - ByteArray, Bytes
+      - TINYBLOB, MEDIUMBLOB, BLOB, LONGBLOB
+    * - DateTime
+      - DATETIME
+    * - Date
+      - DATE
+    * - Time
+      - TIME
+    * - Timestamp
+      - TIMESTAMP

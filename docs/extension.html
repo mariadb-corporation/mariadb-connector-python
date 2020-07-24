@@ -1,0 +1,219 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Extensions to the DB API &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="License" href="license.html" />
+    <link rel="prev" title="The ConnectionPool class" href="pool.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="license.html" title="License"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="pool.html" title="The ConnectionPool class"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="extensions-to-the-db-api">
+<span id="extensions"></span><h1>Extensions to the DB API<a class="headerlink" href="#extensions-to-the-db-api" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="constants">
+<h2>Constants<a class="headerlink" href="#constants" title="Permalink to this headline">¶</a></h2>
+<p>For using constants of various types they have to be imported first:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
+</pre></div>
+</div>
+<div class="section" id="cursor-types">
+<h3>Cursor types<a class="headerlink" href="#cursor-types" title="Permalink to this headline">¶</a></h3>
+<p>MariaDB Connector/Python defines the following cursor types for server side cursors:</p>
+<dl class="data">
+<dt id="mariadb.constants.CURSOR.NONE">
+<code class="sig-prename descclassname">mariadb.constants.CURSOR.</code><code class="sig-name descname">NONE</code><a class="headerlink" href="#mariadb.constants.CURSOR.NONE" title="Permalink to this definition">¶</a></dt>
+<dd><p>Don’t use a server side cursor (default)</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.CURSOR.READ_ONLY">
+<code class="sig-prename descclassname">mariadb.constants.CURSOR.</code><code class="sig-name descname">READ_ONLY</code><a class="headerlink" href="#mariadb.constants.CURSOR.READ_ONLY" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use a read-only server side cursor.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="indicators">
+<h3>Indicators<a class="headerlink" href="#indicators" title="Permalink to this headline">¶</a></h3>
+<p>Indicators hold supplementary information when you are modify (insert/update/delete) data with cursors <cite>executemany</cite> method. There are several distinct uses for indicator variables:</p>
+<dl class="data">
+<dt id="INDICATOR.NULL">
+<code class="sig-prename descclassname">INDICATOR.</code><code class="sig-name descname">NULL</code><a class="headerlink" href="#INDICATOR.NULL" title="Permalink to this definition">¶</a></dt>
+<dd><p>A null value will be inserted or updated</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="INDICATOR.DEFAULT">
+<code class="sig-prename descclassname">INDICATOR.</code><code class="sig-name descname">DEFAULT</code><a class="headerlink" href="#INDICATOR.DEFAULT" title="Permalink to this definition">¶</a></dt>
+<dd><p>The default value of a column will be inserted or updated</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="INDICATOR.IGNORE">
+<code class="sig-prename descclassname">INDICATOR.</code><code class="sig-name descname">IGNORE</code><a class="headerlink" href="#INDICATOR.IGNORE" title="Permalink to this definition">¶</a></dt>
+<dd><p>Don’t update column at all</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="INDICATOR.IGNORE_ROW">
+<code class="sig-prename descclassname">INDICATOR.</code><code class="sig-name descname">IGNORE_ROW</code><a class="headerlink" href="#INDICATOR.IGNORE_ROW" title="Permalink to this definition">¶</a></dt>
+<dd><p>Don’t update or delete row</p>
+</dd></dl>
+
+</div>
+<div class="section" id="capability-flags">
+<h3>Capability flags<a class="headerlink" href="#capability-flags" title="Permalink to this headline">¶</a></h3>
+<p>These flags are used when establishing a connection or to check if the database is
+capabable of a certain feature.</p>
+<dl class="data">
+<dt id="CLIENT.MYSQL">
+<code class="sig-prename descclassname">CLIENT.</code><code class="sig-name descname">MYSQL</code><a class="headerlink" href="#CLIENT.MYSQL" title="Permalink to this definition">¶</a></dt>
+<dd><p>not in use/supported by MariaDB Server</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="CLIENT.FOUND_ROWS">
+<code class="sig-prename descclassname">CLIENT.</code><code class="sig-name descname">FOUND_ROWS</code><a class="headerlink" href="#CLIENT.FOUND_ROWS" title="Permalink to this definition">¶</a></dt>
+<dd><p>return the number of matched rows instead of number of changed rows</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="CLIENT.NO_SCHEMA">
+<code class="sig-prename descclassname">CLIENT.</code><code class="sig-name descname">NO_SCHEMA</code><a class="headerlink" href="#CLIENT.NO_SCHEMA" title="Permalink to this definition">¶</a></dt>
+<dd><p>forbids the use of database.tablename.columnname syntax and forces SQL parser
+to generate an error.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="CLIENT.LOCAL_FILES">
+<code class="sig-prename descclassname">CLIENT.</code><code class="sig-name descname">LOCAL_FILES</code><a class="headerlink" href="#CLIENT.LOCAL_FILES" title="Permalink to this definition">¶</a></dt>
+<dd><p>Allows LOAD DATA LOCAL INFILE statements (if not disabled on server).</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="CLIENT_COMPRESS">
+<code class="sig-name descname">CLIENT_COMPRESS</code><a class="headerlink" href="#CLIENT_COMPRESS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use compressed protocol</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="CLIENT_IGNORE_SPACE">
+<code class="sig-name descname">CLIENT_IGNORE_SPACE</code><a class="headerlink" href="#CLIENT_IGNORE_SPACE" title="Permalink to this definition">¶</a></dt>
+<dd><p>Allows spaces after function names. This implies, that all function names will
+become reserved words.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="CLIENT_MULTI_RESULZS">
+<code class="sig-name descname">CLIENT_MULTI_RESULZS</code><a class="headerlink" href="#CLIENT_MULTI_RESULZS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Indicates that the client is able to handle multiple result sets.</p>
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Extensions to the DB API</a><ul>
+<li><a class="reference internal" href="#constants">Constants</a><ul>
+<li><a class="reference internal" href="#cursor-types">Cursor types</a></li>
+<li><a class="reference internal" href="#indicators">Indicators</a></li>
+<li><a class="reference internal" href="#capability-flags">Capability flags</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="pool.html"
+                        title="previous chapter">The ConnectionPool class</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="license.html"
+                        title="next chapter">License</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/extension.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="license.html" title="License"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="pool.html" title="The ConnectionPool class"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.4.3.
+    </div>
+  </body>
+</html>

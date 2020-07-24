@@ -206,18 +206,22 @@ a loop, but much more effective is using the <a class="reference internal" href=
 2
 3
 4
-5</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;CREATE TABLE cakes(id int, cake varchar(100), price decimal(10,2) default 1.99)&quot;</span><span class="p">)</span>
+5
+6
+7</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;CREATE TABLE cakes(id int, cake varchar(100), price decimal(10,2) default 1.99)&quot;</span><span class="p">)</span>
 
 <span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;INSERT INTO cakes (id, cake, price) VALUES (?,?)&quot;</span>
-<span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Cherry Cake&quot;</span><span class="p">,</span> <span class="mf">2.10</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;Apple Cake&quot;</span><span class="p">,</span> <span class="n">mariadb</span><span class="o">.</span><span class="n">indicator_default</span><span class="p">)]</span>
+<span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Cherry Cake&quot;</span><span class="p">,</span> <span class="mf">2.10</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;Apple Cake&quot;</span><span class="p">,</span> <span class="n">INDICATOR</span><span class="o">.</span><span class="n">default</span><span class="p">)]</span>
 <span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
 </pre></div>
 </td></tr></table></div>
 <dl class="simple">
 <dt>Beside the default indicator which inserts the default value of 1.99, the following indicators are supported:</dt><dd><ul class="simple">
-<li><p>indicator_ignore: Ignores the value (only update commands)</p></li>
-<li><p>indicator_null: Value is NULL</p></li>
-<li><p>indicator_row: Don’t update or insert row</p></li>
+<li><p>INDICATOR.IGNORE: Ignores the value (only update commands)</p></li>
+<li><p>INDICATOR.NULL: Value is NULL</p></li>
+<li><p>INDICATOR.IGNORE_ROW: Don’t update or insert row</p></li>
 </ul>
 </dd>
 </dl>
@@ -233,6 +237,54 @@ a loop, but much more effective is using the <a class="reference internal" href=
 </div>
 <div class="section" id="supported-data-types">
 <h4>Supported Data types<a class="headerlink" href="#supported-data-types" title="Permalink to this headline">¶</a></h4>
+<p>Several standard python types are converted into SQL types and returned as Python objects when a statement is executed.</p>
+<table class="docutils align-left" id="id1">
+<caption><span class="caption-text">Supported Data Types</span><a class="headerlink" href="#id1" title="Permalink to this table">¶</a></caption>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Python type</p></th>
+<th class="head"><p>SQL type</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>None</p></td>
+<td><p>NULL</p></td>
+</tr>
+<tr class="row-odd"><td><p>Bool</p></td>
+<td><p>TINYINT</p></td>
+</tr>
+<tr class="row-even"><td><p>Float, Double</p></td>
+<td><p>DOUBLE</p></td>
+</tr>
+<tr class="row-odd"><td><p>Decimal</p></td>
+<td><p>DECIMAL</p></td>
+</tr>
+<tr class="row-even"><td><p>Long</p></td>
+<td><p>TINYINT, SMALLINT, INT, BIGINT</p></td>
+</tr>
+<tr class="row-odd"><td><p>String</p></td>
+<td><p>VARCHAR, VARSTRING, TEXT</p></td>
+</tr>
+<tr class="row-even"><td><p>ByteArray, Bytes</p></td>
+<td><p>TINYBLOB, MEDIUMBLOB, BLOB, LONGBLOB</p></td>
+</tr>
+<tr class="row-odd"><td><p>DateTime</p></td>
+<td><p>DATETIME</p></td>
+</tr>
+<tr class="row-even"><td><p>Date</p></td>
+<td><p>DATE</p></td>
+</tr>
+<tr class="row-odd"><td><p>Time</p></td>
+<td><p>TIME</p></td>
+</tr>
+<tr class="row-even"><td><p>Timestamp</p></td>
+<td><p>TIMESTAMP</p></td>
+</tr>
+</tbody>
+</table>
 </div>
 </div>
 </div>

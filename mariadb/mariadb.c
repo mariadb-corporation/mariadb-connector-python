@@ -100,25 +100,10 @@ Mariadb_Methods[] =
 static struct PyModuleDef 
 mariadb_module= {
     PyModuleDef_HEAD_INIT,
-    "mariadb",
+    "_mariadb",
     "MariaDB Connector for Python",
     -1,
     Mariadb_Methods
-};
-
-/*  constants */
-struct st_constants {
-    const char *name;
-    union {
-        long lvalue;
-        const char *strvalue;
-    } u;
-};
-
-static struct st_constants int_constants[]= {
-    {"CURSOR_TYPE_READ_ONLY", {CURSOR_TYPE_READ_ONLY}},
-    {"CURSOR_TYPE_NONE", {CURSOR_TYPE_NO_CURSOR}},
-    {NULL, {0}} /* Always last */
 };
 
 static void mariadb_add_exception(PyObject *module,
@@ -137,11 +122,10 @@ static void mariadb_add_exception(PyObject *module,
 }
 
 /* MariaDB module initialization function */
-PyMODINIT_FUNC PyInit_mariadb(void)
+PyMODINIT_FUNC PyInit__mariadb(void)
 {
     PyObject *module= PyModule_Create(&mariadb_module);
     PyObject *version_info;
-    struct st_constants *intvals= int_constants;
     const char *pre_release="";
 
 #ifdef PY_MARIADB_PRE_RELEASE_SEGMENT
@@ -192,13 +176,6 @@ PyMODINIT_FUNC PyInit_mariadb(void)
     if (PyType_Ready(&Mariadb_DBAPIType_Type) == -1)
     {
         goto error;
-    }
-
-    /* Mariadb module constants */
-    while (intvals->name) {
-        PyModule_AddIntConstant(module, intvals->name,
-                intvals->u.lvalue);
-        intvals++;
     }
 
     /* PEP-396: Module version numbers */

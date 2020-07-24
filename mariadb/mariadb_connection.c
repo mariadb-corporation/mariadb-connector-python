@@ -28,9 +28,9 @@ char *dsn_keys[]= {
     "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
     "ssl_cipher", "ssl_capath", "ssl_crlpath",
     "ssl_verify_cert", "ssl",
-    "client_flags", "pool_name", "pool_size", 
+    "client_flag", "pool_name", "pool_size", 
     "pool_reset_connection", "plugin_dir",
-    "username", "db", "passwd",
+    "username", "db", "passwd", 
     NULL
 };
 
@@ -357,7 +357,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     if (mysql_options(self->mysql, MYSQL_SET_CHARSET_NAME, "utf8mb4"))
     {
         mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
-            "Can't set default character set utf8mb4");
+            "Can't set default character set.");
         return -1;
     }
 

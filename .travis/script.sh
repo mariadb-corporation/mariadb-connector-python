@@ -84,11 +84,13 @@ if [ -n "$BENCH" ] ; then
   python setup.py build
   python setup.py install
   pip install mysql-connector-python pyperf
+  cd testing
   export TEST_MODULE=mariadb
   python bench.py -o mariadb_bench_pypy3_6.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
   export TEST_MODULE=mysql.connector
   python bench.py -o mysql_bench_pypy3_6.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
   python -m pyperf compare_to mysql_bench_pypy3_6.json mariadb_bench_pypy3_6.json --table
+  cd ..
 
 # python -m pyperf compare_to mysql_bench.json mariadb_bench.json mysql_bench_pypy3_6.json mariadb_bench_pypy3_6.json \
 #   mysql_bench_miniconda3_4_3_30.json mariadb_bench_miniconda3_4_3_30.json --table
@@ -98,8 +100,10 @@ else
 
   python setup.py build
   python setup.py install
+  cd testing
 
   python -m unittest discover -v
+  cd ..
 fi
 
 

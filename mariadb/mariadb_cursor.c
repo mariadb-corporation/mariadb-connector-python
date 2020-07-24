@@ -1274,8 +1274,8 @@ MrdbCursor_executemany(MrdbCursor *self,
 
     self->data= NULL;
 
-    if (!PyArg_ParseTuple(Args, "s#O!", &statement, &statement_len,
-                &PyList_Type, &self->data))
+    if (!PyArg_ParseTuple(Args, "s#O", &statement, &statement_len,
+                &self->data))
     {
         return NULL;
     }

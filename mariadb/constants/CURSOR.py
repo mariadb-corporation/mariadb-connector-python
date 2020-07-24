@@ -1,0 +1,2 @@
+NONE= 0
+READ_ONLY= 1

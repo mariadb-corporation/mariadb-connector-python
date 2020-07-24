@@ -8,6 +8,7 @@ import os
 from decimal import Decimal
 
 import mariadb
+from mariadb.constants import *
 
 from test.base_test import create_connection
 
@@ -119,6 +120,24 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[1], c2)
         self.assertEqual(row[2], c3)
         self.assertEqual(row[3], c4)
+        del cursor
+
+    def test_inserttuple(self):
+        if os.environ.get("MAXSCALE_VERSION"):
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+        cursor = self.connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE test_inserttuple (id int, name varchar(64), "
+                       "city varchar(64))");
+        params = ((1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia"))
+        cursor.executemany("INSERT INTO test_inserttuple VALUES (?,?,?)", params);
+
+        cursor.execute("SELECT name FROM test_inserttuple ORDER BY id DESC")
+        row= cursor.fetchone()
+        self.assertEqual("Andrey", row[0]);
         del cursor
 
     def test_fetchmany(self):
@@ -326,8 +345,8 @@ class TestCursor(unittest.TestCase):
 
     def test_multi_cursor(self):
         cursor = self.connection.cursor()
-        cursor1 = self.connection.cursor(cursor_type=1)
-        cursor2 = self.connection.cursor(cursor_type=1)
+        cursor1 = self.connection.cursor(cursor_type=CURSOR.READ_ONLY)
+        cursor2 = self.connection.cursor(cursor_type=CURSOR.READ_ONLY)
 
         cursor.execute("CREATE TEMPORARY TABLE test_multi_cursor (a int)")
         cursor.execute("INSERT INTO test_multi_cursor VALUES (1),(2),(3),(4),(5),(6),(7),(8)")
@@ -384,7 +403,7 @@ class TestCursor(unittest.TestCase):
 
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE ind1 (a int, b int default 2,c int)")
-        vals = [(1,4,3),(mariadb.indicator_null, mariadb.indicator_default, 3)]
+        vals = [(1,4,3),(INDICATOR.NULL, INDICATOR.DEFAULT, 3)]
         cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
         cursor.execute("SELECT a, b, c FROM ind1")
         row = cursor.fetchone()
@@ -744,7 +763,7 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy35(self):
         con= create_connection()
-        cursor = con.cursor(cursor_type=mariadb.CURSOR_TYPE_READ_ONLY)
+        cursor = con.cursor(cursor_type=CURSOR.READ_ONLY)
         cursor.execute("CREATE TEMPORARY table sample (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(64))");
 
         for name in ('foo', 'bar', 'baz'):
@@ -911,7 +930,7 @@ class TestCursor(unittest.TestCase):
         row= cursor.fetchone()
         self.assertEqual(row[0], None)
         cursor.execute("DELETE FROM ind1")
-        vals=[(1,4,3), (mariadb.indicator_null, mariadb.indicator_default, None)]
+        vals=[(1,4,3), (INDICATOR.NULL, INDICATOR.DEFAULT, None)]
         cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
         cursor.execute("SELECT a, b, c FROM ind1")
         row= cursor.fetchone()

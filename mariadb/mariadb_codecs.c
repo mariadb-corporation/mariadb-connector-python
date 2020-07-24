@@ -851,7 +851,7 @@ mariadb_get_parameter(MrdbCursor *self,
             return 1;
         }
 
-        if (!(row= PyList_GetItem(self->data, row_nr)))
+        if (!(row= ListOrTuple_GetItem(self->data, row_nr)))
         {
             mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
                     "Can't access row number %d", row_nr + 1);
@@ -1056,7 +1056,15 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
 {
     uint32_t i;
 
-    if (!(self->array_size= (uint32_t)PyList_Size(data)))
+    if (Py_TYPE(data) != &PyList_Type &&
+        Py_TYPE(data) != &PyTuple_Type)
+    {
+        mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, 
+                "Data must be passed as sequence (Tuple or List)");
+        return 1;
+    }
+
+    if (!(self->array_size= (uint32_t)ListOrTuple_Size(data)))
     {
         mariadb_throw_exception(self->stmt, Mariadb_InterfaceError, 1, 
                 "Empty parameter list. At least one row must be specified");
@@ -1065,7 +1073,7 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
 
     for (i=0; i < self->array_size; i++)
     {
-        PyObject *obj= PyList_GetItem(data, i);
+        PyObject *obj= ListOrTuple_GetItem(data, i);
         if (self->parser->paramstyle != PYFORMAT &&
                 (Py_TYPE(obj) != &PyTuple_Type &&
                  Py_TYPE(obj) != &PyList_Type))
