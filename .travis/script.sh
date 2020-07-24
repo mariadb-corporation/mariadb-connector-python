@@ -64,12 +64,14 @@ if [ -n "$BENCH" ] ; then
   python setup.py install
   pip install mysql-connector-python pyperf
   export TEST_MODULE=mariadb
+  cd testing
   python bench_init.py
   python bench.py -o mariadb_bench.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT,TEST_MODULE
   export TEST_MODULE=mysql.connector
   python bench.py -o mysql_bench.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT,TEST_MODULE
 
   python -m pyperf compare_to mysql_bench.json mariadb_bench.json --table
+  cd ..
 
 # export PYENV_VERSION=miniconda3-4.3.30
 # python setup.py build
