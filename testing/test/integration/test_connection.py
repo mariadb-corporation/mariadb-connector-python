@@ -60,7 +60,7 @@ class TestConnection(unittest.TestCase):
         cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
         try:
             cursor.execute("LOAD DATA LOCAL INFILE 'x.x' INTO TABLE t1")
-        except mariadb.DatabaseError:
+        except (mariadb.ProgrammingError, mariadb.DatabaseError):
             pass
         del cursor
         del new_conn
