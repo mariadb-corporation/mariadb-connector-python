@@ -42,9 +42,9 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
    - **ssl_ca** (string): Defines a path to a PEM file that should contain one or more X509 certificates for trusted Certificate Authorities (CAs) to use for TLS.  This option requires that you use the absolute path, not a relative path.
    - **ssl_capath** (string):  Defines a path to a directory that contains one or more PEM files that contains one X509 certificate for a trusted Certificate Authority (CA)
    - **ssl_cipher** (string):  Defines a list of permitted cipher suites to use for TLS
-   - **ssl_crl_path** (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.
-   - **ssl_verify_server_cert** (bool): Enables server certificate verification.
-   - **ssl_enforce** (bool): Always use a secure TLS connection
+   - **ssl_crlpath** (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.
+   - **ssl_verify_cert** (bool): Enables server certificate verification.
+   - **ssl** (bool): Always use a secure TLS connection
 
 
    :return: Returns a connection or raises an error if the connection between client and server couldn't be established.
