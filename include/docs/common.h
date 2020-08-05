@@ -63,11 +63,11 @@
 "    contains one X509 certificate for a trusted Certificate Authority (CA)\n\n"\
 "ssl_cipher: string\n"\
 "    Defines a list of permitted cipher suites to use for TLS\n\n"\
-"ssl_crl_path: string\n"\
+"ssl_crlpath: string\n"\
 "    Defines a path to a PEM file that should contain one or more revoked\n"\
 "    X509 certificates to use for TLS. This option requires that you use\n"\
 "    the absolute path, not a relative path.\n\n"\
-"ssl_verify_server_cert: boolean\n"\
+"ssl_verify_cert: boolean\n"\
 "    Enables server certificate verification.\n\n"\
-"ssl_enforce: Boolean\n"\
+"ssl: Boolean\n"\
 "    The connection must use TLS security or it will fail.\n\n"
