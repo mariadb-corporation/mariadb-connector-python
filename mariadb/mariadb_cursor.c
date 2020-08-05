@@ -484,9 +484,9 @@ void ma_cursor_close(MrdbCursor *self)
     {
         /* Todo: check if all the cursor stuff is deleted (when using prepared
            statements this should be handled in mysql_stmt_close) */
-        Py_BEGIN_ALLOW_THREADS
+        MARIADB_BEGIN_ALLOW_THREADS(self)
         mysql_stmt_close(self->stmt);
-        Py_END_ALLOW_THREADS
+        MARIADB_END_ALLOW_THREADS(self)
         self->stmt= NULL;
     }
     MrdbCursor_clear(self, 0);
@@ -653,9 +653,9 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         MrdbParser_end(self->parser);
         self->parser= NULL;
         MrdbCursor_clear(self, 0);
-        Py_BEGIN_ALLOW_THREADS;
+        MARIADB_BEGIN_ALLOW_THREADS(self);
         rc= mysql_real_query(self->connection->mysql, statement, (unsigned long)statement_len);
-        Py_END_ALLOW_THREADS;
+        MARIADB_END_ALLOW_THREADS(self);
         if (rc)
         {
             mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
@@ -726,7 +726,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
             mysql_stmt_bind_param(self->stmt, self->params);
 
-            Py_BEGIN_ALLOW_THREADS;
+            MARIADB_BEGIN_ALLOW_THREADS(self);
             /* execute_direct was implemented together with bulk operations, so we need
                to check if MARIADB_CLIENT_STMT_BULK_OPERATIONS is set in extended server
                capabilities */
@@ -741,7 +741,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
             else
                 rc= mariadb_stmt_execute_direct(self->stmt, self->parser->statement.str, 
                         self->parser->statement.length);
-            Py_END_ALLOW_THREADS;
+            MARIADB_END_ALLOW_THREADS(self);
 
             if (rc)
             {
@@ -749,10 +749,10 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
                    to run the statement with text protocol */
                 if (mysql_stmt_errno(self->stmt) == ER_UNSUPPORTED_PS)
                 {
-                    Py_BEGIN_ALLOW_THREADS;
+                    MARIADB_BEGIN_ALLOW_THREADS(self);
                     self->is_text= 0;
                     rc= mysql_real_query(self->connection->mysql, statement, (unsigned long)statement_len);
-                    Py_END_ALLOW_THREADS;
+                    MARIADB_END_ALLOW_THREADS(self);
 
                     if (rc)
                     {
@@ -784,9 +784,9 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         } else {
             /* We are already prepared, so just reexecute statement */
             mysql_stmt_bind_param(self->stmt, self->params);
-            Py_BEGIN_ALLOW_THREADS;
+            MARIADB_BEGIN_ALLOW_THREADS(self);
             rc= mysql_stmt_execute(self->stmt);
-            Py_END_ALLOW_THREADS;
+            MARIADB_END_ALLOW_THREADS(self);
             if (rc)
             {
                 mariadb_throw_exception(self->stmt, NULL, 1, NULL);
@@ -1223,7 +1223,7 @@ MrdbCursor_executemany_fallback(MrdbCursor *self,
         {
             goto error;
         }
-        Py_BEGIN_ALLOW_THREADS;
+        MARIADB_BEGIN_ALLOW_THREADS(self);
         if (i==0)
         {
             rc= mysql_stmt_prepare(self->stmt, self->parser->statement.str, 
@@ -1233,7 +1233,7 @@ MrdbCursor_executemany_fallback(MrdbCursor *self,
         {
             rc= mysql_stmt_execute(self->stmt);
         }
-        Py_END_ALLOW_THREADS;
+        MARIADB_END_ALLOW_THREADS(self);
         if (rc)
         {
             goto error;
@@ -1337,10 +1337,10 @@ MrdbCursor_executemany(MrdbCursor *self,
 
         mysql_stmt_bind_param(self->stmt, self->params);
 
-        Py_BEGIN_ALLOW_THREADS;
+        MARIADB_BEGIN_ALLOW_THREADS(self);
         rc= mariadb_stmt_execute_direct(self->stmt, self->parser->statement.str,
                 (unsigned long)self->parser->statement.length);
-        Py_END_ALLOW_THREADS;
+        MARIADB_END_ALLOW_THREADS(self);
         if (rc)
         {
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
@@ -1348,9 +1348,9 @@ MrdbCursor_executemany(MrdbCursor *self,
         }
     }
     else {
-        Py_BEGIN_ALLOW_THREADS;
+        MARIADB_BEGIN_ALLOW_THREADS(self);
         rc= mysql_stmt_execute(self->stmt);
-        Py_END_ALLOW_THREADS;
+        MARIADB_END_ALLOW_THREADS(self);
         if (rc)
         {
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
@@ -1385,7 +1385,7 @@ MrdbCursor_nextset(MrdbCursor *self)
         return NULL;
     }
 
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self);
     if (!self->is_text)
         rc= mysql_stmt_next_result(self->stmt);
     else
@@ -1397,7 +1397,7 @@ MrdbCursor_nextset(MrdbCursor *self)
         }
         rc= mysql_next_result(self->connection->mysql);
     }
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self);
 
     if (rc)
     {

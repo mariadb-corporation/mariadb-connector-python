@@ -178,6 +178,7 @@ typedef struct {
     unsigned long client_capabilities;
     unsigned long server_capabilities;
     unsigned long extended_server_capabilities;
+    PyThreadState *thread_state;
 } MrdbConnection;
 
 typedef struct mrdb_pool{
@@ -253,6 +254,7 @@ typedef struct {
     int64_t affected_rows;
     int64_t row_count;
     uint32_t field_count;
+    uint64_t lastrowid;
     unsigned long row_number;
     enum enum_result_format result_format;
     uint8_t is_prepared;
@@ -261,6 +263,7 @@ typedef struct {
     uint8_t is_closed;
     uint8_t is_text;
     MrdbParser *parser;
+    PyThreadState *thread_state;
 } MrdbCursor;
 
 typedef struct
@@ -426,14 +429,41 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
 
 /* Helper macros */
 
+/* Due to callback functions we cannot use PY_BEGIN/END_ALLOW_THREADS */
+
+#define MARIADB_BEGIN_ALLOW_THREADS(obj) (obj)->thread_state= PyEval_SaveThread();
+#define MARIADB_END_ALLOW_THREADS(obj)\
+if ((obj)->thread_state)\
+{\
+    PyEval_RestoreThread((obj)->thread_state);\
+    (obj)->thread_state= NULL;\
+}
+#define MARIADB_UNBLOCK_THREADS(obj)\
+{\
+    PyThreadState *_save= NULL;\
+    if ((obj)->thread_state)\
+    {\
+        _save= (obj)->thread_state;\
+        PyEval_RestoreThread(_save);\
+        (obj)->thread_state= NULL;\
+    }
+
+#define MARIADB_BLOCK_THREADS(obj)\
+    if (_save)\
+    {\
+        (obj)->thread_state= PyEval_SaveThread();\
+        _save= NULL;\
+    }\
+} 
+
 #define MrdbIndicator_Check(a)\
     (Py_TYPE((a)) == &MrdbIndicator_Type)
 
 #define MARIADB_CHECK_CONNECTION(connection, ret)\
     if (!(connection) || !(connection)->mysql)\
     {\
-        mariadb_throw_exception((connection)->mysql, Mariadb_Error, 0,\
-            "Invalid connection or not connected");\
+        mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0, \
+           "Invalid connection or not connected");\
         return (ret);\
     }
 

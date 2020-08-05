@@ -63,36 +63,6 @@ mariadb_pydate_to_tm(enum enum_field_types type,
     }
 }
 
-/*
-   Checks if the blob is a serialized (pickled) Python Object
-
-   conditions:
-     - First two bytes must be 0x8003
-     - Last Byte must be 0x2E
-     - unpickle must return success
-*/
-static PyObject *
-mariadb_get_pickled(unsigned char *data, size_t length)
-{
-    PyObject *obj= NULL;
-
-    if (length < 3)
-    {
-        return NULL;
-    }
-
-    if (*data == 0x80 && *(data +1) <= 0x04 && *(data + length - 1) == 0x2E)
-    {
-        PyObject *byte= PyBytes_FromStringAndSize((char *)data, length);
-        obj= PyObject_CallMethod(Mrdb_Pickle, "loads", "O", byte);
-
-        if (PyErr_Occurred())
-            PyErr_Clear();
-        Py_DECREF(byte);
-    }
-    return obj;
-}
-
 static unsigned long long my_strtoull(const char *str, size_t len, const char **end, int *err)
 {
   unsigned long long val = 0;
@@ -455,14 +425,9 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             }
             if (self->fields[column].flags & BINARY_FLAG)
             {
-                if (!(self->values[column]= 
-                   mariadb_get_pickled((unsigned char *)data, 
-                                       (size_t)length[column])))
-                {
-                    self->values[column]= 
+                self->values[column]= 
                        PyBytes_FromStringAndSize((const char *)data,
                                                  (Py_ssize_t)length[column]);
-                }
             }
             else {
                 self->values[column]= 
@@ -517,6 +482,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 {
     MrdbCursor *self= (MrdbCursor *)data;
 
+    MARIADB_UNBLOCK_THREADS(self);
     if (!PyDateTimeAPI)
     {
         PyDateTime_IMPORT;
@@ -526,6 +492,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     {
         Py_INCREF(Py_None);
         self->values[column]= Py_None;
+        goto end;
         return;
     }
     switch(self->fields[column].type) {
@@ -677,9 +644,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                     self->fields[column].max_length= length;
                 if (self->fields[column].flags & BINARY_FLAG)
                 {
-                    if (!(self->values[column]= 
-                        mariadb_get_pickled(*row, (size_t)length)))
-                        self->values[column]= 
+                    self->values[column]= 
                             PyBytes_FromStringAndSize((const char *)*row, 
                                                        (Py_ssize_t)length);
                 }
@@ -732,6 +697,8 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         default:
             break;
     }
+end:
+    MARIADB_BLOCK_THREADS(self);
 }
 
 /* 
@@ -837,6 +804,9 @@ mariadb_get_parameter(MrdbCursor *self,
 {
     PyObject *row= NULL,
              *column= NULL;
+    uint8_t rc= 1;
+
+    MARIADB_UNBLOCK_THREADS(self);
 
     if (is_bulk)
     {
@@ -868,7 +838,7 @@ mariadb_get_parameter(MrdbCursor *self,
             mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
                     "Can't access column number %d at row %d",
                      column_nr + 1, row_nr + 1);
-            return 1;
+            goto end;
         }
     } else
     {
@@ -878,7 +848,7 @@ mariadb_get_parameter(MrdbCursor *self,
             mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
                     "Can't find key '%s' in parameter data", 
                     self->parser->keys[column_nr]);
-            return 1;
+            goto end;
         }
         column= PyDict_GetItem(row, key);
     }
@@ -893,7 +863,7 @@ mariadb_get_parameter(MrdbCursor *self,
                     "MariaDB %s doesn't support indicator variables. "\
                     "Required version is 10.2.6 or newer",
                     mysql_get_server_info(self->stmt->mysql));
-            return 1;
+            goto end;
         }
         param->indicator= (char)MrdbIndicator_AsLong(column);
         param->value= NULL; /* you can't have both indicator and value */
@@ -909,7 +879,10 @@ mariadb_get_parameter(MrdbCursor *self,
         param->value= column;
         param->indicator= STMT_INDICATOR_NONE;
     }
-    return 0;
+    rc= 0;
+end:
+    MARIADB_BLOCK_THREADS(self);
+    return rc;
 }
 
 /* 
@@ -1189,19 +1162,25 @@ error:
 
   @brief Set the current value for the specified bind buffer
 
+  @param self       cursor
   @param bind[in]   bind structure
   @param value[in]  current column value
 
   @return 0 on succes, otherwise error
  */
 static uint8_t 
-mariadb_param_to_bind(MYSQL_BIND *bind,
+mariadb_param_to_bind(MrdbCursor *self,
+                      MYSQL_BIND *bind,
                       MrdbParamValue *value)
 {
+    uint8_t rc= 0;
+
+    MARIADB_UNBLOCK_THREADS(self);
+
     if (value->indicator > 0)
     {
         bind->u.indicator[0]= value->indicator;
-        return 0;
+        goto end;
     }
 
     if (!value->value)
@@ -1272,8 +1251,25 @@ mariadb_param_to_bind(MYSQL_BIND *bind,
         case MYSQL_TYPE_NEWDECIMAL:
             {
                 Py_ssize_t len;
-                PyObject *obj= PyObject_Str(value->value);
-                bind->buffer= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
+                PyObject *obj= NULL;
+                char *p;
+
+                if (value->free_me)
+                    MARIADB_FREE_MEM(value->buffer);
+                if (!strcmp(Py_TYPE(value->value)->tp_name, "decimal.Decimal") ||
+                    !strcmp(Py_TYPE(value->value)->tp_name, "Decimal"))
+                {
+                    obj= PyObject_Str(value->value);
+                    p= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
+                }
+                else
+                {
+                    obj= PyObject_Str(value->value);
+                    p= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
+                }
+                bind->buffer= value->buffer= PyMem_RawCalloc(1, len);
+                memcpy(value->buffer, p, len);
+                value->free_me= 1;
                 bind->buffer_length= (unsigned long)len;
                 Py_DECREF(obj);
             }
@@ -1289,9 +1285,11 @@ mariadb_param_to_bind(MYSQL_BIND *bind,
         case MYSQL_TYPE_NULL:
             break;
         default:
-            return 1;
+            rc= 1;
     }
-    return 0;
+end:
+    MARIADB_BLOCK_THREADS(self);
+    return rc;
 }
 
 /* 
@@ -1313,18 +1311,21 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
 {
     MrdbCursor *self= (MrdbCursor *)data;
     uint32_t i;
+    uint8_t rc= 1;
 
-    if (!self)
+/*    if (!self)
     {
         return 1;
-    }
+    } */
+
+    MARIADB_UNBLOCK_THREADS(self);
 
     for (i=0; i < self->param_count; i++)
     {
         if (mariadb_get_parameter(self, (self->array_size > 0), 
                                  row_nr, i, &self->value[i]))
         {
-            return 1;
+            goto end;
         }
         if (self->value[i].indicator)
         {
@@ -1332,13 +1333,16 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
         }
         if (self->value[i].indicator < 1)
         {
-            if (mariadb_param_to_bind(&bind[i], &self->value[i]))
+            if (mariadb_param_to_bind(self, &bind[i], &self->value[i]))
             {
-                return 1;
+                goto end;
             }
         }
     }
-    return 0;
+    rc= 0;
+end:
+    MARIADB_BLOCK_THREADS(self);
+    return rc;
 }
 
 #ifdef _WIN32
