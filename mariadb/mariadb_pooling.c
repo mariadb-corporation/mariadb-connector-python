@@ -35,6 +35,9 @@ MrdbPool_poolsize(MrdbPool *self);
 static PyObject *
 MrdbPool_poolname(MrdbPool *self);
 
+static PyObject *
+MrdbPool_close(MrdbPool *self);
+
 static int
 MrdbPool_set_resetconnection(MrdbPool *self, PyObject *arg);
 
@@ -69,7 +72,10 @@ MrdbPool_Methods[] =
         pool_get_connection__doc__},
     {"set_config", (PyCFunction)MrdbPool_setconfig,
         METH_VARARGS | METH_KEYWORDS,
-        pool_set_config__doc__ }, 
+        pool_set_config__doc__ },
+    {"close", (PyCFunction)MrdbPool_close,
+        METH_NOARGS,
+        pool_close__doc__},
     {NULL} /* always last */
 };
 
@@ -195,7 +201,7 @@ MrdbPool_initialize(MrdbPool *self, PyObject *args, PyObject *kwargs)
         self->connection_cnt= self->pool_size;
     }
     PyDict_SetItemString(cnx_pool, self->pool_name, (PyObject *)self);
-    Py_DECREF(self);
+    Py_INCREF(self);
 
     return 0;
 error:
@@ -294,40 +300,8 @@ MrdbPool_Type =
 void
 MrdbPool_dealloc(MrdbPool *self)
 {
-    uint32_t i;
-
-    pthread_mutex_lock(&self->lock);
-
-    if (self->pool_name)
-    {
-        if (PyDict_Contains(cnx_pool, PyUnicode_FromString(self->pool_name)))
-        {
-            PyDict_DelItemString(cnx_pool, self->pool_name);
-        }
-        MARIADB_FREE_MEM(self->pool_name);
-        self->pool_name= NULL;
-    }
-
-    if (self->connection)
-    {
-        for (i=0; i < self->pool_size; i++)
-        {
-            if (self->connection[i])
-            {
-                self->connection[i]->pool= NULL;
-                MrdbConnection_close(self->connection[i]);
-                Py_DECREF(self->connection[i]);
-                self->connection[i]= NULL;
-            }
-        }
-    }
-    self->pool_size= 0;
-    MARIADB_FREE_MEM(self->connection);
-    self->connection= NULL;
-
-
-    pthread_mutex_unlock(&self->lock);
-    pthread_mutex_destroy(&self->lock);
+    PyObject_GC_UnTrack(self);
+    MrdbPool_close(self);
 
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -528,4 +502,41 @@ MrdbPool_set_resetconnection(MrdbPool *self, PyObject *arg)
 
     self->reset_session= PyObject_IsTrue(arg);
     return 0;
+}
+
+static PyObject *
+MrdbPool_close(MrdbPool *self)
+{
+    uint32_t i;
+
+    pthread_mutex_lock(&self->lock);
+
+    if (self->connection)
+    {
+        for (i=0; i < self->pool_size; i++)
+        {
+            if (self->connection[i])
+            {
+                self->connection[i]->pool= NULL;
+                MrdbConnection_close(self->connection[i]);
+                self->connection[i]= NULL;
+            }
+        }
+        MARIADB_FREE_MEM(self->connection);
+        self->connection= NULL;
+    }
+    self->pool_size= 0;
+
+    if (self->pool_name)
+    {
+        if (PyDict_Contains(cnx_pool, PyUnicode_FromString(self->pool_name)))
+        {
+            PyDict_DelItemString(cnx_pool, self->pool_name);
+        }
+        self->pool_name= NULL;
+    }
+    pthread_mutex_unlock(&self->lock);
+    pthread_mutex_destroy(&self->lock);
+    Py_INCREF(Py_None);
+    return Py_None;
 }

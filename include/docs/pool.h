@@ -37,6 +37,14 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
+  pool_close__doc__,
+  "close()\n"
+  "--\n"
+  "\n"
+  "Closes connection pool and all connections."
+);
+
+PyDoc_STRVAR(
   pool_add_connection__doc__,
   "add_connection(connection)\n"
   "--\n"
