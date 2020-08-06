@@ -52,8 +52,6 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
    :rtype: mariadb.connection object
 
 
-   :Example:
-
    The connection parameters have to be provided as a set of keyword arguments::
 
       import mariadb
