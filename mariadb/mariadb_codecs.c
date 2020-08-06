@@ -19,6 +19,8 @@
 #include "mariadb_python.h"
 #include <datetime.h>
 
+#define CHARSET_BINARY 63
+
 #define CHECK_TYPE(obj, type) \
    (Py_TYPE((obj)) == type || \
     PyType_IsSubtype(Py_TYPE((obj)), type))
@@ -423,11 +425,13 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         case MYSQL_TYPE_BLOB:
         case MYSQL_TYPE_LONG_BLOB:
         case MYSQL_TYPE_GEOMETRY:
+        case MYSQL_TYPE_BIT:
             if (length[column] > self->fields[column].max_length)
             {
                 self->fields[column].max_length= length[column];
             }
-            if (self->fields[column].flags & BINARY_FLAG)
+            if (self->fields[column].flags & BINARY_FLAG ||
+                self->fields[column].charsetnr== CHARSET_BINARY)
             {
                 self->values[column]= 
                        PyBytes_FromStringAndSize((const char *)data,
@@ -642,11 +646,13 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         case MYSQL_TYPE_MEDIUM_BLOB:
         case MYSQL_TYPE_BLOB:
         case MYSQL_TYPE_LONG_BLOB:
+        case MYSQL_TYPE_BIT:
             {
                 unsigned long length= mysql_net_field_length(row);
                 if (length > self->fields[column].max_length)
                     self->fields[column].max_length= length;
-                if (self->fields[column].flags & BINARY_FLAG)
+                if (self->fields[column].flags & BINARY_FLAG ||
+                    self->fields[column].charsetnr == CHARSET_BINARY)
                 {
                     self->values[column]= 
                             PyBytes_FromStringAndSize((const char *)*row, 
