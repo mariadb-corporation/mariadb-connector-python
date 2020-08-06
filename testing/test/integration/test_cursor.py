@@ -14,6 +14,8 @@ from test.base_test import create_connection
 
 server_indicator_version= 100206
 
+class foo(int):
+   def bar(self):pass
 
 class TestCursor(unittest.TestCase):
 
@@ -1001,6 +1003,15 @@ class TestCursor(unittest.TestCase):
         cur.execute("SELECT a FROM t1 WHERE 1=?", (1,))
         row= cur.fetchone()
         self.assertEqual(row[0], 1);
+        del cur
+
+    def test_conpy94(self):
+        con= create_connection()
+        cur= con.cursor()
+        a= foo(2)
+        cur.execute("SELECT ?", (a,))
+        row= cur.fetchone()
+        self.assertEqual(row[0], 2)
         del cur
 
 if __name__ == '__main__':
