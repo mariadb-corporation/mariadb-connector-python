@@ -458,15 +458,24 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         case MYSQL_TYPE_SET:
         case MYSQL_TYPE_ENUM:
         {
-            unsigned long utf8len;
+            unsigned long len;
 
-            self->values[column]=
-                PyUnicode_FromStringAndSize((const char *)data,
-                                            (Py_ssize_t)length[column]);
-            utf8len= (unsigned long)PyUnicode_GET_LENGTH(self->values[column]);
-            if (utf8len > self->fields[column].max_length)
+            if (self->fields[column].flags & BINARY_FLAG ||
+                self->fields[column].charsetnr == CHARSET_BINARY) 
             {
-                self->fields[column].max_length= utf8len;
+                self->values[column]= 
+                        PyBytes_FromStringAndSize((const char *)data, 
+                                                       (Py_ssize_t)length[column]);
+                len= (unsigned long)length[column];
+            } else {
+                self->values[column]=
+                    PyUnicode_FromStringAndSize((const char *)data,
+                                                (Py_ssize_t)length[column]);
+                len= (unsigned long)PyUnicode_GET_LENGTH(self->values[column]);
+            }
+            if (len > self->fields[column].max_length)
+            {
+                self->fields[column].max_length= len;
             }
             break;
         }
@@ -690,20 +699,29 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         case MYSQL_TYPE_DECIMAL:
         case MYSQL_TYPE_SET:
         case MYSQL_TYPE_ENUM:
-            {
-                unsigned long length;
-                unsigned long utf8len;
-                length= mysql_net_field_length(row);
+        {
+            unsigned long length;
+            unsigned long utf8len;
+            length= mysql_net_field_length(row);
 
+            if (self->fields[column].flags & BINARY_FLAG ||
+                self->fields[column].charsetnr == CHARSET_BINARY) 
+            {
                 self->values[column]= 
-                    PyUnicode_FromStringAndSize((const char *)*row,
-                                                (Py_ssize_t)length);
-                utf8len= 
-                   (unsigned long)PyUnicode_GET_LENGTH(self->values[column]);
-                if (utf8len > self->fields[column].max_length)
+                        PyBytes_FromStringAndSize((const char *)*row, 
+                                                   (Py_ssize_t)length);
+                if (length > self->fields[column].max_length)
+                    self->fields[column].max_length= length;
+            } else {
+                 self->values[column]= 
+                 PyUnicode_FromStringAndSize((const char *)*row,
+                                             (Py_ssize_t)length);
+                 utf8len= (unsigned long)PyUnicode_GET_LENGTH(self->values[column]);
+                 if (utf8len > self->fields[column].max_length)
                     self->fields[column].max_length= utf8len;
-                *row+= length;
             }
+            *row+= length;
+        }
         default:
             break;
     }

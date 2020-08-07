@@ -1015,6 +1015,17 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 2)
         del cur
 
+    def test_conpy98(self):
+        con= create_connection()
+        cursor=con.cursor()
+        cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1 WHERE 1=?", (1,))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], b'foo')
+        cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], b'foo')
+        del cursor
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:
