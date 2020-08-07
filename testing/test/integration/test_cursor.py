@@ -5,6 +5,7 @@ import collections
 import datetime
 import unittest
 import os
+import decimal
 from decimal import Decimal
 
 import mariadb
@@ -1013,6 +1014,39 @@ class TestCursor(unittest.TestCase):
         row= cur.fetchone()
         self.assertEqual(row[0], 2)
         del cur
+
+    def test_conpy91(self):
+        with create_connection() as connection:
+            with connection.cursor() as cursor:
+                for parameter_type in (int, decimal.Decimal):
+                    with self.subTest(parameter_type=parameter_type):
+                        with self.subTest(parameter_count=1):
+                            with self.subTest(parameter_style='?'):
+                                cursor.execute('select ?', [parameter_type(1)])
+                                [[value]] = cursor.fetchall()
+                                self.assertEqual(value, 1)
+                            with self.subTest(parameter_style='%s'):
+                                cursor.execute('select %s', [parameter_type(1)])
+                                [[value]] = cursor.fetchall()
+                                self.assertEqual(value, 1)
+                            with self.subTest(parameter_style='%(name)s'):
+                                cursor.execute('select %(value)s', dict(value=parameter_type(1)))
+                                [[value]] = cursor.fetchall()
+                                self.assertEqual(value, 1)
+                        with self.subTest(parameter_count=2):
+                            with self.subTest(parameter_style='?'):
+                                cursor.execute('select ?, ?', [parameter_type(1), 1])
+                                [[value, _]] = cursor.fetchall()
+                                self.assertEqual(value, 1)
+                            with self.subTest(parameter_style='%s'):
+                                cursor.execute('select %s, %s', [parameter_type(1), 1])
+                                [[value, _]] = cursor.fetchall()
+                                self.assertEqual(value, 1)
+                            with self.subTest(parameter_style='%(name)s'):
+                                cursor.execute('select %(value)s, %(dummy)s', dict(value=parameter_type(1), dummy=1))
+                                [[value, _]] = cursor.fetchall()
+                                self.assertEqual(value, 1)
+
 
 if __name__ == '__main__':
     unittest.main()
