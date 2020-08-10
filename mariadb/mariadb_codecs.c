@@ -430,8 +430,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             {
                 self->fields[column].max_length= length[column];
             }
-            if (self->fields[column].flags & BINARY_FLAG ||
-                self->fields[column].charsetnr== CHARSET_BINARY)
+            if (self->fields[column].charsetnr== CHARSET_BINARY)
             {
                 self->values[column]= 
                        PyBytes_FromStringAndSize((const char *)data,
@@ -460,11 +459,10 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         {
             unsigned long len;
 
-            if (self->fields[column].flags & BINARY_FLAG ||
-                self->fields[column].charsetnr == CHARSET_BINARY) 
+            if ( self->fields[column].charsetnr == CHARSET_BINARY)
             {
-                self->values[column]= 
-                        PyBytes_FromStringAndSize((const char *)data, 
+                self->values[column]=
+                        PyBytes_FromStringAndSize((const char *)data,
                                                        (Py_ssize_t)length[column]);
                 len= (unsigned long)length[column];
             } else {
@@ -660,8 +658,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 unsigned long length= mysql_net_field_length(row);
                 if (length > self->fields[column].max_length)
                     self->fields[column].max_length= length;
-                if (self->fields[column].flags & BINARY_FLAG ||
-                    self->fields[column].charsetnr == CHARSET_BINARY)
+                if (self->fields[column].charsetnr == CHARSET_BINARY)
                 {
                     self->values[column]= 
                             PyBytes_FromStringAndSize((const char *)*row, 
@@ -705,10 +702,10 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
             length= mysql_net_field_length(row);
 
             if (self->fields[column].flags & BINARY_FLAG ||
-                self->fields[column].charsetnr == CHARSET_BINARY) 
+                self->fields[column].charsetnr == CHARSET_BINARY)
             {
-                self->values[column]= 
-                        PyBytes_FromStringAndSize((const char *)*row, 
+                self->values[column]=
+                        PyBytes_FromStringAndSize((const char *)*row,
                                                    (Py_ssize_t)length);
                 if (length > self->fields[column].max_length)
                     self->fields[column].max_length= length;

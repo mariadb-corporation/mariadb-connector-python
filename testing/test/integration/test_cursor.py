@@ -6,6 +6,7 @@ import datetime
 import unittest
 import os
 import decimal
+import json
 from decimal import Decimal
 
 import mariadb
@@ -1024,6 +1025,17 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1")
         row= cursor.fetchone()
         self.assertEqual(row[0], b'foo')
+        del cursor
+
+    def test_conpy68(self):
+        con= create_connection()
+        cursor=con.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a JSON)")
+        content = {'a': 'aaa', 'b': 'bbb', 'c': 123 }
+        cursor.execute("INSERT INTO t1 VALUES(?)", (json.dumps(content),))
+        cursor.execute("SELECT a FROM t1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], json.dumps(content))
         del cursor
 
     def test_conpy91(self):
