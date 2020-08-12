@@ -1590,7 +1590,6 @@ MrdbCursor_callproc(MrdbCursor *self, PyObject *args)
     PyTuple_SetItem(new_args, 1, data);
 
     rc= MrdbCursor_execute(self, new_args, NULL);
-    Py_DECREF(new_args);
 end:
     if (stmt)
     {
