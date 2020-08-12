@@ -226,7 +226,7 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
         PyObject *kwargs)
 {
     char *key_words[]= {"", "named_tuple", "dictionary", "prefetch_size", "cursor_type", 
-        "buffered", "prepared", NULL};
+        "buffered", "prepared", "binary", NULL};
     PyObject *connection;
     uint8_t is_named_tuple= 0;
     uint8_t is_dictionary= 0;
@@ -234,14 +234,15 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
                   prefetch_rows= 0;
     uint8_t is_buffered= 0;
     uint8_t is_prepared= 0;
+    uint8_t is_binary= 0;
 
     if (!self)
         return -1;
 
     if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-                "O!|bbkkbb", key_words, &MrdbConnection_Type, &connection,
+                "O!|bbkkbbb", key_words, &MrdbConnection_Type, &connection,
                 &is_named_tuple, &is_dictionary, &prefetch_rows, &cursor_type, &is_buffered,
-                &is_prepared))
+                &is_prepared, &is_binary))
         return -1;
 
     if (!((MrdbConnection *)connection)->mysql)
@@ -278,6 +279,7 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
     Py_INCREF(connection);
     self->connection= (MrdbConnection *)connection;
     self->is_buffered= is_buffered ? is_buffered : self->connection->is_buffered;
+    self->is_binary= is_binary;
 
     self->is_prepared= is_prepared;
     self->is_text= 0;
@@ -646,7 +648,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
       self->is_buffered= is_buffered;
 
     /* if there are no parameters specified, we execute the statement in text protocol */
-    if (!data_count(Data) && !self->cursor_type)
+    if (!data_count(Data) && !self->cursor_type && !self->is_binary)
     {
         /* in case statement was executed before, we need to clear, since we don't use 
            binary protocol */

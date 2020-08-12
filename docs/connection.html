@@ -69,13 +69,16 @@
 <li><p><strong>buffered</strong> (bool): When set to <cite>True</cite> the entire result set from a SELECT/SHOW statement will be stored in client memory</p></li>
 <li><p><strong>prepared</strong> (bool): When set to <cite>True</cite> cursor will remain in prepared state after the first <code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code> method was called. Further calls to <em>execute()</em> method will ignore the sql statement.</p></li>
 </ul>
+</dd></dl>
+
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.0.1: </span>- <strong>binary</strong> (bool): When set to <cite>True</cite> cursor will be executed using the MariaDB client/server binary protocol.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Returns</dt>
+<dt class="field-odd">return</dt>
 <dd class="field-odd"><p>Returns a cursor object or raises an exception if an error occured.</p>
 </dd>
 </dl>
-</dd></dl>
-
+</div>
 <dl class="method">
 <dt id="xid">
 <code class="sig-name descname">xid</code><span class="sig-paren">(</span><em class="sig-param">format_id</em>, <em class="sig-param">global_transaction_id</em>, <em class="sig-param">branch_qualifier</em><span class="sig-paren">)</span><a class="headerlink" href="#xid" title="Permalink to this definition">¶</a></dt>

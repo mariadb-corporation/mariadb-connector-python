@@ -65,7 +65,7 @@ PyDoc_STRVAR(
 PyDoc_STRVAR(
   connection_cursor__doc__,
   "cursor(self, buffered=None, dictionary=None, named_tuple=None, cursor_type=mariadb.CURSOR_TYPE_NONE,\n"
-  "       prepared=None, prefetch_rows=1)\n"
+  "       prepared=None, prefetch_rows=1, binary=False)\n"
   "--\n"
   "\n"
   "Returns a new cursor object for the current connection.\n\n"
@@ -77,6 +77,7 @@ PyDoc_STRVAR(
   "result sets have the same name.\n\n"
   "If cursor_type is set to mariadb.CURSOR_TYPE_READ_ONLY, a cursor is opened for the\n"
   "statement invoked with cursors execute() method."
+  "If binary is set to True, cursor will always be executed using the binary protocol."
 );
 
 PyDoc_STRVAR(

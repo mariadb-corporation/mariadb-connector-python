@@ -262,6 +262,7 @@ typedef struct {
     uint8_t fetched;
     uint8_t is_closed;
     uint8_t is_text;
+    uint8_t is_binary;
     MrdbParser *parser;
     PyThreadState *thread_state;
 } MrdbCursor;

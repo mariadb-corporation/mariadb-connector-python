@@ -31,6 +31,8 @@ Connection constructors
   - **prefetch_size** (integer): The number of rows prefetched. This option will be ignored, if *cursor_type* is not `CURSOR_TYPE_READ_ONLY`
   - **buffered** (bool): When set to `True` the entire result set from a SELECT/SHOW statement will be stored in client memory
   - **prepared** (bool): When set to `True` cursor will remain in prepared state after the first :func:`~cursor.execute` method was called. Further calls to *execute()* method will ignore the sql statement.
+.. versionadded:: 1.0.1
+  - **binary** (bool): When set to `True` cursor will be executed using the MariaDB client/server binary protocol.
 
   :return: Returns a cursor object or raises an exception if an error occured.
 
