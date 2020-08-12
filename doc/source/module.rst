@@ -35,7 +35,7 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
        be used
    - **init_command** (string): Specifies one or more commands to execute when connecting and reconnecting to the database server.
    - **default_file** (string): Read options from the specified option file. If the file is an empty string, default configuration file(s) will be used
-   - **default_group** (string): -- Read options from the specified group
+   - **default_group** (string): Read options from the specified group
    - **ssl_key** (string): Defines a path to a private key file to use for TLS. This option
        requires that you use the absolute path, not a relative path. The specified key must be in PEM format
    - **ssl_cert** (string): Defines a path to the X509 certificate file to use for TLS.  This option requires that you use the absolute path, not a relative path. The X609 certificate must be in PEM format.
@@ -45,6 +45,8 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
    - **ssl_crlpath** (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.
    - **ssl_verify_cert** (bool): Enables server certificate verification.
    - **ssl** (bool): Always use a secure TLS connection
+   .. versionadded:: 1.0.1
+   - **autocommit** (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).
 
 
    :return: Returns a connection or raises an error if the connection between client and server couldn't be established.

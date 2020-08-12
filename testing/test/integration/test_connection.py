@@ -46,12 +46,11 @@ class TestConnection(unittest.TestCase):
 
     def test_autocommit(self):
         conn = self.connection
-        cursor = conn.cursor()
-        self.assertEqual(conn.autocommit, True)
         conn.autocommit = False
         self.assertEqual(conn.autocommit, False)
         # revert
         conn.autocommit = True
+        self.assertEqual(conn.autocommit, True)
 
     def test_local_infile(self):
         default_conf= conf()
@@ -177,6 +176,18 @@ class TestConnection(unittest.TestCase):
             cursor= con.cursor()
         except mariadb.ProgrammingError:
             pass
+
+    def test_conpy101(self):
+        default_conf = conf()
+        c1 = mariadb.connect(user=default_conf["user"], database=default_conf["database"],
+             port=default_conf["port"], host=default_conf["host"])
+        self.assertEqual(c1.autocommit, False)
+        c1 = mariadb.connect(user=default_conf["user"], database=default_conf["database"],
+             port=default_conf["port"], host=default_conf["host"], autocommit=False)
+        self.assertEqual(c1.autocommit, False)
+        c1 = mariadb.connect(user=default_conf["user"], database=default_conf["database"],
+             port=default_conf["port"], host=default_conf["host"], autocommit=True)
+        self.assertEqual(c1.autocommit, True)
 
 if __name__ == '__main__':
     unittest.main()

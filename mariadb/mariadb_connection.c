@@ -30,7 +30,8 @@ char *dsn_keys[]= {
     "ssl_verify_cert", "ssl",
     "client_flag", "pool_name", "pool_size", 
     "pool_reset_connection", "plugin_dir",
-    "username", "db", "passwd", 
+    "username", "db", "passwd",
+    "autocommit",
     NULL
 };
 
@@ -312,9 +313,10 @@ MrdbConnection_Initialize(MrdbConnection *self,
     unsigned int local_infile= 0xFF;
     unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
+    PyObject *autocommit_obj= NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiibbssssssssssipisibssss:connect",
+                "|sssssisiiibbssssssssssipisibssssO:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -325,9 +327,20 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_verify_cert, &ssl_enforce,
                 &client_flags, &pool_name, &pool_size,
                 &reset_session, &plugin_dir,
-                &user, &schema, &password))
+                &user, &schema, &password,
+                &autocommit_obj))
     {
         return -1;
+    }
+
+    if (autocommit_obj)
+    {
+        if (autocommit_obj != Py_None &&
+            Py_TYPE(autocommit_obj) != &PyBool_Type)
+        {
+            PyErr_SetString(PyExc_TypeError, "Argument must be boolean or None");
+            return -1;
+        }
     }
 
     if (dsn)
@@ -419,6 +432,27 @@ MrdbConnection_Initialize(MrdbConnection *self,
     {
         mariadb_throw_exception(self->mysql, NULL, 0, NULL);
         goto end;
+    }
+
+    if (!autocommit_obj ||
+        (autocommit_obj && Py_TYPE(autocommit_obj) == &PyBool_Type))
+    {
+        uint8_t autocommit= (autocommit_obj) ?
+                 (uint8_t) PyLong_AsUnsignedLong(autocommit_obj) : 0;
+        uint8_t server_autocommit;
+        uint32_t server_status;
+
+        mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
+        server_autocommit= server_status & SERVER_STATUS_AUTOCOMMIT;
+
+        if (server_autocommit != autocommit)
+        {
+            if (mysql_autocommit(self->mysql, autocommit))
+            {
+                mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+                goto end;
+            }
+        }
     }
 
 end:

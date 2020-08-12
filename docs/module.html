@@ -74,7 +74,7 @@ be used</p>
 </li>
 <li><p><strong>init_command</strong> (string): Specifies one or more commands to execute when connecting and reconnecting to the database server.</p></li>
 <li><p><strong>default_file</strong> (string): Read options from the specified option file. If the file is an empty string, default configuration file(s) will be used</p></li>
-<li><p><strong>default_group</strong> (string): – Read options from the specified group</p></li>
+<li><p><strong>default_group</strong> (string): Read options from the specified group</p></li>
 <li><dl class="simple">
 <dt><strong>ssl_key</strong> (string): Defines a path to a private key file to use for TLS. This option</dt><dd><p>requires that you use the absolute path, not a relative path. The specified key must be in PEM format</p>
 </dd>
@@ -87,6 +87,12 @@ be used</p>
 <li><p><strong>ssl_crlpath</strong> (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.</p></li>
 <li><p><strong>ssl_verify_cert</strong> (bool): Enables server certificate verification.</p></li>
 <li><p><strong>ssl</strong> (bool): Always use a secure TLS connection</p></li>
+</ul>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.0.1.</span></p>
+</div>
+<ul class="simple">
+<li><p><strong>autocommit</strong> (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).</p></li>
 </ul>
 <dl class="field-list simple">
 <dt class="field-odd">Returns</dt>
