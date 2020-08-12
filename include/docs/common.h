@@ -70,7 +70,7 @@
 "ssl_verify_cert: boolean\n"\
 "    Enables server certificate verification.\n\n"\
 "ssl: Boolean\n"\
-"    The connection must use TLS security or it will fail.\n\n"
+"    The connection must use TLS security or it will fail.\n\n"\
 "autocommit: Boolean or None\n"\
 "    Specifies the autocommit settings: None will use the server default,"\
 "    True will enable autocommit, False will disable it (default).\n\n"
