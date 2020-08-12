@@ -722,9 +722,11 @@ class TestCursor(unittest.TestCase):
 
     def test_sp2(self):
         con= create_connection()
+        if con.server_version < 100301:
+            self.skipTest("Not supported in versions < 10.3")
         cursor= con.cursor()
         cursor.execute("DROP PROCEDURE IF EXISTS p2")
-        cursor.execute("CREATE PROCEDURE p2(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\n SET o1:=CONCAT(s1,s2);\nEND")
+        cursor.execute("CREATE PROCEDURE p2(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\nSET o1:=CAST(CONCAT(s1,s2) AS char CHARACTER SET utf8mb4);\nEND")
         cursor.callproc("p2", ("foo", "bar", 1))
         self.assertEqual(cursor.sp_outparams, True)
         row= cursor.fetchone()
@@ -743,7 +745,7 @@ class TestCursor(unittest.TestCase):
         con= create_connection()
         cursor= con.cursor()
         cursor.execute("DROP PROCEDURE IF EXISTS p3")
-        cursor.execute("CREATE PROCEDURE p3(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\n SELECT '1';SET o1:=CONCAT(s1,s2);\nEND")
+        cursor.execute("CREATE PROCEDURE p3(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\nSELECT '1';\nSET o1:=CAST(CONCAT(s1,s2) AS char CHARACTER SET utf8mb4);\nEND")
         cursor.callproc("p3", ("foo", "bar", 1))
         self.assertEqual(cursor.sp_outparams, False)
         row= cursor.fetchone()
@@ -1019,9 +1021,6 @@ class TestCursor(unittest.TestCase):
     def test_conpy98(self):
         con= create_connection()
         cursor=con.cursor()
-        cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1 WHERE 1=?", (1,))
-        row= cursor.fetchone()
-        self.assertEqual(row[0], b'foo')
         cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1")
         row= cursor.fetchone()
         self.assertEqual(row[0], b'foo')
@@ -1029,6 +1028,8 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy68(self):
         con= create_connection()
+        if con.server_version < 100207:
+            self.skipTest("Not supported in versions < 10.2.7")
         cursor=con.cursor()
         cursor.execute("CREATE TEMPORARY TABLE t1 (a JSON)")
         content = {'a': 'aaa', 'b': 'bbb', 'c': 123 }
@@ -1037,6 +1038,15 @@ class TestCursor(unittest.TestCase):
         row= cursor.fetchone()
         self.assertEqual(row[0], json.dumps(content))
         del cursor
+
+    def test_conpy103(self):
+        con= create_connection()
+        cursor= con.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a decimal(10,2))")
+        cursor.executemany("INSERT INTO t1 VALUES (?)", [[decimal.Decimal(1)]])
+        cursor.execute("SELECT a FROM t1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], decimal.Decimal(1))
 
     def test_conpy91(self):
         with create_connection() as connection:
