@@ -25,6 +25,9 @@
    (Py_TYPE((obj)) == type || \
     PyType_IsSubtype(Py_TYPE((obj)), type))
 
+#define IS_DECIMAL_TYPE(type) \
+((type) == MYSQL_TYPE_NEWDECIMAL || (type) == MYSQL_TYPE_DOUBLE || (type) == MYSQL_TYPE_FLOAT)
+
 /*
    converts a Python date/time/datetime object to MYSQL_TIME
  */
@@ -1000,6 +1003,12 @@ mariadb_get_parameter_info(MrdbCursor *self,
                      param->buffer_type == MYSQL_TYPE_LONG) &&
                         pinfo.type == MYSQL_TYPE_LONGLONG)
                     break;
+                if (IS_DECIMAL_TYPE(pinfo.type) &&
+                    IS_DECIMAL_TYPE(param->buffer_type))
+                {
+                    param->buffer_type= MYSQL_TYPE_NEWDECIMAL;
+                    break;
+                }
                 mariadb_throw_exception(NULL, Mariadb_DataError, 1,
                         "Invalid parameter type at row %d, column %d",
                         i+1, column_nr + 1);
