@@ -25,7 +25,7 @@ class TestConnection(unittest.TestCase):
         default_conf = conf()
         try:
            conn= mariadb.connect(user=default_conf["user"], unix_socket="/does_not_exist/x.sock", port=default_conf["port"], host=default_conf["host"])
-        except mariadb.DatabaseError:
+        except (mariadb.OperationalError,):
            pass
 
     def test_connection_default_file(self):
@@ -59,7 +59,7 @@ class TestConnection(unittest.TestCase):
         cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
         try:
             cursor.execute("LOAD DATA LOCAL INFILE 'x.x' INTO TABLE t1")
-        except (mariadb.ProgrammingError, mariadb.DatabaseError):
+        except (mariadb.OperationalError,):
             pass
         del cursor
         del new_conn

@@ -166,13 +166,13 @@ class TestCursor(unittest.TestCase):
         self.assertRaises(mariadb.Error, cursor.fetchall)
 
         cursor.execute("SELECT id, name, city FROM test_fetchmany ORDER BY id")
-        self.assertEqual(-1, cursor.rowcount)
+        self.assertEqual(0, cursor.rowcount)
         row = cursor.fetchall()
         self.assertEqual(row, params)
         self.assertEqual(5, cursor.rowcount)
 
         cursor.execute("SELECT id, name, city FROM test_fetchmany ORDER BY id")
-        self.assertEqual(-1, cursor.rowcount)
+        self.assertEqual(0, cursor.rowcount)
 
         row = cursor.fetchmany(1)
         self.assertEqual(row, [params[0]])
@@ -543,7 +543,7 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.execute(
             "CREATE TEMPORARY TABLE test_conpy_15 (a int not null auto_increment primary key, b varchar(20))");
-        self.assertEqual(cursor.lastrowid, 0)
+        self.assertEqual(cursor.lastrowid, None)
         cursor.execute("INSERT INTO test_conpy_15 VALUES (null, 'foo')")
         self.assertEqual(cursor.lastrowid, 1)
         cursor.execute("SELECT LAST_INSERT_ID()")
@@ -570,7 +570,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.rowcount, -1)
         cursor.execute(
             "CREATE TEMPORARY TABLE test_conpy_14 (a int not null auto_increment primary key, b varchar(20))");
-        self.assertEqual(cursor.rowcount, -1)
+        self.assertEqual(cursor.rowcount, 0)
         cursor.execute("INSERT INTO test_conpy_14 VALUES (null, 'foo')")
         self.assertEqual(cursor.rowcount, 1)
         vals = [(3, "bar"), (4, "this")]
@@ -961,13 +961,13 @@ class TestCursor(unittest.TestCase):
         con= create_connection()
         cur = con.cursor()
         cur.execute("SELECT 1")
-        self.assertEqual(cur.rowcount, -1)
+        self.assertEqual(cur.rowcount, 0)
         cur.close()
 
         cur = con.cursor()
         cur.execute("CREATE TEMPORARY TABLE test_conpy67 (a int)")
         cur.execute("SELECT * from test_conpy67")
-        self.assertEqual(cur.rowcount, -1)
+        self.assertEqual(cur.rowcount, 0)
         cur.fetchall()
         self.assertEqual(cur.rowcount, 0)
 

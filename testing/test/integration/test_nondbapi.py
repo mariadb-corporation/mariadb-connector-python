@@ -27,7 +27,7 @@ class CursorTest(unittest.TestCase):
         self.connection.kill(id)
         try:
             new_conn.ping()
-        except mariadb.DatabaseError:
+        except mariadb.InterfaceError:
             pass
         del new_conn
         new_conn = create_connection()
@@ -83,7 +83,7 @@ class CursorTest(unittest.TestCase):
         cursor.execute("SELECT 1 UNION SELECT 2")
         try:
             self.connection.ping()
-        except mariadb.DatabaseError:
+        except mariadb.InterfaceError:
             pass
 
         self.connection.reset()

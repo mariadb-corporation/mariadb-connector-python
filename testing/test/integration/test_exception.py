@@ -41,7 +41,7 @@ class TestException(unittest.TestCase):
         start = datetime.today()
         try:
             create_connection({"connect_timeout": 1, "host": "8.8.8.8"})
-        except mariadb.DatabaseError as err:
+        except mariadb.OperationalError as err:
             self.assertEqual(err.sqlstate, "HY000")
             self.assertEqual(err.errno, 2002)
             self.assertTrue(err.errmsg.find("server on '8.8.8.8'") > -1)
