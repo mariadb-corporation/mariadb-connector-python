@@ -252,9 +252,9 @@ typedef struct {
     unsigned long prefetch_rows;
     unsigned long cursor_type;
     int64_t affected_rows;
-    int64_t row_count;
     uint32_t field_count;
-    uint64_t lastrowid;
+    int64_t row_count;
+    uint64_t lastrow_id;
     unsigned long row_number;
     enum enum_result_format result_format;
     uint8_t is_prepared;
@@ -319,7 +319,7 @@ int Mariadb_traverse(PyObject *self,
 void
 mariadb_throw_exception(void *handle,
     PyObject *execption_type,
-    unsigned char is_statement,
+    int8_t is_statement,
     const char *message,
     ...);
 
