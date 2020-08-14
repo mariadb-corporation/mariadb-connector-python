@@ -47,6 +47,11 @@ static PyObject *get_exception_type(int error_number)
   switch (error_number) {
   /* InterfaceError */
   case 0:
+  case CR_SERVER_LOST:
+  case CR_SERVER_GONE_ERROR:
+  case CR_SERVER_HANDSHAKE_ERR:
+  case CR_IPSOCK_ERROR:
+  case CR_COMMANDS_OUT_OF_SYNC:
       return Mariadb_InterfaceError;
   /* DataError: Exception raised for errors that are due to problems with the processed
      data like division by zero, numeric value out of range, etc */
@@ -61,7 +66,7 @@ static PyObject *get_exception_type(int error_number)
 
   /* ProgrammingError: Exception raised for programming errors, e.g. table not found or 
      already exists, syntax error in the SQL statement, wrong number of parameters specified, etc. */
-  case CR_COMMANDS_OUT_OF_SYNC:
+  case ER_EMPTY_QUERY:
   case ER_CANT_DO_THIS_DURING_AN_TRANSACTION:
   case ER_DB_CREATE_EXISTS:
   case ER_FIELD_SPECIFIED_TWICE:
@@ -76,6 +81,7 @@ static PyObject *get_exception_type(int error_number)
   case ER_UNSUPPORTED_EXTENSION:
   case ER_WRONG_DB_NAME:
   case ER_WRONG_TABLE_NAME:
+  case ER_BAD_DB_ERROR:
       return Mariadb_ProgrammingError;
 
   /* IntegrityError: Exception raised when the relational integrity of the database is affected,
@@ -88,6 +94,8 @@ static PyObject *get_exception_type(int error_number)
   case ER_NO_REFERENCED_ROW_2:
   case ER_ROW_IS_REFERENCED:
   case ER_ROW_IS_REFERENCED_2:
+  case ER_XAER_OUTSIDE:
+  case ER_XAER_RMERR:
       return Mariadb_IntegrityError;
   default:
       /* MariaDB Error */
