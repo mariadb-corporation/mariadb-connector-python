@@ -201,15 +201,15 @@ static uint8_t check_date(uint16_t year, uint8_t month, uint8_t day)
   return 1;
 }
 
-static uint8_t check_time(int8_t hour, int8_t minute, int8_t seconds, int32_t microseconds)
+static uint8_t check_time(MYSQL_TIME *tm)
 {
-  if (hour < 0 || hour > 23)
+  if (tm->hour > 838)
       return 0;
-  if (minute < 0 || minute > 59)
+  if (tm->minute < 0 || tm->minute > 59)
       return 0;
-  if (seconds < 0 || seconds > 59)
+  if (tm->second < 0 || tm->second > 59)
       return 0;
-  if (microseconds < 0 || microseconds > 999999)
+  if (tm->second_part < 0 || tm->second_part > 999999)
       return 0;
   return 1;
 }
@@ -340,6 +340,22 @@ error:
   tm->time_type = MYSQL_TIMESTAMP_ERROR;
   return 1;
 }
+
+static PyObject *Mrdb_GetTimeDelta(MYSQL_TIME *tm)
+{
+    int days, hour, minute, second, second_part;
+ 
+    hour= (tm->neg) ? -tm->hour : tm->hour;
+    minute= (tm->neg) ? -tm->minute : tm->minute;
+    second= (tm->neg) ? -tm->second : tm->second;
+    second_part= (tm->neg) ? -tm->second_part : tm->second_part;
+
+    days= hour / 24;
+    hour= hour % 24;
+    second= hour * 3600 + minute * 60 + second;
+    
+    return PyDelta_FromDSU(days, second, second_part);
+}
  
 void
 field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
@@ -390,10 +406,9 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             Py_str_to_TIME(data, strlen(data), &tm);
             if (self->fields[column].type == MYSQL_TYPE_TIME)
             {
-                if (check_time(tm.hour, tm.minute, tm.second, tm.second_part))
+                if (check_time(&tm))
                 {
-                    self->values[column]= PyTime_FromTime((int)tm.hour, (int)tm.minute,
-                                          (int)tm.second, (int)tm.second_part);
+                      self->values[column]= Mrdb_GetTimeDelta(&tm);
                 }
                 else {
                     Py_INCREF(Py_None);
@@ -412,7 +427,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             } else 
             {
                 if (check_date(tm.year, tm.month, tm.day) &&
-                    check_time(tm.hour, tm.minute, tm.second, tm.second_part))
+                    check_time(&tm))
                 {
                     self->values[column]= PyDateTime_FromDateAndTime(tm.year, tm.month,
                                tm.day, tm.hour, tm.minute, tm.second, tm.second_part);
@@ -623,32 +638,26 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
             }
         case MYSQL_TYPE_TIME:
             {
-                uint8_t len= 0,
-                        is_negative= 0,
-                        minute= 0,
-                        second= 0;
-                int32_t hour;
-                uint32_t day, second_part= 0;
+                uint8_t len= 0;
+                MYSQL_TIME tm;
+                memset(&tm, 0, sizeof(MYSQL_TIME));
 
                 len= (uint8_t)mysql_net_field_length(row);
                 if (!len)
                 {
-                    self->values[column]= PyTime_FromTime(0,0,0,0);
+                    self->values[column]= Mrdb_GetTimeDelta(&tm);
                     break;
                 }
-                is_negative= uint1korr(*row);
-                day= uint4korr(*row + 1);
-                hour= uint1korr(*row + 5);
-                minute= uint1korr(*row + 6);
-                second= uint1korr(*row + 7);
+                tm.neg= uint1korr(*row);
+                tm.day= uint4korr(*row + 1);
+                tm.hour= uint1korr(*row + 5);
+                tm.minute= uint1korr(*row + 6);
+                tm.second= uint1korr(*row + 7);
                 if (len > 8)
-                    second_part= uint4korr(*row + 8);
-                if (day)
-                    hour+= (day * 24);
-                if (is_negative)
-                    hour*= -1;
-                self->values[column]= PyTime_FromTime(hour, minute, 
-                                                      second, second_part);
+                    tm.second_part= uint4korr(*row + 8);
+                if (tm.day)
+                    tm.hour+= (tm.day * 24);
+                self->values[column]= Mrdb_GetTimeDelta(&tm);
                 *row+= len;
                 break;
             }
