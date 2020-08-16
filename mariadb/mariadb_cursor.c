@@ -1196,6 +1196,8 @@ MrdbCursor_fetchall(MrdbCursor *self)
             ma_set_result_column_value(self, Row, j);
         }
         PyList_Append(List, Row);
+        /* CONPY-99: Decrement Row to prevent memory leak */
+        Py_DECREF(Row);
     }
     self->row_count= (self->is_text) ? mysql_num_rows(self->result) : 
         mysql_stmt_num_rows(self->stmt);
