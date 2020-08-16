@@ -743,6 +743,8 @@ class TestCursor(unittest.TestCase):
 
     def test_sp3(self):
         con= create_connection()
+        if con.server_version < 100301:
+            self.skipTest("Not supported in versions < 10.3")
         cursor= con.cursor()
         cursor.execute("DROP PROCEDURE IF EXISTS p3")
         cursor.execute("CREATE PROCEDURE p3(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\nSELECT '1';\nSET o1:=CAST(CONCAT(s1,s2) AS char CHARACTER SET utf8mb4);\nEND")

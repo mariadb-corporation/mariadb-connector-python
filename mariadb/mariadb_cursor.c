@@ -1341,7 +1341,8 @@ MrdbCursor_executemany(MrdbCursor *self,
         if (MrdbCursor_executemany_fallback(self, self->parser->statement.str, 
                     self->parser->statement.length))
             goto error;
-        goto end;
+        MARIADB_FREE_MEM(self->values);
+        Py_RETURN_NONE;
     }
 
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &self->array_size);
@@ -1373,7 +1374,7 @@ MrdbCursor_executemany(MrdbCursor *self,
             goto error;
         }
     }
-end:
+
     self->row_count= CURSOR_AFFECTED_ROWS(self);
     self->lastrow_id= CURSOR_INSERT_ID(self); 
     MARIADB_FREE_MEM(self->values);
