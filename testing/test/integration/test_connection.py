@@ -141,7 +141,7 @@ class TestConnection(unittest.TestCase):
         cursor = conn.cursor()
         try:
             cursor.execute("INSTALL SONAME 'auth_ed25519'")
-        except mariadb.DatabaseError:
+        except (mariadb.DatabaseError, mariadb.OperationalError):
             self.skipTest("Server couldn't load auth_ed25519")
         cursor.execute("DROP USER IF EXISTS eduser")
         if self.connection.server_version < 100400:
