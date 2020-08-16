@@ -157,7 +157,7 @@ class TestConnection(unittest.TestCase):
         try:
             create_connection({"user": "eduser", "password": "MySup8%rPassw@ord", "plugin_dir": "wrong_plugin_dir"})
             self.fail("wrong plugin directory, must not have found authentication plugin")
-        except (mariadb.DatabaseError, mariadb.ProgrammingError):
+        except (mariadb.OperationalError):
             pass
         cursor.execute("DROP USER IF EXISTS eduser")
         del cursor, conn2
