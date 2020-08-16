@@ -72,6 +72,30 @@ mariadb_pydate_to_tm(enum enum_field_types type,
     }
 }
 
+static void
+mariadb_pydelta_to_tm(PyObject *obj, MYSQL_TIME *tm)
+{
+  int remain= 0, total_seconds= 0;
+
+  memset(tm, 0, sizeof(MYSQL_TIME));
+  tm->second_part= ((PyDateTime_Delta *)obj)->microseconds;
+  tm->neg= ((PyDateTime_Delta *)obj)->days < 0;
+
+  /* todo: there must be a function obj->total_seconds() */
+  total_seconds= abs(((PyDateTime_Delta *)obj)->days * 3600 * 24 + ((PyDateTime_Delta *)obj)->seconds);
+
+  if (tm->second_part && tm->neg)
+  {
+    total_seconds-= 1;
+    tm->second_part= 1000000 - tm->second_part;
+  }
+
+  tm->hour= total_seconds / 3600;
+  remain= total_seconds % 3600;
+  tm->minute= remain / 60;
+  tm->second= remain % 60;
+}
+
 static unsigned long long my_strtoull(const char *str, size_t len, const char **end, int *err)
 {
   unsigned long long val = 0;
@@ -779,7 +803,8 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
     } else if (PyDate_CheckExact(obj)) {
         paraminfo->type= MYSQL_TYPE_DATE;
         return 0;
-    } else if (PyTime_CheckExact(obj)) {
+    } else if (PyTime_CheckExact(obj) ||
+               PyDelta_CheckExact(obj)) {
         paraminfo->type= MYSQL_TYPE_TIME;
         return 0;
     } else if (PyDateTime_CheckExact(obj)) {
@@ -1289,7 +1314,10 @@ mariadb_param_to_bind(MrdbCursor *self,
         case MYSQL_TYPE_TIME:
         case MYSQL_TYPE_DATETIME:
             bind->buffer= &value->tm;
-            mariadb_pydate_to_tm(bind->buffer_type, value->value, &value->tm);
+            if (PyDelta_CheckExact(value->value))
+                mariadb_pydelta_to_tm(value->value, &value->tm);
+            else
+                mariadb_pydate_to_tm(bind->buffer_type, value->value, &value->tm);
             break;
         case MYSQL_TYPE_NEWDECIMAL:
             {
