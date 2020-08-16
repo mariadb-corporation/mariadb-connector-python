@@ -55,7 +55,7 @@ def get_config(options):
     cfg = MariaDBConfiguration()
     cfg.includes = [".\\include", mariadb_dir + "\\include", mariadb_dir + "\\include\\mysql"]
     cfg.lib_dirs = [mariadb_dir + "\\lib"]
-    cfg.libs = ["ws2_32", "advapi32", "kernel32", "shlwapi", "crypt32"]
+    cfg.libs = ["ws2_32", "advapi32", "kernel32", "shlwapi", "crypt32", "secur32", "bcrypt"]
     if static.lower() == "on" or static.lower() == "default":
         cfg.libs.append("mariadbclient")
     else:
