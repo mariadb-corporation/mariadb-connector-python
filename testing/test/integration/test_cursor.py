@@ -51,7 +51,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT c1,c2,c3,c4 FROM test_date")
         row = cursor.fetchone()
         self.assertEqual(row[0], c1)
-        self.assertEqual(row[1], c2)
+        self.assertEqual(row[1], datetime.timedelta(seconds=44551, microseconds=123456))
         self.assertEqual(row[2], c3)
         self.assertEqual(row[3], c4)
         cursor.close()
@@ -790,7 +790,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("INSERT INTO t1 VALUES ('13:12:24.05111', '2020-10-10 14:12:24.123456')")
         cursor.execute("SELECT a,b FROM t1");
         row= cursor.fetchone()
-        self.assertEqual(row[0], datetime.time(13, 12, 24, 51000))
+        self.assertEqual(row[0], datetime.timedelta(seconds=47544, microseconds=51000))
         self.assertEqual(row[1], datetime.datetime(2020, 10, 10, 14, 12, 24, 120000))
         del cursor
         del con
