@@ -1137,6 +1137,7 @@ MrdbCursor_fetchmany(MrdbCursor *self,
             ma_set_result_column_value(self, Row, j);
         }
         PyList_Append(List, Row);
+        Py_DECREF(Row);
     }
 end:
     return List;
