@@ -398,6 +398,39 @@ static PyObject *Mariadb_no_operation(MrdbCursor *self,
 }
 /* }}} */
 
+/* {{{ MrdbCursor_clear_result(MrdbCursor *self)
+   clear pending result sets
+*/
+static void MrdbCursor_clear_result(MrdbCursor *self)
+{
+    if (!self->is_text &&
+        self->stmt)
+    {
+        /* free current result */
+        mysql_stmt_free_result(self->stmt);
+
+        /* check if there are more pending result sets */
+        while (mysql_stmt_next_result(self->stmt) == 0)
+        {
+            mysql_stmt_free_result(self->stmt);
+        }
+    } else if (self->is_text)
+    {
+        /* free current result */
+        if (self->result)
+        {
+            mysql_free_result(self->result);
+        }
+        /* clear pending result sets */
+        if (self->connection->mysql)
+        {
+            while (!mysql_next_result(self->connection->mysql));
+        }
+    }
+    /* CONPY-52: Avoid possible double free */
+    self->result= NULL;
+}
+
 /* {{{ MrdbCursor_clear
    Resets statement attributes  and frees
    associated memory
@@ -405,16 +438,10 @@ static PyObject *Mariadb_no_operation(MrdbCursor *self,
     static
 void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
 {
+    /* clear pending result sets */
+    MrdbCursor_clear_result(self);
 
     if (!self->is_text && self->stmt) {
-        mysql_stmt_free_result(self->stmt);
-
-        /* CONPY-52: avoid possible double free */
-        self->result= NULL;
-
-        while (!mysql_stmt_next_result(self->stmt))
-            mysql_stmt_free_result(self->stmt);
-
         if (new_stmt)
         {
           mysql_stmt_close(self->stmt);
@@ -423,28 +450,14 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
         else {
             uint32_t val= 0;
 
-            mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, 0);
-            mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, 0);
-            mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, 0);
+            mysql_stmt_reset(self->stmt);
+
+            /* we need to unset array size only */
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &val);
-            mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &val);
         }
 
     }
     self->fetched= 0;
-
-    if (self->is_text)
-    {
-        if (self->result)
-        { 
-            mysql_free_result(self->result);
-            self->result= 0;
-            self->is_text= 0;
-        }
-        /* clear also pending result sets */
-        if (self->connection->mysql)
-            while (!mysql_next_result(self->connection->mysql));
-    }
 
     MARIADB_FREE_MEM(self->sequence_fields);
     self->fields= NULL;
@@ -456,7 +469,6 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     MARIADB_FREE_MEM(self->statement);
     MARIADB_FREE_MEM(self->value);
     MARIADB_FREE_MEM(self->params);
-
 }
 /* }}} */
 
@@ -614,6 +626,30 @@ static Py_ssize_t data_count(PyObject *data)
   return 0;
 }
 
+static int Mrdb_execute_direct(MrdbCursor *self)
+{
+   int rc;
+
+   MARIADB_BEGIN_ALLOW_THREADS(self);
+   /* execute_direct was implemented together with bulk operations, so we need
+      to check if MARIADB_CLIENT_STMT_BULK_OPERATIONS is set in extended server
+      capabilities */
+   if (!(self->connection->extended_server_capabilities &
+        (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32)))
+   {
+       if (!(rc= mysql_stmt_prepare(self->stmt, self->parser->statement.str, 
+                        (unsigned long)self->parser->statement.length)))
+       {
+           rc= mysql_stmt_execute(self->stmt);
+       }
+   } else {
+       rc= mariadb_stmt_execute_direct(self->stmt, self->parser->statement.str, 
+                                       self->parser->statement.length);
+   }
+   MARIADB_END_ALLOW_THREADS(self);
+   return rc;
+}
+
 /* {{{ MrdbCursor_execute
    PEP-249 execute() method
  */
@@ -671,18 +707,20 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     {
         uint8_t do_prepare= 1;
 
-        if (self->is_prepared && self->statement)
+        if ((self->is_prepared && self->statement))
             do_prepare= 0;
 
         /* if cursor type is not prepared, we need to clear the cursor first */
         if (!self->is_prepared && self->statement)
         {
-            uint8_t new_stmt= 1;
             if (!strcmp(self->statement, statement))
-              new_stmt= 0;
-            MrdbCursor_clear(self, new_stmt);
-            MrdbParser_end(self->parser);
-            self->parser= NULL;
+            {
+                do_prepare= 0;
+            } else {
+                MrdbCursor_clear(self, 1);
+                MrdbParser_end(self->parser);
+                self->parser= NULL;
+            }
         }
         self->is_text= 0;
 
@@ -729,23 +767,8 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
             mysql_stmt_bind_param(self->stmt, self->params);
 
-            MARIADB_BEGIN_ALLOW_THREADS(self);
-            /* execute_direct was implemented together with bulk operations, so we need
-               to check if MARIADB_CLIENT_STMT_BULK_OPERATIONS is set in extended server
-               capabilities */
-            if ((self->connection->extended_server_capabilities &
-                 (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32)))
-            {
-                rc= mysql_stmt_prepare(self->stmt, self->parser->statement.str, 
-                        (unsigned long)self->parser->statement.length);
-                if (!rc)
-                    rc= mysql_stmt_execute(self->stmt);
-            }
-            else
-                rc= mariadb_stmt_execute_direct(self->stmt, self->parser->statement.str, 
-                        self->parser->statement.length);
-            MARIADB_END_ALLOW_THREADS(self);
-
+            rc= Mrdb_execute_direct(self);
+ 
             if (rc)
             {
                 /* in case statement is not supported via binary protocol, we try
@@ -1355,11 +1378,7 @@ MrdbCursor_executemany(MrdbCursor *self,
 
         mysql_stmt_bind_param(self->stmt, self->params);
 
-        MARIADB_BEGIN_ALLOW_THREADS(self);
-        rc= mariadb_stmt_execute_direct(self->stmt, self->parser->statement.str,
-                (unsigned long)self->parser->statement.length);
-        MARIADB_END_ALLOW_THREADS(self);
-        if (rc)
+        if (Mrdb_execute_direct(self))
         {
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
             goto error;

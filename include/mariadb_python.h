@@ -17,6 +17,7 @@
    51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 ******************************************************************************/
 #define PY_SSIZE_T_CLEAN
+
 #include "Python.h"
 #include "bytesobject.h"
 #include "structmember.h"
@@ -28,7 +29,6 @@
 #include <mysqld_error.h>
 #include <time.h>
 #include <docs/common.h>
-
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -61,6 +61,8 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 int clock_gettime(int dummy, struct timespec *ct);
 #define CLOCK_MONOTONIC_RAW 1
 #endif
+
+int codecs_datetime_init();
 
 
 #define REQUIRED_CC_VERSION 30103

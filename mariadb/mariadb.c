@@ -106,6 +106,17 @@ mariadb_module= {
     Mariadb_Methods
 };
 
+static int mariadb_datetime_init()
+{
+    PyDateTime_IMPORT;
+
+    if (!PyDateTimeAPI) {
+        PyErr_SetString(PyExc_ImportError, "DateTimeAPI initialization failed");
+        return 1;
+    }
+    return 0;
+}
+
 static void mariadb_add_exception(PyObject *module,
         PyObject **exception,
         const char *exception_name,
@@ -131,6 +142,13 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 #ifdef PY_MARIADB_PRE_RELEASE_SEGMENT
     pre_release= PY_MARIADB_PRE_RELEASE_SEGMENT;
 #endif
+
+    /* Initialite DateTimeAPI */
+    if (mariadb_datetime_init() ||
+        codecs_datetime_init())
+    {
+        goto error;
+    }
 
     Py_TYPE(&MrdbConnection_Type) = &PyType_Type;
     if (PyType_Ready(&MrdbConnection_Type) == -1)
@@ -304,11 +322,6 @@ Mariadb_date_from_ticks(PyObject *module, PyObject *args)
     struct tm *ts;
     time_t epoch;
 
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
-
     if (!PyArg_ParseTuple(args, "O", &o))
     {
         return NULL;
@@ -328,11 +341,6 @@ Mariadb_time_from_ticks(PyObject *module, PyObject *args)
     time_t epoch;
     PyObject *o, *Time= NULL;
 
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
-
     if (!PyArg_ParseTuple(args, "O", &o))
     {
         return NULL;
@@ -351,11 +359,6 @@ Mariadb_timestamp_from_ticks(PyObject *module, PyObject *args)
     PyObject *o,*Timestamp;
     struct tm *ts;
     time_t epoch;
-
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
 
     if (!PyArg_ParseTuple(args, "O", &o))
     {
@@ -377,11 +380,6 @@ Mariadb_date(PyObject *self, PyObject *args)
     PyObject *date= NULL;
     int32_t year=0, month=0, day= 0;
 
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
-
     if (!PyArg_ParseTuple(args, "iii", &year, &month, &day))
     {
         return NULL;
@@ -397,11 +395,6 @@ Mariadb_timestamp(PyObject *self, PyObject *args)
     PyObject *timestamp= NULL;
     int32_t year=0, month=0, day= 0;
     int32_t hour=0, min=0, sec= 0;
-
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
 
     if (!PyArg_ParseTuple(args, "iiiiii", &year, &month, &day, 
                           &hour, &min, &sec))
@@ -419,10 +412,6 @@ Mariadb_time(PyObject *self, PyObject *args)
 {
     PyObject *time= NULL;
     int32_t hour=0, min=0, sec= 0;
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
 
     if (!PyArg_ParseTuple(args, "iii", &hour, &min, &sec))
     {

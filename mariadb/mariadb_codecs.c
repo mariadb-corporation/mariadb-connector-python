@@ -28,6 +28,18 @@
 #define IS_DECIMAL_TYPE(type) \
 ((type) == MYSQL_TYPE_NEWDECIMAL || (type) == MYSQL_TYPE_DOUBLE || (type) == MYSQL_TYPE_FLOAT)
 
+
+int codecs_datetime_init()
+{
+    PyDateTime_IMPORT;
+
+    if (!PyDateTimeAPI) {
+        PyErr_SetString(PyExc_ImportError, "DateTimeAPI initialization failed");
+        return 1;
+    }
+    return 0;
+}
+
 /*
    converts a Python date/time/datetime object to MYSQL_TIME
  */
@@ -36,10 +48,6 @@ mariadb_pydate_to_tm(enum enum_field_types type,
                      PyObject *obj,
                      MYSQL_TIME *tm)
 {
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
     memset(tm, 0, sizeof(MYSQL_TIME));
     if (type == MYSQL_TYPE_TIME ||
             type == MYSQL_TYPE_DATETIME)
@@ -387,11 +395,6 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
     MYSQL_TIME tm;
     unsigned long *length;
 
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
-
     if (!data)
     {
         Py_INCREF(Py_None);
@@ -540,10 +543,6 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     MrdbCursor *self= (MrdbCursor *)data;
 
     MARIADB_UNBLOCK_THREADS(self);
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
 
     if (!row)
     {
@@ -771,11 +770,6 @@ end:
 static uint8_t 
 mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
 {
-    if (!PyDateTimeAPI)
-    {
-        PyDateTime_IMPORT;
-    }
-
     if (obj == NULL)
     {
         paraminfo->type= MYSQL_TYPE_NULL;
@@ -880,14 +874,14 @@ mariadb_get_parameter(MrdbCursor *self,
             mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
                     "Can't access data at row %d, column %d",
                      row_nr + 1, column_nr + 1);
-            return 1;
+            goto end;
         }
 
         if (!(row= ListOrTuple_GetItem(self->data, row_nr)))
         {
             mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
                     "Can't access row number %d", row_nr + 1);
-            return 1;
+            goto end;
         }
     }
     else
@@ -1191,7 +1185,7 @@ mariadb_check_execute_parameters(MrdbCursor *self,
     {
         mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                 "Invalid number of parameters");
-        return 1;
+        goto error;
     }
 
     if (!self->params &&
