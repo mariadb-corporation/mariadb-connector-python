@@ -24,6 +24,7 @@ else
     .travis/build/build.sh
     docker build -t build:latest --label build .travis/build/
   fi
+fi
 
 export ENTRYPOINT=$PROJ_PATH/.travis/entrypoint
 
