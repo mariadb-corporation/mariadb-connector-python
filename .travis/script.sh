@@ -7,13 +7,26 @@ set -e
 # test different type of configuration
 ###################################################################################################################
 mysql=( mysql --protocol=tcp -ubob -h127.0.0.1 --port=3305 )
+if [ -n "$SKYSQL" ] ; then
 
-if [ "$DB" = "build" ] ; then
-  .travis/build/build.sh
-  docker build -t build:latest --label build .travis/build/
-fi
+  if [ -z "$SKYSQL_TEST_HOST" ] ; then
+    echo "No SkySQL configuration found !"
+    exit 1
+  fi
+
+  export TEST_USER=$SKYSQL_TEST_USER
+  export TEST_HOST=$SKYSQL_TEST_HOST
+  export TEST_PASSWORD=$SKYSQL_TEST_PASSWORD
+  export TEST_PORT=$SKYSQL_TEST_PORT
+  export TEST_DATABASE=$SKYSQL_TEST_DATABASE
+else
+  if [ "$DB" = "build" ] ; then
+    .travis/build/build.sh
+    docker build -t build:latest --label build .travis/build/
+  fi
 
 export ENTRYPOINT=$PROJ_PATH/.travis/entrypoint
+
 if [ -n "$MAXSCALE_VERSION" ] ; then
   ###################################################################################################################
   # launch Maxscale with one server

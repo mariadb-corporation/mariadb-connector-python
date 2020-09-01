@@ -48,6 +48,7 @@ env:
 
 matrix:
   include:
+  - env: SKYSQL=true PYTHON_VER="3.8.0"
   - env: DB=mariadb:10.4 PYTHON_VER="3.6.0"
   - env: DB=mariadb:10.4 PYTHON_VER="3.8.0"
   - env: DB=mariadb:10.4 PYTHON_VER="pypy3.6-7.3.1"
