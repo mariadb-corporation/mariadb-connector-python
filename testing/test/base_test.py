@@ -5,6 +5,10 @@ import mariadb
 
 from .conf_test import conf
 
+def is_skysql():
+   if conf()["host"][-13:] == "db.skysql.net":
+       return True
+   return False
 
 def create_connection(additional_conf=None):
     default_conf = conf()

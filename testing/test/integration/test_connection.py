@@ -6,7 +6,7 @@ import unittest
 
 import mariadb
 
-from test.base_test import create_connection
+from test.base_test import create_connection, is_skysql
 from test.conf_test import conf
 import platform
 
@@ -36,10 +36,12 @@ class TestConnection(unittest.TestCase):
         f.write("[client]\n")
         f.write("host=%s\n" % default_conf["host"])
         f.write("port=%i\n" % default_conf["port"])
+        f.write("user=%s\n" % default_conf["user"])
+        f.write("password=%s\n" % default_conf["password"])
         f.write("database=%s\n" % default_conf["database"])
         f.close()
 
-        new_conn = mariadb.connect(user=default_conf["user"], default_file="./client.cnf")
+        new_conn = mariadb.connect(user=default_conf["user"], ssl=True, default_file="./client.cnf")
         self.assertEqual(new_conn.database, default_conf["database"])
         del new_conn
         os.remove("client.cnf")
@@ -54,7 +56,7 @@ class TestConnection(unittest.TestCase):
 
     def test_local_infile(self):
         default_conf= conf()
-        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], local_infile=False, port=default_conf["port"], host=default_conf["host"])
+        new_conn = mariadb.connect(**default_conf, local_infile=False)
         cursor=new_conn.cursor()
         cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
         try:
@@ -66,7 +68,8 @@ class TestConnection(unittest.TestCase):
 
     def test_init_command(self):
         default_conf= conf()
-        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], init_command="SET @a:=1", port=default_conf["port"], host=default_conf["host"])
+        new_conn = mariadb.connect(**default_conf, init_command="SET @a:=1")
+#, port=default_conf["port"], host=default_conf["host"], password=default_conf["password"])
         cursor=new_conn.cursor()
         cursor.execute("SELECT @a")
         row=cursor.fetchone()
@@ -76,7 +79,7 @@ class TestConnection(unittest.TestCase):
 
     def test_compress(self):
         default_conf= conf()
-        new_conn = mariadb.connect(user=default_conf["user"], database=default_conf["database"], compress=True, port=default_conf["port"], host=default_conf["host"])
+        new_conn = mariadb.connect(**default_conf, compress=True)
         cursor=new_conn.cursor()
         cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
         row=cursor.fetchone()
@@ -123,6 +126,8 @@ class TestConnection(unittest.TestCase):
         self.assertNotEqual(0, conn.connection_id)
 
     def test_ed25519(self):
+        if is_skysql():
+            self.skipTest("Test fail on SkySQL")
         default_conf = conf()
         if os.environ.get("MAXSCALE_VERSION"):
             self.skipTest("MAXSCALE doesn't support ed25519 for now")
@@ -179,14 +184,9 @@ class TestConnection(unittest.TestCase):
 
     def test_conpy101(self):
         default_conf = conf()
-        c1 = mariadb.connect(user=default_conf["user"], database=default_conf["database"],
-             port=default_conf["port"], host=default_conf["host"])
+        c1 = mariadb.connect(**default_conf)
         self.assertEqual(c1.autocommit, False)
-        c1 = mariadb.connect(user=default_conf["user"], database=default_conf["database"],
-             port=default_conf["port"], host=default_conf["host"], autocommit=False)
-        self.assertEqual(c1.autocommit, False)
-        c1 = mariadb.connect(user=default_conf["user"], database=default_conf["database"],
-             port=default_conf["port"], host=default_conf["host"], autocommit=True)
+        c1 = mariadb.connect(**default_conf, autocommit=True)
         self.assertEqual(c1.autocommit, True)
 
 if __name__ == '__main__':

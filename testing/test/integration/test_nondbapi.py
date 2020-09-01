@@ -6,7 +6,7 @@ import unittest
 import os
 import mariadb
 
-from test.base_test import create_connection
+from test.base_test import create_connection, is_skysql
 from test.conf_test import conf
 
 
@@ -40,6 +40,8 @@ class CursorTest(unittest.TestCase):
         del new_conn
 
     def test_change_user(self):
+        if is_skysql():
+            self.skipTest("SkySQL failure")
         if self.connection.server_version < 100103:
             self.skipTest("CREATE OR REPLACE USER not supported")
         if os.environ.get("MAXSCALE_VERSION"):
@@ -109,7 +111,7 @@ class CursorTest(unittest.TestCase):
     def test_escape(self):
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_escape (a varchar(100))")
-        str = 'This is a \ and a "'
+        str = 'This is a \ and a \"'
         cmd = "INSERT INTO test_escape VALUES('%s')" % str
 
         try:
