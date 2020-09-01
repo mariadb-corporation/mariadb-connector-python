@@ -37,7 +37,8 @@ class TestConnection(unittest.TestCase):
         f.write("host=%s\n" % default_conf["host"])
         f.write("port=%i\n" % default_conf["port"])
         f.write("user=%s\n" % default_conf["user"])
-        f.write("password=%s\n" % default_conf["password"])
+        if "password" in default_conf:
+            f.write("password=%s\n" % default_conf["password"])
         f.write("database=%s\n" % default_conf["database"])
         f.close()
 
