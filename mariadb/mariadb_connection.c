@@ -316,7 +316,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     PyObject *autocommit_obj= NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiibbssssssssssipisibssssO:connect",
+                "|sssssisiiibbssssssssssibisibssssO:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
