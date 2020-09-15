@@ -2,7 +2,7 @@
 
 import subprocess
 from distutils.version import StrictVersion
-import sys
+import sys, os
 # from packaging import version
 
 
@@ -26,7 +26,12 @@ def mariadb_config(config, option):
             data = []
         if rc / 256 > 1:
             raise EnvironmentError(
-                "mariadb_config not found.\nPlease make sure, that MariaDB Connector/C is installed on your system, edit the configuration file 'site.cfg' and set the 'mariadb_config'\noption, which should point to the mariadb_config utility.")
+                "mariadb_config not found.\n\nPlease make sure, that MariaDB Connector/C is installed on your system.\n"
+                "Either set the environment variable MARIADB_CONFIG or edit the configuration\n"
+                "file 'site.cfg' and set the 'mariadb_config option, which should point\n"
+                "to the mariadb_config utility.\n"
+                "The MariaDB Download website at <https://downloads.mariadb.com/Connectors/c/>\n"
+                "provides latest stable releease of Connector/C.")
     return data
 
 
@@ -42,7 +47,10 @@ def get_config(options):
     static = options["link_static"]
 
     try:
-        config_prg = options["mariadb_config"]
+        try:
+            config_prg= os.environ["MARIADB_CONFIG"]
+        except KeyError:
+            config_prg = options["mariadb_config"]
         subprocess.call([config_prg, "--version"])
     except FileNotFoundError:
         # using default from path
