@@ -1,1 +1,1 @@
-__all__ = ["CLIENT", "INDICATOR", "CURSOR"]
+__all__ = ["CLIENT", "INDICATOR", "CURSOR", "FIELD_TYPE"]
