@@ -24,6 +24,8 @@
 #include <structmember.h>
 #include <datetime.h>
 
+extern int codecs_datetime_init(void);
+
 PyObject *Mrdb_Pickle= NULL;
 PyObject *cnx_pool= NULL;
 PyObject *decimal_module= NULL,
@@ -106,7 +108,7 @@ mariadb_module= {
     Mariadb_Methods
 };
 
-static int mariadb_datetime_init()
+static int mariadb_datetime_init(void)
 {
     PyDateTime_IMPORT;
 

@@ -62,9 +62,6 @@ int clock_gettime(int dummy, struct timespec *ct);
 #define CLOCK_MONOTONIC_RAW 1
 #endif
 
-int codecs_datetime_init();
-
-
 #define REQUIRED_CC_VERSION 30103
 
 #if MARIADB_PACKAGE_VERSION_ID < REQUIRED_CC_VERSION
