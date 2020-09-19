@@ -29,7 +29,7 @@
 ((type) == MYSQL_TYPE_NEWDECIMAL || (type) == MYSQL_TYPE_DOUBLE || (type) == MYSQL_TYPE_FLOAT)
 
 
-int codecs_datetime_init()
+int codecs_datetime_init(void)
 {
     PyDateTime_IMPORT;
 
@@ -961,6 +961,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
 
     /* Assume unsigned */
     param->is_unsigned= 1;
+    paramvalue.indicator= 0;
 
     if (!self->array_size)
     {
