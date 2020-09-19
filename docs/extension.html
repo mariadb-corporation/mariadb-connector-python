@@ -1,18 +1,20 @@
 
-<!DOCTYPE html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Extensions to the DB API &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
     <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-    <script src="_static/jquery.js"></script>
-    <script src="_static/underscore.js"></script>
-    <script src="_static/doctools.js"></script>
-    <script src="_static/language_data.js"></script>
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -51,18 +53,18 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
 </pre></div>
 </div>
-<div class="section" id="cursor-types">
-<h3>Cursor types<a class="headerlink" href="#cursor-types" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="cursor">
+<h3>Cursor<a class="headerlink" href="#cursor" title="Permalink to this headline">¶</a></h3>
 <p>MariaDB Connector/Python defines the following cursor types for server side cursors:</p>
 <dl class="data">
 <dt id="mariadb.constants.CURSOR.NONE">
-<code class="sig-prename descclassname">mariadb.constants.CURSOR.</code><code class="sig-name descname">NONE</code><a class="headerlink" href="#mariadb.constants.CURSOR.NONE" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">mariadb.constants.CURSOR.</code><code class="descname">NONE</code><a class="headerlink" href="#mariadb.constants.CURSOR.NONE" title="Permalink to this definition">¶</a></dt>
 <dd><p>Don’t use a server side cursor (default)</p>
 </dd></dl>
 
 <dl class="data">
 <dt id="mariadb.constants.CURSOR.READ_ONLY">
-<code class="sig-prename descclassname">mariadb.constants.CURSOR.</code><code class="sig-name descname">READ_ONLY</code><a class="headerlink" href="#mariadb.constants.CURSOR.READ_ONLY" title="Permalink to this definition">¶</a></dt>
+<code class="descclassname">mariadb.constants.CURSOR.</code><code class="descname">READ_ONLY</code><a class="headerlink" href="#mariadb.constants.CURSOR.READ_ONLY" title="Permalink to this definition">¶</a></dt>
 <dd><p>Use a read-only server side cursor.</p>
 </dd></dl>
 
@@ -71,26 +73,26 @@
 <h3>Indicators<a class="headerlink" href="#indicators" title="Permalink to this headline">¶</a></h3>
 <p>Indicators hold supplementary information when you are modify (insert/update/delete) data with cursors <cite>executemany</cite> method. There are several distinct uses for indicator variables:</p>
 <dl class="data">
-<dt id="INDICATOR.NULL">
-<code class="sig-prename descclassname">INDICATOR.</code><code class="sig-name descname">NULL</code><a class="headerlink" href="#INDICATOR.NULL" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.INDICATOR.NULL">
+<code class="descclassname">mariadb.constants.INDICATOR.</code><code class="descname">NULL</code><a class="headerlink" href="#mariadb.constants.INDICATOR.NULL" title="Permalink to this definition">¶</a></dt>
 <dd><p>A null value will be inserted or updated</p>
 </dd></dl>
 
 <dl class="data">
-<dt id="INDICATOR.DEFAULT">
-<code class="sig-prename descclassname">INDICATOR.</code><code class="sig-name descname">DEFAULT</code><a class="headerlink" href="#INDICATOR.DEFAULT" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.INDICATOR.DEFAULT">
+<code class="descclassname">mariadb.constants.INDICATOR.</code><code class="descname">DEFAULT</code><a class="headerlink" href="#mariadb.constants.INDICATOR.DEFAULT" title="Permalink to this definition">¶</a></dt>
 <dd><p>The default value of a column will be inserted or updated</p>
 </dd></dl>
 
 <dl class="data">
-<dt id="INDICATOR.IGNORE">
-<code class="sig-prename descclassname">INDICATOR.</code><code class="sig-name descname">IGNORE</code><a class="headerlink" href="#INDICATOR.IGNORE" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.INDICATOR.IGNORE">
+<code class="descclassname">mariadb.constants.INDICATOR.</code><code class="descname">IGNORE</code><a class="headerlink" href="#mariadb.constants.INDICATOR.IGNORE" title="Permalink to this definition">¶</a></dt>
 <dd><p>Don’t update column at all</p>
 </dd></dl>
 
 <dl class="data">
-<dt id="INDICATOR.IGNORE_ROW">
-<code class="sig-prename descclassname">INDICATOR.</code><code class="sig-name descname">IGNORE_ROW</code><a class="headerlink" href="#INDICATOR.IGNORE_ROW" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.INDICATOR.IGNORE_ROW">
+<code class="descclassname">mariadb.constants.INDICATOR.</code><code class="descname">IGNORE_ROW</code><a class="headerlink" href="#mariadb.constants.INDICATOR.IGNORE_ROW" title="Permalink to this definition">¶</a></dt>
 <dd><p>Don’t update or delete row</p>
 </dd></dl>
 
@@ -100,47 +102,194 @@
 <p>These flags are used when establishing a connection or to check if the database is
 capabable of a certain feature.</p>
 <dl class="data">
-<dt id="CLIENT.MYSQL">
-<code class="sig-prename descclassname">CLIENT.</code><code class="sig-name descname">MYSQL</code><a class="headerlink" href="#CLIENT.MYSQL" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.CLIENT.MYSQL">
+<code class="descclassname">mariadb.constants.CLIENT.</code><code class="descname">MYSQL</code><a class="headerlink" href="#mariadb.constants.CLIENT.MYSQL" title="Permalink to this definition">¶</a></dt>
 <dd><p>not in use/supported by MariaDB Server</p>
 </dd></dl>
 
 <dl class="data">
-<dt id="CLIENT.FOUND_ROWS">
-<code class="sig-prename descclassname">CLIENT.</code><code class="sig-name descname">FOUND_ROWS</code><a class="headerlink" href="#CLIENT.FOUND_ROWS" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.CLIENT.FOUND_ROWS">
+<code class="descclassname">mariadb.constants.CLIENT.</code><code class="descname">FOUND_ROWS</code><a class="headerlink" href="#mariadb.constants.CLIENT.FOUND_ROWS" title="Permalink to this definition">¶</a></dt>
 <dd><p>return the number of matched rows instead of number of changed rows</p>
 </dd></dl>
 
 <dl class="data">
-<dt id="CLIENT.NO_SCHEMA">
-<code class="sig-prename descclassname">CLIENT.</code><code class="sig-name descname">NO_SCHEMA</code><a class="headerlink" href="#CLIENT.NO_SCHEMA" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.CLIENT.NO_SCHEMA">
+<code class="descclassname">mariadb.constants.CLIENT.</code><code class="descname">NO_SCHEMA</code><a class="headerlink" href="#mariadb.constants.CLIENT.NO_SCHEMA" title="Permalink to this definition">¶</a></dt>
 <dd><p>forbids the use of database.tablename.columnname syntax and forces SQL parser
 to generate an error.</p>
 </dd></dl>
 
 <dl class="data">
-<dt id="CLIENT.LOCAL_FILES">
-<code class="sig-prename descclassname">CLIENT.</code><code class="sig-name descname">LOCAL_FILES</code><a class="headerlink" href="#CLIENT.LOCAL_FILES" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.CLIENT.LOCAL_FILES">
+<code class="descclassname">mariadb.constants.CLIENT.</code><code class="descname">LOCAL_FILES</code><a class="headerlink" href="#mariadb.constants.CLIENT.LOCAL_FILES" title="Permalink to this definition">¶</a></dt>
 <dd><p>Allows LOAD DATA LOCAL INFILE statements (if not disabled on server).</p>
 </dd></dl>
 
 <dl class="data">
-<dt id="CLIENT_COMPRESS">
-<code class="sig-name descname">CLIENT_COMPRESS</code><a class="headerlink" href="#CLIENT_COMPRESS" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.CLIENT.COMPRESS">
+<code class="descclassname">mariadb.constants.CLIENT.</code><code class="descname">COMPRESS</code><a class="headerlink" href="#mariadb.constants.CLIENT.COMPRESS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Use compressed protocol</p>
 </dd></dl>
 
 <dl class="data">
-<dt id="CLIENT_IGNORE_SPACE">
-<code class="sig-name descname">CLIENT_IGNORE_SPACE</code><a class="headerlink" href="#CLIENT_IGNORE_SPACE" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.CLIENT.IGNORE_SPACE">
+<code class="descclassname">mariadb.constants.CLIENT.</code><code class="descname">IGNORE_SPACE</code><a class="headerlink" href="#mariadb.constants.CLIENT.IGNORE_SPACE" title="Permalink to this definition">¶</a></dt>
 <dd><p>Allows spaces after function names. This implies, that all function names will
 become reserved words.</p>
 </dd></dl>
 
 <dl class="data">
-<dt id="CLIENT_MULTI_RESULZS">
-<code class="sig-name descname">CLIENT_MULTI_RESULZS</code><a class="headerlink" href="#CLIENT_MULTI_RESULZS" title="Permalink to this definition">¶</a></dt>
+<dt id="mariadb.constants.CLIENT.MULTI_RESULTS">
+<code class="descclassname">mariadb.constants.CLIENT.</code><code class="descname">MULTI_RESULTS</code><a class="headerlink" href="#mariadb.constants.CLIENT.MULTI_RESULTS" title="Permalink to this definition">¶</a></dt>
 <dd><p>Indicates that the client is able to handle multiple result sets.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="field-types">
+<h3>Field types<a class="headerlink" href="#field-types" title="Permalink to this headline">¶</a></h3>
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.DECIMAL">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">DECIMAL</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.DECIMAL" title="Permalink to this definition">¶</a></dt>
+<dd><p>Old decimal format: Not in use anymore, instead of use NEWDECIMAL.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.TINY">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">TINY</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.TINY" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type TINYINT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.SHORT">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">SHORT</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.SHORT" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type SMALLINT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.LONG">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">LONG</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.LONG" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type INT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.FLOAT">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">FLOAT</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.FLOAT" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type FLOAT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.DOUBLE">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">DOUBLE</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.DOUBLE" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type DOUBLE</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.NULL">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">NULL</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.NULL" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type NULL</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.TIMESTAMP">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">TIMESTAMP</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.TIMESTAMP" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type TIMESTAMP</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.LONGLONG">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">LONGLONG</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.LONGLONG" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type BIGINT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.INT24">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">INT24</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.INT24" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type MEDIUMINT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.DATETIME">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">DATETIME</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.DATETIME" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type DATETIME</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.YEAR">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">YEAR</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.YEAR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type YEAR</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.NEWDATE">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">NEWDATE</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.NEWDATE" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type DATE</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.VARCHAR">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">VARCHAR</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.VARCHAR" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type VARCHAR</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.BIT">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">BIT</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.BIT" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type BIT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.JSON">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">JSON</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.JSON" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type JSON</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.NEWDECIMAL">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">NEWDECIMAL</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.NEWDECIMAL" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type DECIMAL</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.ENUM">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">ENUM</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.ENUM" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type ENUM</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.SET">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">SET</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.SET" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type SET</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.TINY_BLOB">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">TINY_BLOB</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.TINY_BLOB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type TINYBLOB or TINYTEXT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.MEDIUM_BLOB">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">MEDIUM_BLOB</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.MEDIUM_BLOB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type MEDIUMBLOB or MEDIUMTEXT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.LONG_BLOB">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">LONG_BLOB</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.LONG_BLOB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type LONGBLOB or LONGTEXT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.BLOB">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">BLOB</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.BLOB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type BLOB or TEXT</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="mariadb.constants.FIELD_TYPE.GEOMETRY">
+<code class="descclassname">mariadb.constants.FIELD_TYPE.</code><code class="descname">GEOMETRY</code><a class="headerlink" href="#mariadb.constants.FIELD_TYPE.GEOMETRY" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents SQL type GEOMETRY</p>
 </dd></dl>
 
 </div>
@@ -157,9 +306,10 @@ become reserved words.</p>
   <ul>
 <li><a class="reference internal" href="#">Extensions to the DB API</a><ul>
 <li><a class="reference internal" href="#constants">Constants</a><ul>
-<li><a class="reference internal" href="#cursor-types">Cursor types</a></li>
+<li><a class="reference internal" href="#cursor">Cursor</a></li>
 <li><a class="reference internal" href="#indicators">Indicators</a></li>
 <li><a class="reference internal" href="#capability-flags">Capability flags</a></li>
+<li><a class="reference internal" href="#field-types">Field types</a></li>
 </ul>
 </li>
 </ul>
@@ -180,15 +330,17 @@ become reserved words.</p>
     </ul>
    </div>
 <div id="searchbox" style="display: none" role="search">
-  <h3 id="searchlabel">Quick search</h3>
+  <h3>Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" />
       <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -213,7 +365,7 @@ become reserved words.</p>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.4.3.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.8.5.
     </div>
   </body>
 </html>

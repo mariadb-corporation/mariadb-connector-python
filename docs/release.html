@@ -1,18 +1,20 @@
 
-<!DOCTYPE html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Release history &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
     <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-    <script src="_static/jquery.js"></script>
-    <script src="_static/underscore.js"></script>
-    <script src="_static/doctools.js"></script>
-    <script src="_static/language_data.js"></script>
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -46,17 +48,18 @@
 <div class="section" id="mariadb-connector-python-1-0-0">
 <h3>MariaDB Connector/Python 1.0.0<a class="headerlink" href="#mariadb-connector-python-1-0-0" title="Permalink to this headline">¶</a></h3>
 <p>Release date: June 24th 2020</p>
-<dl class="simple">
-<dt>Notable Updates:</dt><dd><ul class="simple">
-<li><p>CONPY-81: Fixed crash when switching between text and binary protocol with same cursor</p></li>
-<li><p>CONPY-80: Parameters in set_config() method of ConnectionPool class have to be checked against the list of DSN keywords</p></li>
-<li><p>CONPY-79: When inserting NULL values with executemany() method on a server which doesn’t support BULK statements NULL values weren’t inserted correctly.</p></li>
-<li><p>CONPY-78: Since MaxScale doesn’t support bulk operations yet, we have to check servers extended capability flag to determine if this feature is supported or not.</p></li>
-<li><p>CONPY-76: Added aliases username, passwd and db to connection keywords.</p></li>
-<li><p>CONPY-70: set_config() method needs to check the passed parameter and raise an exception if the parameter type is not a dictionary.</p></li>
-<li><p>CONPY-72: When deallocating the connection pool class, we need to check beside pool_size if the array containing the connections is valid.</p></li>
-<li><p>Fixed bug when inserting negative integer values with cursor.execute() method</p></li>
-<li><p>CONPY-69: Set default character set (utf8mb4) with authentication packet</p></li>
+<dl class="docutils">
+<dt>Notable Updates:</dt>
+<dd><ul class="first last simple">
+<li>CONPY-81: Fixed crash when switching between text and binary protocol with same cursor</li>
+<li>CONPY-80: Parameters in set_config() method of ConnectionPool class have to be checked against the list of DSN keywords</li>
+<li>CONPY-79: When inserting NULL values with executemany() method on a server which doesn’t support BULK statements NULL values weren’t inserted correctly.</li>
+<li>CONPY-78: Since MaxScale doesn’t support bulk operations yet, we have to check servers extended capability flag to determine if this feature is supported or not.</li>
+<li>CONPY-76: Added aliases username, passwd and db to connection keywords.</li>
+<li>CONPY-70: set_config() method needs to check the passed parameter and raise an exception if the parameter type is not a dictionary.</li>
+<li>CONPY-72: When deallocating the connection pool class, we need to check beside pool_size if the array containing the connections is valid.</li>
+<li>Fixed bug when inserting negative integer values with cursor.execute() method</li>
+<li>CONPY-69: Set default character set (utf8mb4) with authentication packet</li>
 </ul>
 </dd>
 </dl>
@@ -92,15 +95,17 @@
     </ul>
    </div>
 <div id="searchbox" style="display: none" role="search">
-  <h3 id="searchlabel">Quick search</h3>
+  <h3>Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" />
       <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script type="text/javascript">$('#searchbox').show(0);</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -122,7 +127,7 @@
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.4.3.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.8.5.
     </div>
   </body>
 </html>
