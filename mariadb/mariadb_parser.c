@@ -131,6 +131,7 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
 
     while (a <= end)
     {
+cont:
         /* check literals */
         for (i=0; i < 3; i++)
         {
@@ -138,7 +139,7 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
             {
                 p->in_literal[i]= !(p->in_literal[i]);
                 a++;
-                continue;
+                goto cont;
             }
         }
         /* nothing to do, if we are inside a comment or literal */
