@@ -1111,11 +1111,8 @@ mariadb_get_parameter_info(MrdbCursor *self,
         else if ((bits <= 32 && param->is_unsigned) || bits < 32) {
             param->buffer_type= MYSQL_TYPE_LONG;
         }
-        else if ((bits <= 64 && param->is_unsigned) || bits < 64) {
-            param->buffer_type= MYSQL_TYPE_LONGLONG;
-        }
         else {
-            param->buffer_type= MYSQL_TYPE_VAR_STRING;
+            param->buffer_type= MYSQL_TYPE_LONGLONG;
         }
     }
     return 0;
