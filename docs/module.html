@@ -89,13 +89,17 @@ be used</dd>
 <li><strong>ssl_crlpath</strong> (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.</li>
 <li><strong>ssl_verify_cert</strong> (bool): Enables server certificate verification.</li>
 <li><strong>ssl</strong> (bool): Always use a secure TLS connection</li>
+<li><strong>autocommit</strong> (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).</li>
 </ul>
 <div class="versionadded">
 <p><span class="versionmodified">New in version 1.0.1.</span></p>
 </div>
 <ul class="simple">
-<li><strong>autocommit</strong> (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).</li>
+<li><strong>converter</strong> (dict): Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions.</li>
 </ul>
+<div class="versionadded">
+<p><span class="versionmodified">New in version 1.0.3.</span></p>
+</div>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />

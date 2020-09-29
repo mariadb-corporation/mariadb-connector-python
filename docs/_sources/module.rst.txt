@@ -20,10 +20,10 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
 
    The supported connection keywords are:
 
-   - **user** (string): The username used to authenticate with the database server, defaults to current user
-   - **pasword** (string): The password of the given user
+   - **user**, **username** (string): The username used to authenticate with the database server, defaults to current user
+   - **password**, **passwd** (string): The password of the given user
    - **host** (string): The host name or IP address of the database server
-   - **database** (string): The database (schema) name to used when connecting with the database server
+   - **database**, **db** (string): The database (schema) name to used when connecting with the database server
    - **unix_socket** (string): The location of the unix socket file to use instead of using an IP port to connect.  If socket authentication is enabled, this can also be used in place of a password.
    - **port** (integer): The port number of the database server. If not specified the default value (=3306) will be used.
    - **connect_timeout** (integer): The connect timeout in seconds
@@ -35,24 +35,26 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
        be used
    - **init_command** (string): Specifies one or more commands to execute when connecting and reconnecting to the database server.
    - **default_file** (string): Read options from the specified option file. If the file is an empty string, default configuration file(s) will be used
-   - **default_group** (string): -- Read options from the specified group
+   - **default_group** (string): Read options from the specified group
    - **ssl_key** (string): Defines a path to a private key file to use for TLS. This option
        requires that you use the absolute path, not a relative path. The specified key must be in PEM format
    - **ssl_cert** (string): Defines a path to the X509 certificate file to use for TLS.  This option requires that you use the absolute path, not a relative path. The X609 certificate must be in PEM format.
    - **ssl_ca** (string): Defines a path to a PEM file that should contain one or more X509 certificates for trusted Certificate Authorities (CAs) to use for TLS.  This option requires that you use the absolute path, not a relative path.
    - **ssl_capath** (string):  Defines a path to a directory that contains one or more PEM files that contains one X509 certificate for a trusted Certificate Authority (CA)
    - **ssl_cipher** (string):  Defines a list of permitted cipher suites to use for TLS
-   - **ssl_crl_path** (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.
-   - **ssl_verify_server_cert** (bool): Enables server certificate verification.
-   - **ssl_enforce** (bool): Always use a secure TLS connection
+   - **ssl_crlpath** (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.
+   - **ssl_verify_cert** (bool): Enables server certificate verification.
+   - **ssl** (bool): Always use a secure TLS connection
+   - **autocommit** (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).
+   .. versionadded:: 1.0.1
+   - **converter** (dict): Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions.
+   .. versionadded:: 1.0.3
 
 
    :return: Returns a connection or raises an error if the connection between client and server couldn't be established.
 
    :rtype: mariadb.connection object
 
-
-   :Example:
 
    The connection parameters have to be provided as a set of keyword arguments::
 

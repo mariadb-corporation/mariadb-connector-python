@@ -31,7 +31,7 @@ char *dsn_keys[]= {
     "client_flag", "pool_name", "pool_size", 
     "pool_reset_connection", "plugin_dir",
     "username", "db", "passwd",
-    "autocommit",
+    "autocommit", "converter",
     NULL
 };
 
@@ -215,6 +215,11 @@ PyMemberDef MrdbConnection_Members[] =
         offsetof(MrdbConnection, charset),
         READONLY,
         "Client character set"},
+    {"converter",
+        T_OBJECT,
+        offsetof(MrdbConnection, converter),
+        READONLY,
+        "Conversion dictionary"},
     {"collation",
         T_OBJECT,
         offsetof(MrdbConnection, collation),
@@ -314,9 +319,10 @@ MrdbConnection_Initialize(MrdbConnection *self,
     unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
     PyObject *autocommit_obj= NULL;
+    PyObject *converter= NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiibbssssssssssibisibssssO:connect",
+                "|sssssisiiibbssssssssssibisibssssOO:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -328,7 +334,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &client_flags, &pool_name, &pool_size,
                 &reset_session, &plugin_dir,
                 &user, &schema, &password,
-                &autocommit_obj))
+                &autocommit_obj, &converter))
     {
         return -1;
     }
@@ -373,6 +379,13 @@ MrdbConnection_Initialize(MrdbConnection *self,
             "Can't set default character set.");
         return -1;
     }
+
+    if (converter)
+        Py_INCREF(converter);
+    else
+        if (!(converter= PyDict_New()))
+            return 1;
+    self->converter= converter;
 
     if (local_infile != 0xFF)
     {
@@ -472,6 +485,8 @@ static int MrdbConnection_traverse(
         visitproc visit,
         void *arg)
 {
+    if (self->converter)
+         return visit(self->converter, arg);
     return 0;
 }
 
@@ -542,7 +557,7 @@ PyTypeObject MrdbConnection_Type = {
     0, /* (PyObject *) tp_defined */
 };
 
-    PyObject *
+PyObject *
 MrdbConnection_connect(
         PyObject *self,
         PyObject *args,
@@ -597,6 +612,10 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
     MARIADB_CHECK_CONNECTION(self, NULL);
     /* Todo: check if all the cursor stuff is deleted (when using prepared
        statemnts this should be handled in mysql_close) */
+
+    if (self->converter)
+        Py_XDECREF(self->converter);
+    self->converter= NULL;
 
     if (self->pool)
     {

@@ -19,10 +19,10 @@ The ConnectionPool class
        In case that pool doesn't have a free slot or is not configured a PoolError
        exception will be raised.
 
-    .. versionadded:: 1.0.1
     .. method:: close()
 
        Closes the pool and all connection inside the pool.
+    .. versionadded:: 1.0.1
 
     .. method:: get_connection()
 

@@ -1,79 +1,21 @@
-.. _release_notes:
+Release history
+===============
 
-Release notes
-=============
+Stable releases (GA)
+--------------------
 
-.. sectionauthor:: Georg Richter <georg@mariadb.com>
+MariaDB Connector/Python 1.0.0
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-MariaDB Connector/Python 0.9.59 beta
-------------------------------------
-Release date: May 26th 2020
-
-Notable Updates:
-
-- CONPY-64: Fixed crash when a connection was established without parameters
-- CONPY-66: Fixed windows build
-- CONPY-62: Fixed String to Decimal conversion (binary protocol)
-- CONPY-63: Implemented version and version_info for module 
-
-MariaDB Connector/Python 0.9.58 beta
-------------------------------------
-Release date: May 6th 2020
+Release date: June 24th 2020
 
 Notable Updates:
-
-- CONPY-62: When using binary protocol (which is forced when using a placeholder), the type NEW_DECIMAL was ignored and internally converted as string instead of Decimal
-- CONPY-61: Fixed bug in execute_many when using NULL values or indicator variables
-- CONPY-59: Fixed bug when converting invalid date "0000-00-00". Instead of raising an exception it will be converted to None value.
-- CONPY-58: Fixed parameter error when using paramstyle PyFormat.
-
-MariaDB Connector/Python 0.9.57 beta
-------------------------------------
-Release date: April 15th 2020
-
-Notable Updates:
-
-- Build: Posix builds don't link statically against Connector/C anymore.
-- CONPY-53: Allow empty parameter sequence in execute() method
-- CONPY-56: Support dictionary option in cursor: Added anoptional boolean parameter 'dictionary' for cursor class. When dictionary parameter was set to true, the fetch operations will return rows from result set as Dict.
-- CONPY-55: Fixed memory leak when opening/closing cursor.  
-
-MariaDB Connector/Python 0.9.56 beta
-------------------------------------
-Release date: April 6th 2020
-
-Notable Updates:
-
-- CONPY-46: Implemented __enter__() and __exit__() methods for with statement (PEP-343). These methods are available now for connection and cursor class.
-- CONPY-47: When sending parameters PyBool_Type wasn't supported. In case a boolean type (True/False) will be provided as a parameter, it will be converted to a tinyint (MYSQL_TYPE_TINY).
-- CONPY-48: Accept List of parameters for execute() method
-- CONPY-49: Added support for Decimal type When retrieving data with column type MYSQL_TYPE_NEWDECIMAL Connector/Python now loads the decimal module and converts data from string into Pythons decimal.Decimal type.  Wnen sending a decimal.Decimal parameter, value will be converted to string and send with type MYSQL_TYPE_NEWDECIMAL to server. 
-- CONPY-51: Store field_count internelly for buffered cursors to prevent overriding/clearing the value by connection methods which directly send commands to database server.
-- CONPY-52: Fixed double free of resultset.
-
-MariaDB Connector/Python 0.9.55 beta
-------------------------------------
-Release date: March 30th 2020
-
-Notable Updates:
-
-- CONPY-9: Fixed description (character length/code points and precision scale)
-- CONPY-45: Fixed conversion from time and datetime column types
-- CONPY-32: Fixed crash when fetching GEOMETRY columns 
-
-MariaDB Connector/Python 0.9.54 beta
-------------------------------------
-Release date: Feb 18th 2020
-
-Notable Updates:
-
-- Fixed parameter sequence when creating a xid object
-- Added ssl_capath in connect() method
-- CONPY-40: ConnectionPool._setconfig now accepts only DSN parameters
-- CONPY-35: Close and reinitialize statement if the cursor was reused with a different SQL statement
-- CONPY-34: If a python object can't be converted to a corresponding data type, an exception will be raised.
-- CONPY-39: If no pool_name was provided, an exception will be raised.
-- CONPY-33: Segfault when using auto completion in python shell
-- CONPY-37: Corrected option name: named_tuple
-- CONPY-36: connection key word socket was renamed to unix_socket
-
+  - CONPY-81: Fixed crash when switching between text and binary protocol with same cursor
+  - CONPY-80: Parameters in set_config() method of ConnectionPool class have to be checked against the list of DSN keywords
+  - CONPY-79: When inserting NULL values with executemany() method on a server which doesn't support BULK statements NULL values weren't inserted correctly.
+  - CONPY-78: Since MaxScale doesn't support bulk operations yet, we have to check servers extended capability flag to determine if this feature is supported or not.
+  - CONPY-76: Added aliases username, passwd and db to connection keywords.
+  - CONPY-70: set_config() method needs to check the passed parameter and raise an exception if the parameter type is not a dictionary.
+  - CONPY-72: When deallocating the connection pool class, we need to check beside pool_size if the array containing the connections is valid.
+  - Fixed bug when inserting negative integer values with cursor.execute() method
+  - CONPY-69: Set default character set (utf8mb4) with authentication packet 

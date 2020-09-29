@@ -70,20 +70,21 @@
 <li><strong>prefetch_size</strong> (integer): The number of rows prefetched. This option will be ignored, if <em>cursor_type</em> is not <cite>CURSOR_TYPE_READ_ONLY</cite></li>
 <li><strong>buffered</strong> (bool): When set to <cite>True</cite> the entire result set from a SELECT/SHOW statement will be stored in client memory</li>
 <li><strong>prepared</strong> (bool): When set to <cite>True</cite> cursor will remain in prepared state after the first <code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code> method was called. Further calls to <em>execute()</em> method will ignore the sql statement.</li>
+<li><strong>binary</strong> (bool): When set to <cite>True</cite> cursor will be executed using the MariaDB client/server binary protocol.</li>
 </ul>
-</dd></dl>
-
 <div class="versionadded">
-<p><span class="versionmodified">New in version 1.0.1: </span>- <strong>binary</strong> (bool): When set to <cite>True</cite> cursor will be executed using the MariaDB client/server binary protocol.</p>
+<p><span class="versionmodified">New in version 1.0.1.</span></p>
+</div>
 <table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
 <tbody valign="top">
-<tr class="field-odd field"><th class="field-name">return:</th><td class="field-body">Returns a cursor object or raises an exception if an error occured.</td>
+<tr class="field-odd field"><th class="field-name">Returns:</th><td class="field-body">Returns a cursor object or raises an exception if an error occured.</td>
 </tr>
 </tbody>
 </table>
-</div>
+</dd></dl>
+
 <dl class="method">
 <dt id="xid">
 <code class="descname">xid</code><span class="sig-paren">(</span><em>format_id</em>, <em>global_transaction_id</em>, <em>branch_qualifier</em><span class="sig-paren">)</span><a class="headerlink" href="#xid" title="Permalink to this definition">¶</a></dt>
