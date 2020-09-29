@@ -214,7 +214,6 @@ typedef struct {
     enum enum_field_types type;
     size_t bits; /* for PyLong Object */
     PyTypeObject *ob_type;
-    uint8_t is_negative;
     uint8_t has_indicator;
 } MrdbParamInfo;
 

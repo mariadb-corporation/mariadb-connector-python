@@ -833,8 +833,6 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
         size_t b= _PyLong_NumBits(obj);
         if (b > paraminfo->bits)
             paraminfo->bits= b;
-        if (_PyLong_Sign(obj) < 0)
-            paraminfo->is_negative= 1;
         paraminfo->type= MYSQL_TYPE_LONGLONG;
         return 0;
     } else if (CHECK_TYPE(obj, &PyBool_Type)) {
@@ -1011,8 +1009,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
     MrdbParamValue paramvalue;
     MrdbParamInfo pinfo;
 
-    /* Assume unsigned */
-    param->is_unsigned= 1;
+    param->is_unsigned= 0;
     paramvalue.indicator= 0;
 
     if (!self->array_size)
@@ -1040,8 +1037,6 @@ mariadb_get_parameter_info(MrdbCursor *self,
         }
         param->buffer_type= pinfo.type;
         bits= (uint32_t)pinfo.bits;
-        if (pinfo.is_negative)
-            param->is_unsigned= 0;
     }
     else for (i=0; i < self->array_size; i++)
     {
@@ -1056,9 +1051,6 @@ mariadb_get_parameter_info(MrdbCursor *self,
             return 1;
         }
 
-        if (pinfo.is_negative)
-            param->is_unsigned= 0;
-
         if (pinfo.type == MYSQL_TYPE_LONGLONG)
         {
             if (pinfo.bits > bits)
@@ -1066,7 +1058,6 @@ mariadb_get_parameter_info(MrdbCursor *self,
                 bits= (uint32_t)pinfo.bits;
             }
         }
-
 
         if (!param->buffer_type ||
                 param->buffer_type == MYSQL_TYPE_NULL)
@@ -1286,6 +1277,7 @@ mariadb_param_to_bind(MrdbCursor *self,
                       MrdbParamValue *value)
 {
     uint8_t rc= 0;
+    uint8_t is_negative= 0;
 
     MARIADB_UNBLOCK_THREADS(self);
 
@@ -1299,41 +1291,53 @@ mariadb_param_to_bind(MrdbCursor *self,
       bind->buffer_type= MYSQL_TYPE_NULL;
 
     if (IS_NUM(bind->buffer_type))
+    {
         bind->buffer= value->num;
+    }
+
+    if (CHECK_TYPE(value->value, &PyLong_Type))
+    {
+        if (_PyLong_Sign(value->value) < 0)
+            is_negative= 1;
+    }
 
     switch(bind->buffer_type)
     {
         case MYSQL_TYPE_TINY:
-            if (bind->is_unsigned)
+            if (!is_negative)
             {
-                value->num[0]= (uint8_t)PyLong_AsUnsignedLong(value->value);
+                if ((value->num[0]= (uint8_t)PyLong_AsUnsignedLong(value->value)) > 0x7F)
+                    bind->is_unsigned= 1;
             }
             else {
                 value->num[0]= (int8_t)PyLong_AsLong(value->value);
             }
             break;
         case MYSQL_TYPE_SHORT:
-            if (bind->is_unsigned)
+            if (!is_negative)
             {
-                *(uint16_t *)&value->num= (uint16_t)PyLong_AsUnsignedLong(value->value);
+                if ((*(uint16_t *)&value->num= (uint16_t)PyLong_AsUnsignedLong(value->value)) > 0x7FFF)
+                    bind->is_unsigned= 1;
             }
             else {
                 *(int16_t *)&value->num= (int16_t)PyLong_AsLong(value->value);
             }
             break;
         case MYSQL_TYPE_LONG:
-            if (bind->is_unsigned)
+            if (!is_negative)
             {
-                *(uint32_t *)&value->num= (uint32_t)PyLong_AsUnsignedLong(value->value);
+                if ((*(uint32_t *)&value->num= (uint32_t)PyLong_AsUnsignedLong(value->value)) > 0x7FFFFFFF)
+                    bind->is_unsigned= 1;
             }
             else {
                 *(int32_t *)&value->num= (int32_t)PyLong_AsLong(value->value);
             }
             break;
         case MYSQL_TYPE_LONGLONG:
-            if (bind->is_unsigned)
+            if (!is_negative)
             {
-                *(uint64_t *)value->num= (uint64_t)PyLong_AsUnsignedLongLong(value->value);
+                if ((*(uint64_t *)value->num= (uint64_t)PyLong_AsUnsignedLongLong(value->value)) > 0x7FFFFFFFFFFFFFFF)
+                    bind->is_unsigned= 1;
             }
             else {
                 *(int64_t *)value->num= (int64_t)PyLong_AsLongLong(value->value);
