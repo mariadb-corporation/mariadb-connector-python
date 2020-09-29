@@ -99,6 +99,12 @@ enum enum_dataapi_groups
     DBAPI_ROWID
 };
 
+enum enum_extended_field_type
+{
+  EXT_TYPE_NONE=0,
+  EXT_TYPE_JSON=1
+};
+
 enum enum_result_format
 {
     RESULT_TUPLE= 0,
@@ -321,6 +327,8 @@ mariadb_throw_exception(void *handle,
     int8_t is_statement,
     const char *message,
     ...);
+
+enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *field);
 
 PyObject *
 MrdbIndicator_Object(uint32_t type);

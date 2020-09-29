@@ -883,6 +883,7 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
             unsigned long display_length;
             long packed_len= 0;
             PyObject *desc;
+            enum enum_extended_field_type ext_type= mariadb_extended_field_type(&self->fields[i]);
 
             display_length= self->fields[i].max_length > self->fields[i].length ? 
                             self->fields[i].max_length : self->fields[i].length;
@@ -905,6 +906,9 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
                     display_length= precision + 1;
                 }
             }
+
+            if (ext_type == EXT_TYPE_JSON)
+                self->fields[i].type= MYSQL_TYPE_JSON;
 
             if (!(desc= Py_BuildValue("(sIIiIIOI)",
                             self->fields[i].name,

@@ -228,7 +228,7 @@ class TestCursor(unittest.TestCase):
         fieldinfo = mariadb.fieldinfo()
         cursor.execute(
             "CREATE TEMPORARY TABLE test_xfield_types (a tinyint not null auto_increment primary "
-            "key, b smallint, c int, d bigint, e float, f decimal, g double, h char(10), i varchar(255), j blob, index(b))");
+            "key, b smallint, c int, d bigint, e float, f decimal, g double, h char(10), i varchar(255), j blob, k json, index(b))");
         info = cursor.description
         self.assertEqual(info, None)
         cursor.execute("SELECT * FROM test_xfield_types")
@@ -243,6 +243,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(fieldinfo.type(info[7]), "STRING")
         self.assertEqual(fieldinfo.type(info[8]), "VAR_STRING")
         self.assertEqual(fieldinfo.type(info[9]), "BLOB")
+        self.assertEqual(fieldinfo.type(info[10]), "JSON")
         self.assertEqual(fieldinfo.flag(info[0]),
                          "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT | NUMERIC")
         self.assertEqual(fieldinfo.flag(info[1]), "PART_KEY | NUMERIC")

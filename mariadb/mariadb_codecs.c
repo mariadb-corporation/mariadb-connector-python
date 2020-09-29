@@ -40,6 +40,18 @@ int codecs_datetime_init(void)
     return 0;
 }
 
+
+enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *field)
+{
+    MARIADB_CONST_STRING str;
+
+    if (!mariadb_field_attr(&str, field, MARIADB_FIELD_ATTR_FORMAT_NAME))
+    {
+      if (str.length == 4 && !strncmp(str.str, "json", 4))
+          return EXT_TYPE_JSON;
+    }
+    return EXT_TYPE_NONE;
+}
 /*
    converts a Python date/time/datetime object to MYSQL_TIME
  */
@@ -503,8 +515,8 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         case MYSQL_TYPE_ENUM:
         {
             unsigned long len;
-
-            if ( self->fields[column].charsetnr == CHARSET_BINARY)
+            enum enum_extended_field_type ext_type= mariadb_extended_field_type(&self->fields[column]);
+            if ( self->fields[column].charsetnr == CHARSET_BINARY && ext_type != EXT_TYPE_JSON)
             {
                 self->values[column]=
                         PyBytes_FromStringAndSize((const char *)data,
@@ -735,9 +747,11 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
             unsigned long length;
             unsigned long utf8len;
             length= mysql_net_field_length(row);
+            enum enum_extended_field_type ext_type= mariadb_extended_field_type(&self->fields[column]);
 
-            if (self->fields[column].flags & BINARY_FLAG ||
-                self->fields[column].charsetnr == CHARSET_BINARY)
+            if ((self->fields[column].flags & BINARY_FLAG ||
+                self->fields[column].charsetnr == CHARSET_BINARY) &&
+                ext_type != EXT_TYPE_JSON)
             {
                 self->values[column]=
                         PyBytes_FromStringAndSize((const char *)*row,
