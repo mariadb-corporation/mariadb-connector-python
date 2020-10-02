@@ -280,30 +280,12 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
 
     self->is_prepared= is_prepared;
     self->is_text= 0;
-
-    if (!(self->stmt= mysql_stmt_init(self->connection->mysql)))
-    {
-        mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
-        return -1;
-    }
+    self->stmt= NULL;
 
     self->cursor_type= cursor_type;
     self->prefetch_rows= prefetch_rows;
     self->row_array_size= 1;
 
-    if (self->cursor_type || self->prefetch_rows)
-    {
-        if (!(self->stmt = mysql_stmt_init(self->connection->mysql)))
-        {
-            mariadb_throw_exception(self->connection->mysql, Mariadb_OperationalError, 0, NULL);
-            return -1;
-        }
-    }
-    else
-        return 0;
-
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CURSOR_TYPE, &self->cursor_type);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREFETCH_ROWS, &self->prefetch_rows);
     return 0;
 }
 /* }}} */
@@ -488,7 +470,7 @@ static void ma_set_result_column_value(MrdbCursor *self, PyObject *row, uint32_t
    closes the statement handle of current cursor. After call to
    cursor_close the cursor can't be reused anymore
  */
-    static
+static
 void ma_cursor_close(MrdbCursor *self)
 {
     if (!self->is_closed)
@@ -503,6 +485,10 @@ void ma_cursor_close(MrdbCursor *self)
             self->stmt= NULL;
         }
         MrdbCursor_clear(self, 0);
+
+        if (self->is_text && self->stmt)
+            mysql_stmt_close(self->stmt);
+
         if (self->parser)
         {
             MrdbParser_end(self->parser);
@@ -610,13 +596,13 @@ static Py_ssize_t data_count(PyObject *data)
   if (!data)
     return 0;
 
-  if (Py_TYPE(data) == &PyTuple_Type)
+  if (CHECK_TYPE(data, &PyTuple_Type))
   {
     return PyTuple_Size(data);
-  } else if (Py_TYPE(data) == &PyList_Type)
+  } else if (CHECK_TYPE(data, &PyList_Type))
   {
     return PyList_Size(data);
-  } else if (Py_TYPE(data) == &PyDict_Type)
+  } else if (CHECK_TYPE(data, &PyDict_Type))
   {
     return PyDict_Size(data);
   }
@@ -704,6 +690,15 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     {
         uint8_t do_prepare= 1;
 
+        if (!self->stmt)
+        {
+            if (!(self->stmt= mysql_stmt_init(self->connection->mysql)))
+            {
+                mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
+                goto error;
+            }
+        }
+
         if ((self->is_prepared && self->statement))
             do_prepare= 0;
 
@@ -736,13 +731,14 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         {
             if (self->parser->paramstyle == PYFORMAT)
             {
-                if (Py_TYPE(Data) != &PyDict_Type)
+                if (!CHECK_TYPE(Data, &PyDict_Type))
                 {
                     PyErr_SetString(PyExc_TypeError, "argument 2 must be dict");
                     goto error;
                 }
             }
-            else if (Py_TYPE(Data) != &PyTuple_Type && Py_TYPE(Data) != &PyList_Type)
+            else if (!CHECK_TYPE(Data, &PyTuple_Type) &&
+                     !CHECK_TYPE(Data, &PyList_Type))
             {
                 PyErr_SetString(PyExc_TypeError, "Argument 2 must be Tuple or List!");
                 goto error;
@@ -760,6 +756,8 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
         }
         if (do_prepare)
         {
+            mysql_stmt_attr_set(self->stmt, STMT_ATTR_CURSOR_TYPE, &self->cursor_type);
+            mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREFETCH_ROWS, &self->prefetch_rows);
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->param_count);
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
             mysql_stmt_bind_param(self->stmt, self->params);
@@ -1306,6 +1304,7 @@ MrdbCursor_executemany(MrdbCursor *self,
     int rc;
     uint8_t do_prepare= 1;
     char errmsg[128];
+
     MARIADB_CHECK_STMT(self);
 
     if (PyErr_Occurred())
@@ -1338,6 +1337,16 @@ MrdbCursor_executemany(MrdbCursor *self,
         MrdbParser_end(self->parser);
         self->parser= NULL;
     }
+
+    if (!self->stmt)
+    {
+        if (!(self->stmt= mysql_stmt_init(self->connection->mysql)))
+        {
+            mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
+            goto error;
+        }
+    }
+
     self->is_text= 0;
 
     if (!self->parser)
@@ -1501,7 +1510,7 @@ MrdbCursor_getbuffered(MrdbCursor *self)
 static int
 MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg)
 {
-    if (!arg || Py_TYPE(arg) != &PyBool_Type)
+    if (!arg || !CHECK_TYPE(arg, &PyBool_Type))
     {
         PyErr_SetString(PyExc_TypeError, "Argument must be boolean");
         return -1;
@@ -1550,7 +1559,7 @@ MrdbCursor_iternext(PyObject *self)
 static PyObject
 *MrdbCursor_closed(MrdbCursor *self)
 {
-    if (self->is_closed || !self->stmt || self->stmt->mysql == NULL)
+    if (self->is_closed || self->connection->mysql == NULL)
         Py_RETURN_TRUE;
     Py_RETURN_FALSE;
 }
@@ -1585,12 +1594,11 @@ MrdbCursor_callproc(MrdbCursor *self, PyObject *args)
 
     MARIADB_CHECK_STMT(((MrdbCursor *)self));
 
-    if (!PyArg_ParseTuple(args, "s#|O!", &sp, &sp_len,
-                &PyTuple_Type, &data))
+    if (!PyArg_ParseTuple(args, "s#|O", &sp, &sp_len, &data))
         return NULL;
 
     if (data)
-        param_count= (uint32_t)PyTuple_Size(data);
+        param_count= (uint32_t)data_count(data);
 
     stmt_len= sp_len + 5 + 3 + param_count * 2 + 1;
     if (!(stmt= (char *)PyMem_RawCalloc(1, stmt_len)))

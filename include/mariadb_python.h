@@ -45,6 +45,9 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 #include <limits.h>
 #endif /* defined(_WIN32) */
 
+#define CHECK_TYPE(obj, type) \
+(Py_TYPE((obj)) == type || PyType_IsSubtype(Py_TYPE((obj)), type))
+
 #ifndef MIN
 #define MIN(a,b) (a) < (b) ? (a) : (b)
 #endif
@@ -491,7 +494,7 @@ if ((obj)->thread_state)\
     }
 
 #define MARIADB_CHECK_STMT(cursor)\
-    if (!cursor->stmt || !cursor->stmt->mysql || cursor->is_closed)\
+    if (!cursor->connection->mysql || cursor->is_closed)\
     {\
        (cursor)->is_closed= 1;\
         mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\

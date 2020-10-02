@@ -342,7 +342,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     if (autocommit_obj)
     {
         if (autocommit_obj != Py_None &&
-            Py_TYPE(autocommit_obj) != &PyBool_Type)
+            !CHECK_TYPE(autocommit_obj, &PyBool_Type))
         {
             PyErr_SetString(PyExc_TypeError, "Argument must be boolean or None");
             return -1;
@@ -448,7 +448,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     }
 
     if (!autocommit_obj ||
-        (autocommit_obj && Py_TYPE(autocommit_obj) == &PyBool_Type))
+        (autocommit_obj && CHECK_TYPE(autocommit_obj, &PyBool_Type)))
     {
         uint8_t autocommit= (autocommit_obj) ?
                  (uint8_t) PyLong_AsUnsignedLong(autocommit_obj) : 0;
@@ -1142,7 +1142,7 @@ static int MrdbConnection_setreconnect(MrdbConnection *self,
         return 0;
     }
 
-    if (!args || Py_TYPE(args) != &PyBool_Type) {
+    if (!args || !CHECK_TYPE(args, &PyBool_Type)) {
         PyErr_SetString(PyExc_TypeError, "Argument must be boolean");
         return -1;
     }
@@ -1176,7 +1176,7 @@ static int MrdbConnection_setdb(MrdbConnection *self, PyObject *db,
 
     MARIADB_CHECK_CONNECTION(self, -1);
 
-    if (!db || Py_TYPE(db) != &PyUnicode_Type)
+    if (!db || !CHECK_TYPE(db, &PyUnicode_Type))
     {
         PyErr_SetString(PyExc_TypeError, "Argument must be string");
         return -1;
@@ -1321,7 +1321,7 @@ static int MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg,
 
     MARIADB_CHECK_CONNECTION(self, -1);
 
-    if (!arg || Py_TYPE(arg) != &PyBool_Type)
+    if (!arg || !CHECK_TYPE(arg, &PyBool_Type))
     {
         PyErr_SetString(PyExc_TypeError, "Argument must be boolean");
         return -1;
