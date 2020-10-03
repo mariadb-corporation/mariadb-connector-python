@@ -26,7 +26,6 @@
 
 extern int codecs_datetime_init(void);
 
-PyObject *Mrdb_Pickle= NULL;
 PyObject *cnx_pool= NULL;
 PyObject *decimal_module= NULL,
          *decimal_type= NULL;
@@ -164,9 +163,6 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     {
         goto error;
     }
-
-    /* we need pickle for object serialization */
-    Mrdb_Pickle= PyImport_ImportModule("pickle");
 
     Py_TYPE(&MrdbCursor_Type) = &PyType_Type;
     if (PyType_Ready(&MrdbCursor_Type) == -1)

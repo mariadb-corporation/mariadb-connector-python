@@ -438,7 +438,11 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     }
     self->fetched= 0;
 
-    MARIADB_FREE_MEM(self->sequence_fields);
+    if (self->sequence_fields)
+    {
+        MARIADB_FREE_MEM(self->sequence_fields);
+        Py_DECREF((PyObject *)self->sequence_type);
+    }
     self->fields= NULL;
     self->row_count= 0;
     self->affected_rows= 0;
@@ -459,6 +463,7 @@ static void ma_set_result_column_value(MrdbCursor *self, PyObject *row, uint32_t
             break;
         case RESULT_DICTIONARY:
             PyDict_SetItemString(row, self->fields[column].name, self->values[column]); 
+            Py_DECREF(self->values[column]); /* CONPY-119 */
             break;
         default:
             PyTuple_SET_ITEM(row, column, (self)->values[column]);
@@ -561,8 +566,7 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             {
                 self->sequence_fields[i].name= self->fields[i].name;
             }
-            self->sequence_type= PyMem_RawCalloc(1,sizeof(PyTypeObject));
-            PyStructSequence_InitType(self->sequence_type, &self->sequence_desc);
+            self->sequence_type= PyStructSequence_NewType(&self->sequence_desc);
         }
     }
     return 0;
