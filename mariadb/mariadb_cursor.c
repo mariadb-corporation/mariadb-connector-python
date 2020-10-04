@@ -931,7 +931,6 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
             }
             PyTuple_SetItem(obj, i, desc);
         }
-        Py_INCREF(obj);
         return obj;
     }
     Py_INCREF(Py_None);
