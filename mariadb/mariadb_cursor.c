@@ -552,21 +552,23 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
 
         if (self->result_format == RESULT_NAMED_TUPLE) {
             unsigned int i;
+            PyStructSequence_Desc sequence_desc;
+
             if (!(self->sequence_fields= (PyStructSequence_Field *)
                         PyMem_RawCalloc(self->field_count + 1,
                             sizeof(PyStructSequence_Field))))
                 return 1;
-            self->sequence_desc.name= mariadb_named_tuple_name;
-            self->sequence_desc.doc= mariadb_named_tuple_desc;
-            self->sequence_desc.fields= self->sequence_fields;
-            self->sequence_desc.n_in_sequence= self->field_count;
+            sequence_desc.name= mariadb_named_tuple_name;
+            sequence_desc.doc= mariadb_named_tuple_desc;
+            sequence_desc.fields= self->sequence_fields;
+            sequence_desc.n_in_sequence= self->field_count;
 
 
             for (i=0; i < self->field_count; i++)
             {
                 self->sequence_fields[i].name= self->fields[i].name;
             }
-            self->sequence_type= PyStructSequence_NewType(&self->sequence_desc);
+            self->sequence_type= PyStructSequence_NewType(&sequence_desc);
         }
     }
     return 0;

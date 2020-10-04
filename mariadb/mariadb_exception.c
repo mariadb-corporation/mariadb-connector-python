@@ -96,6 +96,10 @@ static PyObject *get_exception_type(int error_number)
   case ER_ROW_IS_REFERENCED_2:
   case ER_XAER_OUTSIDE:
   case ER_XAER_RMERR:
+  case ER_BAD_NULL_ERROR:
+  case ER_DATA_OUT_OF_RANGE:
+  case ER_CONSTRAINT_FAILED:
+  case ER_DUP_CONSTRAINT_NAME:
       return Mariadb_IntegrityError;
   default:
       /* MariaDB Error */
