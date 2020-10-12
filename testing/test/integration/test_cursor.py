@@ -1042,6 +1042,18 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], json.dumps(content))
         del cursor
 
+    def test_conpy123(self):
+        con= create_connection({"client_flag" : CLIENT.MULTI_STATEMENTS})
+        cursor1= con.cursor()
+        cursor1.execute("SELECT 1; SELECT 2")
+        cursor1.close()
+        cursor2= con.cursor()
+        cursor2.execute("SELECT 1")
+        row= cursor2.fetchone()
+        self.assertEqual(row[0], 1)
+        cursor2.close()
+        con.close()
+
     def test_conpy103(self):
         con= create_connection()
         cursor= con.cursor()

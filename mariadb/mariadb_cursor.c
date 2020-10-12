@@ -403,7 +403,11 @@ static void MrdbCursor_clear_result(MrdbCursor *self)
         /* clear pending result sets */
         if (self->connection->mysql)
         {
-            while (!mysql_next_result(self->connection->mysql));
+            do {
+                MYSQL_RES *res;
+                if ((res= mysql_use_result(self->connection->mysql)))
+                    mysql_free_result(res);
+            } while (!mysql_next_result(self->connection->mysql));
         }
     }
     /* CONPY-52: Avoid possible double free */
@@ -480,6 +484,7 @@ void ma_cursor_close(MrdbCursor *self)
 {
     if (!self->is_closed)
     {
+        MrdbCursor_clear_result(self);
         if (!self->is_text && self->stmt)
         {
             /* Todo: check if all the cursor stuff is deleted (when using prepared
