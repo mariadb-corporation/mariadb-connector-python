@@ -58,9 +58,9 @@ static PyObject *ma_convert_value(MrdbCursor *self,
 }
 
 
-
 enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *field)
 {
+#if MARIADB_PACKAGE_VERSION_ID > 30107
     MARIADB_CONST_STRING str;
 
     if (!mariadb_field_attr(&str, field, MARIADB_FIELD_ATTR_FORMAT_NAME))
@@ -68,8 +68,10 @@ enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *fie
       if (str.length == 4 && !strncmp(str.str, "json", 4))
           return EXT_TYPE_JSON;
     }
+#endif
     return EXT_TYPE_NONE;
 }
+
 /*
    converts a Python date/time/datetime object to MYSQL_TIME
  */
@@ -587,6 +589,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 {
     MrdbCursor *self= (MrdbCursor *)data;
     enum enum_extended_field_type ext_type= mariadb_extended_field_type(&self->fields[column]);
+
     MARIADB_UNBLOCK_THREADS(self);
 
     if (!row)
