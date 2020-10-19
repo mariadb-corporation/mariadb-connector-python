@@ -147,7 +147,7 @@ static unsigned long long my_strtoull(const char *str, size_t len, const char **
     if (*p < '0' || *p > '9')
       break;
 
-    if (val > ULONG_LONG_MAX /10 || val*10 > ULONG_LONG_MAX - (*p - '0'))
+    if (val > ULLONG_MAX /10 || val*10 > ULLONG_MAX - (*p - '0'))
     {
       *err = ERANGE;
       break;
