@@ -11,9 +11,9 @@ this_directory = path.abspath(path.dirname(__file__))
 with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
-define_macros= [] 
+define_macros= []
 
-# read settings from site.cfg 
+# read settings from site.cfg
 c= ConfigParser()
 c.read(['site.cfg'])
 options= dict(c.items('cc_options'))
@@ -29,7 +29,7 @@ PY_MARIADB_AUTHORS= "Georg Richter"
 
 PY_MARIADB_MAJOR_VERSION=1
 PY_MARIADB_MINOR_VERSION=0
-PY_MARIADB_PATCH_VERSION=4
+PY_MARIADB_PATCH_VERSION=5
 # PY_MARIADB_PRE_RELEASE_SEGMENT=""
 
 PY_MARIADB_VERSION= "%s.%s.%s" % (PY_MARIADB_MAJOR_VERSION, PY_MARIADB_MINOR_VERSION, PY_MARIADB_PATCH_VERSION)
@@ -56,6 +56,7 @@ setup(name='mariadb',
           'Programming Language :: Python :: 3.6',
           'Programming Language :: Python :: 3.7',
           'Programming Language :: Python :: 3.8',
+          'Programming Language :: Python :: 3.9',
           'Operating System :: Microsoft :: Windows',
           'Operating System :: MacOS',
           'Operating System :: POSIX',
