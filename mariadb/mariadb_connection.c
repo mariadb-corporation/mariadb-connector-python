@@ -35,6 +35,9 @@ char *dsn_keys[]= {
     NULL
 };
 
+const char *mariadb_default_charset= "utf8mb4";
+const char *mariadb_default_collation= "utf8mb4_general_ci";
+
 void
 MrdbConnection_dealloc(MrdbConnection *self);
 
@@ -211,7 +214,7 @@ static struct
 PyMemberDef MrdbConnection_Members[] =
 {
     {"character_set",
-        T_OBJECT,
+        T_STRING,
         offsetof(MrdbConnection, charset),
         READONLY,
         "Client character set"},
@@ -221,7 +224,7 @@ PyMemberDef MrdbConnection_Members[] =
         READONLY,
         "Conversion dictionary"},
     {"collation",
-        T_OBJECT,
+        T_STRING,
         offsetof(MrdbConnection, collation),
         READONLY,
         "Client character set collation"},
@@ -236,22 +239,22 @@ PyMemberDef MrdbConnection_Members[] =
         READONLY,
         "Database server TCP/IP port"},
     {"unix_socket",
-        T_OBJECT,
+        T_STRING,
         offsetof(MrdbConnection, unix_socket),
         READONLY,
         "Unix socket name"},
     {"server_name",
-        T_OBJECT,
+        T_STRING,
         offsetof(MrdbConnection, host),
         READONLY,
         "Name or address of database server"},
     {"tls_cipher",
-        T_OBJECT,
+        T_STRING,
         offsetof(MrdbConnection, tls_cipher),
         READONLY,
         "TLS cipher suite in used by connection"},
     {"tls_version",
-        T_OBJECT,
+        T_STRING,
         offsetof(MrdbConnection, tls_version),
         READONLY,
         "TLS protocol version used by connection"},
@@ -269,34 +272,15 @@ static void MrdbConnection_GetCapabilities(MrdbConnection *self)
 }
 
 
-static void
-Mrdb_ConnAttrStr(MYSQL *mysql, PyObject **obj, enum mariadb_value attr)
-{
-    char *val= NULL;
-
-    if (mariadb_get_infov(mysql, attr, &val) || !val)
-    {
-        return;
-    }
-    *obj= PyUnicode_FromString(val);
-}
-
 void MrdbConnection_SetAttributes(MrdbConnection *self)
 {
-    MY_CHARSET_INFO cinfo;
-
-    Mrdb_ConnAttrStr(self->mysql, &self->host, MARIADB_CONNECTION_HOST);
-    Mrdb_ConnAttrStr(self->mysql, &self->tls_cipher,
-                     MARIADB_CONNECTION_SSL_CIPHER);
-    Mrdb_ConnAttrStr(self->mysql, &self->tls_version,
-                     MARIADB_CONNECTION_TLS_VERSION);
-    Mrdb_ConnAttrStr(self->mysql, &self->unix_socket,
-                     MARIADB_CONNECTION_UNIX_SOCKET);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, &self->host);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SSL_CIPHER, &self->tls_cipher);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_TLS_VERSION, &self->tls_version);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_UNIX_SOCKET, &self->unix_socket);
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_PORT, &self->port);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_MARIADB_CHARSET_INFO,
-                      &cinfo);
-    self->charset= PyUnicode_FromString(cinfo.csname);
-    self->collation= PyUnicode_FromString(cinfo.name);
+    self->charset= mariadb_default_charset;
+    self->collation= mariadb_default_collation;
 }
 
 static int
@@ -373,7 +357,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
         return -1;
     }
 
-    if (mysql_options(self->mysql, MYSQL_SET_CHARSET_NAME, "utf8mb4"))
+    if (mysql_options(self->mysql, MYSQL_SET_CHARSET_NAME, mariadb_default_charset))
     {
         mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
             "Can't set default character set.");

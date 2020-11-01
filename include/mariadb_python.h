@@ -171,13 +171,13 @@ typedef struct {
     enum enum_tpc_state tpc_state;
     char xid[150]; /* large enough, to hold 2 * MAX_TPC_XID size + integer value */
     PyObject *dsn; /* always null */
-    PyObject *tls_cipher;
-    PyObject *tls_version;
-    PyObject *host;
-    PyObject *unix_socket;
+    const char *tls_cipher;
+    const char *tls_version;
+    const char *host;
+    const char *unix_socket;
     int port;
-    PyObject *charset;
-    PyObject *collation;
+    const char *charset;
+    const char *collation;
     struct mrdb_pool *pool;
     uint8_t inuse;
     uint8_t status;
