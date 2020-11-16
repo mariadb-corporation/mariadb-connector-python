@@ -445,7 +445,6 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     if (self->sequence_fields)
     {
         MARIADB_FREE_MEM(self->sequence_fields);
-        Py_DECREF((PyObject *)self->sequence_type);
     }
     self->fields= NULL;
     self->row_count= 0;
@@ -573,7 +572,7 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             {
                 self->sequence_fields[i].name= self->fields[i].name;
             }
-            self->sequence_type= PyStructSequence_NewType(&sequence_desc);
+            (void)PyStructSequence_InitType(&self->sequence_type, &sequence_desc);
         }
     }
     return 0;
@@ -1181,7 +1180,7 @@ mariadb_get_sequence_or_tuple(MrdbCursor *self)
     switch (self->result_format)
     {
         case RESULT_NAMED_TUPLE:
-            return PyStructSequence_New(self->sequence_type);
+            return PyStructSequence_New(&self->sequence_type);
         case RESULT_DICTIONARY:
             return PyDict_New();
         default:

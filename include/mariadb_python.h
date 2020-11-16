@@ -255,7 +255,7 @@ typedef struct {
     unsigned long statement_len;
     PyObject **values;
     PyStructSequence_Field *sequence_fields;
-    PyTypeObject *sequence_type;
+    PyTypeObject sequence_type;
     unsigned long prefetch_rows;
     unsigned long cursor_type;
     int64_t affected_rows;
