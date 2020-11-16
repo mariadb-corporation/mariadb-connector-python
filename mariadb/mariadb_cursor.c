@@ -573,10 +573,9 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             {
                 self->sequence_fields[i].name= self->fields[i].name;
             }
-#if PY_VERSION_HEX < 0x03070000
-            (void)PyStructSequence_InitType(&self->sequence_type, &sequence_desc);
-#else
             self->sequence_type= PyStructSequence_NewType(&sequence_desc);
+#if PY_VERSION_HEX < 0x03070000
+            self->sequence_type->tp_flags|= Py_TPFLAGS_HEAPTYPE;
 #endif
         }
     }
@@ -1185,11 +1184,7 @@ mariadb_get_sequence_or_tuple(MrdbCursor *self)
     switch (self->result_format)
     {
         case RESULT_NAMED_TUPLE:
-#if PY_VERSION_HEX < 0x03070000
-            return PyStructSequence_New(&self->sequence_type);
-#else
             return PyStructSequence_New(self->sequence_type);
-#endif
         case RESULT_DICTIONARY:
             return PyDict_New();
         default:
