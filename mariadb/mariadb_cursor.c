@@ -101,7 +101,7 @@ strncpy((a)->statement, (s), (l));\
 #define CURSOR_NUM_ROWS(a)\
     ((a)->is_text ? mysql_num_rows((a)->result) : (a)->stmt ? mysql_stmt_num_rows((a)->stmt) : 0)
 
-static char *mariadb_named_tuple_name= "Row";
+static char *mariadb_named_tuple_name= "mariadb.Row";
 static char *mariadb_named_tuple_desc= "Named tupled row";
 static PyObject *Mariadb_no_operation(MrdbCursor *,
         PyObject *);
@@ -445,6 +445,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     if (self->sequence_fields)
     {
         MARIADB_FREE_MEM(self->sequence_fields);
+//        Py_DECREF((PyObject *)self->sequence_type);
     }
     self->fields= NULL;
     self->row_count= 0;
@@ -572,7 +573,11 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             {
                 self->sequence_fields[i].name= self->fields[i].name;
             }
+#if PY_VERSION_HEX < 0x03070000
             (void)PyStructSequence_InitType(&self->sequence_type, &sequence_desc);
+#else
+            self->sequence_type= PyStructSequence_NewType(&sequence_desc);
+#endif
         }
     }
     return 0;
@@ -1180,7 +1185,11 @@ mariadb_get_sequence_or_tuple(MrdbCursor *self)
     switch (self->result_format)
     {
         case RESULT_NAMED_TUPLE:
+#if PY_VERSION_HEX < 0x03070000
             return PyStructSequence_New(&self->sequence_type);
+#else
+            return PyStructSequence_New(self->sequence_type);
+#endif
         case RESULT_DICTIONARY:
             return PyDict_New();
         default:
