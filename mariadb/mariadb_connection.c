@@ -319,7 +319,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     PyObject *converter= NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|sssssisiiibbssssssssssibisibssssOO:connect",
+                "|zzzzziziiibbzzzzzzzzzzibizibzzzzOO:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
