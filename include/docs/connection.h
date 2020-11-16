@@ -28,6 +28,15 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
+  connection_get_server_version__doc__,
+  "Returns a tuple representing the version of the connected server in\n"
+  "the following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION).\n\n"
+  "get_server_version() method exists for compatibility reasons. However the\n"
+  "preferred way to retrieve server version information are the server_version and\n"
+  "server_version_info connection attributes"
+);
+
+PyDoc_STRVAR(
   connection_close__doc__,
   "close()\n"
   "--\n"

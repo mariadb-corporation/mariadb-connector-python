@@ -1063,6 +1063,15 @@ class TestCursor(unittest.TestCase):
         row= cursor.fetchone()
         self.assertEqual(row[0], decimal.Decimal(1))
 
+    def test_conpy129(self):
+        conn= create_connection()
+        server_version= conn.server_version
+        major = int(server_version / 10000)
+        minor = int((server_version % 10000) / 100)
+        patch = server_version % 100;
+        self.assertEqual(conn.server_version_info, (major, minor, patch))
+        self.assertEqual(conn.get_server_version(), (major, minor, patch))
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:

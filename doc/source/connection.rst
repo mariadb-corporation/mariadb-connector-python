@@ -32,10 +32,10 @@ Connection constructors
   - **buffered** (bool): When set to `True` the entire result set from a SELECT/SHOW statement will be stored in client memory
   - **prepared** (bool): When set to `True` cursor will remain in prepared state after the first :func:`~cursor.execute` method was called. Further calls to *execute()* method will ignore the sql statement.
   - **binary** (bool): When set to `True` cursor will be executed using the MariaDB client/server binary protocol.
-.. versionadded:: 1.0.1
 
   :return: Returns a cursor object or raises an exception if an error occured.
 
+.. versionadded:: 1.0.1
 
 .. method:: xid(format_id, global_transaction_id, branch_qualifier)
 
@@ -85,6 +85,15 @@ Connection methods
   with the connection. The same applies to all cursor objects trying to
   use the connection. If the connection was obtained by *ConnectionPool*,
   the connection will not be closed but returned to the pool.
+
+.. method:: get_server_version()
+
+  Returns numeric version of connected database server as tuple. 
+  The form of the tuple is (VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH).
+
+  The get_server_version() method was added for compatibility. New applications should use the connection attribute server_version_info.
+
+.. versionadded:: 1.0.5
 
 .. method:: escape_string(escape_str)
  
@@ -237,7 +246,7 @@ Connection attributes
 
 .. data:: server_info
  
-  Returns the alphanumeric version of connected database. Tthe numeric version
+  Returns the alphanumeric version of connected database. The numeric version
   can be obtained via server_version() property.
 
 .. data:: server_name
@@ -252,6 +261,13 @@ Connection attributes
  
   Returns numeric version of connected database server. The form of the version
   number is VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH
+
+.. data:: server_version_info
+
+  Returns numeric version of connected database server as tuple. 
+  The form of the tuple is (VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH)
+
+.. versionadded:: 1.0.5
 
 .. data:: tls_cipher
 

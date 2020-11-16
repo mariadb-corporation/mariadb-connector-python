@@ -94,6 +94,9 @@ static int
 MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg,
                              void *closure);
 
+static PyObject *
+MrdbConnection_get_server_version(MrdbConnection *self);
+
 static PyGetSetDef
 MrdbConnection_sets[]=
 {
@@ -183,6 +186,11 @@ MrdbConnection_Methods[] =
         METH_VARARGS,
         connection_change_user__doc__
     },
+    { "get_server_version",
+        (PyCFunction)MrdbConnection_get_server_version,
+        METH_NOARGS,
+        connection_get_server_version__doc__,
+    },
     { "kill",
         (PyCFunction)MrdbConnection_kill,
         METH_VARARGS,
@@ -238,6 +246,11 @@ PyMemberDef MrdbConnection_Members[] =
         offsetof(MrdbConnection, port),
         READONLY,
         "Database server TCP/IP port"},
+    {"server_version_info",
+        T_OBJECT,
+        offsetof(MrdbConnection, server_version_info),
+        READONLY,
+        "Server version in tuple format"},
     {"unix_socket",
         T_STRING,
         offsetof(MrdbConnection, unix_socket),
@@ -450,6 +463,18 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 goto end;
             }
         }
+    }
+    /* CONPY-129: server_version_info */
+    if ((self->server_version_info= PyTuple_New(3)))
+    {
+        long major= mysql_get_server_version(self->mysql) / 10000;
+        long minor = (mysql_get_server_version(self->mysql) % 10000) / 100;
+        long patch= mysql_get_server_version(self->mysql) % 100;
+
+        if (PyTuple_SetItem(self->server_version_info, 0, PyLong_FromLong(major)) ||
+            PyTuple_SetItem(self->server_version_info, 1, PyLong_FromLong(minor)) ||
+            PyTuple_SetItem(self->server_version_info, 2, PyLong_FromLong(patch)))
+            goto end;
     }
 
 end:
@@ -1357,6 +1382,11 @@ MrdbConnection_exit(MrdbConnection *self, PyObject *args __attribute__((unused))
     }
     Py_XDECREF(tmp);
     return rc;
+}
+
+static PyObject *MrdbConnection_get_server_version(MrdbConnection *self)
+{
+  return self->server_version_info;
 }
 
 /* vim: set tabstop=4 */

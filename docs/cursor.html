@@ -1,20 +1,19 @@
 
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
   <head>
-    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>The cursor class &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
-    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     
-    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-    <script type="text/javascript" src="_static/jquery.js"></script>
-    <script type="text/javascript" src="_static/underscore.js"></script>
-    <script type="text/javascript" src="_static/doctools.js"></script>
-    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -36,7 +35,8 @@
         <li class="right" >
           <a href="connection.html" title="The connection class"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">The cursor class</a></li> 
       </ul>
     </div>  
 
@@ -47,9 +47,9 @@
             
   <div class="section" id="the-cursor-class">
 <h1>The cursor class<a class="headerlink" href="#the-cursor-class" title="Permalink to this headline">¶</a></h1>
-<dl class="class">
+<dl class="py class">
 <dt id="mariadb.cursor">
-<em class="property">class </em><code class="descclassname">mariadb.</code><code class="descname">cursor</code><a class="headerlink" href="#mariadb.cursor" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">cursor</code><a class="headerlink" href="#mariadb.cursor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Cursors can be used to execute SQL commands within a database session. Cursors
 objects are created by the <a class="reference internal" href="connection.html#cursor" title="cursor"><code class="xref py py-func docutils literal notranslate"><span class="pre">cursor()</span></code></a> method.</p>
 <p>Cursors are bound to the connection for their entire lifetime. If a connection was
@@ -59,25 +59,21 @@ closed or dropped all cursor objects bound to this connection became invalid.</p
 
 <div class="section" id="cursor-methods">
 <h2>Cursor methods<a class="headerlink" href="#cursor-methods" title="Permalink to this headline">¶</a></h2>
-<dl class="method">
+<dl class="py method">
 <dt id="callproc">
-<code class="descname">callproc</code><span class="sig-paren">(</span><em>procname, [ args])</em><span class="sig-paren">)</span><a class="headerlink" href="#callproc" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">callproc</code><span class="sig-paren">(</span><em class="sig-param">procname, [ args])</em><span class="sig-paren">)</span><a class="headerlink" href="#callproc" title="Permalink to this definition">¶</a></dt>
 <dd><p>Executes a stored procedure.</p>
 <p>Input/Output or Output parameters have to be retrieved by .fetch methods,
 the <a class="reference internal" href="#sp_outparams" title="sp_outparams"><code class="xref py py-data docutils literal notranslate"><span class="pre">sp_outparams</span></code></a> attribute indicates if the result set contains output
 parameters.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>procname</strong> (<em>string</em>) – The name of the stored procedure</li>
-<li><strong>args</strong> (<em>sequence</em>) – A sequence which must contain an entry for each parameter the procedure expects.</li>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>procname</strong> (<em>string</em>) – The name of the stored procedure</p></li>
+<li><p><strong>args</strong> (<em>sequence</em>) – A sequence which must contain an entry for each parameter the procedure expects.</p></li>
 </ul>
-</td>
-</tr>
-</tbody>
-</table>
+</dd>
+</dl>
 <p>Example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="go">&gt;&gt;&gt;cursor.execute(&quot;CREATE PROCEDURE p1(IN i1 VAR  CHAR(20), OUT o2 VARCHAR(40))&quot;</span>
 <span class="go">                  &quot;BEGIN&quot;</span>
@@ -99,9 +95,9 @@ parameters.</p>
 </div>
 </dd></dl>
 
-<dl class="method">
+<dl class="py method">
 <dt id="execute">
-<code class="descname">execute</code><span class="sig-paren">(</span><em>statement[, data [, buffered=False]</em><span class="sig-paren">)</span><a class="headerlink" href="#execute" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">execute</code><span class="sig-paren">(</span><em class="sig-param">statement[, data [, buffered=False]</em><span class="sig-paren">)</span><a class="headerlink" href="#execute" title="Permalink to this definition">¶</a></dt>
 <dd><p>Executes a SQL statement.</p>
 <p>Parameters in SQL statement may be provided as sequence or mapping and will be bound
 to variables in the operation. Variables are specified as question
@@ -109,18 +105,14 @@ marks (paramstyle=’qmark’), however for compatibility reasons MariaDB Connec
 also supports the ‘format’ and ‘pyformat’ paramstyles
 with the restriction, that different paramstyles can’t be mixed within.
 a statement</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>statement</strong> – SQL statement</li>
-<li><strong>args</strong> (<em>sequence</em>) – A sequence which must contain an entry for each parameter the statement expects.</li>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>statement</strong> – SQL statement</p></li>
+<li><p><strong>args</strong> (<em>sequence</em>) – A sequence which must contain an entry for each parameter the statement expects.</p></li>
 </ul>
-</td>
-</tr>
-</tbody>
-</table>
+</dd>
+</dl>
 <p>A reference to the operation will be retained by the cursor.
 If the cursor was created with attribute prepared=True the statement
 string for following execute operations will be ignored:
@@ -131,24 +123,20 @@ same connection will fail, unless the entire result set was read. For buffering
 the entire result set an additional parameter <em>buffered=True</em> must be specified.</p>
 </dd></dl>
 
-<dl class="method">
+<dl class="py method">
 <dt id="executemany">
-<code class="descname">executemany</code><span class="sig-paren">(</span><em>statement</em>, <em>data</em><span class="sig-paren">)</span><a class="headerlink" href="#executemany" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">executemany</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">statement</span></em>, <em class="sig-param"><span class="n">data</span></em><span class="sig-paren">)</span><a class="headerlink" href="#executemany" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exactly behaves like .execute() but accepts a list of tuples, where each
 tuple represents data of a row within a table.
 .executemany() only supports DML (insert, update, delete, replace) statements.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>statement</strong> (<em>string</em>) – A DML SQL statement</li>
-<li><strong>data</strong> – Data to be used for place holders</li>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>statement</strong> (<em>string</em>) – A DML SQL statement</p></li>
+<li><p><strong>data</strong> – Data to be used for place holders</p></li>
 </ul>
-</td>
-</tr>
-</tbody>
-</table>
+</dd>
+</dl>
 <p>The following example will insert 3 rows:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">=</span> <span class="p">[</span>
     <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="s1">&#39;Michael&#39;</span><span class="p">,</span> <span class="s1">&#39;Widenius&#39;</span><span class="p">)</span>
@@ -160,86 +148,79 @@ tuple represents data of a row within a table.
 </div>
 <p>To insert special values like NULL or a column default, you need to specify indicators:</p>
 <ul class="simple">
-<li>mariadb.indicator_null is used for NULL values</li>
-<li>mariadb.indicator_ignore is used to skip update of a column.</li>
-<li>mariadb.indicator_default is used for a default value (insert/update)</li>
-<li>mariadb.indicator_row is used to skip update/insert of the entire row.</li>
+<li><p>mariadb.indicator_null is used for NULL values</p></li>
+<li><p>mariadb.indicator_ignore is used to skip update of a column.</p></li>
+<li><p>mariadb.indicator_default is used for a default value (insert/update)</p></li>
+<li><p>mariadb.indicator_row is used to skip update/insert of the entire row.</p></li>
 </ul>
 <div class="admonition note">
-<p class="first admonition-title">Note</p>
-<ul class="last simple">
-<li>All values for a column must have the same data type.</li>
-<li>Indicators can only be used when connecting to a MariaDB Server 10.2 or newer. Older versions of MariaDB and MySQL servers don’t support this feature.</li>
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>All values for a column must have the same data type.</p></li>
+<li><p>Indicators can only be used when connecting to a MariaDB Server 10.2 or newer. Older versions of MariaDB and MySQL servers don’t support this feature.</p></li>
 </ul>
 </div>
 </dd></dl>
 
-<dl class="method">
+<dl class="py method">
 <dt id="fetchall">
-<code class="descname">fetchall</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#fetchall" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fetchall</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#fetchall" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fetches all rows of a pending result set and returns a list of tuples.</p>
 <p>If the cursor was created with option <em>named_tuple=True</em> the result will be a list of named tuples.</p>
 </dd></dl>
 
-<dl class="method">
+<dl class="py method">
 <dt id="fetchmany">
-<code class="descname">fetchmany</code><span class="sig-paren">(</span><em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#fetchmany" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fetchmany</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">size</span></em><span class="sig-paren">)</span><a class="headerlink" href="#fetchmany" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fetch the next set of rows of a query result, returning a list of tuples
 An empty list is returned when no more rows are available.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><strong>size</strong> (<em>integer</em>) – The number of rows to fetch per call. If it is not given, the cursor’s arraysize determines the number of rows to be fetched.</td>
-</tr>
-</tbody>
-</table>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>size</strong> (<em>integer</em>) – The number of rows to fetch per call. If it is not given, the cursor’s arraysize determines the number of rows to be fetched.</p>
+</dd>
+</dl>
 <p>If the cursor was created with option <em>named_tuple=True</em> the result will be a list of named tuples.</p>
 </dd></dl>
 
-<dl class="method">
+<dl class="py method">
 <dt id="fetchone">
-<code class="descname">fetchone</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#fetchone" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fetchone</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#fetchone" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fetches next row of a pending result set and returns a tuple.</p>
 <p>If the cursor was created with option <em>named_tuple=True</em> the result will be a named tuple.</p>
 </dd></dl>
 
-<dl class="method">
+<dl class="py method">
 <dt id="fieldcount">
-<code class="descname">fieldcount</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#fieldcount" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">fieldcount</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#fieldcount" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the number of fields (columns) within a result set.</p>
 </dd></dl>
 
-<dl class="method">
+<dl class="py method">
 <dt id="next">
-<code class="descname">next</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#next" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">next</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#next" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return the next row from the currently executing SQL statement
 using the same semantics as fetchone().</p>
 </dd></dl>
 
-<dl class="method">
+<dl class="py method">
 <dt id="nextset">
-<code class="descname">nextset</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#nextset" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">nextset</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#nextset" title="Permalink to this definition">¶</a></dt>
 <dd><p>Will make the cursor skip to the next available result set,
 discarding any remaining rows from the current set.</p>
 </dd></dl>
 
-<dl class="method">
+<dl class="py method">
 <dt id="scroll">
-<code class="descname">scroll</code><span class="sig-paren">(</span><em>value</em><span class="optional">[</span>, <em>mode='relative'</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#scroll" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">scroll</code><span class="sig-paren">(</span><em class="sig-param">value</em><span class="optional">[</span>, <em class="sig-param">mode='relative'</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#scroll" title="Permalink to this definition">¶</a></dt>
 <dd><p>Scroll the cursor in the result set to a new position according to mode.</p>
-<table class="docutils field-list" frame="void" rules="none">
-<col class="field-name" />
-<col class="field-body" />
-<tbody valign="top">
-<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
-<li><strong>value</strong> (<em>integer</em>) – New position in the result set</li>
-<li><strong>mode</strong> (<em>string</em>) – Scroll mode, posslible values are ‘absolute’ or ‘relative’. Defaults to ‘relative’.</li>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>value</strong> (<em>integer</em>) – New position in the result set</p></li>
+<li><p><strong>mode</strong> (<em>string</em>) – Scroll mode, posslible values are ‘absolute’ or ‘relative’. Defaults to ‘relative’.</p></li>
 </ul>
-</td>
-</tr>
-</tbody>
-</table>
+</dd>
+</dl>
 <p>If mode is relative, value is taken as offset to the current
 position in the result set, if set to absolute, value states an absolute
 target position.</p>
@@ -248,52 +229,52 @@ target position.</p>
 </div>
 <div class="section" id="cursor-attributes">
 <h2>Cursor attributes<a class="headerlink" href="#cursor-attributes" title="Permalink to this headline">¶</a></h2>
-<dl class="data">
+<dl class="py data">
 <dt id="arraysize">
-<code class="descname">arraysize</code><a class="headerlink" href="#arraysize" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">arraysize</code><a class="headerlink" href="#arraysize" title="Permalink to this definition">¶</a></dt>
 <dd><p>This read/write attribute specifies the number of rows to fetch at a time with .fetchmany(). It defaults to 1 meaning to fetch a single row at a time</p>
 </dd></dl>
 
-<dl class="data">
+<dl class="py data">
 <dt id="buffered">
-<code class="descname">buffered</code><a class="headerlink" href="#buffered" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">buffered</code><a class="headerlink" href="#buffered" title="Permalink to this definition">¶</a></dt>
 <dd><p>When set to <em>True</em> all result sets are immediately transferred and the connection
 between client and server is no longer blocked. Default value is False.</p>
 </dd></dl>
 
-<dl class="data">
+<dl class="py data">
 <dt id="closed">
-<code class="descname">closed</code><a class="headerlink" href="#closed" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">closed</code><a class="headerlink" href="#closed" title="Permalink to this definition">¶</a></dt>
 <dd><p>Indicates if the cursor is closed (e.g. if connection dropped) and can’t be reused.</p>
 </dd></dl>
 
-<dl class="data">
+<dl class="py data">
 <dt id="connection">
-<code class="descname">connection</code><a class="headerlink" href="#connection" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">connection</code><a class="headerlink" href="#connection" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a reference to the connection object on which the cursor was created.</p>
 </dd></dl>
 
-<dl class="data">
+<dl class="py data">
 <dt id="description">
-<code class="descname">description</code><a class="headerlink" href="#description" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">description</code><a class="headerlink" href="#description" title="Permalink to this definition">¶</a></dt>
 <dd><p>This read-only attribute is a sequence of 7-item sequences.</p>
 <p>Each of these sequences contains information describing one result column:</p>
 <ul class="simple">
-<li>name</li>
-<li>type_code</li>
-<li>display_size</li>
-<li>internal_size</li>
-<li>precision</li>
-<li>scale</li>
-<li>null_ok</li>
+<li><p>name</p></li>
+<li><p>type_code</p></li>
+<li><p>display_size</p></li>
+<li><p>internal_size</p></li>
+<li><p>precision</p></li>
+<li><p>scale</p></li>
+<li><p>null_ok</p></li>
 </ul>
 <p>This attribute will be None for operations that do not return rows or if the cursor has
 not had an operation invoked via the .execute*() method yet</p>
 </dd></dl>
 
-<dl class="data">
+<dl class="py data">
 <dt id="lastrowid">
-<code class="descname">lastrowid</code><a class="headerlink" href="#lastrowid" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">lastrowid</code><a class="headerlink" href="#lastrowid" title="Permalink to this definition">¶</a></dt>
 <dd><p>This read only attribute of the ID generated by a query on a table with a column having
 the AUTO_INCREMENT attribute or the value for the last usage of
 LAST_INSERT_ID(expr). If the last query wasn’t an INSERT or UPDATE
@@ -302,16 +283,16 @@ AUTO_INCREMENT attribute and LAST_INSERT_ID was not used, the returned
 value will be zero</p>
 </dd></dl>
 
-<dl class="data">
+<dl class="py data">
 <dt id="sp_outparams">
-<code class="descname">sp_outparams</code><a class="headerlink" href="#sp_outparams" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">sp_outparams</code><a class="headerlink" href="#sp_outparams" title="Permalink to this definition">¶</a></dt>
 <dd><p>This read-only attribute undicates if the current result set contains inout
 or out parameters from a previously executed stored procedure.</p>
 </dd></dl>
 
-<dl class="data">
+<dl class="py data">
 <dt id="rowcount">
-<code class="descname">rowcount</code><a class="headerlink" href="#rowcount" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">rowcount</code><a class="headerlink" href="#rowcount" title="Permalink to this definition">¶</a></dt>
 <dd><p>This read-only attribute specifies the number of rows that the last
 execute*() produced (for DQL statements like SELECT) or affected
 (for DML statements like UPDATE or INSERT).</p>
@@ -327,7 +308,7 @@ determined by the interface.</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">rows</span><span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">cursor</span><span class="o">.</span><span class="n">rowcount</span>
 <span class="go">1</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">cursor</span><span class="o">=</span><span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">(</span><span class="n">buffered</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">cursor</span><span class="o">=</span><span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">(</span><span class="n">buffered</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT 1&quot;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">cursor</span><span class="o">.</span><span class="n">rowcount</span>
 <span class="go">1</span>
@@ -335,20 +316,20 @@ determined by the interface.</p>
 </div>
 </dd></dl>
 
-<dl class="data">
+<dl class="py data">
 <dt id="statement">
-<code class="descname">statement</code><a class="headerlink" href="#statement" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">statement</code><a class="headerlink" href="#statement" title="Permalink to this definition">¶</a></dt>
 <dd><p>This ready only attribute returns the last executed SQL statement.</p>
 </dd></dl>
 
-<dl class="data">
+<dl class="py data">
 <dt id="warnings">
-<code class="descname">warnings</code><a class="headerlink" href="#warnings" title="Permalink to this definition">¶</a></dt>
+<code class="sig-name descname">warnings</code><a class="headerlink" href="#warnings" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the number of warnings from the last executed statement, or zero
 if there are no warnings.</p>
 <div class="admonition note">
-<p class="first admonition-title">Note</p>
-<p class="last">If SQL_MODE TRADITIONAL is enabled an error instead of a warning will be returned. To retrieve warnings use the cursor method execute(“SHOW WARNINGS”).</p>
+<p class="admonition-title">Note</p>
+<p>If SQL_MODE TRADITIONAL is enabled an error instead of a warning will be returned. To retrieve warnings use the cursor method execute(“SHOW WARNINGS”).</p>
 </div>
 </dd></dl>
 
@@ -356,6 +337,7 @@ if there are no warnings.</p>
 </div>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
@@ -384,17 +366,15 @@ if there are no warnings.</p>
     </ul>
    </div>
 <div id="searchbox" style="display: none" role="search">
-  <h3>Quick search</h3>
+  <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" />
+      <input type="text" name="q" aria-labelledby="searchlabel" />
       <input type="submit" value="Go" />
-      <input type="hidden" name="check_keywords" value="yes" />
-      <input type="hidden" name="area" value="default" />
     </form>
     </div>
 </div>
-<script type="text/javascript">$('#searchbox').show(0);</script>
+<script>$('#searchbox').show(0);</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -414,12 +394,13 @@ if there are no warnings.</p>
         <li class="right" >
           <a href="connection.html" title="The connection class"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">The cursor class</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.8.5.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.3.1.
     </div>
   </body>
 </html>

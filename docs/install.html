@@ -1,20 +1,19 @@
 
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html>
   <head>
-    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Installation &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
-    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
     
-    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-    <script type="text/javascript" src="_static/jquery.js"></script>
-    <script type="text/javascript" src="_static/underscore.js"></script>
-    <script type="text/javascript" src="_static/doctools.js"></script>
-    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -36,7 +35,8 @@
         <li class="right" >
           <a href="index.html" title="MariaDB Connector/Python"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Installation</a></li> 
       </ul>
     </div>  
 
@@ -50,20 +50,20 @@
 <div class="section" id="prerequisites">
 <h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
-<li>Python 3 (minimum supported version is 3.6)</li>
-<li>MariaDB Server 10.x or MySQL Server</li>
-<li>MariaDB Connector/C 3.1.5 or newer</li>
+<li><p>Python 3 (minimum supported version is 3.6)</p></li>
+<li><p>MariaDB Server 10.x or MySQL Server</p></li>
+<li><p>MariaDB Connector/C 3.1.5 or newer</p></li>
 </ul>
 <div class="section" id="build-prerequisites">
 <h3>Build prerequisites<a class="headerlink" href="#build-prerequisites" title="Permalink to this headline">¶</a></h3>
 <p>The following build prerequisites are required to install or build MariaDB Connector/Python.
 For Windows operating platforms the pypi.org download page provides binary versions.</p>
 <ul class="simple">
-<li>C compiler</li>
-<li>Python development files (Usually they are installed with package <strong>python-dev</strong>). The minimum supported version of Python is 3.6</li>
-<li>MariaDB Connector/C libraries and header files (Either from MariaDB server package or
-from MariaDB Connector/C package).</li>
-<li>For Posix systems: TLS libraries, e.g. GnuTLS or OpenSSL (default)</li>
+<li><p>C compiler</p></li>
+<li><p>Python development files (Usually they are installed with package <strong>python-dev</strong>). The minimum supported version of Python is 3.6</p></li>
+<li><p>MariaDB Connector/C libraries and header files (Either from MariaDB server package or
+from MariaDB Connector/C package).</p></li>
+<li><p>For Posix systems: TLS libraries, e.g. GnuTLS or OpenSSL (default)</p></li>
 </ul>
 <p>On Posix systems make sure that the path environment variable contains the directory which
 contains the mariadb_config utility.</p>
@@ -84,8 +84,8 @@ contains the mariadb_config utility.</p>
 These binary packages are not intended for production use, since there might be several limitations
 and bottlenecks, e.g.:</p>
 <ul class="simple">
-<li>Dynamic MariaDB plugins (e.g. authentication plugins) are not part of the package and must
-be installed separetly by installing MariaDB Connector/C or MariaDB Server package.</li>
+<li><p>Dynamic MariaDB plugins (e.g. authentication plugins) are not part of the package and must
+be installed separetly by installing MariaDB Connector/C or MariaDB Server package.</p></li>
 </ul>
 <p>Make sure you have an up to date version of pip and install it with</p>
 <div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$</span> pip3 install mariadb
@@ -101,16 +101,17 @@ from the source directory.</p>
 </div>
 <p>You can configure the connection parameters by using the following environment variables</p>
 <ul class="simple">
-<li>TEST_USER (default root)</li>
-<li>TEST_PASSWORD</li>
-<li>TEST_DATABASE (default ‘testp’)</li>
-<li>TEST_HOST (default ‘localhost’)</li>
-<li>TEST_PORT (default 3306)</li>
+<li><p>TEST_USER (default root)</p></li>
+<li><p>TEST_PASSWORD</p></li>
+<li><p>TEST_DATABASE (default ‘testp’)</p></li>
+<li><p>TEST_HOST (default ‘localhost’)</p></li>
+<li><p>TEST_PORT (default 3306)</p></li>
 </ul>
 </div>
 </div>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
@@ -143,17 +144,15 @@ from the source directory.</p>
     </ul>
    </div>
 <div id="searchbox" style="display: none" role="search">
-  <h3>Quick search</h3>
+  <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" />
+      <input type="text" name="q" aria-labelledby="searchlabel" />
       <input type="submit" value="Go" />
-      <input type="hidden" name="check_keywords" value="yes" />
-      <input type="hidden" name="area" value="default" />
     </form>
     </div>
 </div>
-<script type="text/javascript">$('#searchbox').show(0);</script>
+<script>$('#searchbox').show(0);</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -173,12 +172,13 @@ from the source directory.</p>
         <li class="right" >
           <a href="index.html" title="MariaDB Connector/Python"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li> 
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Installation</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
-      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 1.8.5.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.3.1.
     </div>
   </body>
 </html>

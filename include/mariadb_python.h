@@ -188,6 +188,7 @@ typedef struct {
     unsigned long extended_server_capabilities;
     PyThreadState *thread_state;
     PyObject *converter;
+    PyObject *server_version_info;
 } MrdbConnection;
 
 typedef struct mrdb_pool{
