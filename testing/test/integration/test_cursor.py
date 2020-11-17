@@ -243,7 +243,11 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(fieldinfo.type(info[7]), "STRING")
         self.assertEqual(fieldinfo.type(info[8]), "VAR_STRING")
         self.assertEqual(fieldinfo.type(info[9]), "BLOB")
-        self.assertEqual(fieldinfo.type(info[10]), "JSON")
+        if self.connection.server_version_info > (10, 5, 1):
+            self.assertEqual(fieldinfo.type(info[10]), "JSON")
+        else:
+            self.assertEqual(fieldinfo.type(info[10]), "BLOB")
+        self.assertEqual(fieldinfo.type(info[10]), "JSON" or "BLOB")
         self.assertEqual(fieldinfo.flag(info[0]),
                          "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT | NUMERIC")
         self.assertEqual(fieldinfo.flag(info[1]), "PART_KEY | NUMERIC")
