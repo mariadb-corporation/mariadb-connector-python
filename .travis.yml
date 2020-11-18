@@ -44,7 +44,7 @@ env:
   global:
   - TEST_PORT=3305
   - TEST_HOST=mariadb.example.com
-
+  - MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
 
 matrix:
   include:
