@@ -24,6 +24,7 @@ def long_minus(s):
 conversions = {
     **{FIELD_TYPE.TIME: timedelta_to_time},
     **{FIELD_TYPE.LONG: long_minus},
+    **{FIELD_TYPE.LONGLONG: long_minus},
 }
 
 class TestConversion(unittest.TestCase):
@@ -46,7 +47,7 @@ class TestConversion(unittest.TestCase):
     def test_convert_long(self):
         cursor= self.connection.cursor()
         a= 12345
-        cursor.execute("SELECT CAST(? AS INT)", (12345,))
+        cursor.execute("SELECT CAST(? AS SIGNED)", (12345,))
         row= cursor.fetchone()
         self.assertEqual(row[0],a-1)
         del cursor

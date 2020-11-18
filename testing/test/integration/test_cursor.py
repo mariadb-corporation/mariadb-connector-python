@@ -16,6 +16,18 @@ from test.base_test import create_connection
 
 server_indicator_version= 100206
 
+def is_mysql():
+    mysql_server= 1
+    conn= create_connection()
+    cursor= conn.cursor()
+    cursor.execute("select version()")
+    row= cursor.fetchone()
+    print(row[0].upper())
+    if "MARIADB" in row[0].upper():
+        mysql_server= 0
+    del cursor, conn
+    return mysql_server
+
 class foo(int):
    def bar(self):pass
 
@@ -243,7 +255,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(fieldinfo.type(info[7]), "STRING")
         self.assertEqual(fieldinfo.type(info[8]), "VAR_STRING")
         self.assertEqual(fieldinfo.type(info[9]), "BLOB")
-        if self.connection.server_version_info > (10, 5, 1):
+        if self.connection.server_version_info > (10, 5, 1) or is_mysql():
             self.assertEqual(fieldinfo.type(info[10]), "JSON")
         else:
             self.assertEqual(fieldinfo.type(info[10]), "BLOB")
@@ -764,6 +776,8 @@ class TestCursor(unittest.TestCase):
         del cursor, con
 
     def test_conpy42(self):
+        if is_mysql():
+            self.skipTest("Skip (MySQL)")
         con= create_connection()
         cursor = con.cursor()
         cursor.execute("CREATE TEMPORARY TABLE conpy42(a GEOMETRY)")

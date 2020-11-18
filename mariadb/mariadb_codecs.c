@@ -1299,17 +1299,19 @@ mariadb_param_to_bind(MrdbCursor *self,
     }
 
     if (!value->value)
+    {
       bind->buffer_type= MYSQL_TYPE_NULL;
+    } else {
+      if (IS_NUM(bind->buffer_type))
+      {
+          bind->buffer= value->num;
+      }
 
-    if (IS_NUM(bind->buffer_type))
-    {
-        bind->buffer= value->num;
-    }
-
-    if (CHECK_TYPE(value->value, &PyLong_Type))
-    {
-        if (_PyLong_Sign(value->value) < 0)
-            is_negative= 1;
+      if (CHECK_TYPE(value->value, &PyLong_Type))
+      {
+          if (_PyLong_Sign(value->value) < 0)
+              is_negative= 1;
+      }
     }
 
     switch(bind->buffer_type)
@@ -1434,11 +1436,6 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     MrdbCursor *self= (MrdbCursor *)data;
     uint32_t i;
     uint8_t rc= 1;
-
-/*    if (!self)
-    {
-        return 1;
-    } */
 
     MARIADB_UNBLOCK_THREADS(self);
 
