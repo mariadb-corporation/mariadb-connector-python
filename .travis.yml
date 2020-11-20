@@ -10,6 +10,7 @@ addons:
     - mariadb.example.com
 
 before_install:
+  - export PROJ_PATH=`pwd`
   - chmod +x .travis/script.sh
   - sudo apt-get install software-properties-common
   - sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
@@ -25,7 +26,7 @@ before_install:
   - cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
   - make -j4
   - sudo make install
-  - cd ~/mariadb-corporation/mariadb-connector-python
+  - cd $PROJ_PATH
   - git clone https://github.com/pyenv/pyenv.git ~/.pyenv
   - export PYENV_ROOT="$HOME/.pyenv"
   - export PATH="$PYENV_ROOT/bin:$PATH"
