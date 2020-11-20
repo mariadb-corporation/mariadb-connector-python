@@ -18,7 +18,7 @@ before_install:
   - sudo apt update
   - sudo apt-get install -f libssl-dev libssl1.1
   - sudo apt-get install -f
-  - git clone https://github.com/mariadb-corporation/mariadb-connector-c.git ~/.cc_3.1
+  - git clone https://github.com/mariadb-corporation/mariadb-connector-c.git ~/cc_3.1
   - cd ~/cc_3.1
   - mkdir bld
   - cd bld
