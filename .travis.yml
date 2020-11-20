@@ -49,6 +49,7 @@ install:
   - export TEST_SSL_CLIENT_CERT_FILE=$SSLCERT/client.crt
   - export TEST_SSL_CLIENT_KEYSTORE_FILE=$SSLCERT/client-keystore.p12
   - export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
+  - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
 
 env:
   global:
