@@ -409,6 +409,7 @@ static PyObject
         }
     }
     self->configuration= kwargs;
+    Py_INCREF(self->configuration);
     Py_RETURN_NONE;
 }
 
@@ -444,9 +445,9 @@ MrdbPool_addconnection(MrdbPool *self, PyObject *args)
     {
         if (!self->connection[i])
         {
-            if (!conn &&
-                (!(conn = (MrdbConnection *)MrdbConnection_connect(NULL, args,
-                                                                   self->configuration))))
+            if (!conn && 
+                !(conn = (MrdbConnection *)MrdbConnection_connect(NULL, args,
+                                                                   self->configuration)))
             {
                 pthread_mutex_unlock(&self->lock);
                 return NULL;
