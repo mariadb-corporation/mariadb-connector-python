@@ -789,13 +789,14 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy35(self):
         con= create_connection()
-        cursor = con.cursor(cursor_type=CURSOR.READ_ONLY)
+        cursor = con.cursor()
         cursor.execute("CREATE TEMPORARY table sample (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(64))");
 
         for name in ('foo', 'bar', 'baz'):
             cursor.execute("INSERT INTO sample SET name = ?", (name,))
         self.assertEqual(cursor.lastrowid, 3)
 
+        cursor = con.cursor(cursor_type=CURSOR.READ_ONLY)
         cursor.execute("SELECT * FROM sample ORDER BY id")
         i= 0
         for row in cursor:
