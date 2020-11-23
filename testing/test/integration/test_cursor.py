@@ -670,6 +670,8 @@ class TestCursor(unittest.TestCase):
         del cursor, con
 
     def test_conpy27(self):
+        if is_mysql():
+            self.skipTest("Skip (MySQL)")
         con = create_connection()
         cursor = con.cursor(prepared=True)
         cursor.execute("SELECT ?", (1,))
