@@ -534,7 +534,8 @@ MrdbPool_close(MrdbPool *self)
         {
             PyDict_DelItemString(cnx_pool, self->pool_name);
         }
-        self->pool_name= NULL;
+        MARIADB_FREE_MEM(self->pool_name);
+        self->pool_name= 0;
     }
     pthread_mutex_unlock(&self->lock);
     pthread_mutex_destroy(&self->lock);
