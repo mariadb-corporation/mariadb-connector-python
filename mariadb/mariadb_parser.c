@@ -168,7 +168,7 @@ cont:
                     if (a + 7 < end && isdigit(*(a+1)))
                     {
                         char *x;
-                        ulong version_number= strtol(a+1, &x, 10);
+                        unsigned long version_number= strtol(a+1, &x, 10);
                         a= x;
                         if ((version_number >= 50700 && version_number <= 99999) ||
                             !(version_number <= mysql_get_server_version(p->mysql)))
@@ -189,7 +189,7 @@ cont:
                     if (a + 6 < end && isdigit(*a))
                     {
                       char *x;
-                      ulong version_number= strtol(a, &x, 10);
+                      unsigned long version_number= strtol(a, &x, 10);
                       a= x;
                       if (!(version_number <= mysql_get_server_version(p->mysql)))
                       {
