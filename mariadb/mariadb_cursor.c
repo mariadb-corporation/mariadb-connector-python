@@ -732,7 +732,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
 
         if (!self->parser)
         {
-            self->parser= MrdbParser_init(statement, statement_len);
+            self->parser= MrdbParser_init(self->connection->mysql, statement, statement_len);
             if (MrdbParser_parse(self->parser, 0, errmsg, 128))
             {
                 PyErr_SetString(Mariadb_ProgrammingError, errmsg);
@@ -1364,7 +1364,7 @@ MrdbCursor_executemany(MrdbCursor *self,
 
     if (!self->parser)
     {
-        if (!(self->parser= MrdbParser_init(statement, (size_t)statement_len)))
+        if (!(self->parser= MrdbParser_init(self->connection->mysql, statement, (size_t)statement_len)))
         {
             exit(-1);
         }

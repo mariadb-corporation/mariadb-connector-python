@@ -73,7 +73,7 @@ MrdbParser_end(MrdbParser* p)
 }
 
 MrdbParser *
-MrdbParser_init(const char *statement, size_t length)
+MrdbParser_init(MYSQL *mysql, const char *statement, size_t length)
 {
     MrdbParser *p;
 
@@ -91,6 +91,7 @@ MrdbParser_init(const char *statement, size_t length)
         }
         memcpy(p->statement.str, statement, length);
         p->statement.length= length;
+        p->mysql= mysql;
     }
     return p;
 }
@@ -155,6 +156,48 @@ cont:
             if (*a == '/' && *(a + 1) == '*')
             {
                 a+= 2;
+                if (a+1 < end && *a == '!')
+                {
+                    /* check special syntax: 1. comment followed by '!' and whitespace */
+                    if (isspace(*(a+1)))
+                    {
+                      a+= 2;
+                      continue;
+                    }
+                    /* check special syntax: 3. comment followed by '!' 5 or 6 digit version number */
+                    if (a + 7 < end && isdigit(*(a+1)))
+                    {
+                        char *x;
+                        ulong version_number= strtol(a+1, &x, 10);
+                        a= x;
+                        if ((version_number >= 50700 && version_number <= 99999) ||
+                            !(version_number <= mysql_get_server_version(p->mysql)))
+                        {
+                          p->in_comment= 1;
+                        }
+                        continue;
+                    }
+                }
+                if (a+2 < end && *a == 'M' && *(a+1) == '!')
+                {
+                    a+= 2;
+                    /* check special syntax: 2. comment followed by 'M! ' (MariaDB only) */
+                    if (isspace(*(a)))
+                        continue;
+
+                    /* check special syntax: 2. comment followed by 'M!' and version number */
+                    if (a + 6 < end && isdigit(*a))
+                    {
+                      char *x;
+                      ulong version_number= strtol(a, &x, 10);
+                      a= x;
+                      if (!(version_number <= mysql_get_server_version(p->mysql)))
+                      {
+                          p->in_comment= 1;
+                      }
+                      continue;
+                    }
+                }
                 p->in_comment= 1;
                 continue;
             }

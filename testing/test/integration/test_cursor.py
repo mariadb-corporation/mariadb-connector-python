@@ -1092,6 +1092,49 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(conn.server_version_info, (major, minor, patch))
         self.assertEqual(conn.get_server_version(), (major, minor, patch))
 
+    def test_conpy133(self):
+        if is_mysql():
+            self.skipTest("Skip (MySQL)")
+        conn= create_connection()
+
+        cursor= conn.cursor()
+        cursor.execute("SELECT /*! ? */", (1,))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        del cursor
+
+        cursor= conn.cursor()
+        cursor.execute("SELECT /*M! ? */", (1,))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        del cursor
+
+        cursor= conn.cursor()
+        cursor.execute("SELECT /*M!50601 ? */", (1,))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        del cursor
+
+        cursor= conn.cursor()
+        cursor.execute("SELECT /*!40301 ? */", (1,))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        del cursor
+
+        cursor= conn.cursor()
+        try:
+            cursor.execute("SELECT /*!50701 ? */", (1,))
+        except mariadb.DataError:
+            pass
+        del cursor
+
+        cursor= conn.cursor()
+        try:
+            cursor.execute("SELECT /*!250701 ? */", (1,))
+        except mariadb.DataError:
+            pass
+        del cursor
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:

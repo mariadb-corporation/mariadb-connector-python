@@ -157,6 +157,7 @@ typedef struct st_parser {
     char* value_ofs;
     enum enum_paramstyle paramstyle;
     MrdbString *keys;
+    MYSQL *mysql;
 } MrdbParser;
 
 struct mrdb_pool;
@@ -415,7 +416,7 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 
 /* parser prototypes */
 MrdbParser *
-MrdbParser_init(const char *statement, size_t length);
+MrdbParser_init(MYSQL *mysql, const char *statement, size_t length);
 
 void
 MrdbParser_end(MrdbParser *p);
