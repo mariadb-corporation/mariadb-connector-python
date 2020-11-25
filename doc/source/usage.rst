@@ -7,7 +7,7 @@ Basic usage
 Connecting
 ##########
 
-The basic usage of MariaDB Connector/Python is similiar to other database drivers which
+The basic usage of MariaDB Connector/Python is similar to other database drivers which
 implement |DBAPI|. 
 
 Below is a simple example of a typical use of MariaDB Connector/Python
@@ -61,7 +61,7 @@ Since |MCP| uses binary protocol, escaping strings or binary data like in other 
    data= ("The Lord of the Rings", "J.R.R. Tolkien", 18.99)
 
 Often there is a requirement to update, delete or insert multiple records. This could be done be using :func:`~execute` in
-a loop, but much more effective is using the :func:`executemany` method, especially when using a MariaDB database server 10.2 and above, which supports a special "bulk" protocol. The executemany() works similiar to execute(), but accepts data as a list of tuples:
+a loop, but much more effective is using the :func:`executemany` method, especially when using a MariaDB database server 10.2 and above, which supports a special "bulk" protocol. The executemany() works similar to execute(), but accepts data as a list of tuples:
 
 .. code-block:: python
    :linenos:

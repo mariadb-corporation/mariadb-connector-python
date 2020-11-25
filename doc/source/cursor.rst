@@ -217,7 +217,7 @@ Cursor attributes
 
 .. data:: sp_outparams
 
-  This read-only attribute undicates if the current result set contains inout
+  This read-only attribute undicates if the current result set contains in/out
   or out parameters from a previously executed stored procedure.
 
 .. data:: rowcount

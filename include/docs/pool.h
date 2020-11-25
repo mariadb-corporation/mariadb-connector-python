@@ -84,6 +84,6 @@ PyDoc_STRVAR(
 PyDoc_STRVAR(
   pool_pool_reset_connection__doc__,
   "(read/write)\n\n"
-  "If set to true, the connection will be resetted on both client and server side\n"
+  "If set to true, the connection will be reset on both client and server side\n"
   "after .close() method was called"
 );

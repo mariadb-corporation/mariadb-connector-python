@@ -33,7 +33,7 @@ Connection constructors
   - **prepared** (bool): When set to `True` cursor will remain in prepared state after the first :func:`~cursor.execute` method was called. Further calls to *execute()* method will ignore the sql statement.
   - **binary** (bool): When set to `True` cursor will be executed using the MariaDB client/server binary protocol.
 
-  :return: Returns a cursor object or raises an exception if an error occured.
+  :return: Returns a cursor object or raises an exception if an error occurred.
 
 .. versionadded:: 1.0.1
 
@@ -241,7 +241,7 @@ Connection attributes
  
   Returns or sets the default database for the current connection
    
-  If the used datbase will not change, the preffered way is to specify
+  If the used database will not change, the preferred way is to specify
   the default database when establishing the connection.
 
 .. data:: server_info

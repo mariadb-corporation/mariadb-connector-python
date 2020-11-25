@@ -49,7 +49,7 @@
 <h1>Basic usage<a class="headerlink" href="#basic-usage" title="Permalink to this headline">¶</a></h1>
 <div class="section" id="connecting">
 <h2>Connecting<a class="headerlink" href="#connecting" title="Permalink to this headline">¶</a></h2>
-<p>The basic usage of MariaDB Connector/Python is similiar to other database drivers which
+<p>The basic usage of MariaDB Connector/Python is similar to other database drivers which
 implement DB API 2.0 (PEP-249).</p>
 <p>Below is a simple example of a typical use of MariaDB Connector/Python</p>
 <div class="highlight-python notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
@@ -158,7 +158,7 @@ parameters is supported in methods <a class="reference internal" href="cursor.ht
 </pre></div>
 </td></tr></table></div>
 <p>Often there is a requirement to update, delete or insert multiple records. This could be done be using <a class="reference internal" href="cursor.html#execute" title="execute"><code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code></a> in
-a loop, but much more effective is using the <a class="reference internal" href="cursor.html#executemany" title="executemany"><code class="xref py py-func docutils literal notranslate"><span class="pre">executemany()</span></code></a> method, especially when using a MariaDB database server 10.2 and above, which supports a special “bulk” protocol. The executemany() works similiar to execute(), but accepts data as a list of tuples:</p>
+a loop, but much more effective is using the <a class="reference internal" href="cursor.html#executemany" title="executemany"><code class="xref py py-func docutils literal notranslate"><span class="pre">executemany()</span></code></a> method, especially when using a MariaDB database server 10.2 and above, which supports a special “bulk” protocol. The executemany() works similar to execute(), but accepts data as a list of tuples:</p>
 <div class="highlight-python notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
  2
  3

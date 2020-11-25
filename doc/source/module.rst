@@ -78,7 +78,7 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
 
     - pool_name -- Name of the pool
     - pool_size -- Size of the pool. If this value is not provided, a default size of 5 pool connections will be used.
-    - pool_reset -- If set to `True` the connection will be resetted after close() method was called.
+    - pool_reset -- If set to `True` the connection will be reset after close() method was called.
 
 
 .. data:: apilevel
@@ -128,7 +128,7 @@ through the following exceptions:
 
 .. exception:: PoolError
 
-    Exception rasied for errors related to ConnectionPool class.
+    Exception raised for errors related to ConnectionPool class.
 
 .. exception:: OperationalError
 

@@ -46,7 +46,7 @@ These binary packages are not intended for production use, since there might be 
 and bottlenecks, e.g.:
 
 - Dynamic MariaDB plugins (e.g. authentication plugins) are not part of the package and must
-  be installed separetly by installing MariaDB Connector/C or MariaDB Server package.
+  be installed separately by installing MariaDB Connector/C or MariaDB Server package.
 
 Make sure you have an up to date version of pip and install it with
 

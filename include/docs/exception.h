@@ -42,7 +42,7 @@ PyDoc_STRVAR(
 
 PyDoc_STRVAR(
     exception_pool__doc__,
-    "Exeception rasied for errors related to ConnectionPool class."
+    "Exception raised for errors related to ConnectionPool class."
 );
 
 PyDoc_STRVAR(

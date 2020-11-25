@@ -620,7 +620,7 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
 {
     MARIADB_CHECK_CONNECTION(self, NULL);
     /* Todo: check if all the cursor stuff is deleted (when using prepared
-       statemnts this should be handled in mysql_close) */
+       statements this should be handled in mysql_close) */
 
     if (self->converter)
         Py_XDECREF(self->converter);

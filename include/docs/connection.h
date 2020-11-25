@@ -262,7 +262,7 @@ PyDoc_STRVAR(
   connection_database__doc__,
   "(read/write)\n\n"
   "Returns or sets the default database for the current connection\n\n"
-  "If the used datbase will not change, the preffered way is to specify\n"
+  "If the used database will not change, the preferred way is to specify\n"
   "the default database in connect() method."
 );
 
@@ -300,7 +300,7 @@ PyDoc_STRVAR(
 PyDoc_STRVAR(
   connection_server_info__doc__,
   "(read only)\n\n"
-  "Returns the alphanumeric version of connected database. Tthe numeric version\n"
+  "Returns the alphanumeric version of connected database. The numeric version\n"
   "can be obtained with server_version property."
 );
 

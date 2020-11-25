@@ -184,7 +184,7 @@ PyDoc_STRVAR(
   "field_count()\n"
   "--\n"
   "\n"
-  "Returns the number of fields (colunns) of a result set."
+  "Returns the number of fields (columns) of a result set."
 );
 
 PyDoc_STRVAR(
@@ -262,7 +262,7 @@ PyDoc_STRVAR(
 PyDoc_STRVAR(
   cursor_sp_outparam__doc__,
   "(read)\n\n"
-  "Indicates if the current result set contains inout or out parameter\n"
+  "Indicates if the current result set contains in out or out parameter\n"
   "from a previous executed stored procedure."
 );
 

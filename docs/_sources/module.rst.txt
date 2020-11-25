@@ -46,9 +46,9 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
    - **ssl_verify_cert** (bool): Enables server certificate verification.
    - **ssl** (bool): Always use a secure TLS connection
    - **autocommit** (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).
-   .. versionadded:: 1.0.1
+.. versionadded:: 1.0.1
    - **converter** (dict): Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions.
-   .. versionadded:: 1.0.3
+.. versionadded:: 1.0.3
 
 
    :return: Returns a connection or raises an error if the connection between client and server couldn't be established.
@@ -78,7 +78,7 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
 
     - pool_name -- Name of the pool
     - pool_size -- Size of the pool. If this value is not provided, a default size of 5 pool connections will be used.
-    - pool_reset -- If set to `True` the connection will be resetted after close() method was called.
+    - pool_reset -- If set to `True` the connection will be reset after close() method was called.
 
 
 .. data:: apilevel
@@ -128,7 +128,7 @@ through the following exceptions:
 
 .. exception:: PoolError
 
-    Exception rasied for errors related to ConnectionPool class.
+    Exception raised for errors related to ConnectionPool class.
 
 .. exception:: OperationalError
 

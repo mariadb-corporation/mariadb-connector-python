@@ -52,7 +52,7 @@ Capability flags
 ^^^^^^^^^^^^^^^^
 
 These flags are used when establishing a connection or to check if the database is
-capabable of a certain feature.
+capable of a certain feature.
 
 .. data:: mariadb.constants.CLIENT.MYSQL
 
