@@ -24,6 +24,11 @@
 #define IS_DECIMAL_TYPE(type) \
 ((type) == MYSQL_TYPE_NEWDECIMAL || (type) == MYSQL_TYPE_DOUBLE || (type) == MYSQL_TYPE_FLOAT)
 
+long MrdbIndicator_AsLong(PyObject *column)
+{
+  PyObject *pyLong= PyObject_GetAttrString(column, "indicator");
+  return PyLong_AsLong(pyLong);
+}
 
 int codecs_datetime_init(void)
 {
@@ -982,7 +987,7 @@ mariadb_get_parameter(MrdbCursor *self,
                     mysql_get_server_info(self->stmt->mysql));
             goto end;
         }
-        param->indicator= (char)MrdbIndicator_AsLong(column);
+        param->indicator= (uint8_t)MrdbIndicator_AsLong(column);
         param->value= NULL; /* you can't have both indicator and value */
     } else if (column == Py_None) {
         param->value= NULL;

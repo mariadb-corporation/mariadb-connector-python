@@ -4,10 +4,14 @@ MariaDB indicator variables
 Indicator values are used in executemany() method of cursor class to
 indicate special values.
 '''
+class MrdbIndicator():
+    indicator= 0
 
-import mariadb._mariadb as m
+    def __init__(self, indicator):
+        self.indicator = indicator
 
-NULL = m.indicator_null
-DEFAULT = m.indicator_default
-IGNORE = m.indicator_ignore
-IGNORE_ROW = m.indicator_row
+NULL = MrdbIndicator(1)
+DEFAULT = MrdbIndicator(2)
+IGNORE = MrdbIndicator(3)
+IGNORE_ROW = MrdbIndicator(4)
+

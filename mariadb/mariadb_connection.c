@@ -722,6 +722,7 @@ MrdbConnection_rollback(MrdbConnection *self)
     Py_RETURN_NONE;
 }
 
+/*
 PyObject *
 Mariadb_DBAPIType_Object(uint32_t type)
 {
@@ -730,7 +731,7 @@ Mariadb_DBAPIType_Object(uint32_t type)
             types);
     Py_DECREF(types);
     return number;
-}
+} */
 
 PyObject *
 MrdbConnection_xid(MrdbConnection *self, PyObject *args)

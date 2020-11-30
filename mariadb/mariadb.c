@@ -28,7 +28,8 @@ extern int codecs_datetime_init(void);
 
 PyObject *cnx_pool= NULL;
 PyObject *decimal_module= NULL,
-         *decimal_type= NULL;
+         *decimal_type= NULL,
+         *indicator_module= NULL;
 extern uint16_t max_pool_size;
 
 int
@@ -177,20 +178,8 @@ PyMODINIT_FUNC PyInit__mariadb(void)
         goto error;
     }
 
-    Py_TYPE(&MrdbIndicator_Type) = &PyType_Type;
-    if (PyType_Ready(&MrdbIndicator_Type) == -1)
-    {
-        goto error;
-    }
-
     Py_TYPE(&Mariadb_Fieldinfo_Type) = &PyType_Type;
     if (PyType_Ready(&Mariadb_Fieldinfo_Type) == -1)
-    {
-        goto error;
-    }
-
-    Py_TYPE(&Mariadb_DBAPIType_Type) = &PyType_Type;
-    if (PyType_Ready(&Mariadb_DBAPIType_Type) == -1)
     {
         goto error;
     }
@@ -268,26 +257,6 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     Py_INCREF(&MrdbPool_Type);
     PyModule_AddObject(module, "ConnectionPool", (PyObject *)&MrdbPool_Type);
     PyModule_AddObject(module, "_CONNECTION_POOLS", cnx_pool);
-
-    PyModule_AddObject(module, "indicator_null", 
-                       MrdbIndicator_Object(STMT_INDICATOR_NULL));
-    PyModule_AddObject(module, "indicator_default",
-                       MrdbIndicator_Object(STMT_INDICATOR_DEFAULT));
-    PyModule_AddObject(module, "indicator_ignore",
-                       MrdbIndicator_Object(STMT_INDICATOR_IGNORE));
-    PyModule_AddObject(module, "indicator_row",
-                       MrdbIndicator_Object(STMT_INDICATOR_IGNORE_ROW));
-
-    PyModule_AddObject(module, "NUMBER",
-                       Mariadb_DBAPIType_Object(DBAPI_NUMBER));
-    PyModule_AddObject(module, "BINARY",
-                       Mariadb_DBAPIType_Object(DBAPI_BINARY));
-    PyModule_AddObject(module, "STRING",
-                       Mariadb_DBAPIType_Object(DBAPI_STRING));
-    PyModule_AddObject(module, "DATETIME",
-                       Mariadb_DBAPIType_Object(DBAPI_DATETIME));
-    PyModule_AddObject(module, "ROWID",
-                       Mariadb_DBAPIType_Object(DBAPI_ROWID));
 
     Py_INCREF(&Mariadb_Fieldinfo_Type);
     PyModule_AddObject(module, "fieldinfo",

@@ -8,10 +8,8 @@ Minimum supported Python version is 3.6
 '''
 
 from ._mariadb import (
-    BINARY,
     Binary,
     ConnectionPool,
-    DATETIME,
     DataError,
     DatabaseError,
     Date,
@@ -20,13 +18,10 @@ from ._mariadb import (
     IntegrityError,
     InterfaceError,
     InternalError,
-    NUMBER,
     NotSupportedError,
     OperationalError,
     PoolError,
     ProgrammingError,
-    ROWID,
-    STRING,
     Time,
     TimeFromTicks,
     Timestamp,
@@ -35,13 +30,52 @@ from ._mariadb import (
     _CONNECTION_POOLS,
     __version__,
     __version_info__,
-    apilevel,
-    paramstyle,
-    threadsafety,
     connect,
     fieldinfo,
     mariadbapi_version,
 )
+
+apilevel = '2.0'
+paramstyle = 'qmark'
+threadsafety = True
+
+from mariadb.constants import FIELD_TYPE
+
+class DbApiType(frozenset):
+
+    def __eq__(self, field_type):
+        if (isinstance(field_type, DbApiType)):
+            return not self.difference(field_type)
+        return field_type in self
+
+BINARY = DbApiType([FIELD_TYPE.GEOMETRY,
+                    FIELD_TYPE.LONG_BLOB,
+                    FIELD_TYPE.MEDIUM_BLOB,
+                    FIELD_TYPE.TINY_BLOB,
+                    FIELD_TYPE.BLOB])
+
+STRING = DbApiType([FIELD_TYPE.ENUM,
+                    FIELD_TYPE.JSON,
+                    FIELD_TYPE.STRING,
+                    FIELD_TYPE.VARCHAR,
+                    FIELD_TYPE.VAR_STRING])
+
+NUMBER = DbApiType([FIELD_TYPE.DECIMAL,
+                    FIELD_TYPE.DOUBLE,
+                    FIELD_TYPE.FLOAT,
+                    FIELD_TYPE.INT24,
+                    FIELD_TYPE.LONG,
+                    FIELD_TYPE.LONGLONG,
+                    FIELD_TYPE.NEWDECIMAL,
+                    FIELD_TYPE.SHORT,
+                    FIELD_TYPE.TINY,
+                    FIELD_TYPE.YEAR])
+
+DATE = DbApiType([FIELD_TYPE.DATE])
+TIME = DbApiType([FIELD_TYPE.TIME])
+DATETIME = TIMESTAMP = DbApiType([FIELD_TYPE.DATETIME,
+                                          FIELD_TYPE.TIMESTAMP])
+ROWID = DbApiType()
 
 '''
 test attribute

@@ -93,15 +93,6 @@ int clock_gettime(int dummy, struct timespec *ct);
 /* Magic constant for checking dynamic columns */
 #define PYTHON_DYNCOL_VALUE 0xA378BD8E
 
-enum enum_dataapi_groups
-{
-    DBAPI_NUMBER= 1,
-    DBAPI_STRING,
-    DBAPI_DATETIME,
-    DBAPI_BINARY,
-    DBAPI_ROWID
-};
-
 enum enum_extended_field_type
 {
   EXT_TYPE_NONE=0,
@@ -210,7 +201,7 @@ typedef struct mrdb_pool{
 typedef struct {
     enum enum_field_types type;
     PyObject *Value;
-    char indicator;
+    uint8_t indicator;
 } Mariadb_Value;
 
 /* Parameter info for cursor.executemany()
@@ -232,11 +223,6 @@ typedef struct {
     unsigned char num[8];
     MYSQL_TIME tm;
 } MrdbParamValue;
-
-typedef struct {
-    PyObject_HEAD
-    enum enum_indicator_type indicator;
-} MrdbIndicator;
 
 /* PEP-249: Cursor object */
 typedef struct {
@@ -281,12 +267,6 @@ typedef struct
     PyObject_HEAD
 } Mariadb_Fieldinfo;
 
-typedef struct
-{
-    PyObject_HEAD
-    int32_t *types;
-} Mariadb_DBAPIType;
-
 typedef struct {
     ps_field_fetch_func func;
     int pack_len;
@@ -314,10 +294,8 @@ extern PyObject *decimal_module,
 /* Object types */
 extern PyTypeObject MrdbPool_Type;
 extern PyTypeObject Mariadb_Fieldinfo_Type;
-extern PyTypeObject MrdbIndicator_Type;
 extern PyTypeObject MrdbConnection_Type;
 extern PyTypeObject MrdbCursor_Type;
-extern PyTypeObject Mariadb_DBAPIType_Type;
 
 int Mariadb_traverse(PyObject *self,
     visitproc visit,
@@ -332,15 +310,6 @@ mariadb_throw_exception(void *handle,
     ...);
 
 enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *field);
-
-PyObject *
-MrdbIndicator_Object(uint32_t type);
-
-long
-MrdbIndicator_AsLong(PyObject *v);
-
-PyObject *
-Mariadb_DBAPIType_Object(uint32_t type);
 
 PyObject *
 MrdbConnection_affected_rows(MrdbConnection *self);
@@ -468,7 +437,7 @@ if ((obj)->thread_state)\
 } 
 
 #define MrdbIndicator_Check(a)\
-    (Py_TYPE((a)) == &MrdbIndicator_Type)
+      (PyObject_HasAttrString(a, "indicator"))
 
 #define MARIADB_CHECK_CONNECTION(connection, ret)\
     if (!(connection) || !(connection)->mysql)\
