@@ -748,134 +748,109 @@ class DatabaseAPI20Test(unittest.TestCase):
         finally:
             con.close()
 
-#           cur.execute('select name from %sbooze' % self.table_prefix)
-#           rows1 = cur.fetchone()
-#           rows23 = cur.fetchmany(2)
-#           rows4 = cur.fetchone()
-#           rows56 = cur.fetchall()
-#           self.assertTrue(cur.rowcount in (-1, 6))
-#           self.assertEqual(len(rows23), 2,
-#                            'fetchmany returned incorrect number of rows'
-#                            )
-#           self.assertEqual(len(rows56), 2,
-#                            'fetchall returned incorrect number of rows'
-#                            )
+    def help_nextset_setUp(self, cur):
+        ''' Should create a procedure called deleteme
+            that returns two result sets, first the
+      number of rows in booze then "name from booze"
+        '''
+        raise NotImplementedError('Helper not implemented')
+        # sql="""
+        #    create procedure deleteme as
+        #    begin
+        #        select count(*) from booze
+        #        select name from booze
+        #    end
+        # """
+        # cur.execute(sql)
 
-#           rows = [rows1[0]]
-#           rows.extend([rows23[0][0], rows23[1][0]])
-#           rows.append(rows4[0])
-#           rows.extend([rows56[0][0], rows56[1][0]])
-#           rows.sort()
-#           for i in range(0, len(self.samples)):
-#               self.assertEqual(rows[i], self.samples[i],
-#                                'incorrect data retrieved or inserted'
-#                                )
-#       finally:
-#           con.close()
+    def help_nextset_tearDown(self, cur):
+        'If cleaning up is needed after nextSetTest'
+        raise NotImplementedError('Helper not implemented')
+        # cur.execute("drop procedure deleteme")
 
-#   def help_nextset_setUp(self, cur):
-#       ''' Should create a procedure called deleteme
-#           that returns two result sets, first the
-#     number of rows in booze then "name from booze"
-#       '''
-#       raise NotImplementedError('Helper not implemented')
-#       # sql="""
-#       #    create procedure deleteme as
-#       #    begin
-#       #        select count(*) from booze
-#       #        select name from booze
-#       #    end
-#       # """
-#       # cur.execute(sql)
+    def test_arraysize(self):
+        # Not much here - rest of the tests for this are in test_fetchmany
+        con = self._connect()
+        try:
+            cur = con.cursor()
+            self.assertTrue(hasattr(cur, 'arraysize'),
+                            'cursor.arraysize must be defined'
+                            )
+        finally:
+            con.close()
 
-#   def help_nextset_tearDown(self, cur):
-#       'If cleaning up is needed after nextSetTest'
-#       raise NotImplementedError('Helper not implemented')
-#       # cur.execute("drop procedure deleteme")
+    def test_setinputsizes(self):
+        con = self._connect()
+        try:
+            cur = con.cursor()
+            cur.setinputsizes((25,))
+            self._paraminsert(cur)  # Make sure cursor still works
+        finally:
+            con.close()
 
-#   def test_arraysize(self):
-#       # Not much here - rest of the tests for this are in test_fetchmany
-#       con = self._connect()
-#       try:
-#           cur = con.cursor()
-#           self.assertTrue(hasattr(cur, 'arraysize'),
-#                           'cursor.arraysize must be defined'
-#                           )
-#       finally:
-#           con.close()
+    def test_None(self):
+        con = self._connect()
+        try:
+            cur = con.cursor()
+            self.executeDDL1(cur)
+            cur.execute('insert into %sbooze values (NULL)' % self.table_prefix)
+            cur.execute('select name from %sbooze' % self.table_prefix)
+            r = cur.fetchall()
+            self.assertEqual(len(r), 1)
+            self.assertEqual(len(r[0]), 1)
+            self.assertEqual(r[0][0], None, 'NULL value not returned as None')
+        finally:
+            con.close()
 
-#   def test_setinputsizes(self):
-#       con = self._connect()
-#       try:
-#           cur = con.cursor()
-#           cur.setinputsizes((25,))
-#           self._paraminsert(cur)  # Make sure cursor still works
-#       finally:
-#           con.close()
+    def test_Date(self):
+        d1 = self.driver.Date(2002, 12, 25)
+        d2 = self.driver.DateFromTicks(time.mktime((2002, 12, 25, 0, 0, 0, 0, 0, 0)))
+        # Can we assume this? API doesn't specify, but it seems implied
+        # self.assertEqual(str(d1),str(d2))
 
-#   def test_None(self):
-#       con = self._connect()
-#       try:
-#           cur = con.cursor()
-#           self.executeDDL1(cur)
-#           cur.execute('insert into %sbooze values (NULL)' % self.table_prefix)
-#           cur.execute('select name from %sbooze' % self.table_prefix)
-#           r = cur.fetchall()
-#           self.assertEqual(len(r), 1)
-#           self.assertEqual(len(r[0]), 1)
-#           self.assertEqual(r[0][0], None, 'NULL value not returned as None')
-#       finally:
-#           con.close()
+    def test_Time(self):
+        t1 = self.driver.Time(13, 45, 30)
+        t2 = self.driver.TimeFromTicks(time.mktime((2001, 1, 1, 13, 45, 30, 0, 0, 0)))
+        # Can we assume this? API doesn't specify, but it seems implied
+        # self.assertEqual(str(t1),str(t2))
 
-#   def test_Date(self):
-#       d1 = self.driver.Date(2002, 12, 25)
-#       d2 = self.driver.DateFromTicks(time.mktime((2002, 12, 25, 0, 0, 0, 0, 0, 0)))
-#       # Can we assume this? API doesn't specify, but it seems implied
-#       # self.assertEqual(str(d1),str(d2))
+    def test_Timestamp(self):
+        t1 = self.driver.Timestamp(2002, 12, 25, 13, 45, 30)
+        t2 = self.driver.TimestampFromTicks(
+            time.mktime((2002, 12, 25, 13, 45, 30, 0, 0, 0))
+        )
+        # Can we assume this? API doesn't specify, but it seems implied
+        # self.assertEqual(str(t1),str(t2))
 
-#   def test_Time(self):
-#       t1 = self.driver.Time(13, 45, 30)
-#       t2 = self.driver.TimeFromTicks(time.mktime((2001, 1, 1, 13, 45, 30, 0, 0, 0)))
-#       # Can we assume this? API doesn't specify, but it seems implied
-#       # self.assertEqual(str(t1),str(t2))
+    def test_Binary(self):
+        b = self.driver.Binary(b'Something')
+        b = self.driver.Binary(b'')
 
-#   def test_Timestamp(self):
-#       t1 = self.driver.Timestamp(2002, 12, 25, 13, 45, 30)
-#       t2 = self.driver.TimestampFromTicks(
-#           time.mktime((2002, 12, 25, 13, 45, 30, 0, 0, 0))
-#       )
-#       # Can we assume this? API doesn't specify, but it seems implied
-#       # self.assertEqual(str(t1),str(t2))
+    def test_STRING(self):
+        self.assertTrue(hasattr(self.driver, 'STRING'),
+                        'module.STRING must be defined'
+                        )
 
-#   def test_Binary(self):
-#       b = self.driver.Binary(b'Something')
-#       b = self.driver.Binary(b'')
+    def test_BINARY(self):
+        self.assertTrue(hasattr(self.driver, 'BINARY'),
+                        'module.BINARY must be defined.'
+                        )
 
-#   def test_STRING(self):
-#       self.assertTrue(hasattr(self.driver, 'STRING'),
-#                       'module.STRING must be defined'
-#                       )
+    def test_NUMBER(self):
+        self.assertTrue(hasattr(self.driver, 'NUMBER'),
+                        'module.NUMBER must be defined.'
+                        )
 
-#   def test_BINARY(self):
-#       self.assertTrue(hasattr(self.driver, 'BINARY'),
-#                       'module.BINARY must be defined.'
-#                       )
+    def test_DATETIME(self):
+        self.assertTrue(hasattr(self.driver, 'DATETIME'),
+                        'module.DATETIME must be defined.'
+                        )
 
-#   def test_NUMBER(self):
-#       self.assertTrue(hasattr(self.driver, 'NUMBER'),
-#                       'module.NUMBER must be defined.'
-#                       )
-
-#   def test_DATETIME(self):
-#       self.assertTrue(hasattr(self.driver, 'DATETIME'),
-#                       'module.DATETIME must be defined.'
-#                       )
-
-#   def test_ROWID(self):
-#       self.assertTrue(hasattr(self.driver, 'ROWID'),
-#                       'module.ROWID must be defined.'
-#                       )
+    def test_ROWID(self):
+        self.assertTrue(hasattr(self.driver, 'ROWID'),
+                        'module.ROWID must be defined.'
+                        )
 
 
-# f __name__ == '__main__':
-#   unittest.main()
+if __name__ == '__main__':
+    unittest.main()

@@ -41,24 +41,6 @@ Mariadb_traverse(PyObject *self,
 }
 
 static PyObject *
-Mariadb_date_from_ticks(PyObject *self, PyObject *args);
-
-static PyObject *
-Mariadb_time_from_ticks(PyObject *self, PyObject *args);
-
-static PyObject *
-Mariadb_timestamp_from_ticks(PyObject *self, PyObject *args);
-
-static PyObject 
-*Mariadb_date(PyObject *self, PyObject *args);
-
-static PyObject *
-Mariadb_time(PyObject *self, PyObject *args);
-
-static PyObject *
-Mariadb_timestamp(PyObject *self, PyObject *args);
-
-static PyObject *
 Mariadb_binary(PyObject *self, PyObject *args);
 
 static PyMethodDef
@@ -74,25 +56,6 @@ Mariadb_Methods[] =
     {"ConnectionPool", (PyCFunction)MrdbPool_add,
         METH_VARARGS | METH_KEYWORDS,
         "todo!!"}, 
-    /* PEP-249 DB-API */
-    {"DateFromTicks", (PyCFunction)Mariadb_date_from_ticks,
-        METH_VARARGS,
-        module_DateFromTicks__doc__},
-    {"TimeFromTicks", (PyCFunction)Mariadb_time_from_ticks,
-        METH_VARARGS,
-        module_TimeFromTicks__doc__},
-    {"TimestampFromTicks", (PyCFunction)Mariadb_timestamp_from_ticks,
-        METH_VARARGS,
-        module_TimestampFromTicks__doc__},
-    {"Date", (PyCFunction)Mariadb_date,
-        METH_VARARGS,
-        module_Date__doc__},
-    {"Time", (PyCFunction)Mariadb_time,
-        METH_VARARGS,
-        module_Time__doc__},
-    {"Timestamp", (PyCFunction)Mariadb_timestamp,
-        METH_VARARGS,
-        module_Timestamp__doc__},
     /* Todo: add methods for api functions which don't require
        a connection */
     {NULL} /* always last */
@@ -256,128 +219,6 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 error:
     PyErr_SetString(PyExc_ImportError, "Mariadb module initialization failed");
     return NULL;
-}
-
-static time_t
-get_ticks(PyObject *object)
-{
-    time_t ticks= 0;
-    if (Py_TYPE(object) == &PyFloat_Type)
-    {
-        ticks= (time_t)PyFloat_AsDouble(object);
-    }
-    if (Py_TYPE(object) == &PyLong_Type)
-    {
-        ticks= (time_t)PyLong_AsLong(object);
-    }
-    return ticks;
-}
-
-static PyObject *
-Mariadb_date_from_ticks(PyObject *module, PyObject *args)
-{
-    PyObject *o, *Date;
-    struct tm *ts;
-    time_t epoch;
-
-    if (!PyArg_ParseTuple(args, "O", &o))
-    {
-        return NULL;
-    }
-
-    epoch= get_ticks(o);
-    ts= localtime(&epoch);
-
-    Date= PyDate_FromDate(ts->tm_year + 1900, ts->tm_mon + 1, ts->tm_mday);
-    return Date;
-}
-
-static PyObject *
-Mariadb_time_from_ticks(PyObject *module, PyObject *args)
-{
-    struct tm *ts;
-    time_t epoch;
-    PyObject *o, *Time= NULL;
-
-    if (!PyArg_ParseTuple(args, "O", &o))
-    {
-        return NULL;
-    }
-
-    epoch= get_ticks(o);
-    ts= localtime(&epoch);
-
-    Time= PyTime_FromTime(ts->tm_hour, ts->tm_min, ts->tm_sec, 0);
-    return Time;
-}
-
-static PyObject *
-Mariadb_timestamp_from_ticks(PyObject *module, PyObject *args)
-{
-    PyObject *o,*Timestamp;
-    struct tm *ts;
-    time_t epoch;
-
-    if (!PyArg_ParseTuple(args, "O", &o))
-    {
-        return NULL;
-    }
-
-    epoch= get_ticks(o);
-    ts= localtime(&epoch);
-
-    Timestamp= PyDateTime_FromDateAndTime(ts->tm_year + 1900, ts->tm_mon + 1, 
-                                          ts->tm_mday, ts->tm_hour,
-                                          ts->tm_min, ts->tm_sec, 0);
-    return Timestamp;
-}
-
-static PyObject *
-Mariadb_date(PyObject *self, PyObject *args)
-{
-    PyObject *date= NULL;
-    int32_t year=0, month=0, day= 0;
-
-    if (!PyArg_ParseTuple(args, "iii", &year, &month, &day))
-    {
-        return NULL;
-    }
-
-    date= PyDate_FromDate(year, month, day);
-    return date;
-}
-
-static PyObject *
-Mariadb_timestamp(PyObject *self, PyObject *args)
-{
-    PyObject *timestamp= NULL;
-    int32_t year=0, month=0, day= 0;
-    int32_t hour=0, min=0, sec= 0;
-
-    if (!PyArg_ParseTuple(args, "iiiiii", &year, &month, &day, 
-                          &hour, &min, &sec))
-    {
-        return NULL;
-    }
-
-    timestamp= PyDateTime_FromDateAndTime(year, month, day,
-                                          hour, min, sec, 0);
-    return timestamp;
-}
-
-static PyObject *
-Mariadb_time(PyObject *self, PyObject *args)
-{
-    PyObject *time= NULL;
-    int32_t hour=0, min=0, sec= 0;
-
-    if (!PyArg_ParseTuple(args, "iii", &hour, &min, &sec))
-    {
-        return NULL;
-    }
-
-    time= PyTime_FromTime(hour, min, sec, 0);
-    return time;
 }
 
 static PyObject *

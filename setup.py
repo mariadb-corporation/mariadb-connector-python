@@ -89,6 +89,6 @@ setup(name='mariadb',
                              extra_link_args = cfg.extra_link_args,
                              extra_objects= cfg.extra_objects
                              )],
-      py_modules=['mariadb.__init__', 'mariadb.constants.CLIENT', 'mariadb.constants.CURSOR', 'mariadb.field',
+      py_modules=['mariadb.__init__', 'mariadb.constants.CLIENT', 'mariadb.constants.CURSOR', 'mariadb.field', 'mariadb.dbapi20', 
                   'mariadb.constants.FIELD_TYPE', 'mariadb.constants.FIELD_FLAG', 'mariadb.constants.INDICATOR'],
       )
