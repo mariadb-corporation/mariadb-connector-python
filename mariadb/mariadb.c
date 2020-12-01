@@ -178,12 +178,6 @@ PyMODINIT_FUNC PyInit__mariadb(void)
         goto error;
     }
 
-    Py_TYPE(&Mariadb_Fieldinfo_Type) = &PyType_Type;
-    if (PyType_Ready(&Mariadb_Fieldinfo_Type) == -1)
-    {
-        goto error;
-    }
-
     /* PEP-396: Module version numbers */
     PyModule_AddObject(module, "__version__",
                        PyUnicode_FromString(PY_MARIADB_VERSION));
@@ -257,10 +251,6 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     Py_INCREF(&MrdbPool_Type);
     PyModule_AddObject(module, "ConnectionPool", (PyObject *)&MrdbPool_Type);
     PyModule_AddObject(module, "_CONNECTION_POOLS", cnx_pool);
-
-    Py_INCREF(&Mariadb_Fieldinfo_Type);
-    PyModule_AddObject(module, "fieldinfo",
-                       (PyObject *)&Mariadb_Fieldinfo_Type);
 
     return module;
 error:

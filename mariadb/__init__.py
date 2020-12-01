@@ -31,15 +31,16 @@ from ._mariadb import (
     __version__,
     __version_info__,
     connect,
-    fieldinfo,
     mariadbapi_version,
 )
+
+from .field import fieldinfo
 
 apilevel = '2.0'
 paramstyle = 'qmark'
 threadsafety = True
 
-from mariadb.constants import FIELD_TYPE
+from mariadb.constants import FIELD_TYPE, FIELD_FLAG
 
 class DbApiType(frozenset):
 
@@ -81,3 +82,4 @@ ROWID = DbApiType()
 test attribute
 '''
 test=1
+
