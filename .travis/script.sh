@@ -6,65 +6,129 @@ set -e
 ###################################################################################################################
 # test different type of configuration
 ###################################################################################################################
-mysql=( mysql --protocol=tcp -ubob -h127.0.0.1 --port=3305 )
-if [ -n "$SKYSQL" ] ; then
 
-  if [ -z "$SKYSQL_TEST_HOST" ] ; then
-    echo "No SkySQL configuration found !"
+if [ -n "$SKYSQL" ] || [ -n "$SKYSQL_HA" ]; then
+  if [ -n "$SKYSQL" ]; then
+    ###################################################################################################################
+    # test SKYSQL
+    ###################################################################################################################
+    if [ -z "$SKYSQL_HOST" ] ; then
+      echo "No SkySQL configuration found !"
+      exit 0
+    fi
+
+    export TEST_USER=$SKYSQL_USER
+    export TEST_HOST=$SKYSQL_HOST
+    export TEST_PASSWORD=$SKYSQL_PASSWORD
+    export TEST_PORT=$SKYSQL_PORT
+    export TEST_DATABASE=testp
+
+  else
+
+    ###################################################################################################################
+    # test SKYSQL with replication
+    ###################################################################################################################
+    if [ -z "$SKYSQL_HA" ] ; then
+      echo "No SkySQL HA configuration found !"
+      exit 0
+    fi
+
+    export TEST_USER=$SKYSQL_HA_USER
+    export TEST_HOST=$SKYSQL_HA_HOST
+    export TEST_PASSWORD=$SKYSQL_HA_PASSWORD
+    export TEST_PORT=$SKYSQL_HA_PORT
+    export TEST_DATABASE=testp
+  fi
+
+else
+
+  export COMPOSE_FILE=.travis/docker-compose.yml
+  export ENTRYPOINT=$PROJ_PATH/.travis/sql
+  export ENTRYPOINT_PAM=$PROJ_PATH/.travis/pam
+
+  export TEST_HOST=mariadb.example.com
+  export TEST_DATABASE=testp
+  export TEST_USER=bob
+  export TEST_PORT=3305
+
+  if [ -n "$MAXSCALE_VERSION" ] ; then
+      # maxscale ports:
+      # - non ssl: 4006
+      # - ssl: 4009
+      export TEST_PORT=4006
+      export TEST_SSL_PORT=4009
+      export COMPOSE_FILE=.travis/maxscale-compose.yml
+      docker-compose -f ${COMPOSE_FILE} build
+  fi
+
+  mysql=( mysql --protocol=TCP -u${TEST_USER} -h${TEST_HOST} --port=${TEST_PORT} ${TEST_DATABASE})
+
+  ###################################################################################################################
+  # launch docker server and maxscale
+  ###################################################################################################################
+  docker-compose -f ${COMPOSE_FILE} up -d
+
+  ###################################################################################################################
+  # wait for docker initialisation
+  ###################################################################################################################
+
+  for i in {30..0}; do
+    if echo 'SELECT 1' | "${mysql[@]}" &> /dev/null; then
+        break
+    fi
+    echo 'data server still not active'
+    sleep 2
+  done
+
+  if [ "$i" = 0 ]; then
+    if echo 'SELECT 1' | "${mysql[@]}" ; then
+        break
+    fi
+
+    docker-compose -f ${COMPOSE_FILE} logs
+    if [ -n "$MAXSCALE_VERSION" ] ; then
+        docker-compose -f ${COMPOSE_FILE} exec maxscale tail -n 500 /var/log/maxscale/maxscale.log
+    fi
+    echo >&2 'data server init process failed.'
     exit 1
   fi
 
-  export TEST_USER=$SKYSQL_TEST_USER
-  export TEST_HOST=$SKYSQL_TEST_HOST
-  export TEST_PASSWORD=$SKYSQL_TEST_PASSWORD
-  export TEST_PORT=$SKYSQL_TEST_PORT
-  export TEST_DATABASE=$SKYSQL_TEST_DATABASE
-else
-  if [ "$DB" = "build" ] ; then
-    .travis/build/build.sh
-    docker build -t build:latest --label build .travis/build/
-  fi
-
-
-  export ENTRYPOINT=$PROJ_PATH/.travis/entrypoint
-
-  if [ -n "$MAXSCALE_VERSION" ] ; then
+  if [[ "$DB" != mysql* ]] ; then
     ###################################################################################################################
-    # launch Maxscale with one server
+    # execute pam
     ###################################################################################################################
-    export COMPOSE_FILE=.travis/maxscale-compose.yml
-    export ENTRYPOINT=$PROJ_PATH/.travis/sql
-    docker-compose -f ${COMPOSE_FILE} build
-    docker-compose -f ${COMPOSE_FILE} up -d
-    mysql=( mysql --protocol=tcp -ubob -h127.0.0.1 --port=4007 )
-  else
-    docker-compose -f .travis/docker-compose.yml up -d
-  fi
+    docker-compose -f ${COMPOSE_FILE} exec -u root db bash /pam/pam.sh
+    sleep 1
+    docker-compose -f ${COMPOSE_FILE} restart db
+    sleep 5
 
-  for i in {60..0}; do
+    ###################################################################################################################
+    # wait for restart
+    ###################################################################################################################
+
+    for i in {30..0}; do
       if echo 'SELECT 1' | "${mysql[@]}" &> /dev/null; then
           break
       fi
-      echo 'data server still not active'
-      sleep 1
-  done
-
-  if [ -z "$MAXSCALE_VERSION" ] ; then
-    docker-compose -f .travis/docker-compose.yml exec -u root db bash /pam/pam.sh
-    sleep 1
-    docker-compose -f .travis/docker-compose.yml stop db
-    sleep 1
-    docker-compose -f .travis/docker-compose.yml up -d
-    docker-compose -f .travis/docker-compose.yml logs db
-
-    for i in {60..0}; do
-      if echo 'SELECT 1' | "${mysql[@]}" &> /dev/null; then
-          break
-      fi
-      echo 'data server still not active'
-      sleep 1
+      echo 'data server restart still not active'
+      sleep 2
     done
+
+    if [ "$i" = 0 ]; then
+      if echo 'SELECT 1' | "${mysql[@]}" ; then
+          break
+      fi
+
+      docker-compose -f ${COMPOSE_FILE} logs
+      if [ -n "$MAXSCALE_VERSION" ] ; then
+          docker-compose -f ${COMPOSE_FILE} exec maxscale tail -n 500 /var/log/maxscale/maxscale.log
+      fi
+      echo >&2 'data server restart process failed.'
+      exit 1
+    fi
   fi
+
+
 fi
 
 if [ -n "$BENCH" ] ; then

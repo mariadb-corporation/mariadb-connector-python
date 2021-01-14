@@ -255,10 +255,14 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(fieldinfo.type(info[7]), "STRING")
         self.assertEqual(fieldinfo.type(info[8]), "VAR_STRING")
         self.assertEqual(fieldinfo.type(info[9]), "BLOB")
-        if self.connection.server_version_info > (10, 5, 1) or is_mysql():
+
+        if (os.environ.get("MAXSCALE_VERSION") or os.environ.get("SKYSQL_HA")):
+          self.assertEqual(fieldinfo.type(info[10]), "BLOB")
+        elif (self.connection.server_version_info > (10, 5, 1) or is_mysql()):
             self.assertEqual(fieldinfo.type(info[10]), "JSON")
         else:
             self.assertEqual(fieldinfo.type(info[10]), "BLOB")
+
         self.assertEqual(fieldinfo.flag(info[0]),
                          "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT | NUMERIC")
         self.assertEqual(fieldinfo.flag(info[1]), "PART_KEY | NUMERIC")

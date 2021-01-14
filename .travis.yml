@@ -1,9 +1,7 @@
+dist: focal
 sudo: true
 language: python
-dist: bionic
-
-services:
-- docker
+services: docker
 
 addons:
   hosts:
@@ -26,6 +24,7 @@ before_install:
   - cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
   - make -j4
   - sudo make install
+  - sudo apt-get install -f mariadb-client
   - cd $PROJ_PATH
   - git clone https://github.com/pyenv/pyenv.git ~/.pyenv
   - export PYENV_ROOT="$HOME/.pyenv"
@@ -34,20 +33,20 @@ before_install:
   - eval "$(pyenv init -)"
 
 install:
-  - wget -qO- 'https://github.com/tianon/pgp-happy-eyeballs/raw/master/hack-my-builds.sh' | bash
+#  - wget -qO- 'https://github.com/tianon/pgp-happy-eyeballs/raw/master/hack-my-builds.sh' | bash
   # generate SSL certificates
-  - mkdir tmp
   - chmod +x .travis/gen-ssl.sh
   - chmod +x .travis/build/build.sh
   - chmod +x .travis/build/docker-entrypoint.sh
   - chmod 777 .travis/build/
+  - mkdir tmp
   - .travis/gen-ssl.sh mariadb.example.com tmp
+  - chmod 777 tmp/*
   - export PROJ_PATH=`pwd`
   - export SSLCERT=$PROJ_PATH/tmp
   - export TEST_SSL_CA_FILE=$SSLCERT/server.crt
   - export TEST_SSL_CLIENT_KEY_FILE=$SSLCERT/client.key
   - export TEST_SSL_CLIENT_CERT_FILE=$SSLCERT/client.crt
-  - export TEST_SSL_CLIENT_KEYSTORE_FILE=$SSLCERT/client-keystore.p12
   - export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
   - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
 
@@ -58,19 +57,22 @@ env:
 
 matrix:
   include:
-  - env: SKYSQL=true PYTHON_VER="3.8.0"
-  - env: DB=mariadb:10.4 PYTHON_VER="3.6.0"
-  - env: DB=mariadb:10.4 PYTHON_VER="3.8.0"
-#  - env: DB=mariadb:10.4 PYTHON_VER="pypy3.6-7.3.1"
-#  - env: DB=mariadb:10.4 BENCH=1
-  - env: DB=mariadb:10.4 PYTHON_VER="3.6.0" MAXSCALE_VERSION=2.2.9 TEST_PORT=4007 TEST_USER=bob TEXT_DATABASE=test2 SKIP_LEAK=1
-  - env: DB=mariadb:10.2 PYTHON_VER="3.6.0"
-  - env: DB=mariadb:10.3 PYTHON_VER="3.6.0"
-  - env: DB=mysql:5.7 PYTHON_VER="3.6.0"
-  - env: DB=mysql:8.0 PYTHON_VER="3.6.0"
+  - env: PYTHON_VER="3.8.0" SKYSQL=true
+  - env: PYTHON_VER="3.8.0" SKYSQL_HA=true MAXSCALE_TEST_DISABLE=true
+  - env: PYTHON_VER="3.8.0" DB=mariadb:10.5 DB=mariadb:10.5 MAXSCALE_VERSION=2.5.3 MAXSCALE_TEST_DISABLE=true
+  - env: PYTHON_VER="3.8.0" DB=build:10.6
+  - env: PYTHON_VER="3.8.0" DB=mariadb:10.5
+  - env: PYTHON_VER="3.6.0" DB=mariadb:10.5
+  - env: PYTHON_VER="3.8.0" DB=mariadb:10.4
+  - env: PYTHON_VER="3.8.0" DB=mariadb:10.3
+  - env: PYTHON_VER="3.8.0" DB=mariadb:10.2
+  - env: PYTHON_VER="3.8.0" DB=mysql:5.7
+  - env: PYTHON_VER="3.8.0" DB=mysql:8.0 ADDITIONAL_CONF=--default-authentication-plugin=mysql_native_password
 
 notifications:
   email: false
 
 script:
+  - if [[ "$DB" == build* ]] ; then .travis/build/build.sh; fi
+  - if [[ "$DB" == build* ]] ; then docker build -t build:10.6 --label build .travis/build/; fi
   - .travis/script.sh

@@ -84,7 +84,7 @@ class TestConnection(unittest.TestCase):
         cursor=new_conn.cursor()
         cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
         row=cursor.fetchone()
-        if os.environ.get("MAXSCALE_VERSION"):
+        if os.environ.get("MAXSCALE_VERSION") or os.environ.get("SKYSQL_HA"):
             self.assertEqual(row[1], "OFF")
         else:
             self.assertEqual(row[1], "ON")
@@ -96,7 +96,7 @@ class TestConnection(unittest.TestCase):
             self.skipTest("CREATE OR REPLACE SCHEMA not supported")
         if self.connection.server_version < 100202:
             self.skipTest("session tracking not supported")
-        if os.environ.get("MAXSCALE_VERSION"):
+        if os.environ.get("MAXSCALE_VERSION") or os.environ.get("SKYSQL_HA"):
             self.skipTest("MAXSCALE doesn't tell schema change for now")
 
         default_conf = conf()
@@ -110,7 +110,7 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn.database, default_conf["database"])
 
     def test_ping(self):
-        if os.environ.get("MAXSCALE_VERSION"):
+        if os.environ.get("MAXSCALE_VERSION") or os.environ.get("SKYSQL_HA"):
             self.skipTest("MAXSCALE wrong thread id")
         conn = self.connection
         cursor = conn.cursor()

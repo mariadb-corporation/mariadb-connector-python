@@ -19,7 +19,7 @@ class CursorTest(unittest.TestCase):
         del self.connection
 
     def test_ping(self):
-        if os.environ.get("MAXSCALE_VERSION"):
+        if os.environ.get("MAXSCALE_VERSION") or os.environ.get("SKYSQL_HA"):
             self.skipTest("MAXSCALE return wrong thread id")
 
         new_conn = create_connection()

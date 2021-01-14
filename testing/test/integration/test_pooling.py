@@ -4,7 +4,7 @@
 import collections
 import datetime
 import unittest
-
+import os
 import mariadb
 import platform
 import sys
@@ -88,11 +88,14 @@ class TestPooling(unittest.TestCase):
          pool.close()
  
      def test_conpy69(self):
+         if os.environ.get("MAXSCALE_VERSION") or os.environ.get("SKYSQL_HA"):
+             self.skipTest("MAXSCALE test skip")
+
          conn= create_connection()
          conn.autocommit= True
          cursor1= conn.cursor()
          cursor1.execute("CREATE SCHEMA IF NOT EXISTS 中文考试")
-         cursor1.execute("COMMIT");
+         cursor1.execute("FLUSH TABLES")
          default_conf= conf()
          default_conf["database"]= "中文考试"
          pool= mariadb.ConnectionPool(pool_name="test_conpy69")

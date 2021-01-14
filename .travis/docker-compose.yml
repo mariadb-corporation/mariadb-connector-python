@@ -7,11 +7,12 @@ services:
       - 3305:3306
     volumes:
       - $SSLCERT:/etc/sslcert
-      - $ENTRYPOINT:/pam
+      - $ENTRYPOINT:/docker-entrypoint-initdb.d
+      - $ENTRYPOINT_PAM:/pam
     environment:
       MYSQL_DATABASE: testp
       MYSQL_ALLOW_EMPTY_PASSWORD: 1
-      MYSQL_ROOT_PASSWORD:
+      MYSQL_INITDB_SKIP_TZINFO: 1
 
 
 
