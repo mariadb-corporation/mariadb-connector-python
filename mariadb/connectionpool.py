@@ -156,7 +156,7 @@ class ConnectionPool(object):
         """
 
         with self._lock_pool:
-            if self.pool_args["reset_connection"]:
+            if self._pool_args["reset_connection"]:
                 connection.reset()
             connection._Connection__in_use= 0
             connection._Connection__last_used= time.monotonic()
