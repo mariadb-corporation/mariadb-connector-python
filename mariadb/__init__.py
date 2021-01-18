@@ -31,7 +31,9 @@ _POOLS= _CONNECTION_POOLS= {}
 
 from mariadb.dbapi20 import *
 from mariadb.connectionpool import *
-from mariadb.pooling import *
+
+# disable for now, until tests are in place
+# from mariadb.pooling import *
 
 def connect(*args, **kwargs):
     from mariadb.connections import Connection
