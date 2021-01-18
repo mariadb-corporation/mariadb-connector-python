@@ -41,8 +41,6 @@ const char *mariadb_default_collation= "utf8mb4_general_ci";
 void
 MrdbConnection_dealloc(MrdbConnection *self);
 
-extern PyObject *cnx_pool;
-
 static PyObject 
 *MrdbConnection_cursor(MrdbConnection *self, PyObject *args, PyObject *kwargs);
 
@@ -353,16 +351,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
         return -1;
     }
 
-    /* do we need pooling? */
-    if (pool_name)
-    {
-        /* check if pool exists */
-        if (PyDict_Contains(cnx_pool, PyUnicode_FromString(pool_name)))
-        {
-            /* get connection from pool */
-        }
-    }
-
     if (!(self->mysql= mysql_init(NULL)))
     {
         mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
@@ -573,22 +561,6 @@ MrdbConnection_connect(
         PyObject *kwargs)
 {
     MrdbConnection *c;
-    PyObject *pn= NULL,
-             *pool= NULL;
-
-
-    /* if pool name exists, we need to return a connection from pool */
-    if (kwargs && (pn= PyDict_GetItemString(kwargs, "pool_name")))
-    {
-        if ((pool = PyDict_GetItem(cnx_pool, pn)))
-        {
-            return MrdbPool_getconnection((MrdbPool *)pool);
-        }
-        if ((pool = MrdbPool_add(self, args, kwargs)))
-        {
-            return MrdbPool_getconnection((MrdbPool *)pool);
-        }
-    }
 
     if (!(c= (MrdbConnection *)PyType_GenericAlloc(&MrdbConnection_Type, 1)))
         return NULL;
@@ -625,24 +597,6 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
     if (self->converter)
         Py_XDECREF(self->converter);
     self->converter= NULL;
-
-    if (self->pool)
-    {
-        int rc= 0;
-        pthread_mutex_lock(&self->pool->lock);
-        if (self->pool->reset_session)
-        {
-            rc= mysql_reset_connection(self->mysql);
-        }
-        if (!rc)
-        {
-            self->inuse= 0;
-            clock_gettime(CLOCK_MONOTONIC_RAW, &self->last_used);
-        }
-        pthread_mutex_unlock(&self->pool->lock);
-        Py_INCREF(Py_None);
-        return Py_None;
-    }
 
     Py_BEGIN_ALLOW_THREADS
     mysql_close(self->mysql);

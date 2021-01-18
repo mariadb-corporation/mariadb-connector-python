@@ -26,9 +26,9 @@
 
 extern int codecs_datetime_init(void);
 
-PyObject *cnx_pool= NULL;
 PyObject *decimal_module= NULL,
          *decimal_type= NULL,
+         *socket_module= NULL,
          *indicator_module= NULL;
 extern uint16_t max_pool_size;
 
@@ -53,9 +53,6 @@ Mariadb_Methods[] =
     {"connect", (PyCFunction)MrdbConnection_connect,
         METH_VARARGS | METH_KEYWORDS,
         module_connect__doc__},
-    {"ConnectionPool", (PyCFunction)MrdbPool_add,
-        METH_VARARGS | METH_KEYWORDS,
-        "todo!!"}, 
     /* Todo: add methods for api functions which don't require
        a connection */
     {NULL} /* always last */
@@ -129,14 +126,13 @@ PyMODINIT_FUNC PyInit__mariadb(void)
         goto error;
     }
 
-    Py_TYPE(&MrdbCursor_Type) = &PyType_Type;
-    if (PyType_Ready(&MrdbCursor_Type) == -1)
+    if (!(socket_module= PyImport_ImportModule("socket")))
     {
         goto error;
     }
 
-    Py_TYPE(&MrdbPool_Type) = &PyType_Type;
-    if (PyType_Ready(&MrdbPool_Type) == -1)
+    Py_TYPE(&MrdbCursor_Type) = &PyType_Type;
+    if (PyType_Ready(&MrdbCursor_Type) == -1)
     {
         goto error;
     }
@@ -209,11 +205,6 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 
     Py_INCREF(&MrdbConnection_Type);
     PyModule_AddObject(module, "connection", (PyObject *)&MrdbConnection_Type);
-
-    cnx_pool= PyDict_New();
-    Py_INCREF(&MrdbPool_Type);
-    PyModule_AddObject(module, "ConnectionPool", (PyObject *)&MrdbPool_Type);
-    PyModule_AddObject(module, "_CONNECTION_POOLS", cnx_pool);
 
     return module;
 error:

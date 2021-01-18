@@ -9,7 +9,6 @@ Minimum supported Python version is 3.6
 
 from ._mariadb import (
     Binary,
-    ConnectionPool,
     DataError,
     DatabaseError,
     Error,
@@ -21,20 +20,28 @@ from ._mariadb import (
     PoolError,
     ProgrammingError,
     Warning,
-    _CONNECTION_POOLS,
     __version__,
     __version_info__,
-    connect,
     mariadbapi_version,
 )
 
 from .field import fieldinfo
 
+_POOLS= _CONNECTION_POOLS= {}
 
 from mariadb.dbapi20 import *
+from mariadb.connectionpool import *
+from mariadb.pooling import *
 
-'''
-test attribute
-'''
-test=1
+def connect(*args, **kwargs):
+    from mariadb.connections import Connection
+    if kwargs and "pool_name" in kwargs:
+        if not kwargs["pool_name"] in mariadb._CONNECTION_POOLS:
+            pool= mariadb.ConnectionPool(**kwargs)
+        else:
+            pool= mariadb._CONNECTION_POOLS[kwargs["pool_name"]]
+        c= pool.get_connection()
+        return c
+    return Connection(*args, **kwargs)
 
+Connection= connect

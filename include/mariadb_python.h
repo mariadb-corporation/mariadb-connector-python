@@ -151,8 +151,6 @@ typedef struct st_parser {
     MYSQL *mysql;
 } MrdbParser;
 
-struct mrdb_pool;
-
 /* PEP-249: Connection object */
 typedef struct {
     PyObject_HEAD
@@ -170,7 +168,6 @@ typedef struct {
     int port;
     const char *charset;
     const char *collation;
-    struct mrdb_pool *pool;
     uint8_t inuse;
     uint8_t status;
     struct timespec last_used;
@@ -183,6 +180,7 @@ typedef struct {
     PyObject *server_version_info;
 } MrdbConnection;
 
+/*
 typedef struct mrdb_pool{
     PyObject_HEAD
     pthread_mutex_t lock;
@@ -196,7 +194,7 @@ typedef struct mrdb_pool{
     MrdbConnection **connection;
     uint32_t connection_cnt;
     uint16_t max_size;
-} MrdbPool;
+} MrdbPool; */
 
 typedef struct {
     enum enum_field_types type;
@@ -347,13 +345,6 @@ MrdbConnection_connect( PyObject *self,PyObject *args,	PyObject *kwargs);
 void
 MrdbConnection_SetAttributes(MrdbConnection *self);
 
-/* Pooling */
-PyObject *
-MrdbPool_add(PyObject *self, PyObject *args, PyObject *kwargs);
-
-PyObject *
-MrdbPool_getconnection(MrdbPool *self);
-
 /* TPC methods */
 PyObject *
 MrdbConnection_xid(MrdbConnection *self, PyObject *args);
@@ -470,7 +461,7 @@ if ((obj)->thread_state)\
       "Invalid cursor or not connected");\
     }
 
-#define pooling_keywords "pool_name", "pool_size", "reset_session", "idle_timeout", "acquire_timeout"
+// #define pooling_keywords "pool_name", "pool_size", "reset_session", "idle_timeout", "acquire_timeout"
 #define connection_keywords "dsn", "host", "user", "password", "database", "port", "socket",\
   "connect_timeout", "read_timeout", "write_timeout",\
 "local_infile", "compress", "init_command",\
