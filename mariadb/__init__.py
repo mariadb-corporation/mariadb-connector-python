@@ -10,6 +10,7 @@ Minimum supported Python version is 3.6
 from ._mariadb import (
     BINARY,
     Binary,
+    connection,
     ConnectionPool,
     DATETIME,
     DataError,
