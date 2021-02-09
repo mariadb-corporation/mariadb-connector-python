@@ -612,6 +612,7 @@ void MrdbConnection_dealloc(MrdbConnection *self)
             mysql_close(self->mysql);
             Py_END_ALLOW_THREADS
         }
+        Py_DECREF(self->server_version_info);
         Py_TYPE(self)->tp_free((PyObject*)self);
     }
 }
