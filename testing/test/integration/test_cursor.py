@@ -1135,6 +1135,23 @@ class TestCursor(unittest.TestCase):
             pass
         del cursor
 
+    def test_conpy139(self):
+        connection= create_connection()
+        cursor= connection.cursor()
+        cursor.execute("create temporary table t1 (a varchar(254) character set utf8mb4 collate utf8mb4_bin)")
+        cursor.execute("insert into t1 values ('foo')")
+        del cursor
+        c1= connection.cursor()
+        c2= connection.cursor(prepared=True)
+        c1.execute("select a from t1")
+        r1= c1.fetchall()
+        c2.execute("select a from t1")
+        r2= c2.fetchall()
+        self.assertEqual(r1, r2)
+       
+        del c1, c2
+        connection.close()
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:
