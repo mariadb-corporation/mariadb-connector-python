@@ -454,8 +454,9 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         case MYSQL_TYPE_FLOAT:  
         case MYSQL_TYPE_DOUBLE: 
         {
-            double d= atof(data);
-            self->values[column]= PyFloat_FromDouble(d);
+            PyObject *str= PyUnicode_FromString(data);
+            self->values[column]= PyFloat_FromString(str);
+            Py_DECREF(str);
             break;
         }
         case MYSQL_TYPE_TIME:
