@@ -195,16 +195,20 @@ MrdbPool_initialize(MrdbPool *self, PyObject *args, PyObject *kwargs)
                 goto error;
             }
             clock_gettime(CLOCK_MONOTONIC_RAW, &self->connection[i]->last_used);
-            Py_INCREF(self->connection[i]);
             self->connection[i]->pool= self;
         }
         self->connection_cnt= self->pool_size;
     }
     PyDict_SetItemString(cnx_pool, self->pool_name, (PyObject *)self);
-    Py_INCREF(self);
+
+    Py_XDECREF(conn_kwargs);
+    Py_XDECREF(pool_kwargs);
 
     return 0;
 error:
+    Py_XDECREF(conn_kwargs);
+    Py_XDECREF(pool_kwargs);
+
     if (self->connection)
     {
         for (i=0; i < self->pool_size; i++)
@@ -300,10 +304,11 @@ MrdbPool_Type =
 void
 MrdbPool_dealloc(MrdbPool *self)
 {
-    PyObject_GC_UnTrack(self);
-    MrdbPool_close(self);
-
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    if (self)
+    {
+        MrdbPool_close(self);
+        Py_TYPE(self)->tp_free((PyObject*)self);
+    }
 }
 /* }}} */
 
@@ -366,6 +371,7 @@ MrdbPool_getconnection(MrdbPool *self)
     pthread_mutex_unlock(&self->lock);
     if (conn)
     {
+        Py_INCREF(conn);
         return (PyObject *)conn;
     }
     mariadb_throw_exception(NULL, Mariadb_PoolError, 0,
@@ -526,17 +532,21 @@ MrdbPool_close(MrdbPool *self)
         MARIADB_FREE_MEM(self->connection);
         self->connection= NULL;
     }
+
     self->pool_size= 0;
 
     if (self->pool_name)
     {
-        if (PyDict_Contains(cnx_pool, PyUnicode_FromString(self->pool_name)))
+        PyObject *obj= PyUnicode_FromString(self->pool_name);
+        if (PyDict_Contains(cnx_pool, obj))
         {
             PyDict_DelItemString(cnx_pool, self->pool_name);
         }
         MARIADB_FREE_MEM(self->pool_name);
         self->pool_name= 0;
+        Py_DECREF(obj);
     }
+    Py_XDECREF(self->configuration);
     pthread_mutex_unlock(&self->lock);
     pthread_mutex_destroy(&self->lock);
     Py_INCREF(Py_None);
