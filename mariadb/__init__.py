@@ -20,8 +20,6 @@ from ._mariadb import (
     PoolError,
     ProgrammingError,
     Warning,
-    __version__,
-    __version_info__,
     mariadbapi_version,
 )
 
@@ -31,9 +29,17 @@ _POOLS= _CONNECTION_POOLS= {}
 
 from mariadb.dbapi20 import *
 from mariadb.connectionpool import *
-
+from mariadb.cursor import Cursor
+from mariadb.release_info import __version__ as __version__ 
+from mariadb.release_info import __version_info__ as __version_info__ 
+from mariadb.release_info import __author__ as __author__
 # disable for now, until tests are in place
 # from mariadb.pooling import *
+
+def Binary(obj):
+    """This method constructs an object capable of holding a binary (long)
+       string value."""
+    return bytes(obj)
 
 def connect(*args, **kwargs):
     from mariadb.connections import Connection
@@ -47,3 +53,4 @@ def connect(*args, **kwargs):
     return Connection(*args, **kwargs)
 
 Connection= connect
+

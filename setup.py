@@ -28,25 +28,32 @@ cfg = get_config(options)
 PY_MARIADB_AUTHORS= "Georg Richter"
 
 PY_MARIADB_MAJOR_VERSION=1
-PY_MARIADB_MINOR_VERSION=0
-PY_MARIADB_PATCH_VERSION=6
-# PY_MARIADB_PRE_RELEASE_SEGMENT=""
+PY_MARIADB_MINOR_VERSION=1
+PY_MARIADB_PATCH_VERSION=0
+PY_MARIADB_PRE_RELEASE_SEGMENT="alpha"
 
 PY_MARIADB_VERSION= "%s.%s.%s" % (PY_MARIADB_MAJOR_VERSION, PY_MARIADB_MINOR_VERSION, PY_MARIADB_PATCH_VERSION)
 
 # Since we increase patch version even for alpha/beta/rc, pre release nr will be always zero.
 PY_MARIADB_PRE_RELEASE_NR=0
+PY_MARIADB_VERSION_INFO= (PY_MARIADB_MAJOR_VERSION, PY_MARIADB_MINOR_VERSION, PY_MARIADB_PATCH_VERSION,
+                          PY_MARIADB_PRE_RELEASE_SEGMENT, PY_MARIADB_PRE_RELEASE_NR)
 
 define_macros.append(("PY_MARIADB_MAJOR_VERSION", PY_MARIADB_MAJOR_VERSION))
 define_macros.append(("PY_MARIADB_MINOR_VERSION", PY_MARIADB_MINOR_VERSION))
 define_macros.append(("PY_MARIADB_PATCH_VERSION", PY_MARIADB_PATCH_VERSION))
-# define_macros.append(("PY_MARIADB_PRE_RELEASE_SEGMENT", PY_MARIADB_PRE_RELEASE_SEGMENT))
+define_macros.append(("PY_MARIADB_PRE_RELEASE_SEGMENT", "\"%s\"" % PY_MARIADB_PRE_RELEASE_SEGMENT))
+
+
+with open("mariadb/release_info.py", "w") as rel_info:
+   rel_info.write("__author__='%s'\n__version__='%s'\n__version_info__=%s" %
+             (PY_MARIADB_AUTHORS, PY_MARIADB_VERSION, PY_MARIADB_VERSION_INFO))
 
 setup(name='mariadb',
       version=PY_MARIADB_VERSION,
       python_requires='>=3.6',
       classifiers = [
-          'Development Status :: 5 - Production/Stable',
+          'Development Status :: 3 - Alpha',
           'Environment :: Console',
           'Environment :: MacOS X',
           'Environment :: Win32 (MS Windows)',
@@ -88,6 +95,9 @@ setup(name='mariadb',
                              extra_link_args = cfg.extra_link_args,
                              extra_objects= cfg.extra_objects
                              )],
-      py_modules=['mariadb.__init__', 'mariadb.constants.CLIENT', 'mariadb.constants.CURSOR', 'mariadb.field', 'mariadb.dbapi20', 'mariadb.connections', 'mariadb.connectionpool',
+      py_modules=['mariadb.__init__', 'mariadb.constants.CLIENT', 'mariadb.constants.CURSOR',
+                  'mariadb.constants.STATUS',
+                  'mariadb.field', 'mariadb.dbapi20', 'mariadb.connections', 'mariadb.connectionpool',
+                  'mariadb.cursor', 'mariadb.release_info',
                   'mariadb.constants.FIELD_TYPE', 'mariadb.constants.FIELD_FLAG', 'mariadb.constants.INDICATOR'],
       )

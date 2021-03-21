@@ -59,15 +59,21 @@ def Timestamp(year, month, day, hour, minute, second):
 
 def DateFromTicks(ticks):
     """Constructs an object holding a date value from the given ticks value
-       (number of seconds since the epoch)."""
+       (number of seconds since the epoch).
+       For more information see the documentation of the standard Python
+       time module."""
     return Date(*time.localtime(ticks)[:3])
 
 def TimeFromTicks(ticks):
     """Constructs an object holding a time value from the given ticks value
-       (number of seconds since the epoch)."""
+       (number of seconds since the epoch).
+       For more information see the documentation of the standard Python
+       time module."""
     return Time(*time.localtime(ticks)[3:6])
 
 def TimestampFromTicks(ticks):
     """Constructs an object holding a datetime value from the given ticks value
-       (number of seconds since the epoch)."""
+       (number of seconds since the epoch).
+       For more information see the documentation of the standard Python
+       time module."""
     return datetime.datetime(*time.localtime(ticks)[:6])

@@ -45,11 +45,6 @@ static PyObject
 *MrdbConnection_cursor(MrdbConnection *self, PyObject *args, PyObject *kwargs);
 
 static PyObject *
-MrdbConnection_enter(MrdbConnection *self, PyObject *args __attribute__((unused)));
-static PyObject *
-MrdbConnection_exit(MrdbConnection *self, PyObject *args __attribute__((unused)));
-
-static PyObject *
 MrdbConnection_exception(PyObject *self, void *closure);
 
 #define GETTER_EXCEPTION(name, exception, doc)\
@@ -95,6 +90,9 @@ MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg,
 static PyObject *
 MrdbConnection_get_server_version(MrdbConnection *self);
 
+static PyObject *
+MrdbConnection_get_server_status(MrdbConnection *self);
+
 static PyGetSetDef
 MrdbConnection_sets[]=
 {
@@ -112,6 +110,8 @@ MrdbConnection_sets[]=
         NULL},
     {"warnings", (getter)MrdbConnection_warnings, NULL,
         connection_warnings__doc__, NULL},
+    {"_server_status", (getter)MrdbConnection_get_server_status, NULL,
+        NULL, NULL},
     {"server_version", (getter)MrdbConnection_server_version, NULL,
         connection_server_version__doc__, NULL},
     {"server_info", (getter)MrdbConnection_server_info, NULL, 
@@ -209,11 +209,7 @@ MrdbConnection_Methods[] =
         METH_VARARGS,
         connection_escape_string__doc__
     },
-    {"__enter__", (PyCFunction)MrdbConnection_enter,
-        METH_NOARGS, connection_enter__doc__},
-    {"__exit__", (PyCFunction)MrdbConnection_exit,
-        METH_VARARGS, connection_exit__doc__},
-    {NULL} /* alwa+ys last */
+    {NULL} /* always last */
 };
 
 static struct
@@ -489,7 +485,7 @@ static int MrdbConnection_traverse(
 
 PyTypeObject MrdbConnection_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-        "mariadb.connection",
+    "mariadb.connection",
     sizeof(MrdbConnection),
     0,
     (destructor)MrdbConnection_dealloc, /* tp_dealloc */
@@ -584,6 +580,7 @@ void MrdbConnection_dealloc(MrdbConnection *self)
             mysql_close(self->mysql);
             Py_END_ALLOW_THREADS
         }
+        Py_DECREF(self->server_version_info);
         Py_TYPE(self)->tp_free((PyObject*)self);
     }
 }
@@ -595,7 +592,7 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
        statements this should be handled in mysql_close) */
 
     if (self->converter)
-        Py_XDECREF(self->converter);
+        Py_DECREF(self->converter);
     self->converter= NULL;
 
     Py_BEGIN_ALLOW_THREADS
@@ -1317,31 +1314,19 @@ static PyObject *MrdbConnection_getautocommit(MrdbConnection *self)
 }
 /* }}} */
 
-static PyObject *
-MrdbConnection_enter(MrdbConnection *self, PyObject *args __attribute__((unused)))
-{
-    Py_INCREF(self);
-    return (PyObject *)self;
-}
-
-static PyObject *
-MrdbConnection_exit(MrdbConnection *self, PyObject *args __attribute__((unused)))
-{
-    PyObject *rc= NULL,
-             *tmp= NULL;
-
-    if ((tmp= PyObject_CallMethod((PyObject *)self, "close", "")))
-    {
-        rc= Py_None;
-        Py_INCREF(rc);
-    }
-    Py_XDECREF(tmp);
-    return rc;
-}
-
 static PyObject *MrdbConnection_get_server_version(MrdbConnection *self)
 {
   return self->server_version_info;
+}
+
+static PyObject *MrdbConnection_get_server_status(MrdbConnection *self)
+{
+    uint32_t server_status;
+
+    MARIADB_CHECK_CONNECTION(self, NULL);
+
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
+    return PyLong_FromLong((long)server_status);
 }
 
 /* vim: set tabstop=4 */

@@ -72,8 +72,6 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row);
 static PyObject *mariadb_get_sequence_or_tuple(MrdbCursor *self);
 static PyObject * MrdbCursor_iter(PyObject *self);
 static PyObject * MrdbCursor_iternext(PyObject *self);
-static PyObject *MrdbCursor_enter(MrdbCursor *self, PyObject *args __attribute__((unused)));
-static PyObject *MrdbCursor_exit(MrdbCursor *self, PyObject *args __attribute__((unused)));
 
 /* todo: write more documentation, this is just a placeholder */
 static char mariadb_cursor_documentation[] =
@@ -178,20 +176,11 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"scroll", (PyCFunction)MrdbCursor_scroll,
         METH_VARARGS | METH_KEYWORDS,
         cursor_scroll__doc__},
-    {"__enter__", (PyCFunction)MrdbCursor_enter,
-        METH_NOARGS, cursor_enter__doc__},
-    {"__exit__", (PyCFunction)MrdbCursor_exit,
-        METH_VARARGS, cursor_exit__doc__},
     {NULL} /* always last */
 };
 
 static struct PyMemberDef MrdbCursor_Members[] =
 {
-    {"connection",
-        T_OBJECT,
-        offsetof(MrdbCursor, connection),
-        READONLY,
-        cursor_connection__doc__},
     {"statement",
         T_STRING,
         offsetof(MrdbCursor, statement),
@@ -301,7 +290,7 @@ static int MrdbCursor_traverse(
 PyTypeObject MrdbCursor_Type =
 {
     PyVarObject_HEAD_INIT(NULL, 0)
-        "mariadb.connection.cursor",
+    "mariadb.cursor",
     sizeof(MrdbCursor),
     0,
     (destructor)MrdbCursor_dealloc, /* tp_dealloc */
@@ -1637,27 +1626,5 @@ end:
     {
         PyMem_RawFree(stmt);
     }
-    return rc;
-}
-
-static PyObject *
-MrdbCursor_enter(MrdbCursor *self, PyObject *args __attribute__((unused)))
-{
-    Py_INCREF(self);
-    return (PyObject *)self;
-}
-
-static PyObject *
-MrdbCursor_exit(MrdbCursor *self, PyObject *args __attribute__((unused)))
-{
-    PyObject *rc= NULL,
-             *tmp= NULL;
-
-    if ((tmp= PyObject_CallMethod((PyObject *)self, "close", "")))
-    {
-        rc= Py_None;
-        Py_INCREF(rc);
-    }
-    Py_XDECREF(tmp);
     return rc;
 }

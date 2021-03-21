@@ -40,16 +40,10 @@ Mariadb_traverse(PyObject *self,
     return 0;
 }
 
-static PyObject *
-Mariadb_binary(PyObject *self, PyObject *args);
-
 static PyMethodDef
 Mariadb_Methods[] =
 {
     /* PEP-249: mandatory */
-    {"Binary", (PyCFunction)Mariadb_binary,
-        METH_VARARGS,
-        module_binary__doc__},
     {"connect", (PyCFunction)MrdbConnection_connect,
         METH_VARARGS | METH_KEYWORDS,
         module_connect__doc__},
@@ -99,12 +93,6 @@ static void mariadb_add_exception(PyObject *module,
 PyMODINIT_FUNC PyInit__mariadb(void)
 {
     PyObject *module= PyModule_Create(&mariadb_module);
-    PyObject *version_info;
-    const char *pre_release="";
-
-#ifdef PY_MARIADB_PRE_RELEASE_SEGMENT
-    pre_release= PY_MARIADB_PRE_RELEASE_SEGMENT;
-#endif
 
     /* Initialite DateTimeAPI */
     if (mariadb_datetime_init() ||
@@ -136,33 +124,8 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     {
         goto error;
     }
+    PyModule_AddObject(module, "cursor", (PyObject *)&MrdbCursor_Type);
 
-    /* PEP-396: Module version numbers */
-    PyModule_AddObject(module, "__version__",
-                       PyUnicode_FromString(PY_MARIADB_VERSION));
-
-    if (!(version_info= PyTuple_New(5)))
-    {
-        goto error;
-    }
-    if (PyTuple_SetItem(version_info, 0, PyLong_FromLong(PY_MARIADB_MAJOR_VERSION)) ||
-        PyTuple_SetItem(version_info, 1, PyLong_FromLong(PY_MARIADB_MINOR_VERSION)) ||
-        PyTuple_SetItem(version_info, 2, PyLong_FromLong(PY_MARIADB_PATCH_VERSION)) ||
-        PyTuple_SetItem(version_info, 3, PyUnicode_FromString(pre_release)) ||
-        PyTuple_SetItem(version_info, 4, PyLong_FromLong(0L)))
-    {
-        goto error;
-    }
-
-    PyModule_AddObject(module, "__version_info__", version_info);
- 
-    /* PEP-249: mandatory module globals */
-    PyModule_AddObject(module, "apilevel",
-                       PyUnicode_FromString(MARIADB_PY_APILEVEL));
-    PyModule_AddObject(module, "paramstyle",
-                       PyUnicode_FromString(MARIADB_PY_PARAMSTYLE));
-    PyModule_AddObject(module, "threadsafety",
-                       PyLong_FromLong(MARIADB_PY_THREADSAFETY));
     /* optional (MariaDB specific) globals */
     PyModule_AddObject(module, "mariadbapi_version",
                        PyUnicode_FromString(mysql_get_client_info()));
@@ -210,18 +173,4 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 error:
     PyErr_SetString(PyExc_ImportError, "Mariadb module initialization failed");
     return NULL;
-}
-
-static PyObject *
-Mariadb_binary(PyObject *self, PyObject *args)
-{
-    PyObject *b,*o;
-
-    if (!PyArg_ParseTuple(args, "O", &o))
-    {
-        return NULL;
-    }
-
-    b= PyBytes_FromObject(o);
-    return b;
 }

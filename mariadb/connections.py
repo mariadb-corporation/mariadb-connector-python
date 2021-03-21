@@ -21,6 +21,8 @@ import mariadb
 import socket
 import time
 
+from mariadb.constants import STATUS
+
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
 
@@ -33,10 +35,14 @@ class Connection(mariadb._mariadb.connection):
         self.__pool = None
         self.__last_used = 0
 
+#       self._autocommit= kwargs.pop("autocommit", True)
+#       self._converter= kwargs.pop("converter", None)
+
         super().__init__(*args, **kwargs)
 
-    def cursor(self, *args, **kwargs):
-        return  mariadb._mariadb.connection.cursor(self, *args, **kwargs)
+    def cursor(self, **kwargs):
+        return mariadb.Cursor(self, **kwargs)
+
 
     def close(self):
         if self._Connection__pool:
@@ -44,6 +50,13 @@ class Connection(mariadb._mariadb.connection):
         else:
             super().close()
 
+    def __enter__(self):
+        "Returns a copy of the connection."
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        "Closes connection."
+        self.close()
 
     @property
     def character_set(self):
@@ -54,6 +67,11 @@ class Connection(mariadb._mariadb.connection):
     def collation(self):
         """Client character set collation"""
         return _DEFAULT_COLLATION
+
+    @property
+    def server_status(self):
+        """Returns server status flags."""
+        return super()._server_status
 
     @property
     def socket(self):

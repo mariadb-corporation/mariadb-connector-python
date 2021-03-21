@@ -17,47 +17,8 @@
    51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 *************************************************************************************/
 PyDoc_STRVAR(
-  module_binary__doc__,
-  "Binary(string)\n"
-  "--\n"
-  "\n"
-  "This function constructs an object capable of holding a binary (long)\n"
-  "string value.\n"
-);
-
-PyDoc_STRVAR(
   module_connect__doc__,
   __connect__doc__
-);
-
-PyDoc_STRVAR(
-  module_DateFromTicks__doc__,
-  "DateFromTicks(ticks)\n"
-  "--\n"
-  "\n"
-  "This function constructs an object holding a date value from the given\n"
-  "ticks value (number of seconds since the epoch). For more information\n"
-  "see the documentation of the standard Python time module"
-);
-
-PyDoc_STRVAR(
-  module_TimeFromTicks__doc__,
-  "TimeFromTicks(ticks)\n"
-  "--\n"
-  "\n"
-  "This function constructs an object holding a time value from the given\n"
-  "ticks value (number of seconds since the epoch). For more information\n"
-  "see the documentation of the standard Python time module"
-);
-
-PyDoc_STRVAR(
-  module_TimestampFromTicks__doc__,
-  "TimestampFromTicks(ticks)\n"
-  "--\n"
-  "\n"
-  "This function constructs an object holding a time stamp value from the given\n"
-  "ticks value (number of seconds since the epoch). For more information\n"
-  "see the documentation of the standard Python time module"
 );
 
 PyDoc_STRVAR(

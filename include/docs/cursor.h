@@ -265,15 +265,3 @@ PyDoc_STRVAR(
   "Indicates if the current result set contains in out or out parameter\n"
   "from a previous executed stored procedure."
 );
-
-PyDoc_STRVAR(
-  cursor_enter__doc__,
-  "(read)\n\n"
-  "returns a copy of the cursor"
-);
-
-PyDoc_STRVAR(
-  cursor_exit__doc__,
-  "--\n"
-  "closes the cursor"
-);
