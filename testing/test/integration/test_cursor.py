@@ -1152,6 +1152,22 @@ class TestCursor(unittest.TestCase):
         del c1, c2
         connection.close()
 
+    def test_conpy150(self):
+        connection= create_connection()
+        cursor= connection.cursor()
+        cursor.execute("create temporary table t1 (id int, a datetime not null default '0000-00-00 00:00:00', b date not null default '0000-00-00')")
+        cursor.execute("insert into t1 (id) values (1)");
+        cursor.execute("select * from t1")
+        row= cursor.fetchone()
+        self.assertEqual(row[1], None)
+        self.assertEqual(row[2], None)
+        cursor.execute("select * from t1 WHERE 1=?", (1,))
+        row= cursor.fetchone()
+        self.assertEqual(row[1], None)
+        self.assertEqual(row[2], None)
+        del cursor
+        connection.close()
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:

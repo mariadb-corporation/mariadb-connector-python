@@ -666,11 +666,11 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 uint8_t len= 0;
                 int year= 0, month= 0, day= 0,
                     hour= 0, minute= 0, second= 0, second_part= 0;
-
                 len= (uint8_t)mysql_net_field_length(row);
                 if (!len)
                 {
-                    self->values[column]= PyDateTime_FromDateAndTime(0,0,0,0,0,0,0);
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
                     break;
                 }
                 year= uint2korr(*row);
@@ -698,7 +698,8 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 
                 if (!len)
                 {
-                    self->values[column]= PyDate_FromDate(0,0,0);
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
                     break;
                 }
                 year= uint2korr(*row);
