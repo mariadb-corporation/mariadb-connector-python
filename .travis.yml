@@ -58,7 +58,7 @@ env:
   - TEST_HOST=mariadb.example.com
 
 matrix:
-  allowed_failures:
+  allow_failures:
   - env: DB=mariadb:10.5 SQLALCHEMY=1
   include:
   - env: SKYSQL=true PYTHON_VER="3.9.0"
