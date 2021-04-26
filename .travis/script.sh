@@ -67,6 +67,15 @@ else
   fi
 fi
 
+if [ -n "$SQLALCHEMY"] ; then
+  pyenv install 3.9.0
+  export PYENV_VERSION=3.9.0
+  git clone https://github.com/sqlalchemy/sqlalchemy.git sqlalchemy
+  cd sqlalchemy
+  pytest --dburi "mariadb+mariadbconnector://sqlalchemy:foo@localhost/test?charset=utf8mb4"
+  cd ..
+fi
+
 if [ -n "$BENCH" ] ; then
 #  pyenv install pypy3.6-7.2.0
 #  pyenv install miniconda3-4.3.30

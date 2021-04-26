@@ -32,6 +32,7 @@ before_install:
   - export PATH="$PYENV_ROOT/bin:$PATH"
   - echo $PATH
   - eval "$(pyenv init -)"
+  - git clone https://github.com/sqlalchemy/sqlalchemy.git sqlalchemy
 
 install:
   - wget -qO- 'https://github.com/tianon/pgp-happy-eyeballs/raw/master/hack-my-builds.sh' | bash
@@ -57,17 +58,19 @@ env:
   - TEST_HOST=mariadb.example.com
 
 matrix:
+  allowed_failures:
+  - env: DB=mariadb:10.5 SQLALCHEMY=1
   include:
-  - env: SKYSQL=true PYTHON_VER="3.8.0"
+  - env: SKYSQL=true PYTHON_VER="3.9.0"
   - env: DB=mariadb:10.4 PYTHON_VER="3.6.0"
-  - env: DB=mariadb:10.4 PYTHON_VER="3.8.0"
+  - env: DB=mariadb:10.4 PYTHON_VER="3.9.0"
 #  - env: DB=mariadb:10.4 PYTHON_VER="pypy3.6-7.3.1"
 #  - env: DB=mariadb:10.4 BENCH=1
+  - env: DB=mariadb:10.5 PYTHON_VER="3.6.0"
   - env: DB=mariadb:10.4 PYTHON_VER="3.6.0" MAXSCALE_VERSION=2.2.9 TEST_PORT=4007 TEST_USER=bob TEXT_DATABASE=test2 SKIP_LEAK=1
   - env: DB=mariadb:10.2 PYTHON_VER="3.6.0"
   - env: DB=mariadb:10.3 PYTHON_VER="3.6.0"
   - env: DB=mysql:5.7 PYTHON_VER="3.6.0"
-  - env: DB=mysql:8.0 PYTHON_VER="3.6.0"
 
 notifications:
   email: false
