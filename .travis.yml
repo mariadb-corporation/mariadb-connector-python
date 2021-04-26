@@ -58,7 +58,7 @@ env:
 
 matrix:
   allow_failures:
-  - env: DB=mariadb:10.5 SQLALCHEMY=1
+#  - env: DB=mariadb:10.5 SQLALCHEMY=1
   include:
   - env: SKYSQL=true PYTHON_VER="3.9.0"
   - env: DB=mariadb:10.4 PYTHON_VER="3.6.0"
