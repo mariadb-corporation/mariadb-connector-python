@@ -70,6 +70,8 @@ fi
 if [ -n "$SQLALCHEMY"] ; then
   pyenv install 3.9.0
   export PYENV_VERSION=3.9.0
+  python setup.py build
+  python setup.py install
   git clone https://github.com/sqlalchemy/sqlalchemy.git sqlalchemy
   cd sqlalchemy
   pytest --dburi "mariadb+mariadbconnector://sqlalchemy:foo@localhost/test?charset=utf8mb4"
