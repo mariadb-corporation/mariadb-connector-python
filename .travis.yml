@@ -32,7 +32,6 @@ before_install:
   - export PATH="$PYENV_ROOT/bin:$PATH"
   - echo $PATH
   - eval "$(pyenv init -)"
-  - git clone https://github.com/sqlalchemy/sqlalchemy.git sqlalchemy
 
 install:
   - wget -qO- 'https://github.com/tianon/pgp-happy-eyeballs/raw/master/hack-my-builds.sh' | bash
