@@ -190,5 +190,19 @@ class TestConnection(unittest.TestCase):
         c1 = mariadb.connect(**default_conf, autocommit=True)
         self.assertEqual(c1.autocommit, True)
 
+    def test_conpy155(self):
+        default_conf= conf()
+        c1 = mariadb.connect(**default_conf)
+        version= c1.get_server_version()
+        self.assertEqual(c1.get_server_version(), version)
+        self.assertEqual(c1.get_server_version(), version)
+        self.assertEqual(c1.get_server_version(), version)
+        self.assertEqual(c1.get_server_version(), version)
+        c1.close()
+        try:
+            version= c1.get_server_version()
+        except mariadb.InterfaceError:
+            pass
+
 if __name__ == '__main__':
     unittest.main()

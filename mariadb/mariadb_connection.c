@@ -1388,6 +1388,8 @@ MrdbConnection_exit(MrdbConnection *self, PyObject *args __attribute__((unused))
 
 static PyObject *MrdbConnection_get_server_version(MrdbConnection *self)
 {
+  MARIADB_CHECK_CONNECTION(self, NULL);
+  Py_INCREF(self->server_version_info);
   return self->server_version_info;
 }
 
