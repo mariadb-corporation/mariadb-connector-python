@@ -19,7 +19,7 @@ class MariaDBConfiguration():
 def get_config(options):
     static= options["link_static"];
     mariadb_dir= options["install_dir"]
-    required_version= "3.1.5"
+    required_version= "3.2.4"
 
     if not os.path.exists(mariadb_dir):
       try:
