@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
+# Copyright (C) 2021 Georg Richter and MariaDB Corporation AB
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Library General Public
@@ -26,7 +26,7 @@ from mariadb.constants import STATUS
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
 
-class Connection(mariadb._mariadb.connection):
+class AsyncConnection(mariadb._mariadb.connection):
     """MariaDB connection class"""
 
     def __init__(self, *args, **kwargs):
@@ -35,10 +35,19 @@ class Connection(mariadb._mariadb.connection):
         self.__pool = None
         self.__last_used = 0
 
-#       self._autocommit= kwargs.pop("autocommit", True)
-        self._converter= kwargs.pop("converter", None)
-
         super().__init__(*args, **kwargs)
+
+    async def _execute_command(self, command):
+        print("comand: ")
+        print(command)
+        super().query(command)
+
+    async def _read_response(self):
+        super()._read_response()
+
+    async def query(self, command):
+        await self._execute_command(command)
+        await self._read_response()
 
     def cursor(self, **kwargs):
         return mariadb.Cursor(self, **kwargs)

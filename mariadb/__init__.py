@@ -8,7 +8,6 @@ Minimum supported Python version is 3.6
 '''
 
 from ._mariadb import (
-    Binary,
     DataError,
     DatabaseError,
     Error,
@@ -30,6 +29,7 @@ _POOLS= _CONNECTION_POOLS= {}
 from mariadb.dbapi20 import *
 from mariadb.connectionpool import *
 from mariadb.cursor import Cursor
+from mariadb.async_connections import *
 from mariadb.release_info import __version__ as __version__ 
 from mariadb.release_info import __version_info__ as __version_info__ 
 from mariadb.release_info import __author__ as __author__
@@ -43,14 +43,18 @@ def Binary(obj):
 
 def connect(*args, **kwargs):
     from mariadb.connections import Connection
-    if kwargs and "pool_name" in kwargs:
-        if not kwargs["pool_name"] in mariadb._CONNECTION_POOLS:
-            pool= mariadb.ConnectionPool(**kwargs)
-        else:
-            pool= mariadb._CONNECTION_POOLS[kwargs["pool_name"]]
-        c= pool.get_connection()
-        return c
+    if kwargs:
+        if "pool_name" in kwargs:
+            if not kwargs["pool_name"] in mariadb._CONNECTION_POOLS:
+                pool= mariadb.ConnectionPool(**kwargs)
+            else:
+                pool= mariadb._CONNECTION_POOLS[kwargs["pool_name"]]
+            c= pool.get_connection()
+            return c
+        is_async= kwargs.get("asynchronous", False)
+        if is_async:
+            return AsyncConnection(*args, **kwargs)
+
     return Connection(*args, **kwargs)
 
 Connection= connect
-

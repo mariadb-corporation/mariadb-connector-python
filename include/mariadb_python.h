@@ -90,8 +90,28 @@ int clock_gettime(int dummy, struct timespec *ct);
 #define MAX_TPC_XID_SIZE 64
 #define POOL_DEFAULT_SIZE 5
 
+/* Placeholder for missing documentation */
+#define MISSING_DOC NULL
+
 /* Magic constant for checking dynamic columns */
 #define PYTHON_DYNCOL_VALUE 0xA378BD8E
+
+typedef struct st_lex_str {
+    char *str;
+    size_t length;
+} MrdbString;
+
+enum enum_binary_command {
+    SQL_NONE= 0,
+    SQL_INSERT,
+    SQL_UPDATE,
+    SQL_REPLACE,
+    SQL_DELETE,
+    SQL_CALL,
+    SQL_DO,
+    SQL_SELECT,
+    SQL_OTHER=255
+};
 
 enum enum_extended_field_type
 {
@@ -125,19 +145,15 @@ enum enum_tpc_state
 
 enum enum_paramstyle
 {
-    NONE=0,
-    QMARK,
-    FORMAT,
-    PYFORMAT
+    NONE= 0,
+    QMARK= 1,
+    FORMAT= 2,
+    PYFORMAT= 3
 };
-
-typedef struct st_lex_str {
-    char *str;
-    size_t length;
-} MrdbString;
 
 typedef struct st_parser {
     MrdbString statement;
+    MrdbString *keys;
     uint8_t in_literal[3];
     uint8_t in_comment;
     uint8_t in_values;
@@ -146,8 +162,9 @@ typedef struct st_parser {
     uint32_t param_count;
     uint32_t key_count;
     char* value_ofs;
+    PyObject *param_list;
     enum enum_paramstyle paramstyle;
-    MrdbString *keys;
+    enum enum_binary_command command;
     MYSQL *mysql;
 } MrdbParser;
 
@@ -170,6 +187,7 @@ typedef struct {
     const char *collation;
     uint8_t inuse;
     uint8_t status;
+    uint8_t asynchronous;
     struct timespec last_used;
     /* capabilities */
     unsigned long client_capabilities;
@@ -222,6 +240,16 @@ typedef struct {
     MYSQL_TIME tm;
 } MrdbParamValue;
 
+typedef struct {
+    char *statement;
+    Py_ssize_t statement_len;
+    enum enum_paramstyle paramstyle;
+    uint32_t paramcount;
+    uint8_t is_text;
+    PyObject *paramlist;
+    PyObject *keys;
+} MrdbParseInfo;
+
 /* PEP-249: Cursor object */
 typedef struct {
     PyObject_HEAD
@@ -230,7 +258,6 @@ typedef struct {
     MYSQL_RES *result;
     PyObject *data;
     uint32_t array_size;
-    uint32_t param_count;
     uint32_t row_array_size; /* for fetch many */
     MrdbParamInfo *paraminfo;
     MrdbParamValue *value;
@@ -238,10 +265,11 @@ typedef struct {
     MYSQL_BIND *bind;
     MYSQL_FIELD *fields;
     char *statement;
-    unsigned long statement_len;
+    size_t statement_len;
     PyObject **values;
     PyStructSequence_Field *sequence_fields;
     PyTypeObject *sequence_type;
+    MrdbParseInfo parseinfo;
     unsigned long prefetch_rows;
     unsigned long cursor_type;
     int64_t affected_rows;
@@ -251,13 +279,12 @@ typedef struct {
     unsigned long row_number;
     enum enum_result_format result_format;
     uint8_t is_prepared;
-    uint8_t is_buffered;
+    char is_buffered;
     uint8_t fetched;
     uint8_t is_closed;
-    uint8_t is_text;
-    uint8_t is_binary;
-    MrdbParser *parser;
+    uint8_t reprepare;
     PyThreadState *thread_state;
+    enum enum_paramstyle paramstyle;
 } MrdbCursor;
 
 typedef struct
@@ -308,9 +335,6 @@ mariadb_throw_exception(void *handle,
     ...);
 
 enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *field);
-
-PyObject *
-MrdbConnection_affected_rows(MrdbConnection *self);
 
 PyObject *
 MrdbConnection_ping(MrdbConnection *self);

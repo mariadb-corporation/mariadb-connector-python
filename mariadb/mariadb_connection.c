@@ -20,6 +20,13 @@
 #include "mariadb_python.h"
 #include "docs/connection.h"
 
+#define MADB_SET_OPTION(m,o,v)\
+if (mysql_optionsv((m), (o), (v)))\
+{\
+    mariadb_throw_exception(self->mysql, NULL, 0, NULL);\
+    return -1;\
+}
+
 char *dsn_keys[]= {
     "dsn", "host", "user", "password", "database", "port", "unix_socket",
     "connect_timeout", "read_timeout", "write_timeout",
@@ -31,7 +38,7 @@ char *dsn_keys[]= {
     "client_flag", "pool_name", "pool_size", 
     "pool_reset_connection", "plugin_dir",
     "username", "db", "passwd",
-    "autocommit", "converter",
+    "autocommit", "converter", "asynchronous",
     NULL
 };
 
@@ -46,6 +53,9 @@ static PyObject
 
 static PyObject *
 MrdbConnection_exception(PyObject *self, void *closure);
+
+static PyObject *
+MrdbConnection_query(MrdbConnection *self, PyObject *args);
 
 #define GETTER_EXCEPTION(name, exception, doc)\
 { name,MrdbConnection_exception, NULL, doc, &exception }
@@ -93,6 +103,10 @@ MrdbConnection_get_server_version(MrdbConnection *self);
 static PyObject *
 MrdbConnection_get_server_status(MrdbConnection *self);
 
+PyObject *
+MrdbConnection_executecommand(MrdbConnection *self,
+                             PyObject *args);
+
 static PyGetSetDef
 MrdbConnection_sets[]=
 {
@@ -131,6 +145,9 @@ MrdbConnection_sets[]=
 static PyMethodDef
 MrdbConnection_Methods[] =
 {
+    {"_query", (PyCFunction)MrdbConnection_query,
+        METH_VARARGS,
+        NULL},
     /* PEP-249 methods */
     {"close", (PyCFunction)MrdbConnection_close,
         METH_NOARGS,
@@ -209,6 +226,11 @@ MrdbConnection_Methods[] =
         METH_VARARGS,
         connection_escape_string__doc__
     },
+    /* Internal methods */
+    { "_execute_command", 
+      (PyCFunction)MrdbConnection_executecommand,
+      METH_VARARGS, NULL
+    },
     {NULL} /* always last */
 };
 
@@ -265,6 +287,16 @@ PyMemberDef MrdbConnection_Members[] =
         offsetof(MrdbConnection, tls_version),
         READONLY,
         "TLS protocol version used by connection"},
+    {"client_capabilities",
+        T_ULONG,
+        offsetof(MrdbConnection, server_capabilities),
+        READONLY,
+        "Client capabilities"},
+    {"server_capabilities",
+        T_ULONG,
+        offsetof(MrdbConnection, server_capabilities),
+        READONLY,
+        "Server capabilities"},
     {NULL} /* always last */
 };
 
@@ -311,9 +343,10 @@ MrdbConnection_Initialize(MrdbConnection *self,
                  compress= 0, ssl_verify_cert= 0;
     PyObject *autocommit_obj= NULL;
     PyObject *converter= NULL;
+    PyObject *asynchronous= NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|zzzzziziiibbzzzzzzzzzzibizibzzzzOO:connect",
+                "|zzzzziziiibbzzzzzzzzzzibizibzzzzO!OO!:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -325,19 +358,11 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &client_flags, &pool_name, &pool_size,
                 &reset_session, &plugin_dir,
                 &user, &schema, &password,
-                &autocommit_obj, &converter))
+                &PyBool_Type, &autocommit_obj,
+                &converter,
+                &PyBool_Type, &asynchronous))
     {
         return -1;
-    }
-
-    if (autocommit_obj)
-    {
-        if (autocommit_obj != Py_None &&
-            !CHECK_TYPE(autocommit_obj, &PyBool_Type))
-        {
-            PyErr_SetString(PyExc_TypeError, "Argument must be boolean or None");
-            return -1;
-        }
     }
 
     if (dsn)
@@ -370,40 +395,50 @@ MrdbConnection_Initialize(MrdbConnection *self,
 
     if (local_infile != 0xFF)
     {
-        mysql_optionsv(self->mysql, MYSQL_OPT_LOCAL_INFILE, &local_infile);
+        MADB_SET_OPTION(self->mysql, MYSQL_OPT_LOCAL_INFILE, &local_infile);
     }
 
     if (compress)
     {
-        mysql_optionsv(self->mysql, MYSQL_OPT_COMPRESS, 1);
+        MADB_SET_OPTION(self->mysql, MYSQL_OPT_COMPRESS, 1);
     }
 
     if (init_command)
     {
-        mysql_optionsv(self->mysql, MYSQL_INIT_COMMAND, init_command);
+        MADB_SET_OPTION(self->mysql, MYSQL_INIT_COMMAND, init_command);
     }
 
     if (plugin_dir) {
-        mysql_optionsv(self->mysql, MYSQL_PLUGIN_DIR, plugin_dir);
+        MADB_SET_OPTION(self->mysql, MYSQL_PLUGIN_DIR, plugin_dir);
     } else {
 #if defined(DEFAULT_PLUGINS_SUBDIR)
-        mysql_optionsv(self->mysql, MYSQL_PLUGIN_DIR, DEFAULT_PLUGINS_SUBDIR);
+        MADB_SET_OPTION(self->mysql, MYSQL_PLUGIN_DIR, DEFAULT_PLUGINS_SUBDIR);
 #endif
     }
 
     /* read defaults from configuration file(s) */
     if (default_file)
-        mysql_optionsv(self->mysql, MYSQL_READ_DEFAULT_FILE, default_file);
+    {
+        MADB_SET_OPTION(self->mysql, MYSQL_READ_DEFAULT_FILE, default_file);
+    }
     if (default_group)
-        mysql_optionsv(self->mysql, MYSQL_READ_DEFAULT_GROUP, default_group);
+    {
+        MADB_SET_OPTION(self->mysql, MYSQL_READ_DEFAULT_GROUP, default_group);
+    }
 
     /* set timeouts */
     if (connect_timeout)
-        mysql_optionsv(self->mysql, MYSQL_OPT_CONNECT_TIMEOUT, &connect_timeout);
+    {
+        MADB_SET_OPTION(self->mysql, MYSQL_OPT_CONNECT_TIMEOUT, &connect_timeout);
+    }
     if (read_timeout)
-        mysql_optionsv(self->mysql, MYSQL_OPT_READ_TIMEOUT, &read_timeout);
+    {
+        MADB_SET_OPTION(self->mysql, MYSQL_OPT_READ_TIMEOUT, &read_timeout);
+    }
     if (write_timeout)
-        mysql_optionsv(self->mysql, MYSQL_OPT_WRITE_TIMEOUT, &write_timeout);
+    {
+        MADB_SET_OPTION(self->mysql, MYSQL_OPT_WRITE_TIMEOUT, &write_timeout);
+    }
 
     /* set TLS/SSL options */
     if (ssl_enforce || ssl_key || ssl_ca || ssl_cert || ssl_capath || ssl_cipher)
@@ -413,11 +448,18 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 (const char *)ssl_capath,
                 (const char *)ssl_cipher);
     if (ssl_crl)
-        mysql_optionsv(self->mysql, MYSQL_OPT_SSL_CRL, ssl_crl);
+    {
+        MADB_SET_OPTION(self->mysql, MYSQL_OPT_SSL_CRL, ssl_crl);
+    }
     if (ssl_crlpath)
-        mysql_optionsv(self->mysql, MYSQL_OPT_SSL_CRLPATH, ssl_crlpath);
+    {
+        MADB_SET_OPTION(self->mysql, MYSQL_OPT_SSL_CRLPATH, ssl_crlpath);
+    }
     if (ssl_verify_cert)
-        mysql_optionsv(self->mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (unsigned char *) &ssl_verify_cert);
+    {
+        MADB_SET_OPTION(self->mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (unsigned char *) &ssl_verify_cert);
+    }
+
     Py_BEGIN_ALLOW_THREADS;
     mysql_real_connect(self->mysql, host, user, password, schema, port,
             socket, client_flags);
@@ -460,7 +502,13 @@ MrdbConnection_Initialize(MrdbConnection *self,
             PyTuple_SetItem(self->server_version_info, 2, PyLong_FromLong(patch)))
             goto end;
     }
-
+/*
+    if (asynchronous && PyObject_IsTrue(asynchronous))
+    {
+        self->asynchronous= 1;
+        MADB_SET_OPTION(self->mysql, MARIADB_OPT_SKIP_READ_RESPONSE, &self->asynchronous);
+    }
+*/
 end:
     if (PyErr_Occurred())
         return -1;
@@ -580,10 +628,78 @@ void MrdbConnection_dealloc(MrdbConnection *self)
             mysql_close(self->mysql);
             Py_END_ALLOW_THREADS
         }
-        Py_DECREF(self->server_version_info);
+        Py_XDECREF(self->server_version_info);
         Py_TYPE(self)->tp_free((PyObject*)self);
     }
 }
+
+PyObject *
+MrdbConnection_executecommand(MrdbConnection *self,
+                             PyObject *args)
+{
+  char *cmd;
+  int rc;
+
+  MARIADB_CHECK_CONNECTION(self, NULL);
+  if (!PyArg_ParseTuple(args, "s", &cmd))
+    return NULL;
+
+  Py_BEGIN_ALLOW_THREADS;
+  rc= mysql_send_query(self->mysql, cmd, strlen(cmd));
+  Py_END_ALLOW_THREADS;
+
+  if (rc)
+  {
+      mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+      return NULL;
+  }
+  Py_RETURN_NONE;
+}
+
+/*
+PyObject *
+MrdbConnection_readresponse(MrdbConnection *self)
+{
+    int rc;
+    PyObject *result, *tmp;
+
+    MARIADB_CHECK_CONNECTION(self, NULL);
+
+    Py_BEGIN_ALLOW_THREADS;
+    rc= self->mysql->methods->db_read_query_result(self->mysql);
+    Py_END_ALLOW_THREADS;
+
+    if (rc)
+    {
+      mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+      return NULL;
+    }
+
+    result= PyDict_New();
+
+    tmp= PyLong_FromLong((long)mysql_field_count(self->mysql));
+    PyDict_SetItemString(result, "field_count", tmp);
+    Py_DECREF(tmp);
+
+    tmp= PyLong_FromLong((long)mysql_affected_rows(self->mysql));
+    PyDict_SetItemString(result, "affected_rows", tmp);
+    Py_DECREF(tmp);
+
+    tmp= PyLong_FromLong((long)mysql_insert_id(self->mysql));
+    PyDict_SetItemString(result, "insert_id", tmp);
+    Py_DECREF(tmp);
+
+    tmp= PyLong_FromLong((long)self->mysql->server_status);
+    PyDict_SetItemString(result, "server_status", tmp);
+    Py_DECREF(tmp);
+
+    tmp= PyLong_FromLong((long)mysql_warning_count(self->mysql));
+    PyDict_SetItemString(result, "warning_count", tmp);
+    Py_DECREF(tmp);
+
+    return result;
+}
+*/
 
 PyObject *MrdbConnection_close(MrdbConnection *self)
 {
@@ -591,8 +707,7 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
     /* Todo: check if all the cursor stuff is deleted (when using prepared
        statements this should be handled in mysql_close) */
 
-    if (self->converter)
-        Py_DECREF(self->converter);
+    Py_XDECREF(self->converter);
     self->converter= NULL;
 
     Py_BEGIN_ALLOW_THREADS
@@ -1327,6 +1442,27 @@ static PyObject *MrdbConnection_get_server_status(MrdbConnection *self)
 
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
     return PyLong_FromLong((long)server_status);
+}
+
+static PyObject *MrdbConnection_query(MrdbConnection *self, PyObject *args)
+{
+    char *cmd;
+    int rc;
+
+    if (!PyArg_ParseTuple(args, "s", &cmd))
+        return NULL;
+
+
+    Py_BEGIN_ALLOW_THREADS;
+    rc= mysql_send_query(self->mysql, cmd, strlen(cmd));
+    Py_END_ALLOW_THREADS;
+
+    if (rc)
+    {
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        return NULL;
+    }
+    Py_RETURN_NONE;
 }
 
 /* vim: set tabstop=4 */

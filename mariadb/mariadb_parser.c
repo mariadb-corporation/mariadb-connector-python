@@ -28,6 +28,20 @@ const char *comment_start= "/*";
 const char *comment_end= "*/";
 const char literals[3]= {'\'', '\"', '`'};
 
+static struct {
+    enum enum_binary_command command;
+    MrdbString str;
+} binary_command[] =
+{
+    {SQL_INSERT, {"INSERT", 6}},
+    {SQL_UPDATE, {"UPDATE", 6}},
+    {SQL_REPLACE, {"REPLACE", 7}},
+    {SQL_DELETE, {"DELETE", 6}},
+    {SQL_CALL, {"CALL", 4}},
+    {SQL_DO, {"DO", 2}},
+    {SQL_NONE, {NULL, 0}}
+};
+
 static uint8_t
 check_keyword(char* ofs, char* end, char* keyword, size_t keylen)
 {
@@ -92,6 +106,8 @@ MrdbParser_init(MYSQL *mysql, const char *statement, size_t length)
         memcpy(p->statement.str, statement, length);
         p->statement.length= length;
         p->mysql= mysql;
+        p->param_list= PyList_New(0);
+        p->param_count= 0;
     }
     return p;
 }
@@ -242,6 +258,7 @@ cont:
         /* parmastyle = qmark */
         if (*a == '?')
         {
+            PyObject *tmp;
             if (p->paramstyle && p->paramstyle != QMARK)
             {
                 parser_error(errmsg, errmsg_len,
@@ -250,6 +267,9 @@ cont:
             }
             p->paramstyle= QMARK;
             p->param_count++;
+            tmp= PyLong_FromLong((long)(a - p->statement.str));
+            PyList_Append(p->param_list, tmp);
+            Py_DECREF(tmp);
             a++;
             continue;
         }
@@ -259,6 +279,7 @@ cont:
             /* paramstyle format */
             if (*(a+1) == 's' || *(a+1) == 'd')
             {
+                PyObject *tmp;
                 if (p->paramstyle && p->paramstyle != FORMAT)
                 {
                     parser_error(errmsg, errmsg_len, 
@@ -269,6 +290,10 @@ cont:
                 *a= '?';
                 memmove(a+1, a+2, end - a);
                 end--;
+
+                tmp= PyLong_FromLong((long)(a - p->statement.str));
+                PyList_Append(p->param_list, tmp);
+                Py_DECREF(tmp);
                 a++;
                 p->param_count++;
                 continue;
@@ -276,6 +301,9 @@ cont:
             if (*(a+1) == '(')
             {
                 char *val_end= strstr(a+1, ")s");
+                PyObject *tmp;
+
+
                 if (val_end)
                 {
                     ssize_t keylen= val_end - a + 1;
@@ -288,6 +316,9 @@ cont:
                     p->paramstyle= PYFORMAT;
                     *a= '?';
                     p->param_count++;
+                    tmp= PyLong_FromLong((long)(a - p->statement.str));
+                    PyList_Append(p->param_list, tmp);
+                    Py_DECREF(tmp);
                     if (p->keys)
                     {
                         MrdbString *m;
@@ -317,7 +348,7 @@ cont:
                     memcpy(p->keys[p->param_count - 1].str, a + 2, keylen - 3);
 
                     p->keys[p->param_count - 1].length= keylen - 3;
-                    memmove(a+1, val_end+2, end - a - keylen);
+                    memmove(a+1, val_end+2, end - a - keylen + 1);
                     a+= 1;
                     end -= keylen;
                     continue;
@@ -345,8 +376,25 @@ cont:
                 a += 7;
                 continue;
             }
-        }
+        } 
+        else {
+          /* determine SQL command */
+          if (p->command == SQL_NONE && p->param_count)
+          {
+            for (uint8_t i=0; binary_command[i].str.str; i++)
+            {
+              if (check_keyword(a, end, binary_command[i].str.str,
+                  binary_command[i].str.length))
+              {
+                p->command= binary_command[i].command;
+                break;
+              }
+            }
+            if (p->command == SQL_NONE)
+              p->command= SQL_OTHER;
+          }
 
+        }
         lastchar= *a;
         a++;
     }

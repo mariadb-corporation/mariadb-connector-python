@@ -42,7 +42,7 @@ def dequote(s):
 
 
 def get_config(options):
-    required_version = "3.1.5"
+    required_version = "3.2.0"
     no_env = 0
     static = options["link_static"]
 
