@@ -22,7 +22,6 @@ def is_mysql():
     cursor= conn.cursor()
     cursor.execute("select version()")
     row= cursor.fetchone()
-    print(row[0].upper())
     if "MARIADB" in row[0].upper():
         mysql_server= 0
     del cursor, conn
@@ -412,7 +411,10 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE dyncol1 (a blob)")
         tpl = (1, 2, 3)
-        cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
+        try:
+            cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
+        except mariadb.DataError:
+            pass
         del cursor
 
     def test_indicator(self):
@@ -495,7 +497,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20), b varchar(20))")
         try:
             cursor.execute("INSERT INTO test.t1(fname, sname) VALUES (?, ?)", (("Walker", "Percy"), ("Flannery", "O'Connor")))
-        except mariadb.DataError:
+        except (mariadb.ProgrammingError, mariadb.DataError):
             pass
         del cursor
 
@@ -673,7 +675,7 @@ class TestCursor(unittest.TestCase):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
         con = create_connection()
-        cursor = con.cursor(prepared=True)
+        cursor = con.cursor(prepared=True, buffered=True)
         cursor.execute("SELECT ?", (1,))
         row = cursor.fetchone()
         self.assertEqual(row[0], 1)
@@ -832,7 +834,7 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy47(self):
         con= create_connection()
-        cursor=con.cursor()
+        cursor=con.cursor(buffered=True)
         cursor.execute("SELECT ?", (True, ))
         row= cursor.fetchone()
         self.assertEqual(row[0], 1)

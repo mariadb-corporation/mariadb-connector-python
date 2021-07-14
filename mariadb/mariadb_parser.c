@@ -379,7 +379,7 @@ cont:
         } 
         else {
           /* determine SQL command */
-          if (p->command == SQL_NONE && p->param_count)
+          if (p->command == SQL_NONE)
           {
             for (uint8_t i=0; binary_command[i].str.str; i++)
             {

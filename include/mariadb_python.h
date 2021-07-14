@@ -244,6 +244,7 @@ typedef struct {
     char *statement;
     Py_ssize_t statement_len;
     enum enum_paramstyle paramstyle;
+    enum enum_binary_command command;
     uint32_t paramcount;
     uint8_t is_text;
     PyObject *paramlist;

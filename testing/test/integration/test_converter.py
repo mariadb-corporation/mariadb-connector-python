@@ -39,7 +39,7 @@ class TestConversion(unittest.TestCase):
     def test_convert_time(self):
         cursor= self.connection.cursor()
         a= datetime.time(12,29,21)
-        cursor.execute("SELECT ?", (a,))
+        cursor.execute("SELECT cast(? as time)", (a,))
         row= cursor.fetchone()
         self.assertEqual(row[0], a)
         del cursor

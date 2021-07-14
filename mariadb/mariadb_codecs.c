@@ -953,7 +953,7 @@ mariadb_get_parameter(MrdbCursor *self,
     else
         row= self->data;
 
-    if (self->paramstyle != PYFORMAT)
+    if (self->parseinfo.paramstyle != PYFORMAT)
     {
         if (!(column= ListOrTuple_GetItem(row, column_nr)))
         {
@@ -1167,7 +1167,7 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
     for (i=0; i < self->array_size; i++)
     {
         PyObject *obj= ListOrTuple_GetItem(data, i);
-        if (self->paramstyle != PYFORMAT &&
+        if (self->parseinfo.paramstyle != PYFORMAT &&
                 (!CHECK_TYPE(obj, &PyTuple_Type) &&
                  !CHECK_TYPE(obj, &PyList_Type)))
         {
@@ -1176,7 +1176,7 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
                     " (Row data must be provided as tuple(s))", i+1);
             return 1;
         }
-        if (self->paramstyle == PYFORMAT &&
+        if (self->parseinfo.paramstyle == PYFORMAT &&
                 !CHECK_TYPE(obj, &PyDict_Type))
         {
             mariadb_throw_exception(NULL, Mariadb_DataError, 0,
@@ -1186,7 +1186,7 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
         }
 
         if (!self->parseinfo.paramcount ||
-                (self->paramstyle != PYFORMAT && 
+                (self->parseinfo.paramstyle != PYFORMAT && 
                  self->parseinfo.paramcount != ListOrTuple_Size(obj)))
         {
             mariadb_throw_exception(self->stmt, Mariadb_DataError, 1, 
