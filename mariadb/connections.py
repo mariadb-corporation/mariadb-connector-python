@@ -41,8 +41,8 @@ class Connection(mariadb._mariadb.connection):
         super().__init__(*args, **kwargs)
 
     def cursor(self, **kwargs):
-        return mariadb.Cursor(self, **kwargs)
-
+        cursor= mariadb.Cursor(self, **kwargs)
+        return cursor
 
     def close(self):
         if self._Connection__pool:
@@ -58,6 +58,9 @@ class Connection(mariadb._mariadb.connection):
         "Closes connection."
         self.close()
 
+    def get_server_version(self):
+        return self.server_version_info
+
     @property
     def character_set(self):
         """Client character set."""
@@ -72,6 +75,11 @@ class Connection(mariadb._mariadb.connection):
     def server_status(self):
         """Returns server status flags."""
         return super()._server_status
+
+    @property
+    def server_version_info(self):
+        version= self.server_version
+        return (int(version / 10000), int((version % 10000) / 100), version % 100)
 
     @property
     def socket(self):

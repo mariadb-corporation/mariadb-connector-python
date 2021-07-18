@@ -54,7 +54,6 @@ class Cursor(mariadb._mariadb.cursor):
         self._description= None
         self._transformed_statement= None
         self._prepared= False
-        self._parsed= False
         self._prev_stmt= None
         self._force_binary= None
 
@@ -155,11 +154,12 @@ class Cursor(mariadb._mariadb.cursor):
         """
 
         logging.debug("parse_execute: %s" % statement)
+
         if not statement:
             raise mariadb.ProgrammingError("empty statement")
 
         # parse statement
-        if self._prev_stmt != statement:
+        if self.statement != statement:
             super()._parse(statement)
             self._prev_stmt= statement
             self._reprepare= True
@@ -184,7 +184,8 @@ class Cursor(mariadb._mariadb.cursor):
         place holder for execute() description
         """
 
-        logging.debug("execute prepared %s" % self._prepared)
+        # Parse statement
+        do_parse= True
 
         if buffered:
             self.buffered= True
@@ -193,24 +194,22 @@ class Cursor(mariadb._mariadb.cursor):
             logging.debug("clearing result set")
             self._clear_result()
 
-        logging.debug("cleared")
-
         # if we have a prepared cursor, we have to set statement
-        # to previous statement
-        if self._prepared and self._prev_stmt:
-            statement= self._prev_stmt
-            self_parsed= False
+        # to previous statement and don't need to parse
+        if self._prepared and self.statement:
+            statement= self.statement
+            do_parse= False
 
-        if statement != self._prev_stmt:
-           self._parsed= False
+        # Avoid reparsing of same statement
+        if statement == self.statement:
+           do_parse= True
 
         # parse statement and check param style
-        if not self._parsed:
+        if do_parse:
             self._parse_execute(statement, (data))
-            logging.debug("transformed: %s -> %s" % (statement, self._transformed_statement))
-            self._parsed= True
         self._description= None
 
+        # check if data parameters are passed in correct format
         if (self._paramstyle == 3 and not isinstance(data, dict)):
             raise TypeError("Argument 2 must be Dict")
         elif self._paramstyle < 3 and (not isinstance(data, (tuple, list))):
@@ -220,11 +219,12 @@ class Cursor(mariadb._mariadb.cursor):
             self._data= data
         else:
             self._data= None
-            # No need for binary protocol, if no parameters supplied, except CALL statement
+            # If statement doesn't contain parameters we force to run in text
+            # mode, unless a server side cursor or stored procedure will be
+            # executed.
             if self._command != SQL_CALL and self._cursor_type == 0:
                 self._text= True
 
-        logging.debug("Executing %s in %s mode" % (statement, "text" if self._text else "binary"))
         if self._force_binary:
            self._text= False
 
@@ -232,10 +232,10 @@ class Cursor(mariadb._mariadb.cursor):
             # in text mode we need to substitute parameters
             # and store transformed statement
             if (self.paramcount > 0):
-                 logging.debug("transform")
                  self._transformed_statement= self._add_text_params()
+            else:
+                 self._transformed_statement= self.statement
 
-            logging.debug("text mode")
             self._execute_text(self._transformed_statement)
             self._readresponse()
         else:
@@ -275,8 +275,6 @@ class Cursor(mariadb._mariadb.cursor):
 
     def _fetch_row(self):
 
-
-
         # if there is no result set, PEP-249 requires to raise an
         # exception
         if not self.field_count:
@@ -296,6 +294,9 @@ class Cursor(mariadb._mariadb.cursor):
             row= tuple(l)
         return row
 
+    def close(self):
+        super().close()
+
     def fetchone(self):
         row= self._fetch_row()
         if not row:
@@ -309,14 +310,57 @@ class Cursor(mariadb._mariadb.cursor):
             ret= row
         return ret
 
+    def fetchmany(self, size=0):
+        rows=[]
+        if size == 0:
+            size= self.arraysize
+        for count in range(0, size):
+            row= self.fetchone()
+            if row:
+                rows.append(row)
+        return rows
+
     def fetchall(self):
         rows=[];
         for row in self:
             rows.append((row))
         return rows
 
-    def close(self):
-        super().close()
+    def scroll(self, value, mode="relative"):
+        """
+        Scroll the cursor in the result set to a new position according to mode.
+
+        If mode is "relative" (default), value is taken as offset to the current
+        position in the result set, if set to absolute, value states an absolute
+        target position.
+        """
+
+        if self.field_count == 0:
+            raise mariadb.ProgrammingError("Cursor doesn't have a result set")
+
+        if not self.buffered:
+            raise mariadb.ProgrammingError("This method is available only for cursors "\
+                                           "with a buffered result set.")
+
+        if mode != "absolute" and mode != "relative":
+            raise mariadb.DataError("Invalid or unknown scroll mode specified.")
+
+        if value == 0 and mode != "absolute":
+            raise mariadb.DataError("Invalid position value 0.")
+
+        if mode == "relative":
+            if self.rownumber + value < 0 or \
+               self.rownumber + value > self.rowcount:
+                raise mariadb.DataError("Position value is out of range.")
+            new_pos= self.rownumber + value
+        else:
+            if value < 0 or value >= self.rowcount:
+                raise mariadb.DataError("Position value is out of range.")
+            new_pos= value
+
+        self._seek(new_pos);
+        self._rownumber= new_pos;
+
 
     def __enter__(self):
         """Returns a copy of the cursor."""
@@ -325,6 +369,16 @@ class Cursor(mariadb._mariadb.cursor):
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Closes cursor."""
         self.close()
+
+    def __del__(self):
+        self.close()
+
+    @property
+    def lastrowid(self):
+        id= self.insert_id
+        if id > 0:
+            return id
+        return None
 
     @property
     def connection(self):

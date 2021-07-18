@@ -195,7 +195,8 @@ typedef struct {
     unsigned long extended_server_capabilities;
     PyThreadState *thread_state;
     PyObject *converter;
-    PyObject *server_version_info;
+    unsigned long server_version;
+    char *server_info;
 } MrdbConnection;
 
 /*
@@ -409,7 +410,6 @@ MrdbParser_end(MrdbParser *p);
 uint8_t
 MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_len);
 
-
 /* Global defines */
 
 
@@ -485,6 +485,8 @@ if ((obj)->thread_state)\
         mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
       "Invalid cursor or not connected");\
     }
+
+
 
 // #define pooling_keywords "pool_name", "pool_size", "reset_session", "idle_timeout", "acquire_timeout"
 #define connection_keywords "dsn", "host", "user", "password", "database", "port", "socket",\

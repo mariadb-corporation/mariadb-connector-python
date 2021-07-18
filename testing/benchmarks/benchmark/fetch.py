@@ -27,7 +27,7 @@ def str_fetchloop(loops, conn):
     return pyperf.perf_counter() - t0
 
 def num_fetchall(loops, conn):
-    cursor = conn.cursor()
+    cursor = conn.cursor(binary=True)
     range_it = range(loops)
     t0 = pyperf.perf_counter()
     for value in range_it:
@@ -38,7 +38,7 @@ def num_fetchall(loops, conn):
     return pyperf.perf_counter() - t0
 
 def num_fetchloop(loops, conn):
-    cursor = conn.cursor()
+    cursor = conn.cursor(binary=True)
     range_it = range(loops)
     t0 = pyperf.perf_counter()
     for value in range_it:
