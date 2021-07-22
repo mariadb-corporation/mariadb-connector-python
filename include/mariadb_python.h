@@ -196,6 +196,7 @@ typedef struct {
     PyThreadState *thread_state;
     PyObject *converter;
     unsigned long server_version;
+    unsigned long thread_id;
     char *server_info;
 } MrdbConnection;
 

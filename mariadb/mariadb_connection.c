@@ -48,20 +48,11 @@ const char *mariadb_default_collation= "utf8mb4_general_ci";
 void
 MrdbConnection_dealloc(MrdbConnection *self);
 
-static PyObject 
-*MrdbConnection_cursor(MrdbConnection *self, PyObject *args, PyObject *kwargs);
-
 static PyObject *
 MrdbConnection_exception(PyObject *self, void *closure);
 
-static PyObject *
-MrdbConnection_query(MrdbConnection *self, PyObject *args);
-
 #define GETTER_EXCEPTION(name, exception, doc)\
 { name,MrdbConnection_exception, NULL, doc, &exception }
-
-static PyObject *
-MrdbConnection_getid(MrdbConnection *self, void *closure);
 
 static PyObject *
 MrdbConnection_getuser(MrdbConnection *self, void *closure);
@@ -97,8 +88,6 @@ MrdbConnection_readresponse(MrdbConnection *self);
 static PyGetSetDef
 MrdbConnection_sets[]=
 {
-    {"connection_id", (getter)MrdbConnection_getid, NULL,
-        connection_connection_id__doc__, NULL},
     {"database", (getter)MrdbConnection_getdb, (setter)MrdbConnection_setdb,
         connection_database__doc__, NULL},
     {"auto_reconnect", (getter)MrdbConnection_getreconnect,
@@ -125,9 +114,6 @@ MrdbConnection_sets[]=
 static PyMethodDef
 MrdbConnection_Methods[] =
 {
-    {"_query", (PyCFunction)MrdbConnection_query,
-        METH_VARARGS,
-        NULL},
     /* PEP-249 methods */
     {"close", (PyCFunction)MrdbConnection_close,
         METH_NOARGS,
@@ -135,9 +121,6 @@ MrdbConnection_Methods[] =
     {"connect", (PyCFunction)MrdbConnection_connect,
         METH_VARARGS | METH_KEYWORDS,
         connection_connect__doc__},
-    {"cursor", (PyCFunction)MrdbConnection_cursor,
-        METH_VARARGS | METH_KEYWORDS,
-        connection_cursor__doc__},
     /*TPC methods */
     {"tpc_recover",
         (PyCFunction)MrdbConnection_tpc_recover,
@@ -153,11 +136,6 @@ MrdbConnection_Methods[] =
         (PyCFunction)MrdbConnection_change_user,
         METH_VARARGS,
         connection_change_user__doc__
-    },
-    { "kill",
-        (PyCFunction)MrdbConnection_kill,
-        METH_VARARGS,
-        connection_kill__doc__
     },
     { "reconnect",
         (PyCFunction)MrdbConnection_reconnect,
@@ -199,6 +177,11 @@ PyMemberDef MrdbConnection_Members[] =
         offsetof(MrdbConnection, converter),
         READONLY,
         "Conversion dictionary"},
+    {"connection_id",
+        T_ULONG,
+        offsetof(MrdbConnection, thread_id),
+        READONLY,
+        connection_connection_id__doc__},
     {"collation",
         T_STRING,
         offsetof(MrdbConnection, collation),
@@ -246,7 +229,7 @@ PyMemberDef MrdbConnection_Members[] =
         "TLS protocol version used by connection"},
     {"client_capabilities",
         T_ULONG,
-        offsetof(MrdbConnection, server_capabilities),
+        offsetof(MrdbConnection, client_capabilities),
         READONLY,
         "Client capabilities"},
     {"server_capabilities",
@@ -419,11 +402,14 @@ MrdbConnection_Initialize(MrdbConnection *self,
     mysql_real_connect(self->mysql, host, user, password, schema, port,
             socket, client_flags);
     Py_END_ALLOW_THREADS;
+   
     if (mysql_errno(self->mysql))
     {
         mariadb_throw_exception(self->mysql, NULL, 0, NULL);
         goto end;
     }
+
+    self->thread_id= mysql_thread_id(self->mysql);
 
     /* CONPY-129: server_version_info */
     self->server_version= mysql_get_server_version(self->mysql);
@@ -598,19 +584,6 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
     Py_RETURN_NONE;
 }
 
-static PyObject *MrdbConnection_cursor(MrdbConnection *self,
-        PyObject *args,
-        PyObject *kwargs)
-{
-    PyObject *cursor= NULL;
-    PyObject *conn = NULL;
-
-    conn= Py_BuildValue("(O)", self);
-    cursor= PyObject_Call((PyObject *)&MrdbCursor_Type, conn, kwargs);
-    Py_DECREF(conn);
-    return cursor;
-}
-
 static PyObject *
 MrdbConnection_exception(PyObject *self, void *closure)
 {
@@ -742,6 +715,9 @@ PyObject *MrdbConnection_ping(MrdbConnection *self)
         return NULL;
     }
 
+    /* in case a reconnect occured, we need to obtain new thread_id */
+    self->thread_id= mysql_thread_id(self->mysql);
+
     Py_RETURN_NONE;
 }
 /* }}} */
@@ -769,39 +745,6 @@ PyObject *MrdbConnection_change_user(MrdbConnection *self,
         return NULL;
     }
     Py_RETURN_NONE;
-}
-/* }}} */
-
-/* {{{ MrdbConnection_kill */
-PyObject *MrdbConnection_kill(MrdbConnection *self, PyObject *args)
-{
-    int rc;
-    unsigned long thread_id= 0;
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-    if (!PyArg_ParseTuple(args, "l", &thread_id))
-        return NULL;
-
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_kill(self->mysql, thread_id);
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, Mariadb_DatabaseError, 0, NULL);
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-/* {{{ MrdbConnection_getid */
-static PyObject *MrdbConnection_getid(MrdbConnection *self, void *closure)
-{
-    PyObject *p;
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-    p= PyLong_FromUnsignedLong(mysql_thread_id(self->mysql));
-    return p;
 }
 /* }}} */
 
@@ -932,6 +875,7 @@ PyObject *MrdbConnection_reconnect(MrdbConnection *self)
         return NULL;
     }
     /* get capabilities */
+    self->thread_id= mysql_thread_id(self->mysql);
     MrdbConnection_GetCapabilities(self);
     Py_RETURN_NONE;
 }
@@ -997,27 +941,6 @@ static PyObject *MrdbConnection_get_server_status(MrdbConnection *self)
 
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
     return PyLong_FromLong((long)server_status);
-}
-
-static PyObject *MrdbConnection_query(MrdbConnection *self, PyObject *args)
-{
-    char *cmd;
-    int rc;
-
-    if (!PyArg_ParseTuple(args, "s", &cmd))
-        return NULL;
-
-
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_send_query(self->mysql, cmd, strlen(cmd));
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        return NULL;
-    }
-    Py_RETURN_NONE;
 }
 
 static PyObject *MrdbConnection_readresponse(MrdbConnection *self)

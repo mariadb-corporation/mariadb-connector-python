@@ -75,6 +75,13 @@ class Connection(mariadb._mariadb.connection):
         self._execute_command("ROLLBACK")
         self._read_response()
 
+    def kill(self, id):
+        if not isinstance(id, int):
+            raise mariadb.ProgrammingError("id must be of type int.")
+        stmt= "KILL %s" % id
+        self._execute_command(stmt)
+        self._read_response()
+
     def get_server_version(self):
         return self.server_version_info
 
