@@ -59,6 +59,7 @@ class Cursor(mariadb._mariadb.cursor):
 
         self._parseinfo= None
         self._data= None
+        self._quote_sequence= True
 
         if not connection:
             raise mariadb.ProgrammingError("Invalid or no connection provided")
@@ -76,6 +77,7 @@ class Cursor(mariadb._mariadb.cursor):
              self._prepared= kwargs.pop("prepared", False)
              self._force_binary= kwargs.pop("binary", False)
              self._cursor_type= kwargs.pop("cursor_type", 0)
+             self._quote_sequence= kwargs.pop("quote_sequence", True)
 
         super().__init__(connection, **kwargs)
 
@@ -101,12 +103,13 @@ class Cursor(mariadb._mariadb.cursor):
                 else:
                     if isinstance(val, (bytes, bytearray)):
                         replace= "\"%s\"" % self.connection.escape_string(val.decode(encoding='latin1'))
+                    if isinstance(val, (list,tuple)) and self._quote_sequence == False:
+                        replace= tuple(val)
                     else:
                         replace= "\"%s\"" % self.connection.escape_string(val.__str__())
-            start= self._paramlist[i] + replace_diff
-            end= self._paramlist[i] + replace_diff + 1
+            ofs= self._paramlist[i] + replace_diff
             
-            new_stmt= new_stmt[:start] + replace.__str__() + new_stmt[end:]
+            new_stmt= new_stmt[:ofs] + replace.__str__() + new_stmt[ofs+1:]
             replace_diff+= len(replace) - 1
         return new_stmt
 

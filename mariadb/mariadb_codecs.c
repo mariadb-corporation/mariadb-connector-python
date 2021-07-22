@@ -883,6 +883,7 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
         return 0;
     }
     else {
+        /* If Object has string representation, we will use string representation */ 
         /* no corresponding object, return error  */
         return 2;
     }

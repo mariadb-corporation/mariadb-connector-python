@@ -38,7 +38,7 @@ char *dsn_keys[]= {
     "client_flag", "pool_name", "pool_size", 
     "pool_reset_connection", "plugin_dir",
     "username", "db", "passwd",
-    "autocommit", "converter", "asynchronous",
+    "converter", "asynchronous",
     NULL
 };
 
@@ -85,25 +85,18 @@ static PyObject *
 MrdbConnection_warnings(MrdbConnection *self);
 
 static PyObject *
-MrdbConnection_getautocommit(MrdbConnection *self);
-
-static int
-MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg,
-                             void *closure);
-
-static PyObject *
 MrdbConnection_get_server_status(MrdbConnection *self);
 
-PyObject *
+static PyObject *
 MrdbConnection_executecommand(MrdbConnection *self,
                              PyObject *args);
+
+static PyObject *
+MrdbConnection_readresponse(MrdbConnection *self);
 
 static PyGetSetDef
 MrdbConnection_sets[]=
 {
-    {"autocommit", (getter)MrdbConnection_getautocommit,
-        (setter)MrdbConnection_setautocommit, 
-        connection_autocommit__doc__, NULL},
     {"connection_id", (getter)MrdbConnection_getid, NULL,
         connection_connection_id__doc__, NULL},
     {"database", (getter)MrdbConnection_getdb, (setter)MrdbConnection_setdb,
@@ -142,41 +135,14 @@ MrdbConnection_Methods[] =
     {"connect", (PyCFunction)MrdbConnection_connect,
         METH_VARARGS | METH_KEYWORDS,
         connection_connect__doc__},
-    {"commit", (PyCFunction)MrdbConnection_commit,
-        METH_NOARGS,
-        connection_commit__doc__},
-    {"rollback", (PyCFunction)MrdbConnection_rollback,
-        METH_NOARGS,
-        connection_rollback__doc__},
     {"cursor", (PyCFunction)MrdbConnection_cursor,
         METH_VARARGS | METH_KEYWORDS,
         connection_cursor__doc__},
     /*TPC methods */
-    {"tpc_begin",
-        (PyCFunction)MrdbConnection_tpc_begin,
-        METH_VARARGS,
-        connection_tpc_begin__doc__},
-    {"tpc_commit",
-        (PyCFunction)MrdbConnection_tpc_commit,
-        METH_VARARGS,
-        connection_tpc_commit__doc__,
-    },
-    {"tpc_prepare",
-        (PyCFunction)MrdbConnection_tpc_prepare,
-        METH_NOARGS,
-        connection_tpc_prepare__doc__,},
     {"tpc_recover",
         (PyCFunction)MrdbConnection_tpc_recover,
         METH_NOARGS,
         connection_tpc_recover__doc__},
-    {"tpc_rollback",
-        (PyCFunction)MrdbConnection_tpc_rollback,
-        METH_VARARGS,
-        connection_tpc_rollback__doc__},
-    {"xid",
-        (PyCFunction)MrdbConnection_xid,
-        METH_VARARGS,
-        connection_xid__doc__},
     /* additional methods */
     { "ping",
         (PyCFunction)MrdbConnection_ping,
@@ -211,8 +177,12 @@ MrdbConnection_Methods[] =
     /* Internal methods */
     { "_execute_command", 
       (PyCFunction)MrdbConnection_executecommand,
-      METH_VARARGS, NULL
+      METH_VARARGS,
+      NULL
     },
+    {"_read_response", (PyCFunction)MrdbConnection_readresponse,
+        METH_NOARGS,
+        NULL},
     {NULL} /* always last */
 };
 
@@ -327,7 +297,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
     unsigned int local_infile= 0xFF;
     unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
-    PyObject *autocommit_obj= NULL;
     PyObject *converter= NULL;
     PyObject *asynchronous= NULL;
 
@@ -344,7 +313,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &client_flags, &pool_name, &pool_size,
                 &reset_session, &plugin_dir,
                 &user, &schema, &password,
-                &PyBool_Type, &autocommit_obj,
+                &PyBool_Type, 
                 &converter,
                 &PyBool_Type, &asynchronous))
     {
@@ -456,26 +425,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
         goto end;
     }
 
-    if (!autocommit_obj ||
-        (autocommit_obj && CHECK_TYPE(autocommit_obj, &PyBool_Type)))
-    {
-        uint8_t autocommit= (autocommit_obj) ?
-                 (uint8_t) PyLong_AsUnsignedLong(autocommit_obj) : 0;
-        uint8_t server_autocommit;
-        uint32_t server_status;
-
-        mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
-        server_autocommit= server_status & SERVER_STATUS_AUTOCOMMIT;
-
-        if (server_autocommit != autocommit)
-        {
-            if (mysql_autocommit(self->mysql, autocommit))
-            {
-                mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-                goto end;
-            }
-        }
-    }
     /* CONPY-129: server_version_info */
     self->server_version= mysql_get_server_version(self->mysql);
     self->server_info= mysql_get_server_info(self->mysql);
@@ -610,7 +559,7 @@ void MrdbConnection_dealloc(MrdbConnection *self)
     }
 }
 
-PyObject *
+static PyObject *
 MrdbConnection_executecommand(MrdbConnection *self,
                              PyObject *args)
 {
@@ -680,7 +629,7 @@ MrdbConnection_commit(MrdbConnection *self)
     if (self->tpc_state != TPC_STATE_NONE)
     {
         mariadb_throw_exception(self->mysql, Mariadb_ProgrammingError,
-                0, "rollback() is not allowed if a TPC transaction is active");
+                0, "commit() is not allowed if a TPC transaction is active");
         return NULL;
     }
     Py_BEGIN_ALLOW_THREADS;
@@ -718,270 +667,6 @@ MrdbConnection_rollback(MrdbConnection *self)
 
     Py_RETURN_NONE;
 }
-
-/*
-PyObject *
-Mariadb_DBAPIType_Object(uint32_t type)
-{
-    PyObject *types= Py_BuildValue("(I)", (uint32_t)type);
-    PyObject *number= PyObject_CallObject((PyObject *)&Mariadb_DBAPIType_Type,
-            types);
-    Py_DECREF(types);
-    return number;
-} */
-
-PyObject *
-MrdbConnection_xid(MrdbConnection *self, PyObject *args)
-{
-    PyObject *xid= NULL;
-    int      format_id= 1;
-    char     *branch_qualifier= NULL,
-             *transaction_id= NULL;
-
-    if (!PyArg_ParseTuple(args, "iss", &format_id,
-                &transaction_id,
-                &branch_qualifier))
-    {
-        return NULL;
-    }
-
-    if (strlen(transaction_id) > MAX_TPC_XID_SIZE ||
-        strlen(branch_qualifier) > MAX_TPC_XID_SIZE)
-    {
-        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
-                "Maximum length of transaction_id or branch_qualifier exceeded.");
-        return NULL;
-    }
-
-    if (!format_id)
-      format_id= 1;
-
-    if (!(xid= Py_BuildValue("(iss)", format_id,
-                    transaction_id,
-                    branch_qualifier)))
-    {
-        return NULL;
-    }
-
-    return xid;
-}
-
-PyObject *
-MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args)
-{
-    char *transaction_id= 0;
-    char *branch_qualifier= 0;
-    int format_id= 1;
-    char stmt[192];
-    int rc= 0;
-
-    if (!PyArg_ParseTuple(args, "(iss)", &format_id,
-                &transaction_id,
-                &branch_qualifier))
-    {
-        return NULL;
-    }
-
-    snprintf(stmt, 191, "XA BEGIN '%s', '%s', %d", transaction_id, branch_qualifier, format_id);
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_query(self->mysql, stmt);
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        return NULL;
-    }
-    self->tpc_state= TPC_STATE_XID;
-    snprintf(self->xid, 149, "'%s', '%s', %d", transaction_id, branch_qualifier, format_id);
-
-    Py_RETURN_NONE;
-}
-
-PyObject *
-MrdbConnection_tpc_commit(MrdbConnection *self, PyObject *args)
-{
-    char *transaction_id= 0;
-    int format_id=1;
-    char *branch_qualifier= 0;
-    char stmt[192];
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-    MARIADB_CHECK_TPC(self);
-
-    if (!PyArg_ParseTuple(args, "|(iss)", &format_id,
-                &transaction_id,
-                &branch_qualifier))
-    {
-        return NULL;
-    }
-
-    if (!args && self->tpc_state != TPC_STATE_PREPARE)
-    {
-        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
-                "transaction is not in prepared state");
-        return NULL;
-    }
-
-    Py_BEGIN_ALLOW_THREADS;
-    if (self->tpc_state < TPC_STATE_PREPARE)
-    {
-        if (transaction_id) {
-            snprintf(stmt, 191, "XA END '%s', '%s', %d",  
-                     transaction_id, branch_qualifier, format_id);
-        }
-        else {
-            snprintf(stmt, 191, "XA END %s", self->xid);
-        }
-        if (mysql_query(self->mysql, stmt))
-        {
-            mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-            goto end;
-        }
-    }
-    if (transaction_id)
-    {
-        snprintf(stmt, 191, "XA COMMIT '%s', '%s', %d  %s", 
-            transaction_id, branch_qualifier, format_id,
-            self->tpc_state < TPC_STATE_PREPARE ? "ONE PHASE" : "");
-    }
-    else {
-        snprintf(stmt, 191, "XA COMMIT %s %s", 
-            self->xid, 
-            self->tpc_state < TPC_STATE_PREPARE ? "ONE PHASE" : "");
-    }
-    if (mysql_query(self->mysql, stmt))
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        goto end;
-    }
-end:
-    Py_END_ALLOW_THREADS;
-
-    if (PyErr_Occurred())
-        return NULL;
-    self->xid[0]= 0;
-    self->tpc_state= TPC_STATE_NONE;
-
-    Py_RETURN_NONE;
-}
-/* }}} */
-
-/* {{{ MrdbConnection_tpc_rollback */
-PyObject *MrdbConnection_tpc_rollback(MrdbConnection *self, PyObject *args)
-{
-    char *transaction_id= 0;
-    int format_id=1;
-    char *branch_qualifier= 0;
-    char stmt[192];
-    int rc;
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-    MARIADB_CHECK_TPC(self);
-
-    if (!PyArg_ParseTuple(args, "|(iss)", &format_id,
-                &transaction_id,
-                &branch_qualifier))
-        return NULL;
-
-    if (!args && self->tpc_state != TPC_STATE_PREPARE)
-    {
-        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
-                "transaction is not in prepared state");
-        return NULL;
-    }
-    if (self->tpc_state < TPC_STATE_PREPARE)
-    {
-        if (transaction_id)
-        {
-            snprintf(stmt, 191, "XA END '%s', '%s', %d",
-                     transaction_id, branch_qualifier, format_id);
-        }
-        else {
-            snprintf(stmt, 191, "XA END %s", self->xid);
-        }
-        Py_BEGIN_ALLOW_THREADS;
-        rc= mysql_query(self->mysql, stmt);
-        Py_END_ALLOW_THREADS;
-        if (rc)
-        {
-            mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-            goto end;
-        }
-    }
-    if (transaction_id)
-    {
-       snprintf(stmt, 191, "XA ROLLBACK '%s', '%s', %d", 
-                transaction_id, branch_qualifier, format_id);
-    }
-    else {
-            snprintf(stmt, 191, "XA ROLLBACK %s", self->xid);
-    }
-
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_query(self->mysql, stmt);
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        goto end;
-    }
-end:
-
-    if (PyErr_Occurred())
-        return NULL;
-
-    self->xid[0]= 0;
-    self->tpc_state= TPC_STATE_NONE;
-    Py_RETURN_NONE;
-}
-/* }}} */
-
-/* {{{ MrdbConnection_tpc_prepare */
-PyObject *MrdbConnection_tpc_prepare(MrdbConnection *self)
-{
-    char stmt[192];
-    int rc;
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-    MARIADB_CHECK_TPC(self);
-
-    if (self->tpc_state == TPC_STATE_PREPARE)
-    {
-        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
-                "transaction is already in prepared state");
-        return NULL;
-    }
-    snprintf(stmt, 191, "XA END %s", self->xid);
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_query(self->mysql, stmt);
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        goto end;
-    }
-
-    snprintf(stmt, 191, "XA PREPARE %s", self->xid);
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_query(self->mysql, stmt);
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        goto end;
-    }
-end:
-    if (PyErr_Occurred())
-        return NULL;
-
-    self->tpc_state= TPC_STATE_PREPARE;
-    Py_RETURN_NONE;
-}
-/* }}} */
 
 /* {{{ MrdbConnection_tpc_recover */
 PyObject *MrdbConnection_tpc_recover(MrdbConnection *self)
@@ -1304,46 +989,6 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
 }
 /* }}} */
 
-/* {{{ MrdbConnection_setautocommit */
-static int MrdbConnection_setautocommit(MrdbConnection *self, PyObject *arg,
-        void *closure)
-{
-    int rc= 0;
-
-    MARIADB_CHECK_CONNECTION(self, -1);
-
-    if (!arg || !CHECK_TYPE(arg, &PyBool_Type))
-    {
-        PyErr_SetString(PyExc_TypeError, "Argument must be boolean");
-        return -1;
-    }
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_autocommit(self->mysql, PyObject_IsTrue(arg));
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        return -1;
-    }
-    return 0;
-}
-/* }}} */
-
-/* {{{ MrdbConnection_getautocommit */
-static PyObject *MrdbConnection_getautocommit(MrdbConnection *self)
-{
-    uint32_t server_status;
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
-    if (server_status & SERVER_STATUS_AUTOCOMMIT)
-        Py_RETURN_TRUE;
-    Py_RETURN_FALSE;
-}
-/* }}} */
-
 static PyObject *MrdbConnection_get_server_status(MrdbConnection *self)
 {
     uint32_t server_status;
@@ -1365,6 +1010,22 @@ static PyObject *MrdbConnection_query(MrdbConnection *self, PyObject *args)
 
     Py_BEGIN_ALLOW_THREADS;
     rc= mysql_send_query(self->mysql, cmd, strlen(cmd));
+    Py_END_ALLOW_THREADS;
+
+    if (rc)
+    {
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *MrdbConnection_readresponse(MrdbConnection *self)
+{
+    int rc;
+
+    Py_BEGIN_ALLOW_THREADS;
+    rc= self->mysql->methods->db_read_query_result(self->mysql);
     Py_END_ALLOW_THREADS;
 
     if (rc)
