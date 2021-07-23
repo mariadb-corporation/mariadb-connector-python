@@ -261,6 +261,13 @@ class Connection(mariadb._mariadb.connection):
 
         self.tpc_state= TPC_STATE.PREPARE
 
+    def tpc_recover(self):
+        cursor= self.cursor()
+        cursor.execute("XA RECOVER")
+        result= cursor.fetchall()
+        del cursor
+        return result
+
     @property
     def character_set(self):
         """Client character set."""

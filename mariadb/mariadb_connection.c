@@ -121,11 +121,6 @@ MrdbConnection_Methods[] =
     {"connect", (PyCFunction)MrdbConnection_connect,
         METH_VARARGS | METH_KEYWORDS,
         connection_connect__doc__},
-    /*TPC methods */
-    {"tpc_recover",
-        (PyCFunction)MrdbConnection_tpc_recover,
-        METH_NOARGS,
-        connection_tpc_recover__doc__},
     /* additional methods */
     { "ping",
         (PyCFunction)MrdbConnection_ping,
@@ -592,112 +587,6 @@ MrdbConnection_exception(PyObject *self, void *closure)
     Py_INCREF(exception);
     return exception;
 }
-
-PyObject *
-MrdbConnection_commit(MrdbConnection *self)
-{
-    int rc= 0;
-    MARIADB_CHECK_CONNECTION(self, NULL);
-
-    if (self->tpc_state != TPC_STATE_NONE)
-    {
-        mariadb_throw_exception(self->mysql, Mariadb_ProgrammingError,
-                0, "commit() is not allowed if a TPC transaction is active");
-        return NULL;
-    }
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_commit(self->mysql);
-    Py_END_ALLOW_THREADS;
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-PyObject *
-MrdbConnection_rollback(MrdbConnection *self)
-{
-    int rc= 0;
-    MARIADB_CHECK_CONNECTION(self, NULL);
-
-    if (self->tpc_state != TPC_STATE_NONE)
-    {
-        mariadb_throw_exception(self->mysql, Mariadb_ProgrammingError,
-                0, "rollback() is not allowed if a TPC transaction is active");
-        return NULL;
-    }
-
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_rollback(self->mysql);
-    Py_END_ALLOW_THREADS;
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        return NULL;
-    }
-
-    Py_RETURN_NONE;
-}
-
-/* {{{ MrdbConnection_tpc_recover */
-PyObject *MrdbConnection_tpc_recover(MrdbConnection *self)
-{
-    PyObject *List= NULL;
-    MYSQL_RES *result;
-    MYSQL_ROW row;
-    int rc;
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-    MARIADB_CHECK_TPC(self);
-
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_query(self->mysql, "XA RECOVER");
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        goto end;
-    }
-
-    Py_BEGIN_ALLOW_THREADS;
-    result= mysql_store_result(self->mysql);
-    Py_END_ALLOW_THREADS;
-
-    if (!result)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        goto end;
-    }
-
-    if (!(List= PyList_New(0)))
-        return NULL;
-
-    /* if there are no rows, return an empty list */
-    if (!mysql_num_rows(result))
-    {
-        mysql_free_result(result);
-        return List;
-    }
-
-    while ((row= mysql_fetch_row(result)))
-    {
-        PyObject *tpl= Py_BuildValue("(ssss)", row[0], row[1], row[2], row[3]);
-        PyList_Append(List, tpl);
-        Py_DECREF(tpl);
-    }
-
-    Py_BEGIN_ALLOW_THREADS;
-    mysql_free_result(result);
-    Py_END_ALLOW_THREADS;
-end:
-    if (PyErr_Occurred())
-        return NULL;
-    return List;
-}
-/* }}} */
 
 /* {{{ MrdbConnection_ping */
 PyObject *MrdbConnection_ping(MrdbConnection *self)
