@@ -17,8 +17,7 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-import mariadb, collections, logging
-from mariadb.codecs import *
+import mariadb, collections
 from numbers import Number
 from mariadb.constants import *
 
@@ -43,9 +42,14 @@ SQL_OTHER=255
 
 
 class Cursor(mariadb._mariadb.cursor):
-    """Returns a MariaDB cursor object"""
+    """
+    MariaDB cursor object
+    """
 
     def __init__(self, connection, **kwargs):
+        """
+        initialization
+        """
 
         self._dictionary= False
         self._named_tuple= False
@@ -59,11 +63,11 @@ class Cursor(mariadb._mariadb.cursor):
 
         self._parseinfo= None
         self._data= None
-        self._quote_sequence= True
 
         if not connection:
             raise mariadb.ProgrammingError("Invalid or no connection provided")
 
+        # parse keywords
         if kwargs:
              rtype= kwargs.pop("named_tuple", False)
              if rtype:
@@ -77,12 +81,22 @@ class Cursor(mariadb._mariadb.cursor):
              self._prepared= kwargs.pop("prepared", False)
              self._force_binary= kwargs.pop("binary", False)
              self._cursor_type= kwargs.pop("cursor_type", 0)
-             self._quote_sequence= kwargs.pop("quote_sequence", True)
 
+        # call initialization of main class 
         super().__init__(connection, **kwargs)
 
                 
-    def _add_text_params(self):
+    def _substitute_parameters(self):
+        """
+        Internal use only.
+
+        When running in text protocol, this method will replace placeholders
+        by supplied values.
+
+        For values which aren't numbers, strings or bytes string representation
+        will be used.
+        """
+
         new_stmt= self.statement
         replace_diff= 0
         for i in range (0,len(self._paramlist)):
@@ -103,8 +117,6 @@ class Cursor(mariadb._mariadb.cursor):
                 else:
                     if isinstance(val, (bytes, bytearray)):
                         replace= "\"%s\"" % self.connection.escape_string(val.decode(encoding='latin1'))
-                    if isinstance(val, (list,tuple)) and self._quote_sequence == False:
-                        replace= tuple(val)
                     else:
                         replace= "\"%s\"" % self.connection.escape_string(val.__str__())
             ofs= self._paramlist[i] + replace_diff
@@ -132,14 +144,17 @@ class Cursor(mariadb._mariadb.cursor):
                                     " doesn't match the number of data elements (%s)."\
                                      % (len(self._paramlist), len(self._data)))
 
-    def callproc(self, sp, data=()):
+    def callproc(self, sp: str, data=()):
         """
-        Executes a stored procedure. The args sequence must contain an entry for
+        Executes a stored procedure sp. The data sequence must contain an entry for
         each parameter the procedure expects.
-        Input/Output or Output parameters have to be retrieved by .fetch methods,
-        """
-        logging.debug("callproc()")
 
+        Input/Output or Output parameters have to be retrieved by .fetch methods,
+        the .sp_outparams attribute indicates if the result set contains output"
+        parameters
+        """
+
+        # create statement 
         statement= "CALL %s(" % sp
         first= 0
         for param in data:
@@ -149,14 +164,13 @@ class Cursor(mariadb._mariadb.cursor):
             first+= 1
         statement+= ")"
         self.execute(statement, data)
-        logging.debug(statement, data)
 
-    def _parse_execute(self, statement, data=()):
+    def _parse_execute(self, statement:str, data=()):
         """
-        Simple SQL statement parsing:
-        """
+        For internal use
 
-        logging.debug("parse_execute: %s" % statement)
+        Parses SQL statement and checks parameters.
+        """
 
         if not statement:
             raise mariadb.ProgrammingError("empty statement")
@@ -180,11 +194,33 @@ class Cursor(mariadb._mariadb.cursor):
        
 
     def nextset(self):
+        """
+        Will make the cursor skip to the next available result set,
+        discarding any remaining rows from the current set.
+        """
+
         return super()._nextset()
 
-    def execute(self, statement, data=(), buffered=False):
+    def execute(self, statement: str, data=(), buffered=False):
         """
-        place holder for execute() description
+        Prepare and execute a SQL statement.
+
+        Parameters may be provided as sequence or mapping and will be bound
+        to variables in the operation. Variables are specified as question
+        marks (paramstyle='qmark'), however for compatibility reasons MariaDB
+        Connector/Python also supports the 'format' and 'pyformat' paramstyles
+        with the restriction, that different paramstyles can't be mixed within
+        a statement.
+
+        A reference to the operation will be retained by the cursor.
+        If the cursor was created with attribute prepared=True the statement
+        string for following execute operations will be ignored.
+        This is most effective for algorithms where the same operation is used,
+        but different parameters are bound to it (many times).
+
+        By default execute() method generates an unbuffered result set for 
+        statements which return data, setting optional parameter buffered to
+        True will generate buffered result sets.
         """
 
         # Parse statement
@@ -193,8 +229,8 @@ class Cursor(mariadb._mariadb.cursor):
         if buffered:
             self.buffered= True
 
+        # clear pending result sets
         if self.field_count:
-            logging.debug("clearing result set")
             self._clear_result()
 
         # if we have a prepared cursor, we have to set statement
@@ -203,19 +239,15 @@ class Cursor(mariadb._mariadb.cursor):
             statement= self.statement
             do_parse= False
 
-        # Avoid reparsing of same statement
-        if statement == self.statement:
-           do_parse= True
-
         # parse statement and check param style
         if do_parse:
             self._parse_execute(statement, (data))
         self._description= None
 
         # check if data parameters are passed in correct format
-        if (self._paramstyle == 3 and not isinstance(data, dict)):
+        if (self._paramstyle == PARAMSTYLE_PYFORMAT and not isinstance(data, dict)):
             raise TypeError("Argument 2 must be Dict")
-        elif self._paramstyle < 3 and (not isinstance(data, (tuple, list))):
+        elif self._paramstyle < PARAMSTYLE_PYFORMAT and (not isinstance(data, (tuple, list))):
             raise TypeError("Argument 2 must be Tuple or List")
 
         if len(data):
@@ -235,14 +267,13 @@ class Cursor(mariadb._mariadb.cursor):
             # in text mode we need to substitute parameters
             # and store transformed statement
             if (self.paramcount > 0):
-                 self._transformed_statement= self._add_text_params()
+                 self._transformed_statement= self._substitute_parameters()
             else:
                  self._transformed_statement= self.statement
 
             self._execute_text(self._transformed_statement)
             self._readresponse()
         else:
-            logging.debug("binary mode")
             self._data= data
             self._execute_binary()
 
@@ -252,18 +283,30 @@ class Cursor(mariadb._mariadb.cursor):
         """ 
         Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE statement) and
         execute it against all parameter found in sequence.
+
+        Exactly behaves like .execute() but accepts a list of tuples, where each
+        tuple represents data of a row within a table.
+        .executemany() only supports DML (insert, update, delete) statements.
+
+        The following example will insert 3 rows:
+          data= [
+             (1, 'Michael', 'Widenius'),
+             (2, 'Diego', 'Dupin'),
+             (3, 'Lawrin', 'Novitsky'),
+              ]
+          cursor.execute(\"INSERT INTO colleagues VALUES (?, ?, ?\", data)
         """
-        logging.debug("bulk %s" % statement)
 
         if not len(parameters):
             raise TypeError("No data provided")
 
+        # clear pending results
         if self.field_count:
-            logging.debug("clearing result")
             self._clear_result()
 
         # If the server doesn't support bulk operations, we need to emulate
         # by looping
+        # TODO: insert statements are not optimized yet, rowcount not set
         if not (self.connection.server_capabilities & (CLIENT.BULK_OPERATIONS >> 32)):
             for row in parameters:
                 self.execute(statement, row)
@@ -273,10 +316,14 @@ class Cursor(mariadb._mariadb.cursor):
             self._parse_execute(statement, parameters[0])
             self._data= parameters
             self.is_text= False
-
-        self._execute_bulk()
+            self._execute_bulk()
 
     def _fetch_row(self):
+        """
+        Internal use only
+
+        fetches row and converts values, if connections has a converter.
+        """
 
         # if there is no result set, PEP-249 requires to raise an
         # exception
@@ -298,9 +345,27 @@ class Cursor(mariadb._mariadb.cursor):
         return row
 
     def close(self):
+        """
+        Closes the cursor. 
+
+        If the cursor has pending or unread results, .close() will cancel them
+        so that further operations using the same connection can be executed.
+
+        The cursor will be unusable from this point forward; an Error (or subclass)
+        exception will be raised if any operation is attempted with the cursor."
+        """
+
         super().close()
 
     def fetchone(self):
+        """
+        Fetch the next row of a query result set, returning a single sequence,
+        or None if no more data is available.
+
+        An exception will be raised if the previous call to execute() didn't 
+        produce a result set or execute() wasn't called before.
+        """
+
         row= self._fetch_row()
         if not row:
             return row
@@ -314,6 +379,22 @@ class Cursor(mariadb._mariadb.cursor):
         return ret
 
     def fetchmany(self, size=0):
+        """
+        Fetch the next set of rows of a query result, returning a sequence
+        of sequences (e.g. a list of tuples). An empty sequence is returned
+        when no more rows are available.
+
+        The number of rows to fetch per call is specified by the parameter. 
+        If it is not given, the cursor's arraysize determines the number
+        of rows to be fetched. The method should try to fetch as many rows 
+        as indicated by the size parameter. 
+        If this is not possible due to the specified number of rows not being
+        available, fewer rows may be returned.
+
+        An exception will be raised if the previous call to execute() didn't 
+        produce a result set or execute() wasn't called before.
+        """
+
         rows=[]
         if size == 0:
             size= self.arraysize
@@ -324,6 +405,14 @@ class Cursor(mariadb._mariadb.cursor):
         return rows
 
     def fetchall(self):
+        """
+        Fetch all remaining rows of a query result, returning them as a 
+        sequence of sequences (e.g. a list of tuples).
+
+        An exception will be raised if the previous call to execute() didn't 
+        produce a result set or execute() wasn't called before.
+        """
+
         rows=[];
         for row in self:
             rows.append((row))
@@ -367,10 +456,12 @@ class Cursor(mariadb._mariadb.cursor):
 
     def __enter__(self):
         """Returns a copy of the cursor."""
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Closes cursor."""
+
         self.close()
 
     def __del__(self):
@@ -378,6 +469,17 @@ class Cursor(mariadb._mariadb.cursor):
 
     @property
     def lastrowid(self):
+        """
+        Returns the ID generated by a query on a table with a column having
+        the AUTO_INCREMENT attribute or the value for the last usage of
+        LAST_INSERT_ID(expr).
+
+        If the last query wasn't an INSERT or UPDATE
+        statement or if the modified table does not have a column with the
+        AUTO_INCREMENT attribute and LAST_INSERT_ID was not used, the returned
+        value will be zero
+        """
+
         id= self.insert_id
         if id > 0:
             return id
@@ -385,6 +487,9 @@ class Cursor(mariadb._mariadb.cursor):
 
     @property
     def connection(self):
-        """Read-Only attribute which returns the reference to the connection
-           object on which the cursor was created."""
+        """
+        Read-Only attribute which returns the reference to the connection
+        object on which the cursor was created.
+        """
+
         return self._connection

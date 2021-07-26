@@ -538,9 +538,9 @@ void ma_cursor_close(MrdbCursor *self)
         {
             /* Todo: check if all the cursor stuff is deleted (when using prepared
                statements this should be handled in mysql_stmt_close) */
-            MARIADB_BEGIN_ALLOW_THREADS(self)
+            Py_BEGIN_ALLOW_THREADS;
             mysql_stmt_close(self->stmt);
-            MARIADB_END_ALLOW_THREADS(self)
+            Py_END_ALLOW_THREADS;
             self->stmt= NULL;
         }
         MrdbCursor_clear(self, 0);
@@ -667,7 +667,7 @@ static int Mrdb_execute_direct(MrdbCursor *self,
 {
    int rc;
 
-   MARIADB_BEGIN_ALLOW_THREADS(self);
+   Py_BEGIN_ALLOW_THREADS;
    
    /* clear pending result sets */
    MrdbCursor_clear_result(self);
@@ -693,7 +693,7 @@ static int Mrdb_execute_direct(MrdbCursor *self,
        rc= mariadb_stmt_execute_direct(self->stmt, statement, statement_len);
    }
 end:
-   MARIADB_END_ALLOW_THREADS(self);
+   Py_END_ALLOW_THREADS;
    return rc;
 }
 
@@ -886,7 +886,7 @@ MrdbCursor_nextset(MrdbCursor *self)
         return NULL;
     }
 
-    MARIADB_BEGIN_ALLOW_THREADS(self);
+    Py_BEGIN_ALLOW_THREADS;
     if (!self->parseinfo.is_text)
         rc= mysql_stmt_next_result(self->stmt);
     else
@@ -898,7 +898,7 @@ MrdbCursor_nextset(MrdbCursor *self)
         }
         rc= mysql_next_result(self->connection->mysql);
     }
-    MARIADB_END_ALLOW_THREADS(self);
+    Py_END_ALLOW_THREADS;
 
     if (rc)
     {
@@ -1059,6 +1059,8 @@ static PyObject *
 MrdbCursor_execute_binary(MrdbCursor *self)
 {
     int rc;
+    unsigned char *buf= NULL;
+    size_t buflen;
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
@@ -1088,6 +1090,9 @@ MrdbCursor_execute_binary(MrdbCursor *self)
 
     if (self->parseinfo.paramcount)
         mysql_stmt_bind_param(self->stmt, self->params);
+
+    if (!(buf= self->connection->mysql->methods->db_execute_generate_request(self->stmt, &buflen, 1)))
+        goto error;
 
     if ((rc= Mrdb_execute_direct(self, self->parseinfo.statement, self->parseinfo.statement_len)))
     {
@@ -1161,6 +1166,8 @@ static PyObject *
 MrdbCursor_execute_bulk(MrdbCursor *self)
 {
     int rc;
+    unsigned char *buf= NULL;
+    size_t buflen;
 
     MARIADB_CHECK_STMT(self);
 
@@ -1186,7 +1193,6 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
     if (mariadb_check_bulk_parameters(self, self->data))
         goto error;
 
-
     /* If the server doesn't support bulk execution (< 10.2.6),
        we need to call a fallback routine */
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &self->array_size);
@@ -1195,6 +1201,9 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, mariadb_param_update);
 
     mysql_stmt_bind_param(self->stmt, self->params);
+
+    if (!(buf= self->connection->mysql->methods->db_execute_generate_request(self->stmt, &buflen, 1)))
+        goto error;
 
     if ((rc= Mrdb_execute_direct(self, self->parseinfo.statement, self->parseinfo.statement_len)))
     {

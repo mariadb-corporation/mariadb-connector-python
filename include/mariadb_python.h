@@ -428,30 +428,6 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
 
 /* Due to callback functions we cannot use PY_BEGIN/END_ALLOW_THREADS */
 
-#define MARIADB_BEGIN_ALLOW_THREADS(obj) (obj)->thread_state= PyEval_SaveThread();
-#define MARIADB_END_ALLOW_THREADS(obj)\
-if ((obj)->thread_state)\
-{\
-    PyEval_RestoreThread((obj)->thread_state);\
-    (obj)->thread_state= NULL;\
-}
-#define MARIADB_UNBLOCK_THREADS(obj)\
-{\
-    PyThreadState *_save= NULL;\
-    if ((obj)->thread_state)\
-    {\
-        _save= (obj)->thread_state;\
-        PyEval_RestoreThread(_save);\
-        (obj)->thread_state= NULL;\
-    }
-
-#define MARIADB_BLOCK_THREADS(obj)\
-    if (_save)\
-    {\
-        (obj)->thread_state= PyEval_SaveThread();\
-        _save= NULL;\
-    }\
-} 
 
 #define MrdbIndicator_Check(a)\
       (PyObject_HasAttrString(a, "indicator"))

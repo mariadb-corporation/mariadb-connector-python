@@ -595,13 +595,10 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     MrdbCursor *self= (MrdbCursor *)data;
     enum enum_extended_field_type ext_type= mariadb_extended_field_type(&self->fields[column]);
 
-    MARIADB_UNBLOCK_THREADS(self);
-
     if (!row)
     {
         Py_INCREF(Py_None);
         self->values[column]= Py_None;
-        goto end;
         return;
     }
     switch(self->fields[column].type) {
@@ -825,8 +822,6 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         if ((val= ma_convert_value(self, type, self->values[column])))
             self->values[column]= val;
     }
-end:
-    MARIADB_BLOCK_THREADS(self);
 }
 
 /* 
@@ -929,8 +924,6 @@ mariadb_get_parameter(MrdbCursor *self,
              *column= NULL;
     uint8_t rc= 1;
 
-    MARIADB_UNBLOCK_THREADS(self);
-
     if (is_bulk)
     {
         /* check if row_nr and column_nr are in the range from
@@ -1005,7 +998,6 @@ mariadb_get_parameter(MrdbCursor *self,
     }
     rc= 0;
 end:
-    MARIADB_BLOCK_THREADS(self);
     return rc;
 }
 
@@ -1290,8 +1282,6 @@ mariadb_param_to_bind(MrdbCursor *self,
     uint8_t rc= 0;
     uint8_t is_negative= 0;
 
-    MARIADB_UNBLOCK_THREADS(self);
-
     if (value->indicator > 0)
     {
         bind->u.indicator[0]= value->indicator;
@@ -1412,7 +1402,6 @@ mariadb_param_to_bind(MrdbCursor *self,
             rc= 1;
     }
 end:
-    MARIADB_BLOCK_THREADS(self);
     return rc;
 }
 
@@ -1437,8 +1426,6 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     uint32_t i;
     uint8_t rc= 1;
 
-    MARIADB_UNBLOCK_THREADS(self);
-
     for (i=0; i < self->parseinfo.paramcount; i++)
     {
         if (mariadb_get_parameter(self, (self->array_size > 0), 
@@ -1460,7 +1447,6 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     }
     rc= 0;
 end:
-    MARIADB_BLOCK_THREADS(self);
     return rc;
 }
 

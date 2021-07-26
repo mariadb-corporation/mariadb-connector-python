@@ -29,9 +29,14 @@ _DEFAULT_COLLATION = "utf8mb4_general_ci"
 _MAX_TPC_XID_SIZE=64
 
 class Connection(mariadb._mariadb.connection):
-    """MariaDB connection class"""
+    """ MariaDB Connector/Python Connection Object """
 
     def __init__(self, *args, **kwargs):
+        """
+        Establishes a connection to a database server and returns a connection
+        object.
+        """
+
         self._socket= None
         self.__in_use= 0
         self.__pool = None
@@ -45,8 +50,40 @@ class Connection(mariadb._mariadb.connection):
         super().__init__(*args, **kwargs)
         self.autocommit= autocommit
 
-    def cursor(self, **kwargs):
-        cursor= mariadb.Cursor(self, **kwargs)
+    def cursor(self, cursorclass=mariadb.Cursor, **kwargs):
+        """
+        Returns a new cursor object for the current connection.
+
+        If no cursorclass was specified, the default mariadb.Cursor class
+        will be used.
+
+        Optional parameters:
+
+        - buffered= False
+          By default the result will be unbuffered, which means before executing
+          another statement with the same connection the entire result set must be fetched.
+        - dictionary= False
+          Return fetch values as dictionary.
+
+        - named_tuple= False
+          Return fetch values as named tuple. This feature exists for compatibility reasons
+          and should be avoided due to possible inconsistency.
+
+        - cursor_type= CURSOR_TYPE.NONE
+          If cursor_type is set to mariadb.CURSOR_TYPE_READ_ONLY, a cursor is opened for the
+          statement invoked with cursors execute() method.
+
+        - prepared= False
+          When set to True cursor will remain in prepared state after the first execute()
+          method was called. Further calls to execute() method will ignore the sql statement.
+
+        - binary= False
+          Always execute statements in MariaDB client/server binary protocol.
+        """
+
+        cursor= cursorclass(self, **kwargs)
+        if not isinstance(cursor, mariadb.Cursor):
+            raise mariadb.ProgrammingError("%s is not an instance of mariadb.Cursor" % cursor)
         return cursor
 
     def close(self):
