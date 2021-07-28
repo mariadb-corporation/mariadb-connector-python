@@ -52,6 +52,12 @@ Connection constructors
 Connection methods 
 ------------------
 
+.. versionadded:: 1.1.0
+.. method:: begin()
+
+   Start a new transaction which can be committed by .commit() method,
+   or cancelled by .rollback() method.
+
 .. method:: commit()
 
   Commit any pending transaction to the database.

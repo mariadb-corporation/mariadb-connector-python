@@ -19,6 +19,7 @@
 
 #include "mariadb_python.h"
 #include "docs/connection.h"
+#include "docs/exception.h"
 
 #define MADB_SET_OPTION(m,o,v)\
 if (mysql_optionsv((m), (o), (v)))\
@@ -55,28 +56,19 @@ MrdbConnection_exception(PyObject *self, void *closure);
 { name,MrdbConnection_exception, NULL, doc, &exception }
 
 static PyObject *
-MrdbConnection_getuser(MrdbConnection *self, void *closure);
-
-static PyObject *
 MrdbConnection_getreconnect(MrdbConnection *self, void *closure);
 
 static int
 MrdbConnection_setreconnect(MrdbConnection *self, PyObject *args,
                             void *closure);
 static PyObject *
-MrdbConnection_getdb(MrdbConnection *self, void *closure);
-
-static int
-MrdbConnection_setdb(MrdbConnection *self, PyObject *arg, void *closure);
-
-static PyObject *
 MrdbConnection_escape_string(MrdbConnection *self, PyObject *args);
 
 static PyObject *
-MrdbConnection_warnings(MrdbConnection *self);
+MrdbConnection_getinfo(MrdbConnection *self, PyObject *args);
 
 static PyObject *
-MrdbConnection_get_server_status(MrdbConnection *self);
+MrdbConnection_warnings(MrdbConnection *self);
 
 static PyObject *
 MrdbConnection_executecommand(MrdbConnection *self,
@@ -88,26 +80,20 @@ MrdbConnection_readresponse(MrdbConnection *self);
 static PyGetSetDef
 MrdbConnection_sets[]=
 {
-    {"database", (getter)MrdbConnection_getdb, (setter)MrdbConnection_setdb,
-        connection_database__doc__, NULL},
     {"auto_reconnect", (getter)MrdbConnection_getreconnect,
         (setter)MrdbConnection_setreconnect,
         connection_auto_reconnect__doc__, NULL},
-    {"user", (getter)MrdbConnection_getuser, NULL, connection_user__doc__, 
-        NULL},
     {"warnings", (getter)MrdbConnection_warnings, NULL,
         connection_warnings__doc__, NULL},
-    {"_server_status", (getter)MrdbConnection_get_server_status, NULL,
-        NULL, NULL},
     GETTER_EXCEPTION("Error", Mariadb_Error, ""),
-    GETTER_EXCEPTION("Warning", Mariadb_Warning, ""),
-    GETTER_EXCEPTION("InterfaceError", Mariadb_InterfaceError, ""),
-    GETTER_EXCEPTION("ProgrammingError", Mariadb_ProgrammingError, ""),
-    GETTER_EXCEPTION("IntegrityError", Mariadb_IntegrityError, ""),
-    GETTER_EXCEPTION("DatabaseError", Mariadb_DatabaseError, ""),
-    GETTER_EXCEPTION("NotSupportedError", Mariadb_NotSupportedError, ""),
-    GETTER_EXCEPTION("InternalError", Mariadb_InternalError, ""),
-    GETTER_EXCEPTION("OperationalError", Mariadb_OperationalError, ""),
+    GETTER_EXCEPTION("Warning", Mariadb_Warning, exception_warning__doc__),
+    GETTER_EXCEPTION("InterfaceError", Mariadb_InterfaceError, exception_interface__doc__),
+    GETTER_EXCEPTION("ProgrammingError", Mariadb_ProgrammingError, exception_programming__doc__),
+    GETTER_EXCEPTION("IntegrityError", Mariadb_IntegrityError, exception_integrity__doc__),
+    GETTER_EXCEPTION("DatabaseError", Mariadb_DatabaseError, exception_database__doc__),
+    GETTER_EXCEPTION("NotSupportedError", Mariadb_NotSupportedError, exception_notsupported__doc__),
+    GETTER_EXCEPTION("InternalError", Mariadb_InternalError, exception_internal__doc__),
+    GETTER_EXCEPTION("OperationalError", Mariadb_OperationalError, exception_operational__doc__),
     {NULL}
 };
 
@@ -155,6 +141,9 @@ MrdbConnection_Methods[] =
     },
     {"_read_response", (PyCFunction)MrdbConnection_readresponse,
         METH_NOARGS,
+        NULL},
+    {"_mariadb_get_info", (PyCFunction)MrdbConnection_getinfo,
+        METH_VARARGS,
         NULL},
     {NULL} /* always last */
 };
@@ -677,65 +666,41 @@ static int MrdbConnection_setreconnect(MrdbConnection *self,
 }
 /* }}} */
 
-/* {{{ MrdbConnection_getuser */
-static PyObject *MrdbConnection_getuser(MrdbConnection *self, void *closure)
+static PyObject *
+MrdbConnection_getinfo(MrdbConnection *self, PyObject *args)
 {
-    PyObject *p;
-    char *user= NULL;
+    union {
+        char *str;
+        uint64_t num;
+        uint8_t b;
+    } val;
 
-    MARIADB_CHECK_CONNECTION(self, NULL);
+    PyObject *type;
 
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_USER, &user);
-    p= PyUnicode_FromString(user);
-    return p;
-}
-/* }}} */
+    uint32_t option;
 
-/* {{{ MrdbConnection_setdb */
-static int MrdbConnection_setdb(MrdbConnection *self, PyObject *db,
-        void *closure)
-{
-    int rc= 0;
-    char *schema;
+    if (!PyArg_ParseTuple(args, "hO", &option, &type))
+          return NULL;
 
-    MARIADB_CHECK_CONNECTION(self, -1);
+    memset(&val, 0, sizeof(val));
 
-    if (!db || !CHECK_TYPE(db, &PyUnicode_Type))
+    if (mariadb_get_infov(self->mysql, option, &val))
     {
-        PyErr_SetString(PyExc_TypeError, "Argument must be string");
-        return -1;
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
+                                "Parameter option not supported");
+        return NULL;
     }
-    schema= (char *)PyUnicode_AsUTF8(db);
 
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_select_db(self->mysql, schema);
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
+    if ((PyTypeObject *)type == &PyUnicode_Type)
     {
-        mariadb_throw_exception(self->mysql, Mariadb_DatabaseError, 0, NULL);
-        return -1;
+        return PyUnicode_FromString(val.str ? val.str : "");
     }
-    return 0;
+    if ((PyTypeObject *)type == &PyLong_Type)
+        return PyLong_FromLong((long)val.num);
+    if ((PyTypeObject *)type == &PyBool_Type)
+        return val.b ? Py_True : Py_False;
+    Py_RETURN_NONE;
 }
-/* }}} */
-
-/* {{{ MrdbConnection_getdb */
-static PyObject *MrdbConnection_getdb(MrdbConnection *self, void *closure)
-{
-    PyObject *p;
-    char *db= NULL;
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SCHEMA, &db);
-    if (db)
-      p= PyUnicode_FromString(db);
-    else
-      p= Py_None;
-    return p;
-}
-/* }}} */
 
 /* {{{ MrdbConnection_reconnect */
 PyObject *MrdbConnection_reconnect(MrdbConnection *self)
@@ -821,16 +786,6 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
     return new_string;
 }
 /* }}} */
-
-static PyObject *MrdbConnection_get_server_status(MrdbConnection *self)
-{
-    uint32_t server_status;
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
-    return PyLong_FromLong((long)server_status);
-}
 
 static PyObject *MrdbConnection_readresponse(MrdbConnection *self)
 {

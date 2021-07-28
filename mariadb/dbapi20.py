@@ -6,6 +6,26 @@ paramstyle = 'qmark'
 threadsafety = True
 
 class DbApiType(frozenset):
+    """
+    Immutable set for type checking
+
+    By default the following sets are defined:
+
+    - BINARY: for binary field types
+    - NUMBER: for numeric field types
+    - STRING: for character based (string) field types
+    - DATE: for date field type(s)
+    - DATETIME: for datetime and timestamp field type(s)
+    - TIME: for time field type(s)
+    - TIMESTAMP: for datetime and timestamp field type(s)
+
+
+    Example:
+    >>> FIELD_TYPE.GEOMETRY == mariadb.BINARY
+    True
+    >>> FIELD_TYPE.FLOAT == mariadb.BINARY
+    False
+    """
 
     def __eq__(self, field_type):
         if (isinstance(field_type, DbApiType)):

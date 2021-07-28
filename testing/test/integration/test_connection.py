@@ -8,6 +8,7 @@ import mariadb
 
 from test.base_test import create_connection, is_skysql
 from test.conf_test import conf
+from mariadb.constants import STATUS
 import platform
 
 
@@ -189,6 +190,31 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(c1.autocommit, False)
         c1 = mariadb.connect(**default_conf, autocommit=True)
         self.assertEqual(c1.autocommit, True)
+
+    def test_db_attribute(self):
+        con= create_connection()
+        cursor=con.cursor()
+        db= con.database
+        cursor.execute("create schema test123")
+        con.database= "test123"
+        cursor.execute("select database()", buffered=True)
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "test123")
+        con.database= db
+        cursor.execute("select database()", buffered=True)
+        row= cursor.fetchone()
+        self.assertEqual(row[0], db)
+        self.assertEqual(row[0], con.database)
+        cursor.execute("drop schema test123")
+        del cursor
+
+    def test_server_status(self):
+        con= create_connection()
+        self.assertTrue(not con.server_status & STATUS.AUTOCOMMIT)
+        con.autocommit= True
+        self.assertTrue(con.server_status & STATUS.AUTOCOMMIT)
+        con.autocommit= False
+        self.assertTrue(not con.server_status & STATUS.AUTOCOMMIT)
 
 if __name__ == '__main__':
     unittest.main()

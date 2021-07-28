@@ -37,14 +37,6 @@ from mariadb.connections import Connection
 # disable for now, until tests are in place
 # from mariadb.pooling import *
 
-def Binary(obj):
-    """
-    This method constructs an object capable of holding a binary (long)
-    string value.
-    """
-
-    return bytes(obj)
-
 def connect(*args, connectionclass= mariadb.connections.Connection, **kwargs):
     """
     Creates a MariaDB Connection object.

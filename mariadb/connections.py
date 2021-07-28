@@ -21,8 +21,7 @@ import mariadb
 import socket
 import time
 
-from mariadb.constants import STATUS
-from mariadb.constants import TPC_STATE
+from mariadb.constants import STATUS, TPC_STATE, INFO
 
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
@@ -46,6 +45,15 @@ class Connection(mariadb._mariadb.connection):
 
         autocommit= kwargs.pop("autocommit", False)
         self._converter= kwargs.pop("converter", None)
+
+        # compatibiity feature: if SSL is provided as a dictionary,
+        # we will map it's content
+        if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
+             ssl= kwargs.pop("ssl", None)
+             for key in ["ca", "cert", "capath", "key", "cipher"]:
+                 if key in ssl:
+                     kwargs["ssl_%s" % key] = ssl[key]
+             kwargs["ssl"]= True
 
         super().__init__(*args, **kwargs)
         self.autocommit= autocommit
@@ -94,33 +102,97 @@ class Connection(mariadb._mariadb.connection):
 
     def __enter__(self):
         "Returns a copy of the connection."
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         "Closes connection."
+
         self.close()
 
     def commit(self):
+        """
+        Commit any pending transaction to the database.
+
+        Note that this function has no effect, when autocommit was set to True.
+        """
+
         if self.tpc_state > TPC_STATE.NONE:
             raise mariadb.ProgrammingError("commit() is not allowed if a TPC transaction is active")
         self._execute_command("COMMIT")
         self._read_response()
 
     def rollback(self):
+        """
+        Causes the database to roll back to the start of any pending transaction
+
+        Closing a connection without committing the changes first will cause an
+        implicit rollback to be performed.
+        Note that rollback() will not work as expected if autocommit mode was set to True
+        or the storage engine does not support transactions."
+        """
+
         if self.tpc_state > TPC_STATE.NONE:
             raise mariadb.ProgrammingError("rollback() is not allowed if a TPC transaction is active")
         self._execute_command("ROLLBACK")
         self._read_response()
 
     def kill(self, id):
+        """
+        This function is used to ask the server to kill a database connection
+        specified by the processid parameter. 
+
+        The connection id must be retrieved by SHOW PROCESSLIST sql command.
+        """
+
         if not isinstance(id, int):
             raise mariadb.ProgrammingError("id must be of type int.")
         stmt= "KILL %s" % id
         self._execute_command(stmt)
         self._read_response()
 
+    def begin(self):
+        """
+        Start a new transaction which can be committed by .commit() method,
+        or cancelled by .rollback() method.
+        """
+        self._execute_command("BEGIN")
+        self._read_response()
+
+    def select_db(self, new_db):
+        """
+        Sets the default database for the current connection.
+
+        The default database can be obtained by .database property.
+        """
+
+        self.database= new_db
+
     def get_server_version(self):
+        """
+        Returns a tuple representing the version of the connected server in"
+        the following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)
+
+        get_server_version() method exists for compatibility reasons. However the"
+        preferred way to retrieve server version information are the server_version
+        server_version_info connection attributes"
+        """
+
         return self.server_version_info
+
+    def show_warnings(self):
+        """
+        Shows error, warning and note messages from last executed command.
+        """
+
+        if (not self.warnings):
+            return None;
+
+        cursor= self.cursor()
+        cursor.execute("SHOW WARNINGS")
+        ret= cursor.fetchall()
+        del cursor
+        return ret
 
     class xid(tuple):
         """
@@ -224,12 +296,13 @@ class Connection(mariadb._mariadb.connection):
     def tpc_prepare(self): 
         """
         Performs the first phase of a transaction started with .tpc_begin().
-        A ProgrammingError will be raised if this method outside of a TPC
-        transaction.
+        A ProgrammingError will be raised if this method was called outside of
+        a TPC transaction.
 
         After calling .tpc_prepare(), no statements can be executed until
         .tpc_commit() or .tpc_rollback() have been called.
         """
+
         if self.tpc_state == TPC_STATE.NONE:
             raise mariadb.ProgrammingError("Transaction not started.")
         if self.tpc_state == TPC_STATE.PREPARE:
@@ -269,6 +342,7 @@ class Connection(mariadb._mariadb.connection):
         After calling .tpc_prepare(), no statements can be executed until
         .tpc_commit() or .tpc_rollback() have been called.
         """
+
         if self.tpc_state == TPC_STATE.NONE:
             raise mariadb.ProgrammingError("Transaction not started.")
         if xid and type(xid).__name__ != "xid":
@@ -299,6 +373,11 @@ class Connection(mariadb._mariadb.connection):
         self.tpc_state= TPC_STATE.PREPARE
 
     def tpc_recover(self):
+        """
+        Returns a list of pending transaction IDs suitable for use with\n"
+        tpc_commit(xid) or .tpc_rollback(xid).
+        """
+
         cursor= self.cursor()
         cursor.execute("XA RECOVER")
         result= cursor.fetchall()
@@ -306,31 +385,77 @@ class Connection(mariadb._mariadb.connection):
         return result
 
     @property
+    def database(self):
+        """Get default database for connection."""
+
+        return self._mariadb_get_info(INFO.SCHEMA, str)
+ 
+    @database.setter
+    def database(self, schema):
+          """Set default database."""
+
+          try:
+              self._execute_command("USE %s" % str(schema))
+              self._read_response()
+          except:
+              raise
+
+    @property
+    def user(self):
+        """
+        Returns the user name for the current connection or empty
+        string if it can't be determined, e.g. when using socket
+        authentication.
+        """
+
+        return self._mariadb_get_info(INFO.USER, str)
+
+    @property
     def character_set(self):
         """Client character set."""
+
         return _DEFAULT_CHARSET
 
     @property
     def collation(self):
         """Client character set collation"""
+
         return _DEFAULT_COLLATION
 
     @property
     def server_status(self):
-        """Returns server status flags."""
-        return super()._server_status
+        """Return server status flags."""
+
+        return self._mariadb_get_info(INFO.SERVER_STATUS, int)
 
     @property
     def server_version_info(self):
+        """
+        Returns numeric version of connected database server. 
+
+        The form of the version number is
+        VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH"
+        """
+
         version= self.server_version
         return (int(version / 10000), int((version % 10000) / 100), version % 100)
 
     @property
-    def get_autocommit(self):
+    def autocommit(self):
+        """
+        Toggles autocommit mode on or off for the current database connection.
+
+        Autocommit mode only affects operations on transactional table types.
+        Be aware that rollback() will not work, if autocommit mode was switched
+        on.
+
+        By default autocommit mode is set to False."
+        """
+
         return bool(self.server_status & STATUS.AUTOCOMMIT)
 
-    @property
-    def set_autocommit(self, mode):
+    @autocommit.setter
+    def autocommit(self, mode):
         if bool(mode) == self.autocommit:
             return
         try:
@@ -350,3 +475,30 @@ class Connection(mariadb._mariadb.connection):
         elif fno != self._socket.fileno():
             self._socket= socket.socket(fileno=fno)
         return self._socket
+
+    @property
+    def open(self):
+        """
+        Returns true if the connection is alive.
+
+        A ping command will be send to the serve for this purpose,
+        which means this function might fail if there are still
+        non processed pending result sets.
+        """
+
+        try:
+            self.ping()
+        except:
+            return False
+        return True
+
+    # Aliases
+    character_set_name= character_set
+
+    @property
+    def thread_id(self):
+        """
+        Alias for connection_id
+        """
+
+        return self.connection_id
