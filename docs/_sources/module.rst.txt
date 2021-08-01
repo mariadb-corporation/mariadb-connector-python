@@ -219,20 +219,3 @@ Type objects and constructors
 .. data:: ROWID
 
     This type object is used to describe the "Row ID" column in a database.
-
-.. data:: indicator_default
-
-    This indicator object is used to use a default value for insert/update.
-
-.. data:: indicator_ignore
-
-    This indicatior object is used to skip the update of a column.
-
-.. data:: indicator_null
-
-    This indicator object is used for NULL values.
-
-.. data:: indicator_row
-
-    This indicator object is used for skip the update/insert of the entire row. 
-

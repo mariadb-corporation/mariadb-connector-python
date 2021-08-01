@@ -405,8 +405,8 @@ the current connection.</p>
 <div><p>Example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cursor</span><span class="o">.</span><span class="n">callproc</span><span class="p">(</span><span class="s2">&quot;my_storedprocedure&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="s2">&quot;foo&quot;</span><span class="p">))</span>
 
-<span class="k">if</span> <span class="p">(</span><span class="n">connection</span><span class="o">.</span><span class="n">server_status</span> <span class="o">&amp;</span> <span class="n">SP_OUTPARAMS</span><span class="p">):</span>
-    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;retrieving output params from store procedure&quot;</span><span class="p">)</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">connection</span><span class="o">.</span><span class="n">server_status</span> <span class="o">&amp;</span> <span class="n">STATUS</span><span class="o">.</span><span class="n">SP_OUT_PARAMS</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;retrieving output parameters from store procedure&quot;</span><span class="p">)</span>
     <span class="o">...</span>
 <span class="k">else</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;retrieving data from stored procedure&quot;</span><span class="p">)</span>

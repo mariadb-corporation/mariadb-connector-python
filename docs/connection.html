@@ -246,11 +246,10 @@ or the storage engine does not support transactions.”</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.tpc_begin">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tpc_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xid</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.tpc_begin" title="Permalink to this definition">¶</a></dt>
-<dd><p>Parameter:
-xid: xid object which was created by .xid() method of</p>
-<blockquote>
-<div><p>connection class</p>
-</div></blockquote>
+<dd><dl class="simple">
+<dt>Parameter:</dt><dd><p>xid: xid object which was created by .xid() method of connection class</p>
+</dd>
+</dl>
 <p>Begins a TPC transaction with the given transaction ID xid.</p>
 <p>This method should be called outside of a transaction
 (i.e. nothing may have executed since the last .commit()
