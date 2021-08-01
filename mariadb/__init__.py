@@ -28,8 +28,7 @@ _POOLS= _CONNECTION_POOLS= {}
 
 from mariadb.dbapi20 import *
 from mariadb.connectionpool import *
-from mariadb.cursor import Cursor
-from mariadb.async_connections import *
+from mariadb.cursors import Cursor
 from mariadb.release_info import __version__ as __version__ 
 from mariadb.release_info import __version_info__ as __version_info__ 
 from mariadb.release_info import __author__ as __author__
