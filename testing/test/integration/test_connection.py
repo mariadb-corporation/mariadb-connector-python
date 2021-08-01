@@ -195,7 +195,10 @@ class TestConnection(unittest.TestCase):
         con= create_connection()
         cursor=con.cursor()
         db= con.database
-        cursor.execute("create schema test123")
+        try:
+            cursor.execute("create schema test123")
+        except:
+            pass
         con.database= "test123"
         cursor.execute("select database()", buffered=True)
         row= cursor.fetchone()

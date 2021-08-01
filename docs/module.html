@@ -5,15 +5,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The mariadb module &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <title>The mariadb module &#8212; MariaDB Connector/Python 1.1.0-alpha documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
     <script src="_static/doctools.js"></script>
-    <script src="_static/language_data.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +34,7 @@
         <li class="right" >
           <a href="usage.html" title="Basic usage"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The mariadb module</a></li> 
       </ul>
     </div>  
@@ -49,13 +48,22 @@
 <span id="the-mariadb-module"></span><span id="module"></span><h1>The mariadb module<a class="headerlink" href="#module-mariadb" title="Permalink to this headline">¶</a></h1>
 <p>The mariadb module supports the standard defined by DB API 2.0 (PEP-249).</p>
 <dl class="py function">
-<dt id="mariadb.connect">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">connect</code><span class="sig-paren">(</span><em class="sig-param">\*\*kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connect" title="Permalink to this definition">¶</a></dt>
-<dd><blockquote>
-<div><p>Establishes a connection to a database server and returns a new connection
+<dt class="sig sig-object py" id="mariadb.connect">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">connect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursorclass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">mariadb.connections.Connection</span> <span class="pre">**</span> <span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connect" title="Permalink to this definition">¶</a></dt>
+<dd><p>Establishes a connection to a database server and returns a new connection
 object.</p>
-<p>The connection parameters have to be provided as a set of keyword arguments.</p>
-</div></blockquote>
+</dd></dl>
+
+<dl class="field-list simple">
+<dt class="field-odd">parameters</dt>
+<dd class="field-odd"><p></p></dd>
+</dl>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0: </span></p>
+<ul class="simple">
+<li><p><strong>cursorclass</strong>: A subclass of mariadb.connections.Connection. If not specified default will be used.</p></li>
+</ul>
+<p>Keyword arguments:</p>
 <p>The supported connection keywords are:</p>
 <ul class="simple">
 <li><p><strong>user</strong>, <strong>username</strong> (string): The username used to authenticate with the database server, defaults to current user</p></li>
@@ -74,9 +82,11 @@ be used</p>
 </dd>
 </dl>
 </li>
+<li><p><strong>client_flag</strong> (int): Additional client capabilities. Possible values are defined in constants.CLIENT.</p></li>
 <li><p><strong>init_command</strong> (string): Specifies one or more commands to execute when connecting and reconnecting to the database server.</p></li>
 <li><p><strong>default_file</strong> (string): Read options from the specified option file. If the file is an empty string, default configuration file(s) will be used</p></li>
 <li><p><strong>default_group</strong> (string): Read options from the specified group</p></li>
+<li><p><strong>plugin_dir</strong> (string): Directory which contains MariaDB client plugins</p></li>
 <li><dl class="simple">
 <dt><strong>ssl_key</strong> (string): Defines a path to a private key file to use for TLS. This option</dt><dd><p>requires that you use the absolute path, not a relative path. The specified key must be in PEM format</p>
 </dd>
@@ -89,20 +99,16 @@ be used</p>
 <li><p><strong>ssl_crlpath</strong> (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.</p></li>
 <li><p><strong>ssl_verify_cert</strong> (bool): Enables server certificate verification.</p></li>
 <li><p><strong>ssl</strong> (bool): Always use a secure TLS connection</p></li>
-<li><p><strong>autocommit</strong> (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).</p></li>
 </ul>
-</dd></dl>
-
-<div class="versionadded">
-<p><span class="versionmodified added">New in version 1.0.1: </span>- <strong>converter</strong> (dict): Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions.</p>
 </div>
 <div class="versionadded">
-<dl class="field-list">
-<span class="versionmodified added">New in version 1.0.3: </span><dt class="field-odd">return</dt>
-<dd class="field-odd"><p>Returns a connection or raises an error if the connection between client and server couldn’t be established.</p>
-</dd>
-<dt class="field-even">rtype</dt>
-<dd class="field-even"><p>mariadb.connection object</p>
+<p><span class="versionmodified added">New in version 1.0.1: </span>- <strong>autocommit</strong> (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).</p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.0.3: </span>- <strong>converter</strong> (dict): Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">return</dt>
+<dd class="field-odd"><p>Returns a connection object or raises an error if the connection between client and server couldn’t be established.</p>
 </dd>
 </dl>
 <p>The connection parameters have to be provided as a set of keyword arguments:</p>
@@ -113,8 +119,8 @@ be used</p>
 </div>
 </div>
 <dl class="py function">
-<dt id="mariadb.ConnectionPool">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">ConnectionPool</code><span class="sig-paren">(</span><em class="sig-param">\*\*kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.ConnectionPool">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">ConnectionPool</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool" title="Permalink to this definition">¶</a></dt>
 <dd><p>Creates a connection pool and returns a ConnectionPool object.</p>
 <p>The connection parameters have to be provided as a set of keyword arguments:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">db_conf</span><span class="o">=</span> <span class="p">{</span><span class="n">user</span><span class="o">=</span><span class="s2">&quot;myname&quot;</span><span class="p">,</span> <span class="n">password</span><span class="o">=</span><span class="s2">&quot;secret&quot;</span><span class="p">,</span> <span class="n">database</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s2">&quot;localhost&quot;</span><span class="p">};</span>
@@ -131,30 +137,30 @@ The supported pool parameters are:</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.apilevel">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">apilevel</code><a class="headerlink" href="#mariadb.apilevel" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.apilevel">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">apilevel</span></span><a class="headerlink" href="#mariadb.apilevel" title="Permalink to this definition">¶</a></dt>
 <dd><p>String constant stating the supported DB API level. The value for <cite>mariadb</cite> is
 <code class="docutils literal notranslate"><span class="pre">2.0</span></code>.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.threadsafety">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">threadsafety</code><a class="headerlink" href="#mariadb.threadsafety" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.threadsafety">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">threadsafety</span></span><a class="headerlink" href="#mariadb.threadsafety" title="Permalink to this definition">¶</a></dt>
 <dd><p>Integer constant stating the level of thread safety. For <cite>mariadb</cite> the value is 1,
 which means threads can share the module but not the connection.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.paramstyle">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">paramstyle</code><a class="headerlink" href="#mariadb.paramstyle" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.paramstyle">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">paramstyle</span></span><a class="headerlink" href="#mariadb.paramstyle" title="Permalink to this definition">¶</a></dt>
 <dd><p>String constant stating the type of parameter marker. For <cite>mariadb</cite> the value is
 <cite>qmark</cite>. For compatibility reasons <cite>mariadb</cite> also supports the <cite>format</cite> and
 <cite>pyformat</cite> paramstyles with the limitation that they can’t be mixed inside a SQL statement.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.mariadbapi_version">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">mariadbapi_version</code><a class="headerlink" href="#mariadb.mariadbapi_version" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.mariadbapi_version">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">mariadbapi_version</span></span><a class="headerlink" href="#mariadb.mariadbapi_version" title="Permalink to this definition">¶</a></dt>
 <dd><p>String constant stating the version of the used MariaDB Connector/C library.</p>
 </dd></dl>
 
@@ -163,68 +169,68 @@ which means threads can share the module but not the connection.</p>
 <p>Compliant to DB API 2.0 MariaDB Connector/C provides information about errors
 through the following exceptions:</p>
 <dl class="py exception">
-<dt id="mariadb.DataError">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">DataError</code><a class="headerlink" href="#mariadb.DataError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.DataError">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">DataError</span></span><a class="headerlink" href="#mariadb.DataError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are due to problems with the processed data like division by zero,
 numeric value out of range, etc.</p>
 </dd></dl>
 
 <dl class="py exception">
-<dt id="mariadb.DatabaseError">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">DatabaseError</code><a class="headerlink" href="#mariadb.DatabaseError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.DatabaseError">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">DatabaseError</span></span><a class="headerlink" href="#mariadb.DatabaseError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are related to the database</p>
 </dd></dl>
 
 <dl class="py exception">
-<dt id="mariadb.InterfaceError">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">InterfaceError</code><a class="headerlink" href="#mariadb.InterfaceError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.InterfaceError">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">InterfaceError</span></span><a class="headerlink" href="#mariadb.InterfaceError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are related to the database interface
 rather than the database itself.</p>
 </dd></dl>
 
 <dl class="py exception">
-<dt id="mariadb.Warning">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">Warning</code><a class="headerlink" href="#mariadb.Warning" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.Warning">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">Warning</span></span><a class="headerlink" href="#mariadb.Warning" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for important warnings like data truncations while inserting, etc.</p>
 </dd></dl>
 
 <dl class="py exception">
-<dt id="mariadb.PoolError">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">PoolError</code><a class="headerlink" href="#mariadb.PoolError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.PoolError">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">PoolError</span></span><a class="headerlink" href="#mariadb.PoolError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors related to ConnectionPool class.</p>
 </dd></dl>
 
 <dl class="py exception">
-<dt id="mariadb.OperationalError">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">OperationalError</code><a class="headerlink" href="#mariadb.OperationalError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.OperationalError">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">OperationalError</span></span><a class="headerlink" href="#mariadb.OperationalError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are related to the database’s operation
 and not necessarily under the control of the programmer</p>
 </dd></dl>
 
 <dl class="py exception">
-<dt id="mariadb.IntegrityError">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">IntegrityError</code><a class="headerlink" href="#mariadb.IntegrityError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.IntegrityError">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">IntegrityError</span></span><a class="headerlink" href="#mariadb.IntegrityError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised when the relational integrity of the database is affected,
 e.g. a foreign key check fails.</p>
 </dd></dl>
 
 <dl class="py exception">
-<dt id="mariadb.InternalError">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">InternalError</code><a class="headerlink" href="#mariadb.InternalError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.InternalError">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">InternalError</span></span><a class="headerlink" href="#mariadb.InternalError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised when the database encounters an internal error,
 e.g. the cursor is not valid anymore</p>
 </dd></dl>
 
 <dl class="py exception">
-<dt id="mariadb.ProgrammingError">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">ProgrammingError</code><a class="headerlink" href="#mariadb.ProgrammingError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.ProgrammingError">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">ProgrammingError</span></span><a class="headerlink" href="#mariadb.ProgrammingError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for programming errors, e.g. table not found or already
 exists, syntax error in the SQL statement</p>
 </dd></dl>
 
 <dl class="py exception">
-<dt id="mariadb.NotSupportedError">
-<em class="property">exception </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">NotSupportedError</code><a class="headerlink" href="#mariadb.NotSupportedError" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.NotSupportedError">
+<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">NotSupportedError</span></span><a class="headerlink" href="#mariadb.NotSupportedError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised in case a method or database API was used which is not
 supported by the database</p>
 </dd></dl>
@@ -233,107 +239,107 @@ supported by the database</p>
 <div class="section" id="type-objects-and-constructors">
 <h2>Type objects and constructors<a class="headerlink" href="#type-objects-and-constructors" title="Permalink to this headline">¶</a></h2>
 <dl class="py function">
-<dt id="mariadb.Binary">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">Binary</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.Binary" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.Binary">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">Binary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.Binary" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function constructs an object capable of holding a binary (long)
 string value</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="mariadb.Date">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">Date</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">year</span></em>, <em class="sig-param"><span class="n">month</span></em>, <em class="sig-param"><span class="n">day</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.Date" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.Date">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">Date</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">year</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">month</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">day</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.Date" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function constructs an object holding a date value</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="mariadb.DateFromTicks">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">DateFromTicks</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ticks</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.DateFromTicks" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.DateFromTicks">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">DateFromTicks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ticks</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.DateFromTicks" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function constructs an object holding a date value from the given
 ticks value (number of seconds since the epoch). For more information
 see the documentation of the standard Python time module</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="mariadb.Time">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">Time</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">hour</span></em>, <em class="sig-param"><span class="n">minute</span></em>, <em class="sig-param"><span class="n">second</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.Time" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.Time">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">Time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hour</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">minute</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.Time" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function constructs an object holding a time value</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="mariadb.TimeFromTicks">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">TimeFromTicks</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ticks</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.TimeFromTicks" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.TimeFromTicks">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">TimeFromTicks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ticks</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.TimeFromTicks" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function constructs an object holding a time value from the given
 ticks value (number of seconds since the epoch). For more information
 see the documentation of the standard Python time module</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="mariadb.Timestamp">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">Timestamp</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">year</span></em>, <em class="sig-param"><span class="n">month</span></em>, <em class="sig-param"><span class="n">day</span></em>, <em class="sig-param"><span class="n">hour</span></em>, <em class="sig-param"><span class="n">minute</span></em>, <em class="sig-param"><span class="n">second</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.Timestamp" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.Timestamp">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">Timestamp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">year</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">month</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">day</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hour</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">minute</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">second</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.Timestamp" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function constructs an object holding a time stamp value</p>
 </dd></dl>
 
 <dl class="py function">
-<dt id="mariadb.TimestampFromTicks">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">TimestampFromTicks</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">ticks</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.TimestampFromTicks" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.TimestampFromTicks">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">TimestampFromTicks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ticks</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.TimestampFromTicks" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function constructs an object holding a time stamp value from the given
 ticks value (number of seconds since the epoch). For more information
 see the documentation of the standard Python time module</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.STRING">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">STRING</code><a class="headerlink" href="#mariadb.STRING" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.STRING">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">STRING</span></span><a class="headerlink" href="#mariadb.STRING" title="Permalink to this definition">¶</a></dt>
 <dd><p>This type object is used to describe columns in a database that are
 string-based (e.g. CHAR).</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.BINARY">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">BINARY</code><a class="headerlink" href="#mariadb.BINARY" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.BINARY">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">BINARY</span></span><a class="headerlink" href="#mariadb.BINARY" title="Permalink to this definition">¶</a></dt>
 <dd><p>This type object is used to describe (long) binary columns in a database
 (e.g. LONG, RAW, BLOBs).</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.NUMBER">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">NUMBER</code><a class="headerlink" href="#mariadb.NUMBER" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.NUMBER">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">NUMBER</span></span><a class="headerlink" href="#mariadb.NUMBER" title="Permalink to this definition">¶</a></dt>
 <dd><p>This type object is used to describe numeric columns in a database.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.DATETIME">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">DATETIME</code><a class="headerlink" href="#mariadb.DATETIME" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.DATETIME">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">DATETIME</span></span><a class="headerlink" href="#mariadb.DATETIME" title="Permalink to this definition">¶</a></dt>
 <dd><p>This type object is used to describe date/time columns in a database.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.ROWID">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">ROWID</code><a class="headerlink" href="#mariadb.ROWID" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.ROWID">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">ROWID</span></span><a class="headerlink" href="#mariadb.ROWID" title="Permalink to this definition">¶</a></dt>
 <dd><p>This type object is used to describe the “Row ID” column in a database.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.indicator_default">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">indicator_default</code><a class="headerlink" href="#mariadb.indicator_default" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.indicator_default">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">indicator_default</span></span><a class="headerlink" href="#mariadb.indicator_default" title="Permalink to this definition">¶</a></dt>
 <dd><p>This indicator object is used to use a default value for insert/update.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.indicator_ignore">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">indicator_ignore</code><a class="headerlink" href="#mariadb.indicator_ignore" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.indicator_ignore">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">indicator_ignore</span></span><a class="headerlink" href="#mariadb.indicator_ignore" title="Permalink to this definition">¶</a></dt>
 <dd><p>This indicatior object is used to skip the update of a column.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.indicator_null">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">indicator_null</code><a class="headerlink" href="#mariadb.indicator_null" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.indicator_null">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">indicator_null</span></span><a class="headerlink" href="#mariadb.indicator_null" title="Permalink to this definition">¶</a></dt>
 <dd><p>This indicator object is used for NULL values.</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="mariadb.indicator_row">
-<code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">indicator_row</code><a class="headerlink" href="#mariadb.indicator_row" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.indicator_row">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">indicator_row</span></span><a class="headerlink" href="#mariadb.indicator_row" title="Permalink to this definition">¶</a></dt>
 <dd><p>This indicator object is used for skip the update/insert of the entire row.</p>
 </dd></dl>
 
@@ -373,7 +379,7 @@ string-based (e.g. CHAR).</p>
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
     </div>
@@ -398,13 +404,13 @@ string-based (e.g. CHAR).</p>
         <li class="right" >
           <a href="usage.html" title="Basic usage"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The mariadb module</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
-        &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.3.1.
+        &#169; Copyright 2019-2021 MariaDB Corporation and Georg Richter.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
     </div>
   </body>
 </html>

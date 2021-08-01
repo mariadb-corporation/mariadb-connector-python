@@ -426,9 +426,6 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
 
 /* Helper macros */
 
-/* Due to callback functions we cannot use PY_BEGIN/END_ALLOW_THREADS */
-
-
 #define MrdbIndicator_Check(a)\
       (PyObject_HasAttrString(a, "indicator"))
 

@@ -1,32 +1,12 @@
 The cursor class
 ====================
-
-.. class:: mariadb.cursor
-
-  Cursors can be used to execute SQL commands within a database session. Cursors
-  objects are created by the :func:`cursor` method.
-
-  Cursors are bound to the connection for their entire lifetime. If a connection was
-  closed or dropped all cursor objects bound to this connection became invalid.
-
-  To check if a cursor is still valid, the :data:`~closed` attribute needs to be checked.
+.. autoclass:: mariadb.cursors.Cursor 
 
 --------------
 Cursor methods
 --------------
 
-.. method:: callproc(procname, [ args]))
-
-  Executes a stored procedure. 
-
-  Input/Output or Output parameters have to be retrieved by .fetch methods,
-  the :data:`~sp_outparams` attribute indicates if the result set contains output
-  parameters.
-
-  :param procname: The name of the stored procedure
-  :type procname: string
-  :param args: A sequence which must contain an entry for each parameter the procedure expects.
-  :type args: sequence
+.. automethod:: mariadb.cursors.Cursor.callproc
 
   Example:
 
@@ -49,43 +29,11 @@ Cursor methods
     >>> cursor.fetchone()
     ('test',)
 
-.. method:: execute(statement[, data [, buffered=False])
+.. automethod:: mariadb.cursors.Cursor.execute
 
-  Executes a SQL statement.
-
-  Parameters in SQL statement may be provided as sequence or mapping and will be bound
-  to variables in the operation. Variables are specified as question
-  marks (paramstyle='qmark'), however for compatibility reasons |MCP|
-  also supports the 'format' and 'pyformat' paramstyles
-  with the restriction, that different paramstyles can't be mixed within.
-  a statement
-
-  :param statement: SQL statement
-  :type procname: string
-  :param args: A sequence which must contain an entry for each parameter the statement expects.
-  :type args: sequence
-       
-  A reference to the operation will be retained by the cursor.
-  If the cursor was created with attribute prepared=True the statement
-  string for following execute operations will be ignored:
-  This is most effective for algorithms where the same operation is used,
-  but different parameters are bound to it (many times).
-
-  By default result sets will not be buffered, so further operations on the
-  same connection will fail, unless the entire result set was read. For buffering
-  the entire result set an additional parameter *buffered=True* must be specified.
-
-
-
-.. method:: executemany(statement, data)
+.. automethod:: mariadb.cursors.Cursor.executemany
    
-  Exactly behaves like .execute() but accepts a list of tuples, where each
-  tuple represents data of a row within a table.
-  .executemany() only supports DML (insert, update, delete, replace) statements.
-
-  :param statement: A DML SQL statement
-  :type statement: string
-  :param data: Data to be used for place holders
+  Example:
 
   The following example will insert 3 rows:
 
@@ -100,137 +48,74 @@ Cursor methods
 
   To insert special values like NULL or a column default, you need to specify indicators:
 
-  - mariadb.indicator_null is used for NULL values
-  - mariadb.indicator_ignore is used to skip update of a column.
-  - mariadb.indicator_default is used for a default value (insert/update)
-  - mariadb.indicator_row is used to skip update/insert of the entire row.
+  - INDICATOR.NULL is used for NULL values
+  - INDICATOR.IGNORE is used to skip update of a column.
+  - INDICATOR.DEFAULT is used for a default value (insert/update)
+  - INDICATOR.ROW is used to skip update/insert of the entire row.
 
   .. note::
 
     - All values for a column must have the same data type.
-    - Indicators can only be used when connecting to a MariaDB Server 10.2 or newer. Older versions of MariaDB and MySQL servers don't support this feature.
+    - Indicators can only be used when connecting to a MariaDB Server 10.2 or newer. MySQL servers don't support this feature.
 
 
-.. method:: fetchall()
+.. automethod:: mariadb.cursors.Cursor.fetchall
 
-  Fetches all rows of a pending result set and returns a list of tuples.
+.. automethod:: mariadb.cursors.Cursor.fetchmany
 
-  If the cursor was created with option *named_tuple=True* the result will be a list of named tuples.
+.. automethod:: mariadb.cursors.Cursor.fetchone
 
-.. method:: fetchmany(size)
+.. automethod:: mariadb.cursors.Cursor.next
 
-  Fetch the next set of rows of a query result, returning a list of tuples
-  An empty list is returned when no more rows are available.
+.. automethod:: mariadb.cursors.Cursor.nextset
 
-  :param size:  The number of rows to fetch per call. If it is not given, the cursor's arraysize determines the number of rows to be fetched.
-  :type size: integer
+.. automethod:: mariadb.cursors.Cursor.scroll
 
-  If the cursor was created with option *named_tuple=True* the result will be a list of named tuples.
+.. automethod:: mariadb.cursors.Cursor.setinputsizes()
 
-.. method:: fetchone()
-
-  Fetches next row of a pending result set and returns a tuple.
-
-  If the cursor was created with option *named_tuple=True* the result will be a named tuple.
-
-.. method:: fieldcount()
-
-  Returns the number of fields (columns) within a result set.
-
-.. method:: next()
-
-  Return the next row from the currently executing SQL statement
-  using the same semantics as fetchone().
-
-.. method:: nextset()
-
-  Will make the cursor skip to the next available result set,
-  discarding any remaining rows from the current set.
-
-.. method:: scroll(value[, mode='relative'])
-
-  Scroll the cursor in the result set to a new position according to mode.
-
-  :param value: New position in the result set
-  :type value: integer
-  :param mode: Scroll mode, posslible values are 'absolute' or 'relative'. Defaults to 'relative'.
-  :type mode: string
-
-  If mode is relative, value is taken as offset to the current
-  position in the result set, if set to absolute, value states an absolute
-  target position. 
-
-.. method: setinputsizes()
-
-  Required by PEP-249. Does nothing in MariaDB Connector/Python
-
-.. method: setoutputsize()
-
-  Required by PEP-249. Does nothing in MariaDB Connector/Python
+.. automethod:: mariadb.cursors.Cursor.setoutputsize()
 
 -----------------
 Cursor attributes
 -----------------
 
-.. data:: arraysize
+.. autoattribute:: mariadb.cursors.Cursor.arraysize
 
   This read/write attribute specifies the number of rows to fetch at a time with .fetchmany(). It defaults to 1 meaning to fetch a single row at a time
 
-.. data:: buffered
+.. autoattribute:: mariadb.cursors.Cursor.buffered
 
-  When set to *True* all result sets are immediately transferred and the connection
-  between client and server is no longer blocked. Default value is False.
+.. autoattribute:: mariadb.cursors.Cursor.closed
 
-.. data:: closed
+.. autoattribute:: mariadb.cursors.Cursor.connection
 
-  Indicates if the cursor is closed (e.g. if connection dropped) and can't be reused.
+.. autoattribute:: mariadb.cursors.Cursor.description
 
-.. data:: connection
+  .. note::
 
-  Returns a reference to the connection object on which the cursor was created.
+    The 8th parameter 'field_flags' is an extension to the PEP-249 DB API standard.
+    In combination with the type element field, it can be determined for example,
+    whether a column is a BLOB or TEXT field:
 
-.. data:: description
+  .. code-block:: python
 
-  This read-only attribute is a sequence of 7-item sequences.
+    if cursor.description[0][1] == FIELD_TYPE.BLOB:
+        if cursor.description[0][7] == FIELD_FLAG.BINARY:
+            print("column is BLOB")
+        else:
+            print("column is TEXT") 
+   
 
-  Each of these sequences contains information describing one result column:
+.. autoattribute:: mariadb.cursors.Cursor.lastrowid
 
-  - name
-  - type_code
-  - display_size
-  - internal_size
-  - precision
-  - scale
-  - null_ok
+.. autoattribute:: mariadb.cursors.Cursor.sp_outparams
 
-  This attribute will be None for operations that do not return rows or if the cursor has
-  not had an operation invoked via the .execute*() method yet 
+.. autoattribute:: mariadb.cursors.Cursor.rowcount
 
-.. data:: lastrowid
+  .. note::
 
-  This read only attribute of the ID generated by a query on a table with a column having
-  the AUTO_INCREMENT attribute or the value for the last usage of
-  LAST_INSERT_ID(expr). If the last query wasn't an INSERT or UPDATE
-  statement or if the modified table does not have a column with the
-  AUTO_INCREMENT attribute and LAST_INSERT_ID was not used, the returned
-  value will be zero
-
-.. data:: sp_outparams
-
-  This read-only attribute undicates if the current result set contains in/out
-  or out parameters from a previously executed stored procedure.
-
-.. data:: rowcount
-
-  This read-only attribute specifies the number of rows that the last
-  execute*() produced (for DQL statements like SELECT) or affected
-  (for DML statements like UPDATE or INSERT).
-
-  The return value is -1 in case no .execute*() has been performed
-  on the cursor or the rowcount of the last operation cannot be
-  determined by the interface.
-
-  For unbuffered cursors (default) the exact number of rows can only be determined after all rows were fetched.
+    For unbuffered cursors (default) the exact number of rows can only be 
+    determined after all rows were fetched.
 
   Example:
 
@@ -248,16 +133,10 @@ Cursor attributes
     >>> cursor.rowcount
     1
 
+.. autoattribute:: mariadb.cursors.Cursor.statement
 
-.. data:: statement
-
-  This ready only attribute returns the last executed SQL statement.
-
-.. data:: warnings
-
-  Returns the number of warnings from the last executed statement, or zero
-  if there are no warnings.
+.. autoattribute:: mariadb.cursors.Cursor.warnings
 
   .. note::
 
-    If SQL_MODE TRADITIONAL is enabled an error instead of a warning will be returned. To retrieve warnings use the cursor method execute("SHOW WARNINGS").
+    Warnings can be retrieved by the show_warnings() method of connection class.

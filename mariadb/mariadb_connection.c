@@ -137,14 +137,13 @@ MrdbConnection_Methods[] =
     { "_execute_command", 
       (PyCFunction)MrdbConnection_executecommand,
       METH_VARARGS,
-      NULL
-    },
+      "For internal use only"},
     {"_read_response", (PyCFunction)MrdbConnection_readresponse,
-        METH_NOARGS,
-        NULL},
+      METH_NOARGS,
+      "For internal use only"},
     {"_mariadb_get_info", (PyCFunction)MrdbConnection_getinfo,
-        METH_VARARGS,
-        NULL},
+      METH_VARARGS,
+      "For internal use only"},
     {NULL} /* always last */
 };
 
@@ -165,7 +164,7 @@ PyMemberDef MrdbConnection_Members[] =
         T_ULONG,
         offsetof(MrdbConnection, thread_id),
         READONLY,
-        connection_connection_id__doc__},
+        "Id of current connection"},
     {"collation",
         T_STRING,
         offsetof(MrdbConnection, collation),
@@ -180,12 +179,12 @@ PyMemberDef MrdbConnection_Members[] =
         T_INT,
         offsetof(MrdbConnection, port),
         READONLY,
-        "Database server TCP/IP port"},
+        "Database server TCP/IP port. This value will be 0 in case of a unix socket connection"},
     {"server_version",
         T_ULONG,
         offsetof(MrdbConnection, server_version),
         READONLY,
-        "Server version"},
+        "Server version in numerical format:\n\nThe form of the version number is VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH"},
     {"server_info",
         T_STRING,
         offsetof(MrdbConnection, server_info),
@@ -205,7 +204,7 @@ PyMemberDef MrdbConnection_Members[] =
         T_STRING,
         offsetof(MrdbConnection, tls_cipher),
         READONLY,
-        "TLS cipher suite in used by connection"},
+        "TLS cipher suite used by connection"},
     {"tls_version",
         T_STRING,
         offsetof(MrdbConnection, tls_version),
@@ -250,6 +249,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
         PyObject *args,
         PyObject *dsnargs)
 {
+    uint8_t has_error= 1;
     char *dsn= NULL, *host=NULL, *user= NULL, *password= NULL, *schema= NULL,
          *socket= NULL, *init_command= NULL, *default_file= NULL,
          *default_group= NULL,
@@ -301,13 +301,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
         return -1;
     }
 
-    if (mysql_options(self->mysql, MYSQL_SET_CHARSET_NAME, mariadb_default_charset))
-    {
-        mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
-            "Can't set default character set.");
-        return -1;
-    }
-
     if (converter)
         Py_INCREF(converter);
     else
@@ -315,51 +308,65 @@ MrdbConnection_Initialize(MrdbConnection *self,
             return 1;
     self->converter= converter;
 
+    Py_BEGIN_ALLOW_THREADS;
+    if (mysql_options(self->mysql, MYSQL_SET_CHARSET_NAME, mariadb_default_charset))
+       goto end;
+
     if (local_infile != 0xFF)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_OPT_LOCAL_INFILE, &local_infile);
+        if (mysql_options(self->mysql, MYSQL_OPT_LOCAL_INFILE, &local_infile))
+          goto end;
     }
 
     if (compress)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_OPT_COMPRESS, 1);
+        if (mysql_options(self->mysql, MYSQL_OPT_COMPRESS, "1"))
+          goto end;
     }
 
     if (init_command)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_INIT_COMMAND, init_command);
+        if (mysql_options(self->mysql, MYSQL_INIT_COMMAND, init_command))
+          goto end;
     }
 
     if (plugin_dir) {
-        MADB_SET_OPTION(self->mysql, MYSQL_PLUGIN_DIR, plugin_dir);
+        if (mysql_options(self->mysql, MYSQL_PLUGIN_DIR, plugin_dir))
+          goto end;
     } else {
 #if defined(DEFAULT_PLUGINS_SUBDIR)
-        MADB_SET_OPTION(self->mysql, MYSQL_PLUGIN_DIR, DEFAULT_PLUGINS_SUBDIR);
+      if (mysql_options(self->mysql, MYSQL_PLUGIN_DIR, DEFAULT_PLUGINS_SUBDIR))
+        goto end;
 #endif
     }
 
     /* read defaults from configuration file(s) */
     if (default_file)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_READ_DEFAULT_FILE, default_file);
+        if (mysql_options(self->mysql, MYSQL_READ_DEFAULT_FILE, default_file))
+          goto end;
     }
     if (default_group)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_READ_DEFAULT_GROUP, default_group);
+        if (mysql_options(self->mysql, MYSQL_READ_DEFAULT_GROUP, default_group))
+          goto end;
     }
 
     /* set timeouts */
     if (connect_timeout)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_OPT_CONNECT_TIMEOUT, &connect_timeout);
+        if (mysql_options(self->mysql, MYSQL_OPT_CONNECT_TIMEOUT, &connect_timeout))
+          goto end;
     }
     if (read_timeout)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_OPT_READ_TIMEOUT, &read_timeout);
+        if (mysql_options(self->mysql, MYSQL_OPT_READ_TIMEOUT, &read_timeout))
+          goto end;
     }
     if (write_timeout)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_OPT_WRITE_TIMEOUT, &write_timeout);
+        if (mysql_options(self->mysql, MYSQL_OPT_WRITE_TIMEOUT, &write_timeout))
+          goto end;
     }
 
     /* set TLS/SSL options */
@@ -371,25 +378,25 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 (const char *)ssl_cipher);
     if (ssl_crl)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_OPT_SSL_CRL, ssl_crl);
+        if (mysql_options(self->mysql, MYSQL_OPT_SSL_CRL, ssl_crl))
+          goto end;
     }
     if (ssl_crlpath)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_OPT_SSL_CRLPATH, ssl_crlpath);
+        if (mysql_options(self->mysql, MYSQL_OPT_SSL_CRLPATH, ssl_crlpath))
+          goto end;
     }
     if (ssl_verify_cert)
     {
-        MADB_SET_OPTION(self->mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (unsigned char *) &ssl_verify_cert);
+        if (mysql_options(self->mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (unsigned char *) &ssl_verify_cert))
+          goto end;
     }
 
-    Py_BEGIN_ALLOW_THREADS;
     mysql_real_connect(self->mysql, host, user, password, schema, port,
             socket, client_flags);
-    Py_END_ALLOW_THREADS;
    
     if (mysql_errno(self->mysql))
     {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
         goto end;
     }
 
@@ -398,14 +405,17 @@ MrdbConnection_Initialize(MrdbConnection *self,
     /* CONPY-129: server_version_info */
     self->server_version= mysql_get_server_version(self->mysql);
     self->server_info= mysql_get_server_info(self->mysql);
-/*
-    if (asynchronous && PyObject_IsTrue(asynchronous))
-    {
-        self->asynchronous= 1;
-        MADB_SET_OPTION(self->mysql, MARIADB_OPT_SKIP_READ_RESPONSE, &self->asynchronous);
-    }
-*/
+
+    has_error= 0;
 end:
+    Py_END_ALLOW_THREADS;
+
+    if (has_error)
+    {
+          mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+          return -1;
+    }
+
     if (PyErr_Occurred())
         return -1;
 

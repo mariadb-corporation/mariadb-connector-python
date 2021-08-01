@@ -5,19 +5,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The ConnectionPool class &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <title>The ConnectionPool class &#8212; MariaDB Connector/Python 1.1.0-alpha documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
     <script src="_static/doctools.js"></script>
-    <script src="_static/language_data.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Extensions to the DB API" href="extension.html" />
+    <link rel="next" title="License" href="license.html" />
     <link rel="prev" title="The cursor class" href="cursor.html" /> 
   </head><body>
     <div class="related" role="navigation" aria-label="related navigation">
@@ -30,12 +29,12 @@
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
-          <a href="extension.html" title="Extensions to the DB API"
+          <a href="license.html" title="License"
              accesskey="N">next</a> |</li>
         <li class="right" >
           <a href="cursor.html" title="The cursor class"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The ConnectionPool class</a></li> 
       </ul>
     </div>  
@@ -48,24 +47,24 @@
   <div class="section" id="the-connectionpool-class">
 <h1>The ConnectionPool class<a class="headerlink" href="#the-connectionpool-class" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
-<dt id="ConnectionPool">
-<em class="property">class </em><code class="sig-name descname">ConnectionPool</code><a class="headerlink" href="#ConnectionPool" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="ConnectionPool">
+<em class="property"><span class="pre">class</span> </em><span class="sig-name descname"><span class="pre">ConnectionPool</span></span><a class="headerlink" href="#ConnectionPool" title="Permalink to this definition">¶</a></dt>
 <dd><p>MariaDB Connector/Python supports simple connection pooling.
 A connection pool holds a number of open connections and handles thread safety
 when providing connections to threads.</p>
 <p>The size of a connection pool is configurable at creation time, but cannot be
 changed afterwards. The maximum size of a connection pool is limited to 64 connections.</p>
 <dl class="py method">
-<dt id="ConnectionPool.add_connection">
-<code class="sig-name descname">add_connection</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">connection</span></em><span class="sig-paren">)</span><a class="headerlink" href="#ConnectionPool.add_connection" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="ConnectionPool.add_connection">
+<span class="sig-name descname"><span class="pre">add_connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#ConnectionPool.add_connection" title="Permalink to this definition">¶</a></dt>
 <dd><p>Adds a connection object to the connection pool.</p>
 <p>In case that pool doesn’t have a free slot or is not configured a PoolError
 exception will be raised.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="ConnectionPool.close">
-<code class="sig-name descname">close</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ConnectionPool.close" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="ConnectionPool.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ConnectionPool.close" title="Permalink to this definition">¶</a></dt>
 <dd><p>Closes the pool and all connection inside the pool.</p>
 </dd></dl>
 
@@ -73,15 +72,15 @@ exception will be raised.</p>
 <p><span class="versionmodified added">New in version 1.0.1.</span></p>
 </div>
 <dl class="py method">
-<dt id="ConnectionPool.get_connection">
-<code class="sig-name descname">get_connection</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ConnectionPool.get_connection" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="ConnectionPool.get_connection">
+<span class="sig-name descname"><span class="pre">get_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ConnectionPool.get_connection" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a connection from the connection pool or raises a PoolError if no
 connection is available.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="ConnectionPool.set_config">
-<code class="sig-name descname">set_config</code><span class="sig-paren">(</span><em class="sig-param">\*\*kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#ConnectionPool.set_config" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="ConnectionPool.set_config">
+<span class="sig-name descname"><span class="pre">set_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">\*\*kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#ConnectionPool.set_config" title="Permalink to this definition">¶</a></dt>
 <dd><p>Sets the connection configuration for the connection pool. For valid connection
 arguments see <a class="reference internal" href="module.html#mariadb.connect" title="mariadb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">mariadb.connect()</span></code></a> method.</p>
 <div class="admonition note">
@@ -92,20 +91,20 @@ the <a class="reference internal" href="#ConnectionPool.add_connection" title="C
 </dd></dl>
 
 <dl class="py data">
-<dt id="ConnectionPool.max_size">
-<code class="sig-name descname">max_size</code><a class="headerlink" href="#ConnectionPool.max_size" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="ConnectionPool.max_size">
+<span class="sig-name descname"><span class="pre">max_size</span></span><a class="headerlink" href="#ConnectionPool.max_size" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the maximum allowed size of the pool</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="ConnectionPool.pool_size">
-<code class="sig-name descname">pool_size</code><a class="headerlink" href="#ConnectionPool.pool_size" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="ConnectionPool.pool_size">
+<span class="sig-name descname"><span class="pre">pool_size</span></span><a class="headerlink" href="#ConnectionPool.pool_size" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the size of connection pool</p>
 </dd></dl>
 
 <dl class="py data">
-<dt id="ConnectionPool.pool_name">
-<code class="sig-name descname">pool_name</code><a class="headerlink" href="#ConnectionPool.pool_name" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="ConnectionPool.pool_name">
+<span class="sig-name descname"><span class="pre">pool_name</span></span><a class="headerlink" href="#ConnectionPool.pool_name" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the name of the pool.</p>
 </dd></dl>
 
@@ -124,8 +123,8 @@ the <a class="reference internal" href="#ConnectionPool.add_connection" title="C
   <p class="topless"><a href="cursor.html"
                         title="previous chapter">The cursor class</a></p>
   <h4>Next topic</h4>
-  <p class="topless"><a href="extension.html"
-                        title="next chapter">Extensions to the DB API</a></p>
+  <p class="topless"><a href="license.html"
+                        title="next chapter">License</a></p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
@@ -137,7 +136,7 @@ the <a class="reference internal" href="#ConnectionPool.add_connection" title="C
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
     </div>
@@ -157,18 +156,18 @@ the <a class="reference internal" href="#ConnectionPool.add_connection" title="C
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
-          <a href="extension.html" title="Extensions to the DB API"
+          <a href="license.html" title="License"
              >next</a> |</li>
         <li class="right" >
           <a href="cursor.html" title="The cursor class"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The ConnectionPool class</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
-        &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.3.1.
+        &#169; Copyright 2019-2021 MariaDB Corporation and Georg Richter.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
     </div>
   </body>
 </html>

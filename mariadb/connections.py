@@ -20,6 +20,7 @@
 import mariadb
 import socket
 import time
+import mariadb.cursors
 
 from mariadb.constants import STATUS, TPC_STATE, INFO
 
@@ -28,7 +29,14 @@ _DEFAULT_COLLATION = "utf8mb4_general_ci"
 _MAX_TPC_XID_SIZE=64
 
 class Connection(mariadb._mariadb.connection):
-    """ MariaDB Connector/Python Connection Object """
+    """
+    MariaDB Connector/Python Connection Object
+
+    Handles the connection to a MariaDB or MySQL database server.
+    It encapsulates a database session.
+
+    Connections are created using the method mariadb.connect()
+    """
 
     def __init__(self, *args, **kwargs):
         """
@@ -58,12 +66,12 @@ class Connection(mariadb._mariadb.connection):
         super().__init__(*args, **kwargs)
         self.autocommit= autocommit
 
-    def cursor(self, cursorclass=mariadb.Cursor, **kwargs):
+    def cursor(self, cursorclass=mariadb.cursors.Cursor, **kwargs):
         """
         Returns a new cursor object for the current connection.
 
-        If no cursorclass was specified, the default mariadb.Cursor class
-        will be used.
+        If no cursorclass was specified, a cursor with default mariadb.Cursor class
+        will be created.
 
         Optional parameters:
 
@@ -78,7 +86,7 @@ class Connection(mariadb._mariadb.connection):
           and should be avoided due to possible inconsistency.
 
         - cursor_type= CURSOR_TYPE.NONE
-          If cursor_type is set to mariadb.CURSOR_TYPE_READ_ONLY, a cursor is opened for the
+          If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for the
           statement invoked with cursors execute() method.
 
         - prepared= False
@@ -87,11 +95,22 @@ class Connection(mariadb._mariadb.connection):
 
         - binary= False
           Always execute statements in MariaDB client/server binary protocol.
+
+        By default the result will be unbuffered, which means before executing another 
+        statement with the same connection the entire result set must be fetched.
+
+        fetch* methods of the cursor class by default return result set values as a 
+        tuple, unless named_tuple or dictionary was specified. The latter one exists 
+        for compatibility reasons and should be avoided due to possible inconsistency
+        in case two or more fields in a result set have the same name.
+
+        If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
+        the statement invoked with cursors execute() method.
         """
 
         cursor= cursorclass(self, **kwargs)
-        if not isinstance(cursor, mariadb.Cursor):
-            raise mariadb.ProgrammingError("%s is not an instance of mariadb.Cursor" % cursor)
+        if not isinstance(cursor, mariadb._mariadb.cursor):
+            raise mariadb.ProgrammingError("%s is not an instance of mariadb.cursor" % cursor)
         return cursor
 
     def close(self):
@@ -113,8 +132,6 @@ class Connection(mariadb._mariadb.connection):
     def commit(self):
         """
         Commit any pending transaction to the database.
-
-        Note that this function has no effect, when autocommit was set to True.
         """
 
         if self.tpc_state > TPC_STATE.NONE:
@@ -161,21 +178,17 @@ class Connection(mariadb._mariadb.connection):
 
     def select_db(self, new_db):
         """
-        Sets the default database for the current connection.
+        Gets the default database for the current connection.
 
-        The default database can be obtained by .database property.
+        The default database can also be obtained or changed by database attribute.
         """
 
         self.database= new_db
 
     def get_server_version(self):
         """
-        Returns a tuple representing the version of the connected server in"
+        Returns a tuple representing the version of the connected server in
         the following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)
-
-        get_server_version() method exists for compatibility reasons. However the"
-        preferred way to retrieve server version information are the server_version
-        server_version_info connection attributes"
         """
 
         return self.server_version_info
@@ -198,6 +211,12 @@ class Connection(mariadb._mariadb.connection):
         """
         A transaction ID object suitable for passing to the .tpc_*()
         methods of this connection.
+
+        Parameters:
+          - format_id: Format id. If not set default value `0` will be used.
+          - global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.
+          - branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.
+ 
         """
         def __new__(self, format_id, transaction_id, branch_qualifier):
             if not isinstance(format_id, int):
@@ -217,8 +236,7 @@ class Connection(mariadb._mariadb.connection):
     def tpc_begin(self, xid):
         """
         Parameter:
-        xid: xid object which was created by .xid() method of 
-             connection class
+          xid: xid object which was created by .xid() method of connection class
 
         Begins a TPC transaction with the given transaction ID xid.
 
@@ -374,7 +392,7 @@ class Connection(mariadb._mariadb.connection):
 
     def tpc_recover(self):
         """
-        Returns a list of pending transaction IDs suitable for use with\n"
+        Returns a list of pending transaction IDs suitable for use with
         tpc_commit(xid) or .tpc_rollback(xid).
         """
 
@@ -412,7 +430,11 @@ class Connection(mariadb._mariadb.connection):
 
     @property
     def character_set(self):
-        """Client character set."""
+        """
+        Client character set.
+
+        For MariaDB Connector/Python it is always utf8mb4.
+        """
 
         return _DEFAULT_CHARSET
 
@@ -424,17 +446,16 @@ class Connection(mariadb._mariadb.connection):
 
     @property
     def server_status(self):
-        """Return server status flags."""
+        """
+        Return server status flags
+        """
 
         return self._mariadb_get_info(INFO.SERVER_STATUS, int)
 
     @property
     def server_version_info(self):
         """
-        Returns numeric version of connected database server. 
-
-        The form of the version number is
-        VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH"
+        Returns numeric version of connected database server in tuple format. 
         """
 
         version= self.server_version

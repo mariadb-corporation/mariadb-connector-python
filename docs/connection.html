@@ -5,15 +5,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The connection class &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <title>The connection class &#8212; MariaDB Connector/Python 1.1.0-alpha documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
     <script src="_static/doctools.js"></script>
-    <script src="_static/language_data.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +34,7 @@
         <li class="right" >
           <a href="module.html" title="The mariadb module"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>
     </div>  
@@ -48,50 +47,64 @@
   <div class="section" id="the-connection-class">
 <h1>The connection class<a class="headerlink" href="#the-connection-class" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
-<dt id="mariadb.connection">
-<em class="property">class </em><code class="sig-prename descclassname">mariadb.</code><code class="sig-name descname">connection</code><a class="headerlink" href="#mariadb.connection" title="Permalink to this definition">¶</a></dt>
-<dd><p>Handles the connection to a MariaDB or MySQL database server. It encapsulates a database session.</p>
-<p>Connections are created using the method <a class="reference internal" href="module.html#mariadb.connect" title="mariadb.connect"><code class="xref py py-func docutils literal notranslate"><span class="pre">connect()</span></code></a>.</p>
+<dt class="sig sig-object py" id="mariadb.connections.Connection">
+<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.connections.</span></span><span class="sig-name descname"><span class="pre">Connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection" title="Permalink to this definition">¶</a></dt>
+<dd><p>MariaDB Connector/Python Connection Object</p>
+<p>Handles the connection to a MariaDB or MySQL database server.
+It encapsulates a database session.</p>
+<p>Connections are created using the method mariadb.connect()</p>
 </dd></dl>
 
 <div class="section" id="connection-constructors">
 <h2>Connection constructors<a class="headerlink" href="#connection-constructors" title="Permalink to this headline">¶</a></h2>
 <dl class="py method">
-<dt id="cursor">
-<code class="sig-name descname">cursor</code><span class="sig-paren">(</span><em class="sig-param">\*\*kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#cursor" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns a new cursor object using the current connection.</p>
-<p>By default the result will be unbuffered, which means before executing another statement with the same connection the entire result set must be fetched.</p>
-<p>fetch methods of the cursor class by default return result set values as a tuple, unless named_tuple or dictionary was specified. The latter one exists for compatibility reasons and should be avoided due to possible inconsistency in case two or more fields in a result set have the same name.</p>
-<p>If cursor_type is set to mariadb.CURSOR_TYPE_READ_ONLY, a cursor is opened for the statement invoked with cursors execute() method.</p>
-<p>Supported keywords:</p>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.cursor">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></em>, <em class="sig-param"><span class="pre">**kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.cursor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a new cursor object for the current connection.</p>
+<p>If no cursorclass was specified, a cursor with default mariadb.Cursor class
+will be created.</p>
+<p>Optional parameters:</p>
 <ul class="simple">
-<li><p><strong>named_tuple</strong> (bool): When set to <cite>True</cite> results from fetch methods will be returned as named tuple.</p></li>
-<li><p><strong>cursor_type</strong> (type): When set to <cite>CURSOR_TYPE_READ_ONLY</cite>, server side cursor will be used.</p></li>
-<li><p><strong>prefetch_size</strong> (integer): The number of rows prefetched. This option will be ignored, if <em>cursor_type</em> is not <cite>CURSOR_TYPE_READ_ONLY</cite></p></li>
-<li><p><strong>buffered</strong> (bool): When set to <cite>True</cite> the entire result set from a SELECT/SHOW statement will be stored in client memory</p></li>
-<li><p><strong>prepared</strong> (bool): When set to <cite>True</cite> cursor will remain in prepared state after the first <code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code> method was called. Further calls to <em>execute()</em> method will ignore the sql statement.</p></li>
-<li><p><strong>binary</strong> (bool): When set to <cite>True</cite> cursor will be executed using the MariaDB client/server binary protocol.</p></li>
+<li><p>buffered= False
+By default the result will be unbuffered, which means before executing
+another statement with the same connection the entire result set must be fetched.</p></li>
+<li><p>dictionary= False
+Return fetch values as dictionary.</p></li>
+<li><p>named_tuple= False
+Return fetch values as named tuple. This feature exists for compatibility reasons
+and should be avoided due to possible inconsistency.</p></li>
+<li><p>cursor_type= CURSOR_TYPE.NONE
+If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for the
+statement invoked with cursors execute() method.</p></li>
+<li><p>prepared= False
+When set to True cursor will remain in prepared state after the first execute()
+method was called. Further calls to execute() method will ignore the sql statement.</p></li>
+<li><p>binary= False
+Always execute statements in MariaDB client/server binary protocol.</p></li>
 </ul>
-<dl class="field-list simple">
-<dt class="field-odd">Returns</dt>
-<dd class="field-odd"><p>Returns a cursor object or raises an exception if an error occurred.</p>
-</dd>
-</dl>
+<p>By default the result will be unbuffered, which means before executing another 
+statement with the same connection the entire result set must be fetched.</p>
+<p>fetch* methods of the cursor class by default return result set values as a 
+tuple, unless named_tuple or dictionary was specified. The latter one exists 
+for compatibility reasons and should be avoided due to possible inconsistency
+in case two or more fields in a result set have the same name.</p>
+<p>If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
+the statement invoked with cursors execute() method.</p>
 </dd></dl>
 
 <div class="versionadded">
 <p><span class="versionmodified added">New in version 1.0.1.</span></p>
 </div>
 <dl class="py method">
-<dt id="xid">
-<code class="sig-name descname">xid</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">format_id</span></em>, <em class="sig-param"><span class="n">global_transaction_id</span></em>, <em class="sig-param"><span class="n">branch_qualifier</span></em><span class="sig-paren">)</span><a class="headerlink" href="#xid" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns a transaction ID object suitable for passing to the tpc methods of this connection</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>format_id</strong> (<em>integer</em>) – Format id. If not set default value <cite>0</cite> will be used.</p></li>
-<li><p><strong>global_transaction_id</strong> – Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.</p></li>
-<li><p><strong>branch_qualifier</strong> (<em>string</em>) – Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.</p></li>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.xid">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">xid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format_id</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_transaction_id</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">brach_qualifier</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.xid" title="Permalink to this definition">¶</a></dt>
+<dd><p>A transaction ID object suitable for passing to the .tpc_*()
+methods of this connection.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p>format_id: Format id. If not set default value <cite>0</cite> will be used.</p></li>
+<li><p>global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.</p></li>
+<li><p>branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.</p></li>
 </ul>
 </dd>
 </dl>
@@ -100,307 +113,328 @@
 </div>
 <div class="section" id="connection-methods">
 <h2>Connection methods<a class="headerlink" href="#connection-methods" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
 <dl class="py method">
-<dt id="commit">
-<code class="sig-name descname">commit</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#commit" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.begin">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">begin</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.begin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start a new transaction which can be committed by .commit() method,
+or cancelled by .rollback() method.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.commit">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">commit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.commit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Commit any pending transaction to the database.</p>
 </dd></dl>
 
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>This method has no effect, when autocommit was set to True, or the storage engine in use doesn’t support transactions.</p>
-</div>
 <dl class="py method">
-<dt id="change_user">
-<code class="sig-name descname">change_user</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">user</span></em>, <em class="sig-param"><span class="n">password</span></em>, <em class="sig-param"><span class="n">database</span></em><span class="sig-paren">)</span><a class="headerlink" href="#change_user" title="Permalink to this definition">¶</a></dt>
-<dd><p>Changes the <em>user</em> and default <em>database</em> of the current connection.
-In order to successfully change users a valid username and password
-parameters must be provided and that user must have sufficient
-permissions to access the desired database.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>user</strong> (<em>string</em>) – The user name for server authentication</p></li>
-<li><p><strong>password</strong> (<em>string</em>) – The passoword of the user</p></li>
-<li><p><strong>database</strong> (<em>string</em>) – The default database</p></li>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.change_user">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">change_user</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">password</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">database</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.change_user" title="Permalink to this definition">¶</a></dt>
+<dd><p>Changes the user and default database of the current connection</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p>user: user name</p></li>
+<li><p>password: password</p></li>
+<li><p>database: name of default database</p></li>
 </ul>
 </dd>
 </dl>
+<p>In order to successfully change users a valid username and password
+parameters must be provided and that user must have sufficient
+permissions to access the desired database. If for any reason
+authorization fails, the current user authentication will remain.</p>
 <p>If for any reason authorization fails an exception will be raised and the current user authentication will remain.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="close">
-<code class="sig-name descname">close</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#close" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.close">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.close" title="Permalink to this definition">¶</a></dt>
 <dd><p>Close the connection now (rather than whenever .__del__() is called).</p>
 <p>The connection will be unusable from this point forward; an Error
 (or subclass) exception will be raised if any operation is attempted
 with the connection. The same applies to all cursor objects trying to
-use the connection. If the connection was obtained by <em>ConnectionPool</em>,
-the connection will not be closed but returned to the pool.</p>
+use the connection.</p>
+<p>Note that closing a connection without committing the changes first
+will cause an implicit rollback to be performed.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="get_server_version">
-<code class="sig-name descname">get_server_version</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#get_server_version" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns numeric version of connected database server as tuple.
-The form of the tuple is (VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH).</p>
-<p>The get_server_version() method was added for compatibility. New applications should use the connection attribute server_version_info.</p>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.get_server_version">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">get_server_version</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.get_server_version" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a tuple representing the version of the connected server in
+the following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)</p>
 </dd></dl>
 
 <div class="versionadded">
 <p><span class="versionmodified added">New in version 1.0.5.</span></p>
 </div>
 <dl class="py method">
-<dt id="escape_string">
-<code class="sig-name descname">escape_string</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">escape_str</span></em><span class="sig-paren">)</span><a class="headerlink" href="#escape_string" title="Permalink to this definition">¶</a></dt>
-<dd><p>This function is used to create a legal SQL string that you can use in
-an SQL statement. The given string is encoded and returned as an escaped string.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>escape_str</strong> (<em>string</em>) – The string that is to be escaped.</p>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>the escaped string or NULL on error.</p>
-</dd>
-</dl>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.escape_string">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">escape_string</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">escape_str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.escape_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parameters:
+statement: string</p>
+<p>This function is used to create a legal SQL string that you can use in
+an SQL statement. The given string is encoded to an escaped SQL string.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="kill">
-<code class="sig-name descname">kill</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">thread_id</span></em><span class="sig-paren">)</span><a class="headerlink" href="#kill" title="Permalink to this definition">¶</a></dt>
-<dd><p>This function is used to ask the server to terminate a database connection, specified
-by the <em>thread_id</em> parameter.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>thread_id</strong> (<em>integer</em>) – An id which represents a database connection.</p>
-</dd>
-</dl>
-</dd></dl>
-
+<dt class="sig sig-object py" id="mariadb.connections.Connection.kill">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">kill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thread_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.kill" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function is used to ask the server to kill a database connection
+specified by the processid parameter.</p>
+<p>The connection id must be retrieved by SHOW PROCESSLIST sql command.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>A thread_id from other connections can be determined by executing the SQL statement <code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">PROCESSLIST</span></code>
-The thread_id of the current connection the current connection is stored in <a class="reference internal" href="#connection_id" title="connection_id"><code class="xref py py-data docutils literal notranslate"><span class="pre">connection_id</span></code></a> attribute.</p>
+The thread_id of the current connection the current connection is stored in <a class="reference internal" href="#mariadb.connections.Connection.connection_id" title="mariadb.connections.Connection.connection_id"><code class="xref py py-data docutils literal notranslate"><span class="pre">connection_id</span></code></a> attribute.</p>
 </div>
+</dd></dl>
+
 <dl class="py method">
-<dt id="ping">
-<code class="sig-name descname">ping</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#ping" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.ping">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">ping</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.ping" title="Permalink to this definition">¶</a></dt>
 <dd><p>Checks if the connection to the database server is still available.</p>
-</dd></dl>
-
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>If <a class="reference internal" href="#auto_reconnect" title="auto_reconnect"><code class="xref py py-data docutils literal notranslate"><span class="pre">auto_reconnect</span></code></a> was set to True, an attempt will be made to reconnect to the database server in case the connection was lost</p>
+<p>If auto reconnect was set to true, an attempt will be made to reconnect
+to the database server in case the connection
+was lost</p>
 <p>If the connection is not available an InterfaceError will be raised.</p>
-</div>
-<dl class="py method">
-<dt id="reconnect">
-<code class="sig-name descname">reconnect</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#reconnect" title="Permalink to this definition">¶</a></dt>
-<dd><p>Tries to reconnect to a server in case the connection died due to timeout
-or other errors. It uses the same credentials which were specified in
-<code class="xref py py-func docutils literal notranslate"><span class="pre">module.connect()</span></code> method.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="reset">
-<code class="sig-name descname">reset</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#reset" title="Permalink to this definition">¶</a></dt>
-<dd><p>Tries to reconnect to a server in case the connection died due to timeout
+<dt class="sig sig-object py" id="mariadb.connections.Connection.reconnect">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">reconnect</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.reconnect" title="Permalink to this definition">¶</a></dt>
+<dd><p>tries to reconnect to a server in case the connection died due to timeout
 or other errors. It uses the same credentials which were specified in
 connect() method.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="rollback">
-<code class="sig-name descname">rollback</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#rollback" title="Permalink to this definition">¶</a></dt>
-<dd><blockquote>
-<div><p>Causes the database to roll back to the start of any pending transaction</p>
-<p>Closing a connection without committing the changes first will cause an
-implicit rollback to be performed.</p>
-</div></blockquote>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>rollback() will not work as expected if autocommit mode was set to True or the storage engine does not support transactions.</p>
-</div>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.reset">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.reset" title="Permalink to this definition">¶</a></dt>
+<dd><p>Resets the current connection and clears session state and pending
+results. Open cursors will become invalid and cannot be used anymore.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="tpc_begin">
-<code class="sig-name descname">tpc_begin</code><span class="sig-paren">(</span><span class="optional">[</span><em class="sig-param">xid</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#tpc_begin" title="Permalink to this definition">¶</a></dt>
-<dd><p>Begins a TPC transaction with the given transaction ID xid, which
-was created by xid() method.</p>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.rollback">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">rollback</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.rollback" title="Permalink to this definition">¶</a></dt>
+<dd><p>Causes the database to roll back to the start of any pending transaction</p>
+<p>Closing a connection without committing the changes first will cause an
+implicit rollback to be performed.
+Note that rollback() will not work as expected if autocommit mode was set to True
+or the storage engine does not support transactions.”</p>
+</dd></dl>
+
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.select_db">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">select_db</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_db</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.select_db" title="Permalink to this definition">¶</a></dt>
+<dd><p>Gets the default database for the current connection.</p>
+<p>The default database can also be obtained or changed by database attribute.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.show_warnings">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">show_warnings</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.show_warnings" title="Permalink to this definition">¶</a></dt>
+<dd><p>Shows error, warning and note messages from last executed command.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.tpc_begin">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tpc_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xid</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.tpc_begin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parameter:
+xid: xid object which was created by .xid() method of</p>
+<blockquote>
+<div><p>connection class</p>
+</div></blockquote>
+<p>Begins a TPC transaction with the given transaction ID xid.</p>
 <p>This method should be called outside of a transaction
 (i.e. nothing may have executed since the last .commit()
-or .rollback()).</p>
-<p>Furthermore, it is an error to call commit() or rollback() within
+or .rollback()).
+Furthermore, it is an error to call .commit() or .rollback() within
 the TPC transaction. A ProgrammingError is raised, if the application
-calls commit() or rollback() during an active TPC transaction.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>xid</strong> (<em>Dictionary</em>) – A transaction id which was previously created by <a class="reference internal" href="#xid" title="xid"><code class="xref py py-func docutils literal notranslate"><span class="pre">xid()</span></code></a> method.</p>
-</dd>
-</dl>
+calls .commit() or .rollback() during an active TPC transaction.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="tpc_commit">
-<code class="sig-name descname">tpc_commit</code><span class="sig-paren">(</span><span class="optional">[</span><em class="sig-param">xid</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#tpc_commit" title="Permalink to this definition">¶</a></dt>
-<dd><p>When called with no arguments, tpc_commit() commits a TPC transaction
-previously prepared with tpc_prepare().</p>
-<p>If tpc_commit() is called prior to tpc_prepare(), a single phase commit
+<dt class="sig sig-object py" id="mariadb.connections.Connection.tpc_commit">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tpc_commit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.tpc_commit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Optional parameter:”
+xid: xid object which was created by .xid() method of connection class.</p>
+<p>When called with no arguments, .tpc_commit() commits a TPC transaction
+previously prepared with .tpc_prepare().</p>
+<p>If .tpc_commit() is called prior to .tpc_prepare(), a single phase commit
 is performed. A transaction manager may choose to do this if only a
-single resource is participating in the global transaction.</p>
-<p>When called with a transaction ID xid, the database commits the given
+single resource is participating in the global transaction.
+When called with a transaction ID xid, the database commits the given
 transaction. If an invalid transaction ID is provided, a ProgrammingError
 will be raised. This form should be called outside of a transaction, and
-is intended for use in recovery.</p>
+is intended for use in recovery.”</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="tpc_prepare">
-<code class="sig-name descname">tpc_prepare</code><span class="sig-paren">(</span><span class="optional">[</span><em class="sig-param">xid</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#tpc_prepare" title="Permalink to this definition">¶</a></dt>
-<dd><p>Performs the first phase of a transaction started with tpc_begin().</p>
-<p>A ProgrammingError will be raised if this method outside of a TPC
-transaction.</p>
-<p>After calling tpc_prepare(), no statements can be executed until
-<a class="reference internal" href="#tpc_commit" title="tpc_commit"><code class="xref py py-func docutils literal notranslate"><span class="pre">tpc_commit()</span></code></a> or <a class="reference internal" href="#tpc_rollback" title="tpc_rollback"><code class="xref py py-func docutils literal notranslate"><span class="pre">tpc_rollback()</span></code></a> have been called.</p>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.tpc_prepare">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tpc_prepare</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.tpc_prepare" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs the first phase of a transaction started with .tpc_begin().
+A ProgrammingError will be raised if this method was called outside of
+a TPC transaction.</p>
+<p>After calling .tpc_prepare(), no statements can be executed until
+.tpc_commit() or .tpc_rollback() have been called.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="tpc_recover">
-<code class="sig-name descname">tpc_recover</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tpc_recover" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="mariadb.connections.Connection.tpc_recover">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tpc_recover</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.tpc_recover" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a list of pending transaction IDs suitable for use with
-tpc_commit(xid) or tpc_rollback(xid).</p>
+tpc_commit(xid) or .tpc_rollback(xid).</p>
 </dd></dl>
 
 <dl class="py method">
-<dt id="tpc_rollback">
-<code class="sig-name descname">tpc_rollback</code><span class="sig-paren">(</span><span class="optional">[</span><em class="sig-param">xid</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#tpc_rollback" title="Permalink to this definition">¶</a></dt>
-<dd><p>When called with no arguments, tpc_rollback() rolls back a TPC
-transaction. It may be called before or after <a class="reference internal" href="#tpc_prepare" title="tpc_prepare"><code class="xref py py-func docutils literal notranslate"><span class="pre">tpc_prepare()</span></code></a>.</p>
-<p>When called with a transaction ID xid, it rolls back the given
+<dt class="sig sig-object py" id="mariadb.connections.Connection.tpc_rollback">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tpc_rollback</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.tpc_rollback" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>Parameter:</dt><dd><dl class="simple">
+<dt>xid: xid object which was created by .xid() method of connection</dt><dd><p>class</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p>Performs the first phase of a transaction started with .tpc_begin().
+A ProgrammingError will be raised if this method outside of a TPC
 transaction.</p>
+<p>After calling .tpc_prepare(), no statements can be executed until
+.tpc_commit() or .tpc_rollback() have been called.</p>
 </dd></dl>
 
 </div>
 <div class="section" id="connection-attributes">
 <h2>Connection attributes<a class="headerlink" href="#connection-attributes" title="Permalink to this headline">¶</a></h2>
-<dl class="py data">
-<dt id="auto_reconnect">
-<code class="sig-name descname">auto_reconnect</code><a class="headerlink" href="#auto_reconnect" title="Permalink to this definition">¶</a></dt>
-<dd><p>Enable or disable automatic reconnection to the server if the connection
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.auto_reconnect">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">auto_reconnect</span></span><a class="headerlink" href="#mariadb.connections.Connection.auto_reconnect" title="Permalink to this definition">¶</a></dt>
+<dd><p>(read/write)</p>
+<p>Enable or disable automatic reconnection to the server if the connection
 is found to have been lost.</p>
 <p>When enabled, client tries to reconnect to a database server in case
 the connection to a database server died due to timeout or other errors.</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="autocommit">
-<code class="sig-name descname">autocommit</code><a class="headerlink" href="#autocommit" title="Permalink to this definition">¶</a></dt>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.autocommit">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">autocommit</span></span><a class="headerlink" href="#mariadb.connections.Connection.autocommit" title="Permalink to this definition">¶</a></dt>
 <dd><p>Toggles autocommit mode on or off for the current database connection.</p>
 <p>Autocommit mode only affects operations on transactional table types.
-Be aware that <a class="reference internal" href="#rollback" title="rollback"><code class="xref py py-func docutils literal notranslate"><span class="pre">rollback()</span></code></a> will not work, if autocommit mode was switched on.</p>
-<p>By default autocommit mode is set to False.</p>
+Be aware that rollback() will not work, if autocommit mode was switched
+on.</p>
+<p>By default autocommit mode is set to False.”</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="character_set">
-<code class="sig-name descname">character_set</code><a class="headerlink" href="#character_set" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the character set used for the connection</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.character_set">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">character_set</span></span><a class="headerlink" href="#mariadb.connections.Connection.character_set" title="Permalink to this definition">¶</a></dt>
+<dd><p>Client character set.</p>
+<p>For MariaDB Connector/Python it is always utf8mb4.</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="collation">
-<code class="sig-name descname">collation</code><a class="headerlink" href="#collation" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns character set collation used for the connection</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.collation">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">collation</span></span><a class="headerlink" href="#mariadb.connections.Connection.collation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Client character set collation</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="connection_id">
-<code class="sig-name descname">connection_id</code><a class="headerlink" href="#connection_id" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the (thread) id for the current connection.</p>
-<p>If <a class="reference internal" href="#auto_reconnect" title="auto_reconnect"><code class="xref py py-data docutils literal notranslate"><span class="pre">auto_reconnect</span></code></a> was set to True, the id might change if the client reconnects to the database server</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.connection_id">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">connection_id</span></span><a class="headerlink" href="#mariadb.connections.Connection.connection_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>Id of current connection</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="database">
-<code class="sig-name descname">database</code><a class="headerlink" href="#database" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns or sets the default database for the current connection</p>
-<p>If the used database will not change, the preferred way is to specify
-the default database when establishing the connection.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.database">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">database</span></span><a class="headerlink" href="#mariadb.connections.Connection.database" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get default database for connection.</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="server_info">
-<code class="sig-name descname">server_info</code><a class="headerlink" href="#server_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the alphanumeric version of connected database. The numeric version
-can be obtained via server_version() property.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.server_info">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">server_info</span></span><a class="headerlink" href="#mariadb.connections.Connection.server_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Server info</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="server_name">
-<code class="sig-name descname">server_name</code><a class="headerlink" href="#server_name" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns name or IP address of database server</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.server_name">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">server_name</span></span><a class="headerlink" href="#mariadb.connections.Connection.server_name" title="Permalink to this definition">¶</a></dt>
+<dd><p>Name or address of database server</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="server_port">
-<code class="sig-name descname">server_port</code><a class="headerlink" href="#server_port" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the database server TCP/IP port</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.server_port">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">server_port</span></span><a class="headerlink" href="#mariadb.connections.Connection.server_port" title="Permalink to this definition">¶</a></dt>
+<dd><p>Database server TCP/IP port. This value will be 0 in case of a unix socket connection</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="server_version">
-<code class="sig-name descname">server_version</code><a class="headerlink" href="#server_version" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns numeric version of connected database server. The form of the version
-number is VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH</p>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.server_status">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">server_status</span></span><a class="headerlink" href="#mariadb.connections.Connection.server_status" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return server status flags</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="server_version_info">
-<code class="sig-name descname">server_version_info</code><a class="headerlink" href="#server_version_info" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns numeric version of connected database server as tuple.
-The form of the tuple is (VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH)</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.server_version">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">server_version</span></span><a class="headerlink" href="#mariadb.connections.Connection.server_version" title="Permalink to this definition">¶</a></dt>
+<dd><p>Server version in numerical format:</p>
+<p>The form of the version number is VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.server_version_info">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">server_version_info</span></span><a class="headerlink" href="#mariadb.connections.Connection.server_version_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns numeric version of connected database server in tuple format.</p>
 </dd></dl>
 
 <div class="versionadded">
 <p><span class="versionmodified added">New in version 1.0.5.</span></p>
 </div>
-<dl class="py data">
-<dt id="tls_cipher">
-<code class="sig-name descname">tls_cipher</code><a class="headerlink" href="#tls_cipher" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns TLS cipher suite in use by connection</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.tls_cipher">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tls_cipher</span></span><a class="headerlink" href="#mariadb.connections.Connection.tls_cipher" title="Permalink to this definition">¶</a></dt>
+<dd><p>TLS cipher suite used by connection</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="tls_version">
-<code class="sig-name descname">tls_version</code><a class="headerlink" href="#tls_version" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns TLS protocol version used by connection</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.tls_version">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tls_version</span></span><a class="headerlink" href="#mariadb.connections.Connection.tls_version" title="Permalink to this definition">¶</a></dt>
+<dd><p>TLS protocol version used by connection</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="unix_socket">
-<code class="sig-name descname">unix_socket</code><a class="headerlink" href="#unix_socket" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns Unix socket name</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.unix_socket">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">unix_socket</span></span><a class="headerlink" href="#mariadb.connections.Connection.unix_socket" title="Permalink to this definition">¶</a></dt>
+<dd><p>Unix socket name</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="user">
-<code class="sig-name descname">user</code><a class="headerlink" href="#user" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns user name for the current connection</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.user">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">user</span></span><a class="headerlink" href="#mariadb.connections.Connection.user" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the user name for the current connection or empty
+string if it can’t be determined, e.g. when using socket
+authentication.</p>
 </dd></dl>
 
-<dl class="py data">
-<dt id="warnings">
-<code class="sig-name descname">warnings</code><a class="headerlink" href="#warnings" title="Permalink to this definition">¶</a></dt>
-<dd><p>Returns the number of warnings from the last executed statement, or zero
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.warnings">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">warnings</span></span><a class="headerlink" href="#mariadb.connections.Connection.warnings" title="Permalink to this definition">¶</a></dt>
+<dd><p>(read only)</p>
+<p>Returns the number of warnings from the last executed statement, or zero
 if there are no warnings.</p>
 </dd></dl>
 
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>If the sql mode <code class="docutils literal notranslate"><span class="pre">TRADITIONAL</span></code> is enabled an error instead of a warning will be returned. To retrieve warnings the SQL statement <code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">WARNINGS</span></code> has to be used.</p>
-</div>
 </div>
 </div>
 
@@ -438,7 +472,7 @@ if there are no warnings.</p>
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
     </div>
@@ -463,13 +497,13 @@ if there are no warnings.</p>
         <li class="right" >
           <a href="module.html" title="The mariadb module"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
-        &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.3.1.
+        &#169; Copyright 2019-2021 MariaDB Corporation and Georg Richter.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
     </div>
   </body>
 </html>

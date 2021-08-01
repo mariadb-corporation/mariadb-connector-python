@@ -28,15 +28,6 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
-  connection_get_server_version__doc__,
-  "Returns a tuple representing the version of the connected server in\n"
-  "the following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION).\n\n"
-  "get_server_version() method exists for compatibility reasons. However the\n"
-  "preferred way to retrieve server version information are the server_version and\n"
-  "server_version_info connection attributes"
-);
-
-PyDoc_STRVAR(
   connection_close__doc__,
   "close()\n"
   "--\n"
@@ -51,72 +42,18 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
-  connection_commit__doc__,
-  "commit()\n"
-  "--\n"
-  "\n"
-  "Commit any pending transaction to the database.\n\n"
-  "Note that this function has no effect, when autocommit was set to True\n"
-);
-
-PyDoc_STRVAR(
-  connection_cursor__doc__,
-  "cursor(self, buffered=None, dictionary=None, named_tuple=None, cursor_type=mariadb.CURSOR_TYPE_NONE,\n"
-  "       prepared=None, prefetch_rows=1, binary=False)\n"
-  "--\n"
-  "\n"
-  "Returns a new cursor object for the current connection.\n\n"
-  "By default the result will be unbuffered, which means before executing another\n"
-  "statement with the same connection the entire result set must be fetched.\n\n"
-  "fetch methods of the cursor class by default return result set values as a tuple, unless\n"
-  "named_tuple or dictionary was specified. The latter one exists for compatibility reasons\n"
-  "and should be avoided due to possible inconsistency in case two or more fields in a\n"
-  "result sets have the same name.\n\n"
-  "If cursor_type is set to mariadb.CURSOR_TYPE_READ_ONLY, a cursor is opened for the\n"
-  "statement invoked with cursors execute() method."
-  "If binary is set to True, cursor will always be executed using the binary protocol."
-);
-
-PyDoc_STRVAR(
-  connection_tpc_begin__doc__,
-  "tpc_begin(xid)\n"
-  "--\n"
-  "\n"
-  "Parameter:\n"
-  "xid: xid object which was created by .xid()\n\n"
-  "Begins a TPC transaction with the given transaction ID xid.\n\n"
-  "This method should be called outside of a transaction\n"
-  "(i.e. nothing may have executed since the last .commit()\n"
-  "or .rollback()).\n\n"
-  "Furthermore, it is an error to call .commit() or .rollback() within\n"
-  "the TPC transaction. A ProgrammingError is raised, if the application\n"
-  "calls .commit() or .rollback() during an active TPC transaction."
-);
-
-PyDoc_STRVAR(
-  connection_xid__doc__, 
-  "xid(format_id, global_transaction_id, branch_qualifier)\n"
-  "--\n"
-  "\n"
-  "Parameters:\n"
-  "format_id: string xid object which was created by .xid()\n\n"
-  "Returns a transaction ID object suitable for passing to the .tpc_*()\n"
-  "methods of this connection\n"
-);
-
-PyDoc_STRVAR(
   connection_change_user__doc__,
-  "change_user(user, password, database)\n"
+  "change_user(user: str, password: str, database: str)\n"
   "--\n"
   "\n"
+  "Changes the user and default database of the current connection\n\n"
   "Parameters:\n"
-  "user: string\n"
-  "password: string\n"
-  "database: string\n\n"
-  "Changes the user and default database of the current connection.\n"
+  "  - user: user name\n"
+  "  - password: password\n"
+  "  - database: name of default database\n\n"
   "In order to successfully change users a valid username and password\n"
   "parameters must be provided and that user must have sufficient\n"
-  "permissions to access the desired database. If for any reasonßn"
+  "permissions to access the desired database. If for any reason\n"
   "authorization fails, the current user authentication will remain."
 );
 
@@ -150,18 +87,7 @@ PyDoc_STRVAR(
   "an SQL statement. The given string is encoded to an escaped SQL string."
 );
 
-PyDoc_STRVAR(
-  connection_kill__doc__,
-  "kill(connection_id)\n"
-  "--\n"
-  "\n"
-  "Parameters:\n"
-  "connection_id: integer\n\n"
-  "This function is used to ask the server to kill a database connection"
-  "specified by the processid parameter. This value must be retrieved "
-  "by SHOW PROCESSLIST sql command."
-);
-
+/* ok */
 PyDoc_STRVAR(
   connection_ping__doc__, 
   "ping()\n"
@@ -175,32 +101,6 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
-  connection_autocommit__doc__,
-  "(read/write)\n\n"
-  "Toggles autocommit mode on or off for the current database connection.\n\n"
-  "Autocommit mode only affects operations on transactional table types.\n"
-  "Be aware that rollback() will not work, if autocommit mode was switched\n"
-  "on.\n\n"
-  "By default autocommit mode is set to False."
-);
-
-PyDoc_STRVAR(
-  connection_connection_id__doc__,
-  "(read only)\n\n"
-  "returns the (thread) id for the current connection.\n\n"
-  "If reconnect was set to True, the id might change if the client\n"
-  "reconnects to the database server"
-);
-
-PyDoc_STRVAR(
-  connection_database__doc__,
-  "(read/write)\n\n"
-  "Returns or sets the default database for the current connection\n\n"
-  "If the used database will not change, the preferred way is to specify\n"
-  "the default database in connect() method."
-);
-
-PyDoc_STRVAR(
   connection_auto_reconnect__doc__,
   "(read/write)\n\n"
   "Enable or disable automatic reconnection to the server if the connection\n"
@@ -210,23 +110,8 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
-  connection_user__doc__,
-  "(read only)\n\n"
-  "Returns the user name for the current connection."
-);
-
-PyDoc_STRVAR(
   connection_warnings__doc__,
   "(read only)\n\n"
   "Returns the number of warnings from the last executed statement, or zero\n"
   "if there are no warnings.\n\n"
-  "If SQL_MODE TRADITIONAL is enabled an error instead of a warning will be\n"
-  "returned. To retrieve warnings use the cursor method execute(\"SHOW WARNINGS\").\n"
-);
-
-PyDoc_STRVAR(
-  connection_server_info__doc__,
-  "(read only)\n\n"
-  "Returns the alphanumeric version of connected database. The numeric version\n"
-  "can be obtained with server_version property."
 );

@@ -29,40 +29,43 @@ PyDoc_STRVAR(
 
 PyDoc_STRVAR(
   cursor_description__doc__,
-  "(read only)\n\n"
-  "This read-only attribute is a sequence of 8-item sequences.\n"
-  "Each of these sequences contains information describing one result column"
+  "This read-only attribute is a sequence of 8-item sequences\n"
+  "Each of these sequences contains information describing one result column:\n\n"
+  "- name\n"
+  "- type_code\n"
+  "- display_size\n"
+  "- internal_size\n"
+  "- precision\n"
+  "- scale\n"
+  "- null_ok\n"
+  "- field_flags\n\n"
+  "This attribute will be None for operations that do not return rows or if the cursor has\n"
+  "not had an operation invoked via the .execute*() method yet."
 );
 
 PyDoc_STRVAR(
   cursor_rowcount__doc__,
-  "(read only)\n\n"
   "This read-only attribute specifies the number of rows that the last\n"
   "execute*() produced (for DQL statements like SELECT) or affected\n"
   "(for DML statements like UPDATE or INSERT).\n"
   "The return value is -1 in case no .execute*() has been performed\n"
   "on the cursor or the rowcount of the last operation  cannot be\n"
-  "determined by the interface."
+  "determined by the interface.\n"
 );
 
 PyDoc_STRVAR(
   cursor_warnings__doc__,
-  "(read only)\n\n"
   "Returns the number of warnings from the last executed statement, or zero\n"
   "if there are no warnings.\n\n"
-  "If SQL_MODE TRADITIONAL is enabled an error instead of a warning will be\n"
-  "returned. To retrieve warnings use the cursor method execute(\"SHOW WARNINGS\").\n"
 );
 
 PyDoc_STRVAR(
   cursor_closed__doc__,
-  "(read only)\n\n"
   "Indicates if the cursor is closed and can't be reused"
 );
 
 PyDoc_STRVAR(
   cursor_buffered__doc__,
-  "(read/write)\n\n"
   "When True all result sets are immediately transferred and the connection\n"
   "between client and server is no longer blocked. Default value is False."
 );
@@ -80,103 +83,11 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
-  cursor_execute__doc__,
-  "execute(statement [, params])\n"
-  "--\n"
-  "\n"
-  "Parameters:\n"
-  "statement: string\n"
-  "params: tuple\n\n"
-  "parameters may be provided as sequence or mapping and will be bound\n"
-  "to variables in the operation. Variables are specified as question\n"
-  "marks (paramstyle='qmark'), however for compatibility reasons MariaDB\n"
-  "Connector/Python also supports the 'format' and 'pyformat' paramstyles\n"
-  "with the restriction, that different paramstyles can't be mixed within.\n\n"
-  "a statement\n"
-  "A reference to the operation will be retained by the cursor.\n"
-  "If the cursor was created with attribute prepared=True the statement\n"
-  "string for following execute operations will be ignored:\n"
-  "This is most effective for algorithms where the same operation is used,\n"
-  "but different parameters are bound to it (many times)."
-);
-
-PyDoc_STRVAR(
-  cursor_executemany__doc__,
-  "executemany(statement, params)\n"
-  "--\n"
-  "\n"
-  "Parameters:\n"
-  "statement: string\n"
-  "params: list of tuples\n\n"
-  "Exactly behaves like .execute() but accepts a list of tuples, where each\n"
-  "tuple represents data of a row within a table.\n"
-  ".executemany() only supports DML (insert, update, delete) statements.\n\n"
-  "The following example will insert 3 rows:\n\n"
-  "data= [\n"
-  "   (1, 'Michael', 'Widenius')\n"
-  "   (2, 'Diego', 'Dupin')\n"
-  "   (3, 'Lawrin', 'Novitsky')\n"
-  "    ]\n"
-  "cursor.execute(\"INSERT INTO colleagues VALUES (?, ?, ?\", data)\n"
-);
-
-PyDoc_STRVAR(
-  cursor_fetchall__doc__,
-  "fetchall()\n"
-  "--\n"
-  "\n"
-  "Fetches all rows of a pending result set and returns a list of tuples.\n"
-);
-
-PyDoc_STRVAR(
-  cursor_callproc__doc__,
-  "callproc(procedure_name, args=())\n"
-  "--\n"
-  "\n"
-  "Executes a stored procedure. The args sequence must contain an entry for\n"
-  "each parameter the procedure expects.\n"
-  "Input/Output or Output parameters have to be retrieved by .fetch methods,\n"
-  "the .sp_outparams attribute indicates if the result set contains output\n"
-  "parameters\n\n"
-  "Example:\n\n"
-  ">>>cursor.execute(\"CREATE PROCEDURE p1(IN i1 VAR  CHAR(20), OUT o2 VARCHAR(40))\"\n"
-  "                \"BEGIN\"\n"
-  "                \"  SELECT 'hello'\"\n"
-  "                \"  o2:= 'test'\"\n"
-  "                \"END\")\n"
-  ">>>cursor.callproc('p1', ('foo', 0))\n"
-  ">>> cursor.sp_outparams\n"
-  "False\n"
-  ">>> cursor.fetchone()\n"
-  "('hello',)\n"
-  ">>> cursor.nextset()\n"
-  "True\n"
-  ">>> cursor.sp_outparams\n"
-  "True\n"
-  ">>> cursor.fetchone()\n"
-  "('test',)"
-);
-
-PyDoc_STRVAR(
   cursor_fetchone__doc__,
   "fetchone()\n"
   "--\n"
   "\n"
   "Fetches next row of a pending result set and returns a tuple.\n"
-);
-
-PyDoc_STRVAR(
-  cursor_fetchmany__doc__,
-  "fetchmany(size)\n"
-  "--\n"
-  "\n"
-  "Parameter:\n"
-  "size: integer\n"
-  "Fetch the next set of rows of a query result, returning a list of tuples\n"
-  "An empty list is returned when no more rows are available.\n\n"
-  "The number of rows to fetch per call is specified by the size parameter.\n"
-  "If it is not given, the cursor's arraysize determines the number of\n"
-  "rows to be fetched."
 );
 
 PyDoc_STRVAR(
@@ -197,48 +108,12 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
-  cursor_setinputsizes__doc__,
-  "setinputsizes()\n"
-  "--\n"
-  "\n"
-  "Required by PEP-249. Does nothing in MariaDB Connector/Python"
-);
-
-PyDoc_STRVAR(
-  cursor_setoutputsize__doc__,
-  "setoutputsize()\n"
-  "--\n"
-  "\n"
-  "Required by PEP-249. Does nothing in MariaDB Connector/Python"
-);
-
-PyDoc_STRVAR(
   cursor_next__doc__,
   "next()\n"
   "--\n"
   "\n"
   "Return the next row from the currently executing SQL statement\n"
   "using the same semantics as .fetchone()."
-);
-
-PyDoc_STRVAR(
-  cursor_scroll__doc__,
-  "scroll(value, mode=)\n"
-  "--\n"
-  "\n"
-  "Parameters:\n"
-  "value: integer\n"
-  "mode: 'relative' (default) or 'absolute'\n\n"
-  "Scroll the cursor in the result set to a new position according to mode.\n\n"
-  "If mode is relative (default), value is taken as offset to the current\n"
-  "position in the result set, if set to absolute, value states an absolute\n"
-  "target position."
-);
-
-PyDoc_STRVAR(
-  cursor_connection__doc__,
-  "(read only)\n\n"
-  "Reference to the connection object on which the cursor was created"
 );
 
 PyDoc_STRVAR(

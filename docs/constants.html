@@ -1,0 +1,575 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Constants &#8212; MariaDB Connector/Python 1.1.0-alpha documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css" />
+    
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="License" href="license.html" />
+    <link rel="prev" title="The ConnectionPool class" href="pool.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="license.html" title="License"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="pool.html" title="The ConnectionPool class"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Constants</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="constants">
+<h1>Constants<a class="headerlink" href="#constants" title="Permalink to this headline">¶</a></h1>
+<blockquote>
+<div><p>Constants are declared in mariadb.constants module.</p>
+<p>For using constants of various types they have to be imported first:</p>
+</div></blockquote>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
+</pre></div>
+</div>
+<div class="section" id="command">
+<h2>COMMAND<a class="headerlink" href="#command" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0: </span>COMMAND constants are for internal use only.</p>
+</div>
+</div>
+<div class="section" id="client">
+<h2>CLIENT<a class="headerlink" href="#client" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0: </span>For internal use only.</p>
+<p>CLIENT constants are used to check the capabilities of connected database server.</p>
+</div>
+</div>
+<div class="section" id="cursor">
+<h2>CURSOR<a class="headerlink" href="#cursor" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0: </span>Cursor constants are used for server side cursors.</p>
+</div>
+<dl class="py data">
+<dt class="sig sig-object py" id="CURSOR.NONE">
+<span class="sig-prename descclassname"><span class="pre">CURSOR.</span></span><span class="sig-name descname"><span class="pre">NONE</span></span><a class="headerlink" href="#CURSOR.NONE" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the default setting (no cursor)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="CURSOR.READ_ONLY">
+<span class="sig-prename descclassname"><span class="pre">CURSOR.</span></span><span class="sig-name descname"><span class="pre">READ_ONLY</span></span><a class="headerlink" href="#CURSOR.READ_ONLY" title="Permalink to this definition">¶</a></dt>
+<dd><p>Will create a server side read only cursor. The cursor is a forward cursor, which
+means it is not possible to scroll back.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="field-flag">
+<h2>FIELD_FLAG<a class="headerlink" href="#field-flag" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<p>These constants represent the various field flags. As an addition
+to the DBAPI 2.0 standard (PEP-249) these flags are returned as
+8th element of the cursor description attribute.</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.NOT_NULL">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">NOT_NULL</span></span><a class="headerlink" href="#FIELD_FLAG.NOT_NULL" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is defined as not NULL</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.PRIMARY_KEY">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">PRIMARY_KEY</span></span><a class="headerlink" href="#FIELD_FLAG.PRIMARY_KEY" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is (part of) a primary key</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.UNIQUE_KEY">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">UNIQUE_KEY</span></span><a class="headerlink" href="#FIELD_FLAG.UNIQUE_KEY" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is (part of) a unique key</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.MULTIPLE_KEY">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">MULTIPLE_KEY</span></span><a class="headerlink" href="#FIELD_FLAG.MULTIPLE_KEY" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is (part of) a key</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.BLOB">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">BLOB</span></span><a class="headerlink" href="#FIELD_FLAG.BLOB" title="Permalink to this definition">¶</a></dt>
+<dd><p>column contains a binary object</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.UNSIGNED">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">UNSIGNED</span></span><a class="headerlink" href="#FIELD_FLAG.UNSIGNED" title="Permalink to this definition">¶</a></dt>
+<dd><p>numeric column is defined as unsigned</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.ZEROFILL">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">ZEROFILL</span></span><a class="headerlink" href="#FIELD_FLAG.ZEROFILL" title="Permalink to this definition">¶</a></dt>
+<dd><p>column has zerofill attribute</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.BINARY">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">BINARY</span></span><a class="headerlink" href="#FIELD_FLAG.BINARY" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is a binary</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.ENUM">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">ENUM</span></span><a class="headerlink" href="#FIELD_FLAG.ENUM" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is defined as enum</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.AUTO_INCREMENT">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">AUTO_INCREMENT</span></span><a class="headerlink" href="#FIELD_FLAG.AUTO_INCREMENT" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is an auto_increment column</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.TIMESTAMP">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">TIMESTAMP</span></span><a class="headerlink" href="#FIELD_FLAG.TIMESTAMP" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is defined as time stamp</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.SET">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">SET</span></span><a class="headerlink" href="#FIELD_FLAG.SET" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is defined as SET</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.NO_DEFAULT">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">NO_DEFAULT</span></span><a class="headerlink" href="#FIELD_FLAG.NO_DEFAULT" title="Permalink to this definition">¶</a></dt>
+<dd><p>column hasn’t a default value</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.ON_UPDATE_NOW">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">ON_UPDATE_NOW</span></span><a class="headerlink" href="#FIELD_FLAG.ON_UPDATE_NOW" title="Permalink to this definition">¶</a></dt>
+<dd><p>column will be set to current timestamp on UPDATE</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.NUMERIC">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">NUMERIC</span></span><a class="headerlink" href="#FIELD_FLAG.NUMERIC" title="Permalink to this definition">¶</a></dt>
+<dd><p>column contains numeric value</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_FLAG.PART_OF_KEY">
+<span class="sig-prename descclassname"><span class="pre">FIELD_FLAG.</span></span><span class="sig-name descname"><span class="pre">PART_OF_KEY</span></span><a class="headerlink" href="#FIELD_FLAG.PART_OF_KEY" title="Permalink to this definition">¶</a></dt>
+<dd><p>column is part of a key</p>
+</dd></dl>
+
+</div>
+<div class="section" id="field-types">
+<h2>FIELD_TYPES<a class="headerlink" href="#field-types" title="Permalink to this headline">¶</a></h2>
+<p>These constants represent the various field types. The field type
+is returned as 2nd element of cursor description attribute.</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.TINY">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">TINY</span></span><a class="headerlink" href="#FIELD_TYPE.TINY" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is TINYINT  (1-byte integer)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.SHORT">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">SHORT</span></span><a class="headerlink" href="#FIELD_TYPE.SHORT" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is SMALLINT (2-byte integer)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.LONG">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">LONG</span></span><a class="headerlink" href="#FIELD_TYPE.LONG" title="Permalink to this definition">¶</a></dt>
+<dd><p>column tyoe is INT (4-byte integer)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.FLOAT">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">FLOAT</span></span><a class="headerlink" href="#FIELD_TYPE.FLOAT" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is FLOAT (4-byte single precision)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.DOUBLE">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">DOUBLE</span></span><a class="headerlink" href="#FIELD_TYPE.DOUBLE" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is DOUBLE (8-byte double precision)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.NULL">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">NULL</span></span><a class="headerlink" href="#FIELD_TYPE.NULL" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is NULL</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.TIMESTAMP">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">TIMESTAMP</span></span><a class="headerlink" href="#FIELD_TYPE.TIMESTAMP" title="Permalink to this definition">¶</a></dt>
+<dd><p>column tyoe is TIMESTAMP</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.LONGLONG">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">LONGLONG</span></span><a class="headerlink" href="#FIELD_TYPE.LONGLONG" title="Permalink to this definition">¶</a></dt>
+<dd><p>column tyoe is BIGINT (8-byte Integer)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.INT24">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">INT24</span></span><a class="headerlink" href="#FIELD_TYPE.INT24" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is MEDIUMINT (3-byte Integer)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.DATE">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">DATE</span></span><a class="headerlink" href="#FIELD_TYPE.DATE" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is DATE</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.TIME">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">TIME</span></span><a class="headerlink" href="#FIELD_TYPE.TIME" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is TIME</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.DATETIME">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">DATETIME</span></span><a class="headerlink" href="#FIELD_TYPE.DATETIME" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is YEAR</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.YEAR">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">YEAR</span></span><a class="headerlink" href="#FIELD_TYPE.YEAR" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.VARCHAR">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">VARCHAR</span></span><a class="headerlink" href="#FIELD_TYPE.VARCHAR" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is YEAR</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.BIT">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">BIT</span></span><a class="headerlink" href="#FIELD_TYPE.BIT" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is BIT</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.JSON">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">JSON</span></span><a class="headerlink" href="#FIELD_TYPE.JSON" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is JSON</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.NEWDECIMAL">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">NEWDECIMAL</span></span><a class="headerlink" href="#FIELD_TYPE.NEWDECIMAL" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is DECIMAL</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.ENUM">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">ENUM</span></span><a class="headerlink" href="#FIELD_TYPE.ENUM" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is ENUM</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.SET">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">SET</span></span><a class="headerlink" href="#FIELD_TYPE.SET" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is SET</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.TINY_BLOB">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">TINY_BLOB</span></span><a class="headerlink" href="#FIELD_TYPE.TINY_BLOB" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is TINYBLOB (max. length of 255 bytes)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.MEDIUM_BLOB">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">MEDIUM_BLOB</span></span><a class="headerlink" href="#FIELD_TYPE.MEDIUM_BLOB" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is MEDIUMBLOB (max. length of 16,777,215 bytes)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.LONG_BLOB">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">LONG_BLOB</span></span><a class="headerlink" href="#FIELD_TYPE.LONG_BLOB" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is LONGBLOB (max. length 4GB bytes)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.BLOB">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">BLOB</span></span><a class="headerlink" href="#FIELD_TYPE.BLOB" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is BLOB (max. length of 65.535 bytes)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.VAR_STRING">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">VAR_STRING</span></span><a class="headerlink" href="#FIELD_TYPE.VAR_STRING" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is VARCHAR (variable length)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.STRING">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">STRING</span></span><a class="headerlink" href="#FIELD_TYPE.STRING" title="Permalink to this definition">¶</a></dt>
+<dd><p>column tyoe is CHAR (fixed length)</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="FIELD_TYPE.GEOMETRY">
+<span class="sig-prename descclassname"><span class="pre">FIELD_TYPE.</span></span><span class="sig-name descname"><span class="pre">GEOMETRY</span></span><a class="headerlink" href="#FIELD_TYPE.GEOMETRY" title="Permalink to this definition">¶</a></dt>
+<dd><p>column type is GEOMETRY</p>
+</dd></dl>
+
+</div>
+<div class="section" id="indicators">
+<h2>INDICATORS<a class="headerlink" href="#indicators" title="Permalink to this headline">¶</a></h2>
+<p>Indicator values are used in executemany() method of cursor class to
+indicate special values when connected to a MariaDB server 10.2 or newer.</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="INDICATOR.NULL">
+<span class="sig-prename descclassname"><span class="pre">INDICATOR.</span></span><span class="sig-name descname"><span class="pre">NULL</span></span><a class="headerlink" href="#INDICATOR.NULL" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>indicates a NULL value</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="INDICATOR.DEFAULT">
+<span class="sig-prename descclassname"><span class="pre">INDICATOR.</span></span><span class="sig-name descname"><span class="pre">DEFAULT</span></span><a class="headerlink" href="#INDICATOR.DEFAULT" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>indicates to use default value of column</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="INDICATOR.IGNORE">
+<span class="sig-prename descclassname"><span class="pre">INDICATOR.</span></span><span class="sig-name descname"><span class="pre">IGNORE</span></span><a class="headerlink" href="#INDICATOR.IGNORE" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>indicates to ignore value for column for UPDATE statements.
+If set, the column will not be updated.</p>
+<dl class="py data">
+<dt class="sig sig-object py" id="INDICATOR.IGNORE_ROW">
+<span class="sig-prename descclassname"><span class="pre">INDICATOR.</span></span><span class="sig-name descname"><span class="pre">IGNORE_ROW</span></span><a class="headerlink" href="#INDICATOR.IGNORE_ROW" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>indicates not to update the entire row.</p>
+</div>
+<div class="section" id="info">
+<h2>INFO<a class="headerlink" href="#info" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<p>For internal use only</p>
+</div>
+<div class="section" id="tpc-state">
+<h2>TPC_STATE<a class="headerlink" href="#tpc-state" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<p>For internal use only</p>
+</div>
+<div class="section" id="status">
+<h2>STATUS<a class="headerlink" href="#status" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<p>The STATUS constants are used to check the server status of
+the current connection.</p>
+<blockquote>
+<div><p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cursor</span><span class="o">.</span><span class="n">callproc</span><span class="p">(</span><span class="s2">&quot;my_storedprocedure&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="s2">&quot;foo&quot;</span><span class="p">))</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="n">connection</span><span class="o">.</span><span class="n">server_status</span> <span class="o">&amp;</span> <span class="n">SP_OUTPARAMS</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;retrieving output params from store procedure&quot;</span><span class="p">)</span>
+    <span class="o">...</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;retrieving data from stored procedure&quot;</span><span class="p">)</span>
+    <span class="o">....</span>
+</pre></div>
+</div>
+</div></blockquote>
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.IN_TRANS">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">IN_TRANS</span></span><a class="headerlink" href="#STATUS.IN_TRANS" title="Permalink to this definition">¶</a></dt>
+<dd><p>Pending transaction</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.AUTOCOMMIT">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">AUTOCOMMIT</span></span><a class="headerlink" href="#STATUS.AUTOCOMMIT" title="Permalink to this definition">¶</a></dt>
+<dd><p>Server operates in autocommit mode</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.MORE_RESULTS_EXIST">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">MORE_RESULTS_EXIST</span></span><a class="headerlink" href="#STATUS.MORE_RESULTS_EXIST" title="Permalink to this definition">¶</a></dt>
+<dd><p>The result from last executed statement contained two or more result
+sets which can be retrieved by cursors nextset() method.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.QUERY_NO_GOOD_INDEX_USED">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">QUERY_NO_GOOD_INDEX_USED</span></span><a class="headerlink" href="#STATUS.QUERY_NO_GOOD_INDEX_USED" title="Permalink to this definition">¶</a></dt>
+<dd><p>The last executed statement didn’t use a good index.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.QUERY_NO_INDEX_USED">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">QUERY_NO_INDEX_USED</span></span><a class="headerlink" href="#STATUS.QUERY_NO_INDEX_USED" title="Permalink to this definition">¶</a></dt>
+<dd><p>The last executed statement didn’t use an index.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.CURSOR_EXISTS">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">CURSOR_EXISTS</span></span><a class="headerlink" href="#STATUS.CURSOR_EXISTS" title="Permalink to this definition">¶</a></dt>
+<dd><p>The last executed statement opened a server side cursor.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.LAST_ROW_SENT">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">LAST_ROW_SENT</span></span><a class="headerlink" href="#STATUS.LAST_ROW_SENT" title="Permalink to this definition">¶</a></dt>
+<dd><p>For server side cursors this flag indicates end of a result set.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.DB_DROPPED">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">DB_DROPPED</span></span><a class="headerlink" href="#STATUS.DB_DROPPED" title="Permalink to this definition">¶</a></dt>
+<dd><p>The current database in use was dropped and there is no default
+database for the connection anymore.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.NO_BACKSLASH_ESCAPES">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">NO_BACKSLASH_ESCAPES</span></span><a class="headerlink" href="#STATUS.NO_BACKSLASH_ESCAPES" title="Permalink to this definition">¶</a></dt>
+<dd><p>Indicates that SQL mode NO_BACKSLASH_ESCAPE is active, which means
+that the backslash character ‘' becomes an ordinary character.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.QUERY_WAS_SLOW">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">QUERY_WAS_SLOW</span></span><a class="headerlink" href="#STATUS.QUERY_WAS_SLOW" title="Permalink to this definition">¶</a></dt>
+<dd><p>The previously executed statement was slow (and needs to be optimized).</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.PS_OUT_PARAMS">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">PS_OUT_PARAMS</span></span><a class="headerlink" href="#STATUS.PS_OUT_PARAMS" title="Permalink to this definition">¶</a></dt>
+<dd><p>The current result set contains output parameters of a stored procedure.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.SESSION_STATE_CHANGED">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">SESSION_STATE_CHANGED</span></span><a class="headerlink" href="#STATUS.SESSION_STATE_CHANGED" title="Permalink to this definition">¶</a></dt>
+<dd><p>The session status has been changed.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="STATUS.ANSI_QUOTES">
+<span class="sig-prename descclassname"><span class="pre">STATUS.</span></span><span class="sig-name descname"><span class="pre">ANSI_QUOTES</span></span><a class="headerlink" href="#STATUS.ANSI_QUOTES" title="Permalink to this definition">¶</a></dt>
+<dd><p>SQL mode ANSI_QUOTES is active,</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Constants</a><ul>
+<li><a class="reference internal" href="#command">COMMAND</a></li>
+<li><a class="reference internal" href="#client">CLIENT</a></li>
+<li><a class="reference internal" href="#cursor">CURSOR</a></li>
+<li><a class="reference internal" href="#field-flag">FIELD_FLAG</a></li>
+<li><a class="reference internal" href="#field-types">FIELD_TYPES</a></li>
+<li><a class="reference internal" href="#indicators">INDICATORS</a></li>
+<li><a class="reference internal" href="#info">INFO</a></li>
+<li><a class="reference internal" href="#tpc-state">TPC_STATE</a></li>
+<li><a class="reference internal" href="#status">STATUS</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="pool.html"
+                        title="previous chapter">The ConnectionPool class</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="license.html"
+                        title="next chapter">License</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/constants.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="license.html" title="License"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="pool.html" title="The ConnectionPool class"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Constants</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019-2021 MariaDB Corporation and Georg Richter.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+    </div>
+  </body>
+</html>

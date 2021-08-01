@@ -20,7 +20,7 @@ client library for client server communication.
    connection
    cursor
    pool
-   extension
+   constants 
    license
    release
 

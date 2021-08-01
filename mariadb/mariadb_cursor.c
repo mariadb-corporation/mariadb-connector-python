@@ -97,13 +97,10 @@ strncpy((a)->statement, (s), (l));\
 
 static char *mariadb_named_tuple_name= "mariadb.Row";
 static char *mariadb_named_tuple_desc= "Named tupled row";
-static PyObject *Mariadb_no_operation(MrdbCursor *,
-        PyObject *);
 static PyObject *Mariadb_row_count(MrdbCursor *self);
 static PyObject *Mariadb_row_number(MrdbCursor *self);
 static PyObject *MrdbCursor_warnings(MrdbCursor *self);
 static PyObject *MrdbCursor_closed(MrdbCursor *self);
-static PyObject *MrdbCursor_sp_outparams(MrdbCursor *self);
 
 
 static PyGetSetDef MrdbCursor_sets[]=
@@ -118,8 +115,6 @@ static PyGetSetDef MrdbCursor_sets[]=
         cursor_closed__doc__, NULL},
     {"rownumber", (getter)Mariadb_row_number, NULL,
         cursor_rownumber__doc__, NULL},
-    {"sp_outparams", (getter)MrdbCursor_sp_outparams, NULL,
-        cursor_sp_outparam__doc__, NULL},
     {NULL}
 };
 
@@ -135,12 +130,6 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"_nextset", (PyCFunction)MrdbCursor_nextset,
         METH_NOARGS,
         cursor_nextset__doc__},
-    {"setinputsizes", (PyCFunction)Mariadb_no_operation,
-        METH_VARARGS,
-        cursor_setinputsizes__doc__},
-    {"setoutputsize", (PyCFunction)Mariadb_no_operation,
-        METH_VARARGS,
-        cursor_setoutputsize__doc__},
     {"next", (PyCFunction)MrdbCursor_fetchone,
         METH_NOARGS,
         cursor_next__doc__},
@@ -148,7 +137,6 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"_seek", (PyCFunction)MrdbCursor_seek,
         METH_VARARGS,
         NULL},
-    /* internal helper functions */
     {"_initresult", (PyCFunction)MrdbCursor_InitResultSet,
         METH_NOARGS,
         NULL},
@@ -173,15 +161,6 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"_readresponse", (PyCFunction)MrdbCursor_readresponse,
         METH_NOARGS,
          NULL},
-    {"_execute_text", (PyCFunction)MrdbCursor_execute_text,
-        METH_VARARGS,
-        NULL},
-    {"_execute_binary", (PyCFunction)MrdbCursor_execute_binary,
-        METH_NOARGS,
-        NULL},
-    {"_execute_bulk", (PyCFunction)MrdbCursor_execute_bulk,
-        METH_NOARGS,
-        NULL},
     {"_clear_result", (PyCFunction)MrdbCursor_clear_result,
         METH_NOARGS,
         NULL},
@@ -406,16 +385,6 @@ PyTypeObject MrdbCursor_Type =
     0, /* (PyObject *) tp_mro method resolution order */
     0, /* (PyObject *) tp_defined */
 };
-
-/* {{{ Mariadb_no_operation
-   This function is a stub and just returns Py_None
- */
-static PyObject *Mariadb_no_operation(MrdbCursor *self,
-        PyObject *args)
-{
-    Py_RETURN_NONE;
-}
-/* }}} */
 
 void MrdbCursor_clearparseinfo(MrdbParseInfo *parseinfo)
 {
@@ -975,22 +944,6 @@ static PyObject
 {
     if (self->is_closed || self->connection->mysql == NULL)
         Py_RETURN_TRUE;
-    Py_RETURN_FALSE;
-}
-
-static PyObject *
-MrdbCursor_sp_outparams(MrdbCursor *self)
-{
-    if (!self->is_closed && self->stmt && 
-            self->stmt->mysql)
-    {
-        uint32_t server_status;
-        mariadb_get_infov(self->stmt->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
-        if (server_status & SERVER_PS_OUT_PARAMS)
-        {
-            Py_RETURN_TRUE;
-        }
-    }
     Py_RETURN_FALSE;
 }
 

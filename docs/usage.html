@@ -5,15 +5,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Basic usage &#8212; MariaDB Connector/Python 1.0.0 documentation</title>
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-    <link rel="stylesheet" href="_static/classic.css" type="text/css" />
+    <title>Basic usage &#8212; MariaDB Connector/Python 1.1.0-alpha documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
     <script src="_static/doctools.js"></script>
-    <script src="_static/language_data.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +34,7 @@
         <li class="right" >
           <a href="install.html" title="Installation"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Basic usage</a></li> 
       </ul>
     </div>  
@@ -52,63 +51,36 @@
 <p>The basic usage of MariaDB Connector/Python is similar to other database drivers which
 implement DB API 2.0 (PEP-249).</p>
 <p>Below is a simple example of a typical use of MariaDB Connector/Python</p>
-<div class="highlight-python notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
- 2
- 3
- 4
- 5
- 6
- 7
- 8
- 9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="c1"># Import MariaDB Connector/Python module</span>
-<span class="kn">import</span> <span class="nn">mariadb</span>
-
-<span class="c1"># Establish a connection</span>
-<span class="n">connection</span><span class="o">=</span> <span class="n">mariadb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="s2">&quot;myuser&quot;</span><span class="p">,</span> <span class="n">database</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s2">&quot;localhost&quot;</span><span class="p">)</span>
-
-<span class="n">cursor</span><span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
-
-<span class="c1"># Create a database table</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;DROP TABLE IF EXISTS mytest&quot;</span><span class="p">)</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;CREATE TABLE mytest(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,&quot;</span>
-               <span class="s2">&quot;first_name VARCHAR(100), last_name VARCHAR(100))&quot;</span><span class="p">)</span>
-
-
-<span class="c1"># Populate table with some data</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;INSERT INTO mytest(first_name, last_name) VALUES (?,?)&quot;</span><span class="p">,</span>
-               <span class="p">(</span><span class="s2">&quot;Robert&quot;</span><span class="p">,</span> <span class="s2">&quot;Redford&quot;</span><span class="p">))</span>
-
-<span class="c1"># retrieve data</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT id, first_name, last_name FROM mytest&quot;</span><span class="p">)</span>
-
-<span class="c1"># print content</span>
-<span class="n">row</span><span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="o">*</span><span class="n">row</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
-
-<span class="c1"># free resources</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
-<span class="n">connection</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="c1"># Import MariaDB Connector/Python module</span>
+<span class="linenos"> 2</span><span class="kn">import</span> <span class="nn">mariadb</span>
+<span class="linenos"> 3</span>
+<span class="linenos"> 4</span><span class="c1"># Establish a connection</span>
+<span class="linenos"> 5</span><span class="n">connection</span><span class="o">=</span> <span class="n">mariadb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="s2">&quot;myuser&quot;</span><span class="p">,</span> <span class="n">database</span><span class="o">=</span><span class="s2">&quot;test&quot;</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s2">&quot;localhost&quot;</span><span class="p">)</span>
+<span class="linenos"> 6</span>
+<span class="linenos"> 7</span><span class="n">cursor</span><span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+<span class="linenos"> 8</span>
+<span class="linenos"> 9</span><span class="c1"># Create a database table</span>
+<span class="linenos">10</span><span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;DROP TABLE IF EXISTS mytest&quot;</span><span class="p">)</span>
+<span class="linenos">11</span><span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;CREATE TABLE mytest(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,&quot;</span>
+<span class="linenos">12</span>               <span class="s2">&quot;first_name VARCHAR(100), last_name VARCHAR(100))&quot;</span><span class="p">)</span>
+<span class="linenos">13</span>
+<span class="linenos">14</span>
+<span class="linenos">15</span><span class="c1"># Populate table with some data</span>
+<span class="linenos">16</span><span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;INSERT INTO mytest(first_name, last_name) VALUES (?,?)&quot;</span><span class="p">,</span>
+<span class="linenos">17</span>               <span class="p">(</span><span class="s2">&quot;Robert&quot;</span><span class="p">,</span> <span class="s2">&quot;Redford&quot;</span><span class="p">))</span>
+<span class="linenos">18</span>
+<span class="linenos">19</span><span class="c1"># retrieve data</span>
+<span class="linenos">20</span><span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT id, first_name, last_name FROM mytest&quot;</span><span class="p">)</span>
+<span class="linenos">21</span>
+<span class="linenos">22</span><span class="c1"># print content</span>
+<span class="linenos">23</span><span class="n">row</span><span class="o">=</span> <span class="n">cursor</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+<span class="linenos">24</span><span class="nb">print</span><span class="p">(</span><span class="o">*</span><span class="n">row</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+<span class="linenos">25</span>
+<span class="linenos">26</span><span class="c1"># free resources</span>
+<span class="linenos">27</span><span class="n">cursor</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<span class="linenos">28</span><span class="n">connection</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
-</td></tr></table></div>
+</div>
 <p>Before MariaDB Connector/Python can be used, the MariaDB Connector/Python module must be
 imported (line #2)
 Once the mariadb module is loaded, a connection to a database server will be established
@@ -126,99 +98,62 @@ the form of a tuple as a second parameter (line #16).</p>
 <h2>Passing parameters to SQL statements<a class="headerlink" href="#passing-parameters-to-sql-statements" title="Permalink to this headline">¶</a></h2>
 <p>As shown in previous example, passing parameters to SQL statements happens by using placeholders in the statement. By default
 MariaDB Connector/Python uses a question mark as a placeholder, for compatibility reason also %s placeholders are supported. Passing
-parameters is supported in methods <a class="reference internal" href="cursor.html#execute" title="execute"><code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code></a> and <a class="reference internal" href="cursor.html#executemany" title="executemany"><code class="xref py py-func docutils literal notranslate"><span class="pre">executemany()</span></code></a> of the cursor class.</p>
+parameters is supported in methods <code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code> and <code class="xref py py-func docutils literal notranslate"><span class="pre">executemany()</span></code> of the cursor class.</p>
 <p>Since MariaDB Connector/Python uses binary protocol, escaping strings or binary data like in other database drivers is not required.</p>
-<div class="highlight-python notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
- 2
- 3
- 4
- 5
- 6
- 7
- 8
- 9
-10
-11
-12
-13
-14</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="c1"># update</span>
-<span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;UPDATE books SET price=? WHERE book_name=?&quot;</span>
-<span class="n">data</span><span class="o">=</span> <span class="p">(</span><span class="mf">14.90</span><span class="p">,</span> <span class="s2">&quot;Dream of the Red Chamber&quot;</span><span class="p">)</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
-
-<span class="c1"># delete</span>
-<span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;DELETE FROM books WHERE id=?&quot;</span>
-<span class="n">data</span><span class="o">=</span> <span class="p">(</span><span class="mi">4034</span><span class="p">,)</span>   <span class="c1"># Don&#39;t forget a comma at the end!</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
-
-
-<span class="c1"># insert</span>
-<span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;INSERT INTO books (book_name, author_name, price) VALUES (?, ?, ?)&quot;</span>
-<span class="n">data</span><span class="o">=</span> <span class="p">(</span><span class="s2">&quot;The Lord of the Rings&quot;</span><span class="p">,</span> <span class="s2">&quot;J.R.R. Tolkien&quot;</span><span class="p">,</span> <span class="mf">18.99</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="c1"># update</span>
+<span class="linenos"> 2</span><span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;UPDATE books SET price=? WHERE book_name=?&quot;</span>
+<span class="linenos"> 3</span><span class="n">data</span><span class="o">=</span> <span class="p">(</span><span class="mf">14.90</span><span class="p">,</span> <span class="s2">&quot;Dream of the Red Chamber&quot;</span><span class="p">)</span>
+<span class="linenos"> 4</span><span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+<span class="linenos"> 5</span>
+<span class="linenos"> 6</span><span class="c1"># delete</span>
+<span class="linenos"> 7</span><span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;DELETE FROM books WHERE id=?&quot;</span>
+<span class="linenos"> 8</span><span class="n">data</span><span class="o">=</span> <span class="p">(</span><span class="mi">4034</span><span class="p">,)</span>   <span class="c1"># Don&#39;t forget a comma at the end!</span>
+<span class="linenos"> 9</span><span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+<span class="linenos">10</span>
+<span class="linenos">11</span>
+<span class="linenos">12</span><span class="c1"># insert</span>
+<span class="linenos">13</span><span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;INSERT INTO books (book_name, author_name, price) VALUES (?, ?, ?)&quot;</span>
+<span class="linenos">14</span><span class="n">data</span><span class="o">=</span> <span class="p">(</span><span class="s2">&quot;The Lord of the Rings&quot;</span><span class="p">,</span> <span class="s2">&quot;J.R.R. Tolkien&quot;</span><span class="p">,</span> <span class="mf">18.99</span><span class="p">)</span>
 </pre></div>
-</td></tr></table></div>
-<p>Often there is a requirement to update, delete or insert multiple records. This could be done be using <a class="reference internal" href="cursor.html#execute" title="execute"><code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code></a> in
-a loop, but much more effective is using the <a class="reference internal" href="cursor.html#executemany" title="executemany"><code class="xref py py-func docutils literal notranslate"><span class="pre">executemany()</span></code></a> method, especially when using a MariaDB database server 10.2 and above, which supports a special “bulk” protocol. The executemany() works similar to execute(), but accepts data as a list of tuples:</p>
-<div class="highlight-python notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre> 1
- 2
- 3
- 4
- 5
- 6
- 7
- 8
- 9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="c1"># update</span>
-<span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;UPDATE books SET price=? WHERE book_name=?&quot;</span>
-<span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="mf">14.90</span><span class="p">,</span> <span class="s2">&quot;Dream of the Red Chamber&quot;</span><span class="p">),</span>
-       <span class="p">(</span><span class="mf">22.30</span><span class="p">,</span> <span class="s2">&quot;The Master and Margarita&quot;</span><span class="p">),</span>
-       <span class="p">(</span><span class="mf">17.10</span><span class="p">,</span> <span class="s2">&quot;And Then There Were None&quot;</span><span class="p">)]</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
-
-<span class="c1"># delete</span>
-<span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;DELETE FROM books WHERE id=?&quot;</span>
-<span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="mi">4034</span><span class="p">,),(</span><span class="mi">12001</span><span class="p">,),(</span><span class="mi">230</span><span class="p">,)]</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
-
-<span class="c1">#insert</span>
-<span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;INSERT INTO books (book_name, author_name, price) VALUES (?, ?, ?)&quot;</span>
-<span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="s2">&quot;The Lord of the Rings&quot;</span><span class="p">,</span> <span class="s2">&quot;J.R.R. Tolkien&quot;</span><span class="p">,</span> <span class="mf">18.99</span><span class="p">),</span>
-       <span class="p">(</span><span class="s2">&quot;Le Petit Prince&quot;</span><span class="p">,</span> <span class="s2">&quot;Antoine de Saint-Exupéry&quot;</span><span class="p">,</span> <span class="mf">22.40</span><span class="p">),</span>
-       <span class="p">(</span><span class="s2">&quot;Dream of the Red Chamber&quot;</span><span class="p">,</span> <span class="s2">&quot;Cao Xueqin&quot;</span><span class="p">,</span> <span class="mf">16.90</span><span class="p">),</span>
-       <span class="p">(</span><span class="s2">&quot;The Adventures of Pinocchio&quot;</span><span class="p">,</span> <span class="s2">&quot;Carlo Collodi&quot;</span><span class="p">,</span> <span class="mf">17.10</span><span class="p">)]</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+</div>
+<p>Often there is a requirement to update, delete or insert multiple records. This could be done be using <code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code> in
+a loop, but much more effective is using the <code class="xref py py-func docutils literal notranslate"><span class="pre">executemany()</span></code> method, especially when using a MariaDB database server 10.2 and above, which supports a special “bulk” protocol. The executemany() works similar to execute(), but accepts data as a list of tuples:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos"> 1</span><span class="c1"># update</span>
+<span class="linenos"> 2</span><span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;UPDATE books SET price=? WHERE book_name=?&quot;</span>
+<span class="linenos"> 3</span><span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="mf">14.90</span><span class="p">,</span> <span class="s2">&quot;Dream of the Red Chamber&quot;</span><span class="p">),</span>
+<span class="linenos"> 4</span>       <span class="p">(</span><span class="mf">22.30</span><span class="p">,</span> <span class="s2">&quot;The Master and Margarita&quot;</span><span class="p">),</span>
+<span class="linenos"> 5</span>       <span class="p">(</span><span class="mf">17.10</span><span class="p">,</span> <span class="s2">&quot;And Then There Were None&quot;</span><span class="p">)]</span>
+<span class="linenos"> 6</span><span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+<span class="linenos"> 7</span>
+<span class="linenos"> 8</span><span class="c1"># delete</span>
+<span class="linenos"> 9</span><span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;DELETE FROM books WHERE id=?&quot;</span>
+<span class="linenos">10</span><span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="mi">4034</span><span class="p">,),(</span><span class="mi">12001</span><span class="p">,),(</span><span class="mi">230</span><span class="p">,)]</span>
+<span class="linenos">11</span><span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+<span class="linenos">12</span>
+<span class="linenos">13</span><span class="c1">#insert</span>
+<span class="linenos">14</span><span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;INSERT INTO books (book_name, author_name, price) VALUES (?, ?, ?)&quot;</span>
+<span class="linenos">15</span><span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="s2">&quot;The Lord of the Rings&quot;</span><span class="p">,</span> <span class="s2">&quot;J.R.R. Tolkien&quot;</span><span class="p">,</span> <span class="mf">18.99</span><span class="p">),</span>
+<span class="linenos">16</span>       <span class="p">(</span><span class="s2">&quot;Le Petit Prince&quot;</span><span class="p">,</span> <span class="s2">&quot;Antoine de Saint-Exupéry&quot;</span><span class="p">,</span> <span class="mf">22.40</span><span class="p">),</span>
+<span class="linenos">17</span>       <span class="p">(</span><span class="s2">&quot;Dream of the Red Chamber&quot;</span><span class="p">,</span> <span class="s2">&quot;Cao Xueqin&quot;</span><span class="p">,</span> <span class="mf">16.90</span><span class="p">),</span>
+<span class="linenos">18</span>       <span class="p">(</span><span class="s2">&quot;The Adventures of Pinocchio&quot;</span><span class="p">,</span> <span class="s2">&quot;Carlo Collodi&quot;</span><span class="p">,</span> <span class="mf">17.10</span><span class="p">)]</span>
+<span class="linenos">19</span><span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
 </pre></div>
-</td></tr></table></div>
+</div>
 <p>When using executemany(), there are a few restrictions:
 - All tuples must have the same types as in first tuple. E.g. the parameter [(1),(1.0)] or [(1),(None)] are invalid.
 - Special values like None or column default value needs to be indicated by an indicator.</p>
 <div class="section" id="using-indicators">
 <h3>Using indicators<a class="headerlink" href="#using-indicators" title="Permalink to this headline">¶</a></h3>
 <p>In certain situations, for example when inserting default values or NULL, special indicators must be used.</p>
-<div class="highlight-python notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
-2
-3
-4
-5
-6
-7</pre></div></td><td class="code"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
-
-<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;CREATE TABLE cakes(id int, cake varchar(100), price decimal(10,2) default 1.99)&quot;</span><span class="p">)</span>
-
-<span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;INSERT INTO cakes (id, cake, price) VALUES (?,?)&quot;</span>
-<span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Cherry Cake&quot;</span><span class="p">,</span> <span class="mf">2.10</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;Apple Cake&quot;</span><span class="p">,</span> <span class="n">INDICATOR</span><span class="o">.</span><span class="n">default</span><span class="p">)]</span>
-<span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="linenos">1</span><span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="linenos">2</span>
+<span class="linenos">3</span><span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;CREATE TABLE cakes(id int, cake varchar(100), price decimal(10,2) default 1.99)&quot;</span><span class="p">)</span>
+<span class="linenos">4</span>
+<span class="linenos">5</span><span class="n">sql</span><span class="o">=</span> <span class="s2">&quot;INSERT INTO cakes (id, cake, price) VALUES (?,?)&quot;</span>
+<span class="linenos">6</span><span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Cherry Cake&quot;</span><span class="p">,</span> <span class="mf">2.10</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;Apple Cake&quot;</span><span class="p">,</span> <span class="n">INDICATOR</span><span class="o">.</span><span class="n">default</span><span class="p">)]</span>
+<span class="linenos">7</span><span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="n">sql</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
 </pre></div>
-</td></tr></table></div>
+</div>
 <dl class="simple">
 <dt>Beside the default indicator which inserts the default value of 1.99, the following indicators are supported:</dt><dd><ul class="simple">
 <li><p>INDICATOR.IGNORE: Ignores the value (only update commands)</p></li>
@@ -231,10 +166,10 @@ a loop, but much more effective is using the <a class="reference internal" href=
 <p class="admonition-title">Note</p>
 <ul class="simple">
 <li><p>Mixing different parameter styles is not supported and will raise an exception</p></li>
-<li><p>The Python string operator % must not be used. The <a class="reference internal" href="cursor.html#execute" title="execute"><code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code></a> method accepts a tuple or list as second parameter.</p></li>
+<li><p>The Python string operator % must not be used. The <code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code> method accepts a tuple or list as second parameter.</p></li>
 <li><p>Placeholders between quotation marks are interpreted as a string.</p></li>
-<li><p>Parameters for <a class="reference internal" href="cursor.html#execute" title="execute"><code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code></a> needs to be passed as a tuple. If only one parameter will be passed, tuple needs to contain a comma at the end.</p></li>
-<li><p>Parameters for <a class="reference internal" href="cursor.html#executemany" title="executemany"><code class="xref py py-func docutils literal notranslate"><span class="pre">executemany()</span></code></a> need to be passed as a list of tuples.</p></li>
+<li><p>Parameters for <code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code> needs to be passed as a tuple. If only one parameter will be passed, tuple needs to contain a comma at the end.</p></li>
+<li><p>Parameters for <code class="xref py py-func docutils literal notranslate"><span class="pre">executemany()</span></code> need to be passed as a list of tuples.</p></li>
 </ul>
 </div>
 <div class="section" id="supported-data-types">
@@ -331,7 +266,7 @@ a loop, but much more effective is using the <a class="reference internal" href=
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="search.html" method="get">
-      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
       <input type="submit" value="Go" />
     </form>
     </div>
@@ -356,13 +291,13 @@ a loop, but much more effective is using the <a class="reference internal" href=
         <li class="right" >
           <a href="install.html" title="Installation"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.0.0 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Basic usage</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
-        &#169; Copyright 2019,2020 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 3.3.1.
+        &#169; Copyright 2019-2021 MariaDB Corporation and Georg Richter.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
     </div>
   </body>
 </html>
