@@ -16,7 +16,7 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
    Establishes a connection to a database server and returns a new connection
    object.
 
-:parameters:
+   Parameters:
 
 .. versionadded:: 1.1.0
 
@@ -53,9 +53,11 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
    - **ssl_crlpath** (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.
    - **ssl_verify_cert** (bool): Enables server certificate verification.
    - **ssl** (bool): Always use a secure TLS connection
-.. versionadded:: 1.0.1 
+.. versionadded:: 1.0.1
+
    - **autocommit** (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).
 .. versionadded:: 1.0.3
+
    - **converter** (dict): Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions.
 
    :return: Returns a connection object or raises an error if the connection between client and server couldn't be established.

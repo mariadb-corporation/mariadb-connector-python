@@ -52,12 +52,9 @@
 <span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">connect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursorclass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">mariadb.connections.Connection</span> <span class="pre">**</span> <span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connect" title="Permalink to this definition">¶</a></dt>
 <dd><p>Establishes a connection to a database server and returns a new connection
 object.</p>
+<p>Parameters:</p>
 </dd></dl>
 
-<dl class="field-list simple">
-<dt class="field-odd">parameters</dt>
-<dd class="field-odd"><p></p></dd>
-</dl>
 <div class="versionadded">
 <p><span class="versionmodified added">New in version 1.1.0: </span></p>
 <ul class="simple">
@@ -102,10 +99,16 @@ be used</p>
 </ul>
 </div>
 <div class="versionadded">
-<p><span class="versionmodified added">New in version 1.0.1: </span>- <strong>autocommit</strong> (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).</p>
+<p><span class="versionmodified added">New in version 1.0.1: </span></p>
+<ul class="simple">
+<li><p><strong>autocommit</strong> (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).</p></li>
+</ul>
 </div>
 <div class="versionadded">
-<p><span class="versionmodified added">New in version 1.0.3: </span>- <strong>converter</strong> (dict): Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions.</p>
+<p><span class="versionmodified added">New in version 1.0.3: </span></p>
+<ul class="simple">
+<li><p><strong>converter</strong> (dict): Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions.</p></li>
+</ul>
 <dl class="field-list simple">
 <dt class="field-odd">return</dt>
 <dd class="field-odd"><p>Returns a connection object or raises an error if the connection between client and server couldn’t be established.</p>

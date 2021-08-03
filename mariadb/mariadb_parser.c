@@ -106,9 +106,9 @@ MrdbParser_init(MYSQL *mysql, const char *statement, size_t length)
         memcpy(p->statement.str, statement, length);
         p->statement.length= length;
         p->mysql= mysql;
-        p->param_list= PyList_New(0);
         p->param_count= 0;
     }
+    p->param_list= PyList_New(0);
     return p;
 }
 

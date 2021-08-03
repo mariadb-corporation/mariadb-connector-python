@@ -391,6 +391,8 @@ void MrdbCursor_clearparseinfo(MrdbParseInfo *parseinfo)
   if (parseinfo->statement)
     MARIADB_FREE_MEM(parseinfo->statement);
   Py_XDECREF(parseinfo->keys);
+  if (parseinfo->paramlist)
+    Py_XDECREF(parseinfo->paramlist);
   memset(parseinfo, 0, sizeof(MrdbParseInfo));
 }
 
@@ -467,8 +469,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     self->fields= NULL;
     self->row_count= 0;
     self->affected_rows= 0;
-    MARIADB_FREE_MEM(self->parseinfo.statement);
-    memset(&self->parseinfo, 0, sizeof(MrdbParseInfo));
+    MrdbCursor_clearparseinfo(&self->parseinfo);
     MARIADB_FREE_MEM(self->values);
     MARIADB_FREE_MEM(self->bind);
     MARIADB_FREE_MEM(self->statement);
@@ -520,8 +521,7 @@ void ma_cursor_close(MrdbCursor *self)
             self->stmt= NULL;
         }
 
-        MARIADB_FREE_MEM(self->parseinfo.statement);
-
+        MrdbCursor_clearparseinfo(&self->parseinfo);
         self->is_closed= 1;
     }
 }
@@ -822,10 +822,12 @@ static PyObject *MrdbCursor_seek(MrdbCursor *self, PyObject *args)
     {
         return NULL;
     }
+    Py_BEGIN_ALLOW_THREADS;
     if (self->parseinfo.is_text)
         mysql_data_seek(self->result, new_position);
     else
         mysql_stmt_data_seek(self->stmt, new_position);
+    Py_END_ALLOW_THREADS;
 
     Py_RETURN_NONE;
 }
@@ -899,8 +901,7 @@ Mariadb_row_count(MrdbCursor *self)
 static PyObject *
 Mariadb_row_number(MrdbCursor *self)
 {
-    unsigned int field_count= self->field_count;
-    if (!field_count) {
+    if (!self->field_count) {
         Py_RETURN_NONE;
     }
     return PyLong_FromLongLong(self->row_number);
@@ -989,6 +990,7 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *args)
     memcpy(self->parseinfo.statement, parser->statement.str, parser->statement.length);
     self->parseinfo.statement_len= parser->statement.length;
     self->parseinfo.paramlist= parser->param_list;
+    parser->param_list= NULL;
     self->parseinfo.is_text= (parser->command == SQL_NONE || parser->command == SQL_OTHER);
     self->parseinfo.command= parser->command;
 
@@ -1000,6 +1002,7 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *args)
             PyObject *key;
             key= PyUnicode_FromString(parser->keys[i].str);
             PyTuple_SetItem(tmp, i, key);
+            Py_DECREF(key);
         }
         self->parseinfo.keys= tmp;
     }

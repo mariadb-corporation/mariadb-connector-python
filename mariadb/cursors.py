@@ -99,30 +99,31 @@ class Cursor(mariadb._mariadb.cursor):
 
         new_stmt= self.statement
         replace_diff= 0
-        for i in range (0,len(self._paramlist)):
-            if self._paramstyle == PARAMSTYLE_PYFORMAT:
-                val= self._data[self._keys[i]]
-            else:
-                val= self._data[i]
-            if val is None:
-                replace= "NULL";
-            else:
-                if isinstance(val, INDICATOR.MrdbIndicator):
-                    if val == INDICATOR.NULL:
-                       replace= "NULL"
-                    if val == INDICATOR.DEFAULT:
-                       replace= "DEFAULT"   
-                elif isinstance(val, Number):
-                    replace= val.__str__()
+        if self._paramlist:
+            for i in range (0,len(self._paramlist)):
+                if self._paramstyle == PARAMSTYLE_PYFORMAT:
+                    val= self._data[self._keys[i]]
                 else:
-                    if isinstance(val, (bytes, bytearray)):
-                        replace= "\"%s\"" % self.connection.escape_string(val.decode(encoding='latin1'))
+                    val= self._data[i]
+                if val is None:
+                    replace= "NULL";
+                else:
+                    if isinstance(val, INDICATOR.MrdbIndicator):
+                        if val == INDICATOR.NULL:
+                           replace= "NULL"
+                        if val == INDICATOR.DEFAULT:
+                           replace= "DEFAULT"   
+                    elif isinstance(val, Number):
+                        replace= val.__str__()
                     else:
-                        replace= "\"%s\"" % self.connection.escape_string(val.__str__())
-            ofs= self._paramlist[i] + replace_diff
-            
-            new_stmt= new_stmt[:ofs] + replace.__str__() + new_stmt[ofs+1:]
-            replace_diff+= len(replace) - 1
+                        if isinstance(val, (bytes, bytearray)):
+                            replace= "\"%s\"" % self.connection.escape_string(val.decode(encoding='latin1'))
+                        else:
+                            replace= "\"%s\"" % self.connection.escape_string(val.__str__())
+                ofs= self._paramlist[i] + replace_diff
+                
+                new_stmt= new_stmt[:ofs] + replace.__str__() + new_stmt[ofs+1:]
+                replace_diff+= len(replace) - 1
         return new_stmt
 
     def _check_execute_params(self):
@@ -138,8 +139,8 @@ class Cursor(mariadb._mariadb.cursor):
 
         # check if number of place holders matches the number of 
         # supplied elements in data tuple
-        if (not self._data and len(self._paramlist) > 0) or \
-           (len(self._data) != len(self._paramlist)):
+        if self._paramlist and  ((not self._data and len(self._paramlist) > 0) or \
+           (len(self._data) != len(self._paramlist))):
             raise mariadb.DataError("Number of parameters in statement (%s)"\
                                     " doesn't match the number of data elements (%s)."\
                                      % (len(self._paramlist), len(self._data)))
@@ -342,7 +343,6 @@ class Cursor(mariadb._mariadb.cursor):
         The cursor will be unusable from this point forward; an Error (or subclass)
         exception will be raised if any operation is attempted with the cursor."
         """
-
         super().close()
 
     def fetchone(self):
@@ -462,7 +462,6 @@ class Cursor(mariadb._mariadb.cursor):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Closes cursor."""
-
         self.close()
 
     def __del__(self):
