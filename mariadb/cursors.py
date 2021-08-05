@@ -239,6 +239,10 @@ class Cursor(mariadb._mariadb.cursor):
         # parse statement and check param style
         if do_parse:
             self._parse_execute(statement, (data))
+
+        if data and len(data) != self.paramcount:
+            raise mariadb.DataError("Invalid number of parameters.")
+
         self._description= None
 
         # check if data parameters are passed in correct format
