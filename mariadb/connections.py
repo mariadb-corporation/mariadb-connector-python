@@ -75,9 +75,10 @@ class Connection(mariadb._mariadb.connection):
 
         Optional parameters:
 
-        - buffered= False
+        - buffered= True
           By default the result will be unbuffered, which means before executing
           another statement with the same connection the entire result set must be fetched.
+          Please note that the default was False for MariaDB Connector/Python versions < 1.1.0.
         - dictionary= False
           Return fetch values as dictionary.
 

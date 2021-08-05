@@ -76,7 +76,7 @@ class Cursor(mariadb._mariadb.cursor):
                  rtype= kwargs.pop("dictionary", False)
                  if rtype:
                      self._resulttype= RESULT_DICTIONARY
-             buffered= kwargs.pop("buffered", False)
+             buffered= kwargs.pop("buffered", True)
              self.buffered= buffered
              self._prepared= kwargs.pop("prepared", False)
              self._force_binary= kwargs.pop("binary", False)

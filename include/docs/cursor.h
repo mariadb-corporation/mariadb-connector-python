@@ -67,7 +67,8 @@ PyDoc_STRVAR(
 PyDoc_STRVAR(
   cursor_buffered__doc__,
   "When True all result sets are immediately transferred and the connection\n"
-  "between client and server is no longer blocked. Default value is False."
+  "between client and server is no longer blocked. Since version 1.1.0 default\n"
+  "is True, for prior versions default was False."
 );
 
 PyDoc_STRVAR(

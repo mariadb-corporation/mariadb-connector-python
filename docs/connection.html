@@ -65,9 +65,10 @@ It encapsulates a database session.</p>
 will be created.</p>
 <p>Optional parameters:</p>
 <ul class="simple">
-<li><p>buffered= False
+<li><p>buffered= True
 By default the result will be unbuffered, which means before executing
-another statement with the same connection the entire result set must be fetched.</p></li>
+another statement with the same connection the entire result set must be fetched.
+Please note that the default was False for MariaDB Connector/Python versions &lt; 1.1.0.</p></li>
 <li><p>dictionary= False
 Return fetch values as dictionary.</p></li>
 <li><p>named_tuple= False
