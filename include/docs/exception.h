@@ -24,12 +24,6 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
-    exeception_internal__doc__,
-    "Exception raised when the database encounters an internal error, "\
-    "e.g. the cursor is not valid anymore"
-);
-
-PyDoc_STRVAR(
     exception_warning__doc__,
     "Exception raised for important warnings like data truncations "\
     "while inserting, etc"
