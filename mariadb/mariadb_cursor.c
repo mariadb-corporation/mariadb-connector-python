@@ -1002,7 +1002,6 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *args)
             PyObject *key;
             key= PyUnicode_FromString(parser->keys[i].str);
             PyTuple_SetItem(tmp, i, key);
-            Py_DECREF(key);
         }
         self->parseinfo.keys= tmp;
     }
