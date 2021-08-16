@@ -111,7 +111,6 @@ PyDoc_STRVAR(
 
 PyDoc_STRVAR(
   connection_warnings__doc__,
-  "(read only)\n\n"
   "Returns the number of warnings from the last executed statement, or zero\n"
-  "if there are no warnings.\n\n"
+  "if there are no warnings."
 );

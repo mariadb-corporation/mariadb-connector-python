@@ -20,27 +20,3 @@ PyDoc_STRVAR(
   module_connect__doc__,
   __connect__doc__
 );
-
-PyDoc_STRVAR(
-  module_Date__doc__,
-  "Date(year, month, day)\n"
-  "--\n"
-  "\n"
-  "This function constructs an object holding a date value\n"
-);
-
-PyDoc_STRVAR(
-  module_Time__doc__,
-  "Time(hour, minute, second)\n"
-  "--\n"
-  "\n"
-  "This function constructs an object holding a time value\n"
-);
-
-PyDoc_STRVAR(
-  module_Timestamp__doc__,
-  "Timestamp(year, month, day, hour, minute, second)\n"
-  "--\n"
-  "\n"
-  "This function constructs an object holding a time stamp value\n"
-);
