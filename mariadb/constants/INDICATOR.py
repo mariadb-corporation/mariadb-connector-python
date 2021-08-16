@@ -14,4 +14,3 @@ NULL = MrdbIndicator(1)
 DEFAULT = MrdbIndicator(2)
 IGNORE = MrdbIndicator(3)
 IGNORE_ROW = MrdbIndicator(4)
-
