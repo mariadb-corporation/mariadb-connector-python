@@ -60,6 +60,7 @@ class Cursor(mariadb._mariadb.cursor):
         self._prepared= False
         self._prev_stmt= None
         self._force_binary= None
+        self._rowcount= 0
 
         self._parseinfo= None
         self._data= None
@@ -160,6 +161,7 @@ class Cursor(mariadb._mariadb.cursor):
         if len(data):
             params= ("?," * len(data))[:-1]
         statement= "CALL %s(%s)" % (sp, params)
+        self._rowcount= 0
         self.execute(statement, data)
 
     def _parse_execute(self, statement:str, data=()):
@@ -222,6 +224,7 @@ class Cursor(mariadb._mariadb.cursor):
 
         # Parse statement
         do_parse= True
+        self._rowcount= 0
 
         if buffered:
             self.buffered= True
@@ -301,15 +304,18 @@ class Cursor(mariadb._mariadb.cursor):
         # by looping
         # TODO: insert/replace statements are not optimized yet, rowcount not set
         if not (self.connection.server_capabilities & (CLIENT.BULK_OPERATIONS >> 32)):
+            count= 0
             for row in parameters:
                 self.execute(statement, row)
-                #todo: rowcount ?!
+                count+= self.rowcount
+            self._rowcount= count
         else:
             # parse statement 
             self._parse_execute(statement, parameters[0])
             self._data= parameters
             self.is_text= False
             self._execute_bulk()
+            self._rowcount= 0
 
     def _fetch_row(self):
         """
@@ -470,6 +476,12 @@ class Cursor(mariadb._mariadb.cursor):
 
     def __del__(self):
         self.close()
+
+    @property
+    def rowcount(self):
+        if self._rowcount > 0:
+            return self._rowcount
+        return super().rowcount
 
     @property
     def sp_outparams(self):
