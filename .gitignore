@@ -26,6 +26,13 @@
 .*.swp
 .gdb_history
 
+# Build/Dist
+build/
+dist/
+
+# Cache
+__pycache__
+
 #VS files/directories
 *.vcxproj
 *.filters
