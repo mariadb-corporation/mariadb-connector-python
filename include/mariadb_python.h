@@ -189,13 +189,7 @@ typedef struct {
     uint8_t status;
     uint8_t asynchronous;
     struct timespec last_used;
-    /* capabilities */
-//    unsigned long client_capabilities;
-//    unsigned long server_capabilities;
-    unsigned long extended_server_capabilities;
     PyThreadState *thread_state;
-    PyObject *converter;
-//    unsigned long server_version;
     unsigned long thread_id;
     char *server_info;
 } MrdbConnection;

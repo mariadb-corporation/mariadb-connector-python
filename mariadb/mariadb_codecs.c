@@ -41,28 +41,6 @@ int codecs_datetime_init(void)
     return 0;
 }
 
-static PyObject *ma_convert_value(MrdbCursor *self,
-                                  enum enum_field_types type,
-                                  PyObject *value)
-{
-    PyObject *key= PyLong_FromLongLong(type);
-    PyObject *func;
-    PyObject *new_value= NULL;
-
-    if (!self->connection->converter || value == Py_None)
-        return NULL;
-
-    if ((func= PyDict_GetItem(self->connection->converter, key)) &&
-            PyCallable_Check(func))
-    {
-        PyObject *arglist= PyTuple_New(1);
-        PyTuple_SetItem(arglist, 0, value);
-        new_value= PyObject_CallObject(func, arglist);
-    }
-    return new_value;
-}
-
-
 enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *field)
 {
 #if MARIADB_PACKAGE_VERSION_ID > 30107
@@ -563,21 +541,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         default:
             break;
     }
-    /* check if values need to be converted */
-    if (self->connection->converter)
-    {
-        PyObject *val;
-        enum enum_field_types type;
-
-        if (ext_type == EXT_TYPE_JSON)
-          type= MYSQL_TYPE_JSON;
-        else
-          type= self->fields[column].type;
-
-        if ((val= ma_convert_value(self, type, self->values[column])))
-            self->values[column]= val;
-    }
-}
+} 
 
 /* field_fetch_callback
    This function was previously registered with mysql_stmt_attr_set and
@@ -808,22 +772,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         default:
             break;
     }
-    /* check if values need to be converted */
-    if (self->connection->converter)
-    {
-        PyObject *val;
-        enum enum_field_types type;
-
-        if (ext_type == EXT_TYPE_JSON)
-          type= MYSQL_TYPE_JSON;
-        else
-          type= self->fields[column].type;
-
-        if ((val= ma_convert_value(self, type, self->values[column])))
-            self->values[column]= val;
-    }
 }
-
 /* 
    mariadb_get_column_info
    This function analyzes the Python object and calculates the corresponding

@@ -637,6 +637,10 @@ static int Mrdb_execute_direct(MrdbCursor *self,
    int rc;
 
    Py_BEGIN_ALLOW_THREADS;
+   long ext_caps;
+
+   mariadb_get_infov(self->connection->mysql,
+                      MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES, &ext_caps);
    
    /* clear pending result sets */
    MrdbCursor_clear_result(self);
@@ -651,7 +655,7 @@ static int Mrdb_execute_direct(MrdbCursor *self,
    /* execute_direct was implemented together with bulk operations, so we need
       to check if MARIADB_CLIENT_STMT_BULK_OPERATIONS is set in extended server
       capabilities */
-   if (!(self->connection->extended_server_capabilities &
+   if (!(ext_caps &
         (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32)))
    {
        if (!(rc= mysql_stmt_prepare(self->stmt, statement, (unsigned long)statement_len)))
