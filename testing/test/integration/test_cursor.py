@@ -418,6 +418,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_indicator(self):
+        if is_mysql():
+            self.skipTest("Skip (MySQL)")
         if self.connection.server_version < server_indicator_version:
             self.skipTest("Requires server version >= 10.2.6")
         if os.environ.get("MAXSCALE_VERSION"):
@@ -950,6 +952,8 @@ class TestCursor(unittest.TestCase):
     def test_conpy61(self):
         if os.environ.get("MAXSCALE_VERSION"):
             self.skipTest("MAXSCALE doesn't support BULK yet")
+        if is_mysql():
+            self.skipTest("Skip (MySQL)")
         con= create_connection()
         if self.connection.server_version < server_indicator_version:
             self.skipTest("Requires server version >= 10.2.6")
