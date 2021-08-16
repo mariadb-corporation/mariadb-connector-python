@@ -923,6 +923,10 @@ mariadb_get_parameter(MrdbCursor *self,
     PyObject *row= NULL,
              *column= NULL;
     uint8_t rc= 1;
+    long caps;
+
+    mariadb_get_infov(self->connection->mysql,
+                      MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES, &caps);
 
     if (is_bulk)
     {
@@ -973,8 +977,7 @@ mariadb_get_parameter(MrdbCursor *self,
     /* check if an indicator was passed */
     if (MrdbIndicator_Check(column))
     {
-        if (!(self->connection->extended_server_capabilities &
-             (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32)))
+        if (!(caps & (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32)))
         {
             mariadb_throw_exception(NULL, Mariadb_DataError, 0,
                     "MariaDB %s doesn't support indicator variables. "\
@@ -986,7 +989,7 @@ mariadb_get_parameter(MrdbCursor *self,
         param->value= NULL; /* you can't have both indicator and value */
     } else if (column == Py_None) {
         param->value= NULL;
-        if (self->connection->extended_server_capabilities &
+        if (caps &
             (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32))
         {
             param->indicator= STMT_INDICATOR_NULL;
