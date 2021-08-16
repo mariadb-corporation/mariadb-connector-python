@@ -76,7 +76,7 @@ class Connection(mariadb._mariadb.connection):
         Optional parameters:
 
         - buffered= True
-          By default the result will be unbuffered, which means before executing
+          If set to False the result will be unbuffered, which means before executing
           another statement with the same connection the entire result set must be fetched.
           Please note that the default was False for MariaDB Connector/Python versions < 1.1.0.
         - dictionary= False
@@ -440,10 +440,57 @@ class Connection(mariadb._mariadb.connection):
         return _DEFAULT_CHARSET
 
     @property
+    def client_capabilities(self):
+        """Client capability flags."""
+
+        return self._mariadb_get_info(INFO.CLIENT_CAPABILITIES, int)
+
+    @property
+    def server_capabilities(self):
+        """Server capability flags."""
+
+        return self._mariadb_get_info(INFO.SERVER_CAPABILITIES, int)
+    @property
+    def server_port(self):
+        """Database server TCP/IP port. This value will be 0 in case of a unix socket connection."""
+
+        return self._mariadb_get_info(INFO.PORT, int)
+
+    @property
+    def unix_socket(self):
+        """Unix socket name."""
+
+        return self._mariadb_get_info(INFO.UNIX_SOCKET, str)
+
+    @property
+    def server_name(self):
+        """Name or IP address of database server."""
+
+        return self._mariadb_get_info(INFO.HOST, str)
+
+    @property
     def collation(self):
         """Client character set collation"""
 
         return _DEFAULT_COLLATION
+
+    @property
+    def server_info(self):
+        """Server version in alphanumerical format (str)"""
+
+        return self._mariadb_get_info(INFO.SERVER_VERSION, str)
+
+    @property
+    def tls_cipher(self):
+        """TLS cipher suite if a secure connection is used."""
+
+        return self._mariadb_get_info(INFO.SSL_CIPHER, str)
+
+    @property
+    def tls_version(self):
+        """TLS protocol version if a secure connection is used."""
+
+        return self._mariadb_get_info(INFO.TLS_VERSION, str)
 
     @property
     def server_status(self):
@@ -452,6 +499,17 @@ class Connection(mariadb._mariadb.connection):
         """
 
         return self._mariadb_get_info(INFO.SERVER_STATUS, int)
+
+    @property
+    def server_version(self):
+        """
+        Server version in numerical format.
+
+        The form of the version number is
+        VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH
+        """
+
+        return self._mariadb_get_info(INFO.SERVER_VERSION_ID, int)
 
     @property
     def server_version_info(self):

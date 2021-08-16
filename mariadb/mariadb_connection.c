@@ -150,99 +150,23 @@ MrdbConnection_Methods[] =
 static struct
 PyMemberDef MrdbConnection_Members[] =
 {
-    {"character_set",
-        T_STRING,
-        offsetof(MrdbConnection, charset),
+    {"connection_id",
+        T_LONG,
+        offsetof(MrdbConnection, thread_id),
         READONLY,
-        "Client character set"},
+        "Id of current connection."},
     {"converter",
         T_OBJECT,
         offsetof(MrdbConnection, converter),
         READONLY,
         "Conversion dictionary"},
-    {"connection_id",
-        T_ULONG,
-        offsetof(MrdbConnection, thread_id),
-        READONLY,
-        "Id of current connection"},
-    {"collation",
-        T_STRING,
-        offsetof(MrdbConnection, collation),
-        READONLY,
-        "Client character set collation"},
     {"dsn",
         T_OBJECT,
         offsetof(MrdbConnection, dsn),
         READONLY,
         "Data source name (dsn)"},
-    {"server_port",
-        T_INT,
-        offsetof(MrdbConnection, port),
-        READONLY,
-        "Database server TCP/IP port. This value will be 0 in case of a unix socket connection"},
-    {"server_version",
-        T_ULONG,
-        offsetof(MrdbConnection, server_version),
-        READONLY,
-        "Server version in numerical format:\n\nThe form of the version number is VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH"},
-    {"server_info",
-        T_STRING,
-        offsetof(MrdbConnection, server_info),
-        READONLY,
-        "Server info"},
-    {"unix_socket",
-        T_STRING,
-        offsetof(MrdbConnection, unix_socket),
-        READONLY,
-        "Unix socket name"},
-    {"server_name",
-        T_STRING,
-        offsetof(MrdbConnection, host),
-        READONLY,
-        "Name or address of database server"},
-    {"tls_cipher",
-        T_STRING,
-        offsetof(MrdbConnection, tls_cipher),
-        READONLY,
-        "TLS cipher suite used by connection"},
-    {"tls_version",
-        T_STRING,
-        offsetof(MrdbConnection, tls_version),
-        READONLY,
-        "TLS protocol version used by connection"},
-    {"client_capabilities",
-        T_ULONG,
-        offsetof(MrdbConnection, client_capabilities),
-        READONLY,
-        "Client capabilities"},
-    {"server_capabilities",
-        T_ULONG,
-        offsetof(MrdbConnection, server_capabilities),
-        READONLY,
-        "Server capabilities"},
     {NULL} /* always last */
 };
-
-static void MrdbConnection_GetCapabilities(MrdbConnection *self)
-{
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SERVER_CAPABILITIES,
-        &self->server_capabilities);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES,
-        &self->extended_server_capabilities);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_CLIENT_CAPABILITIES,
-        &self->client_capabilities);
-}
-
-void MrdbConnection_SetAttributes(MrdbConnection *self)
-{
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, &self->host);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SSL_CIPHER, &self->tls_cipher);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_TLS_VERSION, &self->tls_version);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_UNIX_SOCKET, &self->unix_socket);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_PORT, &self->port);
-    self->charset= mariadb_default_charset;
-    self->collation= mariadb_default_collation;
-}
 
 static int
 MrdbConnection_Initialize(MrdbConnection *self,
@@ -402,10 +326,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
 
     self->thread_id= mysql_thread_id(self->mysql);
 
-    /* CONPY-129: server_version_info */
-    self->server_version= mysql_get_server_version(self->mysql);
-    self->server_info= mysql_get_server_info(self->mysql);
-
     has_error= 0;
 end:
     Py_END_ALLOW_THREADS;
@@ -418,11 +338,6 @@ end:
 
     if (PyErr_Occurred())
         return -1;
-
-    /* set connection attributes */
-    MrdbConnection_SetAttributes(self);
-    /* get capabilities */
-    MrdbConnection_GetCapabilities(self);
 
     return 0;
 }
@@ -740,7 +655,6 @@ PyObject *MrdbConnection_reconnect(MrdbConnection *self)
     }
     /* get capabilities */
     self->thread_id= mysql_thread_id(self->mysql);
-    MrdbConnection_GetCapabilities(self);
     Py_RETURN_NONE;
 }
 /* }}} */
