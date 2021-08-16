@@ -178,24 +178,24 @@ typedef struct {
     enum enum_tpc_state tpc_state;
     char xid[150]; /* large enough, to hold 2 * MAX_TPC_XID size + integer value */
     PyObject *dsn; /* always null */
-    const char *tls_cipher;
+/*    const char *tls_cipher;
     const char *tls_version;
     const char *host;
     const char *unix_socket;
     int port;
     const char *charset;
-    const char *collation;
+    const char *collation; */
     uint8_t inuse;
     uint8_t status;
     uint8_t asynchronous;
     struct timespec last_used;
     /* capabilities */
-    unsigned long client_capabilities;
-    unsigned long server_capabilities;
+//    unsigned long client_capabilities;
+//    unsigned long server_capabilities;
     unsigned long extended_server_capabilities;
     PyThreadState *thread_state;
     PyObject *converter;
-    unsigned long server_version;
+//    unsigned long server_version;
     unsigned long thread_id;
     char *server_info;
 } MrdbConnection;
