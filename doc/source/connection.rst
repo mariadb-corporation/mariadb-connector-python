@@ -13,7 +13,6 @@ Connection constructors
 .. automethod:: mariadb.connections.Connection.cursor
 
 .. versionadded:: 1.0.1
-
 .. automethod:: mariadb.connections.Connection.xid(format_id: int, global_transaction_id: str, brach_qualifier: str)
 
 ------------------
@@ -31,13 +30,14 @@ Connection methods
 
 .. automethod:: mariadb.connections.Connection.close
 
+.. automethod:: mariadb.connections.Connection.cursor
+
 .. automethod:: mariadb.connections.Connection.get_server_version
 
 .. versionadded:: 1.0.5
-
-.. automethod:: mariadb.connections.Connection.escape_string(escape_str)
+.. automethod:: mariadb.connections.Connection.escape_string
  
-.. automethod:: mariadb.connections.Connection.kill(thread_id)
+.. automethod:: mariadb.connections.Connection.kill
 
   .. note::
     A thread_id from other connections can be determined by executing the SQL statement ``SHOW PROCESSLIST``
@@ -65,7 +65,7 @@ Connection methods
 .. automethod:: mariadb.connections.Connection.tpc_recover
 
 .. automethod:: mariadb.connections.Connection.tpc_rollback
- 
+
 ---------------------
 Connection attributes
 ---------------------
@@ -76,14 +76,23 @@ Connection attributes
 
 .. autoattribute:: mariadb.connections.Connection.character_set
 
+.. versionadded:: 1.1.0:
+.. autoattribute:: mariadb.connections.Connection.client_capabilities
+
 .. autoattribute:: mariadb.connections.Connection.collation
 
 .. autoattribute:: mariadb.connections.Connection.connection_id
- 
+
 .. autoattribute:: mariadb.connections.Connection.database
- 
+
+.. versionadded:: 1.1.0
+.. autoattribute:: mariadb.connections.Connection.open
+
+.. versionadded:: 1.1.0
+.. autoattribute:: mariadb.connections.Connection.server_capabilities
+
 .. autoattribute:: mariadb.connections.Connection.server_info
- 
+
 .. autoattribute:: mariadb.connections.Connection.server_name
 
 .. autoattribute:: mariadb.connections.Connection.server_port
@@ -92,11 +101,10 @@ Connection attributes
 .. autoattribute:: mariadb.connections.Connection.server_status
 
 .. autoattribute:: mariadb.connections.Connection.server_version
- 
+
 .. autoattribute:: mariadb.connections.Connection.server_version_info
 
 .. versionadded:: 1.0.5
-
 .. autoattribute:: mariadb.connections.Connection.tls_cipher
 
 .. autoattribute:: mariadb.connections.Connection.tls_version

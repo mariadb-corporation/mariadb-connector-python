@@ -63,10 +63,10 @@ It encapsulates a database session.</p>
 <dd><p>Returns a new cursor object for the current connection.</p>
 <p>If no cursorclass was specified, a cursor with default mariadb.Cursor class
 will be created.</p>
-<p>Optional parameters:</p>
+<p>Optional keyword parameters:</p>
 <ul class="simple">
 <li><p>buffered= True
-By default the result will be unbuffered, which means before executing
+If set to False the result will be unbuffered, which means before executing
 another statement with the same connection the entire result set must be fetched.
 Please note that the default was False for MariaDB Connector/Python versions &lt; 1.1.0.</p></li>
 <li><p>dictionary= False
@@ -81,9 +81,9 @@ statement invoked with cursors execute() method.</p></li>
 When set to True cursor will remain in prepared state after the first execute()
 method was called. Further calls to execute() method will ignore the sql statement.</p></li>
 <li><p>binary= False
-Always execute statements in MariaDB client/server binary protocol.</p></li>
+Always execute statement in MariaDB client/server binary protocol.</p></li>
 </ul>
-<p>By default the result will be unbuffered, which means before executing another 
+<p>In versions prior to 1.1.0 results were unbuffered by default, which means before executing another 
 statement with the same connection the entire result set must be fetched.</p>
 <p>fetch* methods of the cursor class by default return result set values as a 
 tuple, unless named_tuple or dictionary was specified. The latter one exists 
@@ -162,6 +162,42 @@ will cause an implicit rollback to be performed.</p>
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></em>, <em class="sig-param"><span class="pre">**kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#id0" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a new cursor object for the current connection.</p>
+<p>If no cursorclass was specified, a cursor with default mariadb.Cursor class
+will be created.</p>
+<p>Optional keyword parameters:</p>
+<ul class="simple">
+<li><p>buffered= True
+If set to False the result will be unbuffered, which means before executing
+another statement with the same connection the entire result set must be fetched.
+Please note that the default was False for MariaDB Connector/Python versions &lt; 1.1.0.</p></li>
+<li><p>dictionary= False
+Return fetch values as dictionary.</p></li>
+<li><p>named_tuple= False
+Return fetch values as named tuple. This feature exists for compatibility reasons
+and should be avoided due to possible inconsistency.</p></li>
+<li><p>cursor_type= CURSOR_TYPE.NONE
+If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for the
+statement invoked with cursors execute() method.</p></li>
+<li><p>prepared= False
+When set to True cursor will remain in prepared state after the first execute()
+method was called. Further calls to execute() method will ignore the sql statement.</p></li>
+<li><p>binary= False
+Always execute statement in MariaDB client/server binary protocol.</p></li>
+</ul>
+<p>In versions prior to 1.1.0 results were unbuffered by default, which means before executing another 
+statement with the same connection the entire result set must be fetched.</p>
+<p>fetch* methods of the cursor class by default return result set values as a 
+tuple, unless named_tuple or dictionary was specified. The latter one exists 
+for compatibility reasons and should be avoided due to possible inconsistency
+in case two or more fields in a result set have the same name.</p>
+<p>If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
+the statement invoked with cursors execute() method.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.get_server_version">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">get_server_version</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.get_server_version" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a tuple representing the version of the connected server in
@@ -173,7 +209,7 @@ the following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)</p>
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.escape_string">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">escape_string</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">escape_str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.escape_string" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">escape_string</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.escape_string" title="Permalink to this definition">¶</a></dt>
 <dd><p>Parameters:
 statement: string</p>
 <p>This function is used to create a legal SQL string that you can use in
@@ -182,7 +218,7 @@ an SQL statement. The given string is encoded to an escaped SQL string.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.kill">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">kill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">thread_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.kill" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">kill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.kill" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function is used to ask the server to kill a database connection
 specified by the processid parameter.</p>
 <p>The connection id must be retrieved by SHOW PROCESSLIST sql command.</p>
@@ -340,6 +376,15 @@ on.</p>
 <p>For MariaDB Connector/Python it is always utf8mb4.</p>
 </dd></dl>
 
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0:.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.client_capabilities">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">client_capabilities</span></span><a class="headerlink" href="#mariadb.connections.Connection.client_capabilities" title="Permalink to this definition">¶</a></dt>
+<dd><p>Client capability flags.</p>
+</dd></dl>
+
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.collation">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">collation</span></span><a class="headerlink" href="#mariadb.connections.Connection.collation" title="Permalink to this definition">¶</a></dt>
@@ -356,6 +401,27 @@ on.</p>
 <dt class="sig sig-object py" id="mariadb.connections.Connection.database">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">database</span></span><a class="headerlink" href="#mariadb.connections.Connection.database" title="Permalink to this definition">¶</a></dt>
 <dd><p>Get default database for connection.</p>
+</dd></dl>
+
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.open">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">open</span></span><a class="headerlink" href="#mariadb.connections.Connection.open" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns true if the connection is alive.</p>
+<p>A ping command will be send to the server for this purpose,
+which means this function might fail if there are still
+non processed pending result sets.</p>
+</dd></dl>
+
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.server_capabilities">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">server_capabilities</span></span><a class="headerlink" href="#mariadb.connections.Connection.server_capabilities" title="Permalink to this definition">¶</a></dt>
+<dd><p>Server capability flags.</p>
 </dd></dl>
 
 <dl class="py attribute">
@@ -431,8 +497,7 @@ authentication.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.warnings">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">warnings</span></span><a class="headerlink" href="#mariadb.connections.Connection.warnings" title="Permalink to this definition">¶</a></dt>
-<dd><p>(read only)</p>
-<p>Returns the number of warnings from the last executed statement, or zero
+<dd><p>Returns the number of warnings from the last executed statement, or zero
 if there are no warnings.</p>
 </dd></dl>
 

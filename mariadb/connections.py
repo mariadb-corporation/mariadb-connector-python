@@ -73,7 +73,7 @@ class Connection(mariadb._mariadb.connection):
         If no cursorclass was specified, a cursor with default mariadb.Cursor class
         will be created.
 
-        Optional parameters:
+        Optional keyword parameters:
 
         - buffered= True
           If set to False the result will be unbuffered, which means before executing
@@ -95,9 +95,9 @@ class Connection(mariadb._mariadb.connection):
           method was called. Further calls to execute() method will ignore the sql statement.
 
         - binary= False
-          Always execute statements in MariaDB client/server binary protocol.
+          Always execute statement in MariaDB client/server binary protocol.
 
-        By default the result will be unbuffered, which means before executing another 
+        In versions prior to 1.1.0 results were unbuffered by default, which means before executing another 
         statement with the same connection the entire result set must be fetched.
 
         fetch* methods of the cursor class by default return result set values as a 
@@ -155,7 +155,7 @@ class Connection(mariadb._mariadb.connection):
         self._execute_command("ROLLBACK")
         self._read_response()
 
-    def kill(self, id):
+    def kill(self, id: int):
         """
         This function is used to ask the server to kill a database connection
         specified by the processid parameter. 
@@ -561,7 +561,7 @@ class Connection(mariadb._mariadb.connection):
         """
         Returns true if the connection is alive.
 
-        A ping command will be send to the serve for this purpose,
+        A ping command will be send to the server for this purpose,
         which means this function might fail if there are still
         non processed pending result sets.
         """

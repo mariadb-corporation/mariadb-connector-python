@@ -110,6 +110,11 @@ Cursor attributes
 
 .. autoattribute:: mariadb.cursors.Cursor.sp_outparams
 
+
+.. versionadded:: 1.1.0
+
+.. autoattribute:: mariadb.cursors.Cursor.paramcount
+
 .. autoattribute:: mariadb.cursors.Cursor.rowcount
 
   .. note::
