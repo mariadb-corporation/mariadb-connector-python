@@ -13,6 +13,8 @@
 import os
 import sys
 import mariadb
+from typing import Sequence
+from datetime import datetime
 print(mariadb.__path__)
 sys.path.insert(0, os.path.abspath('../..'))
 sys.setrecursionlimit(1500)
@@ -21,11 +23,13 @@ sys.setrecursionlimit(1500)
 # -- Project information -----------------------------------------------------
 
 project = 'MariaDB Connector/Python'
-copyright = '2019-2021 MariaDB Corporation and Georg Richter'
+copyright = '2019-%s MariaDB Corporation and Georg Richter' % datetime.now().year
 author = 'Georg Richter'
 
 # The full version, including alpha/beta/rc tags
-release = '1.1.0-alpha'
+release = mariadb.__version__
+if len(mariadb.__version_info__) > 3:
+    release= release + "-" + mariadb.__version_info__[3]
 
 
 # -- General configuration ---------------------------------------------------
@@ -33,8 +37,7 @@ release = '1.1.0-alpha'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.intersphinx', 'recommonmark'
-]
+extensions = ['sphinx.ext.napoleon', 'sphinx.ext.autodoc', 'sphinx.ext.intersphinx', 'recommonmark' ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

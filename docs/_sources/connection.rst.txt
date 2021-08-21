@@ -13,7 +13,7 @@ Connection constructors
 .. automethod:: mariadb.connections.Connection.cursor
 
 .. versionadded:: 1.0.1
-.. automethod:: mariadb.connections.Connection.xid(format_id: int, global_transaction_id: str, brach_qualifier: str)
+.. automethod:: mariadb.connections.Connection.xid
 
 ------------------
 Connection methods 

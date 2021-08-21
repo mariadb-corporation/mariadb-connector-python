@@ -24,7 +24,7 @@ MAX_POOL_SIZE = 64
 POOL_IDLE_TIMEOUT = 1800
 
 class ConnectionPool(object):
-    """
+    r"""
     Class defining a pool of database connections
 
     MariaDB Connector/Python supports simple connection pooling.
@@ -34,8 +34,15 @@ class ConnectionPool(object):
     The size of a connection pool is configurable at creation time, 
     but cannot be changed afterwards. The maximum size of a connection
     pool is limited to 64 connections.
-    """
 
+    :Keyword Arguments:
+
+        * pool_name (str) -- Name of connection pool
+
+        * pool_size (int)=5 -- Size of pool. If not specified default value of 5 will be used.  Maximum allowed number is 64.
+
+        * pool_reset_connection (bool)=True -- Will reset the connection before returning it to the pool.  Default value is True.
+    """
 
     def __init__(self, *args, **kwargs):
         """
@@ -182,9 +189,6 @@ class ConnectionPool(object):
 
     def set_config(self, **kwargs):
         """
-        :param dict configuration
-            configuration settings for pooled connection
-
         Sets the connection configuration for the connection pool.
         For valid connection arguments check the mariadb.connect() method.
         

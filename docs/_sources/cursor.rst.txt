@@ -1,5 +1,7 @@
 The cursor class
 ====================
+.. sectionauthor:: Georg Richter <georg@mariadb.com>
+
 .. autoclass:: mariadb.cursors.Cursor 
 
 --------------

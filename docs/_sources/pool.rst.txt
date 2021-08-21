@@ -1,53 +1,30 @@
+========================
 The ConnectionPool class
 ========================
 
 .. sectionauthor:: Georg Richter <georg@mariadb.com>
 
-.. class:: ConnectionPool
+.. autoclass:: mariadb.ConnectionPool 
 
-    MariaDB Connector/Python supports simple connection pooling.
-    A connection pool holds a number of open connections and handles thread safety
-    when providing connections to threads.
+-----------------------
+Connection pool methods
+-----------------------
 
-    The size of a connection pool is configurable at creation time, but cannot be
-    changed afterwards. The maximum size of a connection pool is limited to 64 connections.
+.. automethod:: mariadb.ConnectionPool.add_connection
 
-    .. method:: add_connection(connection)
+.. automethod:: mariadb.ConnectionPool.close
 
-       Adds a connection object to the connection pool.
+.. automethod:: mariadb.ConnectionPool.get_connection
 
-       In case that pool doesn't have a free slot or is not configured a PoolError
-       exception will be raised.
+.. automethod:: mariadb.ConnectionPool.set_config
 
-    .. method:: close()
+--------------------------
+Connection pool attributes
+--------------------------
 
-       Closes the pool and all connection inside the pool.
-    .. versionadded:: 1.0.1
+.. autoattribute:: mariadb.ConnectionPool.max_size
 
-    .. method:: get_connection()
+.. autoattribute:: mariadb.ConnectionPool.pool_size
 
-       Returns a connection from the connection pool or raises a PoolError if no 
-       connection is available.
-
-    .. method:: set_config(\*\*kwargs)
-
-       Sets the connection configuration for the connection pool. For valid connection
-       arguments see :func:`mariadb.connect` method.
-
-       .. note::
-       
-         This method doesn't create connections in the pool. To fill the pool one has to use
-         the :func:`add_connection` ḿethod.
-
-    .. data:: max_size
-
-       Returns the maximum allowed size of the pool
-
-    .. data:: pool_size
-
-       Returns the size of connection pool
-
-    .. data:: pool_name
-
-       Returns the name of the pool.
+.. autoattribute:: mariadb.ConnectionPool.pool_name
        

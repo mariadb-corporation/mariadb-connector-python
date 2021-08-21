@@ -177,7 +177,7 @@ class Connection(mariadb._mariadb.connection):
         self._execute_command("BEGIN")
         self._read_response()
 
-    def select_db(self, new_db):
+    def select_db(self, new_db: str):
         """
         Gets the default database for the current connection.
 
@@ -210,13 +210,15 @@ class Connection(mariadb._mariadb.connection):
 
     class xid(tuple):
         """
+        xid(format_id, global_transaction_id, branch_qualifier)
+
         A transaction ID object suitable for passing to the .tpc_*()
         methods of this connection.
 
         Parameters:
-          - format_id: Format id. If not set default value `0` will be used.
-          - global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.
-          - branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.
+        :param int format_id: Format id. If not set default value `0` will be used.
+        :param str global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.
+        :param str branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.
  
         """
         def __new__(self, format_id, transaction_id, branch_qualifier):

@@ -19,7 +19,8 @@
 
 import mariadb, collections
 from numbers import Number
-from mariadb.constants import * 
+from mariadb.constants import *
+from typing import Sequence
 
 PARAMSTYLE_QMARK= 1
 PARAMSTYLE_FORMAT= 2
@@ -146,19 +147,23 @@ class Cursor(mariadb._mariadb.cursor):
                                     " doesn't match the number of data elements (%s)."\
                                      % (len(self._paramlist), len(self._data)))
 
-    def callproc(self, sp: str, data=()):
+    def callproc(self, sp: str, data: Sequence =()):
         """
         Executes a stored procedure sp. The data sequence must contain an entry for
         each parameter the procedure expects.
 
         Input/Output or Output parameters have to be retrieved by .fetch methods,
-        the .sp_outparams attribute indicates if the result set contains output"
-        parameters
+        the .sp_outparams attribute indicates if the result set contains output
+        parameters.
+
+        Args:
+            sp: Name of stored procedure.
+            data: Optional sequence containing data for placeholder substitution.
         """
 
         # create statement 
         params= ""
-        if len(data):
+        if data and len(data):
             params= ("?," * len(data))[:-1]
         statement= "CALL %s(%s)" % (sp, params)
         self._rowcount= 0
@@ -200,7 +205,7 @@ class Cursor(mariadb._mariadb.cursor):
 
         return super()._nextset()
 
-    def execute(self, statement: str, data=(), buffered=False):
+    def execute(self, statement: str, data: Sequence =(), buffered=False):
         """
         Prepare and execute a SQL statement.
 
@@ -376,7 +381,7 @@ class Cursor(mariadb._mariadb.cursor):
             ret= row
         return ret
 
-    def fetchmany(self, size=0):
+    def fetchmany(self, size: int =0):
         """
         Fetch the next set of rows of a query result, returning a sequence
         of sequences (e.g. a list of tuples). An empty sequence is returned
@@ -416,7 +421,7 @@ class Cursor(mariadb._mariadb.cursor):
             rows.append((row))
         return rows
 
-    def scroll(self, value, mode="relative"):
+    def scroll(self, value: int, mode="relative"):
         """
         Scroll the cursor in the result set to a new position according to mode.
 
@@ -451,14 +456,14 @@ class Cursor(mariadb._mariadb.cursor):
         self._seek(new_pos);
         self._rownumber= new_pos;
 
-    def setinputsizes(self, size):
+    def setinputsizes(self, size: int):
         """
         Required by PEP-249. Does nothing in MariaDB Connector/Python
         """
 
         return
 
-    def setoutputsize(self, size):
+    def setoutputsize(self, size: int):
         """
         Required by PEP-249. Does nothing in MariaDB Connector/Python
         """
