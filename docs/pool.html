@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The ConnectionPool class &#8212; MariaDB Connector/Python 1.1.0-alpha documentation</title>
+    <title>The ConnectionPool class &#8212; MariaDB Connector/Python 1.1.1-alpha documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
@@ -34,7 +34,7 @@
         <li class="right" >
           <a href="cursor.html" title="The cursor class"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.1-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The ConnectionPool class</a></li> 
       </ul>
     </div>  
@@ -53,7 +53,7 @@
 <p>MariaDB Connector/Python supports simple connection pooling.
 A connection pool holds a number of open connections and handles
 thread safety when providing connections to threads.</p>
-<p>The size of a connection pool is configurable at creation time,
+<p>The size of a connection pool is configurable at creation time, 
 but cannot be changed afterwards. The maximum size of a connection
 pool is limited to 64 connections.</p>
 <dl class="field-list simple">
@@ -67,8 +67,17 @@ pool is limited to 64 connections.</p>
 </dl>
 </dd></dl>
 
-<div class="section" id="connection-pool-methods">
-<h2>Connection pool methods<a class="headerlink" href="#connection-pool-methods" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">mariadb</span>
+
+<span class="n">pool</span><span class="o">=</span> <span class="n">mariadb</span><span class="o">.</span><span class="n">ConnectionPool</span><span class="p">(</span><span class="n">pool_name</span><span class="o">=</span><span class="s2">&quot;mypool&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">pool</span><span class="o">.</span><span class="n">max_size</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>
+</pre></div>
+</div>
+<div class="section" id="connectionpool-methods">
+<h2>ConnectionPool methods<a class="headerlink" href="#connectionpool-methods" title="Permalink to this headline">¶</a></h2>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.ConnectionPool.add_connection">
 <span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">add_connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool.add_connection" title="Permalink to this definition">¶</a></dt>
@@ -100,8 +109,17 @@ To fill the pool one has to use add_connection() ḿethod.</p>
 </dd></dl>
 
 </div>
-<div class="section" id="connection-pool-attributes">
-<h2>Connection pool attributes<a class="headerlink" href="#connection-pool-attributes" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="connectionpool-attributes">
+<h2>ConnectionPool attributes<a class="headerlink" href="#connectionpool-attributes" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.connection_count">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">connection_count</span></span><a class="headerlink" href="#mariadb.ConnectionPool.connection_count" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the number of connections in connection pool.</p>
+</dd></dl>
+
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.ConnectionPool.max_size">
 <span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">max_size</span></span><a class="headerlink" href="#mariadb.ConnectionPool.max_size" title="Permalink to this definition">¶</a></dt>
@@ -120,6 +138,16 @@ To fill the pool one has to use add_connection() ḿethod.</p>
 <dd><p>Returns the name of the connection pool.</p>
 </dd></dl>
 
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.pool_reset_connection">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">pool_reset_connection</span></span><a class="headerlink" href="#mariadb.ConnectionPool.pool_reset_connection" title="Permalink to this definition">¶</a></dt>
+<dd><p>If set to true, the connection will be reset on both client and server side</p>
+<p>after .close() method was called</p>
+</dd></dl>
+
 </div>
 </div>
 
@@ -133,8 +161,8 @@ To fill the pool one has to use add_connection() ḿethod.</p>
   <h3><a href="index.html">Table of Contents</a></h3>
   <ul>
 <li><a class="reference internal" href="#">The ConnectionPool class</a><ul>
-<li><a class="reference internal" href="#connection-pool-methods">Connection pool methods</a></li>
-<li><a class="reference internal" href="#connection-pool-attributes">Connection pool attributes</a></li>
+<li><a class="reference internal" href="#connectionpool-methods">ConnectionPool methods</a></li>
+<li><a class="reference internal" href="#connectionpool-attributes">ConnectionPool attributes</a></li>
 </ul>
 </li>
 </ul>
@@ -181,7 +209,7 @@ To fill the pool one has to use add_connection() ḿethod.</p>
         <li class="right" >
           <a href="cursor.html" title="The cursor class"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.1-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The ConnectionPool class</a></li> 
       </ul>
     </div>

@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The connection class &#8212; MariaDB Connector/Python 1.1.0-alpha documentation</title>
+    <title>The connection class &#8212; MariaDB Connector/Python 1.1.1-alpha documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
@@ -34,7 +34,7 @@
         <li class="right" >
           <a href="module.html" title="The mariadb module"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.1-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>
     </div>  
@@ -83,10 +83,10 @@ method was called. Further calls to execute() method will ignore the sql stateme
 <li><p>binary= False
 Always execute statement in MariaDB client/server binary protocol.</p></li>
 </ul>
-<p>In versions prior to 1.1.0 results were unbuffered by default, which means before executing another
+<p>In versions prior to 1.1.0 results were unbuffered by default, which means before executing another 
 statement with the same connection the entire result set must be fetched.</p>
-<p>fetch* methods of the cursor class by default return result set values as a
-tuple, unless named_tuple or dictionary was specified. The latter one exists
+<p>fetch* methods of the cursor class by default return result set values as a 
+tuple, unless named_tuple or dictionary was specified. The latter one exists 
 for compatibility reasons and should be avoided due to possible inconsistency
 in case two or more fields in a result set have the same name.</p>
 <p>If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
@@ -130,12 +130,11 @@ or cancelled by .rollback() method.</p>
 <dt class="sig sig-object py" id="mariadb.connections.Connection.change_user">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">change_user</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">user</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">password</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">database</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.change_user" title="Permalink to this definition">¶</a></dt>
 <dd><p>Changes the user and default database of the current connection</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>user</strong> (<em>-</em>) – user name</p></li>
-<li><p><strong>password</strong> (<em>-</em>) – password</p></li>
-<li><p><strong>database</strong> (<em>-</em>) – name of default database</p></li>
+<dl class="simple">
+<dt>Parameters:</dt><dd><ul class="simple">
+<li><p>user: user name</p></li>
+<li><p>password: password</p></li>
+<li><p>database: name of default database</p></li>
 </ul>
 </dd>
 </dl>
@@ -184,10 +183,10 @@ method was called. Further calls to execute() method will ignore the sql stateme
 <li><p>binary= False
 Always execute statement in MariaDB client/server binary protocol.</p></li>
 </ul>
-<p>In versions prior to 1.1.0 results were unbuffered by default, which means before executing another
+<p>In versions prior to 1.1.0 results were unbuffered by default, which means before executing another 
 statement with the same connection the entire result set must be fetched.</p>
-<p>fetch* methods of the cursor class by default return result set values as a
-tuple, unless named_tuple or dictionary was specified. The latter one exists
+<p>fetch* methods of the cursor class by default return result set values as a 
+tuple, unless named_tuple or dictionary was specified. The latter one exists 
 for compatibility reasons and should be avoided due to possible inconsistency
 in case two or more fields in a result set have the same name.</p>
 <p>If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
@@ -560,7 +559,7 @@ if there are no warnings.</p>
         <li class="right" >
           <a href="module.html" title="The mariadb module"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.1-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>
     </div>

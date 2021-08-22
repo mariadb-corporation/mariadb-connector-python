@@ -5,7 +5,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The cursor class &#8212; MariaDB Connector/Python 1.1.0-alpha documentation</title>
+    <title>The cursor class &#8212; MariaDB Connector/Python 1.1.1-alpha documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
@@ -34,7 +34,7 @@
         <li class="right" >
           <a href="connection.html" title="The connection class"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.1-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The cursor class</a></li> 
       </ul>
     </div>  
@@ -62,12 +62,9 @@ each parameter the procedure expects.</p>
 <p>Input/Output or Output parameters have to be retrieved by .fetch methods,
 the .sp_outparams attribute indicates if the result set contains output
 parameters.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>sp</strong> – Name of stored procedure.</p></li>
-<li><p><strong>data</strong> – Optional sequence containing data for placeholder substitution.</p></li>
-</ul>
+<dl class="simple">
+<dt>Args:</dt><dd><p>sp: Name of stored procedure.
+data: Optional sequence containing data for placeholder substitution.</p>
 </dd>
 </dl>
 <p>Example:</p>
@@ -106,7 +103,7 @@ If the cursor was created with attribute prepared=True the statement
 string for following execute operations will be ignored.
 This is most effective for algorithms where the same operation is used,
 but different parameters are bound to it (many times).</p>
-<p>By default execute() method generates an unbuffered result set for
+<p>By default execute() method generates an unbuffered result set for 
 statements which return data, setting optional parameter buffered to
 True will generate buffered result sets.</p>
 </dd></dl>
@@ -148,9 +145,9 @@ tuple represents data of a row within a table.
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.fetchall">
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">fetchall</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.fetchall" title="Permalink to this definition">¶</a></dt>
-<dd><p>Fetch all remaining rows of a query result, returning them as a
+<dd><p>Fetch all remaining rows of a query result, returning them as a 
 sequence of sequences (e.g. a list of tuples).</p>
-<p>An exception will be raised if the previous call to execute() didn’t
+<p>An exception will be raised if the previous call to execute() didn’t 
 produce a result set or execute() wasn’t called before.</p>
 </dd></dl>
 
@@ -160,13 +157,13 @@ produce a result set or execute() wasn’t called before.</p>
 <dd><p>Fetch the next set of rows of a query result, returning a sequence
 of sequences (e.g. a list of tuples). An empty sequence is returned
 when no more rows are available.</p>
-<p>The number of rows to fetch per call is specified by the parameter.
+<p>The number of rows to fetch per call is specified by the parameter. 
 If it is not given, the cursor’s arraysize determines the number
-of rows to be fetched. The method should try to fetch as many rows
-as indicated by the size parameter.
+of rows to be fetched. The method should try to fetch as many rows 
+as indicated by the size parameter. 
 If this is not possible due to the specified number of rows not being
 available, fewer rows may be returned.</p>
-<p>An exception will be raised if the previous call to execute() didn’t
+<p>An exception will be raised if the previous call to execute() didn’t 
 produce a result set or execute() wasn’t called before.</p>
 </dd></dl>
 
@@ -175,7 +172,7 @@ produce a result set or execute() wasn’t called before.</p>
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">fetchone</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.fetchone" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fetch the next row of a query result set, returning a single sequence,
 or None if no more data is available.</p>
-<p>An exception will be raised if the previous call to execute() didn’t
+<p>An exception will be raised if the previous call to execute() didn’t 
 produce a result set or execute() wasn’t called before.</p>
 </dd></dl>
 
@@ -408,7 +405,7 @@ if there are no warnings.</p>
         <li class="right" >
           <a href="connection.html" title="The connection class"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0-alpha documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.1-alpha documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The cursor class</a></li> 
       </ul>
     </div>

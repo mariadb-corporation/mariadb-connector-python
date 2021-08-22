@@ -581,7 +581,7 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *args)
 
     uint32_t option;
 
-    if (!PyArg_ParseTuple(args, "hO", &option, &type))
+    if (!PyArg_ParseTuple(args, "iO", &option, &type))
           return NULL;
 
     memset(&val, 0, sizeof(val));

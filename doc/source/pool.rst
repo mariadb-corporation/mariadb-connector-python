@@ -4,11 +4,20 @@ The ConnectionPool class
 
 .. sectionauthor:: Georg Richter <georg@mariadb.com>
 
-.. autoclass:: mariadb.ConnectionPool 
+.. autoclass:: mariadb.ConnectionPool
 
------------------------
-Connection pool methods
------------------------
+.. testcode::
+
+    import mariadb
+
+    pool= mariadb.ConnectionPool(pool_name="mypool")
+    print(pool.max_size)
+
+.. testoutput::
+
+----------------------
+ConnectionPool methods
+----------------------
 
 .. automethod:: mariadb.ConnectionPool.add_connection
 
@@ -18,9 +27,12 @@ Connection pool methods
 
 .. automethod:: mariadb.ConnectionPool.set_config
 
---------------------------
-Connection pool attributes
---------------------------
+-------------------------
+ConnectionPool attributes
+-------------------------
+
+.. versionadded:: 1.1.0
+.. autoattribute:: mariadb.ConnectionPool.connection_count
 
 .. autoattribute:: mariadb.ConnectionPool.max_size
 
@@ -28,3 +40,5 @@ Connection pool attributes
 
 .. autoattribute:: mariadb.ConnectionPool.pool_name
        
+.. versionadded:: 1.1.0
+.. autoattribute:: mariadb.ConnectionPool.pool_reset_connection
