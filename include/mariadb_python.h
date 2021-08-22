@@ -194,22 +194,6 @@ typedef struct {
     char *server_info;
 } MrdbConnection;
 
-/*
-typedef struct mrdb_pool{
-    PyObject_HEAD
-    pthread_mutex_t lock;
-    char *pool_name;
-    size_t pool_name_length;
-    uint32_t pool_size;
-    uint8_t reset_session;
-    uint32_t idle_timeout;
-    uint32_t acquire_timeout;
-    PyObject *configuration;
-    MrdbConnection **connection;
-    uint32_t connection_cnt;
-    uint16_t max_size;
-} MrdbPool; */
-
 typedef struct {
     enum enum_field_types type;
     PyObject *Value;

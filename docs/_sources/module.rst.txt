@@ -87,26 +87,42 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
     - pool_size -- Size of the pool. If this value is not provided, a default size of 5 pool connections will be used.
     - pool_reset -- If set to `True` the connection will be reset after close() method was called.
 
+Attributes
+----------
 
-.. data:: apilevel
+.. attribute:: apilevel
 
     String constant stating the supported DB API level. The value for `mariadb` is
     ``2.0``.
 
-.. data:: threadsafety
+.. attribute:: threadsafety
 
     Integer constant stating the level of thread safety. For `mariadb` the value is 1,
     which means threads can share the module but not the connection.
 
-.. data:: paramstyle
+.. attribute:: paramstyle
 
     String constant stating the type of parameter marker. For `mariadb` the value is
     `qmark`. For compatibility reasons `mariadb` also supports the `format` and
     `pyformat` paramstyles with the limitation that they can't be mixed inside a SQL statement.
 
-.. data:: mariadbapi_version
+.. attribute:: mariadbapi_version
 
     String constant stating the version of the used MariaDB Connector/C library.
+
+.. versionadded:: 1.1.1
+.. attribute:: client_version
+
+    Returns the version of MariaDB Connector/C library in use as an integer.
+    The number has the following format:
+    MAJOR_VERSION * 10000 + MINOR_VERSION * 1000 + PATCH_VERSION
+
+.. versionadded:: 1.1.1
+.. attribute:: client_version_info
+
+    Returns the version of MariaDB Connector/C library as a tuple in the
+    following format:
+    (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)
 
 
 Exceptions

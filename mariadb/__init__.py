@@ -133,3 +133,6 @@ def connect(*args, connectionclass= mariadb.connections.Connection, **kwargs):
 
 
 Connection= connect
+
+client_version_info= tuple(int(x, 10) for x in mariadb.mariadbapi_version.split('.'))
+client_version= client_version_info[0] * 10000 + client_version_info[1] * 1000 + client_version_info[2]

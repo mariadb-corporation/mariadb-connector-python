@@ -139,21 +139,23 @@ The supported pool parameters are:</p>
 </ul>
 </dd></dl>
 
-<dl class="py data">
+<div class="section" id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Permalink to this headline">¶</a></h2>
+<dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.apilevel">
 <span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">apilevel</span></span><a class="headerlink" href="#mariadb.apilevel" title="Permalink to this definition">¶</a></dt>
 <dd><p>String constant stating the supported DB API level. The value for <cite>mariadb</cite> is
 <code class="docutils literal notranslate"><span class="pre">2.0</span></code>.</p>
 </dd></dl>
 
-<dl class="py data">
+<dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.threadsafety">
 <span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">threadsafety</span></span><a class="headerlink" href="#mariadb.threadsafety" title="Permalink to this definition">¶</a></dt>
 <dd><p>Integer constant stating the level of thread safety. For <cite>mariadb</cite> the value is 1,
 which means threads can share the module but not the connection.</p>
 </dd></dl>
 
-<dl class="py data">
+<dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.paramstyle">
 <span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">paramstyle</span></span><a class="headerlink" href="#mariadb.paramstyle" title="Permalink to this definition">¶</a></dt>
 <dd><p>String constant stating the type of parameter marker. For <cite>mariadb</cite> the value is
@@ -161,12 +163,35 @@ which means threads can share the module but not the connection.</p>
 <cite>pyformat</cite> paramstyles with the limitation that they can’t be mixed inside a SQL statement.</p>
 </dd></dl>
 
-<dl class="py data">
+<dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.mariadbapi_version">
 <span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">mariadbapi_version</span></span><a class="headerlink" href="#mariadb.mariadbapi_version" title="Permalink to this definition">¶</a></dt>
 <dd><p>String constant stating the version of the used MariaDB Connector/C library.</p>
 </dd></dl>
 
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.1.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.client_version">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">client_version</span></span><a class="headerlink" href="#mariadb.client_version" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the version of MariaDB Connector/C library in use as an integer.
+The number has the following format:
+MAJOR_VERSION * 10000 + MINOR_VERSION * 1000 + PATCH_VERSION</p>
+</dd></dl>
+
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.1.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.client_version_info">
+<span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">client_version_info</span></span><a class="headerlink" href="#mariadb.client_version_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the version of MariaDB Connector/C library as a tuple in the
+following format:
+(MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)</p>
+</dd></dl>
+
+</div>
 <div class="section" id="exceptions">
 <h2>Exceptions<a class="headerlink" href="#exceptions" title="Permalink to this headline">¶</a></h2>
 <p>Compliant to DB API 2.0 MariaDB Connector/C provides information about errors
@@ -335,6 +360,7 @@ string-based (e.g. CHAR).</p>
   <h3><a href="index.html">Table of Contents</a></h3>
   <ul>
 <li><a class="reference internal" href="#">The mariadb module</a><ul>
+<li><a class="reference internal" href="#attributes">Attributes</a></li>
 <li><a class="reference internal" href="#exceptions">Exceptions</a></li>
 <li><a class="reference internal" href="#type-objects-and-constructors">Type objects and constructors</a></li>
 </ul>
