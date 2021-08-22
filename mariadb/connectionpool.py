@@ -157,7 +157,7 @@ class ConnectionPool(object):
         
         now= time.monotonic()
         conn= None
-        timediff= 0
+        timediff= -1
 
         with self._lock_pool:
             for i in range(0, len(self._connections)):
