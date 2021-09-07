@@ -1030,6 +1030,10 @@ MrdbCursor_execute_binary(MrdbCursor *self)
         goto error;
     }
 
+    /* CONPY-164: reset array_size */
+    self->array_size= 0;
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &self->array_size);
+
     if (self->data && self->parseinfo.paramcount)
     {
         if (mariadb_check_execute_parameters(self, self->data))
