@@ -8,8 +8,8 @@ Installation
 Prerequisites
 -------------
 - Python 3 (minimum supported version is 3.6)
-- MariaDB Server 10.x or MySQL Server
-- MariaDB Connector/C 3.1.5 or newer
+- MariaDB Server (>= 10.2) or MySQL Server (>= 5.7)
+- MariaDB Connector/C
 
 
 Build prerequisites
@@ -20,7 +20,7 @@ For Windows operating platforms the pypi.org download page provides binary versi
 - C compiler
 - Python development files (Usually they are installed with package **python-dev**). The minimum supported version of Python is 3.6
 - MariaDB Connector/C libraries and header files (Either from MariaDB server package or
-  from MariaDB Connector/C package).
+  from MariaDB Connector/C package). Minimum required version for |MCP| < 1.1.0 is 3.1.5, for later versions 3.2.4.
 - For Posix systems: TLS libraries, e.g. GnuTLS or OpenSSL (default)
 
 On Posix systems make sure that the path environment variable contains the directory which

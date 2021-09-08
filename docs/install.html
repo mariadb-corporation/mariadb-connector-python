@@ -50,8 +50,8 @@
 <h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
 <li><p>Python 3 (minimum supported version is 3.6)</p></li>
-<li><p>MariaDB Server 10.x or MySQL Server</p></li>
-<li><p>MariaDB Connector/C 3.1.5 or newer</p></li>
+<li><p>MariaDB Server (&gt;= 10.2) or MySQL Server (&gt;= 5.7)</p></li>
+<li><p>MariaDB Connector/C</p></li>
 </ul>
 <div class="section" id="build-prerequisites">
 <h3>Build prerequisites<a class="headerlink" href="#build-prerequisites" title="Permalink to this headline">¶</a></h3>
@@ -61,7 +61,7 @@ For Windows operating platforms the pypi.org download page provides binary versi
 <li><p>C compiler</p></li>
 <li><p>Python development files (Usually they are installed with package <strong>python-dev</strong>). The minimum supported version of Python is 3.6</p></li>
 <li><p>MariaDB Connector/C libraries and header files (Either from MariaDB server package or
-from MariaDB Connector/C package).</p></li>
+from MariaDB Connector/C package). Minimum required version for MariaDB Connector/Python &lt; 1.1.0 is 3.1.5, for later versions 3.2.4.</p></li>
 <li><p>For Posix systems: TLS libraries, e.g. GnuTLS or OpenSSL (default)</p></li>
 </ul>
 <p>On Posix systems make sure that the path environment variable contains the directory which

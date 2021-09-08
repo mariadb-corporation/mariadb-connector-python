@@ -6,15 +6,6 @@ The ConnectionPool class
 
 .. autoclass:: mariadb.ConnectionPool
 
-.. testcode::
-
-    import mariadb
-
-    pool= mariadb.ConnectionPool(pool_name="mypool")
-    print(pool.max_size)
-
-.. testoutput::
-
 ----------------------
 ConnectionPool methods
 ----------------------

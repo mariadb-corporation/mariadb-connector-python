@@ -4,23 +4,36 @@ MariaDB Connector/Python
 
 .. sectionauthor:: Georg Richter <georg@mariadb.com>
 
-MariaDB Connector/Python enables python programs to access MariaDB and MySQL databases, using an API
-which is compliant with the Python |DBAPI|. It is written in C and uses MariaDB Connector/C
-client library for client server communication.
+.. testsetup::
+
+    import mariadb
+    conn_params= {
+        "host" : "localhost",
+        "database" : "test"
+    }
+
+    conn=mariadb.connect(**conn_params)
+    cursor=conn.cursor()
+    cursor.execute("CREATE USER IF NOT EXISTS example_user@localhost identified by 'GHbe_Su3B8'")
+    cursor.execute("grant all on test.* to example_user@localhost")
+    cursor.execute("DROP TABLE IF EXISTS book")
+    cursor.close()
+    conn.close()
+
+|MCP| enables python programs to access MariaDB and MySQL databases, using an API
+which is compliant with the Python |DBAPI|. It is written in C and Python and uses
+MariaDB Connector/C client library for client server communication.
 
 .. rubric:: Contents
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    install
    usage
-   module
-   connection
-   cursor
-   pool
-   constants 
+   pooling
+   api
    license
    release
 

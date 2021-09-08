@@ -1,8 +1,16 @@
 # Import MariaDB Connector/Python module
 import mariadb
 
+# connection parameters
+conn_params= {
+    "user" : "example_user",
+    "password" : "GHbe_Su3B8",
+    "host" : "localhost",
+    "database" : "test"
+}
+
 # Establish a connection
-connection= mariadb.connect(user="myuser", database="test", host="localhost")
+connection= mariadb.connect(**conn_params)
 
 cursor= connection.cursor()
 

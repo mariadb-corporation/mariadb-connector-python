@@ -43,55 +43,71 @@
   <div class="section" id="mariadb-connector-python">
 <h1>MariaDB Connector/Python<a class="headerlink" href="#mariadb-connector-python" title="Permalink to this headline">¶</a></h1>
 <p>MariaDB Connector/Python enables python programs to access MariaDB and MySQL databases, using an API
-which is compliant with the Python DB API 2.0 (PEP-249). It is written in C and uses MariaDB Connector/C
-client library for client server communication.</p>
+which is compliant with the Python DB API 2.0 (PEP-249). It is written in C and Python and uses
+MariaDB Connector/C client library for client server communication.</p>
 <p class="rubric">Contents</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="install.html#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="install.html#prerequisites">Prerequisites</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="install.html#build-prerequisites">Build prerequisites</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="install.html#binary-installation">Binary installation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="install.html#test-suite">Test suite</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage.html">Basic usage</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="usage.html#connecting">Connecting</a></li>
-<li class="toctree-l2"><a class="reference internal" href="usage.html#passing-parameters-to-sql-statements">Passing parameters to SQL statements</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#passing-parameters-to-sql-statements">Passing parameters to SQL statements</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#using-indicators">Using indicators</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="module.html">The mariadb module</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="module.html#attributes">Attributes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="module.html#exceptions">Exceptions</a></li>
-<li class="toctree-l2"><a class="reference internal" href="module.html#type-objects-and-constructors">Type objects and constructors</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="connection.html">The connection class</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="connection.html#connection-constructors">Connection constructors</a></li>
-<li class="toctree-l2"><a class="reference internal" href="connection.html#connection-methods">Connection methods</a></li>
-<li class="toctree-l2"><a class="reference internal" href="connection.html#connection-attributes">Connection attributes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pooling.html">Connection pooling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pooling.html#configuring-and-using-a-connection-pool">Configuring and using a connection pool</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="pooling.html#creating-a-connection-pool">Creating a connection pool</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="cursor.html">The cursor class</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="cursor.html#cursor-methods">Cursor methods</a></li>
-<li class="toctree-l2"><a class="reference internal" href="cursor.html#cursor-attributes">Cursor attributes</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="pool.html">The ConnectionPool class</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="pool.html#connectionpool-methods">ConnectionPool methods</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pool.html#connectionpool-attributes">ConnectionPool attributes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="module.html">The mariadb module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="module.html#attributes">Attributes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="module.html#exceptions">Exceptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="module.html#type-objects-and-constructors">Type objects and constructors</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="constants.html">Constants</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="constants.html#command">COMMAND</a></li>
-<li class="toctree-l2"><a class="reference internal" href="constants.html#client">CLIENT</a></li>
-<li class="toctree-l2"><a class="reference internal" href="constants.html#cursor">CURSOR</a></li>
-<li class="toctree-l2"><a class="reference internal" href="constants.html#field-flag">FIELD_FLAG</a></li>
-<li class="toctree-l2"><a class="reference internal" href="constants.html#field-types">FIELD_TYPES</a></li>
-<li class="toctree-l2"><a class="reference internal" href="constants.html#indicators">INDICATORS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="constants.html#info">INFO</a></li>
-<li class="toctree-l2"><a class="reference internal" href="constants.html#tpc-state">TPC_STATE</a></li>
-<li class="toctree-l2"><a class="reference internal" href="constants.html#status">STATUS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="connection.html">The connection class</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="connection.html#connection-constructors">Connection constructors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="connection.html#connection-methods">Connection methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="connection.html#connection-attributes">Connection attributes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cursor.html">The cursor class</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cursor.html#cursor-methods">Cursor methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cursor.html#cursor-attributes">Cursor attributes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pool.html">The ConnectionPool class</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="pool.html#connectionpool-methods">ConnectionPool methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pool.html#connectionpool-attributes">ConnectionPool attributes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="constants.html">Constants</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#command">COMMAND</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#client">CLIENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#cursor">CURSOR</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#field-flag">FIELD_FLAG</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#field-types">FIELD_TYPES</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#indicators">INDICATORS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#info">INFO</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#tpc-state">TPC_STATE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#status">STATUS</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="license.html">License</a><ul>
@@ -100,7 +116,42 @@ client library for client server communication.</p>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="release.html">Release history</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="release.html#stable-releases-ga">Stable releases (GA)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-7">MariaDB Connector/Python 1.0.7</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#issues-fixed">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-6">MariaDB Connector/Python 1.0.6</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id1">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-5">MariaDB Connector/Python 1.0.5</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#notable-changes">Notable changes:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id2">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-4">MariaDB Connector/Python 1.0.4</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id3">Notable changes:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id4">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-3">MariaDB Connector/Python 1.0.3</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id5">Notable changes:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id6">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-2">MariaDB Connector/Python 1.0.2</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id7">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-1">MariaDB Connector/Python 1.0.1</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id8">Notable changes:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id9">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-0">MariaDB Connector/Python 1.0.0</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id10">Issues fixed:</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
