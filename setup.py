@@ -29,8 +29,8 @@ PY_MARIADB_AUTHORS= "Georg Richter"
 
 PY_MARIADB_MAJOR_VERSION=1
 PY_MARIADB_MINOR_VERSION=1
-PY_MARIADB_PATCH_VERSION="0a2"
-PY_MARIADB_PRE_RELEASE_SEGMENT="alpha"
+PY_MARIADB_PATCH_VERSION="0b1"
+PY_MARIADB_PRE_RELEASE_SEGMENT="beta"
 
 PY_MARIADB_VERSION= "%s.%s.%s" % (PY_MARIADB_MAJOR_VERSION, PY_MARIADB_MINOR_VERSION, PY_MARIADB_PATCH_VERSION)
 
@@ -53,7 +53,7 @@ setup(name='mariadb',
       version=PY_MARIADB_VERSION,
       python_requires='>=3.6',
       classifiers = [
-          'Development Status :: 3 - Alpha',
+          'Development Status :: 4 - Beta',
           'Environment :: Console',
           'Environment :: MacOS X',
           'Environment :: Win32 (MS Windows)',

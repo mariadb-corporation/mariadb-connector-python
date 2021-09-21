@@ -110,14 +110,14 @@ Attributes
 
     String constant stating the version of the used MariaDB Connector/C library.
 
-.. versionadded:: 1.1.1
+.. versionadded:: 1.1.0
 .. attribute:: client_version
 
     Returns the version of MariaDB Connector/C library in use as an integer.
     The number has the following format:
     MAJOR_VERSION * 10000 + MINOR_VERSION * 1000 + PATCH_VERSION
 
-.. versionadded:: 1.1.1
+.. versionadded:: 1.1.0
 .. attribute:: client_version_info
 
     Returns the version of MariaDB Connector/C library as a tuple in the
