@@ -51,7 +51,7 @@ class Cursor(mariadb._mariadb.cursor):
         """
         initialization
         """
-
+        self._bulk= False
         self._dictionary= False
         self._named_tuple= False
         self._connection= connection
@@ -169,7 +169,7 @@ class Cursor(mariadb._mariadb.cursor):
         self._rowcount= 0
         self.execute(statement, data)
 
-    def _parse_execute(self, statement:str, data=()):
+    def _parse_execute(self, statement:str, data=(), is_bulk=False):
         """
         For internal use
 
@@ -180,7 +180,7 @@ class Cursor(mariadb._mariadb.cursor):
             raise mariadb.ProgrammingError("empty statement")
 
         # parse statement
-        if self.statement != statement:
+        if self.statement != statement or is_bulk and not self._bulk:
             super()._parse(statement)
             self._prev_stmt= statement
             self._reprepare= True
@@ -287,6 +287,7 @@ class Cursor(mariadb._mariadb.cursor):
             self._execute_binary()
 
         self._initresult()
+        self._bulk= 0
 
     def executemany(self, statement, parameters):
         """ 
@@ -316,10 +317,11 @@ class Cursor(mariadb._mariadb.cursor):
             self._rowcount= count
         else:
             # parse statement 
-            self._parse_execute(statement, parameters[0])
+            self._parse_execute(statement, parameters[0], is_bulk=True)
             self._data= parameters
             self.is_text= False
             self._execute_bulk()
+            self._bulk= 1
             self._rowcount= 0
 
     def _fetch_row(self):

@@ -1100,6 +1100,17 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(conn.server_version_info, (major, minor, patch))
         self.assertEqual(conn.get_server_version(), (major, minor, patch))
 
+    def test_conpy167(self):
+        conn= create_connection()
+        cursor= conn.cursor()
+
+        cursor.execute("CREATE TEMPORARY table t1 (a int not NULL auto_increment primary key, b int)")
+        cursor.execute("INSERT INTO t1 VALUES (NULL, ?)", (1, ))
+        self.assertEqual(cursor.rowcount, 1)
+        cursor.executemany("INSERT INTO t1 VALUES (NULL, ?)", [(2, ), (3,)])
+        self.assertEqual(cursor.rowcount, 2)
+        del cursor
+
     def test_conpy133(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
