@@ -272,6 +272,11 @@ class Cursor(mariadb._mariadb.cursor):
         if self._force_binary:
            self._text= False
 
+        for val in data:
+            if isinstance(val, (bytes, bytearray)):
+                self._text= False
+                break
+
         if self._text:
             # in text mode we need to substitute parameters
             # and store transformed statement

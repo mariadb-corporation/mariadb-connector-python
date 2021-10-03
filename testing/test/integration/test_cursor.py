@@ -1111,6 +1111,15 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.rowcount, 2)
         del cursor
 
+    def test_conpy168(self):
+        conn= create_connection()
+        cursor= conn.cursor()
+        x= os.urandom(32)
+        cursor.execute("SELECT cast(? as binary)", (x,))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], x)
+        del cursor
+
     def test_unicode_parsing(self):
         conn= create_connection()
         cursor= conn.cursor()
