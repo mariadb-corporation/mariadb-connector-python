@@ -69,6 +69,8 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
 
       connection= mariadb.connect(user="myuser", host="localhost", database="test", password="secret")
 
+.. note::   For a description of configuration file handling and settings please read the chapter `Configuration files <https://github.com/mariadb-corporation/mariadb-connector-c/wiki/config_files#configuration-options>`_ of the MariaDB Connector/C documentation.
+
 
 .. function:: 
     ConnectionPool(**kwargs)
