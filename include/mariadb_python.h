@@ -33,6 +33,9 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#ifdef _MSC_VER
+typedef SSIZE_T ssize_t;
+#endif
 typedef CRITICAL_SECTION pthread_mutex_t;
 #define pthread_mutex_init(A,B)  InitializeCriticalSection(A)
 #define pthread_mutex_lock(A)	 (EnterCriticalSection(A),0)
