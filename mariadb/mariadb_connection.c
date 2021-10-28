@@ -1301,9 +1301,13 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
         return NULL;
 
     from= (char *)PyUnicode_AsUTF8AndSize(string, (Py_ssize_t *)&from_length);
-    to= (char *)alloca(from_length * 2 + 1);
+    if (!(to= (char *)PyMem_RawCalloc(1, from_length * 2 + 1)))
+    {
+        return NULL;
+    }
     to_length= mysql_real_escape_string(self->mysql, to, from, (unsigned long)from_length);
     new_string= PyUnicode_FromStringAndSize(to, to_length);
+    PyMem_Free(to);
     return new_string;
 }
 /* }}} */

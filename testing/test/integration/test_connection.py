@@ -204,5 +204,14 @@ class TestConnection(unittest.TestCase):
         except mariadb.InterfaceError:
             pass
 
+    def test_conpy175(self):
+        default_conf= conf()
+        c1 = mariadb.connect(**default_conf)
+        str= '"' * 4194304
+        newstr= c1.escape_string(str);
+        self.assertEqual(newstr, '\\"' * 4194304)
+        c1.close()
+
+
 if __name__ == '__main__':
     unittest.main()
