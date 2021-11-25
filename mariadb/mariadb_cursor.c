@@ -386,12 +386,14 @@ static void MrdbCursor_clear_result(MrdbCursor *self)
         self->stmt)
     {
         /* free current result */
-        mysql_stmt_free_result(self->stmt);
+        if (mysql_stmt_field_count(self->stmt))
+            mysql_stmt_free_result(self->stmt);
 
         /* check if there are more pending result sets */
         while (mysql_stmt_next_result(self->stmt) == 0)
         {
-            mysql_stmt_free_result(self->stmt);
+            if (mysql_stmt_field_count(self->stmt))
+                mysql_stmt_free_result(self->stmt);
         }
     } else if (self->is_text)
     {
@@ -1630,6 +1632,8 @@ MrdbCursor_callproc(MrdbCursor *self, PyObject *args)
     new_args= PyTuple_New(2);
     PyTuple_SetItem(new_args, 0, PyUnicode_FromString(stmt));
     PyTuple_SetItem(new_args, 1, data);
+
+    MrdbCursor_clear_result(self);
 
     rc= MrdbCursor_execute(self, new_args, NULL);
 end:

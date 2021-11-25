@@ -13,6 +13,7 @@ def conf():
     d = {
         "user": os.environ.get('TEST_USER', 'root'),
         "host": os.environ.get('TEST_HOST', 'localhost'),
+        "unix_socket" : "/tmp/mysql.sock",
         "database": os.environ.get('TEST_DATABASE', 'testp'),
         "port": int(os.environ.get('TEST_PORT', '3306')),
     }
