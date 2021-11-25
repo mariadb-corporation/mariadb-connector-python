@@ -405,12 +405,14 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
         self->stmt)
     {
         /* free current result */
-        mysql_stmt_free_result(self->stmt);
+        if (mysql_stmt_field_count(self->stmt))
+            mysql_stmt_free_result(self->stmt);
 
         /* check if there are more pending result sets */
         while (mysql_stmt_next_result(self->stmt) == 0)
         {
-            mysql_stmt_free_result(self->stmt);
+            if (mysql_stmt_field_count(self->stmt))
+                mysql_stmt_free_result(self->stmt);
         }
     } else if (self->parseinfo.is_text)
     {
