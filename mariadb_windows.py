@@ -55,11 +55,12 @@ def get_config(options):
     cfg = MariaDBConfiguration()
     cfg.includes = [".\\include", mariadb_dir + "\\include", mariadb_dir + "\\include\\mysql"]
     cfg.lib_dirs = [mariadb_dir + "\\lib"]
-    cfg.libs = ["ws2_32", "advapi32", "kernel32", "shlwapi", "crypt32", "secur32", "bcrypt"]
+    cfg.libs = ["ws2_32", "advapi32", "kernel32", "shlwapi", "crypt32", "secur32", "bcrypt", "python3"]
     if static.lower() == "on" or static.lower() == "default":
         cfg.libs.append("mariadbclient")
     else:
         print("dynamic")
     cfg.extra_link_args= ["/NODEFAULTLIB:LIBCMT"]
-    cfg.extra_compile_args=["\"-DDEFAULT_PLUGINS_SUBDIR=\\\"\"" + options["install_dir"].replace(""'\\', '/') + "/lib/plugin\"\\\"\"", "/MD"]
+
+    cfg.extra_compile_args=['-DDEFAULT_PLUGINS_SUBDIR="%s\\\\lib\\\\plugin"' % options["install_dir"].replace(""'\\', '\\\\'), "/MD"]
     return cfg
