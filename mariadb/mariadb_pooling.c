@@ -234,6 +234,19 @@ MrdbPool_traverse(MrdbPool *self,
     return 0;
 }
 
+static PyObject *MrdbPool_repr(MrdbPool *self)
+{
+    char pobj_repr[384];
+
+    if (!self->closed)
+        snprintf(pobj_repr, 384, "<mariadb.ConnectionPool '%s' at %p>",
+                self->pool_name, self);
+    else
+        snprintf(pobj_repr, 384, "<mariadb.ConnectionPool (closed) at %p>",
+                self);
+    return PyUnicode_FromString(pobj_repr);
+}
+
 PyTypeObject
 MrdbPool_Type =
 {
@@ -246,7 +259,7 @@ MrdbPool_Type =
     0, /* tp_getattr */
     0, /* tp_setattr */
     0, /* PyAsyncMethods * */
-    0, /* tp_repr */
+    (reprfunc)MrdbPool_repr, /* tp_repr */
 
     /* Method suites for standard classes */
 
@@ -307,6 +320,7 @@ MrdbPool_dealloc(MrdbPool *self)
     if (self)
     {
         MrdbPool_close(self);
+        self->closed= 1;
         Py_TYPE(self)->tp_free((PyObject*)self);
     }
 }
@@ -547,6 +561,7 @@ MrdbPool_close(MrdbPool *self)
         Py_DECREF(obj);
     }
     Py_XDECREF(self->configuration);
+    self->closed= 1;
     pthread_mutex_unlock(&self->lock);
     pthread_mutex_destroy(&self->lock);
     Py_INCREF(Py_None);

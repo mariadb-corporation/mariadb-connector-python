@@ -208,6 +208,7 @@ typedef struct mrdb_pool{
     MrdbConnection **connection;
     uint32_t connection_cnt;
     uint16_t max_size;
+    uint8_t closed;
 } MrdbPool;
 
 typedef struct {
@@ -272,7 +273,7 @@ typedef struct {
     uint8_t is_prepared;
     uint8_t is_buffered;
     uint8_t fetched;
-    uint8_t is_closed;
+    uint8_t closed;
     uint8_t is_text;
     uint8_t is_binary;
     MrdbParser *parser;
@@ -497,9 +498,9 @@ if ((obj)->thread_state)\
     }
 
 #define MARIADB_CHECK_STMT(cursor)\
-    if (!cursor->connection->mysql || cursor->is_closed)\
+    if (!cursor->connection->mysql || cursor->closed)\
     {\
-       (cursor)->is_closed= 1;\
+       (cursor)->closed= 1;\
         mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
       "Invalid cursor or not connected");\
     }

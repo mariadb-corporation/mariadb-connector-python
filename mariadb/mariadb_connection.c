@@ -499,6 +499,19 @@ static int MrdbConnection_traverse(
     return 0;
 }
 
+static PyObject *MrdbConnection_repr(MrdbConnection *self)
+{
+    char cobj_repr[384];
+
+    if (self->mysql)
+        snprintf(cobj_repr, 384, "<mariadb.connection connected to '%s' at %p>",
+                self->host, self);
+    else
+        snprintf(cobj_repr, 384, "<mariadb.connection (closed) at %p>",
+                self);
+    return PyUnicode_FromString(cobj_repr);
+}
+
 PyTypeObject MrdbConnection_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
         "mariadb.connection",
@@ -509,7 +522,7 @@ PyTypeObject MrdbConnection_Type = {
     0, /* tp_getattr */
     0, /* tp_setattr */
     0, /* PyAsyncMethods* */
-    0, /* tp_repr */
+    (reprfunc)MrdbConnection_repr, /* tp_repr */
 
     /* Method suites for standard classes */
 
