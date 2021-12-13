@@ -181,9 +181,9 @@ typedef struct {
     enum enum_tpc_state tpc_state;
     char xid[150]; /* large enough, to hold 2 * MAX_TPC_XID size + integer value */
     PyObject *dsn; /* always null */
+    const char *host;
 /*    const char *tls_cipher;
     const char *tls_version;
-    const char *host;
     const char *unix_socket;
     int port;
     const char *charset;
@@ -195,6 +195,7 @@ typedef struct {
     PyThreadState *thread_state;
     unsigned long thread_id;
     char *server_info;
+    uint8_t closed;
 } MrdbConnection;
 
 typedef struct {
@@ -265,7 +266,7 @@ typedef struct {
     uint8_t is_prepared;
     char is_buffered;
     uint8_t fetched;
-    uint8_t is_closed;
+    uint8_t closed;
     uint8_t reprepare;
     PyThreadState *thread_state;
     enum enum_paramstyle paramstyle;
@@ -434,9 +435,9 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
     }
 
 #define MARIADB_CHECK_STMT(cursor)\
-    if (!cursor->connection->mysql || cursor->is_closed)\
+    if (!cursor->connection->mysql || cursor->closed)\
     {\
-       (cursor)->is_closed= 1;\
+       (cursor)->closed= 1;\
         mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
       "Invalid cursor or not connected");\
     }

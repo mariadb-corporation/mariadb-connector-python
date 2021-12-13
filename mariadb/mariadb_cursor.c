@@ -318,6 +318,18 @@ static int MrdbCursor_traverse(
     return 0;
 }
 
+static PyObject *MrdbCursor_repr(MrdbCursor *self)
+{
+    char cobj_repr[384];
+
+    if (!self->closed)
+        snprintf(cobj_repr, 384, "<mariadb.cursor at %p>", self);
+    else
+        snprintf(cobj_repr, 384, "<mariadb.cursor (closed) at %p>",
+                self);
+    return PyUnicode_FromString(cobj_repr);
+}
+
 PyTypeObject MrdbCursor_Type =
 {
     PyVarObject_HEAD_INIT(NULL, 0)
@@ -329,7 +341,7 @@ PyTypeObject MrdbCursor_Type =
     0, /* tp_getattr */
     0, /* tp_setattr */
     0, /* PyAsyncMethods * */
-    0, /* tp_repr */
+    (reprfunc)MrdbCursor_repr, /* tp_repr */
 
     /* Method suites for standard classes */
 
@@ -503,7 +515,7 @@ static void ma_set_result_column_value(MrdbCursor *self, PyObject *row, uint32_t
 static
 void ma_cursor_close(MrdbCursor *self)
 {
-    if (!self->is_closed)
+    if (!self->closed)
     {
         MrdbCursor_clear_result(self);
         if (!self->parseinfo.is_text && self->stmt)
@@ -524,11 +536,11 @@ void ma_cursor_close(MrdbCursor *self)
         }
 
         MrdbCursor_clearparseinfo(&self->parseinfo);
-        self->is_closed= 1;
+        self->closed= 1;
     }
 }
 
-    static
+static
 PyObject * MrdbCursor_close(MrdbCursor *self)
 {
     ma_cursor_close(self);
@@ -949,7 +961,7 @@ MrdbCursor_iternext(PyObject *self)
 static PyObject
 *MrdbCursor_closed(MrdbCursor *self)
 {
-    if (self->is_closed || self->connection->mysql == NULL)
+    if (self->closed || self->connection->mysql == NULL)
         Py_RETURN_TRUE;
     Py_RETURN_FALSE;
 }

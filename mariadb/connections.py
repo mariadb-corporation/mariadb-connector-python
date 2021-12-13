@@ -50,6 +50,7 @@ class Connection(mariadb._mariadb.connection):
         self.__last_used = 0
         self.tpc_state= TPC_STATE.NONE
         self._xid= None
+        self.__closed= None
 
         autocommit= kwargs.pop("autocommit", False)
         self._converter= kwargs.pop("converter", None)
