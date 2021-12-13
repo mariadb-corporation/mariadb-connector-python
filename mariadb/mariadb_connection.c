@@ -287,10 +287,10 @@ static void MrdbConnection_GetCapabilities(MrdbConnection *self)
 
 void MrdbConnection_SetAttributes(MrdbConnection *self)
 {
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, &self->host);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SSL_CIPHER, &self->tls_cipher);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_TLS_VERSION, &self->tls_version);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_UNIX_SOCKET, &self->unix_socket);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_SSL_CIPHER, (void *)&self->tls_cipher);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_TLS_VERSION, (void *)&self->tls_version);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_UNIX_SOCKET, (void *)&self->unix_socket);
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_PORT, &self->port);
     self->charset= mariadb_default_charset;
     self->collation= mariadb_default_collation;

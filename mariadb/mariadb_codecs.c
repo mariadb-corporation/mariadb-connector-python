@@ -409,10 +409,10 @@ static PyObject *Mrdb_GetTimeDelta(MYSQL_TIME *tm)
 {
     int days, hour, minute, second, second_part;
  
-    hour= (tm->neg) ? -tm->hour : tm->hour;
-    minute= (tm->neg) ? -tm->minute : tm->minute;
-    second= (tm->neg) ? -tm->second : tm->second;
-    second_part= (tm->neg) ? -tm->second_part : tm->second_part;
+    hour= (tm->neg) ? -1 * tm->hour : tm->hour;
+    minute= (tm->neg) ? -1 * tm->minute : tm->minute;
+    second= (tm->neg) ? -1 * tm->second : tm->second;
+    second_part= (tm->neg) ? -1 * tm->second_part : tm->second_part;
 
     days= hour / 24;
     hour= hour % 24;
