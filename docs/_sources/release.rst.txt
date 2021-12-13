@@ -1,6 +1,30 @@
 Release history
 ===============
 
+MariaDB Connector/Python 1.0.9
+------------------------------
+
+Release date: Not released
+
+Issues fixed:
+^^^^^^^^^^^^^
+
+- CONPY-184: Display status of connection, cursor and pool class in string representation.
+- CONPY-178: Repeated execution of cursors callproc() method hangs   
+- CONPY-175: Fixed crash in escape_string
+- Build fixes for Visual Studio 2022 (Windows)
+
+MariaDB Connector/Python 1.0.8
+------------------------------
+
+Release date: Oct 22 2021
+
+Issues fixed:
+^^^^^^^^^^^^^
+
+- CONPY-173: Fixed windows build for Python 3.10
+
+
 MariaDB Connector/Python 1.0.7
 ------------------------------
 
