@@ -10,7 +10,7 @@ from benchmarks.internal_bench import run_test
 from test.conf_test import conf, glob
 
 
-module= glob();
+module= glob()
 dbdrv = importlib.import_module(module["module"])
 
 

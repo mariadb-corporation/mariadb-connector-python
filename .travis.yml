@@ -1,22 +1,24 @@
 sudo: true
-language: python
+os: linux
 dist: bionic
-
-services:
-- docker
-
+language: c
+services: docker
 addons:
   hosts:
     - mariadb.example.com
 
 before_install:
-  - export PROJ_PATH=`pwd`
-  - chmod +x .travis/script.sh
+  - git clone https://github.com/mariadb-corporation/connector-test-machine.git
+
+install:
+  - export MAIN_PATH=`pwd`
+  # install pyenv to test multiple python version
+  - git clone https://github.com/pyenv/pyenv.git ~/.pyenv
+  - export PYENV_ROOT="$HOME/.pyenv"
+  - eval "$(pyenv init -)"
+  - export PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
+  # install c dependency
   - sudo apt-get install software-properties-common
-  - sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-  - sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://mirrors.accretive-networks.net/mariadb/repo/10.4/ubuntu bionic main'
-  - sudo apt-get remove --purge mysql*
-  - sudo apt update
   - sudo apt-get install -f libssl-dev libssl1.1
   - sudo apt-get install -f
   - git clone https://github.com/mariadb-corporation/mariadb-connector-c.git ~/.cc_3.1
@@ -26,54 +28,73 @@ before_install:
   - cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
   - make -j4
   - sudo make install
-  - cd $PROJ_PATH
-  - git clone https://github.com/pyenv/pyenv.git ~/.pyenv
-  - export PYENV_ROOT="$HOME/.pyenv"
-  - export PATH="$PYENV_ROOT/bin:$PATH"
-  - echo $PATH
-  - eval "$(pyenv init -)"
-
-install:
-  - wget -qO- 'https://github.com/tianon/pgp-happy-eyeballs/raw/master/hack-my-builds.sh' | bash
-  # generate SSL certificates
-  - mkdir tmp
-  - chmod +x .travis/gen-ssl.sh
-  - chmod +x .travis/build/build.sh
-  - chmod +x .travis/build/docker-entrypoint.sh
-  - chmod 777 .travis/build/
-  - .travis/gen-ssl.sh mariadb.example.com tmp
-  - export PROJ_PATH=`pwd`
-  - export SSLCERT=$PROJ_PATH/tmp
-  - export TEST_SSL_CA_FILE=$SSLCERT/server.crt
-  - export TEST_SSL_CLIENT_KEY_FILE=$SSLCERT/client.key
-  - export TEST_SSL_CLIENT_CERT_FILE=$SSLCERT/client.crt
-  - export TEST_SSL_CLIENT_KEYSTORE_FILE=$SSLCERT/client-keystore.p12
   - export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
   - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
+  # install "install-latest" to retrieve latest python version corresponding to major.minor version
+  - git clone https://github.com/momo-lab/pyenv-install-latest.git "$(pyenv root)"/plugins/pyenv-install-latest
+  - export REAL_PYTHON_VERSION=$(pyenv install-latest --print $PYTHON_VER)
+  - echo $REAL_PYTHON_VERSION
+  - pyenv install $REAL_PYTHON_VERSION
+  - export PYENV_VERSION=$REAL_PYTHON_VERSION
+  - pyenv versions
+  # install server
+  - cd $MAIN_PATH
+  - source connector-test-machine/launch.sh -t "$srv" -v "$v" -d testp -l "$local"
 
 env:
   global:
-  - TEST_PORT=3305
-  - TEST_HOST=mariadb.example.com
+    - PYTHON_VER="3.10"
 
-matrix:
+jobs:
+  fast_finish: true
   allow_failures:
-#  - env: DB=mariadb:10.5 SQLALCHEMY=1
+    - env: srv=build v=10.6
   include:
-  - env: SKYSQL=true PYTHON_VER="3.9.0"
-  - env: DB=mariadb:10.4 PYTHON_VER="3.6.0"
-  - env: DB=mariadb:10.4 PYTHON_VER="3.9.0"
-#  - env: DB=mariadb:10.4 PYTHON_VER="pypy3.6-7.3.1"
-#  - env: DB=mariadb:10.4 BENCH=1
-  - env: DB=mariadb:10.6 PYTHON_VER="3.10.0"
-  - env: DB=mariadb:10.5 PYTHON_VER="3.6.0"
-  - env: DB=mariadb:10.4 PYTHON_VER="3.6.0" MAXSCALE_VERSION=2.2.9 TEST_PORT=4007 TEST_USER=bob TEXT_DATABASE=test2 SKIP_LEAK=1
-  - env: DB=mariadb:10.2 PYTHON_VER="3.6.0"
-  - env: DB=mariadb:10.3 PYTHON_VER="3.6.0"
-  - env: DB=mysql:5.7 PYTHON_VER="3.6.0"
+    - env: srv=mariadb v=10.2 local=1
+    - env: srv=mariadb v=10.3 local=1
+    - env: srv=mariadb v=10.4 local=1
+    - env: srv=mariadb v=10.5 local=1
+    - env: srv=mariadb v=10.6 local=1 PYTHON_VER="3.6"
+    - env: srv=mariadb v=10.6 local=1 PYTHON_VER="3.7"
+    - env: srv=mariadb v=10.6 local=1 PYTHON_VER="3.8"
+    - env: srv=mariadb v=10.6 local=1 PYTHON_VER="3.9"
+    - env: srv=mariadb v=10.6 local=1 PYTHON_VER="3.10"
+    - env: srv=mariadb v=10.6 local=1 PYTHON_VER="3.10" BENCH=1
+    - env: srv=mariadb v=10.7 local=1
+    - if: type = push AND fork = false
+      env: srv=maxscale
+    - if: type = push AND fork = false
+      env: srv=mariadb-es v=10.6
+    - if: type = push AND fork = false
+      env: srv=skysql RUN_LONG_TEST=0
+    - if: type = push AND fork = false
+      env: srv=skysql-ha RUN_LONG_TEST=0
+    - if: type = push AND fork = false
+      env: srv=build v=10.6
+    - if: type = push AND fork = false
+      env: srv=mysql v=5.7
+    - if: type = push AND fork = false
+      env: srv=mysql v=8.0
 
 notifications:
   email: false
 
 script:
-  - .travis/script.sh
+  - python --version
+  - python setup.py build
+  - python setup.py install
+  - cd testing
+  - |-
+    if [ -z "$BENCH" ] ; then
+      python -m unittest discover -v
+    else
+      pip install mysql-connector-python pymysql pyperf
+      export TEST_MODULE=mariadb
+      python bench_init.py
+      python bench.py -o mariadb_bench.json --inherit-environ=TEST_DB_USER,TEST_DB_HOST,TEST_DB_DATABASE,TEST_DB_PORT,TEST_REQUIRE_TLS,TEST_DB_PASSWORD
+      export TEST_MODULE=mysql.connector
+      python bench.py -o mysql_bench.json --inherit-environ=TEST_DB_USER,TEST_DB_HOST,TEST_DB_DATABASE,TEST_DB_PORT,TEST_REQUIRE_TLS,TEST_DB_PASSWORD
+      export TEST_MODULE=pymysql
+      python bench.py -o pymysql_bench.json --inherit-environ=TEST_DB_USER,TEST_DB_HOST,TEST_DB_DATABASE,TEST_DB_PORT,TEST_REQUIRE_TLS,TEST_DB_PASSWORD
+      python -m pyperf compare_to pymysql_bench.json mysql_bench.json mariadb_bench.json --table
+    fi

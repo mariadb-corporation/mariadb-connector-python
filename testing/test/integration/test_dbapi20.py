@@ -70,6 +70,8 @@ import mariadb as mariadb
 #
 from test.conf_test import conf
 
+from test.base_test import is_maxscale
+
 
 class DatabaseAPI20Test(unittest.TestCase):
     ''' Test a database self.driver for DB API 2.0 compatibility.
@@ -404,7 +406,7 @@ class DatabaseAPI20Test(unittest.TestCase):
                          )
 
     def test_executemany(self):
-        if os.environ.get("MAXSCALE_VERSION"):
+        if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         con = self._connect()
         try:

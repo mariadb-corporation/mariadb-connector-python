@@ -6,7 +6,7 @@ import unittest
 
 import mariadb
 
-from test.base_test import create_connection, is_skysql
+from test.base_test import create_connection, is_skysql, is_maxscale
 from test.conf_test import conf
 import platform
 
@@ -84,7 +84,7 @@ class TestConnection(unittest.TestCase):
         cursor=new_conn.cursor()
         cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
         row=cursor.fetchone()
-        if os.environ.get("MAXSCALE_VERSION"):
+        if is_maxscale():
             self.assertEqual(row[1], "OFF")
         else:
             self.assertEqual(row[1], "ON")
@@ -96,7 +96,7 @@ class TestConnection(unittest.TestCase):
             self.skipTest("CREATE OR REPLACE SCHEMA not supported")
         if self.connection.server_version < 100202:
             self.skipTest("session tracking not supported")
-        if os.environ.get("MAXSCALE_VERSION"):
+        if is_maxscale():
             self.skipTest("MAXSCALE doesn't tell schema change for now")
 
         default_conf = conf()
@@ -110,7 +110,7 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn.database, default_conf["database"])
 
     def test_ping(self):
-        if os.environ.get("MAXSCALE_VERSION"):
+        if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
         conn = self.connection
         cursor = conn.cursor()
@@ -130,7 +130,7 @@ class TestConnection(unittest.TestCase):
         if is_skysql():
             self.skipTest("Test fail on SkySQL")
         default_conf = conf()
-        if os.environ.get("MAXSCALE_VERSION"):
+        if is_maxscale():
             self.skipTest("MAXSCALE doesn't support ed25519 for now")
         if self.connection.server_version < 100122:
             self.skipTest("ed25519 not supported")
