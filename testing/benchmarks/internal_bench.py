@@ -3,31 +3,31 @@
 
 import pyperf, os
 
+
 from benchmarks.benchmark.do_1 import do1
 from benchmarks.benchmark.fetch import *
 
 from benchmarks.benchmark.select_1 import select_1
 from benchmarks.benchmark.select_param import select_param
-from benchmarks.benchmark.select_10_cols_from_seq_1_to_10000 import \
-    select_10_cols_from_seq_1_to_10000
+from benchmarks.benchmark.select_10_cols_from_seq_1_to_10000 import select_10_cols_from_seq_1_to_10000
 from benchmarks.benchmark.select_1_mysql_user import select_1_mysql_user
 from benchmarks.benchmark.bulk import bulk
 
-def run_test(tests, conn):
+
+def run_test(tests, conn, paramstyle):
     runner = pyperf.Runner()
     for test in tests:
-        runner.bench_time_func(test['label'], test['method'], conn)
+        runner.bench_time_func(test['label'], test['method'], conn, paramstyle)
 
-
-def test_suite():
+def test_suite(paramstyle):
     is_mysql= int(os.environ.get('TEST_MYSQL', '1'))
     ts= [
-        {'label': 'str_fetchloop', 'method': str_fetchloop},
-        {'label': 'str_fetchall', 'method': str_fetchall},
-        {'label': 'num_fetchloop', 'method': num_fetchloop},
-        {'label': 'num_fetchall', 'method': num_fetchall},
+        {'label': '100 rows * 3 col utf8 string using fetchone', 'method': str_fetchloop},
+        {'label': '100 rows * 3 col utf8 string using fetchall', 'method': str_fetchall},
+        {'label': '1000 rows * 5 numeric col using fetchone', 'method': num_fetchloop},
+        {'label': '1000 rows * 5 numeric col using fetchall', 'method': num_fetchall},
         {'label': 'select 1', 'method': select_1},
-        {'label': 'select param', 'method': select_param},
+        {'label': 'select ? - param 1', 'method': select_param},
         {'label': 'bulk: insert/update/delete', 'method': bulk},
     ]
     if is_mysql == 1:

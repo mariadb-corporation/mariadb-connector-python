@@ -14,7 +14,7 @@ for i in range(0, 10):
 request += " from seq_1_to_10000"
 
 
-def select_10_cols_from_seq_1_to_10000(loops, conn):
+def select_10_cols_from_seq_1_to_10000(loops, conn, paramstyle):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()

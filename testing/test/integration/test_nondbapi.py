@@ -6,7 +6,7 @@ import unittest
 import os
 import mariadb
 
-from test.base_test import create_connection, is_skysql
+from test.base_test import create_connection, is_skysql, is_maxscale, is_mysql
 from test.conf_test import conf
 
 
@@ -19,11 +19,11 @@ class CursorTest(unittest.TestCase):
         del self.connection
 
     def test_ping(self):
-        if os.environ.get("MAXSCALE_VERSION"):
+        if is_maxscale():
             self.skipTest("MAXSCALE return wrong thread id")
 
         new_conn = create_connection()
-        id = new_conn.connection_id;
+        id = new_conn.connection_id
         self.connection.kill(id)
         try:
             new_conn.ping()
@@ -32,7 +32,7 @@ class CursorTest(unittest.TestCase):
         del new_conn
         new_conn = create_connection()
         new_conn.auto_reconnect = True
-        id = new_conn.connection_id;
+        id = new_conn.connection_id
         self.connection.kill(id)
         new_conn.ping()
         new_id = new_conn.connection_id
@@ -44,11 +44,12 @@ class CursorTest(unittest.TestCase):
             self.skipTest("SkySQL failure")
         if self.connection.server_version < 100103:
             self.skipTest("CREATE OR REPLACE USER not supported")
-        if os.environ.get("MAXSCALE_VERSION"):
+        if is_maxscale():
             self.skipTest("MAXSCALE doesn't get new user immediately")
         if self.connection.server_name == "localhost":
-            curs= self.connection.cursor(buffered=True)
-            curs.execute("select * from information_schema.plugins where plugin_name='unix_socket' and plugin_status='ACTIVE'")
+            curs = self.connection.cursor(buffered=True)
+            curs.execute(
+                "select * from information_schema.plugins where plugin_name='unix_socket' and plugin_status='ACTIVE'")
             if curs.rowcount > 0:
                 del curs
                 self.skipTest("unix_socket is active")
@@ -57,17 +58,21 @@ class CursorTest(unittest.TestCase):
         default_conf = conf()
         cursor = self.connection.cursor()
         cursor.execute("drop user if exists foo")
-        cursor.execute("create user foo@'%'")
-        cursor.execute("GRANT ALL on `" + default_conf["database"] + "`.* TO foo@'%'")
+        if is_mysql() and self.connection.server_version < 80000:
+            cursor.execute("create user foo@'%'")
+            cursor.execute("GRANT ALL on `" + default_conf["database"] + "`.* TO foo@'%' IDENTIFIED BY 'heyPassw-!µ20§rd'")
+        else:
+            cursor.execute("create user foo@'%' IDENTIFIED BY 'heyPassw-!µ20§rd'")
+            cursor.execute("GRANT ALL on `" + default_conf["database"] + "`.* TO foo@'%'")
         new_conn = create_connection()
-        new_conn.change_user("foo", "", "")
+        new_conn.change_user("foo", "heyPassw-!µ20§rd", "")
         self.assertEqual("foo", new_conn.user)
         cursor.execute("drop user foo")
         del new_conn
         del cursor
 
     def test_reconnect(self):
-        if os.environ.get("MAXSCALE_VERSION"):
+        if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
         new_conn = create_connection()
         conn1_id = new_conn.connection_id

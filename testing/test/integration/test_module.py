@@ -20,10 +20,10 @@ class TestConnection(unittest.TestCase):
         del self.connection
 
     def test_conpy_63(self):
-        version= mariadb.__version__
-        version_info= mariadb.__version_info__
+        version = mariadb.__version__
+        version_info = mariadb.__version_info__
 
-        str_version= list(map(str, version.split('.')))
+        str_version = list(map(str, version.split('.')))
 
         self.assertEqual(int(str_version[0]), version_info[0])
         self.assertEqual(int(str_version[1]), version_info[1])
@@ -34,6 +34,7 @@ class TestConnection(unittest.TestCase):
             self.assertEqual(int(str_version[2]), version_info[2])
         except:
             self.assertEqual(str_version[2], version_info[2])
+
 
 if __name__ == '__main__':
     unittest.main()
