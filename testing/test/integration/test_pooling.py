@@ -92,6 +92,9 @@ class TestPooling(unittest.TestCase):
     def test_conpy69(self):
         if is_skysql():
             self.skipTest("skipping on SkySQL")
+        if is_maxscale():
+            self.skipTest("skipping on maxscale, bug")
+
         conn = create_connection()
         conn.autocommit = True
         cursor1 = conn.cursor()
