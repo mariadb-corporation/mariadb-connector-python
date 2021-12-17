@@ -4,7 +4,7 @@
 import pyperf
 
 
-def do1(loops, conn):
+def do1(loops, conn, paramstyle):
 
     cursor = conn.cursor()
     range_it = range(loops)

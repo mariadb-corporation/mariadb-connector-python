@@ -3,7 +3,7 @@
 
 import pyperf
 
-def str_fetchall(loops, conn):
+def str_fetchall(loops, conn, paramstyle):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()
@@ -14,7 +14,7 @@ def str_fetchall(loops, conn):
     del cursor
     return pyperf.perf_counter() - t0
 
-def str_fetchloop(loops, conn):
+def str_fetchloop(loops, conn, paramstyle):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()
@@ -26,7 +26,7 @@ def str_fetchloop(loops, conn):
     del cursor
     return pyperf.perf_counter() - t0
 
-def num_fetchall(loops, conn):
+def num_fetchall(loops, conn, paramstyle):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()
@@ -37,7 +37,7 @@ def num_fetchall(loops, conn):
     del cursor
     return pyperf.perf_counter() - t0
 
-def num_fetchloop(loops, conn):
+def num_fetchloop(loops, conn, paramstyle):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()

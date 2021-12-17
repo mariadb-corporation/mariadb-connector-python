@@ -8,13 +8,14 @@ import importlib
 from test.conf_test import conf, glob
 from benchmarks.setup_db import init_db, end_db
 
-module= glob();
+module = glob()
 dbdrv = importlib.import_module(module["module"])
+
 
 def main():
     default_conf = conf()
     conn = dbdrv.connect(**default_conf)
-    init_db(conn)
+    init_db(conn, dbdrv.paramstyle)
     conn.close()
 
 if __name__ == "__main__":

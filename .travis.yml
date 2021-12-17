@@ -91,10 +91,10 @@ script:
       pip install mysql-connector-python pymysql pyperf
       export TEST_MODULE=mariadb
       python bench_init.py
-      python bench.py -o mariadb_bench.json --inherit-environ=TEST_DB_USER,TEST_DB_HOST,TEST_DB_DATABASE,TEST_DB_PORT,TEST_REQUIRE_TLS,TEST_DB_PASSWORD
+      python bench.py -o mariadb_bench.json --inherit-environ=TEST_DB_USER,TEST_DB_HOST,TEST_DB_DATABASE,TEST_DB_PORT,TEST_REQUIRE_TLS,TEST_DB_PASSWORD,TEST_MODULE
       export TEST_MODULE=mysql.connector
-      python bench.py -o mysql_bench.json --inherit-environ=TEST_DB_USER,TEST_DB_HOST,TEST_DB_DATABASE,TEST_DB_PORT,TEST_REQUIRE_TLS,TEST_DB_PASSWORD
+      python bench.py -o mysql-connector-python_bench.json --inherit-environ=TEST_DB_USER,TEST_DB_HOST,TEST_DB_DATABASE,TEST_DB_PORT,TEST_REQUIRE_TLS,TEST_DB_PASSWORD,TEST_MODULE
       export TEST_MODULE=pymysql
-      python bench.py -o pymysql_bench.json --inherit-environ=TEST_DB_USER,TEST_DB_HOST,TEST_DB_DATABASE,TEST_DB_PORT,TEST_REQUIRE_TLS,TEST_DB_PASSWORD
-      python -m pyperf compare_to pymysql_bench.json mysql_bench.json mariadb_bench.json --table
+      python bench.py -o pymysql_bench.json --inherit-environ=TEST_DB_USER,TEST_DB_HOST,TEST_DB_DATABASE,TEST_DB_PORT,TEST_REQUIRE_TLS,TEST_DB_PASSWORD,TEST_MODULE
+      python -m pyperf compare_to pymysql_bench.json mysql-connector-python_bench.json mariadb_bench.json --table
     fi
