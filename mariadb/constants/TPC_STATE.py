@@ -1,3 +1,0 @@
-NONE=0
-XID=1
-PREPARE=2

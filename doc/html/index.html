@@ -1,0 +1,244 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MariaDB Connector/Python &#8212; MariaDB Connector/Python 1.1.0b3-beta documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css" />
+    
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installation" href="install.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installation"
+             accesskey="N">next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">MariaDB Connector/Python 1.1.0b3-beta documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">MariaDB Connector/Python</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="mariadb-connector-python">
+<h1>MariaDB Connector/Python<a class="headerlink" href="#mariadb-connector-python" title="Permalink to this headline">¶</a></h1>
+<p>MariaDB Connector/Python enables python programs to access MariaDB and MySQL databases, using an API
+which is compliant with the Python DB API 2.0 (PEP-249). It is written in C and Python and uses
+MariaDB Connector/C client library for client server communication.</p>
+<p class="rubric">Contents</p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="install.html#prerequisites">Prerequisites</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="install.html#build-prerequisites">Build prerequisites</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="install.html#binary-installation">Binary installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="install.html#test-suite">Test suite</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Basic usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#connecting">Connecting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#passing-parameters-to-sql-statements">Passing parameters to SQL statements</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="usage.html#using-indicators">Using indicators</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="pooling.html">Connection pooling</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pooling.html#configuring-and-using-a-connection-pool">Configuring and using a connection pool</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="pooling.html#creating-a-connection-pool">Creating a connection pool</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="module.html">The mariadb module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="module.html#attributes">Attributes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="module.html#exceptions">Exceptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="module.html#type-objects-and-constructors">Type objects and constructors</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="connection.html">The connection class</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="connection.html#connection-constructors">Connection constructors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="connection.html#connection-methods">Connection methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="connection.html#connection-attributes">Connection attributes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="cursor.html">The cursor class</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="cursor.html#cursor-methods">Cursor methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="cursor.html#cursor-attributes">Cursor attributes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="pool.html">The ConnectionPool class</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="pool.html#connectionpool-methods">ConnectionPool methods</a></li>
+<li class="toctree-l3"><a class="reference internal" href="pool.html#connectionpool-attributes">ConnectionPool attributes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="constants.html">Constants</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#command">COMMAND</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#client">CLIENT</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#cursor">CURSOR</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#field-flag">FIELD_FLAG</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#field-types">FIELD_TYPES</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#indicators">INDICATORS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#info">INFO</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#tpc-state">TPC_STATE</a></li>
+<li class="toctree-l3"><a class="reference internal" href="constants.html#status">STATUS</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="license.html">License</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="license.html#mariadb-connector-python">MariaDB Connector/Python</a></li>
+<li class="toctree-l2"><a class="reference internal" href="license.html#mariadb-connector-python-documentation">MariaDB Connector/Python documentation</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="release.html">Release history</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-9">MariaDB Connector/Python 1.0.9</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#issues-fixed">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-8">MariaDB Connector/Python 1.0.8</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id1">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-7">MariaDB Connector/Python 1.0.7</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id2">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-6">MariaDB Connector/Python 1.0.6</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id3">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-5">MariaDB Connector/Python 1.0.5</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#notable-changes">Notable changes:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id4">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-4">MariaDB Connector/Python 1.0.4</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id5">Notable changes:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id6">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-3">MariaDB Connector/Python 1.0.3</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id7">Notable changes:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id8">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-2">MariaDB Connector/Python 1.0.2</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id9">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-1">MariaDB Connector/Python 1.0.1</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id10">Notable changes:</a></li>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id11">Issues fixed:</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="release.html#mariadb-connector-python-1-0-0">MariaDB Connector/Python 1.0.0</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="release.html#id12">Issues fixed:</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="bugs.html">Bug reports</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="bugs.html#how-to-report-a-bug">How to report a bug?</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="bugs.html#search-first">Search first</a></li>
+<li class="toctree-l3"><a class="reference internal" href="bugs.html#what">What?</a></li>
+<li class="toctree-l3"><a class="reference internal" href="bugs.html#versions-of-components">Versions of components</a></li>
+<li class="toctree-l3"><a class="reference internal" href="bugs.html#avoid-screenshots">Avoid screenshots!</a></li>
+<li class="toctree-l3"><a class="reference internal" href="bugs.html#keep-it-simple">Keep it simple!</a></li>
+<li class="toctree-l3"><a class="reference internal" href="bugs.html#only-report-one-problem-in-one-bug-report">Only report one problem in one bug report</a></li>
+<li class="toctree-l3"><a class="reference internal" href="bugs.html#crashes">Crashes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="bugs.html#report-bugs-in-english-only">Report bugs in English only!</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="indices-and-tables">
+<h2>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</div>
+</div>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="#">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">MariaDB Connector/Python</a><ul>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Next topic</h4>
+  <p class="topless"><a href="install.html"
+                        title="next chapter">Installation</a></p>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installation"
+             >next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">MariaDB Connector/Python 1.1.0b3-beta documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">MariaDB Connector/Python</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019-2021 MariaDB Corporation and Georg Richter.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+    </div>
+  </body>
+</html>
