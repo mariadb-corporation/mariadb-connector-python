@@ -314,7 +314,7 @@ class Cursor(mariadb._mariadb.cursor):
         # If the server doesn't support bulk operations, we need to emulate
         # by looping
         # TODO: insert/replace statements are not optimized yet, rowcount not set
-        if not (self.connection.server_capabilities & (CLIENT.BULK_OPERATIONS >> 32)):
+        if not (self.connection.extended_server_capabilities & (CLIENT.BULK_OPERATIONS >> 32)):
             count= 0
             for row in parameters:
                 self.execute(statement, row)

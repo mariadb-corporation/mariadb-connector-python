@@ -453,6 +453,13 @@ class Connection(mariadb._mariadb.connection):
         """Server capability flags."""
 
         return self._mariadb_get_info(INFO.SERVER_CAPABILITIES, int)
+
+    @property
+    def extended_server_capabilities(self):
+        """Extended server capability flags (only for MariaDB database servers)."""
+
+        return self._mariadb_get_info(INFO.EXTENDED_SERVER_CAPABILITIES, int)
+
     @property
     def server_port(self):
         """Database server TCP/IP port. This value will be 0 in case of a unix socket connection."""
