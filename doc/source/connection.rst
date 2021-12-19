@@ -91,6 +91,9 @@ Connection attributes
 .. versionadded:: 1.1.0
 .. autoattribute:: mariadb.connections.Connection.server_capabilities
 
+.. versionadded:: 1.1.0
+.. autoattribute:: mariadb.connections.Connection.extended_server_capabilities
+
 .. autoattribute:: mariadb.connections.Connection.server_info
 
 .. autoattribute:: mariadb.connections.Connection.server_name
