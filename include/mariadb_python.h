@@ -32,6 +32,7 @@
 #include <limits.h>
 
 #if defined(_WIN32)
+#include <config_win.h>
 #include <windows.h>
 #ifdef _MSC_VER
 typedef SSIZE_T ssize_t;

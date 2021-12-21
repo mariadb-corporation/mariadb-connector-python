@@ -312,7 +312,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     }
 
     self->thread_id= mysql_thread_id(self->mysql);
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, &self->host);
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
 
     has_error= 0;
 end:
@@ -465,7 +465,7 @@ MrdbConnection_executecommand(MrdbConnection *self,
     return NULL;
 
   Py_BEGIN_ALLOW_THREADS;
-  rc= mysql_send_query(self->mysql, cmd, strlen(cmd));
+  rc= mysql_send_query(self->mysql, cmd, (long)strlen(cmd));
   Py_END_ALLOW_THREADS;
 
   if (rc)

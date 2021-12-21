@@ -1102,7 +1102,7 @@ MrdbCursor_execute_text(MrdbCursor *self, PyObject *args)
     db= self->connection->mysql;
 
     Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_send_query(db, statement, statement_len);
+    rc= mysql_send_query(db, statement, (long)statement_len);
     Py_END_ALLOW_THREADS;
 
     if (rc)

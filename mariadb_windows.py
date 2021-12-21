@@ -61,5 +61,9 @@ def get_config(options):
     else:
         print("dynamic")
     cfg.extra_link_args= ["/NODEFAULTLIB:LIBCMT"]
-    cfg.extra_compile_args=["\"-DDEFAULT_PLUGINS_SUBDIR=\\\"\"" + options["install_dir"].replace(""'\\', '/') + "/lib/plugin\"\\\"\"", "/MD"]
+    cfg.extra_compile_args=["/MD"]
+
+    f= open("./include/config_win.h", "w")
+    f.write("#define DEFAULT_PLUGINS_SUBDIR \"%s\\\\lib\\\\plugin\"" % options["install_dir"].replace(""'\\', '\\\\'))
+    f.close()
     return cfg
