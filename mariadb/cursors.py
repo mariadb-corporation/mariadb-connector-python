@@ -47,6 +47,11 @@ class Cursor(mariadb._mariadb.cursor):
     MariaDB Connector/Python Cursor Object
     """
 
+    def check_closed(self):
+        if self.closed:
+            self._connection._check_closed()
+            raise mariadb.ProgrammingError("Cursor is closed")
+
     def __init__(self, connection, **kwargs):
         """
         initialization
@@ -161,6 +166,8 @@ class Cursor(mariadb._mariadb.cursor):
             data: Optional sequence containing data for placeholder substitution.
         """
 
+        self.check_closed()
+
         # create statement 
         params= ""
         if data and len(data):
@@ -203,6 +210,7 @@ class Cursor(mariadb._mariadb.cursor):
         discarding any remaining rows from the current set.
         """
 
+        self.check_closed()
         return super()._nextset()
 
     def execute(self, statement: str, data: Sequence =(), buffered=False):
@@ -226,6 +234,8 @@ class Cursor(mariadb._mariadb.cursor):
         statements which return data, setting optional parameter buffered to
         True will generate buffered result sets.
         """
+
+        self.check_closed()
 
         # Parse statement
         do_parse= True
@@ -303,6 +313,7 @@ class Cursor(mariadb._mariadb.cursor):
         tuple represents data of a row within a table.
         .executemany() only supports DML (insert, update, delete) statements.
         """
+        self.check_closed()
 
         if not parameters or not len(parameters):
             raise TypeError("No data provided")
@@ -335,6 +346,7 @@ class Cursor(mariadb._mariadb.cursor):
 
         fetches row and converts values, if connections has a converter.
         """
+        self.check_closed()
 
         # if there is no result set, PEP-249 requires to raise an
         # exception
@@ -375,6 +387,7 @@ class Cursor(mariadb._mariadb.cursor):
         An exception will be raised if the previous call to execute() didn't 
         produce a result set or execute() wasn't called before.
         """
+        self.check_closed()
 
         row= self._fetch_row()
         if not row:
@@ -404,6 +417,7 @@ class Cursor(mariadb._mariadb.cursor):
         An exception will be raised if the previous call to execute() didn't 
         produce a result set or execute() wasn't called before.
         """
+        self.check_closed()
 
         rows=[]
         if size == 0:
@@ -422,6 +436,7 @@ class Cursor(mariadb._mariadb.cursor):
         An exception will be raised if the previous call to execute() didn't 
         produce a result set or execute() wasn't called before.
         """
+        self.check_closed()
 
         rows=[];
         for row in self:
@@ -491,6 +506,7 @@ class Cursor(mariadb._mariadb.cursor):
 
     @property
     def rowcount(self):
+        self.check_closed()
         if self._rowcount > 0:
             return self._rowcount
         return super().rowcount
@@ -501,6 +517,7 @@ class Cursor(mariadb._mariadb.cursor):
         Indicates if the current result set contains in out or out parameter
         from a previous executed stored procedure
         """
+        self.check_closed()
 
         return bool(self.connection.server_status & STATUS.PS_OUT_PARAMS)
 
@@ -516,6 +533,7 @@ class Cursor(mariadb._mariadb.cursor):
         AUTO_INCREMENT attribute and LAST_INSERT_ID was not used, the returned
         value will be zero
         """
+        self.check_closed()
 
         id= self.insert_id
         if id > 0:
@@ -528,5 +546,6 @@ class Cursor(mariadb._mariadb.cursor):
         Read-Only attribute which returns the reference to the connection
         object on which the cursor was created.
         """
+        self.check_closed()
 
         return self._connection

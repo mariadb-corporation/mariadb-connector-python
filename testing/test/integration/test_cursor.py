@@ -1169,6 +1169,25 @@ class TestCursor(unittest.TestCase):
             pass
         del cursor
 
+    def check_closed(self):
+        conn= create_connection()
+        cursor1= conn.cursor()
+        cursor2= conn.cursor()
+        cursor1.close()
+
+        try:
+            cursor1.execute("select 1")
+        except (mariadb.ProgrammingError):
+            pass
+        del cursor1
+
+        conn.close()
+        try:
+            cursor2.execute("select 1")
+        except (mariadb.ProgrammingError):
+            pass
+        del cursor2, conn
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:

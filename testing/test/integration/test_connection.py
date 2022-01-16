@@ -227,6 +227,14 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(newstr, '\\"' * 4194304)
         c1.close()
 
+    def test_closed(self):
+        default_conf= conf()
+        conn = mariadb.connect(**default_conf)
+        conn.close()
+        try:
+            cursor=conn.cursor()
+        except (mariadb.ProgrammingError):
+            pass
 
 if __name__ == '__main__':
     unittest.main()

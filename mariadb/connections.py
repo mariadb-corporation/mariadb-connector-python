@@ -38,6 +38,10 @@ class Connection(mariadb._mariadb.connection):
     Connections are created using the method mariadb.connect()
     """
 
+    def _check_closed(self):
+        if self._closed:
+            raise mariadb.ProgrammingError("Connection is closed")
+
     def __init__(self, *args, **kwargs):
         """
         Establishes a connection to a database server and returns a connection
@@ -50,7 +54,6 @@ class Connection(mariadb._mariadb.connection):
         self.__last_used = 0
         self.tpc_state= TPC_STATE.NONE
         self._xid= None
-        self.__closed= None
 
         autocommit= kwargs.pop("autocommit", False)
         self._converter= kwargs.pop("converter", None)
@@ -109,24 +112,27 @@ class Connection(mariadb._mariadb.connection):
         If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
         the statement invoked with cursors execute() method.
         """
-
+        self._check_closed()
         cursor= cursorclass(self, **kwargs)
         if not isinstance(cursor, mariadb._mariadb.cursor):
             raise mariadb.ProgrammingError("%s is not an instance of mariadb.cursor" % cursor)
         return cursor
 
     def close(self):
+        self._check_closed()
         if self._Connection__pool:
             self._Connection__pool._close_connection(self)
         else:
             super().close()
 
     def __enter__(self):
+        self._check_closed()
         "Returns a copy of the connection."
 
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self._check_closed()
         "Closes connection."
 
         self.close()
@@ -136,6 +142,7 @@ class Connection(mariadb._mariadb.connection):
         Commit any pending transaction to the database.
         """
 
+        self._check_closed()
         if self.tpc_state > TPC_STATE.NONE:
             raise mariadb.ProgrammingError("commit() is not allowed if a TPC transaction is active")
         self._execute_command("COMMIT")
@@ -151,6 +158,7 @@ class Connection(mariadb._mariadb.connection):
         or the storage engine does not support transactions."
         """
 
+        self._check_closed()
         if self.tpc_state > TPC_STATE.NONE:
             raise mariadb.ProgrammingError("rollback() is not allowed if a TPC transaction is active")
         self._execute_command("ROLLBACK")
@@ -164,6 +172,7 @@ class Connection(mariadb._mariadb.connection):
         The connection id must be retrieved by SHOW PROCESSLIST sql command.
         """
 
+        self._check_closed()
         if not isinstance(id, int):
             raise mariadb.ProgrammingError("id must be of type int.")
         stmt= "KILL %s" % id
@@ -175,6 +184,7 @@ class Connection(mariadb._mariadb.connection):
         Start a new transaction which can be committed by .commit() method,
         or cancelled by .rollback() method.
         """
+        self._check_closed()
         self._execute_command("BEGIN")
         self._read_response()
 
@@ -185,6 +195,7 @@ class Connection(mariadb._mariadb.connection):
         The default database can also be obtained or changed by database attribute.
         """
 
+        self._check_closed()
         self.database= new_db
 
     def get_server_version(self):
@@ -200,6 +211,7 @@ class Connection(mariadb._mariadb.connection):
         Shows error, warning and note messages from last executed command.
         """
 
+        self._check_closed()
         if (not self.warnings):
             return None;
 
@@ -252,6 +264,7 @@ class Connection(mariadb._mariadb.connection):
         calls .commit() or .rollback() during an active TPC transaction.
         """
 
+        self._check_closed()
         if type(xid).__name__ != "xid":
             raise TypeError("argument 1 must be xid not %s", type(xid).__name__)
         stmt= "XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0])
@@ -280,6 +293,7 @@ class Connection(mariadb._mariadb.connection):
         is intended for use in recovery."
         """
 
+        self._check_closed()
         if not xid:
             xid= self._xid
 
@@ -325,6 +339,7 @@ class Connection(mariadb._mariadb.connection):
         .tpc_commit() or .tpc_rollback() have been called.
         """
 
+        self._check_closed()
         if self.tpc_state == TPC_STATE.NONE:
             raise mariadb.ProgrammingError("Transaction not started.")
         if self.tpc_state == TPC_STATE.PREPARE:
@@ -365,6 +380,7 @@ class Connection(mariadb._mariadb.connection):
         .tpc_commit() or .tpc_rollback() have been called.
         """
 
+        self._check_closed()
         if self.tpc_state == TPC_STATE.NONE:
             raise mariadb.ProgrammingError("Transaction not started.")
         if xid and type(xid).__name__ != "xid":
@@ -400,6 +416,7 @@ class Connection(mariadb._mariadb.connection):
         tpc_commit(xid) or .tpc_rollback(xid).
         """
 
+        self._check_closed()
         cursor= self.cursor()
         cursor.execute("XA RECOVER")
         result= cursor.fetchall()
@@ -410,17 +427,19 @@ class Connection(mariadb._mariadb.connection):
     def database(self):
         """Get default database for connection."""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.SCHEMA, str)
  
     @database.setter
     def database(self, schema):
-          """Set default database."""
+        """Set default database."""
+        self._check_closed()
 
-          try:
-              self._execute_command("USE %s" % str(schema))
-              self._read_response()
-          except:
-              raise
+        try:
+            self._execute_command("USE %s" % str(schema))
+            self._read_response()
+        except:
+            raise
 
     @property
     def user(self):
@@ -429,6 +448,7 @@ class Connection(mariadb._mariadb.connection):
         string if it can't be determined, e.g. when using socket
         authentication.
         """
+        self._check_closed()
 
         return self._mariadb_get_info(INFO.USER, str)
 
@@ -446,36 +466,42 @@ class Connection(mariadb._mariadb.connection):
     def client_capabilities(self):
         """Client capability flags."""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.CLIENT_CAPABILITIES, int)
 
     @property
     def server_capabilities(self):
         """Server capability flags."""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.SERVER_CAPABILITIES, int)
 
     @property
     def extended_server_capabilities(self):
         """Extended server capability flags (only for MariaDB database servers)."""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.EXTENDED_SERVER_CAPABILITIES, int)
 
     @property
     def server_port(self):
         """Database server TCP/IP port. This value will be 0 in case of a unix socket connection."""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.PORT, int)
 
     @property
     def unix_socket(self):
         """Unix socket name."""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.UNIX_SOCKET, str)
 
     @property
     def server_name(self):
         """Name or IP address of database server."""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.HOST, str)
 
     @property
@@ -488,18 +514,21 @@ class Connection(mariadb._mariadb.connection):
     def server_info(self):
         """Server version in alphanumerical format (str)"""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.SERVER_VERSION, str)
 
     @property
     def tls_cipher(self):
         """TLS cipher suite if a secure connection is used."""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.SSL_CIPHER, str)
 
     @property
     def tls_version(self):
         """TLS protocol version if a secure connection is used."""
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.TLS_VERSION, str)
 
     @property
@@ -508,6 +537,7 @@ class Connection(mariadb._mariadb.connection):
         Return server status flags
         """
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.SERVER_STATUS, int)
 
     @property
@@ -519,6 +549,7 @@ class Connection(mariadb._mariadb.connection):
         VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH
         """
 
+        self._check_closed()
         return self._mariadb_get_info(INFO.SERVER_VERSION_ID, int)
 
     @property
@@ -527,6 +558,7 @@ class Connection(mariadb._mariadb.connection):
         Returns numeric version of connected database server in tuple format. 
         """
 
+        self._check_closed()
         version= self.server_version
         return (int(version / 10000), int((version % 10000) / 100), version % 100)
 
@@ -542,10 +574,12 @@ class Connection(mariadb._mariadb.connection):
         By default autocommit mode is set to False."
         """
 
+        self._check_closed()
         return bool(self.server_status & STATUS.AUTOCOMMIT)
 
     @autocommit.setter
     def autocommit(self, mode):
+        self._check_closed()
         if bool(mode) == self.autocommit:
             return
         try:
@@ -576,6 +610,7 @@ class Connection(mariadb._mariadb.connection):
         non processed pending result sets.
         """
 
+        self._check_closed()
         try:
             self.ping()
         except:
@@ -591,4 +626,5 @@ class Connection(mariadb._mariadb.connection):
         Alias for connection_id
         """
 
+        self._check_closed()
         return self.connection_id
