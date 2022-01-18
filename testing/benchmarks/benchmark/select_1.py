@@ -4,7 +4,7 @@
 import pyperf
 
 
-def select_1(loops, conn):
+def select_1(loops, conn, paramstyle):
     cursor = conn.cursor()
     range_it = range(loops)
     t0 = pyperf.perf_counter()

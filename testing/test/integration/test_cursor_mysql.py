@@ -5,7 +5,7 @@ import datetime
 import unittest
 import os
 
-from test.base_test import create_connection
+from test.base_test import create_connection, is_maxscale
 
 
 class CursorMySQLTest(unittest.TestCase):
@@ -17,7 +17,7 @@ class CursorMySQLTest(unittest.TestCase):
         del self.connection
 
     def test_parameter(self):
-        if os.environ.get("MAXSCALE_VERSION"):
+        if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
         cursor = self.connection.cursor()

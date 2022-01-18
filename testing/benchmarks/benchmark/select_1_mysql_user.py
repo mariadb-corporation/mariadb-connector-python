@@ -4,7 +4,7 @@
 import pyperf
 
 
-def select_1_mysql_user(loops, conn):
+def select_1_mysql_user(loops, conn, paramstyle):
     range_it = range(loops)
     t0 = pyperf.perf_counter()
     cursor = conn.cursor()
