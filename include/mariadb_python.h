@@ -478,7 +478,7 @@ if ((obj)->thread_state)\
 #define MARIADB_CHECK_CONNECTION(connection, ret)\
     if (!(connection) || !(connection)->mysql)\
     {\
-        mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0, \
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0, \
            "Invalid connection or not connected");\
         return (ret);\
     }
@@ -498,12 +498,13 @@ if ((obj)->thread_state)\
         (a)= NULL;\
     }
 
-#define MARIADB_CHECK_STMT(cursor)\
-    if (!cursor->connection->mysql || cursor->closed)\
+#define MARIADB_CHECK_STMT(cursor, retval)\
+    if (!(cursor)->connection->mysql || (cursor)->closed)\
     {\
        (cursor)->closed= 1;\
-        mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
+        mariadb_throw_exception((cursor)->stmt, Mariadb_ProgrammingError, 1,\
       "Invalid cursor or not connected");\
+      return (retval);\
     }
 
 #define pooling_keywords "pool_name", "pool_size", "reset_session", "idle_timeout", "acquire_timeout"

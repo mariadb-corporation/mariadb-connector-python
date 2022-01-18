@@ -201,7 +201,7 @@ class TestConnection(unittest.TestCase):
         c1.close()
         try:
             version= c1.get_server_version()
-        except mariadb.InterfaceError:
+        except mariadb.ProgrammingError:
             pass
 
     def test_conpy175(self):

@@ -674,6 +674,8 @@ static PyObject *MrdbConnection_cursor(MrdbConnection *self,
     PyObject *cursor= NULL;
     PyObject *conn = NULL;
 
+    MARIADB_CHECK_CONNECTION(self, NULL);
+
     conn= Py_BuildValue("(O)", self);
     cursor= PyObject_Call((PyObject *)&MrdbCursor_Type, conn, kwargs);
     Py_DECREF(conn);
@@ -791,6 +793,8 @@ MrdbConnection_tpc_begin(MrdbConnection *self, PyObject *args)
     int format_id= 1;
     char stmt[192];
     int rc= 0;
+
+    MARIADB_CHECK_CONNECTION(self, NULL);
 
     if (!PyArg_ParseTuple(args, "(iss)", &format_id,
                 &transaction_id,
@@ -1143,6 +1147,8 @@ static PyObject *MrdbConnection_getreconnect(MrdbConnection *self,
 {
     uint8_t reconnect= 0;
 
+    MARIADB_CHECK_CONNECTION(self, NULL);
+
     if (self->mysql) {
         mysql_get_option(self->mysql, MYSQL_OPT_RECONNECT, &reconnect);
     }
@@ -1162,9 +1168,7 @@ static int MrdbConnection_setreconnect(MrdbConnection *self,
 {
     uint8_t reconnect;
 
-    if (!self->mysql) {
-        return 0;
-    }
+    MARIADB_CHECK_CONNECTION(self, -1);
 
     if (!args || !CHECK_TYPE(args, &PyBool_Type)) {
         PyErr_SetString(PyExc_TypeError, "Argument must be boolean");
@@ -1406,6 +1410,7 @@ MrdbConnection_exit(MrdbConnection *self, PyObject *args __attribute__((unused))
 static PyObject *MrdbConnection_get_server_version(MrdbConnection *self)
 {
   MARIADB_CHECK_CONNECTION(self, NULL);
+
   Py_INCREF(self->server_version_info);
   return self->server_version_info;
 }

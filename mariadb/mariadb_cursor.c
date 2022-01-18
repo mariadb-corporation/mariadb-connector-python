@@ -677,9 +677,7 @@ PyObject *MrdbCursor_execute(MrdbCursor *self,
     static char *key_words[]= {"", "", "buffered", NULL};
     char errmsg[128];
 
-    MARIADB_CHECK_STMT(self);
-    if (PyErr_Occurred())
-        return NULL;
+    MARIADB_CHECK_STMT(self, NULL);
 
     if (!PyArg_ParseTupleAndKeywords(args, kwargs,
                 "s#|Ob", key_words, &statement, &statement_len, &Data, &is_buffered))
@@ -871,8 +869,7 @@ error:
 /* {{{ MrdbCursor_fieldcount() */
 PyObject *MrdbCursor_fieldcount(MrdbCursor *self)
 {
-    if (PyErr_Occurred())
-        return NULL;
+    MARIADB_CHECK_STMT(self, NULL);
 
     return PyLong_FromLong((long)self->field_count);
 }
@@ -890,9 +887,7 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
     PyObject *obj= NULL;
     unsigned int field_count= self->field_count;
 
-    if (PyErr_Occurred())
-        return NULL;
-
+    MARIADB_CHECK_STMT(self, NULL);
 
     if (self->fields && field_count)
     {
@@ -996,12 +991,7 @@ MrdbCursor_fetchone(MrdbCursor *self)
     uint32_t i;
     unsigned int field_count= self->field_count;
 
-    if (self->cursor_type == CURSOR_TYPE_READ_ONLY)
-      MARIADB_CHECK_STMT(self);
-    if (PyErr_Occurred())
-    {
-        return NULL;
-    }
+    MARIADB_CHECK_STMT(self, NULL);
 
     if (!field_count)
     {
@@ -1042,11 +1032,7 @@ MrdbCursor_scroll(MrdbCursor *self,
     const char *scroll_modes[]= {"relative", "absolute", NULL};
 
 
-    MARIADB_CHECK_STMT(self);
-    if (PyErr_Occurred())
-    {
-        return NULL;
-    }
+    MARIADB_CHECK_STMT(self, NULL);
 
     if (!self->field_count)
     {
@@ -1133,11 +1119,7 @@ MrdbCursor_fetchmany(MrdbCursor *self,
     static char *kw_list[]= {"size", NULL};
     unsigned int field_count= self->field_count;
 
-    MARIADB_CHECK_STMT(self);
-    if (PyErr_Occurred())
-    {
-        return NULL;
-    }
+    MARIADB_CHECK_STMT(self, NULL);
 
     if (!field_count)
     {
@@ -1211,11 +1193,8 @@ MrdbCursor_fetchall(MrdbCursor *self)
 {
     PyObject *List;
     unsigned int field_count= self->field_count;
-    MARIADB_CHECK_STMT(self);
-    if (PyErr_Occurred())
-    {
-        return NULL;
-    }
+
+    MARIADB_CHECK_STMT(self, NULL);
 
     if (!field_count)
     {
@@ -1332,12 +1311,7 @@ MrdbCursor_executemany(MrdbCursor *self,
     uint8_t do_prepare= 1;
     char errmsg[128];
 
-    MARIADB_CHECK_STMT(self);
-
-    if (PyErr_Occurred())
-    {
-        return NULL;
-    }
+    MARIADB_CHECK_STMT(self, NULL);
 
     self->data= NULL;
 
@@ -1447,13 +1421,8 @@ static PyObject *
 MrdbCursor_nextset(MrdbCursor *self)
 {
     int rc;
-    MARIADB_CHECK_STMT(self);
+    MARIADB_CHECK_STMT(self, NULL);
 
-    if (PyErr_Occurred())
-    {
-        return NULL;
-    }
-/* hmmm */
     if (!self->field_count)
     {
         mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
@@ -1519,7 +1488,7 @@ Mariadb_row_number(MrdbCursor *self)
 static PyObject *
 MrdbCursor_warnings(MrdbCursor *self)
 {
-    MARIADB_CHECK_STMT(self);
+    MARIADB_CHECK_STMT(self, NULL);
 
     return PyLong_FromLong((long)CURSOR_WARNING_COUNT(self));
 }
@@ -1527,6 +1496,7 @@ MrdbCursor_warnings(MrdbCursor *self)
 static PyObject *
 MrdbCursor_getbuffered(MrdbCursor *self)
 {
+    MARIADB_CHECK_STMT(self, NULL);
     if (self->is_buffered)
     {
         Py_RETURN_TRUE;
@@ -1537,6 +1507,7 @@ MrdbCursor_getbuffered(MrdbCursor *self)
 static int
 MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg)
 {
+    MARIADB_CHECK_STMT(self, -1);
     if (!arg || !CHECK_TYPE(arg, &PyBool_Type))
     {
         PyErr_SetString(PyExc_TypeError, "Argument must be boolean");
@@ -1550,6 +1521,7 @@ MrdbCursor_setbuffered(MrdbCursor *self, PyObject *arg)
 static PyObject *
 MrdbCursor_lastrowid(MrdbCursor *self)
 {
+    MARIADB_CHECK_STMT(self, NULL);
     if (!self->lastrow_id)
     {
         Py_INCREF(Py_None);
@@ -1563,7 +1535,7 @@ MrdbCursor_lastrowid(MrdbCursor *self)
 static PyObject *
 MrdbCursor_iter(PyObject *self)
 {
-    MARIADB_CHECK_STMT(((MrdbCursor *)self));
+    MARIADB_CHECK_STMT((MrdbCursor *)self, NULL);
     Py_INCREF(self);
     return self;
 }
@@ -1572,6 +1544,8 @@ static PyObject *
 MrdbCursor_iternext(PyObject *self)
 {
     PyObject *res;
+
+    MARIADB_CHECK_STMT((MrdbCursor *)self, NULL);
 
     res= MrdbCursor_fetchone((MrdbCursor *)self);
 
@@ -1594,15 +1568,14 @@ static PyObject
 static PyObject *
 MrdbCursor_sp_outparams(MrdbCursor *self)
 {
-    if (!self->closed && self->stmt && 
-            self->stmt->mysql)
+    uint32_t server_status;
+
+    MARIADB_CHECK_STMT(self, NULL);
+
+    mariadb_get_infov(self->stmt->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
+    if (server_status & SERVER_PS_OUT_PARAMS)
     {
-        uint32_t server_status;
-        mariadb_get_infov(self->stmt->mysql, MARIADB_CONNECTION_SERVER_STATUS, &server_status);
-        if (server_status & SERVER_PS_OUT_PARAMS)
-        {
-            Py_RETURN_TRUE;
-        }
+        Py_RETURN_TRUE;
     }
     Py_RETURN_FALSE;
 }
@@ -1619,7 +1592,7 @@ MrdbCursor_callproc(MrdbCursor *self, PyObject *args)
     PyObject *new_args= NULL;
     PyObject *rc= NULL;
 
-    MARIADB_CHECK_STMT(((MrdbCursor *)self));
+    MARIADB_CHECK_STMT(self, NULL);
 
     if (!PyArg_ParseTuple(args, "s#|O", &sp, &sp_len, &data))
         return NULL;
