@@ -23,6 +23,7 @@ import time
 import mariadb.cursors
 
 from mariadb.constants import STATUS, TPC_STATE, INFO
+from distutils.version import StrictVersion
 
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
@@ -57,6 +58,14 @@ class Connection(mariadb._mariadb.connection):
 
         autocommit= kwargs.pop("autocommit", False)
         self._converter= kwargs.pop("converter", None)
+
+        # if host contains a connection string or multiple hosts,
+        # we need to check if it's supported by Connector/C
+        if "host" in kwargs:
+            host= kwargs.get("host")
+            if StrictVersion(mariadb.mariadbapi_version) < StrictVersion('3.3.0') and ',' in host:
+                raise mariadb.ProgrammingError("Host failover list requires MariaDB Connector/C 3.3.0 or newer")
+
 
         # compatibiity feature: if SSL is provided as a dictionary,
         # we will map it's content

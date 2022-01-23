@@ -10,6 +10,7 @@ from test.base_test import create_connection, is_skysql, is_maxscale
 from test.conf_test import conf
 from mariadb.constants import STATUS
 import platform
+from distutils.version import StrictVersion
 
 
 class TestConnection(unittest.TestCase):
@@ -235,6 +236,16 @@ class TestConnection(unittest.TestCase):
             cursor=conn.cursor()
         except (mariadb.ProgrammingError):
             pass
+
+    def test_multi_host(self):
+        default_conf= conf()
+        default_conf["host"]= "non_existant," + default_conf["host"]
+        try:
+            c1 = mariadb.connect(**default_conf)
+        except mariadb.ProgrammingError:
+            self.assertLess(StrictVersion(mariadb.mariadbapi_version),StrictVersion('3.3.0'))
+            pass
+
 
 if __name__ == '__main__':
     unittest.main()
