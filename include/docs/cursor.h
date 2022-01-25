@@ -29,7 +29,7 @@ PyDoc_STRVAR(
 
 PyDoc_STRVAR(
   cursor_description__doc__,
-  "This read-only attribute is a sequence of 8-item sequences\n"
+  "This read-only attribute is a sequence of 11-item sequences\n"
   "Each of these sequences contains information describing one result column:\n\n"
   "- name\n"
   "- type_code\n"
