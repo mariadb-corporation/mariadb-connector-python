@@ -99,6 +99,10 @@ Cursor attributes
     In combination with the type element field, it can be determined for example,
     whether a column is a BLOB or TEXT field:
 
+.. versionadded:: 1.1.0
+    The parameter table_name, original_column_name and original_table_name are an
+    extension to the PEP-249 DB API standard.
+
   .. code-block:: python
 
     if cursor.description[0][1] == FIELD_TYPE.BLOB:

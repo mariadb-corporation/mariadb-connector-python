@@ -258,6 +258,9 @@ Each of these sequences contains information describing one result column:</p>
 <li><p>scale</p></li>
 <li><p>null_ok</p></li>
 <li><p>field_flags</p></li>
+<li><p>table_name</p></li>
+<li><p>original_column_name</p></li>
+<li><p>original_table_name</p></li>
 </ul>
 <p>This attribute will be None for operations that do not return rows or if the cursor has
 not had an operation invoked via the .execute*() method yet.</p>
@@ -267,6 +270,11 @@ not had an operation invoked via the .execute*() method yet.</p>
 In combination with the type element field, it can be determined for example,
 whether a column is a BLOB or TEXT field:</p>
 </div>
+</dd></dl>
+
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0: </span>The parameter table_name, original_column_name and original_table_name are an
+  extension to the PEP-249 DB API standard.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">cursor</span><span class="o">.</span><span class="n">description</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="n">FIELD_TYPE</span><span class="o">.</span><span class="n">BLOB</span><span class="p">:</span>
     <span class="k">if</span> <span class="n">cursor</span><span class="o">.</span><span class="n">description</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">7</span><span class="p">]</span> <span class="o">==</span> <span class="n">FIELD_FLAG</span><span class="o">.</span><span class="n">BINARY</span><span class="p">:</span>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;column is BLOB&quot;</span><span class="p">)</span>
@@ -274,8 +282,7 @@ whether a column is a BLOB or TEXT field:</p>
         <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;column is TEXT&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
-</dd></dl>
-
+</div>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.lastrowid">
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">lastrowid</span></span><a class="headerlink" href="#mariadb.cursors.Cursor.lastrowid" title="Permalink to this definition">¶</a></dt>
@@ -405,7 +412,7 @@ if there are no warnings.</p>
       </ul>
     </div>
     <div class="footer" role="contentinfo">
-        &#169; Copyright 2019-2021 MariaDB Corporation and Georg Richter.
+        &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
       Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
     </div>
   </body>
