@@ -284,10 +284,23 @@ class DatabaseAPI20Test(unittest.TestCase):
             self.assertEqual(len(cur.description), 1,
                              'cursor.description describes too many columns'
                              )
-            self.assertEqual(len(cur.description[0]), 8,
-                             'cursor.description[x] tuples must have 8 elements'
+            self.assertEqual(len(cur.description[0]), 11,
+                             'cursor.description[x] tuples must have 11 elements'
                              )
             self.assertEqual(cur.description[0][0].lower(), 'name',
+                             'cursor.description[x][0] must return column name'
+                             )
+
+            # table name
+            self.assertEqual(cur.description[0][8].lower(), 'dbapi20test_booze',
+                             'cursor.description[x][0] must return column name'
+                             )
+            # original column name
+            self.assertEqual(cur.description[0][9].lower(), 'name',
+                             'cursor.description[x][0] must return column name'
+                             )
+            # original table name
+            self.assertEqual(cur.description[0][10].lower(), 'dbapi20test_booze',
                              'cursor.description[x][0] must return column name'
                              )
             self.assertEqual(cur.description[0][1], self.driver.STRING,

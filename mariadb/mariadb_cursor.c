@@ -742,7 +742,7 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
             if (ext_type == EXT_TYPE_JSON)
                 self->fields[i].type= MYSQL_TYPE_JSON;
 
-            if (!(desc= Py_BuildValue("(sIIiIIOI)",
+            if (!(desc= Py_BuildValue("(sIIiIIOIsss)",
                             self->fields[i].name,
                             self->fields[i].type,
                             display_length,
@@ -750,7 +750,10 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
                             precision,
                             decimals,
                             PyBool_FromLong(!IS_NOT_NULL(self->fields[i].flags)),
-                            self->fields[i].flags)))
+                            self->fields[i].flags,
+                            self->fields[i].table,
+                            self->fields[i].org_name,
+                            self->fields[i].org_table)))
             {
                 Py_XDECREF(obj);
                 mariadb_throw_exception(NULL, Mariadb_OperationalError, 0,
