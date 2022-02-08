@@ -1072,7 +1072,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
         }
 
         if (!param->buffer_type ||
-                param->buffer_type == MYSQL_TYPE_NULL)
+            param->buffer_type == MYSQL_TYPE_NULL)
         {
             param->buffer_type= pinfo.type;
         }
@@ -1298,11 +1298,12 @@ mariadb_param_to_bind(MrdbCursor *self,
         bind->u.indicator[0]= value->indicator;
         goto end;
     }
-
-    if (!value->value)
+    value->is_null= value->value == NULL;
+    if (value->is_null)
     {
-      bind->buffer_type= MYSQL_TYPE_NULL;
+      bind->is_null= (my_bool *)&value->is_null;
     } else {
+      bind->is_null= NULL;
       if (IS_NUM(bind->buffer_type))
       {
           bind->buffer= value->num;
@@ -1313,104 +1314,104 @@ mariadb_param_to_bind(MrdbCursor *self,
           if (_PyLong_Sign(value->value) < 0)
               is_negative= 1;
       }
-    }
 
-    switch(bind->buffer_type)
-    {
-        case MYSQL_TYPE_TINY:
-            if (!is_negative)
-            {
-                if ((value->num[0]= (uint8_t)PyLong_AsUnsignedLong(value->value)) > 0x7F)
-                    bind->is_unsigned= 1;
-            }
-            else {
-                value->num[0]= (int8_t)PyLong_AsLong(value->value);
-            }
-            break;
-        case MYSQL_TYPE_SHORT:
-            if (!is_negative)
-            {
-                if ((*(uint16_t *)&value->num= (uint16_t)PyLong_AsUnsignedLong(value->value)) > 0x7FFF)
-                    bind->is_unsigned= 1;
-            }
-            else {
-                *(int16_t *)&value->num= (int16_t)PyLong_AsLong(value->value);
-            }
-            break;
-        case MYSQL_TYPE_LONG:
-            if (!is_negative)
-            {
-                if ((*(uint32_t *)&value->num= (uint32_t)PyLong_AsUnsignedLong(value->value)) > 0x7FFFFFFF)
-                    bind->is_unsigned= 1;
-            }
-            else {
-                *(int32_t *)&value->num= (int32_t)PyLong_AsLong(value->value);
-            }
-            break;
-        case MYSQL_TYPE_LONGLONG:
-            if (!is_negative)
-            {
-                if ((*(uint64_t *)value->num= (uint64_t)PyLong_AsUnsignedLongLong(value->value)) > 0x7FFFFFFFFFFFFFFF)
-                    bind->is_unsigned= 1;
-            }
-            else {
-                *(int64_t *)value->num= (int64_t)PyLong_AsLongLong(value->value);
-            }
-            break;
-        case MYSQL_TYPE_DOUBLE:
-            *(double *)value->num= (double)PyFloat_AsDouble(value->value);
-            break;
-        case MYSQL_TYPE_LONG_BLOB:
-            bind->buffer_length= (unsigned long)PyBytes_GET_SIZE(value->value);
-            bind->buffer= (void *) PyBytes_AS_STRING(value->value);
-            break;
-        case MYSQL_TYPE_DATE:
-        case MYSQL_TYPE_TIME:
-        case MYSQL_TYPE_DATETIME:
-            bind->buffer= &value->tm;
-            if (PyDelta_CheckExact(value->value))
-                mariadb_pydelta_to_tm(value->value, &value->tm);
-            else
-                mariadb_pydate_to_tm(bind->buffer_type, value->value, &value->tm);
-            break;
-        case MYSQL_TYPE_NEWDECIMAL:
-            {
-                Py_ssize_t len;
-                PyObject *obj= NULL;
-                char *p;
+      switch(bind->buffer_type)
+      {
+          case MYSQL_TYPE_TINY:
+              if (!is_negative)
+              {
+                  if ((value->num[0]= (uint8_t)PyLong_AsUnsignedLong(value->value)) > 0x7F)
+                      bind->is_unsigned= 1;
+              }
+              else {
+                  value->num[0]= (int8_t)PyLong_AsLong(value->value);
+              }
+              break;
+          case MYSQL_TYPE_SHORT:
+              if (!is_negative)
+              {
+                  if ((*(uint16_t *)&value->num= (uint16_t)PyLong_AsUnsignedLong(value->value)) > 0x7FFF)
+                      bind->is_unsigned= 1;
+              }
+              else {
+                  *(int16_t *)&value->num= (int16_t)PyLong_AsLong(value->value);
+              }
+              break;
+          case MYSQL_TYPE_LONG:
+              if (!is_negative)
+              {
+                  if ((*(uint32_t *)&value->num= (uint32_t)PyLong_AsUnsignedLong(value->value)) > 0x7FFFFFFF)
+                      bind->is_unsigned= 1;
+              }
+              else {
+                  *(int32_t *)&value->num= (int32_t)PyLong_AsLong(value->value);
+              }
+              break;
+          case MYSQL_TYPE_LONGLONG:
+              if (!is_negative)
+              {
+                  if ((*(uint64_t *)value->num= (uint64_t)PyLong_AsUnsignedLongLong(value->value)) > 0x7FFFFFFFFFFFFFFF)
+                      bind->is_unsigned= 1;
+              }
+              else {
+                  *(int64_t *)value->num= (int64_t)PyLong_AsLongLong(value->value);
+              }
+              break;
+          case MYSQL_TYPE_DOUBLE:
+              *(double *)value->num= (double)PyFloat_AsDouble(value->value);
+              break;
+          case MYSQL_TYPE_LONG_BLOB:
+              bind->buffer_length= (unsigned long)PyBytes_GET_SIZE(value->value);
+              bind->buffer= (void *) PyBytes_AS_STRING(value->value);
+              break;
+          case MYSQL_TYPE_DATE:
+          case MYSQL_TYPE_TIME:
+          case MYSQL_TYPE_DATETIME:
+              bind->buffer= &value->tm;
+              if (PyDelta_CheckExact(value->value))
+                  mariadb_pydelta_to_tm(value->value, &value->tm);
+              else
+                  mariadb_pydate_to_tm(bind->buffer_type, value->value, &value->tm);
+              break;
+          case MYSQL_TYPE_NEWDECIMAL:
+              {
+                  Py_ssize_t len;
+                  PyObject *obj= NULL;
+                  char *p;
 
-                if (value->free_me)
-                    MARIADB_FREE_MEM(value->buffer);
-                if (!strcmp(Py_TYPE(value->value)->tp_name, "decimal.Decimal") ||
-                    !strcmp(Py_TYPE(value->value)->tp_name, "Decimal"))
-                {
-                    obj= PyObject_Str(value->value);
-                    p= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
-                }
-                else
-                {
-                    obj= PyObject_Str(value->value);
-                    p= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
-                }
-                bind->buffer= value->buffer= PyMem_RawCalloc(1, len);
-                memcpy(value->buffer, p, len);
-                value->free_me= 1;
-                bind->buffer_length= (unsigned long)len;
-                Py_DECREF(obj);
-            }
-            break;
-        case MYSQL_TYPE_VAR_STRING:
-            {
-                Py_ssize_t len;
+                  if (value->free_me)
+                      MARIADB_FREE_MEM(value->buffer);
+                  if (!strcmp(Py_TYPE(value->value)->tp_name, "decimal.Decimal") ||
+                      !strcmp(Py_TYPE(value->value)->tp_name, "Decimal"))
+                  {
+                      obj= PyObject_Str(value->value);
+                      p= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
+                  }
+                  else
+                  {
+                      obj= PyObject_Str(value->value);
+                      p= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
+                  }
+                  bind->buffer= value->buffer= PyMem_RawCalloc(1, len);
+                  memcpy(value->buffer, p, len);
+                  value->free_me= 1;
+                  bind->buffer_length= (unsigned long)len;
+                  Py_DECREF(obj);
+              }
+              break;
+          case MYSQL_TYPE_VAR_STRING:
+              {
+                  Py_ssize_t len;
 
-                bind->buffer= (void *)PyUnicode_AsUTF8AndSize(value->value, &len);
-                bind->buffer_length= (unsigned long)len;
-                break;
-            }
-        case MYSQL_TYPE_NULL:
-            break;
-        default:
-            rc= 1;
+                  bind->buffer= (void *)PyUnicode_AsUTF8AndSize(value->value, &len);
+                  bind->buffer_length= (unsigned long)len;
+                  break;
+              }
+          case MYSQL_TYPE_NULL:
+              break;
+          default:
+              rc= 1;
+      }
     }
 end:
     MARIADB_BLOCK_THREADS(self);

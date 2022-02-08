@@ -1163,6 +1163,20 @@ class TestCursor(unittest.TestCase):
         del cursor
         connection.close()
 
+    def test_conpy191(self):
+        connection= create_connection()
+        cursor= connection.cursor()
+        cursor.execute("create temporary table t1 (a int, b int, c int)")
+        data= [(None,1,1),(2,None,2),(3,3,None)]
+
+        cursor.executemany("INSERT INTO t1 VALUES (?,?,?)", data);
+
+        cursor.execute("SELECT a,b,c FROM t1")
+        result= cursor.fetchall()
+        self.assertEqual(data, result)
+        del cursor
+        connection.close()
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:

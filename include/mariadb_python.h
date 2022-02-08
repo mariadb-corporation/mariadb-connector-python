@@ -236,6 +236,7 @@ typedef struct {
     void *buffer;
     unsigned char num[8];
     MYSQL_TIME tm;
+    uint8_t is_null;
 } MrdbParamValue;
 
 typedef struct {
