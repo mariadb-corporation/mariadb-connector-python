@@ -1163,7 +1163,7 @@ class TestCursor(unittest.TestCase):
         del cursor
         connection.close()
 
-    def test_conpy191(self):
+    def test_conpy193(self):
         connection= create_connection()
         cursor= connection.cursor()
         cursor.execute("create temporary table t1 (a int, b int, c int)")
