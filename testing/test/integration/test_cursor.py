@@ -1177,6 +1177,24 @@ class TestCursor(unittest.TestCase):
         del cursor
         connection.close()
 
+    def test_conpy194(self):
+        conn= create_connection()
+        cursor= conn.cursor()
+
+        cursor.execute("create temporary table t1 (a int not null auto_increment primary key, b varchar(10))")
+
+        data= [(1,),(2,),(3,)]
+
+        cursor.executemany("insert into t1 values (?, 'foo') returning a", data)
+        rows= cursor.fetchall()
+        self.assertEqual(rows, data)
+
+        cursor.executemany("delete from t1 where a=? returning a", data)
+        rows= cursor.fetchall()
+        self.assertEqual(rows, data)
+
+        del cursor, conn
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:
