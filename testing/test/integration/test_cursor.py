@@ -1178,6 +1178,8 @@ class TestCursor(unittest.TestCase):
         connection.close()
 
     def test_conpy194(self):
+        if is_mysql():
+            self.skipTest("Skip (MySQL)")
         conn= create_connection()
         cursor= conn.cursor()
 
@@ -1192,6 +1194,19 @@ class TestCursor(unittest.TestCase):
         cursor.executemany("delete from t1 where a=? returning a", data)
         rows= cursor.fetchall()
         self.assertEqual(rows, data)
+
+        cursor.execute("select a from t1")
+        rows= cursor.fetchall()
+        self.assertEqual(rows, [])
+
+        data= [(1,"foo"),(2,"bar"),(3,"hello")]
+        cursor.executemany("insert into t1 values (?,?) returning a,b", data)
+        rows= cursor.fetchall()
+        self.assertEqual(rows, data)
+
+        cursor.executemany("replace into t1 values (?,?) returning a,b", [(1, "xyz")])
+        rows= cursor.fetchall()
+        self.assertEqual(rows, [(1,"xyz")])
 
         del cursor, conn
 
