@@ -1406,9 +1406,17 @@ MrdbCursor_executemany(MrdbCursor *self,
         }
     }
 
-    self->row_count= CURSOR_AFFECTED_ROWS(self);
-    self->lastrow_id= CURSOR_INSERT_ID(self); 
-    MARIADB_FREE_MEM(self->values);
+    if ((self->field_count= CURSOR_FIELD_COUNT(self)))
+    {
+        if (MrdbCursor_InitResultSet(self))
+        {
+            return NULL;
+        }
+    } else {
+        self->row_count= CURSOR_AFFECTED_ROWS(self);
+        self->lastrow_id= CURSOR_INSERT_ID(self);
+        MARIADB_FREE_MEM(self->values);
+    }
     Py_RETURN_NONE;
 error:
     MrdbCursor_clear(self, 0);
