@@ -1200,20 +1200,22 @@ class TestCursor(unittest.TestCase):
         rows= cursor.fetchall()
         self.assertEqual(rows, data)
 
-        cursor.execute("replace t1 set b='bar'  returning a")
-        rows= cursor.fetchall()
-        print("***********************************************************")
-        print(rows)
-        print("***********************************************************")
-
-        cursor.execute("select * from t1")
-        rows= cursor.fetchall()
-        print(rows)
-        
-
         cursor.executemany("delete from t1 where a=? returning a", data)
         rows= cursor.fetchall()
         self.assertEqual(rows, data)
+
+        cursor.execute("select a from t1")
+        rows= cursor.fetchall()
+        self.assertEqual(rows, [])
+
+        data= [(1,"foo"),(2,"bar"),(3,"hello")]
+        cursor.executemany("insert into t1 values (?,?) returning a,b", data)
+        rows= cursor.fetchall()
+        self.assertEqual(rows, data)
+
+        cursor.executemany("replace into t1 values (?,?) returning a,b", [(1, "xyz")])
+        rows= cursor.fetchall()
+        self.assertEqual(rows, [(1,"xyz")])
 
         del cursor, conn
 
