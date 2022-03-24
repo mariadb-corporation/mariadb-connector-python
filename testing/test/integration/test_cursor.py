@@ -7,6 +7,7 @@ import unittest
 import os
 import decimal
 import json
+import resource
 from decimal import Decimal
 
 import mariadb
@@ -1209,6 +1210,22 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(rows, [(1,"xyz")])
 
         del cursor, conn
+
+    def test_conpy196(self):
+        if is_maxscale():
+            self.skipTest("skip test (possible timeout)")
+        last= 0
+        for i in range(1,100000):
+            conn= create_connection()
+            cursor= conn.cursor()
+            cursor.close()
+            conn.close()
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+            new= usage[2]
+            if (last > 0):
+                self.assertEqual(new, last)
+            last= new
+
 
     def test_conpy91(self):
         with create_connection() as connection:

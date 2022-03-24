@@ -518,6 +518,11 @@ void ma_cursor_close(MrdbCursor *self)
             MrdbParser_end(self->parser);
             self->parser= NULL;
         }
+
+        if (self->connection)
+        {
+          Py_DECREF(self->connection);
+        }
         self->closed= 1;
     }
 }
