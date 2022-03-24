@@ -49,6 +49,7 @@ jobs:
   fast_finish: true
   allow_failures:
     - env: srv=build v=10.6
+    - env: srv=xpand
   include:
     - env: srv=mariadb v=10.2 local=1
     - env: srv=mariadb v=10.3 local=1
@@ -75,6 +76,8 @@ jobs:
       env: srv=mysql v=5.7
     - if: type = push AND fork = false
       env: srv=mysql v=8.0
+    - if: type = push AND fork = false
+      env: srv=xpand
 
 notifications:
   email: false
