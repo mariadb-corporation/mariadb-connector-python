@@ -1226,6 +1226,20 @@ class TestCursor(unittest.TestCase):
                 self.assertEqual(new, last)
             last= new
 
+    def test_conpy178(self):
+        conn= create_connection()
+        cursor= conn.cursor()
+        cursor.execute("DROP PROCEDURE IF EXISTS p2")
+        cursor.execute("CREATE PROCEDURE p2(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\nSET o1:=CAST(CONCAT(s1,s2) AS char CHARACTER SET utf8mb4);\nEND")
+
+        for i in range (0,500):
+            cursor.callproc("p2", ("foo", "bar", 1))
+            row= cursor.fetchone()
+            self.assertEqual(row[0], "foobar")
+
+        conn.close()
+
+
 
     def test_conpy91(self):
         with create_connection() as connection:
