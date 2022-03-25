@@ -16,6 +16,15 @@ def is_skysql():
 def is_maxscale():
     return os.environ.get('srv') == "maxscale" or os.environ.get('srv') == 'skysql-ha'
 
+
+def is_xpand():
+    if os.environ.get('srv') == "xpand":
+        return True
+    conn = create_connection()
+    version = conn.get_server_version()
+    del conn
+    return "Xpand" in version
+
 def is_mysql():
     mysql_server = 1
     conn = create_connection()
@@ -34,4 +43,11 @@ def create_connection(additional_conf=None):
     else:
         c = {key: value for (key, value) in (list(default_conf.items()) + list(
             additional_conf.items()))}
-    return mariadb.connect(**c)
+    conn = mariadb.connect(**c)
+    version = conn.get_server_version()
+    # https://jira.mariadb.org/browse/XPT-266
+    if "Xpand" in version or os.environ.get('srv') == "xpand":
+        cursor = conn.cursor()
+        cursor.execute("SET NAMES UTF8")
+        del cursor
+    return conn
