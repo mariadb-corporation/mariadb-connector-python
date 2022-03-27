@@ -28,7 +28,8 @@ The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
 
    - **user**, **username** (string): The username used to authenticate with the database server, defaults to current user
    - **password**, **passwd** (string): The password of the given user
-   - **host** (string): The host name or IP address of the database server
+   - **host** (string): The host name or IP address of the database server.
+     If MariaDB Connector/Python was built with MariaDB Connector/C 3.3 it is also possible to provide a comma separated list of hosts for providing simple fail over in case of one or more hosts are not available. 
    - **database**, **db** (string): The database (schema) name to used when connecting with the database server
    - **unix_socket** (string): The location of the unix socket file to use instead of using an IP port to connect.  If socket authentication is enabled, this can also be used in place of a password.
    - **port** (integer): The port number of the database server. If not specified the default value (=3306) will be used.

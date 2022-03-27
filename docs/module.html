@@ -4,8 +4,9 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The mariadb module &#8212; MariaDB Connector/Python 1.1.0b3-beta documentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>The mariadb module &#8212; MariaDB Connector/Python 1.1.0rc1-rc documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
@@ -34,7 +35,7 @@
         <li class="right" >
           <a href="api.html" title="API Reference"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0b3-beta documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0rc1-rc documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The mariadb module</a></li> 
       </ul>
@@ -45,7 +46,7 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="module-mariadb">
+  <section id="module-mariadb">
 <span id="the-mariadb-module"></span><span id="module"></span><h1>The mariadb module<a class="headerlink" href="#module-mariadb" title="Permalink to this headline">¶</a></h1>
 <p>The mariadb module supports the standard defined by DB API 2.0 (PEP-249).</p>
 <dl class="py function">
@@ -66,7 +67,8 @@ object.</p>
 <ul class="simple">
 <li><p><strong>user</strong>, <strong>username</strong> (string): The username used to authenticate with the database server, defaults to current user</p></li>
 <li><p><strong>password</strong>, <strong>passwd</strong> (string): The password of the given user</p></li>
-<li><p><strong>host</strong> (string): The host name or IP address of the database server</p></li>
+<li><p><strong>host</strong> (string): The host name or IP address of the database server.
+If MariaDB Connector/Python was built with MariaDB Connector/C 3.3 it is also possible to provide a comma separated list of hosts for providing simple fail over in case of one or more hosts are not available.</p></li>
 <li><p><strong>database</strong>, <strong>db</strong> (string): The database (schema) name to used when connecting with the database server</p></li>
 <li><p><strong>unix_socket</strong> (string): The location of the unix socket file to use instead of using an IP port to connect.  If socket authentication is enabled, this can also be used in place of a password.</p></li>
 <li><p><strong>port</strong> (integer): The port number of the database server. If not specified the default value (=3306) will be used.</p></li>
@@ -144,7 +146,7 @@ The supported pool parameters are:</p>
 </ul>
 </dd></dl>
 
-<div class="section" id="attributes">
+<section id="attributes">
 <h2>Attributes<a class="headerlink" href="#attributes" title="Permalink to this headline">¶</a></h2>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.apilevel">
@@ -196,80 +198,80 @@ following format:
 (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)</p>
 </dd></dl>
 
-</div>
-<div class="section" id="exceptions">
+</section>
+<section id="exceptions">
 <h2>Exceptions<a class="headerlink" href="#exceptions" title="Permalink to this headline">¶</a></h2>
 <p>Compliant to DB API 2.0 MariaDB Connector/C provides information about errors
 through the following exceptions:</p>
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.DataError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">DataError</span></span><a class="headerlink" href="#mariadb.DataError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">DataError</span></span><a class="headerlink" href="#mariadb.DataError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are due to problems with the processed data like division by zero,
 numeric value out of range, etc.</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.DatabaseError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">DatabaseError</span></span><a class="headerlink" href="#mariadb.DatabaseError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">DatabaseError</span></span><a class="headerlink" href="#mariadb.DatabaseError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are related to the database</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.InterfaceError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">InterfaceError</span></span><a class="headerlink" href="#mariadb.InterfaceError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">InterfaceError</span></span><a class="headerlink" href="#mariadb.InterfaceError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are related to the database interface
 rather than the database itself.</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.Warning">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">Warning</span></span><a class="headerlink" href="#mariadb.Warning" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">Warning</span></span><a class="headerlink" href="#mariadb.Warning" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for important warnings like data truncations while inserting, etc.</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.PoolError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">PoolError</span></span><a class="headerlink" href="#mariadb.PoolError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">PoolError</span></span><a class="headerlink" href="#mariadb.PoolError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors related to ConnectionPool class.</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.OperationalError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">OperationalError</span></span><a class="headerlink" href="#mariadb.OperationalError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">OperationalError</span></span><a class="headerlink" href="#mariadb.OperationalError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are related to the database’s operation
 and not necessarily under the control of the programmer</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.IntegrityError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">IntegrityError</span></span><a class="headerlink" href="#mariadb.IntegrityError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">IntegrityError</span></span><a class="headerlink" href="#mariadb.IntegrityError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised when the relational integrity of the database is affected,
 e.g. a foreign key check fails.</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.InternalError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">InternalError</span></span><a class="headerlink" href="#mariadb.InternalError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">InternalError</span></span><a class="headerlink" href="#mariadb.InternalError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised when the database encounters an internal error,
 e.g. the cursor is not valid anymore</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.ProgrammingError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">ProgrammingError</span></span><a class="headerlink" href="#mariadb.ProgrammingError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">ProgrammingError</span></span><a class="headerlink" href="#mariadb.ProgrammingError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for programming errors, e.g. table not found or already
 exists, syntax error in the SQL statement</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.NotSupportedError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">NotSupportedError</span></span><a class="headerlink" href="#mariadb.NotSupportedError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">NotSupportedError</span></span><a class="headerlink" href="#mariadb.NotSupportedError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised in case a method or database API was used which is not
 supported by the database</p>
 </dd></dl>
 
-</div>
-<div class="section" id="type-objects-and-constructors">
+</section>
+<section id="type-objects-and-constructors">
 <h2>Type objects and constructors<a class="headerlink" href="#type-objects-and-constructors" title="Permalink to this headline">¶</a></h2>
 <dl class="py function">
 <dt class="sig sig-object py" id="mariadb.Binary">
@@ -352,8 +354,8 @@ string-based (e.g. CHAR).</p>
 <dd><p>This type object is used to describe the “Row ID” column in a database.</p>
 </dd></dl>
 
-</div>
-</div>
+</section>
+</section>
 
 
             <div class="clearer"></div>
@@ -362,8 +364,9 @@ string-based (e.g. CHAR).</p>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">The mariadb module</a><ul>
 <li><a class="reference internal" href="#attributes">Attributes</a></li>
 <li><a class="reference internal" href="#exceptions">Exceptions</a></li>
@@ -372,12 +375,17 @@ string-based (e.g. CHAR).</p>
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="api.html"
-                        title="previous chapter">API Reference</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="connection.html"
-                        title="next chapter">The connection class</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="api.html"
+                          title="previous chapter">API Reference</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="connection.html"
+                          title="next chapter">The connection class</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -407,14 +415,14 @@ string-based (e.g. CHAR).</p>
         <li class="right" >
           <a href="api.html" title="API Reference"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0b3-beta documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0rc1-rc documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The mariadb module</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.4.0.
     </div>
   </body>
 </html>

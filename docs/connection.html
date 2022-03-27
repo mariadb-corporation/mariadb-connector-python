@@ -4,8 +4,9 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>The connection class &#8212; MariaDB Connector/Python 1.1.0b3-beta documentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>The connection class &#8212; MariaDB Connector/Python 1.1.0rc1-rc documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
@@ -34,7 +35,7 @@
         <li class="right" >
           <a href="module.html" title="The mariadb module"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0b3-beta documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0rc1-rc documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>
@@ -45,22 +46,22 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="the-connection-class">
+  <section id="the-connection-class">
 <h1>The connection class<a class="headerlink" href="#the-connection-class" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mariadb.connections.Connection">
-<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">mariadb.connections.</span></span><span class="sig-name descname"><span class="pre">Connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.connections.</span></span><span class="sig-name descname"><span class="pre">Connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection" title="Permalink to this definition">¶</a></dt>
 <dd><p>MariaDB Connector/Python Connection Object</p>
 <p>Handles the connection to a MariaDB or MySQL database server.
 It encapsulates a database session.</p>
 <p>Connections are created using the method mariadb.connect()</p>
 </dd></dl>
 
-<div class="section" id="connection-constructors">
+<section id="connection-constructors">
 <h2>Connection constructors<a class="headerlink" href="#connection-constructors" title="Permalink to this headline">¶</a></h2>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.cursor">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></em>, <em class="sig-param"><span class="pre">**kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.cursor" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">**kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.cursor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a new cursor object for the current connection.</p>
 <p>If no cursorclass was specified, a cursor with default mariadb.Cursor class
 will be created.</p>
@@ -108,8 +109,8 @@ methods of this connection.</p>
 :param str branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.</p>
 </dd></dl>
 
-</div>
-<div class="section" id="connection-methods">
+</section>
+<section id="connection-methods">
 <h2>Connection methods<a class="headerlink" href="#connection-methods" title="Permalink to this headline">¶</a></h2>
 <div class="versionadded">
 <p><span class="versionmodified added">New in version 1.1.0.</span></p>
@@ -160,7 +161,7 @@ will cause an implicit rollback to be performed.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="id0">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></em>, <em class="sig-param"><span class="pre">**kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#id0" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">**kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id0" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a new cursor object for the current connection.</p>
 <p>If no cursorclass was specified, a cursor with default mariadb.Cursor class
 will be created.</p>
@@ -215,7 +216,7 @@ an SQL statement. The given string is encoded to an escaped SQL string.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.kill">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">kill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.kill" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">kill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.kill" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function is used to ask the server to kill a database connection
 specified by the processid parameter.</p>
 <p>The connection id must be retrieved by SHOW PROCESSLIST sql command.</p>
@@ -266,7 +267,7 @@ or the storage engine does not support transactions.”</p>
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.select_db">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">select_db</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_db</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.select_db" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">select_db</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_db</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.select_db" title="Permalink to this definition">¶</a></dt>
 <dd><p>Gets the default database for the current connection.</p>
 <p>The default database can also be obtained or changed by database attribute.</p>
 </dd></dl>
@@ -343,8 +344,8 @@ transaction.</p>
 .tpc_commit() or .tpc_rollback() have been called.</p>
 </dd></dl>
 
-</div>
-<div class="section" id="connection-attributes">
+</section>
+<section id="connection-attributes">
 <h2>Connection attributes<a class="headerlink" href="#connection-attributes" title="Permalink to this headline">¶</a></h2>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.auto_reconnect">
@@ -507,8 +508,8 @@ authentication.</p>
 if there are no warnings.</p>
 </dd></dl>
 
-</div>
-</div>
+</section>
+</section>
 
 
             <div class="clearer"></div>
@@ -517,8 +518,9 @@ if there are no warnings.</p>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">The connection class</a><ul>
 <li><a class="reference internal" href="#connection-constructors">Connection constructors</a></li>
 <li><a class="reference internal" href="#connection-methods">Connection methods</a></li>
@@ -527,12 +529,17 @@ if there are no warnings.</p>
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="module.html"
-                        title="previous chapter">The mariadb module</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="cursor.html"
-                        title="next chapter">The cursor class</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="module.html"
+                          title="previous chapter">The mariadb module</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="cursor.html"
+                          title="next chapter">The cursor class</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -562,14 +569,14 @@ if there are no warnings.</p>
         <li class="right" >
           <a href="module.html" title="The mariadb module"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0b3-beta documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0rc1-rc documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.4.0.
     </div>
   </body>
 </html>
