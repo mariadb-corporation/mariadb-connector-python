@@ -208,7 +208,7 @@ static struct PyMemberDef MrdbCursor_Members[] =
         T_UINT,
         offsetof(MrdbCursor, parseinfo.paramcount),
         READONLY,
-        MISSING_DOC},
+        cursor_paramcount__doc__},
     {"_data",
         T_OBJECT,
         offsetof(MrdbCursor, data),

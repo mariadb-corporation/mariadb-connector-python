@@ -144,3 +144,9 @@ PyDoc_STRVAR(
   "Indicates if the current result set contains in out or out parameter\n"
   "from a previous executed stored procedure."
 );
+
+PyDoc_STRVAR(
+  cursor_paramcount__doc__,
+  "(read)\n\n"
+  "Returns the number of parameter markers present in the executed statement."
+);
