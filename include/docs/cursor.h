@@ -116,7 +116,7 @@ PyDoc_STRVAR(
   "next()\n"
   "--\n"
   "\n"
-  "Return the next row from the currently executing SQL statement\n"
+  "Return the next row from the currently executed SQL statement\n"
   "using the same semantics as .fetchone()."
 );
 

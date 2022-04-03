@@ -506,6 +506,14 @@ class Cursor(mariadb._mariadb.cursor):
 
     @property
     def rowcount(self):
+        """
+        This read-only attribute specifies the number of rows that the last\
+        execute*() produced (for DQL statements like SELECT) or affected
+        (for DML statements like UPDATE or INSERT).
+        The return value is -1 in case no .execute*() has been performed
+        on the cursor or the rowcount of the last operation  cannot be
+        determined by the interface.
+        """
         self.check_closed()
         if self._rowcount > 0:
             return self._rowcount

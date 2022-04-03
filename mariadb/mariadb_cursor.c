@@ -108,7 +108,7 @@ static PyGetSetDef MrdbCursor_sets[]=
     {"description", (getter)MrdbCursor_description, NULL,
         cursor_description__doc__, NULL},
     {"rowcount", (getter)Mariadb_row_count, NULL,
-        cursor_rowcount__doc__, NULL},
+        NULL, NULL},
     {"warnings", (getter)MrdbCursor_warnings, NULL,
         cursor_warnings__doc__, NULL},
     {"closed", (getter)MrdbCursor_closed, NULL,
