@@ -181,7 +181,7 @@ produce a result set or execute() wasn’t called before.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.next">
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">next</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.next" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return the next row from the currently executing SQL statement
+<dd><p>Return the next row from the currently executed SQL statement
 using the same semantics as .fetchone().</p>
 </dd></dl>
 
@@ -309,12 +309,19 @@ from a previous executed stored procedure</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.paramcount">
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">paramcount</span></span><a class="headerlink" href="#mariadb.cursors.Cursor.paramcount" title="Permalink to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>(read)</p>
+<p>Returns the number of parameter markers present in the executed statement.</p>
+</dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.rowcount">
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">rowcount</span></span><a class="headerlink" href="#mariadb.cursors.Cursor.rowcount" title="Permalink to this definition">¶</a></dt>
-<dd><div class="admonition note">
+<dd><p>This read-only attribute specifies the number of rows that the last        execute*() produced (for DQL statements like SELECT) or affected
+(for DML statements like UPDATE or INSERT).
+The return value is -1 in case no .execute*() has been performed
+on the cursor or the rowcount of the last operation  cannot be
+determined by the interface.</p>
+<div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>For unbuffered cursors (default) the exact number of rows can only be
 determined after all rows were fetched.</p>
