@@ -1,10 +1,11 @@
-"""MariaDB FIELD_TYPE Constants
-
-These constants represent the various field types that are
-supported by MariaDB.
 """
+MariaDB FIELD_TYPE Constants
 
-# Source: mariadb_com.h (MariaDB Connector(C)
+These constants represent the field types supported by MariaDB.
+The field type is returned as second element of cursor description attribute.
+
+Field types are defined in module *mariadb.constants.FIELD_TYPE*
+"""
 
 DECIMAL = 0
 TINY = 1

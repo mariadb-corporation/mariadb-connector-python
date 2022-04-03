@@ -1,7 +1,10 @@
-''' MariaDB client flags
+''' 
+MariaDB client flags (internal use only).
 
 These flags are used when establishing a connection to a MariaDB
 database server or to check the capabilities of a MariaDB server.
+
+Client flags are defined in module *mariadb.constants.CLIENT_FLAG*
 '''
 
 MYSQL = 1  # MariaDB
