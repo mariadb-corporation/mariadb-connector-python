@@ -66,7 +66,7 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 
 #ifdef _WIN32
 int clock_gettime(int dummy, struct timespec *ct);
-#define CLOCK_MONOTONIC_RAW 1
+#define CLOCK_MONOTONIC 1
 #endif
 
 #define REQUIRED_CC_VERSION 30103
