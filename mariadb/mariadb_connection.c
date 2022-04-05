@@ -652,7 +652,7 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
         if (!rc)
         {
             self->inuse= 0;
-            clock_gettime(CLOCK_MONOTONIC_RAW, &self->last_used);
+            clock_gettime(CLOCK_MONOTONIC, &self->last_used);
         }
         pthread_mutex_unlock(&self->pool->lock);
         Py_INCREF(Py_None);

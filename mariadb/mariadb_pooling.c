@@ -194,7 +194,7 @@ MrdbPool_initialize(MrdbPool *self, PyObject *args, PyObject *kwargs)
             {
                 goto error;
             }
-            clock_gettime(CLOCK_MONOTONIC_RAW, &self->connection[i]->last_used);
+            clock_gettime(CLOCK_MONOTONIC, &self->connection[i]->last_used);
             self->connection[i]->pool= self;
         }
         self->connection_cnt= self->pool_size;
@@ -475,7 +475,7 @@ MrdbPool_addconnection(MrdbPool *self, PyObject *args)
             Py_INCREF(conn);
             self->connection[i]= conn; 
             self->connection[i]->inuse= 0;
-            clock_gettime(CLOCK_MONOTONIC_RAW, &self->connection[i]->last_used);
+            clock_gettime(CLOCK_MONOTONIC, &self->connection[i]->last_used);
             conn->pool= self;
             pthread_mutex_unlock(&self->lock);
             Py_RETURN_NONE;
