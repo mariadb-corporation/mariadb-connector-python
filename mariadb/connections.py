@@ -178,7 +178,7 @@ class Connection(mariadb._mariadb.connection):
         This function is used to ask the server to kill a database connection
         specified by the processid parameter. 
 
-        The connection id must be retrieved by SHOW PROCESSLIST sql command.
+        The connection id can be be retrieved by SHOW PROCESSLIST sql command.
         """
 
         self._check_closed()
@@ -232,15 +232,18 @@ class Connection(mariadb._mariadb.connection):
 
     class xid(tuple):
         """
-        xid(format_id, global_transaction_id, branch_qualifier)
+        xid(format_id: int, global_transaction_id: str, branch_qualifier: str)
 
-        A transaction ID object suitable for passing to the .tpc_*()
+        Creates a transaction ID object suitable for passing to the .tpc_*()
         methods of this connection.
 
         Parameters:
-        :param int format_id: Format id. If not set default value `0` will be used.
-        :param str global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.
-        :param str branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.
+
+        - format_id: Format id. If not set default value `0` will be used.
+
+        - global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.
+
+        - branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.
  
         """
         def __new__(self, format_id, transaction_id, branch_qualifier):

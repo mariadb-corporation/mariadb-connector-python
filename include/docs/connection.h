@@ -54,7 +54,8 @@ PyDoc_STRVAR(
   "In order to successfully change users a valid username and password\n"
   "parameters must be provided and that user must have sufficient\n"
   "permissions to access the desired database. If for any reason\n"
-  "authorization fails, the current user authentication will remain."
+  "authorization fails an exception will be raised and the current user\n"
+  "authentication will remain."
 );
 
 PyDoc_STRVAR(
