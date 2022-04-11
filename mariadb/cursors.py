@@ -161,9 +161,9 @@ class Cursor(mariadb._mariadb.cursor):
         the .sp_outparams attribute indicates if the result set contains output
         parameters.
 
-        Args:
-            sp: Name of stored procedure.
-            data: Optional sequence containing data for placeholder substitution.
+        Arguments:
+            - sp: Name of stored procedure.
+            - data: Optional sequence containing data for placeholder substitution.
         """
 
         self.check_closed()

@@ -35,7 +35,7 @@ class ConnectionPool(object):
     but cannot be changed afterwards. The maximum size of a connection
     pool is limited to 64 connections.
 
-    :Keyword Arguments:
+    Keyword Arguments:
 
         * pool_name (str) -- Name of connection pool
 

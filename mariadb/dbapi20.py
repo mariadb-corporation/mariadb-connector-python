@@ -1,8 +1,10 @@
 from mariadb.constants import FIELD_TYPE, FIELD_FLAG
 import time, datetime
 
-apilevel = '2.0'
+apilevel= '2.0'
+
 paramstyle = 'qmark'
+
 threadsafety = True
 
 class DbApiType(frozenset):
