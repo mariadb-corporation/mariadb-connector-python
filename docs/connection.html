@@ -50,7 +50,7 @@
 <h1>The connection class<a class="headerlink" href="#the-connection-class" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mariadb.connections.Connection">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.connections.</span></span><span class="sig-name descname"><span class="pre">Connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection" title="Permalink to this definition">¶</a></dt>
 <dd><p>MariaDB Connector/Python Connection Object</p>
 <p>Handles the connection to a MariaDB or MySQL database server.
 It encapsulates a database session.</p>
@@ -100,13 +100,15 @@ the statement invoked with cursors execute() method.</p>
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.xid">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">xid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_transaction_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">branch_qualifier</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.xid" title="Permalink to this definition">¶</a></dt>
-<dd><p>A transaction ID object suitable for passing to the .tpc_*()
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">xid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_transaction_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">branch_qualifier</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.xid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a transaction ID object suitable for passing to the .tpc_*()
 methods of this connection.</p>
-<p>Parameters:
-:param int format_id: Format id. If not set default value <cite>0</cite> will be used.
-:param str global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.
-:param str branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.</p>
+<p>Parameters:</p>
+<ul class="simple">
+<li><p>format_id: Format id. If not set default value <cite>0</cite> will be used.</p></li>
+<li><p>global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.</p></li>
+<li><p>branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.</p></li>
+</ul>
 </dd></dl>
 
 </section>
@@ -143,8 +145,8 @@ or cancelled by .rollback() method.</p>
 <p>In order to successfully change users a valid username and password
 parameters must be provided and that user must have sufficient
 permissions to access the desired database. If for any reason
-authorization fails, the current user authentication will remain.</p>
-<p>If for any reason authorization fails an exception will be raised and the current user authentication will remain.</p>
+authorization fails an exception will be raised and the current user
+authentication will remain.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -214,12 +216,32 @@ statement: string</p>
 an SQL statement. The given string is encoded to an escaped SQL string.</p>
 </dd></dl>
 
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">mariadb</span>
+
+<span class="c1"># connection parameters</span>
+<span class="n">conn_params</span><span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;user&quot;</span> <span class="p">:</span> <span class="s2">&quot;example_user&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;password&quot;</span> <span class="p">:</span> <span class="s2">&quot;GHbe_Su3B8&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;host&quot;</span> <span class="p">:</span> <span class="s2">&quot;localhost&quot;</span>
+<span class="p">}</span>
+
+<span class="c1"># Establish a connection</span>
+<span class="n">connection</span><span class="o">=</span> <span class="n">mariadb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="o">**</span><span class="n">conn_params</span><span class="p">)</span>
+
+<span class="n">string</span><span class="o">=</span> <span class="s1">&#39;This string contains the following special characters: \,&quot;&#39;</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">connection</span><span class="o">.</span><span class="n">escape_string</span><span class="p">(</span><span class="n">string</span><span class="p">))</span>
+</pre></div>
+</div>
+<p><em>Output</em>:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>This string contains the following special characters: \\,\&quot;
+</pre></div>
+</div>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.kill">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">kill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.kill" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function is used to ask the server to kill a database connection
 specified by the processid parameter.</p>
-<p>The connection id must be retrieved by SHOW PROCESSLIST sql command.</p>
+<p>The connection id can be be retrieved by SHOW PROCESSLIST sql command.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>A thread_id from other connections can be determined by executing the SQL statement <code class="docutils literal notranslate"><span class="pre">SHOW</span> <span class="pre">PROCESSLIST</span></code>

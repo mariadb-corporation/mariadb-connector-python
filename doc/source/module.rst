@@ -1,94 +1,64 @@
 .. _module:
 
-The mariadb module
-==================
+The MariaDB Connector/Python module
+===================================
 
 .. sectionauthor:: Georg Richter <georg@mariadb.com>
 
-.. module:: mariadb
+.. automodule:: mariadb
 
 
-The mariadb module supports the standard defined by DB API 2.0 (PEP-249).
+Constructors 
+------------
 
-.. function::
-   connect(cursorclass=mariadb.connections.Connection **kwargs)
+----------
+Connection
+----------
 
-   Establishes a connection to a database server and returns a new connection
-   object.
+.. autofunction:: mariadb.connect(connectionclass=mariadb.connections.Connection, **kwargs)
 
-   Parameters:
+.. note::
+    For a description of configuration file handling and settings please read the chapter `Configuration files <https://github.com/mariadb-corporation/mariadb-connector-c/wiki/config_files#configuration-options>`_ of the MariaDB Connector/C documentation.
 
-.. versionadded:: 1.1.0
+Example:
 
-   - **cursorclass**: A subclass of mariadb.connections.Connection. If not specified default will be used.
-
-   Keyword arguments:
-
-   The supported connection keywords are:
-
-   - **user**, **username** (string): The username used to authenticate with the database server, defaults to current user
-   - **password**, **passwd** (string): The password of the given user
-   - **host** (string): The host name or IP address of the database server.
-     If MariaDB Connector/Python was built with MariaDB Connector/C 3.3 it is also possible to provide a comma separated list of hosts for simple fail over in case of one or more hosts are not available. 
-   - **database**, **db** (string): The database (schema) name to used when connecting with the database server
-   - **unix_socket** (string): The location of the unix socket file to use instead of using an IP port to connect.  If socket authentication is enabled, this can also be used in place of a password.
-   - **port** (integer): The port number of the database server. If not specified the default value (=3306) will be used.
-   - **connect_timeout** (integer): The connect timeout in seconds
-   - **read_timeout** (integer): The read timeout in seconds
-   - **write_timeout** (integer): The write timeout in seconds
-   - **local_infile** (bool): Enables or disables the use of LOAD DATA LOCAL INFILE statements.
-   - **compress** (bool) -- Uses the compressed protocol for client server communication. If the
-       server doesn't support compressed protocol, the default protocol will
-       be used
-   - **client_flag** (int): Additional client capabilities. Possible values are defined in constants.CLIENT.
-   - **init_command** (string): Specifies one or more commands to execute when connecting and reconnecting to the database server.
-   - **default_file** (string): Read options from the specified option file. If the file is an empty string, default configuration file(s) will be used
-   - **default_group** (string): Read options from the specified group
-   - **plugin_dir** (string): Directory which contains MariaDB client plugins 
-   - **ssl_key** (string): Defines a path to a private key file to use for TLS. This option
-       requires that you use the absolute path, not a relative path. The specified key must be in PEM format
-   - **ssl_cert** (string): Defines a path to the X509 certificate file to use for TLS.  This option requires that you use the absolute path, not a relative path. The X609 certificate must be in PEM format.
-   - **ssl_ca** (string): Defines a path to a PEM file that should contain one or more X509 certificates for trusted Certificate Authorities (CAs) to use for TLS.  This option requires that you use the absolute path, not a relative path.
-   - **ssl_capath** (string):  Defines a path to a directory that contains one or more PEM files that contains one X509 certificate for a trusted Certificate Authority (CA)
-   - **ssl_cipher** (string):  Defines a list of permitted cipher suites to use for TLS
-   - **ssl_crlpath** (string): Defines a path to a PEM file that should contain one or more revoked X509 certificates to use for TLS. This option requires that you use the absolute path, not a relative path.
-   - **ssl_verify_cert** (bool): Enables server certificate verification.
-   - **ssl** (bool): Always use a secure TLS connection
-.. versionadded:: 1.0.1
-
-   - **autocommit** (bool or None): Specifies the autocommit settings: None will use the server default.  True will enable autocommit, False will disable it (default).
-.. versionadded:: 1.0.3
-
-   - **converter** (dict): Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions.
-
-   :return: Returns a connection object or raises an error if the connection between client and server couldn't be established.
-
-
-   The connection parameters have to be provided as a set of keyword arguments::
+.. testcode::
 
       import mariadb
 
-      connection= mariadb.connect(user="myuser", host="localhost", database="test", password="secret")
+      connection= mariadb.connect(user="example_user", host="localhost", database="test", password="GHbe_Su3B8")
 
-.. note::   For a description of configuration file handling and settings please read the chapter `Configuration files <https://github.com/mariadb-corporation/mariadb-connector-c/wiki/config_files#configuration-options>`_ of the MariaDB Connector/C documentation.
+      print(connection.character_set)
 
+Output:
 
-.. function:: 
-    ConnectionPool(**kwargs)
+.. testoutput::
 
-    Creates a connection pool and returns a ConnectionPool object.
+    utf8mb4
 
-    The connection parameters have to be provided as a set of keyword arguments::
+---------------
+Connection Pool
+---------------
 
-       db_conf= {user="myname", password="secret", database="test", host="localhost"};
-       pool= mariadb.ConnectionPool(pool_name="pool1", **db_conf)
+.. autofunction:: mariadb.ConnectionPool(**kwargs)
 
-    Beside pool specific parameter all parameters from connect() are supported.
-    The supported pool parameters are:
+-----------------
+Type constructors
+-----------------
 
-    - pool_name -- Name of the pool
-    - pool_size -- Size of the pool. If this value is not provided, a default size of 5 pool connections will be used.
-    - pool_reset -- If set to `True` the connection will be reset after close() method was called.
+.. autofunction:: mariadb.Binary()
+
+.. autofunction:: mariadb.Date(year, month, day)
+
+.. autofunction:: mariadb.DateFromTicks(ticks)
+
+.. autofunction:: mariadb.Time(hour, minute, second)
+
+.. autofunction:: mariadb.TimeFromTicks(ticks)
+
+.. autofunction:: mariadb.Timestamp(year, month, day, hour, minute, second)
+
+.. autofunction:: mariadb.TimestampFromTicks(ticks)
 
 Attributes
 ----------
@@ -134,95 +104,60 @@ Exceptions
 Compliant to DB API 2.0 MariaDB Connector/C provides information about errors
 through the following exceptions:
 
-.. exception:: DataError
+.. autoexception:: mariadb.DataError
 
-    Exception raised for errors that are due to problems with the processed data like division by zero, 
-    numeric value out of range, etc.
+.. autoexception:: mariadb.DatabaseError
 
-.. exception:: DatabaseError
+.. autoexception:: mariadb.InterfaceError
 
-    Exception raised for errors that are related to the database
+.. autoexception:: mariadb.Warning
 
-.. exception:: InterfaceError
+.. autoexception:: mariadb.PoolError
 
-    Exception raised for errors that are related to the database interface
-    rather than the database itself.
+.. autoexception:: mariadb.OperationalError
 
-.. exception:: Warning
+.. autoexception:: mariadb.IntegrityError
 
-    Exception raised for important warnings like data truncations while inserting, etc.
+.. autoexception:: mariadb.InternalError
 
-.. exception:: PoolError
+.. autoexception:: mariadb.ProgrammingError
 
-    Exception raised for errors related to ConnectionPool class.
+.. autoexception:: mariadb.NotSupportedError
 
-.. exception:: OperationalError
+------------
+Type objects 
+------------
 
-    Exception raised for errors that are related to the database's operation 
-    and not necessarily under the control of the programmer
+..
+     _Note: Type objects are handled as constants, therefore we can't
+     use autodata.
 
-.. exception:: IntegrityError
+MariaDB Connector/Python type objects are immutable sets for type settings
+and defined in DBAPI 2.0 (PEP-249).
 
-    Exception raised when the relational integrity of the database is affected, 
-    e.g. a foreign key check fails.
+Example:
 
-.. exception:: InternalError
+.. testcode::
 
-    Exception raised when the database encounters an internal error, 
-    e.g. the cursor is not valid anymore
+    import mariadb
+    from mariadb.constants import FIELD_TYPE
 
-.. exception:: ProgrammingError
+    print(FIELD_TYPE.GEOMETRY == mariadb.BINARY)
+    print(FIELD_TYPE.DATE == mariadb.DATE)
+    print(FIELD_TYPE.VARCHAR == mariadb.BINARY)
 
-    Exception raised for programming errors, e.g. table not found or already 
-    exists, syntax error in the SQL statement
+Output:
 
-.. exception:: NotSupportedError
+.. testoutput::
 
-    Exception raised in case a method or database API was used which is not
-    supported by the database
-
-Type objects and constructors
-------------------------------
-
-.. function:: Binary()
-
-   This function constructs an object capable of holding a binary (long)
-   string value
-
-.. function:: Date(year, month, day)
-
-    This function constructs an object holding a date value
-
-.. function:: DateFromTicks(ticks)
-
-    This function constructs an object holding a date value from the given
-    ticks value (number of seconds since the epoch). For more information
-    see the documentation of the standard Python time module
-    
-.. function::  Time(hour, minute, second)
-
-    This function constructs an object holding a time value
-    
-.. function::  TimeFromTicks(ticks)
-
-    This function constructs an object holding a time value from the given
-    ticks value (number of seconds since the epoch). For more information
-    see the documentation of the standard Python time module
-    
-.. function::  Timestamp(year, month, day, hour, minute, second)
-
-    This function constructs an object holding a time stamp value
-    
-.. function::  TimestampFromTicks(ticks)
-
-    This function constructs an object holding a time stamp value from the given
-    ticks value (number of seconds since the epoch). For more information
-    see the documentation of the standard Python time module
+    True
+    True
+    False
 
 .. data:: STRING
 
     This type object is used to describe columns in a database that are
-    string-based (e.g. CHAR).
+    string-based (e.g. CHAR1).
 
 .. data:: BINARY
 
@@ -239,4 +174,5 @@ Type objects and constructors
 
 .. data:: ROWID
 
-    This type object is used to describe the "Row ID" column in a database.
+    This type object is not supported in MariaDB Connector/Python and represents
+    an empty set.

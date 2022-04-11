@@ -10,22 +10,12 @@ Constants
     from mariadb.constants import *
 
 --------------
-COMMAND
---------------
-
-.. versionadded:: 1.1.0
-
-   COMMAND constants are for internal use only.
-
---------------
 CLIENT
 --------------
 
 .. versionadded:: 1.1.0
 
-   For internal use only.
-
-   CLIENT constants are used to check the capabilities of connected database server.
+.. automodule:: mariadb.constants.CLIENT
 
 --------------
 CURSOR
@@ -33,7 +23,7 @@ CURSOR
 
 .. versionadded:: 1.1.0
 
-   Cursor constants are used for server side cursors.
+.. automodule:: mariadb.constants.CURSOR
 
 .. py:data:: CURSOR.NONE
 
@@ -50,9 +40,8 @@ FIELD_FLAG
 
 .. versionadded:: 1.1.0
 
-These constants represent the various field flags. As an addition
-to the DBAPI 2.0 standard (PEP-249) these flags are returned as
-8th element of the cursor description attribute.
+.. automodule:: mariadb.constants.FIELD_FLAG
+
 
 .. py:data:: FIELD_FLAG.NOT_NULL
 
@@ -118,12 +107,11 @@ to the DBAPI 2.0 standard (PEP-249) these flags are returned as
 
    column is part of a key
 
---------------
-FIELD_TYPES
---------------
+----------
+FIELD_TYPE
+----------
 
-These constants represent the various field types. The field type
-is returned as 2nd element of cursor description attribute.
+.. automodule:: mariadb.constants.FIELD_TYPE
 
 .. py:data:: FIELD_TYPE.TINY
 

@@ -50,7 +50,7 @@
 <h1>The cursor class<a class="headerlink" href="#the-cursor-class" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.cursors.</span></span><span class="sig-name descname"><span class="pre">Cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor" title="Permalink to this definition">¶</a></dt>
 <dd><p>MariaDB Connector/Python Cursor Object</p>
 </dd></dl>
 
@@ -65,8 +65,10 @@ each parameter the procedure expects.</p>
 the .sp_outparams attribute indicates if the result set contains output
 parameters.</p>
 <dl class="simple">
-<dt>Args:</dt><dd><p>sp: Name of stored procedure.
-data: Optional sequence containing data for placeholder substitution.</p>
+<dt>Arguments:</dt><dd><ul class="simple">
+<li><p>sp: Name of stored procedure.</p></li>
+<li><p>data: Optional sequence containing data for placeholder substitution.</p></li>
+</ul>
 </dd>
 </dl>
 <p>Example:</p>

@@ -50,7 +50,7 @@
 <h1>The ConnectionPool class<a class="headerlink" href="#the-connectionpool-class" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mariadb.ConnectionPool">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mariadb.</span></span><span class="sig-name descname"><span class="pre">ConnectionPool</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ConnectionPool</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool" title="Permalink to this definition">¶</a></dt>
 <dd><p>Class defining a pool of database connections</p>
 <p>MariaDB Connector/Python supports simple connection pooling.
 A connection pool holds a number of open connections and handles
@@ -58,15 +58,14 @@ thread safety when providing connections to threads.</p>
 <p>The size of a connection pool is configurable at creation time, 
 but cannot be changed afterwards. The maximum size of a connection
 pool is limited to 64 connections.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Keyword Arguments</dt>
-<dd class="field-odd"><ul class="simple">
+<p>Keyword Arguments:</p>
+<blockquote>
+<div><ul class="simple">
 <li><p>pool_name (str) – Name of connection pool</p></li>
 <li><p>pool_size (int)=5 – Size of pool. If not specified default value of 5 will be used. Maximum allowed number is 64.</p></li>
 <li><p>pool_reset_connection (bool)=True – Will reset the connection before returning it to the pool.  Default value is True.</p></li>
 </ul>
-</dd>
-</dl>
+</div></blockquote>
 </dd></dl>
 
 <section id="connectionpool-methods">

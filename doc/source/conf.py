@@ -30,6 +30,7 @@ author = 'Georg Richter'
 release = mariadb.__version__
 if len(mariadb.__version_info__) > 3:
     release= release + "-" + mariadb.__version_info__[3]
+add_module_names= False
 
 
 # -- General configuration ---------------------------------------------------
