@@ -354,7 +354,7 @@ MrdbPool_getconnection(MrdbPool *self)
     uint64_t tdiff= 0;
     struct timespec now;
 
-    clock_gettime(CLOCK_MONOTONIC_RAW, &now);
+    clock_gettime(CLOCK_MONOTONIC, &now);
 
     pthread_mutex_lock(&self->lock);
 
