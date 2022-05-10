@@ -101,7 +101,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
         goto error;
     }
 
-    Py_TYPE(&MrdbConnection_Type) = &PyType_Type;
+    Py_SET_TYPE(&MrdbConnection_Type, &PyType_Type);
     if (PyType_Ready(&MrdbConnection_Type) == -1)
     {
         goto error;
@@ -119,7 +119,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
         goto error;
     }
 
-    Py_TYPE(&MrdbCursor_Type) = &PyType_Type;
+    Py_SET_TYPE(&MrdbCursor_Type, &PyType_Type);
     if (PyType_Ready(&MrdbCursor_Type) == -1)
     {
         goto error;
