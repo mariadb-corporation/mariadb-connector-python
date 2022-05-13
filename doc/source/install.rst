@@ -42,11 +42,9 @@ or if you downloaded the source package
 Binary installation
 -------------------
 MariaDB Connector/Python is also available from PyPi as wheel packages for Windows.
-These binary packages are not intended for production use, since there might be several limitations
-and bottlenecks, e.g.:
-
-- Dynamic MariaDB plugins (e.g. authentication plugins) are not part of the package and must
-  be installed separately by installing MariaDB Connector/C or MariaDB Server package.
+Please note that dynamic MariaDB plugins (e.g. authentication plugins) are not part
+of the package and must be installed separately by installing MariaDB Connector/C or
+MariaDB Server package.
 
 Make sure you have an up to date version of pip and install it with
 
