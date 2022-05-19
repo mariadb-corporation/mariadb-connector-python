@@ -26,12 +26,16 @@ def mariadb_config(config, option):
             data = []
         if rc / 256 > 1:
             raise EnvironmentError(
-                "mariadb_config not found.\n\nPlease make sure, that MariaDB Connector/C is installed on your system.\n"
-                "Either set the environment variable MARIADB_CONFIG or edit the configuration\n"
-                "file 'site.cfg' and set the 'mariadb_config option, which should point\n"
-                "to the mariadb_config utility.\n"
-                "The MariaDB Download website at <https://downloads.mariadb.com/Connectors/c/>\n"
-                "provides latest stable releease of Connector/C.")
+                """mariadb_config not found.
+
+This error typically indicates that MariaDB Connector/C, a dependency which must be preinstalled,
+is not found.
+If MariaDB Connector/C is not installed, see installation instructions
+at: https://github.com/mariadb-corporation/mariadb-connector-c/wiki/install.md.
+If MariaDB Connector/C is installed, either set the environment variable MARIADB_CONFIG or edit
+the configuration file 'site.cfg' to set the 'mariadb_config' option to the file location of the
+mariadb_config utility.""")
+
     return data
 
 
