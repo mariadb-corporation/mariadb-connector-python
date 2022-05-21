@@ -164,7 +164,7 @@ class TestCursor(unittest.TestCase):
         self.assertRaises(mariadb.Error, cursor.fetchall)
         # b ) if cursor was not executed
         del cursor
-        cursor = self.connection.cursor()
+        cursor = self.connection.cursor(buffered=False)
         self.assertRaises(mariadb.Error, cursor.fetchall)
 
         cursor.execute("SELECT id, name, city FROM test_fetchmany ORDER BY id")
@@ -983,7 +983,7 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy67(self):
         con = create_connection()
-        cur = con.cursor()
+        cur = con.cursor(buffered=False)
         cur.execute("SELECT 1")
         self.assertEqual(cur.rowcount, 0)
         cur.close()
