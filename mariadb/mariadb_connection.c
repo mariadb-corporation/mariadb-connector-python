@@ -67,6 +67,9 @@ static PyObject *
 MrdbConnection_getinfo(MrdbConnection *self, PyObject *args);
 
 static PyObject *
+MrdbConnection_dump_debug_info(MrdbConnection *self);
+
+static PyObject *
 MrdbConnection_warnings(MrdbConnection *self);
 
 static PyObject *
@@ -133,6 +136,11 @@ MrdbConnection_Methods[] =
         (PyCFunction)MrdbConnection_escape_string,
         METH_VARARGS,
         connection_escape_string__doc__
+    },
+    { "dump_debug_info",
+       (PyCFunction)MrdbConnection_dump_debug_info,
+       METH_NOARGS,
+       connection_dump_debug_info__doc__
     },
     /* Internal methods */
     { "_execute_command", 
@@ -713,6 +721,24 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
     return new_string;
 }
 /* }}} */
+
+static PyObject *
+MrdbConnection_dump_debug_info(MrdbConnection *self)
+{
+    int rc;
+    MARIADB_CHECK_CONNECTION(self, NULL);
+
+    Py_BEGIN_ALLOW_THREADS;
+    rc= mysql_dump_debug_info(self->mysql);
+    Py_END_ALLOW_THREADS;
+
+    if (rc)
+    {
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
 
 static PyObject *MrdbConnection_readresponse(MrdbConnection *self)
 {

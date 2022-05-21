@@ -28,6 +28,16 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
+  connection_dump_debug_info__doc__,
+  "dump_debug_info()\n"
+  "--\n"
+  "\n"
+  "This function is designed to be executed by an user with the SUPER privilege\n"
+  "and is used to dump server status information into the log for the MariaDB\n"
+  "Server relating to the connection."
+);
+
+PyDoc_STRVAR(
   connection_close__doc__,
   "close()\n"
   "--\n"
