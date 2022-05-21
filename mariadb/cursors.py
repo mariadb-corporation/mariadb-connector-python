@@ -67,7 +67,7 @@ class Cursor(mariadb._mariadb.cursor):
         self._prev_stmt= None
         self._force_binary= None
         self._rowcount= 0
-
+        self.buffered= True
         self._parseinfo= None
         self._data= None
 
