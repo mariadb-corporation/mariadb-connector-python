@@ -336,9 +336,9 @@ class Cursor(mariadb._mariadb.cursor):
             self._parse_execute(statement, parameters[0], is_bulk=True)
             self._data= parameters
             self.is_text= False
+            self._rowcount= 0
             self._execute_bulk()
             self._bulk= 1
-            self._rowcount= 0
 
     def _fetch_row(self):
         """
