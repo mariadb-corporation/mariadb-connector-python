@@ -1,6 +1,6 @@
 '''
 MariaDB Connector/Python module enables python programs to access MariaDB and MySQL
-atabases, using an API which is compliant with the Python DB API 2.0 (PEP-249).
+databases, using an API which is compliant with the Python DB API 2.0 (PEP-249).
 '''
 
 from ._mariadb import (
