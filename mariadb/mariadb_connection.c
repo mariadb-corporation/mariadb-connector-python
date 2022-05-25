@@ -96,8 +96,8 @@ MrdbConnection_sets[]=
     GETTER_EXCEPTION("NotSupportedError", Mariadb_NotSupportedError, exception_notsupported__doc__),
     GETTER_EXCEPTION("InternalError", Mariadb_InternalError, exception_internal__doc__),
     GETTER_EXCEPTION("OperationalError", Mariadb_OperationalError, exception_operational__doc__),
-    GETTER_EXCEPTION("PoolError", Mariadb_OperationalError, exception_pool__doc__),
-    GETTER_EXCEPTION("DataError", Mariadb_OperationalError, exception_data__doc__),
+    GETTER_EXCEPTION("PoolError", Mariadb_PoolError, exception_pool__doc__),
+    GETTER_EXCEPTION("DataError", Mariadb_DataError, exception_data__doc__),
     {NULL}
 };
 

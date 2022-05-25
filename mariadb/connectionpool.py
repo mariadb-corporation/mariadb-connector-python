@@ -136,7 +136,7 @@ class ConnectionPool(object):
 
         if connection is not None and \
             not isinstance(connection, mariadb.connections.Connection):
-            raise TypeError("Passed parameter is not a connection object")
+            raise mariadb.ProgrammingError("Passed parameter is not a connection object")
 
         if connection == None and len(self._conn_args) == 0:
             raise mariadb.PoolError("Can't get configuration for pool %s" % \

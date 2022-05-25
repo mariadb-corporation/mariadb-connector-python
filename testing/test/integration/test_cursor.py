@@ -404,7 +404,7 @@ class TestCursor(unittest.TestCase):
         tpl = (1, 2, 3)
         try:
             cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
-        except mariadb.DataError:
+        except mariadb.ProgrammingError:
             pass
         del cursor
 
@@ -491,7 +491,7 @@ class TestCursor(unittest.TestCase):
         try:
             cursor.execute("INSERT INTO test.t1(fname, sname) VALUES (?, ?)",
                            (("Walker", "Percy"), ("Flannery", "O'Connor")))
-        except (mariadb.ProgrammingError, mariadb.DataError):
+        except (mariadb.ProgrammingError, mariadb.NotSupportedError):
             pass
         del cursor
 
@@ -502,7 +502,7 @@ class TestCursor(unittest.TestCase):
 
         try:
             cursor.scroll(0)
-        except mariadb.DataError:
+        except mariadb.ProgrammingError:
             pass
 
         cursor.scroll(2, mode='relative')
@@ -530,7 +530,7 @@ class TestCursor(unittest.TestCase):
 
         try:
             cursor.scroll(-2, mode='absolute')
-        except mariadb.DataError:
+        except mariadb.ProgrammingError:
             pass
 
         del cursor
@@ -1158,14 +1158,14 @@ class TestCursor(unittest.TestCase):
         cursor = conn.cursor()
         try:
             cursor.execute("SELECT /*!50701 ? */", (1,))
-        except mariadb.DataError:
+        except mariadb.ProgrammingError:
             pass
         del cursor
 
         cursor = conn.cursor()
         try:
             cursor.execute("SELECT /*!250701 ? */", (1,))
-        except mariadb.DataError:
+        except mariadb.ProgrammingError:
             pass
         del cursor
 
@@ -1233,6 +1233,50 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0], "foobar")
 
         conn.close()
+
+    def test_conpy205(self):
+        conn= create_connection()
+        cursor= conn.cursor()
+
+        cursor.execute("select %(name)s", {"name" : "Marc"})
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "Marc")
+
+        cursor.execute("select %(name)s", {"name" : "Marc", "noname" : "unknown"})
+        row= cursor.fetchone()
+        self.assertEqual(row[0], "Marc")
+
+        try:
+            cursor.execute("select ?", {"noname" : "unknown"})
+        except (mariadb.ProgrammingError):
+            pass
+
+        try:
+            cursor.execute("select %(name)s", (1,))
+        except (mariadb.ProgrammingError):
+            pass
+
+        try:
+            cursor.execute("select %(name)s", {"noname" : "unknown"})
+        except (mariadb.ProgrammingError):
+            pass
+
+        try:
+            cursor.execute("select ?")
+        except (mariadb.ProgrammingError):
+            pass
+
+        try:
+            cursor.execute("select ?,?,?", (1,2))
+        except (mariadb.ProgrammingError):
+            pass
+
+        try:
+            cursor.execute("select ?,?,?", (1,2,3,4))
+        except (mariadb.ProgrammingError):
+            pass
+
+        cursor.close()
 
     def test_conpy91(self):
         with create_connection() as connection:

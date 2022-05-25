@@ -884,7 +884,7 @@ mariadb_get_parameter(MrdbCursor *self,
         if (row_nr > (self->array_size - 1) ||
                 column_nr > (self->parseinfo.paramcount - 1))
         {
-            mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
+            mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 0,
                     "Can't access data at row %d, column %d",
                      row_nr + 1, column_nr + 1);
             goto end;
@@ -892,7 +892,7 @@ mariadb_get_parameter(MrdbCursor *self,
 
         if (!(row= ListOrTuple_GetItem(self->data, row_nr)))
         {
-            mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
+            mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 0,
                     "Can't access row number %d", row_nr + 1);
             goto end;
         }
@@ -904,7 +904,7 @@ mariadb_get_parameter(MrdbCursor *self,
     {
         if (!(column= ListOrTuple_GetItem(row, column_nr)))
         {
-            mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
+            mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 0,
                     "Can't access column number %d at row %d",
                      column_nr + 1, row_nr + 1);
             goto end;
@@ -916,7 +916,7 @@ mariadb_get_parameter(MrdbCursor *self,
         key= PyTuple_GetItem(self->parseinfo.keys, column_nr);
         if (!PyDict_Contains(row, key))
         {
-            mariadb_throw_exception(self->stmt, Mariadb_DataError, 0,
+            mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 0,
                     "Can't find key in parameter data");
             goto end;
         }
@@ -928,7 +928,7 @@ mariadb_get_parameter(MrdbCursor *self,
     {
         if (!(caps & (MARIADB_CLIENT_STMT_BULK_OPERATIONS >> 32)))
         {
-            mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+            mariadb_throw_exception(NULL, Mariadb_NotSupportedError, 0,
                     "MariaDB %s doesn't support indicator variables. "\
                     "Required version is 10.2.6 or newer",
                     mysql_get_server_info(self->stmt->mysql));
@@ -984,13 +984,13 @@ mariadb_get_parameter_info(MrdbCursor *self,
         {
             if (rc == 1)
             {
-                mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+                mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                     "Can't retrieve column information for parameter %d",
                      column_nr);
             }
             if (rc == 2)
             {
-                mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+                mariadb_throw_exception(NULL, Mariadb_NotSupportedError, 0,
                     "Data type '%s' in column %d not supported in MariaDB Connector/Python",
                      Py_TYPE(paramvalue.value)->tp_name, column_nr);
             }
@@ -1007,7 +1007,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
         memset(&pinfo, 0, sizeof(MrdbParamInfo));
         if (mariadb_get_column_info(paramvalue.value, &pinfo) && !paramvalue.indicator)
         {
-            mariadb_throw_exception(NULL, Mariadb_DataError, 1,
+            mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
                     "Invalid parameter type at row %d, column %d",
                     i+1, column_nr + 1);
             return 1;
@@ -1043,7 +1043,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
                     param->buffer_type= MYSQL_TYPE_NEWDECIMAL;
                     break;
                 }
-                mariadb_throw_exception(NULL, Mariadb_DataError, 1,
+                mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
                         "Invalid parameter type at row %d, column %d",
                         i+1, column_nr + 1);
                 return 1;
@@ -1116,7 +1116,7 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
                 (!CHECK_TYPE(obj, &PyTuple_Type) &&
                  !CHECK_TYPE(obj, &PyList_Type)))
         {
-            mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+            mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                     "Invalid parameter type in row %d. "\
                     " (Row data must be provided as tuple(s))", i+1);
             return 1;
@@ -1124,7 +1124,7 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
         if (self->parseinfo.paramstyle == PYFORMAT &&
                 !CHECK_TYPE(obj, &PyDict_Type))
         {
-            mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+            mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                     "Invalid parameter type in row %d. "\
                     " (Row data must be provided as dict)", i+1);
             return 1;
@@ -1134,7 +1134,7 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
                 (self->parseinfo.paramstyle != PYFORMAT && 
                  self->parseinfo.paramcount != ListOrTuple_Size(obj)))
         {
-            mariadb_throw_exception(self->stmt, Mariadb_DataError, 1, 
+            mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 1, 
                     "Invalid number of parameters in row %d", i+1);
             return 1;
         }
@@ -1179,7 +1179,7 @@ mariadb_check_execute_parameters(MrdbCursor *self,
 
     if (!self->parseinfo.paramcount)
     {
-        mariadb_throw_exception(NULL, Mariadb_DataError, 0,
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                 "Invalid number of parameters");
         goto error;
     }

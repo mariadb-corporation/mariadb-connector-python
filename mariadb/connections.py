@@ -248,11 +248,11 @@ class Connection(mariadb._mariadb.connection):
         """
         def __new__(self, format_id, transaction_id, branch_qualifier):
             if not isinstance(format_id, int):
-                raise TypeError("argument 1 must be int, not %s", type(format_id).__name__)
+                raise mariadb.ProgrammingError("argument 1 must be int, not %s", type(format_id).__name__)
             if not isinstance(transaction_id, str):
-                raise TypeError("argument 2 must be str, not %s", type(transaction_id).__mane__)
+                raise mariadb.ProgrammingError("argument 2 must be str, not %s", type(transaction_id).__mane__)
             if not isinstance(branch_qualifier, str):
-                raise TypeError("argument 3 must be str, not %s", type(transaction_id).__name__)
+                raise mariadb.ProgrammingError("argument 3 must be str, not %s", type(transaction_id).__name__)
             if len(transaction_id) > _MAX_TPC_XID_SIZE:
                 raise mariadb.ProgrammingError("Maximum length of transaction_id exceeded.")
             if len(branch_qualifier) > _MAX_TPC_XID_SIZE:
@@ -278,7 +278,7 @@ class Connection(mariadb._mariadb.connection):
 
         self._check_closed()
         if type(xid).__name__ != "xid":
-            raise TypeError("argument 1 must be xid not %s", type(xid).__name__)
+            raise mariadb.ProgrammingError("argument 1 must be xid not %s", type(xid).__name__)
         stmt= "XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
             self._execute_command(stmt)
@@ -314,7 +314,7 @@ class Connection(mariadb._mariadb.connection):
         if xid is None and self.tpc_state != TPC_STATE.PREPARE:
             raise mariadb.ProgrammingError("Transaction is not prepared.")
         if xid and type(xid).__name__ != "xid":
-            raise TypeError("argument 1 must be xid not %s" % type(xid).__name__)
+            raise mariadb.ProgrammingError("argument 1 must be xid not %s" % type(xid).__name__)
 
         if self.tpc_state < TPC_STATE.PREPARE:
             stmt= "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
@@ -396,7 +396,7 @@ class Connection(mariadb._mariadb.connection):
         if self.tpc_state == TPC_STATE.NONE:
             raise mariadb.ProgrammingError("Transaction not started.")
         if xid and type(xid).__name__ != "xid":
-            raise TypeError("argument 1 must be xid not %s" % type(xid).__name__)
+            raise mariadb.ProgrammingError("argument 1 must be xid not %s" % type(xid).__name__)
 
         if not xid:
             xid= self._xid

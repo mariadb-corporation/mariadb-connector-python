@@ -138,19 +138,22 @@ class Cursor(mariadb._mariadb.cursor):
         if self._paramstyle == PARAMSTYLE_QMARK or \
            self._paramstyle == PARAMSTYLE_FORMAT:
             if not isinstance(self._data, (tuple,list)):
-                raise mariadb.ProgrammingError("Data arguent nust be Tuple or List")
+                raise mariadb.ProgrammingError("Data argument must be Tuple or List")
 
-        if self._paramstyle == PARAMSTYLE_PYFORMAT and\
-               not isinstance(self._data, dict):
-            raise mariadb.ProgrammingError("Data arguent nust be Dictionary")
-
-        # check if number of place holders matches the number of 
-        # supplied elements in data tuple
-        if self._paramlist and  ((not self._data and len(self._paramlist) > 0) or \
-           (len(self._data) != len(self._paramlist))):
-            raise mariadb.DataError("Number of parameters in statement (%s)"\
-                                    " doesn't match the number of data elements (%s)."\
-                                     % (len(self._paramlist), len(self._data)))
+        if self._paramstyle == PARAMSTYLE_PYFORMAT:
+            if not isinstance(self._data, dict):
+                raise mariadb.ProgrammingError("Data argument must be Dictionary")
+            for i in range(0, len(self._keys)):
+                if self._keys[i] not in self._data:
+                    raise mariadb.ProgrammingError("Dictionary doesn't contain key '%s'" % self._keys[i])
+        else:
+            # check if number of place holders matches the number of 
+            # supplied elements in data tuple
+            if self._paramlist and  ((not self._data and len(self._paramlist) > 0) or \
+               (len(self._data) != len(self._paramlist))):
+                raise mariadb.ProgrammingError("Number of parameters in statement (%s)"\
+                                        " doesn't match the number of data elements (%s)."\
+                                         % (len(self._paramlist), len(self._data)))
 
     def callproc(self, sp: str, data: Sequence =()):
         """
@@ -258,16 +261,7 @@ class Cursor(mariadb._mariadb.cursor):
         if do_parse:
             self._parse_execute(statement, (data))
 
-        if data and len(data) != self.paramcount:
-            raise mariadb.DataError("Invalid number of parameters.")
-
         self._description= None
-
-        # check if data parameters are passed in correct format
-        if (self._paramstyle == PARAMSTYLE_PYFORMAT and not isinstance(data, dict)):
-            raise TypeError("Argument 2 must be Dict")
-        elif self._paramstyle < PARAMSTYLE_PYFORMAT and (not isinstance(data, (tuple, list))):
-            raise TypeError("Argument 2 must be Tuple or List")
 
         if len(data):
             self._data= data
@@ -316,7 +310,7 @@ class Cursor(mariadb._mariadb.cursor):
         self.check_closed()
 
         if not parameters or not len(parameters):
-            raise TypeError("No data provided")
+            raise mariadb.ProgrammingError("No data provided")
 
         # clear pending results
         if self.field_count:
@@ -460,19 +454,19 @@ class Cursor(mariadb._mariadb.cursor):
                                            "with a buffered result set.")
 
         if mode != "absolute" and mode != "relative":
-            raise mariadb.DataError("Invalid or unknown scroll mode specified.")
+            raise mariadb.ProgrammingError("Invalid or unknown scroll mode specified.")
 
         if value == 0 and mode != "absolute":
-            raise mariadb.DataError("Invalid position value 0.")
+            raise mariadb.ProgrammingError("Invalid position value 0.")
 
         if mode == "relative":
             if self.rownumber + value < 0 or \
                self.rownumber + value > self.rowcount:
-                raise mariadb.DataError("Position value is out of range.")
+                raise mariadb.ProgrammingError("Position value is out of range.")
             new_pos= self.rownumber + value
         else:
             if value < 0 or value >= self.rowcount:
-                raise mariadb.DataError("Position value is out of range.")
+                raise mariadb.ProgrammingError("Position value is out of range.")
             new_pos= value
 
         self._seek(new_pos);
