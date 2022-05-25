@@ -98,6 +98,6 @@ setup(name='mariadb',
       py_modules=['mariadb.__init__', 'mariadb.constants.CLIENT', 'mariadb.constants.CURSOR',
                   'mariadb.constants.STATUS', 'mariadb.constants.TPC_STATE', 'mariadb.constants.INFO',
                   'mariadb.field', 'mariadb.connections', 'mariadb.connectionpool', 'mariadb.dbapi20',
-                  'mariadb.cursors', 'mariadb.release_info', 
+                  'mariadb.cursors', 'mariadb.release_info', 'mariadb.constants.ERR',
                   'mariadb.constants.FIELD_TYPE', 'mariadb.constants.FIELD_FLAG', 'mariadb.constants.INDICATOR'],
       )

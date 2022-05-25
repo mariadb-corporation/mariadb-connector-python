@@ -1278,6 +1278,15 @@ class TestCursor(unittest.TestCase):
 
         cursor.close()
 
+    def test_conpy203(self):
+        conn= create_connection()
+        cursor= conn.cursor()
+
+        try:
+            cursor.execute("SELECT")
+        except mariadb.ProgrammingError as err:
+            self.assertEqual(err.errno, ERR.ER_PARSE_ERROR)
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:
