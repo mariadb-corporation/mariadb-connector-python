@@ -29,8 +29,8 @@ PY_MARIADB_AUTHORS= "Georg Richter"
 
 PY_MARIADB_MAJOR_VERSION=1
 PY_MARIADB_MINOR_VERSION=1
-PY_MARIADB_PATCH_VERSION="0rc1"
-PY_MARIADB_PRE_RELEASE_SEGMENT="rc"
+PY_MARIADB_PATCH_VERSION="0"
+PY_MARIADB_PRE_RELEASE_SEGMENT=""
 
 PY_MARIADB_VERSION= "%s.%s.%s" % (PY_MARIADB_MAJOR_VERSION, PY_MARIADB_MINOR_VERSION, PY_MARIADB_PATCH_VERSION)
 
@@ -50,16 +50,15 @@ with open("mariadb/release_info.py", "w") as rel_info:
 
 setup(name='mariadb',
       version=PY_MARIADB_VERSION,
-      python_requires='>=3.6',
+      python_requires='>=3.7',
       classifiers = [
-          'Development Status :: 4 - Beta',
+          'Development Status :: 5 - Production/Stable',
           'Environment :: Console',
           'Environment :: MacOS X',
           'Environment :: Win32 (MS Windows)',
           'License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)',
           'Programming Language :: C',
           'Programming Language :: Python',
-          'Programming Language :: Python :: 3.6',
           'Programming Language :: Python :: 3.7',
           'Programming Language :: Python :: 3.8',
           'Programming Language :: Python :: 3.9',
