@@ -41,7 +41,7 @@ class Connection(mariadb._mariadb.connection):
 
     def _check_closed(self):
         if self._closed:
-            raise mariadb.ProgrammingError("Connection is closed")
+            raise mariadb.ProgrammingError("Invalid connection or not connected")
 
     def __init__(self, *args, **kwargs):
         """
