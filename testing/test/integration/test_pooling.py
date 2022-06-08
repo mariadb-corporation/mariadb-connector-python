@@ -118,7 +118,7 @@ class TestPooling(unittest.TestCase):
             cursor.execute("select database()")
             row = cursor.fetchone()
             self.assertEqual(row[0], "中文考试")
-            cursor.execute("CREATE TABLE t1 (a varchar(255)) character set utf8mb4")
+            cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(255)) character set utf8mb4")
             cursor.execute("insert into t1 values (?)", ("123.45 中文考试",))
             cursor.execute("select a from t1", buffered=True)
             row = cursor.fetchone()

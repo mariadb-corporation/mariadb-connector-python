@@ -17,7 +17,7 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-import mariadb, collections
+import mariadb, collections, datetime
 from numbers import Number
 from mariadb.constants import *
 from typing import Sequence
@@ -104,7 +104,7 @@ class Cursor(mariadb._mariadb.cursor):
         will be used.
         """
 
-        new_stmt= self.statement
+        new_stmt= self.statement.encode("utf8")
         replace_diff= 0
         if self._paramlist:
             for i in range (0,len(self._paramlist)):
@@ -129,7 +129,7 @@ class Cursor(mariadb._mariadb.cursor):
                             replace= "\"%s\"" % self.connection.escape_string(val.__str__())
                 ofs= self._paramlist[i] + replace_diff
                 
-                new_stmt= new_stmt[:ofs] + replace.__str__() + new_stmt[ofs+1:]
+                new_stmt= new_stmt[:ofs] + replace.__str__().encode("utf8") + new_stmt[ofs+1:]
                 replace_diff+= len(replace) - 1
         return new_stmt
 
@@ -277,7 +277,7 @@ class Cursor(mariadb._mariadb.cursor):
            self._text= False
 
         for val in data:
-            if isinstance(val, (bytes, bytearray)):
+            if isinstance(val, (bytes, bytearray, datetime.datetime, datetime.date, datetime.time)):
                 self._text= False
                 break
 

@@ -1113,19 +1113,6 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], x)
         del cursor
 
-    def test_unicode_parsing(self):
-        conn= create_connection()
-        cursor= conn.cursor()
-
-        cursor.execute("create temporary table Unitéble2 ( 測試 int, méil int)");
-        cursor.execute("insert into Unitéble2 values (%(測試)s, %(méil)s)",
-                        {"測試" : 1, "méil" : 2})
-        self.assertEqual(cursor.rowcount, 1);
-        cursor.execute("SELECT `Unitéble2`.`測試` AS `Unitéble2_測試`, `Unitéble2`.`méil` AS `Unitéble2_méil` FROM `Unitéble2` WHERE ? = `Unitéble2`.`測試`",(1,))
-        rows= cursor.fetchall()
-        self.assertEqual(cursor.rowcount, 1)
-        del cursor
-
     def test_conpy133(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
@@ -1286,6 +1273,21 @@ class TestCursor(unittest.TestCase):
             cursor.execute("SELECT")
         except mariadb.ProgrammingError as err:
             self.assertEqual(err.errno, ERR.ER_PARSE_ERROR)
+
+    def test_unicode_parsing(self):
+        conn= create_connection()
+        cursor= conn.cursor()
+
+        cursor.execute("create temporary table Unitéble2 ( 測試 int, méil int)");
+        cursor.execute("insert into Unitéble2 values (%(測試)s, %(méil)s)",
+                        {"測試" : 1, "méil" : 2})
+        self.assertEqual(cursor.rowcount, 1);
+        cursor.execute("SELECT `Unitéble2`.`測試` AS `Unitéble2_測試`, `Unitéble2`.`méil` AS `Unitéble2_méil` FROM `Unitéble2` WHERE ? = `Unitéble2`.`測試`",(1,))
+        rows= cursor.fetchall()
+        self.assertEqual(cursor.rowcount, 1)
+        del cursor
+
+
 
     def test_conpy91(self):
         with create_connection() as connection:

@@ -448,11 +448,22 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
     Py_RETURN_NONE;
 }
 
+static void MrdbCursor_FreeValues(MrdbCursor *self)
+{
+  uint32_t i;
+  if (!self->value)
+    return;
+  for (i= 0; i < self->parseinfo.paramcount; i++)
+    if (self->value[i].free_me)
+      MARIADB_FREE_MEM(self->value[i].buffer);
+  MARIADB_FREE_MEM(self->value);
+}
+
 /* {{{ MrdbCursor_clear
    Resets statement attributes  and frees
    associated memory
  */
-    static
+static
 void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
 {
     /* clear pending result sets */
@@ -483,6 +494,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     self->fields= NULL;
     self->row_count= 0;
     self->affected_rows= 0;
+    MrdbCursor_FreeValues(self);
     MrdbCursor_clearparseinfo(&self->parseinfo);
     MARIADB_FREE_MEM(self->values);
     MARIADB_FREE_MEM(self->bind);
@@ -976,9 +988,11 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *args)
     Py_ssize_t statement_len= 0;
     MrdbParser *parser= NULL;
     char errmsg[128];
+    uint32_t old_paramcount= 0;
 
     if (self->parseinfo.statement)
     {
+      old_paramcount= self->parseinfo.paramcount;
       MrdbCursor_clearparseinfo(&self->parseinfo);
     }
  
@@ -1002,7 +1016,13 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *args)
     }
 
     /* cleanup and save some parser stuff */
-
+    if (parser->param_count && parser->param_count != old_paramcount)
+    {
+      MARIADB_FREE_MEM(self->params);
+      MrdbCursor_FreeValues(self);
+      MARIADB_FREE_MEM(self->values);
+      MARIADB_FREE_MEM(self->bind);
+    }
     self->parseinfo.paramcount= parser->param_count;
     self->parseinfo.paramstyle= parser->paramstyle;
     if (self->parseinfo.statement)

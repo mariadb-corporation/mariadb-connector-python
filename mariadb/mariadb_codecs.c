@@ -1193,7 +1193,8 @@ mariadb_check_execute_parameters(MrdbCursor *self,
         goto error;
     }
 
-    if (!(self->value= PyMem_RawCalloc(self->parseinfo.paramcount, sizeof(MrdbParamValue))))
+    if (!self->value &&
+       !(self->value= PyMem_RawCalloc(self->parseinfo.paramcount, sizeof(MrdbParamValue))))
     {
         mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
                 "Not enough memory (tried to allocated %lld bytes)",
