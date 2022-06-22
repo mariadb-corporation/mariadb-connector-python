@@ -101,7 +101,7 @@ class ConnectionPool(object):
                     try:
                         connection= mariadb.Connection(**self._conn_args)
                     except:
-                        # if an error occured, close all connections and raise exception
+                        # if an error occurred, close all connections and raise exception
                         for j in range(0, len(self._connections)):
                             try:
                                 self._connections[j].close()

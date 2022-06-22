@@ -94,7 +94,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 {
     PyObject *module= PyModule_Create(&mariadb_module);
 
-    /* Initialite DateTimeAPI */
+    /* Initialize DateTimeAPI */
     if (mariadb_datetime_init() ||
         codecs_datetime_init())
     {
