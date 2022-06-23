@@ -2,7 +2,7 @@
 
 These constants represent the various field flags. As an addition
 to the DBAPI 2.0 standard (PEP-249) these flags are returned as
-eigth element of the cursor description attribute.
+eighth element of the cursor description attribute.
 
 Field flags are defined in module *mariadb.constants.FIELD_FLAG*
 """

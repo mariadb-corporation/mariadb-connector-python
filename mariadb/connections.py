@@ -67,7 +67,7 @@ class Connection(mariadb._mariadb.connection):
                 raise mariadb.ProgrammingError("Host failover list requires MariaDB Connector/C 3.3.0 or newer")
 
 
-        # compatibiity feature: if SSL is provided as a dictionary,
+        # compatibility feature: if SSL is provided as a dictionary,
         # we will map it's content
         if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
              ssl= kwargs.pop("ssl", None)

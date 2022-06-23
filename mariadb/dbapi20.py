@@ -68,7 +68,7 @@ def Binary(object):
     return bytes(object)
 
 def Date(year, month, day):
-    """Contructs an object holding a date value."""
+    """Constructs an object holding a date value."""
     return datetime.date(year, month, day)
 
 def Time(hour, minute, second):

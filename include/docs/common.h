@@ -32,7 +32,7 @@
 "write_timeout: integer\n"\
 "    write timeout in seconds\n\n"\
 "local_infile: boolean\n"\
-"    Eenables or disables the use of LOAD DATA LOCAL INFILE statements.\n\n"\
+"    Enables or disables the use of LOAD DATA LOCAL INFILE statements.\n\n"\
 "compress: boolean\n"\
 "    Uses the compressed protocol for client server communication. If the\n"\
 "    server doesn't support compressed protocol, the default protocol will\n"\

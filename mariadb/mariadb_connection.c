@@ -525,7 +525,7 @@ PyObject *MrdbConnection_ping(MrdbConnection *self)
         return NULL;
     }
 
-    /* in case a reconnect occured, we need to obtain new thread_id */
+    /* in case a reconnect occurred, we need to obtain new thread_id */
     self->thread_id= mysql_thread_id(self->mysql);
 
     Py_RETURN_NONE;
