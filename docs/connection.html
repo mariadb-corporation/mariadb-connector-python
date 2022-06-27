@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>The connection class &#8212; MariaDB Connector/Python 1.1.0rc1-rc documentation</title>
+    <title>The connection class &#8212; MariaDB Connector/Python 1.1.2- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
@@ -35,7 +35,7 @@
         <li class="right" >
           <a href="module.html" title="The MariaDB Connector/Python module"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0rc1-rc documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.2- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>
@@ -195,6 +195,14 @@ for compatibility reasons and should be avoided due to possible inconsistency
 in case two or more fields in a result set have the same name.</p>
 <p>If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
 the statement invoked with cursors execute() method.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="mariadb.connections.Connection.dump_debug_info">
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">dump_debug_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.dump_debug_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function is designed to be executed by an user with the SUPER privilege
+and is used to dump server status information into the log for the MariaDB
+Server relating to the connection.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -591,7 +599,7 @@ if there are no warnings.</p>
         <li class="right" >
           <a href="module.html" title="The MariaDB Connector/Python module"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.0rc1-rc documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.2- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>

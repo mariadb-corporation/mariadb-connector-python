@@ -26,17 +26,41 @@ Connection methods
 
 .. automethod:: mariadb.connections.Connection.change_user(user, password, database)
 
-  If for any reason authorization fails an exception will be raised and the current user authentication will remain.
-
 .. automethod:: mariadb.connections.Connection.close
 
 .. automethod:: mariadb.connections.Connection.cursor
+
+.. automethod:: mariadb.connections.Connection.dump_debug_info
 
 .. automethod:: mariadb.connections.Connection.get_server_version
 
 .. versionadded:: 1.0.5
 .. automethod:: mariadb.connections.Connection.escape_string
- 
+
+.. testcode::
+
+    import mariadb
+
+    # connection parameters
+    conn_params= {
+        "user" : "example_user",
+        "password" : "GHbe_Su3B8",
+        "host" : "localhost"
+    }
+
+    # Establish a connection
+    connection= mariadb.connect(**conn_params)
+    
+    string= 'This string contains the following special characters: \,"'
+    print(connection.escape_string(string))
+
+*Output*:
+
+.. testoutput::
+
+    This string contains the following special characters: \\,\"
+
+
 .. automethod:: mariadb.connections.Connection.kill
 
   .. note::

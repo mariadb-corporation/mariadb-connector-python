@@ -30,6 +30,8 @@ Connection methods
 
 .. automethod:: mariadb.connections.Connection.cursor
 
+.. automethod:: mariadb.connections.Connection.dump_debug_info
+
 .. automethod:: mariadb.connections.Connection.get_server_version
 
 .. versionadded:: 1.0.5
