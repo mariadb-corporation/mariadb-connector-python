@@ -16,7 +16,6 @@ from test.base_test import create_connection, is_maxscale, is_mysql
 
 server_indicator_version = 100206
 
-
 class foo(int):
     def bar(self): pass
 
@@ -1178,6 +1177,10 @@ class TestCursor(unittest.TestCase):
     def test_conpy194(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
+
+        if (self.connection.server_version < 105000):
+            self.skipTest("Insert returning requires MariaDB >= 10.5")
+
         conn= create_connection()
         cursor= conn.cursor()
 
