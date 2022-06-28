@@ -90,10 +90,10 @@ jobs:
       env: srv=mysql v=5.7
     - if: type = push AND fork = false
       env: srv=mysql v=8.0
-    - env: srv=mariadb v=10.8 local=1 PYTHON_VER="3.10"
-      os: osx
-      osx_image: xcode13.3
-      compiler: gcc
+#    - env: srv=mariadb v=10.8 local=1 PYTHON_VER="3.10"
+#      os: osx
+#      osx_image: xcode13.3
+#      compiler: gcc
 
 notifications:
   email: false
