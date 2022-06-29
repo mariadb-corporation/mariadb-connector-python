@@ -218,7 +218,7 @@ class Cursor(mariadb._mariadb.cursor):
         self.check_closed()
         return super()._nextset()
 
-    def execute(self, statement: str, data: Sequence =(), buffered=False):
+    def execute(self, statement: str, data: Sequence =(), buffered=None):
         """
         Prepare and execute a SQL statement.
 
@@ -235,9 +235,9 @@ class Cursor(mariadb._mariadb.cursor):
         This is most effective for algorithms where the same operation is used,
         but different parameters are bound to it (many times).
 
-        By default execute() method generates an unbuffered result set for 
-        statements which return data, setting optional parameter buffered to
-        True will generate buffered result sets.
+        By default execute() method generates an buffered result unless the optional
+        parameter buffered was set to False or the cursor was generated as an
+        unbuffered cursor.
         """
 
         self.check_closed()
@@ -246,8 +246,8 @@ class Cursor(mariadb._mariadb.cursor):
         do_parse= True
         self._rowcount= 0
 
-        if buffered:
-            self.buffered= True
+        if buffered != None:
+            self.buffered= buffered
 
         # clear pending result sets
         if self.field_count:

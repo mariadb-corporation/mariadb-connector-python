@@ -985,6 +985,9 @@ class TestCursor(unittest.TestCase):
         cur = con.cursor(buffered=False)
         cur.execute("SELECT 1")
         self.assertEqual(cur.rowcount, 0)
+        cur = con.cursor()
+        cur.execute("SELECT 1", buffered=False)
+        self.assertEqual(cur.rowcount, 0)
         cur.close()
 
         cur = con.cursor()
