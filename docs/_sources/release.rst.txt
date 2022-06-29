@@ -1,6 +1,16 @@
 Release history
 ===============
 
+MariaDB Connector/Python 1.1.3
+------------------------------
+Release date: not released
+
+Issues fixed:
+^^^^^^^^^^^^^
+    CONPY-209: Wrong unicode substitution in SELECT statement
+    CONPY-210: Added missing error constants
+    CONPY-212: unbuffered cursor.execute() doesn't work 
+
 MariaDB Connector/Python 1.1.2
 -------------------------------
 Release date: Jun 27 2022
