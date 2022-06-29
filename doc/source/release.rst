@@ -1,10 +1,51 @@
 Release history
 ===============
 
+MariaDB Connector/Python 1.1.2
+-------------------------------
+Release date: Jun 27 2022
+
+Notable changes:
+^^^^^^^^^^^^^^^^
+    CONPY-203: Error constants added
+    CONPY-204: New connection method dump_debug_info(
+
+Issues fixed:
+^^^^^^^^^^^^^
+    Removed utf8 part of internal parser and use binary objects for parameter substitution
+    CONPY-205: Fixed inconsistent exceptions: All parameter exceptions are returned as ProgrammingError. 
+    Fixed memory leak when using decimal parameters
+    CONPY-201: Fixed build issues with Python 3.11 beta 
+
+
+MariaDB Connector/Python 1.0.11
+-------------------------------
+
+Release date: Apr 12 2022
+
+Issues fixed:
+^^^^^^^^^^^^^
+
+    CONPY-194: executemany() does not work with returning clause
+    CONPY-196: Missing decrement of reference pointer when closing cursor
+    CONPY-198: Build fix for FreeBSD 
+
+MariaDB Connector/Pyhon 1.0.10
+------------------------------
+
+Release date: Feb 18 2022
+
+Issues fixed:
+^^^^^^^^^^^^^
+
+- CONPY-184: Display status of connection, cursor and pool class in string representation.
+- CONPY-178: Repeated execution of cursors callproc() method hangs
+- CONPY-175: Fixed crash in escape_string 
+
 MariaDB Connector/Python 1.0.9
 ------------------------------
 
-Release date: Not released
+Release date: Dec 21 2022
 
 Issues fixed:
 ^^^^^^^^^^^^^

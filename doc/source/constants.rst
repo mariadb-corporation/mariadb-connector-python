@@ -35,6 +35,16 @@ CURSOR
    means it is not possible to scroll back.
 
 --------------
+ERR (Error)
+--------------
+
+.. versionadded:: 1.1.2
+
+
+Using ERR constants instead of error numbers make the code more readable. Error constants
+are defined in constants.ERR module
+
+--------------
 FIELD_FLAG
 --------------
 
