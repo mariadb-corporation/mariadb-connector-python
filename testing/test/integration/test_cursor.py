@@ -1290,6 +1290,16 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.rowcount, 1)
         del cursor
 
+    def test_conpy209(self):
+        conn= create_connection()
+        cursor= conn.cursor()
+        data= ("col_Unitéble_id_seq", "foobar")
+        sql= f"SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='SEQUENCE' and TABLE_NAME=? and TABLE_SCHEMA=?"
+        transformed= b'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE=\'SEQUENCE\' and TABLE_NAME="col_Unit\xc3\xa9ble_id_seq" and TABLE_SCHEMA="foobar"'
+        cursor.execute(sql, data);
+        self.assertEqual(transformed, cursor._transformed_statement)
+        del cursor
+        
 
 
     def test_conpy91(self):

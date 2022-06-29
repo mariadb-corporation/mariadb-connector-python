@@ -108,6 +108,7 @@ class Cursor(mariadb._mariadb.cursor):
         replace_diff= 0
         if self._paramlist:
             for i in range (0,len(self._paramlist)):
+                extra_bytes= 0
                 if self._paramstyle == PARAMSTYLE_PYFORMAT:
                     val= self._data[self._keys[i]]
                 else:
@@ -127,10 +128,11 @@ class Cursor(mariadb._mariadb.cursor):
                             replace= "\"%s\"" % self.connection.escape_string(val.decode(encoding='latin1'))
                         else:
                             replace= "\"%s\"" % self.connection.escape_string(val.__str__())
+                            extra_bytes= len(replace.encode("utf-8")) - len(replace)
                 ofs= self._paramlist[i] + replace_diff
                 
                 new_stmt= new_stmt[:ofs] + replace.__str__().encode("utf8") + new_stmt[ofs+1:]
-                replace_diff+= len(replace) - 1
+                replace_diff+= len(replace) - 1 + extra_bytes
         return new_stmt
 
     def _check_execute_params(self):
