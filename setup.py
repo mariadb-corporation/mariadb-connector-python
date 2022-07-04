@@ -29,7 +29,7 @@ PY_MARIADB_AUTHORS= "Georg Richter"
 
 PY_MARIADB_MAJOR_VERSION=1
 PY_MARIADB_MINOR_VERSION=1
-PY_MARIADB_PATCH_VERSION=3
+PY_MARIADB_PATCH_VERSION=4
 PY_MARIADB_PRE_RELEASE_SEGMENT=""
 
 PY_MARIADB_VERSION= "%s.%s.%s" % (PY_MARIADB_MAJOR_VERSION, PY_MARIADB_MINOR_VERSION, PY_MARIADB_PATCH_VERSION)
@@ -97,6 +97,6 @@ setup(name='mariadb',
       py_modules=['mariadb.__init__', 'mariadb.constants.CLIENT', 'mariadb.constants.CURSOR',
                   'mariadb.constants.STATUS', 'mariadb.constants.TPC_STATE', 'mariadb.constants.INFO',
                   'mariadb.field', 'mariadb.connections', 'mariadb.connectionpool', 'mariadb.dbapi20',
-                  'mariadb.cursors', 'mariadb.release_info', 'mariadb.constants.ERR',
+                  'mariadb.cursors', 'mariadb.release_info', 'mariadb.constants.ERR', 'mariadb.constants.CAPABILITY',
                   'mariadb.constants.FIELD_TYPE', 'mariadb.constants.FIELD_FLAG', 'mariadb.constants.INDICATOR'],
       )
