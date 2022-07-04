@@ -46,7 +46,7 @@ class ConnectionPool(object):
 
     def __init__(self, *args, **kwargs):
         """
-        Creates a connetion pool class
+        Creates a connection pool class
 
         :param str pool_name:
             Name of connection pool
@@ -85,7 +85,7 @@ class ConnectionPool(object):
 
         # validate pool size (must be in range between 1 and MAX_POOL_SIZE)
         if not (0 < self._pool_args["size"] <= MAX_POOL_SIZE):
-            raise mariadb.ProgrammError("Pool size must be in range of "\
+            raise mariadb.ProgrammingError("Pool size must be in range of "\
                                         "1 and %s" % MAX_POOL_SIZE)
 
         # store pool and connection arguments
