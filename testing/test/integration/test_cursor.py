@@ -310,11 +310,41 @@ class TestCursor(unittest.TestCase):
         row = cursor.fetchone()
         self.assertEqual(row[0], "Andrey")
 
+    def test_conpy214(self):
+        cursor= self.connection.cursor(named_tuple=True)
+        cursor.execute("SELECT 1 as foo")
+        rows= cursor.fetchall()
+        self.assertEqual(rows[0].foo, 1)
+        del cursor
+        cursor= self.connection.cursor(dictionary=True)
+        cursor.execute("SELECT 1 as foo")
+        rows= cursor.fetchall()
+        self.assertEqual(rows[0]["foo"], 1)
+        del cursor
+
     def test_named_tuple(self):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
-        cursor = self.connection.cursor(named_tuple=1)
+        cursor = self.connection.cursor(named_tuple=True)
+        cursor.execute(
+            "CREATE TEMPORARY TABLE test_named_tuple (id int, name varchar(64), city varchar(64))");
+        params = [(1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia")]
+        cursor.executemany("INSERT INTO test_named_tuple VALUES (?,?,?)", params);
+        cursor.execute("SELECT * FROM test_named_tuple ORDER BY id")
+        row = cursor.fetchone()
+
+        self.assertEqual(cursor.statement, "SELECT * FROM test_named_tuple ORDER BY id")
+
+    def test_named_tuple(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+
+        cursor = self.connection.cursor(named_tuple=True)
         cursor.execute(
             "CREATE TEMPORARY TABLE test_named_tuple (id int, name varchar(64), city varchar(64))");
         params = [(1, u"Jack", u"Boston"),

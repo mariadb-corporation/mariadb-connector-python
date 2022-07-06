@@ -66,8 +66,6 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self);
 void
 field_fetch_callback(void *data, unsigned int column, unsigned char **row);
 static PyObject *mariadb_get_sequence_or_tuple(MrdbCursor *self);
-static PyObject * MrdbCursor_iter(PyObject *self);
-static PyObject * MrdbCursor_iternext(PyObject *self);
 
 /* todo: write more documentation, this is just a placeholder */
 static char mariadb_cursor_documentation[] =
@@ -377,8 +375,8 @@ PyTypeObject MrdbCursor_Type =
     0, /* (long) tp_weaklistoffset */
 
     /* Iterators */
-    (getiterfunc)MrdbCursor_iter,
-    (iternextfunc)MrdbCursor_iternext,
+    0,
+    0,
 
     /* Attribute descriptor and subclassing stuff */
     (struct PyMethodDef *)MrdbCursor_Methods, /* tp_methods */
@@ -946,31 +944,6 @@ MrdbCursor_warnings(MrdbCursor *self)
     MARIADB_CHECK_STMT(self);
 
     return PyLong_FromLong((long)CURSOR_WARNING_COUNT(self));
-}
-
-/* iterator protocol */
-
-static PyObject *
-MrdbCursor_iter(PyObject *self)
-{
-    MARIADB_CHECK_STMT(((MrdbCursor *)self));
-    Py_INCREF(self);
-    return self;
-}
-
-static PyObject *
-MrdbCursor_iternext(PyObject *self)
-{
-    PyObject *res;
-
-    res= MrdbCursor_fetchone((MrdbCursor *)self);
-
-    if (res && res == Py_None)
-    {
-        Py_DECREF(res);
-        res= NULL;
-    }
-    return res;
 }
 
 static PyObject

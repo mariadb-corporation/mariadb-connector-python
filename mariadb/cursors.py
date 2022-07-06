@@ -439,6 +439,9 @@ class Cursor(mariadb._mariadb.cursor):
             rows.append((row))
         return rows
 
+    def __iter__(self):
+        return iter(self.fetchone, None)
+
     def scroll(self, value: int, mode="relative"):
         """
         Scroll the cursor in the result set to a new position according to mode.
