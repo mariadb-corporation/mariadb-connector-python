@@ -353,7 +353,7 @@ class Cursor(mariadb._mariadb.cursor):
         if not self.field_count:
              raise mariadb.ProgrammingError("Cursor doesn't have a result set")
         row= super().fetchone()
-        if self._connection._converter:
+        if self._connection._converter and row:
             l= list(row)
             if not self._description:
                 self._description= super().description

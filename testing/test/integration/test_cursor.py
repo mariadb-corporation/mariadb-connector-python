@@ -1333,7 +1333,18 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(transformed, cursor._transformed_statement)
         del cursor
         
-
+    def test_conpy213(self):
+        conversions= { **{FIELD_TYPE.NEWDECIMAL : float}}
+        connection = create_connection({"converter": conversions})
+        cursor= connection.cursor()
+        cursor.execute("SELECT 1.1")
+        rows= cursor.fetchall()
+        self.assertEqual(rows[0][0], 1.1)
+        cursor.execute("SELECT 1.1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1.1)
+        del cursor
+        del connection
 
     def test_conpy91(self):
         with create_connection() as connection:
