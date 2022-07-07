@@ -308,6 +308,10 @@ class Cursor(mariadb._mariadb.cursor):
         Exactly behaves like .execute() but accepts a list of tuples, where each
         tuple represents data of a row within a table.
         .executemany() only supports DML (insert, update, delete) statements.
+
+        If the SQL statement contains a RETURNING clause, executemany()
+        returns a result set containing the values for columns listed in the
+        RETURNING clause.
         """
         self.check_closed()
 
