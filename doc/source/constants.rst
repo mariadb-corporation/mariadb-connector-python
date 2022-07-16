@@ -9,6 +9,40 @@ Constants
 
     from mariadb.constants import *
 
+----------
+CAPABILITY
+----------
+
+.. versionadded:: 1.1.4
+
+.. automodule:: mariadb.constants.CAPABILITY
+
+.. testcode::
+
+    import mariadb
+    from mariadb.constants import *
+
+    # connection parameters
+    conn_params= {
+        "user" : "example_user",
+        "password" : "GHbe_Su3B8",
+        "host" : "localhost"
+    }
+
+    # Establish a connection
+    connection= mariadb.connect(**conn_params)
+
+    # test if LOAD DATA LOCAL INFILE is supported
+    if connection.server_capabilities & CAPABILITY.LOCAL_FILES:
+        print("Server supports LOCAL INFILE")
+    
+*Output*:
+
+.. testoutput::
+
+    Server supports LOCAL INFILE
+
+
 --------------
 CLIENT
 --------------
@@ -16,6 +50,9 @@ CLIENT
 .. versionadded:: 1.1.0
 
 .. automodule:: mariadb.constants.CLIENT
+
+.. deprecated:: 1.1.4
+   Use CAPABILITY constants instead
 
 --------------
 CURSOR
@@ -43,6 +80,31 @@ ERR (Error)
 
 Using ERR constants instead of error numbers make the code more readable. Error constants
 are defined in constants.ERR module
+
+.. testcode::
+
+    import mariadb
+    from mariadb.constants import *
+
+    # connection parameters
+    conn_params= {
+        "user" : "example_user",
+        "password" : "wrong_password",
+        "host" : "localhost"
+    }
+
+    # try to establish a connection
+    try:
+        connection= mariadb.connect(**conn_params)
+    except mariadb.OperationalError as Err:
+        if Err.errno == ERR.ER_ACCESS_DENIED_ERROR:
+            print("Access denied. Wrong password!") 
+
+*Output*:
+
+.. testoutput::
+
+    Access denied. Wrong password!
 
 --------------
 FIELD_FLAG

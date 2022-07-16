@@ -2,7 +2,7 @@ Bug reports
 ===========
 
 If you think that you have found a bug in MariaDB Software, please report it at
-`Jira issue tracker <https://jira.mariadb.org>`_ and file it under Project CONPY (abbrevation for Connector/Python).
+`Jira issue tracker <https://jira.mariadb.org>`_ and file it under Project CONPY (abbreviation for Connector/Python).
 
 How to report a bug?
 --------------------
@@ -42,7 +42,7 @@ If you have encountered two or more bugs which are not related, please file an i
 
 Crashes
 ^^^^^^^
-If your application crahes, please also provide if possible  a backtrace and output of the exception.
+If your application crashes, please also provide if possible a backtrace and output of the exception.
 
 Report bugs in English only!
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

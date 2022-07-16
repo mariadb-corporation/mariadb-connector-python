@@ -18,7 +18,7 @@ The following build prerequisites are required to install or build MariaDB Conne
 For Windows operating platforms the pypi.org download page provides binary versions.
 
 - C compiler
-- Python development files (Usually they are installed with package **python-dev**). The minimum supported version of Python is 3.6
+- Python development files (Usually they are installed with package **python-dev**). The minimum supported version of Python is 3.7
 - MariaDB Connector/C libraries and header files (Either from MariaDB server package or
   from MariaDB Connector/C package). Minimum required version for |MCP| < 1.1.0 is 3.1.5, for later versions 3.2.4.
 - For Posix systems: TLS libraries, e.g. GnuTLS or OpenSSL (default)

@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Constants &#8212; MariaDB Connector/Python 1.1.3- documentation</title>
+    <title>Constants &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
@@ -35,7 +35,7 @@
         <li class="right" >
           <a href="pool.html" title="The ConnectionPool class"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.3- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Constants</a></li> 
       </ul>
@@ -55,6 +55,38 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
 </pre></div>
 </div>
+<section id="capability">
+<h2>CAPABILITY<a class="headerlink" href="#capability" title="Permalink to this headline">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.4.</span></p>
+</div>
+<span class="target" id="module-mariadb.constants.CAPABILITY"></span><p>MariaDB capability flags.</p>
+<p>These flags are used to check the capabilities both of a MariaDB server
+or the client applicaion.</p>
+<p>Capability flags are defined in module <em>mariadb.constants.CAPABILIY</em></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">mariadb</span>
+<span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="c1"># connection parameters</span>
+<span class="n">conn_params</span><span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;user&quot;</span> <span class="p">:</span> <span class="s2">&quot;example_user&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;password&quot;</span> <span class="p">:</span> <span class="s2">&quot;GHbe_Su3B8&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;host&quot;</span> <span class="p">:</span> <span class="s2">&quot;localhost&quot;</span>
+<span class="p">}</span>
+
+<span class="c1"># Establish a connection</span>
+<span class="n">connection</span><span class="o">=</span> <span class="n">mariadb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="o">**</span><span class="n">conn_params</span><span class="p">)</span>
+
+<span class="c1"># test if LOAD DATA LOCAL INFILE is supported</span>
+<span class="k">if</span> <span class="n">connection</span><span class="o">.</span><span class="n">server_capabilities</span> <span class="o">&amp;</span> <span class="n">CAPABILITY</span><span class="o">.</span><span class="n">LOCAL_FILES</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Server supports LOCAL INFILE&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><em>Output</em>:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Server supports LOCAL INFILE
+</pre></div>
+</div>
+</section>
 <section id="client">
 <h2>CLIENT<a class="headerlink" href="#client" title="Permalink to this headline">¶</a></h2>
 <div class="versionadded">
@@ -64,6 +96,9 @@
 <p>These flags are used to check the capabilities both of a MariaDB server
 or the client applicaion.</p>
 <p>Capability flags are defined in module <em>mariadb.constants.CLIENT</em></p>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">Deprecated since version 1.1.4: </span>Use CAPABILITY constants instead</p>
+</div>
 </section>
 <section id="cursor">
 <h2>CURSOR<a class="headerlink" href="#cursor" title="Permalink to this headline">¶</a></h2>
@@ -94,6 +129,28 @@ means it is not possible to scroll back.</p>
 </div>
 <p>Using ERR constants instead of error numbers make the code more readable. Error constants
 are defined in constants.ERR module</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">mariadb</span>
+<span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
+
+<span class="c1"># connection parameters</span>
+<span class="n">conn_params</span><span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;user&quot;</span> <span class="p">:</span> <span class="s2">&quot;example_user&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;password&quot;</span> <span class="p">:</span> <span class="s2">&quot;wrong_password&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;host&quot;</span> <span class="p">:</span> <span class="s2">&quot;localhost&quot;</span>
+<span class="p">}</span>
+
+<span class="c1"># try to establish a connection</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">connection</span><span class="o">=</span> <span class="n">mariadb</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="o">**</span><span class="n">conn_params</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">mariadb</span><span class="o">.</span><span class="n">OperationalError</span> <span class="k">as</span> <span class="n">Err</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">Err</span><span class="o">.</span><span class="n">errno</span> <span class="o">==</span> <span class="n">ERR</span><span class="o">.</span><span class="n">ER_ACCESS_DENIED_ERROR</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Access denied. Wrong password!&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><em>Output</em>:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Access denied. Wrong password!
+</pre></div>
+</div>
 </section>
 <section id="field-flag">
 <h2>FIELD_FLAG<a class="headerlink" href="#field-flag" title="Permalink to this headline">¶</a></h2>
@@ -522,6 +579,7 @@ that the backslash character ‘' becomes an ordinary character.</p>
   <h3><a href="index.html">Table of Contents</a></h3>
   <ul>
 <li><a class="reference internal" href="#">Constants</a><ul>
+<li><a class="reference internal" href="#capability">CAPABILITY</a></li>
 <li><a class="reference internal" href="#client">CLIENT</a></li>
 <li><a class="reference internal" href="#cursor">CURSOR</a></li>
 <li><a class="reference internal" href="#err-error">ERR (Error)</a></li>
@@ -570,7 +628,7 @@ that the backslash character ‘' becomes an ordinary character.</p>
         <li class="right" >
           <a href="pool.html" title="The ConnectionPool class"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.3- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Constants</a></li> 
       </ul>
