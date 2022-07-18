@@ -57,6 +57,7 @@ class Connection(mariadb._mariadb.connection):
         self._xid= None
 
         autocommit= kwargs.pop("autocommit", False)
+        reconnect= kwargs.pop("reconnect", False)
         self._converter= kwargs.pop("converter", None)
 
         # if host contains a connection string or multiple hosts,
@@ -78,6 +79,7 @@ class Connection(mariadb._mariadb.connection):
 
         super().__init__(*args, **kwargs)
         self.autocommit= autocommit
+        self.auto_reconnect= reconnect
 
     def cursor(self, cursorclass=mariadb.cursors.Cursor, **kwargs):
         """
