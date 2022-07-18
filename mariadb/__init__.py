@@ -83,6 +83,8 @@ def connect(*args, connectionclass= mariadb.connections.Connection, **kwargs):
             Read options from the specified group
         - plugin_dir:
             Directory which contains MariaDB client plugins.
+        - reconnect:
+            Enables or disables automatic reconnect. Available since version 1.1.4
         - ssl_key:
             Defines a path to a private key file to use for TLS. This option
             requires that you use the absolute path, not a relative path. The
