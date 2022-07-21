@@ -1346,6 +1346,24 @@ class TestCursor(unittest.TestCase):
         del cursor
         del connection
 
+    def test_conpy218(self):
+        conn= create_connection()
+        cursor= conn.cursor()
+        cursor.execute("SELECT 1",  None)
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        cursor.execute("SELECT 2",  ())
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 2)
+        cursor.execute("SELECT 3",  [])
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 3)
+        cursor.execute("SELECT 4",  {})
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 4)
+        del cursor
+        del conn
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:

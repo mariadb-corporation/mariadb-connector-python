@@ -265,6 +265,9 @@ class Cursor(mariadb._mariadb.cursor):
 
         self._description= None
 
+        # CONPY-218: Allow None as replacement for empty tuple 
+        data= data or ()
+
         if len(data):
             self._data= data
         else:
