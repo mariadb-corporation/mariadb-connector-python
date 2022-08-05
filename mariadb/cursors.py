@@ -242,6 +242,8 @@ class Cursor(mariadb._mariadb.cursor):
 
         self.check_closed()
 
+        self.connection._last_executed_statement= statement
+
         # Parse statement
         do_parse= True
         self._rowcount= 0
@@ -314,6 +316,8 @@ class Cursor(mariadb._mariadb.cursor):
         if not parameters or not len(parameters):
             raise mariadb.ProgrammingError("No data provided")
 
+        self.connection._last_executed_statement= statement
+
         # clear pending results
         if self.field_count:
             self._clear_result()
@@ -373,7 +377,8 @@ class Cursor(mariadb._mariadb.cursor):
         The cursor will be unusable from this point forward; an Error (or subclass)
         exception will be raised if any operation is attempted with the cursor."
         """
-        super().close()
+        if not self.connection.is_closed:
+            super().close()
 
     def fetchone(self):
         """

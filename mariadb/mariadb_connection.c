@@ -39,6 +39,7 @@ char *dsn_keys[]= {
     "client_flag", "pool_name", "pool_size", 
     "pool_reset_connection", "plugin_dir",
     "username", "db", "passwd",
+    "status_callback",
     NULL
 };
 
@@ -176,6 +177,94 @@ PyMemberDef MrdbConnection_Members[] =
         "Indicates if connection was closed"},
     {NULL} /* always last */
 };
+#if MARIADB_PACKAGE_VERSION_ID > 30301
+void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_info type, ...)
+{
+  va_list ap;
+  PyThreadState *_save= NULL;
+  MrdbConnection *self= (MrdbConnection *)data;
+  PyObject *dict= NULL;
+  PyObject *dict_key= NULL, *dict_val= NULL;
+  va_start(ap, type);
+
+  if (self->status_callback) {
+    if (type == STATUS_TYPE)
+    {
+      unsigned int server_status= va_arg(ap, int);
+      
+      MARIADB_UNBLOCK_THREADS(self);
+      dict_key= PyUnicode_FromString("server_status");
+      dict_val= PyLong_FromLong(server_status);
+      dict= PyDict_New();
+      PyDict_SetItem(dict, dict_key, dict_val);
+      Py_DECREF(dict_key);
+      Py_DECREF(dict_val);
+      PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      MARIADB_BLOCK_THREADS(self);
+    }
+  }
+  if (type == SESSION_TRACK_TYPE)
+  {
+    enum enum_session_state_type track_type= va_arg(ap, enum enum_session_state_type);
+
+    MARIADB_UNBLOCK_THREADS(self);
+
+    if (self->status_callback) {
+      switch (track_type) {
+        case SESSION_TRACK_SCHEMA:
+          dict_key= PyUnicode_FromString("schema");
+          break;
+        case SESSION_TRACK_STATE_CHANGE:
+          dict_key= PyUnicode_FromString("state_change");
+          break;
+        default:
+          break;
+      }
+    }
+
+    if (dict_key)
+    {
+      MARIADB_CONST_STRING *val= va_arg(ap, MARIADB_CONST_STRING *);
+      dict_val= PyUnicode_FromStringAndSize(val->str, val->length);
+      dict= PyDict_New();
+      PyDict_SetItem(dict, dict_key, dict_val);
+      Py_DECREF(dict_key);
+      Py_DECREF(dict_val);
+      PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+    }
+
+    if (track_type == SESSION_TRACK_SYSTEM_VARIABLES)
+    {
+      MARIADB_CONST_STRING *key= va_arg(ap, MARIADB_CONST_STRING *);
+      MARIADB_CONST_STRING *val= va_arg(ap, MARIADB_CONST_STRING *);
+
+      if (!strncmp(key->str, "character_set_client", key->length) &&
+           strncmp(val->str, "utf8mb4", val->length))
+      {
+        char charset[128];
+
+        memcpy(charset, val->str, val->length);
+        charset[val->length]= 0;
+        va_end(ap);
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
+                "Character set '%s' is not supported", charset);
+      }
+      if (self->status_callback)
+      {
+        dict_key= PyUnicode_FromStringAndSize(key->str, key->length);
+        dict_val= PyUnicode_FromStringAndSize(val->str, val->length);
+        dict= PyDict_New();
+        PyDict_SetItem(dict, dict_key, dict_val);
+        Py_DECREF(dict_key);
+        Py_DECREF(dict_val);
+        PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      }
+    }
+    MARIADB_BLOCK_THREADS(self);
+  }
+  va_end(ap);
+} 
+#endif
 
 static int
 MrdbConnection_Initialize(MrdbConnection *self,
@@ -197,9 +286,10 @@ MrdbConnection_Initialize(MrdbConnection *self,
     unsigned int local_infile= 0xFF;
     unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
+    PyObject *status_callback= NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|zzzzziziiibbzzzzzzzzzzibizibzzzz:connect",
+                "|zzzzziziiibbzzzzzzzzzzibizibzzzzO:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -210,7 +300,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_verify_cert, &ssl_enforce,
                 &client_flags, &pool_name, &pool_size,
                 &reset_session, &plugin_dir,
-                &user, &schema, &password))
+                &user, &schema, &password, &status_callback))
     {
         return -1;
     }
@@ -222,6 +312,16 @@ MrdbConnection_Initialize(MrdbConnection *self,
         return -1;
     }
 
+#if MARIADB_PACKAGE_VERSION_ID < 30302
+    if (status_callback)
+    {
+        mariadb_throw_exception(NULL, Mariadb_OperationalError, 1,
+                "Use of status_callback requires Connector/C version 3.3.2 or higher.");
+        return -1;
+    }
+#endif
+    self->status_callback= status_callback;
+
     if (!(self->mysql= mysql_init(NULL)))
     {
         mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 1,
@@ -229,7 +329,13 @@ MrdbConnection_Initialize(MrdbConnection *self,
         return -1;
     }
 
-    Py_BEGIN_ALLOW_THREADS;
+#if MARIADB_PACKAGE_VERSION_ID > 30301
+   if (mysql_optionsv(self->mysql, MARIADB_OPT_STATUS_CALLBACK, MrdbConnection_process_status_info, self))
+      goto end;
+#endif
+
+    MARIADB_BEGIN_ALLOW_THREADS(self);
+
     if (mysql_options(self->mysql, MYSQL_SET_CHARSET_NAME, mariadb_default_charset))
        goto end;
 
@@ -326,7 +432,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
 
     has_error= 0;
 end:
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self);
 
     if (has_error)
     {
@@ -454,9 +560,9 @@ void MrdbConnection_dealloc(MrdbConnection *self)
     {
         if (self->mysql)
         {
-            Py_BEGIN_ALLOW_THREADS
+            MARIADB_BEGIN_ALLOW_THREADS(self)
             mysql_close(self->mysql);
-            Py_END_ALLOW_THREADS
+            MARIADB_END_ALLOW_THREADS(self)
             self->mysql= NULL;
         }
         Py_TYPE(self)->tp_free((PyObject*)self);
@@ -474,9 +580,9 @@ MrdbConnection_executecommand(MrdbConnection *self,
   if (!PyArg_ParseTuple(args, "s", &cmd))
     return NULL;
 
-  Py_BEGIN_ALLOW_THREADS;
+  MARIADB_BEGIN_ALLOW_THREADS(self);
   rc= mysql_send_query(self->mysql, cmd, (long)strlen(cmd));
-  Py_END_ALLOW_THREADS;
+  MARIADB_END_ALLOW_THREADS(self);
 
   if (rc)
   {
@@ -492,9 +598,9 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
     /* Todo: check if all the cursor stuff is deleted (when using prepared
        statements this should be handled in mysql_close) */
 
-    Py_BEGIN_ALLOW_THREADS
+    MARIADB_BEGIN_ALLOW_THREADS(self)
     mysql_close(self->mysql);
-    Py_END_ALLOW_THREADS
+    MARIADB_END_ALLOW_THREADS(self)
     self->mysql= NULL;
     self->closed= 1;
     Py_RETURN_NONE;
@@ -516,9 +622,9 @@ PyObject *MrdbConnection_ping(MrdbConnection *self)
 
     MARIADB_CHECK_CONNECTION(self, NULL);
 
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self);
     rc= mysql_ping(self->mysql);
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self);
 
     if (rc) {
         mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
@@ -545,9 +651,9 @@ PyObject *MrdbConnection_change_user(MrdbConnection *self,
     if (!PyArg_ParseTuple(args, "sss", &user, &password, &database))
         return NULL;
 
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self);
     rc= mysql_change_user(self->mysql, user, password, database);
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self);
 
     if (rc)
     {
@@ -607,11 +713,9 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *args)
         uint8_t b;
     } val;
 
-    PyObject *type;
-
     uint32_t option;
 
-    if (!PyArg_ParseTuple(args, "iO", &option, &type))
+    if (!PyArg_ParseTuple(args, "i", &option))
           return NULL;
 
     memset(&val, 0, sizeof(val));
@@ -623,15 +727,45 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *args)
         return NULL;
     }
 
-    if ((PyTypeObject *)type == &PyUnicode_Type)
-    {
+    switch (option) {
+      case MARIADB_CONNECTION_UNIX_SOCKET:
+      case MARIADB_CONNECTION_USER:
+      case MARIADB_CHARSET_NAME: 
+      case MARIADB_TLS_LIBRARY:
+      case MARIADB_CLIENT_VERSION:
+      case MARIADB_CONNECTION_HOST:
+      case MARIADB_CONNECTION_INFO:
+      case MARIADB_CONNECTION_SCHEMA:
+      case MARIADB_CONNECTION_SQLSTATE:
+      case MARIADB_CONNECTION_SOCKET:
+      case MARIADB_CONNECTION_SSL_CIPHER:
+      case MARIADB_CONNECTION_TLS_VERSION:
+      case MARIADB_CONNECTION_SERVER_VERSION:
         return PyUnicode_FromString(val.str ? val.str : "");
-    }
-    if ((PyTypeObject *)type == &PyLong_Type)
+        break;
+
+      case MARIADB_CHARSET_ID:
+      case MARIADB_CLIENT_VERSION_ID:
+      case MARIADB_CONNECTION_ASYNC_TIMEOUT:
+      case MARIADB_CONNECTION_ASYNC_TIMEOUT_MS:
+      case MARIADB_CONNECTION_PORT:
+      case MARIADB_CONNECTION_PROTOCOL_VERSION_ID:
+      case MARIADB_CONNECTION_SERVER_TYPE:
+      case MARIADB_CONNECTION_SERVER_VERSION_ID:
+      case MARIADB_CONNECTION_TLS_VERSION_ID:
+      case MARIADB_MAX_ALLOWED_PACKET:
+      case MARIADB_NET_BUFFER_LENGTH:
+      case MARIADB_CONNECTION_SERVER_STATUS:
+      case MARIADB_CONNECTION_SERVER_CAPABILITIES:
+      case MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES:
+      case MARIADB_CONNECTION_CLIENT_CAPABILITIES:
+      case MARIADB_CONNECTION_BYTES_READ:
+      case MARIADB_CONNECTION_BYTES_SENT:
         return PyLong_FromLong((long)val.num);
-    if ((PyTypeObject *)type == &PyBool_Type)
-        return val.b ? Py_True : Py_False;
-    Py_RETURN_NONE;
+        break;
+      default:
+        Py_RETURN_NONE;
+    }
 }
 
 /* {{{ MrdbConnection_reconnect */
@@ -648,9 +782,9 @@ PyObject *MrdbConnection_reconnect(MrdbConnection *self)
     if (!save_reconnect)
         mysql_optionsv(self->mysql, MYSQL_OPT_RECONNECT, &reconnect);
 
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self);
     rc= mariadb_reconnect(self->mysql);
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self);
 
     if (!save_reconnect)
         mysql_optionsv(self->mysql, MYSQL_OPT_RECONNECT, &save_reconnect);
@@ -672,9 +806,9 @@ PyObject *MrdbConnection_reset(MrdbConnection *self)
     int rc;
     MARIADB_CHECK_CONNECTION(self, NULL);
 
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self);
     rc= mysql_reset_connection(self->mysql);
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self);
 
     if (rc)
     {
@@ -728,9 +862,9 @@ MrdbConnection_dump_debug_info(MrdbConnection *self)
     int rc;
     MARIADB_CHECK_CONNECTION(self, NULL);
 
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self);
     rc= mysql_dump_debug_info(self->mysql);
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self);
 
     if (rc)
     {
@@ -744,9 +878,9 @@ static PyObject *MrdbConnection_readresponse(MrdbConnection *self)
 {
     int rc;
 
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self);
     rc= self->mysql->methods->db_read_query_result(self->mysql);
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self);
 
     if (rc)
     {
