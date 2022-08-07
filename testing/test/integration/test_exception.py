@@ -23,7 +23,8 @@ class TestException(unittest.TestCase):
         except mariadb.ProgrammingError as err:
             self.assertEqual(err.sqlstate, "42000")
             self.assertEqual(err.errno, 1064)
-            self.assertTrue(err.errmsg.find("You have an error in your SQL syntax") > -1)
+            self.assertTrue(err.errmsg.find("You have an error "
+                                            "in your SQL syntax") > -1)
             pass
 
         del cursor

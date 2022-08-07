@@ -17,29 +17,31 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-import mariadb, collections, datetime
+import mariadb
+import collections
+import datetime
 from numbers import Number
-from mariadb.constants import *
+from mariadb.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
 from typing import Sequence
 
-PARAMSTYLE_QMARK= 1
-PARAMSTYLE_FORMAT= 2
-PARAMSTYLE_PYFORMAT= 3
+PARAMSTYLE_QMARK = 1
+PARAMSTYLE_FORMAT = 2
+PARAMSTYLE_PYFORMAT = 3
 
-RESULT_TUPLE= 0
-RESULT_NAMEDTUPLE= 1
-RESULT_DICTIONARY= 2
+RESULT_TUPLE = 0
+RESULT_NAMEDTUPLE = 1
+RESULT_DICTIONARY = 2
 
 # Command types
-SQL_NONE= 0,
-SQL_INSERT= 1
-SQL_UPDATE= 2
-SQL_REPLACE= 3
-SQL_DELETE= 4
-SQL_CALL= 5
-SQL_DO= 6
-SQL_SELECT=7
-SQL_OTHER=255
+SQL_NONE = 0,
+SQL_INSERT = 1
+SQL_UPDATE = 2
+SQL_REPLACE = 3
+SQL_DELETE = 4
+SQL_CALL = 5
+SQL_DO = 6
+SQL_SELECT = 7
+SQL_OTHER = 255
 
 
 class Cursor(mariadb._mariadb.cursor):
@@ -56,43 +58,42 @@ class Cursor(mariadb._mariadb.cursor):
         """
         initialization
         """
-        self._bulk= False
-        self._dictionary= False
-        self._named_tuple= False
-        self._connection= connection
-        self._resulttype= RESULT_TUPLE
-        self._description= None
-        self._transformed_statement= None
-        self._prepared= False
-        self._prev_stmt= None
-        self._force_binary= None
-        self._rowcount= 0
-        self.buffered= True
-        self._parseinfo= None
-        self._data= None
+        self._bulk = False
+        self._dictionary = False
+        self._named_tuple = False
+        self._connection = connection
+        self._resulttype = RESULT_TUPLE
+        self._description = None
+        self._transformed_statement = None
+        self._prepared = False
+        self._prev_stmt = None
+        self._force_binary = None
+        self._rowcount = 0
+        self.buffered = True
+        self._parseinfo = None
+        self._data = None
 
         if not connection:
             raise mariadb.ProgrammingError("Invalid or no connection provided")
 
         # parse keywords
         if kwargs:
-             rtype= kwargs.pop("named_tuple", False)
-             if rtype:
-                 self._resulttype= RESULT_NAMEDTUPLE
-             else:
-                 rtype= kwargs.pop("dictionary", False)
-                 if rtype:
-                     self._resulttype= RESULT_DICTIONARY
-             buffered= kwargs.pop("buffered", True)
-             self.buffered= buffered
-             self._prepared= kwargs.pop("prepared", False)
-             self._force_binary= kwargs.pop("binary", False)
-             self._cursor_type= kwargs.pop("cursor_type", 0)
+            rtype = kwargs.pop("named_tuple", False)
+            if rtype:
+                self._resulttype = RESULT_NAMEDTUPLE
+            else:
+                rtype = kwargs.pop("dictionary", False)
+                if rtype:
+                    self._resulttype = RESULT_DICTIONARY
+            buffered = kwargs.pop("buffered", True)
+            self.buffered = buffered
+            self._prepared = kwargs.pop("prepared", False)
+            self._force_binary = kwargs.pop("binary", False)
+            self._cursor_type = kwargs.pop("cursor_type", 0)
 
-        # call initialization of main class 
+        # call initialization of main class
         super().__init__(connection, **kwargs)
 
-                
     def _substitute_parameters(self):
         """
         Internal use only.
@@ -104,84 +105,92 @@ class Cursor(mariadb._mariadb.cursor):
         will be used.
         """
 
-        new_stmt= self.statement.encode("utf8")
-        replace_diff= 0
+        new_stmt = self.statement.encode("utf8")
+        replace_diff = 0
         if self._paramlist:
-            for i in range (0,len(self._paramlist)):
-                extra_bytes= 0
+            for i in range(0, len(self._paramlist)):
+                extra_bytes = 0
                 if self._paramstyle == PARAMSTYLE_PYFORMAT:
-                    val= self._data[self._keys[i]]
+                    val = self._data[self._keys[i]]
                 else:
-                    val= self._data[i]
+                    val = self._data[i]
                 if val is None:
-                    replace= "NULL";
+                    replace = "NULL"
                 else:
                     if isinstance(val, INDICATOR.MrdbIndicator):
                         if val == INDICATOR.NULL:
-                           replace= "NULL"
+                            replace = "NULL"
                         if val == INDICATOR.DEFAULT:
-                           replace= "DEFAULT"   
+                            replace = "DEFAULT"
                     elif isinstance(val, Number):
-                        replace= val.__str__()
+                        replace = val.__str__()
                     else:
                         if isinstance(val, (bytes, bytearray)):
-                            replace= "\"%s\"" % self.connection.escape_string(val.decode(encoding='latin1'))
+                            replace = "\"%s\"" % self.connection.escape_string(
+                                val.decode(encoding='latin1'))
                         else:
-                            replace= "\"%s\"" % self.connection.escape_string(val.__str__())
-                            extra_bytes= len(replace.encode("utf-8")) - len(replace)
-                ofs= self._paramlist[i] + replace_diff
-                
-                new_stmt= new_stmt[:ofs] + replace.__str__().encode("utf8") + new_stmt[ofs+1:]
-                replace_diff+= len(replace) - 1 + extra_bytes
+                            replace = "\"%s\"" % self.connection.escape_string(
+                                val.__str__())
+                            extra_bytes = len(replace.encode("utf-8")) -\
+                                len(replace)
+                ofs = self._paramlist[i] + replace_diff
+
+                new_stmt = new_stmt[:ofs] + replace.__str__().encode("utf8") +\
+                    new_stmt[ofs+1:]
+                replace_diff += len(replace) - 1 + extra_bytes
         return new_stmt
 
     def _check_execute_params(self):
         # check data format
-        if self._paramstyle == PARAMSTYLE_QMARK or \
-           self._paramstyle == PARAMSTYLE_FORMAT:
-            if not isinstance(self._data, (tuple,list)):
-                raise mariadb.ProgrammingError("Data argument must be Tuple or List")
+        if self._paramstyle in (PARAMSTYLE_QMARK, PARAMSTYLE_FORMAT):
+            if not isinstance(self._data, (tuple, list)):
+                raise mariadb.ProgrammingError("Data argument must be "
+                                               "Tuple or List")
 
         if self._paramstyle == PARAMSTYLE_PYFORMAT:
             if not isinstance(self._data, dict):
-                raise mariadb.ProgrammingError("Data argument must be Dictionary")
+                raise mariadb.ProgrammingError("Data argument must be "
+                                               "Dictionary")
             for i in range(0, len(self._keys)):
                 if self._keys[i] not in self._data:
-                    raise mariadb.ProgrammingError("Dictionary doesn't contain key '%s'" % self._keys[i])
+                    raise mariadb.ProgrammingError("Dictionary doesn't contain"
+                                                   " key '%s'" % self._keys[i])
         else:
-            # check if number of place holders matches the number of 
+            # check if number of place holders matches the number of
             # supplied elements in data tuple
-            if self._paramlist and  ((not self._data and len(self._paramlist) > 0) or \
+            if self._paramlist and (
+               (not self._data and len(self._paramlist) > 0) or
                (len(self._data) != len(self._paramlist))):
-                raise mariadb.ProgrammingError("Number of parameters in statement (%s)"\
-                                        " doesn't match the number of data elements (%s)."\
-                                         % (len(self._paramlist), len(self._data)))
+                raise mariadb.ProgrammingError(
+                    "statement (%s) doesn't match the number of data elements"
+                    " (%s)." % (len(self._paramlist), len(self._data)))
 
-    def callproc(self, sp: str, data: Sequence =()):
+    def callproc(self, sp: str, data: Sequence = ()):
         """
-        Executes a stored procedure sp. The data sequence must contain an entry for
-        each parameter the procedure expects.
+        Executes a stored procedure sp. The data sequence must contain an
+        entry for each parameter the procedure expects.
 
-        Input/Output or Output parameters have to be retrieved by .fetch methods,
-        the .sp_outparams attribute indicates if the result set contains output
-        parameters.
+        Input/Output or Output parameters have to be retrieved by .fetch
+        methods, the .sp_outparams attribute indicates if the result set
+        contains output parameters.
 
         Arguments:
             - sp: Name of stored procedure.
-            - data: Optional sequence containing data for placeholder substitution.
+            - data: Optional sequence containing data for placeholder
+                    substitution.
         """
 
         self.check_closed()
 
-        # create statement 
-        params= ""
+        # create statement
+        params = ""
         if data and len(data):
-            params= ("?," * len(data))[:-1]
-        statement= "CALL %s(%s)" % (sp, params)
-        self._rowcount= 0
+            params = ("?," * len(data))[:-1]
+        statement = "CALL %s(%s)" % (sp, params)
+        self._rowcount = 0
         self.execute(statement, data)
 
-    def _parse_execute(self, statement:str, data=(), is_bulk=False):
+    def _parse_execute(self, statement: str, data=(), is_bulk=False):
         """
         For internal use
 
@@ -194,20 +203,19 @@ class Cursor(mariadb._mariadb.cursor):
         # parse statement
         if self.statement != statement or is_bulk and not self._bulk:
             super()._parse(statement)
-            self._prev_stmt= statement
-            self._reprepare= True
+            self._prev_stmt = statement
+            self._reprepare = True
         else:
-            self._reprepare= False
+            self._reprepare = False
 
-        self._transformed_statement= self.statement
+        self._transformed_statement = self.statement
 
         if self._cursor_type == CURSOR.READ_ONLY:
-            self._text= False
+            self._text = False
 
-        self._data= data
+        self._data = data
 
         self._check_execute_params()
-       
 
     def nextset(self):
         """
@@ -218,36 +226,36 @@ class Cursor(mariadb._mariadb.cursor):
         self.check_closed()
         return super()._nextset()
 
-    def execute(self, statement: str, data: Sequence =(), buffered=None):
+    def execute(self, statement: str, data: Sequence = (), buffered=None):
         """
         Prepare and execute a SQL statement.
 
         Parameters may be provided as sequence or mapping and will be bound
         to variables in the operation. Variables are specified as question
-        marks (paramstyle='qmark'), however for compatibility reasons MariaDB
+        marks (paramstyle ='qmark'), however for compatibility reasons MariaDB
         Connector/Python also supports the 'format' and 'pyformat' paramstyles
         with the restriction, that different paramstyles can't be mixed within
         a statement.
 
         A reference to the operation will be retained by the cursor.
-        If the cursor was created with attribute prepared=True the statement
+        If the cursor was created with attribute prepared =True the statement
         string for following execute operations will be ignored.
         This is most effective for algorithms where the same operation is used,
         but different parameters are bound to it (many times).
 
-        By default execute() method generates an buffered result unless the optional
-        parameter buffered was set to False or the cursor was generated as an
-        unbuffered cursor.
+        By default execute() method generates an buffered result unless the
+        optional parameter buffered was set to False or the cursor was
+        generated as an unbuffered cursor.
         """
 
         self.check_closed()
 
         # Parse statement
-        do_parse= True
-        self._rowcount= 0
+        do_parse = True
+        self._rowcount = 0
 
-        if buffered != None:
-            self.buffered= buffered
+        if buffered is not None:
+            self.buffered = buffered
 
         # clear pending result sets
         if self.field_count:
@@ -256,60 +264,61 @@ class Cursor(mariadb._mariadb.cursor):
         # if we have a prepared cursor, we have to set statement
         # to previous statement and don't need to parse
         if self._prepared and self.statement:
-            statement= self.statement
-            do_parse= False
+            statement = self.statement
+            do_parse = False
 
         # parse statement and check param style
         if do_parse:
             self._parse_execute(statement, (data))
 
-        self._description= None
+        self._description = None
 
-        # CONPY-218: Allow None as replacement for empty tuple 
-        data= data or ()
+        # CONPY-218: Allow None as replacement for empty tuple
+        data = data or ()
 
         if len(data):
-            self._data= data
+            self._data = data
         else:
-            self._data= None
+            self._data = None
             # If statement doesn't contain parameters we force to run in text
             # mode, unless a server side cursor or stored procedure will be
             # executed.
             if self._command != SQL_CALL and self._cursor_type == 0:
-                self._text= True
+                self._text = True
 
         if self._force_binary:
-           self._text= False
+            self._text = False
 
         for val in data:
-            if isinstance(val, (bytes, bytearray, datetime.datetime, datetime.date, datetime.time)):
-                self._text= False
+            if isinstance(val, (bytes, bytearray, datetime.datetime,
+                                datetime.date, datetime.time)):
+                self._text = False
                 break
 
         if self._text:
             # in text mode we need to substitute parameters
             # and store transformed statement
             if (self.paramcount > 0):
-                 self._transformed_statement= self._substitute_parameters()
+                self._transformed_statement = self._substitute_parameters()
             else:
-                 self._transformed_statement= self.statement
+                self._transformed_statement = self.statement
 
             self._execute_text(self._transformed_statement)
             self._readresponse()
         else:
-            self._data= data
+            self._data = data
             self._execute_binary()
 
         self._initresult()
-        self._bulk= 0
+        self._bulk = 0
 
     def executemany(self, statement, parameters):
-        """ 
-        Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE statement) and
-        execute it against all parameter found in sequence.
+        """
+        Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE
+        statement) and execute it against all parameter found in sequence.
 
-        Exactly behaves like .execute() but accepts a list of tuples, where each
-        tuple represents data of a row within a table.
+        Exactly behaves like .execute() but accepts a list of tuples, where
+        each tuple represents data of a row within a table.
         .executemany() only supports DML (insert, update, delete) statements.
 
         If the SQL statement contains a RETURNING clause, executemany()
@@ -327,21 +336,23 @@ class Cursor(mariadb._mariadb.cursor):
 
         # If the server doesn't support bulk operations, we need to emulate
         # by looping
-        # TODO: insert/replace statements are not optimized yet, rowcount not set
-        if not (self.connection.extended_server_capabilities & (CAPABILITY.BULK_OPERATIONS >> 32)):
-            count= 0
+        # TODO: insert/replace statements are not optimized yet
+        #       rowcount updating
+        if not (self.connection.extended_server_capabilities &
+                (CAPABILITY.BULK_OPERATIONS >> 32)):
+            count = 0
             for row in parameters:
                 self.execute(statement, row)
-                count+= self.rowcount
-            self._rowcount= count
+                count += self.rowcount
+            self._rowcount = count
         else:
-            # parse statement 
+            # parse statement
             self._parse_execute(statement, parameters[0], is_bulk=True)
-            self._data= parameters
-            self.is_text= False
-            self._rowcount= 0
+            self._data = parameters
+            self.is_text = False
+            self._rowcount = 0
             self._execute_bulk()
-            self._bulk= 1
+            self._bulk = 1
 
     def _fetch_row(self):
         """
@@ -354,31 +365,32 @@ class Cursor(mariadb._mariadb.cursor):
         # if there is no result set, PEP-249 requires to raise an
         # exception
         if not self.field_count:
-             raise mariadb.ProgrammingError("Cursor doesn't have a result set")
-        row= super().fetchone()
+            raise mariadb.ProgrammingError("Cursor doesn't have a result set")
+        row = super().fetchone()
         if self._connection._converter and row:
-            l= list(row)
+            tmp_l = list(row)
             if not self._description:
-                self._description= super().description
-            for i,v in enumerate(row):
-                type= self.description[i][1]
+                self._description = super().description
+            for i, v in enumerate(row):
+                type = self.description[i][1]
                 if type in self._connection._converter:
-                    func= self._connection._converter[type]
-                    l[i]= func(v)
+                    func = self._connection._converter[type]
+                    tmp_l[i] = func(v)
                 else:
-                    l[i]= v
-            row= tuple(l)
+                    tmp_l[i] = v
+            row = tuple(tmp_l)
         return row
 
     def close(self):
         """
-        Closes the cursor. 
+        Closes the cursor.
 
         If the cursor has pending or unread results, .close() will cancel them
         so that further operations using the same connection can be executed.
 
-        The cursor will be unusable from this point forward; an Error (or subclass)
-        exception will be raised if any operation is attempted with the cursor."
+        The cursor will be unusable from this point forward; an Error
+        (or subclass) exception will be raised if any operation is attempted
+        with the cursor."
         """
         super().close()
 
@@ -387,61 +399,62 @@ class Cursor(mariadb._mariadb.cursor):
         Fetch the next row of a query result set, returning a single sequence,
         or None if no more data is available.
 
-        An exception will be raised if the previous call to execute() didn't 
+        An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
         self.check_closed()
 
-        row= self._fetch_row()
+        row = self._fetch_row()
         if not row:
             return row
         if self._resulttype == RESULT_DICTIONARY:
-            ret= dict(zip(list(d[0] for d in self.description),row))
+            ret = dict(zip(list(d[0] for d in self.description), row))
         elif self._resulttype == RESULT_NAMEDTUPLE:
-            ret= collections.namedtuple('Row1', list(d[0] for d in self.description));
-            ret= ret._make(row)
+            ret = collections.namedtuple('Row1', list(d[0]
+                                         for d in self.description))
+            ret = ret._make(row)
         else:
-            ret= row
+            ret = row
         return ret
 
-    def fetchmany(self, size: int =0):
+    def fetchmany(self, size: int = 0):
         """
         Fetch the next set of rows of a query result, returning a sequence
         of sequences (e.g. a list of tuples). An empty sequence is returned
         when no more rows are available.
 
-        The number of rows to fetch per call is specified by the parameter. 
+        The number of rows to fetch per call is specified by the parameter.
         If it is not given, the cursor's arraysize determines the number
-        of rows to be fetched. The method should try to fetch as many rows 
-        as indicated by the size parameter. 
+        of rows to be fetched. The method should try to fetch as many rows
+        as indicated by the size parameter.
         If this is not possible due to the specified number of rows not being
         available, fewer rows may be returned.
 
-        An exception will be raised if the previous call to execute() didn't 
+        An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
         self.check_closed()
 
-        rows=[]
+        rows = []
         if size == 0:
-            size= self.arraysize
+            size = self.arraysize
         for count in range(0, size):
-            row= self.fetchone()
+            row = self.fetchone()
             if row:
                 rows.append(row)
         return rows
 
     def fetchall(self):
         """
-        Fetch all remaining rows of a query result, returning them as a 
+        Fetch all remaining rows of a query result, returning them as a
         sequence of sequences (e.g. a list of tuples).
 
-        An exception will be raised if the previous call to execute() didn't 
+        An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
         self.check_closed()
 
-        rows=[];
+        rows = []
         for row in self:
             rows.append((row))
         return rows
@@ -451,22 +464,25 @@ class Cursor(mariadb._mariadb.cursor):
 
     def scroll(self, value: int, mode="relative"):
         """
-        Scroll the cursor in the result set to a new position according to mode.
+        Scroll the cursor in the result set to a new position according to
+        mode.
 
-        If mode is "relative" (default), value is taken as offset to the current
-        position in the result set, if set to absolute, value states an absolute
-        target position.
+        If mode is "relative" (default), value is taken as offset to the
+        current position in the result set, if set to absolute, value states
+        an absolute target position.
         """
 
         if self.field_count == 0:
             raise mariadb.ProgrammingError("Cursor doesn't have a result set")
 
         if not self.buffered:
-            raise mariadb.ProgrammingError("This method is available only for cursors "\
-                                           "with a buffered result set.")
+            raise mariadb.ProgrammingError("This method is available only "
+                                           "for cursors with a buffered "
+                                           "result set.")
 
         if mode != "absolute" and mode != "relative":
-            raise mariadb.ProgrammingError("Invalid or unknown scroll mode specified.")
+            raise mariadb.ProgrammingError("Invalid or unknown scroll "
+                                           "mode specified.")
 
         if value == 0 and mode != "absolute":
             raise mariadb.ProgrammingError("Invalid position value 0.")
@@ -474,15 +490,17 @@ class Cursor(mariadb._mariadb.cursor):
         if mode == "relative":
             if self.rownumber + value < 0 or \
                self.rownumber + value > self.rowcount:
-                raise mariadb.ProgrammingError("Position value is out of range.")
-            new_pos= self.rownumber + value
+                raise mariadb.ProgrammingError("Position value "
+                                               "is out of range.")
+            new_pos = self.rownumber + value
         else:
             if value < 0 or value >= self.rowcount:
-                raise mariadb.ProgrammingError("Position value is out of range.")
-            new_pos= value
+                raise mariadb.ProgrammingError("Position value "
+                                               "is out of range.")
+            new_pos = value
 
-        self._seek(new_pos);
-        self._rownumber= new_pos;
+        self._seek(new_pos)
+        self._rownumber = new_pos
 
     def setinputsizes(self, size: int):
         """
@@ -549,7 +567,7 @@ class Cursor(mariadb._mariadb.cursor):
         """
         self.check_closed()
 
-        id= self.insert_id
+        id = self.insert_id
         if id > 0:
             return id
         return None

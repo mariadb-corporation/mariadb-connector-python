@@ -3,11 +3,14 @@
 
 import os
 
+
 def glob():
     dm = {
         "module": os.environ.get('TEST_MODULE', 'mariadb'),
         }
+
     return dm
+
 
 def conf():
     d = {
@@ -20,7 +23,8 @@ def conf():
         if os.environ.get('TEST_REQUIRE_TLS') == "1":
             d["ssl"] = True
     if os.environ.get('TEST_RESET_SESSION'):
-        d["pool_reset_connection"] = int(os.environ.get('TEST_RESET_SESSION', '1'))
+        reset = int(os.environ.get('TEST_RESET_SESSION', '1'))
+        d["pool_reset_connection"] = reset
     if os.environ.get('TEST_DB_PASSWORD'):
         d["password"] = os.environ.get('TEST_DB_PASSWORD')
     return d

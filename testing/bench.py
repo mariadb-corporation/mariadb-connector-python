@@ -20,5 +20,6 @@ def main():
     run_test(test_suite(dbdrv.paramstyle), conn, dbdrv.paramstyle)
     conn.close()
 
+
 if __name__ == "__main__":
     main()

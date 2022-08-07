@@ -10,7 +10,7 @@ def select_1_mysql_user(loops, conn, paramstyle):
     cursor = conn.cursor()
     for value in range_it:
         cursor.execute("select * from mysql.user LIMIT 1")
-        row = cursor.fetchall()
-    del cursor
+        rows = cursor.fetchall()
+    del cursor, rows
 
     return pyperf.perf_counter() - t0

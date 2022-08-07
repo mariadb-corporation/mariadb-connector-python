@@ -19,7 +19,6 @@
 
 import mariadb
 import socket
-import time
 import mariadb.cursors
 
 from mariadb.constants import STATUS, TPC_STATE, INFO
@@ -27,7 +26,8 @@ from distutils.version import StrictVersion
 
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
-_MAX_TPC_XID_SIZE=64
+_MAX_TPC_XID_SIZE = 64
+
 
 class Connection(mariadb._mariadb.connection):
     """
@@ -41,7 +41,8 @@ class Connection(mariadb._mariadb.connection):
 
     def _check_closed(self):
         if self._closed:
-            raise mariadb.ProgrammingError("Invalid connection or not connected")
+            raise mariadb.ProgrammingError("Invalid connection or "
+                                           "not connected")
 
     def __init__(self, *args, **kwargs):
         """
@@ -49,84 +50,94 @@ class Connection(mariadb._mariadb.connection):
         object.
         """
 
-        self._socket= None
-        self.__in_use= 0
+        self._socket = None
+        self.__in_use = 0
         self.__pool = None
         self.__last_used = 0
-        self.tpc_state= TPC_STATE.NONE
-        self._xid= None
+        self.tpc_state = TPC_STATE.NONE
+        self._xid = None
 
-        autocommit= kwargs.pop("autocommit", False)
-        reconnect= kwargs.pop("reconnect", False)
-        self._converter= kwargs.pop("converter", None)
+        autocommit = kwargs.pop("autocommit", False)
+        reconnect = kwargs.pop("reconnect", False)
+        self._converter = kwargs.pop("converter", None)
 
         # if host contains a connection string or multiple hosts,
         # we need to check if it's supported by Connector/C
         if "host" in kwargs:
-            host= kwargs.get("host")
-            if StrictVersion(mariadb.mariadbapi_version) < StrictVersion('3.3.0') and ',' in host:
-                raise mariadb.ProgrammingError("Host failover list requires MariaDB Connector/C 3.3.0 or newer")
-
+            host = kwargs.get("host")
+            if StrictVersion(mariadb.mariadbapi_version) <\
+               StrictVersion('3.3.0') and ',' in host:
+                raise mariadb.ProgrammingError("Host failover list requires "
+                                               "MariaDB Connector/C 3.3.0 "
+                                               "or newer")
 
         # compatibility feature: if SSL is provided as a dictionary,
         # we will map it's content
         if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
-             ssl= kwargs.pop("ssl", None)
-             for key in ["ca", "cert", "capath", "key", "cipher"]:
-                 if key in ssl:
-                     kwargs["ssl_%s" % key] = ssl[key]
-             kwargs["ssl"]= True
+            ssl = kwargs.pop("ssl", None)
+            for key in ["ca", "cert", "capath", "key", "cipher"]:
+                if key in ssl:
+                    kwargs["ssl_%s" % key] = ssl[key]
+            kwargs["ssl"] = True
 
         super().__init__(*args, **kwargs)
-        self.autocommit= autocommit
-        self.auto_reconnect= reconnect
+        self.autocommit = autocommit
+        self.auto_reconnect = reconnect
 
     def cursor(self, cursorclass=mariadb.cursors.Cursor, **kwargs):
         """
         Returns a new cursor object for the current connection.
 
-        If no cursorclass was specified, a cursor with default mariadb.Cursor class
-        will be created.
+        If no cursorclass was specified, a cursor with default mariadb.Cursor
+        class will be created.
 
         Optional keyword parameters:
 
-        - buffered= True
-          If set to False the result will be unbuffered, which means before executing
-          another statement with the same connection the entire result set must be fetched.
-          Please note that the default was False for MariaDB Connector/Python versions < 1.1.0.
-        - dictionary= False
+        - buffered = True
+          If set to False the result will be unbuffered, which means before
+          executing another statement with the same connection the entire
+          result set must be fetched.
+          Please note that the default was False for MariaDB Connector/Python
+          versions < 1.1.0.
+
+        - dictionary = False
           Return fetch values as dictionary.
 
-        - named_tuple= False
-          Return fetch values as named tuple. This feature exists for compatibility reasons
-          and should be avoided due to possible inconsistency.
+        - named_tuple = False
+          Return fetch values as named tuple. This feature exists for
+          compatibility reasons and should be avoided due to possible
+          inconsistency.
 
-        - cursor_type= CURSOR_TYPE.NONE
-          If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for the
-          statement invoked with cursors execute() method.
+        - cursor_type = CURSOR_TYPE.NONE
+          If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened
+          for the statement invoked with cursors execute() method.
 
-        - prepared= False
-          When set to True cursor will remain in prepared state after the first execute()
-          method was called. Further calls to execute() method will ignore the sql statement.
+        - prepared = False
+          When set to True cursor will remain in prepared state after the first
+          execute() method was called. Further calls to execute() method will
+          ignore the sql statement.
 
-        - binary= False
+        - binary = False
           Always execute statement in MariaDB client/server binary protocol.
 
-        In versions prior to 1.1.0 results were unbuffered by default, which means before executing another 
-        statement with the same connection the entire result set must be fetched.
+        In versions prior to 1.1.0 results were unbuffered by default,
+        which means before executing another statement with the same
+        connection the entire result set must be fetched.
 
-        fetch* methods of the cursor class by default return result set values as a 
-        tuple, unless named_tuple or dictionary was specified. The latter one exists 
-        for compatibility reasons and should be avoided due to possible inconsistency
-        in case two or more fields in a result set have the same name.
+        fetch* methods of the cursor class by default return result set values
+        as a tuple, unless named_tuple or dictionary was specified.
+        The latter one exists for compatibility reasons and should be avoided
+        due to possible inconsistency in case two or more fields in a result
+        set have the same name.
 
         If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
         the statement invoked with cursors execute() method.
         """
         self._check_closed()
-        cursor= cursorclass(self, **kwargs)
+        cursor = cursorclass(self, **kwargs)
         if not isinstance(cursor, mariadb._mariadb.cursor):
-            raise mariadb.ProgrammingError("%s is not an instance of mariadb.cursor" % cursor)
+            raise mariadb.ProgrammingError("%s is not an instance of "
+                                           "mariadb.cursor" % cursor)
         return cursor
 
     def close(self):
@@ -155,30 +166,33 @@ class Connection(mariadb._mariadb.connection):
 
         self._check_closed()
         if self.tpc_state > TPC_STATE.NONE:
-            raise mariadb.ProgrammingError("commit() is not allowed if a TPC transaction is active")
+            raise mariadb.ProgrammingError("commit() is not allowed if "
+                                           "a TPC transaction is active")
         self._execute_command("COMMIT")
         self._read_response()
 
     def rollback(self):
         """
-        Causes the database to roll back to the start of any pending transaction
+        Causes the database to roll back to the start of any pending
+        transaction
 
-        Closing a connection without committing the changes first will cause an
-        implicit rollback to be performed.
-        Note that rollback() will not work as expected if autocommit mode was set to True
-        or the storage engine does not support transactions."
+        Closing a connection without committing the changes first will
+        cause an implicit rollback to be performed.
+        Note that rollback() will not work as expected if autocommit mode
+        was set to True or the storage engine does not support transactions."
         """
 
         self._check_closed()
         if self.tpc_state > TPC_STATE.NONE:
-            raise mariadb.ProgrammingError("rollback() is not allowed if a TPC transaction is active")
+            raise mariadb.ProgrammingError("rollback() is not allowed if a "
+                                           "TPC transaction is active")
         self._execute_command("ROLLBACK")
         self._read_response()
 
     def kill(self, id: int):
         """
         This function is used to ask the server to kill a database connection
-        specified by the processid parameter. 
+        specified by the processid parameter.
 
         The connection id can be be retrieved by SHOW PROCESSLIST sql command.
         """
@@ -186,7 +200,7 @@ class Connection(mariadb._mariadb.connection):
         self._check_closed()
         if not isinstance(id, int):
             raise mariadb.ProgrammingError("id must be of type int.")
-        stmt= "KILL %s" % id
+        stmt = "KILL %s" % id
         self._execute_command(stmt)
         self._read_response()
 
@@ -203,11 +217,12 @@ class Connection(mariadb._mariadb.connection):
         """
         Gets the default database for the current connection.
 
-        The default database can also be obtained or changed by database attribute.
+        The default database can also be obtained or changed by database
+        attribute.
         """
 
         self._check_closed()
-        self.database= new_db
+        self.database = new_db
 
     def get_server_version(self):
         """
@@ -224,11 +239,11 @@ class Connection(mariadb._mariadb.connection):
 
         self._check_closed()
         if (not self.warnings):
-            return None;
+            return None
 
-        cursor= self.cursor()
+        cursor = self.cursor()
         cursor.execute("SHOW WARNINGS")
-        ret= cursor.fetchall()
+        ret = cursor.fetchall()
         del cursor
         return ret
 
@@ -243,30 +258,45 @@ class Connection(mariadb._mariadb.connection):
 
         - format_id: Format id. If not set default value `0` will be used.
 
-        - global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.
+        - global_transaction_id: Global transaction qualifier, which must be
+          unique. The maximum length of the global transaction id is
+          limited to 64 characters.
 
-        - branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.
- 
+        - branch_qualifier: Branch qualifier which represents a local
+          transaction identifier. The maximum length of the branch qualifier
+          is limited to 64 characters.
+
         """
         def __new__(self, format_id, transaction_id, branch_qualifier):
             if not isinstance(format_id, int):
-                raise mariadb.ProgrammingError("argument 1 must be int, not %s", type(format_id).__name__)
+                raise mariadb.ProgrammingError("argument 1 must be int, "
+                                               "not %s",
+                                               type(format_id).__name__)
             if not isinstance(transaction_id, str):
-                raise mariadb.ProgrammingError("argument 2 must be str, not %s", type(transaction_id).__mane__)
+                raise mariadb.ProgrammingError("argument 2 must be str, "
+                                               "not %s",
+                                               type(transaction_id).__mane__)
             if not isinstance(branch_qualifier, str):
-                raise mariadb.ProgrammingError("argument 3 must be str, not %s", type(transaction_id).__name__)
+                raise mariadb.ProgrammingError("argument 3 must be str, "
+                                               "not %s",
+                                               type(transaction_id).__name__)
             if len(transaction_id) > _MAX_TPC_XID_SIZE:
-                raise mariadb.ProgrammingError("Maximum length of transaction_id exceeded.")
+                raise mariadb.ProgrammingError("Maximum length of "
+                                               "transaction_id exceeded.")
             if len(branch_qualifier) > _MAX_TPC_XID_SIZE:
-                raise mariadb.ProgrammingError("Maximum length of branch_qualifier exceeded.")
+                raise mariadb.ProgrammingError("Maximum length of "
+                                               "branch_qualifier exceeded.")
             if format_id == 0:
-                format_id= 1
-            return super().__new__(self, (format_id, transaction_id, branch_qualifier))
+                format_id = 1
+            return super().__new__(self, (format_id,
+                                          transaction_id,
+                                          branch_qualifier))
 
     def tpc_begin(self, xid):
         """
         Parameter:
-          xid: xid object which was created by .xid() method of connection class
+          xid: xid object which was created by .xid() method of connection
+               class
 
         Begins a TPC transaction with the given transaction ID xid.
 
@@ -280,15 +310,16 @@ class Connection(mariadb._mariadb.connection):
 
         self._check_closed()
         if type(xid).__name__ != "xid":
-            raise mariadb.ProgrammingError("argument 1 must be xid not %s", type(xid).__name__)
-        stmt= "XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0])
+            raise mariadb.ProgrammingError("argument 1 must be xid "
+                                           "not %s", type(xid).__name__)
+        stmt = "XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
             self._execute_command(stmt)
             self._read_response()
-        except:
+        except mariadb.Error:
             raise
-        self.tpc_state= TPC_STATE.XID
-        self._xid= xid
+        self.tpc_state = TPC_STATE.XID
+        self._xid = xid
 
     def tpc_commit(self, xid=None):
         """
@@ -298,52 +329,54 @@ class Connection(mariadb._mariadb.connection):
         When called with no arguments, .tpc_commit() commits a TPC transaction
         previously prepared with .tpc_prepare().
 
-        If .tpc_commit() is called prior to .tpc_prepare(), a single phase commit
-        is performed. A transaction manager may choose to do this if only a
-        single resource is participating in the global transaction.
+        If .tpc_commit() is called prior to .tpc_prepare(), a single phase
+        commit is performed. A transaction manager may choose to do this if
+        only a single resource is participating in the global transaction.
         When called with a transaction ID xid, the database commits the given
-        transaction. If an invalid transaction ID is provided, a ProgrammingError
-        will be raised. This form should be called outside of a transaction, and
+        transaction. If an invalid transaction ID is provided,
+        a ProgrammingError will be raised.
+        This form should be called outside of a transaction, and
         is intended for use in recovery."
         """
 
         self._check_closed()
         if not xid:
-            xid= self._xid
+            xid = self._xid
 
         if self.tpc_state == TPC_STATE.NONE:
             raise mariadb.ProgrammingError("Transaction not started.")
         if xid is None and self.tpc_state != TPC_STATE.PREPARE:
             raise mariadb.ProgrammingError("Transaction is not prepared.")
         if xid and type(xid).__name__ != "xid":
-            raise mariadb.ProgrammingError("argument 1 must be xid not %s" % type(xid).__name__)
+            raise mariadb.ProgrammingError("argument 1 must be xid "
+                                           "not %s" % type(xid).__name__)
 
         if self.tpc_state < TPC_STATE.PREPARE:
-            stmt= "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
+            stmt = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
             self._execute_command(stmt)
             try:
                 self._read_response()
-            except:
-                self._xid= None
-                self.tpc_state= TPC_STATE.NONE
+            except mariadb.Error:
+                self._xid = None
+                self.tpc_state = TPC_STATE.NONE
                 raise
 
-        stmt= "XA COMMIT '%s','%s',%s" % (xid[1], xid[2], xid[0])
+        stmt = "XA COMMIT '%s','%s',%s" % (xid[1], xid[2], xid[0])
         if self.tpc_state < TPC_STATE.PREPARE:
-            stmt= stmt + " ONE PHASE"
+            stmt = stmt + " ONE PHASE"
         try:
             self._execute_command(stmt)
             self._read_response()
-        except:
-            self._xid= None
-            self.tpc_state= TPC_STATE.NONE
+        except mariadb.Error:
+            self._xid = None
+            self.tpc_state = TPC_STATE.NONE
             raise
 
-        #cleanup
-        self._xid= None
-        self.tpc_state= TPC_STATE.NONE
+        # cleanup
+        self._xid = None
+        self.tpc_state = TPC_STATE.NONE
 
-    def tpc_prepare(self): 
+    def tpc_prepare(self):
         """
         Performs the first phase of a transaction started with .tpc_begin().
         A ProgrammingError will be raised if this method was called outside of
@@ -357,28 +390,29 @@ class Connection(mariadb._mariadb.connection):
         if self.tpc_state == TPC_STATE.NONE:
             raise mariadb.ProgrammingError("Transaction not started.")
         if self.tpc_state == TPC_STATE.PREPARE:
-            raise mariadb.ProgrammingError("Transaction is already in prepared state.")
+            raise mariadb.ProgrammingError("Transaction is already in "
+                                           "prepared state.")
 
-        xid= self._xid
-        stmt= "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
+        xid = self._xid
+        stmt = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
             self._execute_command(stmt)
             self._read_response()
-        except:
-            self._xid= None
-            self.tpc_state= TPC_STATE.NONE
+        except mariadb.Error:
+            self._xid = None
+            self.tpc_state = TPC_STATE.NONE
             raise
 
-        stmt= "XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0])
+        stmt = "XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
             self._execute_command(stmt)
             self._read_response()
-        except:
-            self._xid= None
-            self.tpc_state= TPC_STATE.NONE
+        except mariadb.Error:
+            self._xid = None
+            self.tpc_state = TPC_STATE.NONE
             raise
 
-        self.tpc_state= TPC_STATE.PREPARE
+        self.tpc_state = TPC_STATE.PREPARE
 
     def tpc_rollback(self, xid=None):
         """
@@ -398,31 +432,32 @@ class Connection(mariadb._mariadb.connection):
         if self.tpc_state == TPC_STATE.NONE:
             raise mariadb.ProgrammingError("Transaction not started.")
         if xid and type(xid).__name__ != "xid":
-            raise mariadb.ProgrammingError("argument 1 must be xid not %s" % type(xid).__name__)
+            raise mariadb.ProgrammingError("argument 1 must be xid "
+                                           "not %s" % type(xid).__name__)
 
         if not xid:
-            xid= self._xid
+            xid = self._xid
 
         if self.tpc_state < TPC_STATE.PREPARE:
-            stmt= "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
+            stmt = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
             self._execute_command(stmt)
             try:
                 self._read_response()
-            except:
-                self._xid= None
-                self.tpc_state= TPC_STATE.NONE
+            except mariadb.Error:
+                self._xid = None
+                self.tpc_state = TPC_STATE.NONE
                 raise
 
-        stmt= "XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0])
+        stmt = "XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
             self._execute_command(stmt)
             self._read_response()
-        except:
-            self._xid= None
-            self.tpc_state= TPC_STATE.NONE
+        except mariadb.Error:
+            self._xid = None
+            self.tpc_state = TPC_STATE.NONE
             raise
 
-        self.tpc_state= TPC_STATE.PREPARE
+        self.tpc_state = TPC_STATE.PREPARE
 
     def tpc_recover(self):
         """
@@ -431,9 +466,9 @@ class Connection(mariadb._mariadb.connection):
         """
 
         self._check_closed()
-        cursor= self.cursor()
+        cursor = self.cursor()
         cursor.execute("XA RECOVER")
-        result= cursor.fetchall()
+        result = cursor.fetchall()
         del cursor
         return result
 
@@ -443,7 +478,7 @@ class Connection(mariadb._mariadb.connection):
 
         self._check_closed()
         return self._mariadb_get_info(INFO.SCHEMA, str)
- 
+
     @database.setter
     def database(self, schema):
         """Set default database."""
@@ -452,7 +487,7 @@ class Connection(mariadb._mariadb.connection):
         try:
             self._execute_command("USE %s" % str(schema))
             self._read_response()
-        except:
+        except mariadb.Error:
             raise
 
     @property
@@ -492,14 +527,20 @@ class Connection(mariadb._mariadb.connection):
 
     @property
     def extended_server_capabilities(self):
-        """Extended server capability flags (only for MariaDB database servers)."""
+        """
+        Extended server capability flags (only for MariaDB
+        database servers).
+        """
 
         self._check_closed()
         return self._mariadb_get_info(INFO.EXTENDED_SERVER_CAPABILITIES, int)
 
     @property
     def server_port(self):
-        """Database server TCP/IP port. This value will be 0 in case of a unix socket connection."""
+        """
+        Database server TCP/IP port. This value will be 0 in case of a unix
+        socket connection.
+        """
 
         self._check_closed()
         return self._mariadb_get_info(INFO.PORT, int)
@@ -569,12 +610,14 @@ class Connection(mariadb._mariadb.connection):
     @property
     def server_version_info(self):
         """
-        Returns numeric version of connected database server in tuple format. 
+        Returns numeric version of connected database server in tuple format.
         """
 
         self._check_closed()
-        version= self.server_version
-        return (int(version / 10000), int((version % 10000) / 100), version % 100)
+        version = self.server_version
+        return (int(version / 10000),
+                int((version % 10000) / 100),
+                version % 100)
 
     @property
     def autocommit(self):
@@ -599,19 +642,19 @@ class Connection(mariadb._mariadb.connection):
         try:
             self._execute_command("SET AUTOCOMMIT=%s" % int(mode))
             self._read_response()
-        except:
+        except mariadb.Error:
             raise
 
     @property
     def socket(self):
         """Returns the socket used for database connection"""
 
-        fno= self.get_socket()
+        fno = self.get_socket()
         if not self._socket:
-            self._socket= socket.socket(fileno=fno)
+            self._socket = socket.socket(fileno=fno)
         # in case of a possible reconnect, file descriptor has changed
         elif fno != self._socket.fileno():
-            self._socket= socket.socket(fileno=fno)
+            self._socket = socket.socket(fileno=fno)
         return self._socket
 
     @property
@@ -627,12 +670,12 @@ class Connection(mariadb._mariadb.connection):
         self._check_closed()
         try:
             self.ping()
-        except:
+        except mariadb.Error:
             return False
         return True
 
     # Aliases
-    character_set_name= character_set
+    character_set_name = character_set
 
     @property
     def thread_id(self):

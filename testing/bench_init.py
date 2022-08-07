@@ -6,7 +6,7 @@
 import importlib
 
 from test.conf_test import conf, glob
-from benchmarks.setup_db import init_db, end_db
+from benchmarks.setup_db import init_db
 
 module = glob()
 dbdrv = importlib.import_module(module["module"])
@@ -17,6 +17,7 @@ def main():
     conn = dbdrv.connect(**default_conf)
     init_db(conn, dbdrv.paramstyle)
     conn.close()
+
 
 if __name__ == "__main__":
     main()

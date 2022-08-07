@@ -3,7 +3,6 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-import os
 import mariadb
 
 from test.base_test import create_connection, is_skysql, is_maxscale, is_mysql
@@ -48,8 +47,9 @@ class CursorTest(unittest.TestCase):
             self.skipTest("MAXSCALE doesn't get new user immediately")
         if self.connection.server_name == "localhost":
             curs = self.connection.cursor(buffered=True)
-            curs.execute(
-                "select * from information_schema.plugins where plugin_name='unix_socket' and plugin_status='ACTIVE'")
+            curs.execute("select * from information_schema.plugins "
+                         "where plugin_name='unix_socket' "
+                         "and plugin_status='ACTIVE'")
             if curs.rowcount > 0:
                 del curs
                 self.skipTest("unix_socket is active")
@@ -60,10 +60,15 @@ class CursorTest(unittest.TestCase):
         cursor.execute("drop user if exists foo")
         if is_mysql() and self.connection.server_version < 80000:
             cursor.execute("create user foo@'%'")
-            cursor.execute("GRANT ALL on `" + default_conf["database"] + "`.* TO foo@'%' IDENTIFIED BY 'heyPassw-!µ20§rd'")
+            cursor.execute("GRANT ALL on `"
+                           + default_conf["database"] +
+                           "`.* TO foo@'%' IDENTIFIED BY "
+                           "'heyPassw-!µ20§rd'")
         else:
-            cursor.execute("create user foo@'%' IDENTIFIED BY 'heyPassw-!µ20§rd'")
-            cursor.execute("GRANT ALL on `" + default_conf["database"] + "`.* TO foo@'%'")
+            cursor.execute("create user foo@'%' IDENTIFIED "
+                           "BY 'heyPassw-!µ20§rd'")
+            cursor.execute("GRANT ALL on `" + default_conf["database"] +
+                           "`.* TO foo@'%'")
         new_conn = create_connection()
         new_conn.change_user("foo", "heyPassw-!µ20§rd", "")
         self.assertEqual("foo", new_conn.user)
@@ -111,12 +116,12 @@ class CursorTest(unittest.TestCase):
 
     def test_server_infos(self):
         self.assertTrue(self.connection.server_info)
-        self.assertTrue(self.connection.server_version > 0);
+        self.assertTrue(self.connection.server_version > 0)
 
     def test_escape(self):
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_escape (a varchar(100))")
-        str = 'This is a \ and a \"'
+        str = 'This is a \ and a \"'  # noqa: W605
         cmd = "INSERT INTO test_escape VALUES('%s')" % str
 
         try:

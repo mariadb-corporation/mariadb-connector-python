@@ -13,6 +13,7 @@ def select_param(loops, conn, paramstyle):
             cursor.execute("select ?", (1,))
         else:
             cursor.execute("select %(val)s", {'val': 1})
-        row = cursor.fetchall()
+        rows = cursor.fetchall()
+        del rows
     cursor.close()
     return pyperf.perf_counter() - t0

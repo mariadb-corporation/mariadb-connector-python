@@ -19,9 +19,9 @@ __author__ = 'Stuart Bishop <zen@shangri-la.dropbear.id.au>'
 
 import time
 import unittest
-import os
 
-import mariadb as mariadb
+import mariadb
+import datetime
 
 # $Log$
 # Revision 1.1.2.1  2006/02/25 03:44:32  adustman
@@ -47,7 +47,8 @@ import mariadb as mariadb
 #     added test_nextset & hooks
 #
 # Revision 1.5  2003/02/17 22:08:43  zenzen
-# Implement suggestions and code from Henrik Eklund - test that cursor.arraysize
+# Implement suggestions and code from Henrik Eklund - test that
+# cursor.arraysize
 # defaults to 1 & generic cursor.callproc test added
 #
 # Revision 1.4  2003/02/15 00:16:33  zenzen
@@ -107,7 +108,8 @@ class DatabaseAPI20Test(unittest.TestCase):
     xddl1 = 'drop table %sbooze' % table_prefix
     xddl2 = 'drop table %sbarflys' % table_prefix
 
-    lowerfunc = 'lower'  # Name of stored procedure to convert string->lowercase
+    # Name of stored procedure to convert string->lowercase
+    lowerfunc = 'lower'
 
     # Some drivers may need to override these helpers, for example adding
     # a 'commit' after the execute.
@@ -124,8 +126,8 @@ class DatabaseAPI20Test(unittest.TestCase):
         pass
 
     def tearDown(self):
-        ''' self.drivers should override this method to perform required cleanup
-            if any is necessary, such as deleting the test database.
+        ''' self.drivers should override this method to perform required
+            cleanup if any is necessary, such as deleting the test database.
             The default drops the tables that may be created.
         '''
         con = self._connect()
@@ -251,6 +253,7 @@ class DatabaseAPI20Test(unittest.TestCase):
             cur = con.cursor()
         finally:
             con.close()
+            del cur
 
     def test_cursor_isolation(self):
         con = self._connect()
@@ -277,42 +280,50 @@ class DatabaseAPI20Test(unittest.TestCase):
             cur = con.cursor()
             self.executeDDL1(cur)
             self.assertEqual(cur.description, None,
-                             'cursor.description should be none after executing a '
-                             'statement that can return no rows (such as DDL)'
+                             'cursor.description should be none after '
+                             'executing a statement that can return no '
+                             'rows (such as DDL)'
                              )
             cur.execute('select name from %sbooze' % self.table_prefix)
             self.assertEqual(len(cur.description), 1,
                              'cursor.description describes too many columns'
                              )
             self.assertEqual(len(cur.description[0]), 11,
-                             'cursor.description[x] tuples must have 11 elements'
+                             'cursor.description[x] tuples must have '
+                             '11 elements'
                              )
             self.assertEqual(cur.description[0][0].lower(), 'name',
-                             'cursor.description[x][0] must return column name'
+                             'cursor.description[x][0] must return column '
+                             'name'
                              )
 
             # table name
-            self.assertEqual(cur.description[0][8].lower(), 'dbapi20test_booze',
-                             'cursor.description[x][0] must return column name'
+            self.assertEqual(cur.description[0][8].lower(),
+                             'dbapi20test_booze',
+                             'cursor.description[x][0] must return column '
+                             'name'
                              )
             # original column name
             self.assertEqual(cur.description[0][9].lower(), 'name',
-                             'cursor.description[x][0] must return column name'
+                             'cursor.description[x][0] must return column '
+                             'name'
                              )
             # original table name
-            self.assertEqual(cur.description[0][10].lower(), 'dbapi20test_booze',
-                             'cursor.description[x][0] must return column name'
+            self.assertEqual(cur.description[0][10].lower(),
+                             'dbapi20test_booze',
+                             'cursor.description[x][0] must return i'
+                             'column name'
                              )
             self.assertEqual(cur.description[0][1], self.driver.STRING,
-                             'cursor.description[x][1] must return column type. Got %r'
-                             % cur.description[0][1]
+                             'cursor.description[x][1] must return column '
+                             'type. Got %r' % cur.description[0][1]
                              )
 
             # Make sure self.description gets reset
             self.executeDDL2(cur)
             self.assertEqual(cur.description, None,
-                             'cursor.description not being set to None when executing '
-                             'no-result statements (eg. DDL)'
+                             'cursor.description not being set to None when '
+                             'executing no-result statements (eg. DDL)'
                              )
         finally:
             con.close()
@@ -323,8 +334,8 @@ class DatabaseAPI20Test(unittest.TestCase):
             cur = con.cursor(buffered=True)
             self.executeDDL1(cur)
             self.assertEqual(cur.rowcount, 0,
-                             'cursor.rowcount should be 0 after executing no-result '
-                             'statements'
+                             'cursor.rowcount should be 0 after executing '
+                             'no-result statements'
                              )
             cur.execute("insert into %sbooze values ('Victoria Bitter')" % (
                 self.table_prefix
@@ -334,8 +345,8 @@ class DatabaseAPI20Test(unittest.TestCase):
             self.assertEqual(cur.rowcount, 1)
             self.executeDDL2(cur)
             self.assertEqual(cur.rowcount, 0,
-                             'cursor.rowcount not being reset to 0 after executing '
-                             'no-result statements'
+                             'cursor.rowcount not being reset to 0 after '
+                             'executing no-result statements'
                              )
         finally:
             con.close()
@@ -410,12 +421,12 @@ class DatabaseAPI20Test(unittest.TestCase):
         beers = [res[0][0], res[1][0]]
         beers.sort()
         self.assertEqual(beers[0], "Cooper's",
-                         'cursor.fetchall retrieved incorrect data, or data inserted '
-                         'incorrectly'
+                         'cursor.fetchall retrieved incorrect data, or data '
+                         'inserted incorrectly'
                          )
         self.assertEqual(beers[1], "Victoria Bitter",
-                         'cursor.fetchall retrieved incorrect data, or data inserted '
-                         'incorrectly'
+                         'cursor.fetchall retrieved incorrect data, '
+                         'or data inserted incorrectly'
                          )
 
     def test_executemany(self):
@@ -457,13 +468,15 @@ class DatabaseAPI20Test(unittest.TestCase):
             else:
                 self.fail('Unknown paramstyle')
             self.assertTrue(cur.rowcount in (-1, 2),
-                            'insert using cursor.executemany set cursor.rowcount to '
+                            'insert using cursor.executemany set '
+                            'cursor.rowcount to '
                             'incorrect value %r' % cur.rowcount
                             )
             cur.execute('select name from %sbooze' % self.table_prefix)
             res = cur.fetchall()
             self.assertEqual(len(res), 2,
-                             'cursor.fetchall retrieved incorrect number of rows'
+                             'cursor.fetchall retrieved incorrect number '
+                             'of rows'
                              )
             beers = [res[0][0], res[1][0]]
             beers.sort()
@@ -471,7 +484,6 @@ class DatabaseAPI20Test(unittest.TestCase):
             self.assertEqual(beers[1], "Cooper's", 'incorrect data retrieved')
         finally:
             con.close()
-
 
     def test_fetchone(self):
         con = self._connect()
@@ -489,8 +501,8 @@ class DatabaseAPI20Test(unittest.TestCase):
 
             cur.execute('select name from %sbooze' % self.table_prefix)
             self.assertEqual(cur.fetchone(), None,
-                             'cursor.fetchone should return None if a query retrieves '
-                             'no rows'
+                             'cursor.fetchone should return None if a query '
+                             'retrieves no rows'
                              )
             self.assertTrue(cur.rowcount in (-1, 0))
 
@@ -504,18 +516,19 @@ class DatabaseAPI20Test(unittest.TestCase):
             cur.execute('select name from %sbooze' % self.table_prefix)
             r = cur.fetchone()
             self.assertEqual(len(r), 1,
-                             'cursor.fetchone should have retrieved a single row'
+                             'cursor.fetchone should have retrieved a single '
+                             ' row'
                              )
             self.assertEqual(r[0], 'Victoria Bitter',
                              'cursor.fetchone retrieved incorrect data'
                              )
             self.assertEqual(cur.fetchone(), None,
-                             'cursor.fetchone should return None if no more rows available'
+                             'cursor.fetchone should return None '
+                             'if no more rows available'
                              )
             self.assertTrue(cur.rowcount in (-1, 1))
         finally:
             con.close()
-
 
     samples = [
         'Carlton Cold',
@@ -526,7 +539,6 @@ class DatabaseAPI20Test(unittest.TestCase):
         'XXXX'
     ]
 
-
     def _populate(self):
         ''' Return a list of sql commands to setup the DB for the fetch
             tests.
@@ -536,7 +548,6 @@ class DatabaseAPI20Test(unittest.TestCase):
             for s in self.samples
         ]
         return populate
-
 
     def test_fetchmany(self):
         con = self._connect()
@@ -554,21 +565,24 @@ class DatabaseAPI20Test(unittest.TestCase):
             cur.execute('select name from %sbooze' % self.table_prefix)
             r = cur.fetchmany()
             self.assertEqual(len(r), 1,
-                             'cursor.fetchmany retrieved incorrect number of rows, '
-                             'default of arraysize is one.'
+                             'cursor.fetchmany retrieved incorrect number of '
+                             'rows, default of arraysize is one.'
                              )
             cur.arraysize = 10
             r = cur.fetchmany(3)  # Should get 3 rows
             self.assertEqual(len(r), 3,
-                             'cursor.fetchmany retrieved incorrect number of rows'
+                             'cursor.fetchmany retrieved incorrect number '
+                             'of rows'
                              )
             r = cur.fetchmany(4)  # Should get 2 more
             self.assertEqual(len(r), 2,
-                             'cursor.fetchmany retrieved incorrect number of rows'
+                             'cursor.fetchmany retrieved incorrect number '
+                             'of rows'
                              )
             r = cur.fetchmany(4)  # Should be an empty sequence
             self.assertEqual(len(r), 0,
-                             'cursor.fetchmany should return an empty sequence after '
+                             'cursor.fetchmany should return an empty '
+                             'sequence after '
                              'results are exhausted'
                              )
             self.assertTrue(cur.rowcount in (-1, 6))
@@ -603,23 +617,23 @@ class DatabaseAPI20Test(unittest.TestCase):
 
             rows = cur.fetchmany()  # Should return an empty list
             self.assertEqual(len(rows), 0,
-                             'cursor.fetchmany should return an empty sequence if '
-                             'called after the whole result set has been fetched'
+                             'cursor.fetchmany should return an empty '
+                             'sequence if called after the whole result '
+                             'set has been fetched'
                              )
             self.assertTrue(cur.rowcount in (-1, 6))
 
             self.executeDDL2(cur)
             cur.execute('select name from %sbarflys' % self.table_prefix)
             r = cur.fetchmany()  # Should get empty sequence
-            self.assertEqual(len(r), 0,
-                             'cursor.fetchmany should return an empty sequence if '
-                             'query retrieved no rows'
+            self.assertEqual(len(r), 0, "cursor.fetchmany should return an "
+                                        "empty sequence if query retrieved "
+                                        "no rows"
                              )
             self.assertTrue(cur.rowcount in (-1, 0))
 
         finally:
             con.close()
-
 
     def test_fetchall(self):
         con = self._connect()
@@ -670,7 +684,6 @@ class DatabaseAPI20Test(unittest.TestCase):
         finally:
             con.close()
 
-
     def test_mixedfetch(self):
         con = self._connect()
         try:
@@ -704,65 +717,6 @@ class DatabaseAPI20Test(unittest.TestCase):
         finally:
             con.close()
 
-
-    def help_nextset_setUp(self, cur):
-        ''' Should create a procedure called deleteme
-            that returns two result sets, first the
-      number of rows in booze then "name from booze"
-        '''
-        raise NotImplementedError('Helper not implemented')
-        # sql="""
-        #    create procedure deleteme as
-        #    begin
-        #        select count(*) from booze
-        #        select name from booze
-        #    end
-        # """
-        # cur.execute(sql)
-
-
-    def help_nextset_tearDown(self, cur):
-        'If cleaning up is needed after nextSetTest'
-        raise NotImplementedError('Helper not implemented')
-        # cur.execute("drop procedure deleteme")
-
-
-    def test_arraysize(self):
-        # Not much here - rest of the tests for this are in test_fetchmany
-        con = self._connect()
-        try:
-            cur = con.cursor()
-            self.assertTrue(hasattr(cur, 'arraysize'),
-                            'cursor.arraysize must be defined'
-                            )
-        finally:
-            con.close()
-
-
-    def test_setinputsizes(self):
-        con = self._connect()
-        try:
-            cur = con.cursor()
-            cur.setinputsizes((25,))
-            self._paraminsert(cur)  # Make sure cursor still works
-        finally:
-            con.close()
-
-
-    def test_None(self):
-        con = self._connect()
-        try:
-            cur = con.cursor()
-            self.executeDDL1(cur)
-            cur.execute('insert into %sbooze values (NULL)' % self.table_prefix)
-            cur.execute('select name from %sbooze' % self.table_prefix)
-            r = cur.fetchall()
-            self.assertEqual(len(r), 1)
-            self.assertEqual(len(r[0]), 1)
-            self.assertEqual(r[0][0], None, 'NULL value not returned as None')
-        finally:
-            con.close()
-
     def help_nextset_setUp(self, cur):
         ''' Should create a procedure called deleteme
             that returns two result sets, first the
@@ -808,7 +762,8 @@ class DatabaseAPI20Test(unittest.TestCase):
         try:
             cur = con.cursor()
             self.executeDDL1(cur)
-            cur.execute('insert into %sbooze values (NULL)' % self.table_prefix)
+            cur.execute('insert into %sbooze values (NULL)'
+                        % self.table_prefix)
             cur.execute('select name from %sbooze' % self.table_prefix)
             r = cur.fetchall()
             self.assertEqual(len(r), 1)
@@ -819,27 +774,36 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_Date(self):
         d1 = self.driver.Date(2002, 12, 25)
-        d2 = self.driver.DateFromTicks(time.mktime((2002, 12, 25, 0, 0, 0, 0, 0, 0)))
+        self.assertTrue(isinstance(d1, datetime.date))
+        d2 = self.driver.DateFromTicks(time.mktime((2002, 12, 25,
+                                                    0, 0, 0, 0, 0, 0)))
         # Can we assume this? API doesn't specify, but it seems implied
-        # self.assertEqual(str(d1),str(d2))
+        self.assertEqual(str(d1), str(d2))
 
     def test_Time(self):
         t1 = self.driver.Time(13, 45, 30)
-        t2 = self.driver.TimeFromTicks(time.mktime((2001, 1, 1, 13, 45, 30, 0, 0, 0)))
+        self.assertTrue(isinstance(t1, datetime.time))
+        t2 = self.driver.TimeFromTicks(time.mktime((2001, 1, 1, 13, 45,
+                                                    30, 0, 0, 0)))
         # Can we assume this? API doesn't specify, but it seems implied
-        # self.assertEqual(str(t1),str(t2))
+        self.assertTrue(isinstance(t2, datetime.time))
+        self.assertEqual(str(t1), str(t2))
 
     def test_Timestamp(self):
         t1 = self.driver.Timestamp(2002, 12, 25, 13, 45, 30)
+        self.assertTrue(isinstance(t1, datetime.datetime))
         t2 = self.driver.TimestampFromTicks(
             time.mktime((2002, 12, 25, 13, 45, 30, 0, 0, 0))
         )
+        self.assertTrue(isinstance(t2, datetime.datetime))
         # Can we assume this? API doesn't specify, but it seems implied
         # self.assertEqual(str(t1),str(t2))
 
     def test_Binary(self):
         b = self.driver.Binary(b'Something')
+        self.assertTrue(isinstance(b, bytes))
         b = self.driver.Binary(b'')
+        self.assertTrue(isinstance(b, bytes))
 
     def test_STRING(self):
         self.assertTrue(hasattr(self.driver, 'STRING'),

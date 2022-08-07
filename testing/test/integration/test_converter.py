@@ -1,15 +1,10 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
-import collections
 import datetime
 import unittest
-import os
-from decimal import Decimal
 
-import mariadb
-from mariadb.constants import CLIENT, FIELD_TYPE
-import datetime
+from mariadb.constants import FIELD_TYPE
 from test.base_test import create_connection
 
 
@@ -22,7 +17,7 @@ def timedelta_to_time(s):
 
 
 def long_minus(s):
-    return s - 1;
+    return s - 1
 
 
 conversions = {

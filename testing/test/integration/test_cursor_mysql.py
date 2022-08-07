@@ -3,7 +3,6 @@
 
 import datetime
 import unittest
-import os
 
 from test.base_test import create_connection, is_maxscale
 
@@ -21,15 +20,16 @@ class CursorMySQLTest(unittest.TestCase):
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
         cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE test_parameter(a int auto_increment primary key not "
+        cursor.execute("CREATE TEMPORARY TABLE test_parameter("
+                       "a int auto_increment primary key not "
                        "null, b int, c int, d varchar(20),e date)")
         cursor.execute("SET @@autocommit=0")
-        c = (1, 2, 3, "bar", datetime.date(2018, 11, 11))
         list_in = []
         for i in range(1, 30000):
             row = (i, i, i, "bar", datetime.date(2019, 1, 1))
             list_in.append(row)
-        cursor.executemany("INSERT INTO test_parameter VALUES (%s,%s,%s,%s,%s)", list_in)
+        cursor.executemany("INSERT INTO test_parameter VALUES "
+                           "(%s,%s,%s,%s,%s)", list_in)
         self.connection.commit()
         cursor.execute("SELECT * FROM test_parameter order by a")
         list_out = cursor.fetchall()

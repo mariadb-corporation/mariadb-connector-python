@@ -20,7 +20,7 @@ def select_10_cols_from_seq_1_to_10000(loops, conn, paramstyle):
     t0 = pyperf.perf_counter()
     for value in range_it:
         cursor.execute(request)
-        row = cursor.fetchall()
+        cursor.fetchall()
     cursor.close()
 
     return pyperf.perf_counter() - t0

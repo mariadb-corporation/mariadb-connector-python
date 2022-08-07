@@ -1,11 +1,13 @@
-from mariadb.constants import FIELD_TYPE, FIELD_FLAG
-import time, datetime
+from mariadb.constants import FIELD_TYPE
+import time
+import datetime
 
-apilevel= '2.0'
+apilevel = '2.0'
 
 paramstyle = 'qmark'
 
 threadsafety = True
+
 
 class DbApiType(frozenset):
     """
@@ -34,6 +36,7 @@ class DbApiType(frozenset):
             return not self.difference(field_type)
         return field_type in self
 
+
 BINARY = DbApiType([FIELD_TYPE.GEOMETRY,
                     FIELD_TYPE.LONG_BLOB,
                     FIELD_TYPE.MEDIUM_BLOB,
@@ -60,24 +63,29 @@ NUMBER = DbApiType([FIELD_TYPE.DECIMAL,
 DATE = DbApiType([FIELD_TYPE.DATE])
 TIME = DbApiType([FIELD_TYPE.TIME])
 DATETIME = TIMESTAMP = DbApiType([FIELD_TYPE.DATETIME,
-                                          FIELD_TYPE.TIMESTAMP])
+                                 FIELD_TYPE.TIMESTAMP])
 ROWID = DbApiType()
+
 
 def Binary(object):
     """Constructs an object capable of holding a binary value."""
     return bytes(object)
 
+
 def Date(year, month, day):
     """Constructs an object holding a date value."""
     return datetime.date(year, month, day)
+
 
 def Time(hour, minute, second):
     """Constructs an object holding a time value."""
     return datetime.time(hour, minute, second)
 
+
 def Timestamp(year, month, day, hour, minute, second):
     """Constructs an object holding a datetime value."""
     return datetime.datetime(year, month, day, hour, minute, second)
+
 
 def DateFromTicks(ticks):
     """Constructs an object holding a date value from the given ticks value
@@ -86,12 +94,14 @@ def DateFromTicks(ticks):
        time module."""
     return Date(*time.localtime(ticks)[:3])
 
+
 def TimeFromTicks(ticks):
     """Constructs an object holding a time value from the given ticks value
        (number of seconds since the epoch).
        For more information see the documentation of the standard Python
        time module."""
     return Time(*time.localtime(ticks)[3:6])
+
 
 def TimestampFromTicks(ticks):
     """Constructs an object holding a datetime value from the given ticks value

@@ -1,7 +1,6 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
-import collections
 import datetime
 import unittest
 import os
@@ -10,11 +9,12 @@ import json
 from decimal import Decimal
 
 import mariadb
-from mariadb.constants import *
+from mariadb.constants import FIELD_TYPE, ERR, CURSOR, INDICATOR, CLIENT
 
 from test.base_test import create_connection, is_maxscale, is_mysql
 
 server_indicator_version = 100206
+
 
 class foo(int):
     def bar(self): pass
@@ -35,33 +35,38 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_date(self):
-        if (self.connection.server_version < 50500) or (
-                ("mariadb" not in self.connection.server_info.lower()) and self.connection.server_version < 50600):
+        v = self.connection.server_version
+        i = self.connection.server_info.lower()
+        if (v) or ("mariadb" not in i and v < 50600):
             self.skipTest("microsecond not supported")
 
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE test_date(c1 TIMESTAMP(6), c2 TIME(6), c3 DATETIME(6), c4 DATE)")
+        cursor.execute("CREATE TEMPORARY TABLE test_date("
+                       "c1 TIMESTAMP(6), c2 TIME(6), "
+                       "c3 DATETIME(6), c4 DATE)")
         t = datetime.datetime(2018, 6, 20, 12, 22, 31, 123456)
         c1 = t
         c2 = t.time()
         c3 = t
         c4 = t.date()
-        cursor.execute("INSERT INTO test_date VALUES (?,?,?,?)", (c1, c2, c3, c4))
+        cursor.execute("INSERT INTO test_date VALUES (?,?,?,?)",
+                       (c1, c2, c3, c4))
 
         cursor.execute("SELECT c1,c2,c3,c4 FROM test_date")
         row = cursor.fetchone()
         self.assertEqual(row[0], c1)
-        self.assertEqual(row[1], datetime.timedelta(seconds=44551, microseconds=123456))
+        self.assertEqual(row[1], datetime.timedelta(seconds=44551,
+                                                    microseconds=123456))
         self.assertEqual(row[2], c3)
         self.assertEqual(row[3], c4)
         cursor.close()
 
     def test_numbers(self):
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE test_numbers (a tinyint unsigned, b smallint unsigned, c mediumint "
-            "unsigned, d int unsigned, e bigint unsigned, f double)")
+        cursor.execute("CREATE TEMPORARY TABLE test_numbers ("
+                       "a tinyint unsigned, b smallint unsigned, "
+                       "c mediumint unsigned, d int unsigned, "
+                       "e bigint unsigned, f double)")
         c1 = 4
         c2 = 200
         c3 = 167557
@@ -69,7 +74,8 @@ class TestCursor(unittest.TestCase):
         c5 = 7330133222578
         c6 = 3.1415925
 
-        cursor.execute("insert into test_numbers values (?,?,?,?,?,?)", (c1, c2, c3, c4, c5, c6))
+        cursor.execute("insert into test_numbers values (?,?,?,?,?,?)",
+                       (c1, c2, c3, c4, c5, c6))
 
         cursor.execute("select * from test_numbers")
         row = cursor.fetchone()
@@ -83,18 +89,20 @@ class TestCursor(unittest.TestCase):
 
     def test_string(self):
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE test_string (a char(5), b varchar(100), c tinytext, "
-            "d mediumtext, e text, f longtext)");
+        cursor.execute("CREATE TEMPORARY TABLE test_string ("
+                       "a char(5), b varchar(100), c tinytext, "
+                       "d mediumtext, e text, f longtext)")
 
-        c1 = "12345";
+        c1 = "12345"
         c2 = "The length of this text is < 100 characters"
-        c3 = "This should also fit into tinytext which has a maximum of 255 characters"
-        c4 = 'a' * 1000;
-        c5 = 'b' * 6000;
-        c6 = 'c' * 67000;
+        c3 = "This should also fit into tinytext which"\
+             " has a maximum of 255 characters"
+        c4 = 'a' * 1000
+        c5 = 'b' * 6000
+        c6 = 'c' * 67000
 
-        cursor.execute("INSERT INTO test_string VALUES (?,?,?,?,?,?)", (c1, c2, c3, c4, c5, c6))
+        cursor.execute("INSERT INTO test_string VALUES (?,?,?,?,?,?)",
+                       (c1, c2, c3, c4, c5, c6))
 
         cursor.execute("SELECT * from test_string")
         row = cursor.fetchone()
@@ -108,16 +116,17 @@ class TestCursor(unittest.TestCase):
 
     def test_blob(self):
         cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE test_blob (a tinyblob, b mediumblob, c blob, "
+        cursor.execute("CREATE TEMPORARY TABLE test_blob ("
+                       "a tinyblob, b mediumblob, c blob, "
                        "d longblob)")
 
-        c1 = b'a' * 100;
-        c2 = b'b' * 1000;
-        c3 = b'c' * 10000;
-        c4 = b'd' * 100000;
+        c1 = b'a' * 100
+        c2 = b'b' * 1000
+        c3 = b'c' * 10000
+        c4 = b'd' * 100000
 
-        a = (None, None, None, None)
-        cursor.execute("INSERT INTO test_blob VALUES (?,?,?,?)", (c1, c2, c3, c4))
+        cursor.execute("INSERT INTO test_blob VALUES (?,?,?,?)",
+                       (c1, c2, c3, c4))
 
         cursor.execute("SELECT * FROM test_blob")
         row = cursor.fetchone()
@@ -131,32 +140,35 @@ class TestCursor(unittest.TestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE test_inserttuple (id int, name varchar(64), "
-                       "city varchar(64))");
+        cursor.execute("CREATE TEMPORARY TABLE test_inserttuple ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
         params = ((1, u"Jack", u"Boston"),
                   (2, u"Martin", u"Ohio"),
                   (3, u"James", u"Washington"),
                   (4, u"Rasmus", u"Helsinki"),
                   (5, u"Andrey", u"Sofia"))
-        cursor.executemany("INSERT INTO test_inserttuple VALUES (?,?,?)", params);
+        cursor.executemany("INSERT INTO test_inserttuple VALUES (?,?,?)",
+                           params)
 
         cursor.execute("SELECT name FROM test_inserttuple ORDER BY id DESC")
         row = cursor.fetchone()
-        self.assertEqual("Andrey", row[0]);
+        self.assertEqual("Andrey", row[0])
         del cursor
 
     def test_fetchmany(self):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE test_fetchmany (id int, name varchar(64), "
-                       "city varchar(64))");
+        cursor.execute("CREATE TEMPORARY TABLE test_fetchmany ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
         params = [(1, u"Jack", u"Boston"),
                   (2, u"Martin", u"Ohio"),
                   (3, u"James", u"Washington"),
                   (4, u"Rasmus", u"Helsinki"),
                   (5, u"Andrey", u"Sofia")]
-        cursor.executemany("INSERT INTO test_fetchmany VALUES (?,?,?)", params);
+        cursor.executemany("INSERT INTO test_fetchmany VALUES (?,?,?)", params)
 
         # test Errors
         # a) if no select was executed
@@ -227,9 +239,11 @@ class TestCursor(unittest.TestCase):
     def test_xfield_types(self):
         cursor = self.connection.cursor()
         fieldinfo = mariadb.fieldinfo()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE test_xfield_types (a tinyint not null auto_increment primary "
-            "key, b smallint, c int, d bigint, e float, f decimal, g double, h char(10), i varchar(255), j blob, k json, index(b))");
+        cursor.execute("CREATE TEMPORARY TABLE test_xfield_types ("
+                       "a tinyint not null auto_increment primary "
+                       "key, b smallint, c int, d bigint, e float, "
+                       "f decimal, g double, h char(10), i varchar(255), "
+                       "j blob, k json, index(b))")
         info = cursor.description
         self.assertEqual(info, None)
         cursor.execute("SELECT * FROM test_xfield_types")
@@ -244,7 +258,8 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(fieldinfo.type(info[7]), "STRING")
         self.assertEqual(fieldinfo.type(info[8]), "VAR_STRING")
         self.assertEqual(fieldinfo.type(info[9]), "BLOB")
-        if not is_maxscale() and (self.connection.server_version_info > (10, 5, 1) or is_mysql()):
+        x = self.connection.server_version_info
+        if not is_maxscale() and (x > (10, 5, 1) or is_mysql()):
             self.assertEqual(fieldinfo.type(info[10]), "JSON")
         else:
             self.assertEqual(fieldinfo.type(info[10]), "BLOB")
@@ -258,8 +273,8 @@ class TestCursor(unittest.TestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE bulk_delete (id int, name varchar(64), city varchar(64))");
+        cursor.execute("CREATE TEMPORARY TABLE bulk_delete ("
+                       "id int, name varchar(64), city varchar(64))")
         params = [(1, u"Jack", u"Boston"),
                   (2, u"Martin", u"Ohio"),
                   (3, u"James", u"Washington"),
@@ -277,14 +292,15 @@ class TestCursor(unittest.TestCase):
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE pyformat (id int, name varchar(64), city varchar(64))");
+        cursor.execute("CREATE TEMPORARY TABLE pyformat ("
+                       "id int, name varchar(64), city varchar(64))")
         params = [{"id": 1, "name": u"Jack", "city": u"Boston"},
                   {"id": 2, "name": u"Martin", "city": u"Ohio"},
                   {"id": 3, "name": u"James", "city": u"Washington"},
                   {"id": 4, "name": u"Rasmus", "city": u"Helsinki"},
                   {"id": 5, "name": u"Andrey", "city": u"Sofia"}]
-        cursor.executemany("INSERT INTO pyformat VALUES (%(id)s,%(name)s,%(city)s)", params)
+        cursor.executemany("INSERT INTO pyformat VALUES "
+                           "(%(id)s,%(name)s,%(city)s)", params)
         self.assertEqual(cursor.rowcount, 5)
         cursor.execute("commit")
         cursor.execute("SELECT name FROM pyformat WHERE id=5")
@@ -296,8 +312,8 @@ class TestCursor(unittest.TestCase):
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE pyformat (id int, name varchar(64), city varchar(64))");
+        cursor.execute("CREATE TEMPORARY TABLE pyformat ("
+                       "id int, name varchar(64), city varchar(64))")
         params = [(1, u"Jack", u"Boston"),
                   (2, u"Martin", u"Ohio"),
                   (3, u"James", u"Washington"),
@@ -311,14 +327,14 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], "Andrey")
 
     def test_conpy214(self):
-        cursor= self.connection.cursor(named_tuple=True)
+        cursor = self.connection.cursor(named_tuple=True)
         cursor.execute("SELECT 1 as foo")
-        rows= cursor.fetchall()
+        rows = cursor.fetchall()
         self.assertEqual(rows[0].foo, 1)
         del cursor
-        cursor= self.connection.cursor(dictionary=True)
+        cursor = self.connection.cursor(dictionary=True)
         cursor.execute("SELECT 1 as foo")
-        rows= cursor.fetchall()
+        rows = cursor.fetchall()
         self.assertEqual(rows[0]["foo"], 1)
         del cursor
 
@@ -327,36 +343,20 @@ class TestCursor(unittest.TestCase):
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
         cursor = self.connection.cursor(named_tuple=True)
-        cursor.execute(
-            "CREATE TEMPORARY TABLE test_named_tuple (id int, name varchar(64), city varchar(64))");
+        cursor.execute("CREATE TEMPORARY TABLE test_named_tuple ("
+                       "id int, name varchar(64), city varchar(64))")
         params = [(1, u"Jack", u"Boston"),
                   (2, u"Martin", u"Ohio"),
                   (3, u"James", u"Washington"),
                   (4, u"Rasmus", u"Helsinki"),
                   (5, u"Andrey", u"Sofia")]
-        cursor.executemany("INSERT INTO test_named_tuple VALUES (?,?,?)", params);
+        cursor.executemany("INSERT INTO test_named_tuple VALUES (?,?,?)",
+                           params)
         cursor.execute("SELECT * FROM test_named_tuple ORDER BY id")
         row = cursor.fetchone()
 
-        self.assertEqual(cursor.statement, "SELECT * FROM test_named_tuple ORDER BY id")
-
-    def test_named_tuple(self):
-        if is_maxscale():
-            self.skipTest("MAXSCALE doesn't support BULK yet")
-
-        cursor = self.connection.cursor(named_tuple=True)
-        cursor.execute(
-            "CREATE TEMPORARY TABLE test_named_tuple (id int, name varchar(64), city varchar(64))");
-        params = [(1, u"Jack", u"Boston"),
-                  (2, u"Martin", u"Ohio"),
-                  (3, u"James", u"Washington"),
-                  (4, u"Rasmus", u"Helsinki"),
-                  (5, u"Andrey", u"Sofia")]
-        cursor.executemany("INSERT INTO test_named_tuple VALUES (?,?,?)", params);
-        cursor.execute("SELECT * FROM test_named_tuple ORDER BY id")
-        row = cursor.fetchone()
-
-        self.assertEqual(cursor.statement, "SELECT * FROM test_named_tuple ORDER BY id")
+        self.assertEqual(cursor.statement,
+                         "SELECT * FROM test_named_tuple ORDER BY id")
         self.assertEqual(row.id, 1)
         self.assertEqual(row.name, "Jack")
         self.assertEqual(row.city, "Boston")
@@ -367,19 +367,23 @@ class TestCursor(unittest.TestCase):
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
         cursor = self.connection.cursor(named_tuple=1)
-        cursor.execute("CREATE TEMPORARY TABLE test_laststatement (id int, name varchar(64), "
-                       "city varchar(64))");
+        cursor.execute("CREATE TEMPORARY TABLE test_laststatement ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
         self.assertEqual(cursor.statement,
-                         "CREATE TEMPORARY TABLE test_laststatement (id int, name varchar(64), city varchar(64))")
+                         "CREATE TEMPORARY TABLE test_laststatement "
+                         "(id int, name varchar(64), city varchar(64))")
 
         params = [(1, u"Jack", u"Boston"),
                   (2, u"Martin", u"Ohio"),
                   (3, u"James", u"Washington"),
                   (4, u"Rasmus", u"Helsinki"),
                   (5, u"Andrey", u"Sofia")]
-        cursor.executemany("INSERT INTO test_laststatement VALUES (?,?,?)", params);
+        cursor.executemany("INSERT INTO test_laststatement VALUES (?,?,?)",
+                           params)
         cursor.execute("SELECT * FROM test_laststatement ORDER BY id")
-        self.assertEqual(cursor.statement, "SELECT * FROM test_laststatement ORDER BY id")
+        self.assertEqual(cursor.statement,
+                         "SELECT * FROM test_laststatement ORDER BY id")
         del cursor
 
     def test_multi_cursor(self):
@@ -388,7 +392,8 @@ class TestCursor(unittest.TestCase):
         cursor2 = self.connection.cursor(cursor_type=CURSOR.READ_ONLY)
 
         cursor.execute("CREATE TEMPORARY TABLE test_multi_cursor (a int)")
-        cursor.execute("INSERT INTO test_multi_cursor VALUES (1),(2),(3),(4),(5),(6),(7),(8)")
+        cursor.execute("INSERT INTO test_multi_cursor VALUES "
+                       "(1),(2),(3),(4),(5),(6),(7),(8)")
         del cursor
 
         cursor1.execute("SELECT a FROM test_multi_cursor ORDER BY a")
@@ -411,9 +416,11 @@ class TestCursor(unittest.TestCase):
 
     def test_dbapi_type(self):
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE test_dbapi_type (a int, b varchar(20), c blob, d datetime, e decimal)")
-        cursor.execute("INSERT INTO test_dbapi_type VALUES (1, 'foo', 'blabla', now(), 10.2)");
+        cursor.execute("CREATE TEMPORARY TABLE test_dbapi_type ("
+                       "a int, b varchar(20), "
+                       "c blob, d datetime, e decimal)")
+        cursor.execute("INSERT INTO test_dbapi_type VALUES "
+                       "(1, 'foo', 'blabla', now(), 10.2)")
         cursor.execute("SELECT * FROM test_dbapi_type ORDER BY a")
         expected_typecodes = [
             mariadb.NUMBER,
@@ -422,7 +429,7 @@ class TestCursor(unittest.TestCase):
             mariadb.DATETIME,
             mariadb.NUMBER
         ]
-        row = cursor.fetchone()
+        cursor.fetchone()
         typecodes = [row[1] for row in cursor.description]
         self.assertEqual(expected_typecodes, typecodes)
         del cursor
@@ -446,7 +453,8 @@ class TestCursor(unittest.TestCase):
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
         cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE ind1 (a int, b int default 2,c int)")
+        cursor.execute("CREATE TEMPORARY TABLE ind1 (a int, "
+                       "b int default 2,c int)")
         vals = [(1, 4, 3), (INDICATOR.NULL, INDICATOR.DEFAULT, 3)]
         cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
         cursor.execute("SELECT a, b, c FROM ind1")
@@ -470,7 +478,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("CREATE TEMPORARY TABLE test_fake_pickle (a blob)")
         k = bytes([0x80, 0x03, 0x00, 0x2E])
         cursor.execute("insert into test_fake_pickle values (?)", (k,))
-        cursor.execute("select * from test_fake_pickle");
+        cursor.execute("select * from test_fake_pickle")
         row = cursor.fetchone()
         self.assertEqual(row[0], k)
         del cursor
@@ -479,19 +487,20 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.execute("set @a:=1")
         try:
-            row = cursor.fetchone()
+            cursor.fetchone()
         except mariadb.ProgrammingError:
             pass
         del cursor
 
     def test_collate(self):
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE `test_collate` (`test` varchar(500) COLLATE "
-            "utf8mb4_unicode_ci NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci")
+        cursor.execute("CREATE TEMPORARY TABLE `test_collate` ("
+                       "`test` varchar(500) COLLATE "
+                       "utf8mb4_unicode_ci NOT NULL) ENGINE=InnoDB "
+                       "DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci")
         cursor.execute("SET NAMES utf8mb4")
-        cursor.execute(
-            "SELECT * FROM `test_collate` WHERE `test` LIKE 'jj' COLLATE utf8mb4_unicode_ci")
+        cursor.execute("SELECT * FROM `test_collate` WHERE `test` LIKE 'jj' "
+                       "COLLATE utf8mb4_unicode_ci")
         del cursor
 
     def test_conpy_8(self):
@@ -511,12 +520,13 @@ class TestCursor(unittest.TestCase):
 
         cursor.nextset()
         row = cursor.fetchone()
-        self.assertEqual(row[0], 2);
+        self.assertEqual(row[0], 2)
         del cursor
 
     def test_conpy34(self):
         cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20), b varchar(20))")
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20),"
+                       "b varchar(20))")
         try:
             cursor.execute("INSERT INTO test.t1(fname, sname) VALUES (?, ?)",
                            (("Walker", "Percy"), ("Flannery", "O'Connor")))
@@ -567,24 +577,27 @@ class TestCursor(unittest.TestCase):
     def test_conpy_9(self):
         cursor = self.connection.cursor()
         cursor.execute(
-            "CREATE TEMPORARY TABLE test_compy_9 (a varchar(20), b double(5,2), c double)");
-        cursor.execute("INSERT INTO test_compy_9 VALUES ('€uro', -123.34, 12345.678)")
+            "CREATE TEMPORARY TABLE test_compy_9 ("
+            "a varchar(20), b double(5,2), c double)")
+        cursor.execute("INSERT INTO test_compy_9 VALUES "
+                       "('€uro', -123.34, 12345.678)")
         cursor.execute("SELECT a,b,c FROM test_compy_9")
         cursor.fetchone()
-        d = cursor.description;
-        self.assertEqual(d[0][2], 20);  # 20 code points
-        self.assertEqual(d[0][3], 80);  # 80 characters
-        self.assertEqual(d[1][2], 6);  # length=precision +  1
-        self.assertEqual(d[1][4], 5);  # precision
-        self.assertEqual(d[1][5], 2);  # scale
+        d = cursor.description
+        self.assertEqual(d[0][2], 20)  # 20 code points
+        self.assertEqual(d[0][3], 80)  # 80 characters
+        self.assertEqual(d[1][2], 6)  # length=precision +  1
+        self.assertEqual(d[1][4], 5)  # precision
+        self.assertEqual(d[1][5], 2)  # scale
         del cursor
 
     def test_conpy_15(self):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE test_conpy_15 (a int not null auto_increment primary key, b varchar(20))");
+        cursor.execute("CREATE TEMPORARY TABLE test_conpy_15 ("
+                       "a int not null auto_increment primary key,"
+                       "b varchar(20))")
         self.assertEqual(cursor.lastrowid, None)
         cursor.execute("INSERT INTO test_conpy_15 VALUES (null, 'foo')")
         self.assertEqual(cursor.lastrowid, 1)
@@ -596,7 +609,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.lastrowid, 4)
         # Bug MDEV-16847
         # cursor.execute("SELECT LAST_INSERT_ID()")
-        # row= cursor.fetchone()
+        # row = cursor.fetchone()
         # self.assertEqual(row[0], 4)
 
         # Bug MDEV-16593
@@ -611,7 +624,8 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         self.assertEqual(cursor.rowcount, -1)
         cursor.execute(
-            "CREATE TEMPORARY TABLE test_conpy_14 (a int not null auto_increment primary key, b varchar(20))");
+            "CREATE TEMPORARY TABLE test_conpy_14 ("
+            "a int not null auto_increment primary key, b varchar(20))")
         self.assertEqual(cursor.rowcount, 0)
         cursor.execute("INSERT INTO test_conpy_14 VALUES (null, 'foo')")
         self.assertEqual(cursor.rowcount, 1)
@@ -641,7 +655,8 @@ class TestCursor(unittest.TestCase):
 
     def test_iterator(self):
         cursor = self.connection.cursor()
-        cursor.execute("select 1 union select 2 union select 3 union select 4 union select 5")
+        cursor.execute("select 1 union select 2 union select 3 "
+                       "union select 4 union select 5")
         for i, row in enumerate(cursor):
             self.assertEqual(i + 1, cursor.rownumber)
             self.assertEqual(i + 1, row[0])
@@ -651,12 +666,15 @@ class TestCursor(unittest.TestCase):
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
         cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE test_update_bulk (a int primary key, b int)")
+        cursor.execute("CREATE TEMPORARY TABLE test_update_bulk ("
+                       "a int primary key, b int)")
         vals = [(i,) for i in range(1000)]
-        cursor.executemany("INSERT INTO test_update_bulk VALUES (?, NULL)", vals);
+        cursor.executemany("INSERT INTO test_update_bulk VALUES (?, NULL)",
+                           vals)
         self.assertEqual(cursor.rowcount, 1000)
         self.connection.autocommit = False
-        cursor.executemany("UPDATE test_update_bulk SET b=2 WHERE a=?", vals);
+        cursor.executemany("UPDATE test_update_bulk SET b=2 WHERE a=?",
+                           vals)
         self.connection.commit()
         self.assertEqual(cursor.rowcount, 1000)
         self.connection.autocommit = True
@@ -664,8 +682,8 @@ class TestCursor(unittest.TestCase):
 
     def test_multi_execute(self):
         cursor = self.connection.cursor()
-        cursor.execute(
-            "CREATE TEMPORARY TABLE test_multi_execute (a int auto_increment primary key, b int)")
+        cursor.execute("CREATE TEMPORARY TABLE test_multi_execute ("
+                       "a int auto_increment primary key, b int)")
         self.connection.autocommit = False
         for i in range(1, 1000):
             cursor.execute("INSERT INTO test_multi_execute VALUES (?,1)", (i,))
@@ -692,7 +710,8 @@ class TestCursor(unittest.TestCase):
         cursor.execute("INSERT INTO test_utf8 VALUES (?)", ("😎🌶🎤🥂",))
         cursor.execute("SELECT * FROM test_utf8")
         row = cursor.fetchone()
-        self.assertEqual(row[0], b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82")
+        e = b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82"
+        self.assertEqual(row[0], e)
         del cursor, con
 
     def test_conpy27(self):
@@ -711,13 +730,15 @@ class TestCursor(unittest.TestCase):
     def test_multiple_cursor(self):
         cursor = self.connection.cursor()
         cursor2 = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE test_multiple_cursor(col1 int, col2 varchar(100))")
-        cursor.execute("INSERT INTO test_multiple_cursor VALUES (1, 'val1'), (2, 'val2')")
+        cursor.execute("CREATE TEMPORARY TABLE test_multiple_cursor("
+                       "col1 int, col2 varchar(100))")
+        cursor.execute("INSERT INTO test_multiple_cursor "
+                       "VALUES (1, 'val1'), (2, 'val2')")
         cursor.execute("SELECT * FROM test_multiple_cursor LIMIT 1")
-        row = cursor.fetchone()
+        cursor.fetchone()
         self.assertEqual(None, cursor.fetchone())
         cursor2.execute("SELECT * FROM test_multiple_cursor LIMIT 1")
-        row = cursor2.fetchone()
+        cursor2.fetchone()
         del cursor, cursor2
 
     def test_inaccurate_rownumber(self):
@@ -769,8 +790,11 @@ class TestCursor(unittest.TestCase):
             self.skipTest("Not supported in versions < 10.3")
         cursor = con.cursor()
         cursor.execute("DROP PROCEDURE IF EXISTS p2")
-        cursor.execute(
-            "CREATE PROCEDURE p2(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\nSET o1:=CAST(CONCAT(s1,s2) AS char CHARACTER SET utf8mb4);\nEND")
+        cursor.execute("CREATE PROCEDURE p2(IN s1 VARCHAR(20),"
+                       "IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\n"
+                       "BEGIN\n"
+                       "SET o1:=CAST(CONCAT(s1,s2) AS char "
+                       "CHARACTER SET utf8mb4);\nEND")
         cursor.callproc("p2", ("foo", "bar", 1))
         self.assertEqual(cursor.sp_outparams, True)
         row = cursor.fetchone()
@@ -791,8 +815,13 @@ class TestCursor(unittest.TestCase):
             self.skipTest("Not supported in versions < 10.3")
         cursor = con.cursor()
         cursor.execute("DROP PROCEDURE IF EXISTS p3")
-        cursor.execute(
-            "CREATE PROCEDURE p3(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\nSELECT '1';\nSET o1:=CAST(CONCAT(s1,s2) AS char CHARACTER SET utf8mb4);\nEND")
+        cursor.execute("CREATE PROCEDURE p3(IN s1 VARCHAR(20),"
+                       "IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\n"
+                       "BEGIN\n"
+                       "SELECT '1';\n"
+                       "SET o1:=CAST(CONCAT(s1,s2) "
+                       "AS char CHARACTER SET utf8mb4);\n"
+                       "END")
         cursor.callproc("p3", ("foo", "bar", 1))
         self.assertEqual(cursor.sp_outparams, False)
         row = cursor.fetchone()
@@ -810,17 +839,22 @@ class TestCursor(unittest.TestCase):
         con = create_connection()
         cursor = con.cursor()
         cursor.execute("CREATE TEMPORARY TABLE conpy42(a GEOMETRY)")
-        cursor.execute("INSERT INTO conpy42 VALUES (PointFromText('point(1 1)'))")
+        cursor.execute("INSERT INTO conpy42 VALUES "
+                       "(PointFromText('point(1 1)'))")
         cursor.execute("SELECT a FROM conpy42")
         row = cursor.fetchone()
-        self.assertEqual(row[0],
-                         b'\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?')
+        expected = b'' . join([b'\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00',
+                               b'\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00',
+                               b'\x00\xf0?'])
+        self.assertEqual(row[0], expected)
         del cursor
 
     def test_conpy35(self):
         con = create_connection()
         cursor = con.cursor()
-        cursor.execute("CREATE TEMPORARY table sample (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(64))");
+        cursor.execute("CREATE TEMPORARY table sample ("
+                       "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+                       "name VARCHAR(64))")
 
         for name in ('foo', 'bar', 'baz'):
             cursor.execute("INSERT INTO sample SET name = ?", (name,))
@@ -838,11 +872,14 @@ class TestCursor(unittest.TestCase):
         con = create_connection()
         cursor = con.cursor()
         cursor.execute("CREATE TEMPORARY table t1 (a time(3), b datetime(2))")
-        cursor.execute("INSERT INTO t1 VALUES ('13:12:24.05111', '2020-10-10 14:12:24.123456')")
-        cursor.execute("SELECT a,b FROM t1");
+        cursor.execute("INSERT INTO t1 VALUES ('13:12:24.05111', "
+                       "'2020-10-10 14:12:24.123456')")
+        cursor.execute("SELECT a,b FROM t1")
         row = cursor.fetchone()
-        self.assertEqual(row[0], datetime.timedelta(seconds=47544, microseconds=51000))
-        self.assertEqual(row[1], datetime.datetime(2020, 10, 10, 14, 12, 24, 120000))
+        self.assertEqual(row[0],
+                         datetime.timedelta(seconds=47544, microseconds=51000))
+        self.assertEqual(row[1],
+                         datetime.datetime(2020, 10, 10, 14, 12, 24, 120000))
         del cursor
         del con
 
@@ -954,7 +991,8 @@ class TestCursor(unittest.TestCase):
         row = cursor.fetchone()
         self.assertEqual(row[0], 3)
         cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
-        cursor.executemany("INSERT INTO t1 VALUES (%(val)s)", [{"val": 1}, {"val": 2}])
+        cursor.executemany("INSERT INTO t1 VALUES (%(val)s)",
+                           [{"val": 1}, {"val": 2}])
         cursor.execute("SELECT a FROM t1 ORDER by a")
         row = cursor.fetchall()
         self.assertEqual(row[0][0], 1)
@@ -980,7 +1018,8 @@ class TestCursor(unittest.TestCase):
         if self.connection.server_version < server_indicator_version:
             self.skipTest("Requires server version >= 10.2.6")
         cursor = con.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE ind1 (a int, b int default 2,c int)")
+        cursor.execute("CREATE TEMPORARY TABLE ind1 "
+                       "(a int, b int default 2,c int)")
         vals = [(1, 4, 3), (None, 2, 3)]
         cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
         cursor.execute("SELECT a, b, c FROM ind1")
@@ -1049,7 +1088,7 @@ class TestCursor(unittest.TestCase):
         cur.executemany("INSERT INTO t1 VALUES (?)", vals)
         cur.execute("select a from t1 order by a")
         rows = cur.fetchall()
-        self.assertEqual(rows[0][0], None);
+        self.assertEqual(rows[0][0], None)
         del cur
 
     def test_conpy81(self):
@@ -1059,10 +1098,10 @@ class TestCursor(unittest.TestCase):
         cur.execute("INSERT INTO t1 VALUES(1)")
         cur.execute("SELECT a FROM t1")
         row = cur.fetchone()
-        self.assertEqual(row[0], 1);
+        self.assertEqual(row[0], 1)
         cur.execute("SELECT a FROM t1 WHERE 1=?", (1,))
         row = cur.fetchone()
-        self.assertEqual(row[0], 1);
+        self.assertEqual(row[0], 1)
         del cur
 
     def test_conpy94(self):
@@ -1110,26 +1149,27 @@ class TestCursor(unittest.TestCase):
     def test_conpy103(self):
         con = create_connection()
         cursor = con.cursor()
-#       cursor.execute("CREATE TEMPORARY TABLE t1 (a decimal(10,2))")
-#       cursor.executemany("INSERT INTO t1 VALUES (?)", [[decimal.Decimal(1)]])
-#       cursor.execute("SELECT a FROM t1")
-#       row= cursor.fetchone()
-#       self.assertEqual(row[0], decimal.Decimal(1))
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a decimal(10,2))")
+        cursor.executemany("INSERT INTO t1 VALUES (?)", [[decimal.Decimal(1)]])
+        cursor.execute("SELECT a FROM t1")
+        row = cursor.fetchone()
+        self.assertEqual(row[0], decimal.Decimal(1))
 
     def test_conpy129(self):
         conn = create_connection()
         server_version = conn.server_version
         major = int(server_version / 10000)
         minor = int((server_version % 10000) / 100)
-        patch = server_version % 100;
+        patch = server_version % 100
         self.assertEqual(conn.server_version_info, (major, minor, patch))
         self.assertEqual(conn.get_server_version(), (major, minor, patch))
 
     def test_conpy167(self):
-        conn= create_connection()
-        cursor= conn.cursor()
+        conn = create_connection()
+        cursor = conn.cursor()
 
-        cursor.execute("CREATE TEMPORARY table t1 (a int not NULL auto_increment primary key, b int)")
+        cursor.execute("CREATE TEMPORARY table t1 ("
+                       "a int not NULL auto_increment primary key, b int)")
         cursor.execute("INSERT INTO t1 VALUES (NULL, ?)", (1, ))
         self.assertEqual(cursor.rowcount, 1)
         cursor.executemany("INSERT INTO t1 VALUES (NULL, ?)", [(2, ), (3,)])
@@ -1137,11 +1177,11 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_conpy168(self):
-        conn= create_connection()
-        cursor= conn.cursor()
-        x= os.urandom(32)
+        conn = create_connection()
+        cursor = conn.cursor()
+        x = os.urandom(32)
         cursor.execute("SELECT cast(? as binary)", (x,))
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], x)
         del cursor
 
@@ -1189,9 +1229,9 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def check_closed(self):
-        conn= create_connection()
-        cursor1= conn.cursor()
-        cursor2= conn.cursor()
+        conn = create_connection()
+        cursor1 = conn.cursor()
+        cursor2 = conn.cursor()
         cursor1.close()
 
         try:
@@ -1214,63 +1254,71 @@ class TestCursor(unittest.TestCase):
         if (self.connection.server_version < 105000):
             self.skipTest("Insert returning requires MariaDB >= 10.5")
 
-        conn= create_connection()
-        cursor= conn.cursor()
+        conn = create_connection()
+        cursor = conn.cursor()
 
-        cursor.execute("create temporary table t1 (a int not null auto_increment primary key, b varchar(10))")
+        cursor.execute("create temporary table t1 "
+                       "(a int not null auto_increment primary key,"
+                       "b varchar(10))")
 
-        data= [(1,),(2,),(3,)]
+        data = [(1, ), (2, ), (3, )]
 
-        cursor.executemany("insert into t1 values (?, 'foo') returning a", data)
-        rows= cursor.fetchall()
+        cursor.executemany("insert into t1 values (?, 'foo') returning a",
+                           data)
+        rows = cursor.fetchall()
         self.assertEqual(rows, data)
 
         cursor.executemany("delete from t1 where a=? returning a", data)
-        rows= cursor.fetchall()
+        rows = cursor.fetchall()
         self.assertEqual(rows, data)
 
         cursor.execute("select a from t1")
-        rows= cursor.fetchall()
+        rows = cursor.fetchall()
         self.assertEqual(rows, [])
 
-        data= [(1,"foo"),(2,"bar"),(3,"hello")]
+        data = [(1, "foo"), (2, "bar"), (3, "hello")]
         cursor.executemany("insert into t1 values (?,?) returning a,b", data)
-        rows= cursor.fetchall()
+        rows = cursor.fetchall()
         self.assertEqual(rows, data)
 
-        cursor.executemany("replace into t1 values (?,?) returning a,b", [(1, "xyz")])
-        rows= cursor.fetchall()
-        self.assertEqual(rows, [(1,"xyz")])
+        cursor.executemany("replace into t1 values (?,?) returning a,b",
+                           [(1, "xyz")])
+        rows = cursor.fetchall()
+        self.assertEqual(rows, [(1, "xyz")])
 
         del cursor, conn
 
     def test_conpy178(self):
-        conn= create_connection()
-        cursor= conn.cursor()
+        conn = create_connection()
+        cursor = conn.cursor()
         cursor.execute("DROP PROCEDURE IF EXISTS p2")
-        cursor.execute("CREATE PROCEDURE p2(IN s1 VARCHAR(20), IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\nBEGIN\nSET o1:=CAST(CONCAT(s1,s2) AS char CHARACTER SET utf8mb4);\nEND")
+        cursor.execute("CREATE PROCEDURE p2(IN s1 VARCHAR(20), "
+                       "IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\n"
+                       "BEGIN\nSET o1:=CAST(CONCAT(s1,s2) AS "
+                       "char CHARACTER SET utf8mb4);\nEND")
 
-        for i in range (0,500):
+        for i in range(0, 500):
             cursor.callproc("p2", ("foo", "bar", 1))
-            row= cursor.fetchone()
+            row = cursor.fetchone()
             self.assertEqual(row[0], "foobar")
 
         conn.close()
 
     def test_conpy205(self):
-        conn= create_connection()
-        cursor= conn.cursor()
+        conn = create_connection()
+        cursor = conn.cursor()
 
-        cursor.execute("select %(name)s", {"name" : "Marc"})
-        row= cursor.fetchone()
+        cursor.execute("select %(name)s", {"name": "Marc"})
+        row = cursor.fetchone()
         self.assertEqual(row[0], "Marc")
 
-        cursor.execute("select %(name)s", {"name" : "Marc", "noname" : "unknown"})
-        row= cursor.fetchone()
+        cursor.execute("select %(name)s", {"name": "Marc",
+                                           "noname": "unknown"})
+        row = cursor.fetchone()
         self.assertEqual(row[0], "Marc")
 
         try:
-            cursor.execute("select ?", {"noname" : "unknown"})
+            cursor.execute("select ?", {"noname": "unknown"})
         except (mariadb.ProgrammingError):
             pass
 
@@ -1280,7 +1328,7 @@ class TestCursor(unittest.TestCase):
             pass
 
         try:
-            cursor.execute("select %(name)s", {"noname" : "unknown"})
+            cursor.execute("select %(name)s", {"noname": "unknown"})
         except (mariadb.ProgrammingError):
             pass
 
@@ -1290,20 +1338,20 @@ class TestCursor(unittest.TestCase):
             pass
 
         try:
-            cursor.execute("select ?,?,?", (1,2))
+            cursor.execute("select ?,?,?", (1, 2))
         except (mariadb.ProgrammingError):
             pass
 
         try:
-            cursor.execute("select ?,?,?", (1,2,3,4))
+            cursor.execute("select ?,?,?", (1, 2, 3, 4))
         except (mariadb.ProgrammingError):
             pass
 
         cursor.close()
 
     def test_conpy203(self):
-        conn= create_connection()
-        cursor= conn.cursor()
+        conn = create_connection()
+        cursor = conn.cursor()
 
         try:
             cursor.execute("SELECT")
@@ -1311,55 +1359,63 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(err.errno, ERR.ER_PARSE_ERROR)
 
     def test_unicode_parsing(self):
-        conn= create_connection()
-        cursor= conn.cursor()
+        conn = create_connection()
+        cursor = conn.cursor()
 
-        cursor.execute("create temporary table Unitéble2 ( 測試 int, méil int)");
+        cursor.execute("create temporary table Unitéble2 ( 測試 int, méil int)")
         cursor.execute("insert into Unitéble2 values (%(測試)s, %(méil)s)",
-                        {"測試" : 1, "méil" : 2})
-        self.assertEqual(cursor.rowcount, 1);
-        cursor.execute("SELECT `Unitéble2`.`測試` AS `Unitéble2_測試`, `Unitéble2`.`méil` AS `Unitéble2_méil` FROM `Unitéble2` WHERE ? = `Unitéble2`.`測試`",(1,))
-        rows= cursor.fetchall()
+                       {"測試": 1, "méil": 2})
+        self.assertEqual(cursor.rowcount, 1)
+        cursor.execute("SELECT `Unitéble2`.`測試` AS `Unitéble2_測試`,"
+                       " `Unitéble2`.`méil` AS `Unitéble2_méil` FROM "
+                       "`Unitéble2` WHERE ? = `Unitéble2`.`測試`", (1, ))
+        cursor.fetchall()
         self.assertEqual(cursor.rowcount, 1)
         del cursor
 
     def test_conpy209(self):
-        conn= create_connection()
-        cursor= conn.cursor()
-        data= ("col_Unitéble_id_seq", "foobar")
-        sql= f"SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='SEQUENCE' and TABLE_NAME=? and TABLE_SCHEMA=?"
-        transformed= b'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE=\'SEQUENCE\' and TABLE_NAME="col_Unit\xc3\xa9ble_id_seq" and TABLE_SCHEMA="foobar"'
-        cursor.execute(sql, data);
+        conn = create_connection()
+        cursor = conn.cursor()
+        data = ("col_Unitéble_id_seq", "foobar")
+        sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE "\
+              "TABLE_TYPE='SEQUENCE' and TABLE_NAME=? and TABLE_SCHEMA=?"
+        transformed = b"" .  join([b'SELECT TABLE_NAME FROM ',
+                                   b'INFORMATION_SCHEMA.TABLES ',
+                                   b'WHERE TABLE_TYPE=\'SEQUENCE\'',
+                                   b' and TABLE_NAME=',
+                                   b'"col_Unit\xc3\xa9ble_id_seq" ',
+                                   b'and TABLE_SCHEMA="foobar"'])
+        cursor.execute(sql, data)
         self.assertEqual(transformed, cursor._transformed_statement)
         del cursor
-        
+
     def test_conpy213(self):
-        conversions= { **{FIELD_TYPE.NEWDECIMAL : float}}
+        conversions = {**{FIELD_TYPE.NEWDECIMAL: float}}
         connection = create_connection({"converter": conversions})
-        cursor= connection.cursor()
+        cursor = connection.cursor()
         cursor.execute("SELECT 1.1")
-        rows= cursor.fetchall()
+        rows = cursor.fetchall()
         self.assertEqual(rows[0][0], 1.1)
         cursor.execute("SELECT 1.1")
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 1.1)
         del cursor
         del connection
 
     def test_conpy218(self):
-        conn= create_connection()
-        cursor= conn.cursor()
+        conn = create_connection()
+        cursor = conn.cursor()
         cursor.execute("SELECT 1",  None)
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 1)
         cursor.execute("SELECT 2",  ())
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 2)
         cursor.execute("SELECT 3",  [])
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 3)
         cursor.execute("SELECT 4",  {})
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 4)
         del cursor
         del conn
@@ -1371,28 +1427,35 @@ class TestCursor(unittest.TestCase):
                     with self.subTest(parameter_type=parameter_type):
                         with self.subTest(parameter_count=1):
                             with self.subTest(parameter_style='?'):
-                                cursor.execute('select ?', [parameter_type(1)])
+                                cursor.execute('select ?',
+                                               [parameter_type(1)])
                                 [[value]] = cursor.fetchall()
                                 self.assertEqual(value, 1)
                             with self.subTest(parameter_style='%s'):
-                                cursor.execute('select %s', [parameter_type(1)])
+                                cursor.execute('select %s',
+                                               [parameter_type(1)])
                                 [[value]] = cursor.fetchall()
                                 self.assertEqual(value, 1)
                             with self.subTest(parameter_style='%(name)s'):
-                                cursor.execute('select %(value)s', dict(value=parameter_type(1)))
+                                cursor.execute('select %(value)s',
+                                               dict(value=parameter_type(1)))
                                 [[value]] = cursor.fetchall()
                                 self.assertEqual(value, 1)
                         with self.subTest(parameter_count=2):
                             with self.subTest(parameter_style='?'):
-                                cursor.execute('select ?, ?', [parameter_type(1), 1])
+                                cursor.execute('select ?, ?',
+                                               [parameter_type(1), 1])
                                 [[value, _]] = cursor.fetchall()
                                 self.assertEqual(value, 1)
                             with self.subTest(parameter_style='%s'):
-                                cursor.execute('select %s, %s', [parameter_type(1), 1])
+                                cursor.execute('select %s, %s',
+                                               [parameter_type(1), 1])
                                 [[value, _]] = cursor.fetchall()
                                 self.assertEqual(value, 1)
                             with self.subTest(parameter_style='%(name)s'):
-                                cursor.execute('select %(value)s, %(dummy)s', dict(value=parameter_type(1), dummy=1))
+                                cursor.execute('select %(value)s, %(dummy)s',
+                                               dict(value=parameter_type(1),
+                                                    dummy=1))
                                 [[value, _]] = cursor.fetchall()
                                 self.assertEqual(value, 1)
 

@@ -1,4 +1,4 @@
-''' 
+'''
 MariaDB capability flags.
 
 These flags are used to check the capabilities both of a MariaDB server
@@ -8,19 +8,19 @@ Capability flags are defined in module *mariadb.constants.CLIENT*
 
 '''
 
-MYSQL = 1  # MariaDB
-LONG_PASSWORD= 1 # MySQL
+MYSQL = 1          # MariaDB
+LONG_PASSWORD = 1  # MySQL
 FOUND_ROWS = 2
 LONG_FLAG = 4
-CONNECT_WITH_DB	= 8
+CONNECT_WITH_DB = 8
 NO_SCHEMA = 16
 COMPRESS = 32
 LOCAL_FILES = 128
 IGNORE_SPACE = 256
-INTERACTIVE	= 1024
+INTERACTIVE = 1024
 SSL = 2048
 TRANSACTIONS = 8192
-SECURE_CONNECTION = 32768  
+SECURE_CONNECTION = 32768
 MULTI_STATEMENTS = 1 << 16
 MULTI_RESULTS = 1 << 17
 PS_MULTI_RESULTS = 1 << 18

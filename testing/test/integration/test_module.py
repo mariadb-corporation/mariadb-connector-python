@@ -1,14 +1,11 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
-import os
 import unittest
 
 import mariadb
 
 from test.base_test import create_connection
-from test.conf_test import conf
-import platform
 
 
 class TestConnection(unittest.TestCase):
@@ -30,9 +27,8 @@ class TestConnection(unittest.TestCase):
 
         # patch might contain letters
         try:
-            x= int(str_version[2])
             self.assertEqual(int(str_version[2]), version_info[2])
-        except:
+        except Exception:
             self.assertEqual(str_version[2], version_info[2])
 
 

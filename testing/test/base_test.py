@@ -14,7 +14,9 @@ def is_skysql():
 
 
 def is_maxscale():
-    return os.environ.get('srv') == "maxscale" or os.environ.get('srv') == 'skysql-ha'
+    return (os.environ.get('srv') == "maxscale" or
+            os.environ.get('srv') == 'skysql-ha')
+
 
 def is_mysql():
     mysql_server = 1
@@ -26,6 +28,7 @@ def is_mysql():
         mysql_server = 0
     del cursor, conn
     return mysql_server
+
 
 def create_connection(additional_conf=None):
     default_conf = conf()

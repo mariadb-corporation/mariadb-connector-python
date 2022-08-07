@@ -26,9 +26,12 @@ class TestConnection(unittest.TestCase):
             self.skipTest("unix_socket not supported on Windows")
         default_conf = conf()
         try:
-           conn= mariadb.connect(user=default_conf["user"], unix_socket="/does_not_exist/x.sock", port=default_conf["port"], host=default_conf["host"])
+            mariadb.connect(user=default_conf["user"],
+                            unix_socket="/does_not_exist/x.sock",
+                            port=default_conf["port"],
+                            host=default_conf["host"])
         except (mariadb.OperationalError,):
-           pass
+            pass
 
     def test_connection_default_file(self):
         if os.path.exists("client.cnf"):
@@ -36,15 +39,16 @@ class TestConnection(unittest.TestCase):
         default_conf = conf()
         f = open("client.cnf", "w+")
         f.write("[client]\n")
-        f.write("host=%s\n" % default_conf["host"])
-        f.write("port=%i\n" % default_conf["port"])
-        f.write("user=%s\n" % default_conf["user"])
+        f.write("host =%s\n" % default_conf["host"])
+        f.write("port =%i\n" % default_conf["port"])
+        f.write("user =%s\n" % default_conf["user"])
         if "password" in default_conf:
-            f.write("password=%s\n" % default_conf["password"])
-        f.write("database=%s\n" % default_conf["database"])
+            f.write("password =%s\n" % default_conf["password"])
+        f.write("database =%s\n" % default_conf["database"])
         f.close()
 
-        new_conn = mariadb.connect(user=default_conf["user"], ssl=True, default_file="./client.cnf")
+        new_conn = mariadb.connect(user=default_conf["user"], ssl=True,
+                                   default_file="./client.cnf")
         self.assertEqual(new_conn.database, default_conf["database"])
         del new_conn
         os.remove("client.cnf")
@@ -58,9 +62,9 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn.autocommit, True)
 
     def test_local_infile(self):
-        default_conf= conf()
+        default_conf = conf()
         new_conn = mariadb.connect(**default_conf, local_infile=False)
-        cursor=new_conn.cursor()
+        cursor = new_conn.cursor()
         cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
         try:
             cursor.execute("LOAD DATA LOCAL INFILE 'x.x' INTO TABLE t1")
@@ -70,22 +74,21 @@ class TestConnection(unittest.TestCase):
         del new_conn
 
     def test_init_command(self):
-        default_conf= conf()
+        default_conf = conf()
         new_conn = mariadb.connect(**default_conf, init_command="SET @a:=1")
-#, port=default_conf["port"], host=default_conf["host"], password=default_conf["password"])
-        cursor=new_conn.cursor()
+        cursor = new_conn.cursor()
         cursor.execute("SELECT @a")
-        row=cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], 1)
         del cursor
         del new_conn
 
     def test_compress(self):
-        default_conf= conf()
+        default_conf = conf()
         new_conn = mariadb.connect(**default_conf, compress=True)
-        cursor=new_conn.cursor()
+        cursor = new_conn.cursor()
         cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
-        row=cursor.fetchone()
+        row = cursor.fetchone()
         if is_maxscale():
             self.assertEqual(row[1], "OFF")
         else:
@@ -119,8 +122,8 @@ class TestConnection(unittest.TestCase):
         oldid = conn.connection_id
 
         try:
-            cursor.execute("KILL {id}".format(id=oldid))
-        except:
+            cursor.execute("KILL {id}" . format(id=oldid))
+        except mariadb.Error:
             pass
 
         conn.auto_reconnect = True
@@ -141,10 +144,12 @@ class TestConnection(unittest.TestCase):
         curs = conn.cursor(buffered=True)
 
         if self.connection.server_name == "localhost":
-          curs.execute("select * from information_schema.plugins where plugin_name='unix_socket' and plugin_status='ACTIVE'")
-          if curs.rowcount > 0:
-              del curs
-              self.skipTest("unix_socket is active")
+            curs.execute("select * from information_schema.plugins where "
+                         "plugin_name ='unix_socket' and "
+                         "plugin_status ='ACTIVE'")
+            if curs.rowcount > 0:
+                del curs
+                self.skipTest("unix_socket is active")
 
         cursor = conn.cursor()
         try:
@@ -154,17 +159,22 @@ class TestConnection(unittest.TestCase):
         cursor.execute("DROP USER IF EXISTS eduser")
         if self.connection.server_version < 100400:
             cursor.execute("CREATE USER eduser@'%' IDENTIFIED VIA ed25519 "
-                           "USING '6aW9C7ENlasUfymtfMvMZZtnkCVlcb1ssxOLJ0kj/AA'")
+                           "USING "
+                           "'6aW9C7ENlasUfymtfMvMZZtnkCVlcb1ssxOLJ0kj/AA'")
         else:
             cursor.execute("CREATE USER eduser@'%' IDENTIFIED VIA ed25519 "
                            "USING PASSWORD('MySup8%rPassw@ord')")
-        cursor.execute("GRANT ALL on " + default_conf["database"] + ".* to eduser@'%'")
-        conn2 = create_connection({"user": "eduser", "password":
-            "MySup8%rPassw@ord"})
+        cursor.execute("GRANT ALL on " + default_conf["database"] +
+                       ".* to eduser@'%'")
+        conn2 = create_connection({"user": "eduser",
+                                   "password": "MySup8%rPassw@ord"})
         cursor.execute("DROP USER IF EXISTS eduser")
         try:
-            create_connection({"user": "eduser", "password": "MySup8%rPassw@ord", "plugin_dir": "wrong_plugin_dir"})
-            self.fail("wrong plugin directory, must not have found authentication plugin")
+            create_connection({"user": "eduser",
+                               "password": "MySup8%rPassw@ord",
+                               "plugin_dir": "wrong_plugin_dir"})
+            self.fail("wrong plugin directory, must not have found "
+                      "authentication plugin")
         except (mariadb.OperationalError):
             pass
         cursor.execute("DROP USER IF EXISTS eduser")
@@ -174,14 +184,14 @@ class TestConnection(unittest.TestCase):
         with create_connection() as con:
             with con.cursor() as cursor:
                 cursor.execute("SELECT 'foo'")
-                row= cursor.fetchone()
+                row = cursor.fetchone()
                 self.assertEqual(row[0], "foo")
             try:
                 cursor.execute("SELECT 'bar'")
             except mariadb.ProgrammingError:
                 pass
         try:
-            cursor= con.cursor()
+            cursor = con.cursor()
         except mariadb.ProgrammingError:
             pass
 
@@ -193,57 +203,58 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(c1.autocommit, True)
 
     def test_db_attribute(self):
-        con= create_connection()
-        cursor=con.cursor()
-        db= con.database
+        con = create_connection()
+        cursor = con.cursor()
+        db = con.database
         try:
             cursor.execute("create schema test123")
-        except:
+        except mariadb.Error:
             pass
-        con.database= "test123"
+        con.database = "test123"
         cursor.execute("select database()", buffered=True)
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], "test123")
-        con.database= db
+        con.database = db
         cursor.execute("select database()", buffered=True)
-        row= cursor.fetchone()
+        row = cursor.fetchone()
         self.assertEqual(row[0], db)
         self.assertEqual(row[0], con.database)
         cursor.execute("drop schema test123")
         del cursor
 
     def test_server_status(self):
-        con= create_connection()
+        con = create_connection()
         self.assertTrue(not con.server_status & STATUS.AUTOCOMMIT)
-        con.autocommit= True
+        con.autocommit = True
         self.assertTrue(con.server_status & STATUS.AUTOCOMMIT)
-        con.autocommit= False
+        con.autocommit = False
         self.assertTrue(not con.server_status & STATUS.AUTOCOMMIT)
 
     def test_conpy175(self):
-        default_conf= conf()
+        default_conf = conf()
         c1 = mariadb.connect(**default_conf)
-        str= '"' * 4194304
-        newstr= c1.escape_string(str);
+        str = '"' * 4194304
+        newstr = c1.escape_string(str)
         self.assertEqual(newstr, '\\"' * 4194304)
         c1.close()
 
     def test_closed(self):
-        default_conf= conf()
+        default_conf = conf()
         conn = mariadb.connect(**default_conf)
         conn.close()
         try:
-            cursor=conn.cursor()
+            conn.cursor()
         except (mariadb.ProgrammingError):
             pass
 
     def test_multi_host(self):
-        default_conf= conf()
-        default_conf["host"]= "non_existant," + default_conf["host"]
+        default_conf = conf()
+        default_conf["host"] = "non_existant," + default_conf["host"]
         try:
-            c1 = mariadb.connect(**default_conf)
+            mariadb.connect(**default_conf)
         except mariadb.ProgrammingError:
-            self.assertLess(StrictVersion(mariadb.mariadbapi_version),StrictVersion('3.3.0'))
+            self.assertLess(StrictVersion(mariadb.mariadbapi_version),
+                            StrictVersion('3.3.0'))
             pass
 
 

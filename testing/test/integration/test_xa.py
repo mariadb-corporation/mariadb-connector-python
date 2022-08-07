@@ -1,12 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
-import collections
-import datetime
-import time
 import unittest
-import os
-
 import mariadb
 
 from test.base_test import create_connection
@@ -22,36 +17,35 @@ class TestCA(unittest.TestCase):
         del self.connection
 
     def test_xid(self):
-        con= create_connection()
-        xid= con.xid(1, "foo", "bar")
-        self.assertEqual(xid, (1, "foo","bar"))
+        con = create_connection()
+        xid = con.xid(1, "foo", "bar")
+        self.assertEqual(xid, (1, "foo", "bar"))
 
-        #default for format_id is 1
-        xid= con.xid(0, "foo", "bar")
-        self.assertEqual(xid, (1, "foo","bar"))
+        # default for format_id is 1
+        xid = con.xid(0, "foo", "bar")
+        self.assertEqual(xid, (1, "foo", "bar"))
 
-        #parameter too long:
+        # parameter too long:
         try:
-            xid= con.xid(0, "a" * 65, "bar")
+            xid = con.xid(0, "a" * 65, "bar")
         except mariadb.ProgrammingError:
             pass
         try:
-            xid= con.xid(0, "foo", "b" * 65)
+            xid = con.xid(0, "foo", "b" * 65)
         except mariadb.ProgrammingError:
             pass
-
 
     def test_tpc_begin(self):
-        con= create_connection()
-        xid= con.xid(0, "1234567890", "2345")
+        con = create_connection()
+        xid = con.xid(0, "1234567890", "2345")
         try:
             con.tpc_begin(xid)
         except mariadb.NotSupportedError:
             pass
-        
+
     def test_tpc_commit(self):
         con = create_connection()
-        xid= con.xid(0, "1234567891", "2345")
+        xid = con.xid(0, "1234567891", "2345")
         try:
             con.tpc_begin(xid)
             cursor = con.cursor()
@@ -135,6 +129,7 @@ class TestCA(unittest.TestCase):
             self.assertRaises(mariadb.ProgrammingError, con.rollback)
         finally:
             con.close()
+
 
 if __name__ == '__main__':
     unittest.main()

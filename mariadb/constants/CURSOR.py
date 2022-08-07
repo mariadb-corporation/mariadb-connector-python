@@ -5,5 +5,5 @@
     Cursor constants are defined in module *mariadb.constants.CURSOR*.
 """
 
-NONE= 0
-READ_ONLY= 1
+NONE = 0
+READ_ONLY = 1
