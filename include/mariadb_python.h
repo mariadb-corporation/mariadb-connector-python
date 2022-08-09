@@ -31,6 +31,9 @@
 #include <docs/common.h>
 #include <limits.h>
 
+#define CHECK_TYPE(obj, type) \
+(Py_TYPE((obj)) == type || PyType_IsSubtype(Py_TYPE((obj)), type))
+
 #if PY_VERSION_HEX < 0x030900A4 && !defined(Py_SET_TYPE)
 static inline void _Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
 { ob->ob_type = type; }
@@ -55,8 +58,6 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 #include <limits.h>
 #endif /* defined(_WIN32) */
 
-#define CHECK_TYPE(obj, type) \
-(Py_TYPE((obj)) == type || PyType_IsSubtype(Py_TYPE((obj)), type))
 
 #ifndef MIN
 #define MIN(a,b) (a) < (b) ? (a) : (b)
@@ -181,6 +182,7 @@ typedef struct st_parser {
 /* PEP-249: Connection object */
 typedef struct {
     PyObject_HEAD
+    PyThreadState *thread_state;
     MYSQL *mysql;
     int open;
     uint8_t is_buffered;
@@ -199,10 +201,13 @@ typedef struct {
     uint8_t status;
     uint8_t asynchronous;
     struct timespec last_used;
-    PyThreadState *thread_state;
     unsigned long thread_id;
     char *server_info;
     uint8_t closed;
+#if MARIADB_PACKAGE_VERSION_ID > 30301
+    PyObject *status_callback;
+#endif
+    PyObject *last_executed_stmt;
 } MrdbConnection;
 
 typedef struct {
@@ -275,7 +280,6 @@ typedef struct {
     uint8_t fetched;
     uint8_t closed;
     uint8_t reprepare;
-    PyThreadState *thread_state;
     enum enum_paramstyle paramstyle;
 } MrdbCursor;
 
@@ -736,6 +740,33 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
 
 #endif /* __i386__ OR _WIN32 */
 
-#ifdef _WIN32
-          //#define alloca _malloca
-#endif
+/* Due to callback functions we cannot use PY_BEGIN/END_ALLOW_THREADS */
+
+#define MARIADB_BEGIN_ALLOW_THREADS(obj)\
+{\
+  (obj)->thread_state= PyEval_SaveThread();\
+}
+
+#define MARIADB_END_ALLOW_THREADS(obj)\
+if ((obj)->thread_state)\
+{\
+    PyEval_RestoreThread((obj)->thread_state);\
+    (obj)->thread_state= NULL;\
+}
+
+#define MARIADB_UNBLOCK_THREADS(obj)\
+{\
+    if ((obj)->thread_state)\
+    {\
+        _save= (obj)->thread_state;\
+        PyEval_RestoreThread(_save);\
+        (obj)->thread_state= NULL;\
+    }\
+}
+
+#define MARIADB_BLOCK_THREADS(obj)\
+    if (_save)\
+    {\
+        (obj)->thread_state= PyEval_SaveThread();\
+        _save= NULL;\
+    }

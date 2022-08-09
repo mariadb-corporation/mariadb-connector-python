@@ -52,6 +52,9 @@ class Connection(mariadb._mariadb.connection):
 
         self._socket = None
         self.__in_use = 0
+        self._last_executed_statement = None
+        self._socket = None
+        self.__in_use = 0
         self.__pool = None
         self.__last_used = 0
         self.tpc_state = TPC_STATE.NONE
@@ -477,7 +480,7 @@ class Connection(mariadb._mariadb.connection):
         """Get default database for connection."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SCHEMA, str)
+        return self._mariadb_get_info(INFO.SCHEMA)
 
     @database.setter
     def database(self, schema):
@@ -499,7 +502,7 @@ class Connection(mariadb._mariadb.connection):
         """
         self._check_closed()
 
-        return self._mariadb_get_info(INFO.USER, str)
+        return self._mariadb_get_info(INFO.USER)
 
     @property
     def character_set(self):
@@ -516,14 +519,14 @@ class Connection(mariadb._mariadb.connection):
         """Client capability flags."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.CLIENT_CAPABILITIES, int)
+        return self._mariadb_get_info(INFO.CLIENT_CAPABILITIES)
 
     @property
     def server_capabilities(self):
         """Server capability flags."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_CAPABILITIES, int)
+        return self._mariadb_get_info(INFO.SERVER_CAPABILITIES)
 
     @property
     def extended_server_capabilities(self):
@@ -533,7 +536,7 @@ class Connection(mariadb._mariadb.connection):
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.EXTENDED_SERVER_CAPABILITIES, int)
+        return self._mariadb_get_info(INFO.EXTENDED_SERVER_CAPABILITIES)
 
     @property
     def server_port(self):
@@ -543,21 +546,21 @@ class Connection(mariadb._mariadb.connection):
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.PORT, int)
+        return self._mariadb_get_info(INFO.PORT)
 
     @property
     def unix_socket(self):
         """Unix socket name."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.UNIX_SOCKET, str)
+        return self._mariadb_get_info(INFO.UNIX_SOCKET)
 
     @property
     def server_name(self):
         """Name or IP address of database server."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.HOST, str)
+        return self._mariadb_get_info(INFO.HOST)
 
     @property
     def collation(self):
@@ -570,21 +573,21 @@ class Connection(mariadb._mariadb.connection):
         """Server version in alphanumerical format (str)"""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_VERSION, str)
+        return self._mariadb_get_info(INFO.SERVER_VERSION)
 
     @property
     def tls_cipher(self):
         """TLS cipher suite if a secure connection is used."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SSL_CIPHER, str)
+        return self._mariadb_get_info(INFO.SSL_CIPHER)
 
     @property
     def tls_version(self):
         """TLS protocol version if a secure connection is used."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.TLS_VERSION, str)
+        return self._mariadb_get_info(INFO.TLS_VERSION)
 
     @property
     def server_status(self):
@@ -593,7 +596,7 @@ class Connection(mariadb._mariadb.connection):
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_STATUS, int)
+        return self._mariadb_get_info(INFO.SERVER_STATUS)
 
     @property
     def server_version(self):
@@ -605,7 +608,7 @@ class Connection(mariadb._mariadb.connection):
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_VERSION_ID, int)
+        return self._mariadb_get_info(INFO.SERVER_VERSION_ID)
 
     @property
     def server_version_info(self):

@@ -532,9 +532,9 @@ void ma_cursor_close(MrdbCursor *self)
         {
             /* Todo: check if all the cursor stuff is deleted (when using prepared
                statements this should be handled in mysql_stmt_close) */
-            Py_BEGIN_ALLOW_THREADS;
+            MARIADB_BEGIN_ALLOW_THREADS(self->connection);
             mysql_stmt_close(self->stmt);
-            Py_END_ALLOW_THREADS;
+            MARIADB_END_ALLOW_THREADS(self->connection);
             self->stmt= NULL;
         }
         MrdbCursor_clear(self, 0);
@@ -660,7 +660,7 @@ static int Mrdb_execute_direct(MrdbCursor *self,
 {
    int rc;
 
-   Py_BEGIN_ALLOW_THREADS;
+   MARIADB_BEGIN_ALLOW_THREADS(self->connection);
    long ext_caps;
 
    mariadb_get_infov(self->connection->mysql,
@@ -690,7 +690,7 @@ static int Mrdb_execute_direct(MrdbCursor *self,
        rc= mariadb_stmt_execute_direct(self->stmt, statement, statement_len);
    }
 end:
-   Py_END_ALLOW_THREADS;
+   MARIADB_END_ALLOW_THREADS(self->connection);
    return rc;
 }
 
@@ -853,12 +853,12 @@ static PyObject *MrdbCursor_seek(MrdbCursor *self, PyObject *args)
     {
         return NULL;
     }
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self->connection);
     if (self->parseinfo.is_text)
         mysql_data_seek(self->result, new_position);
     else
         mysql_stmt_data_seek(self->stmt, new_position);
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self->connection);
 
     Py_RETURN_NONE;
 }
@@ -888,7 +888,7 @@ MrdbCursor_nextset(MrdbCursor *self)
         return NULL;
     }
 
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self->connection);
     if (!self->parseinfo.is_text)
         rc= mysql_stmt_next_result(self->stmt);
     else
@@ -900,7 +900,7 @@ MrdbCursor_nextset(MrdbCursor *self)
         }
         rc= mysql_next_result(self->connection->mysql);
     }
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self->connection);
 
     if (rc)
     {
@@ -1097,9 +1097,9 @@ MrdbCursor_execute_text(MrdbCursor *self, PyObject *args)
 
     db= self->connection->mysql;
 
-    Py_BEGIN_ALLOW_THREADS;
+    MARIADB_BEGIN_ALLOW_THREADS(self->connection);
     rc= mysql_send_query(db, statement, (long)statement_len);
-    Py_END_ALLOW_THREADS;
+    MARIADB_END_ALLOW_THREADS(self->connection);
 
     if (rc)
     {
@@ -1121,9 +1121,9 @@ MrdbCursor_readresponse(MrdbCursor *self)
 
     if (self->parseinfo.is_text)
     {
-        Py_BEGIN_ALLOW_THREADS;
+        MARIADB_BEGIN_ALLOW_THREADS(self->connection);
         rc= db->methods->db_read_query_result(db);
-        Py_END_ALLOW_THREADS;
+        MARIADB_END_ALLOW_THREADS(self->connection);
 
         if (rc)
         {
