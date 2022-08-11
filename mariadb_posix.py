@@ -62,7 +62,7 @@ def get_config(options):
     cc_version = mariadb_config(config_prg, "cc_version")
     if StrictVersion(cc_version[0]) < StrictVersion(required_version):
         print('MariaDB Connector/Python requires MariaDB Connector/C '
-              '>= %s, found version %s' % required_version, cc_version[0])
+              '>= %s, found version %s' % (required_version, cc_version[0]))
         sys.exit(2)
     cfg = MariaDBConfiguration()
     cfg.version = cc_version[0]
