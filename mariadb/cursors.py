@@ -396,7 +396,7 @@ class Cursor(mariadb._mariadb.cursor):
         (or subclass) exception will be raised if any operation is attempted
         with the cursor."
         """
-        if not self.connection.is_closed:
+        if not self.connection._closed:
             super().close()
 
     def fetchone(self):
