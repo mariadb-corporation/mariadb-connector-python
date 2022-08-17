@@ -652,7 +652,7 @@ class Connection(mariadb._mariadb.connection):
     def socket(self):
         """Returns the socket used for database connection"""
 
-        fno = self.get_socket()
+        fno = self._get_socket()
         if not self._socket:
             self._socket = socket.socket(fileno=fno)
         # in case of a possible reconnect, file descriptor has changed

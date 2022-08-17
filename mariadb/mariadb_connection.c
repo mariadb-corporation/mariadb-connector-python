@@ -80,6 +80,9 @@ MrdbConnection_executecommand(MrdbConnection *self,
 static PyObject *
 MrdbConnection_readresponse(MrdbConnection *self);
 
+static PyObject
+*MrdbConnection_socket(MrdbConnection *self);
+
 static PyGetSetDef
 MrdbConnection_sets[]=
 {
@@ -153,6 +156,9 @@ MrdbConnection_Methods[] =
       "For internal use only"},
     {"_mariadb_get_info", (PyCFunction)MrdbConnection_getinfo,
       METH_VARARGS,
+      "For internal use only"},
+    {"_get_socket", (PyCFunction)MrdbConnection_socket,
+      METH_NOARGS,
       "For internal use only"},
     {NULL} /* always last */
 };
@@ -888,6 +894,13 @@ static PyObject *MrdbConnection_readresponse(MrdbConnection *self)
         return NULL;
     }
     Py_RETURN_NONE;
+}
+
+static PyObject *MrdbConnection_socket(MrdbConnection *self)
+{
+    MARIADB_CHECK_CONNECTION(self, NULL);
+
+    return PyLong_FromLong((unsigned long)mysql_get_socket(self->mysql));
 }
 
 /* vim: set tabstop=4 */
