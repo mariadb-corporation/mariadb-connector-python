@@ -1419,7 +1419,7 @@ class TestCursor(unittest.TestCase):
         del cursor
         del conn
 
-    def test_conpy221(self):
+    def test_conpy222(self):
         conn = create_connection()
         cursor = conn.cursor()
         cursor.close()
