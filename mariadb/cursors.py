@@ -530,9 +530,6 @@ class Cursor(mariadb._mariadb.cursor):
         """Closes cursor."""
         self.close()
 
-    def __del__(self):
-        self.close()
-
     @property
     def rowcount(self):
         """

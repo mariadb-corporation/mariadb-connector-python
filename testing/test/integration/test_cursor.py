@@ -637,7 +637,6 @@ class TestCursor(unittest.TestCase):
     def test_closed(self):
         cursor = self.connection.cursor()
         cursor.close()
-        cursor.close()
         self.assertEqual(cursor.closed, True)
         try:
             cursor.execute("set @a:=1")
@@ -1419,6 +1418,19 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 4)
         del cursor
         del conn
+
+    def test_conpy221(self):
+        conn = create_connection()
+        cursor = conn.cursor()
+        cursor.close()
+        del cursor
+
+        cursor = conn.cursor()
+        del cursor
+        try:
+            cursor.close()   # noqa: F821
+        except Exception:
+            pass
 
     def test_conpy91(self):
         with create_connection() as connection:
