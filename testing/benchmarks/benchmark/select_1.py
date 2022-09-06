@@ -9,9 +9,10 @@ def select_1(loops, conn, paramstyle):
     range_it = range(loops)
     t0 = pyperf.perf_counter()
     for value in range_it:
+        cursor = conn.cursor()
         cursor.execute("select 1")
         rows = cursor.fetchall()
         del rows
-    cursor.close()
+        cursor.close()
 
     return pyperf.perf_counter() - t0
