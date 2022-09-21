@@ -29,6 +29,18 @@ def init_db(conn, paramstyle):
     else:
         cursor.executemany("INSERT INTO num_test VALUES (%s,%s,%s,%s,%s,%s)",
                            vals)
+
+    cursor.execute("DROP TABLE IF EXISTS perfTestTextBatch")
+    try:
+        cursor.execute("INSTALL SONAME 'ha_blackhole'")
+    except Error:
+        pass
+    createTable = "CREATE TABLE perfTestTextBatch (id MEDIUMINT NOT NULL AUTO_INCREMENT,t0 text, PRIMARY KEY (id)) COLLATE='utf8mb4_unicode_ci'"
+    try:
+        cursor.execute(createTable + " ENGINE = BLACKHOLE")
+    except Exception:
+        cursor.execute(createTable)
+
     conn.commit()
     del cursor
 

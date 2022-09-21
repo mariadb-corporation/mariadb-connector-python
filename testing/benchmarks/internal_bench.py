@@ -4,6 +4,7 @@
 import pyperf
 import os
 
+from benchmarks.benchmark.bulk import bulk
 from benchmarks.benchmark.do_1 import do1
 from benchmarks.benchmark.select_1 import select_1
 from benchmarks.benchmark.do_1000_param import do_1000_param
@@ -19,6 +20,8 @@ def run_test(tests, conn, paramstyle):
 def test_suite(paramstyle):
     is_mysql = int(os.environ.get('TEST_MYSQL', '1'))
     ts = [
+        {'label': 'BULK Insert',
+                  'method': bulk},
         {'label': 'DO 1',
                   'method': do1},
         {'label': 'DO 1000 params',
