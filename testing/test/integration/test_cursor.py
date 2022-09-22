@@ -1432,6 +1432,39 @@ class TestCursor(unittest.TestCase):
         except Exception:
             pass
 
+    def test_conpy_224(self):
+
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+
+        cursor = self.connection.cursor()
+
+        cursor.execute("CREATE TEMPORARY TABLE test_inserttuple ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
+
+        params = ((1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia"))
+
+        cursor.executemany("INSERT INTO test_inserttuple VALUES (?,?,?)",
+                           params)
+
+        cursor.executemany("INSERT INTO test_inserttuple VALUES (?,?,?)",
+                           params)
+
+        cursor = self.connection.cursor()
+
+        cursor.execute("SELECT name FROM test_inserttuple ORDER BY id DESC")
+
+        row = cursor.fetchone()
+
+        self.assertEqual("Andrey", row[0])
+
+        del cursor
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:

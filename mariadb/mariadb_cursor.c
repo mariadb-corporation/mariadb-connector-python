@@ -1168,10 +1168,13 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
 
     /* If the server doesn't support bulk execution (< 10.2.6),
        we need to call a fallback routine */
+    if (self->reprepare)
+    {
+      mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->parseinfo.paramcount);
+      mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
+      mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, mariadb_param_update);
+    }
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &self->array_size);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->parseinfo.paramcount);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
-    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, mariadb_param_update);
 
     mysql_stmt_bind_param(self->stmt, self->params);
 
