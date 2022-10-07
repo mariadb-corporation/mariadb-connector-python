@@ -18,7 +18,6 @@ def run_test(tests, conn, paramstyle):
         runner.bench_time_func(test['label'], test['method'], conn, paramstyle)
 
 def test_suite(paramstyle):
-    is_mysql = int(os.environ.get('TEST_MYSQL', '1'))
     ts = [
         {'label': 'BULK Insert',
                   'method': bulk},
@@ -28,9 +27,9 @@ def test_suite(paramstyle):
                   'method': do_1000_param},
         {'label': 'select_100_cols',
                   'method': select_100_cols},
-        {'label': 'select_100_cols_execute',
-                  'method': select_100_cols_execute},
         {'label': 'select 1', 'method': select_1},
         {'label': 'select_1000_rows', 'method': select_1000_rows},
     ]
+    if paramstyle == 'qmark':
+        ts.append({'label': 'select_100_cols_execute', 'method': select_100_cols_execute})
     return ts
