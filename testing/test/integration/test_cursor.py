@@ -1465,6 +1465,25 @@ class TestCursor(unittest.TestCase):
 
         del cursor
 
+    def test_conpy225(self):
+        conn = create_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("CREATE TEMPORARY TABLE x01 (a int, b int)")
+        params = ((1, 2), (2, 3), (3, 4), (4, 5))
+
+        cursor.executemany("INSERT INTO x01 VALUES (?,?)", params)
+        self.assertEqual(cursor.rowcount, 4)
+        self.assertEqual(cursor.affected_rows, 4)
+
+        cursor.execute("UPDATE x01 SET a=1 WHERE a=1")
+        self.assertEqual(cursor.rowcount, 0)
+        self.assertEqual(cursor.affected_rows, 0)
+
+        cursor.execute("UPDATE x01 SET a=1 WHERE a=4")
+        self.assertEqual(cursor.affected_rows, 1)
+        self.assertEqual(cursor.rowcount, 1)
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:

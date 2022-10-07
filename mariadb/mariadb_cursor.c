@@ -236,7 +236,7 @@ static struct PyMemberDef MrdbCursor_Members[] =
         T_ULONGLONG,
         offsetof(MrdbCursor, affected_rows),
         READONLY,
-        "Number of affected rows"},
+        "This property is deprecated - use rowcount instead."},
     {"_rownumber",
         T_ULONGLONG,
         offsetof(MrdbCursor, row_number),
@@ -646,8 +646,9 @@ PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
     if (self->field_count)
     {
       self->row_count= CURSOR_NUM_ROWS(self);
+      self->affected_rows= 0;
     } else {
-      self->row_count= CURSOR_AFFECTED_ROWS(self);
+      self->row_count= self->affected_rows= CURSOR_AFFECTED_ROWS(self);
     }
     self->lastrow_id= CURSOR_INSERT_ID(self);
 
