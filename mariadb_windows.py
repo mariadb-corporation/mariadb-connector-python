@@ -5,7 +5,7 @@
 import os
 import platform
 import sys
-from distutils.version import StrictVersion
+from packaging import version
 
 from winreg import ConnectRegistry, OpenKey, QueryValueEx,\
     HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY
@@ -45,8 +45,8 @@ def get_config(options):
                                             'MariaDB Connector C 64-bit',
                                             access=KEY_READ | KEY_WOW64_64KEY)
                 cc_version = QueryValueEx(connector_key, "Version")
-                if (StrictVersion(cc_version[0]) <
-                        StrictVersion(required_version)):
+                if (version.Version(cc_version[0]) <
+                        version.Version(required_version)):
                     print("MariaDB Connector/Python requires "
                           "MariaDB Connector/C "
                           ">= %s (found version: %s") \
