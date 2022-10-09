@@ -18,7 +18,6 @@
 #
 
 import mariadb
-import collections
 import datetime
 from numbers import Number
 from mariadb.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
@@ -27,6 +26,8 @@ from typing import Sequence
 PARAMSTYLE_QMARK = 1
 PARAMSTYLE_FORMAT = 2
 PARAMSTYLE_PYFORMAT = 3
+
+ROWS_ALL = -1
 
 RESULT_TUPLE = 0
 RESULT_NAMEDTUPLE = 1
@@ -410,17 +411,7 @@ class Cursor(mariadb._mariadb.cursor):
         self.check_closed()
 
         row = self._fetch_row()
-        if not row:
-            return row
-        if self._resulttype == RESULT_DICTIONARY:
-            ret = dict(zip(list(d[0] for d in self.description), row))
-        elif self._resulttype == RESULT_NAMEDTUPLE:
-            ret = collections.namedtuple('Row1', list(d[0]
-                                         for d in self.description))
-            ret = ret._make(row)
-        else:
-            ret = row
-        return ret
+        return row
 
     def fetchmany(self, size: int = 0):
         """
@@ -440,13 +431,9 @@ class Cursor(mariadb._mariadb.cursor):
         """
         self.check_closed()
 
-        rows = []
         if size == 0:
             size = self.arraysize
-        for count in range(0, size):
-            row = self.fetchone()
-            if row:
-                rows.append(row)
+        rows = super().fetchrows(size)
         return rows
 
     def fetchall(self):
@@ -458,7 +445,7 @@ class Cursor(mariadb._mariadb.cursor):
         produce a result set or execute() wasn't called before.
         """
         self.check_closed()
-        rows = super().fetchall()
+        rows = super().fetchrows(ROWS_ALL)
 
         if self._connection._converter:
             for idx, row in enumerate(rows):
@@ -474,19 +461,7 @@ class Cursor(mariadb._mariadb.cursor):
                         tmp_l[i] = v
                 rows[idx] = tuple(tmp_l)
 
-        if self._resulttype == RESULT_TUPLE:
-            return rows
-
-        ret = []
-        for row in rows:
-            if self._resulttype == RESULT_DICTIONARY:
-                new_row = dict(zip(list(d[0] for d in self.description), row))
-            elif self._resulttype == RESULT_NAMEDTUPLE:
-                new_row = collections.namedtuple('Row1', list(d[0]
-                                                 for d in self.description))
-                new_row = new_row._make(row)
-            ret.append(new_row)
-        return ret
+        return rows
 
     def __iter__(self):
         return iter(self.fetchone, None)

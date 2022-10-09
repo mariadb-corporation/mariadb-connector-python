@@ -40,7 +40,7 @@ static PyObject *
 MrdbCursor_execute_text(MrdbCursor *self, PyObject *args);
 
 static PyObject *
-MrdbCursor_fetchall(MrdbCursor *self);
+MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args);
 
 static PyObject *
 MrdbCursor_parse(MrdbCursor *self, PyObject *args);
@@ -128,8 +128,8 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"fetchone", (PyCFunction)MrdbCursor_fetchone,
         METH_NOARGS,
         cursor_fetchone__doc__,},
-    {"fetchall", (PyCFunction)MrdbCursor_fetchall,
-        METH_NOARGS,
+    {"fetchrows", (PyCFunction)MrdbCursor_fetchrows,
+        METH_VARARGS,
         NULL},
     {"_nextset", (PyCFunction)MrdbCursor_nextset,
         METH_NOARGS,
@@ -191,6 +191,11 @@ static struct PyMemberDef MrdbCursor_Members[] =
     {"_command",
         T_BYTE,
         offsetof(MrdbCursor, parseinfo.command),
+        0,
+        MISSING_DOC},
+    {"_resulttype",
+        T_UINT,
+        offsetof(MrdbCursor, result_format),
         0,
         MISSING_DOC},
     {"_text",
@@ -1212,10 +1217,17 @@ error:
 }
 
 static PyObject *
-MrdbCursor_fetchall(MrdbCursor *self)
+MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args)
 {
     PyObject *List;
     unsigned int field_count= self->field_count;
+    uint64_t row_count;
+
+    if (!PyArg_ParseTuple(args, "K", &row_count))
+    {
+        return NULL;
+    }
+
 
     MARIADB_CHECK_STMT(self);
 
@@ -1231,7 +1243,7 @@ MrdbCursor_fetchall(MrdbCursor *self)
         return NULL;
     }
 
-    while (!MrdbCursor_fetchinternal(self))
+    for (uint64_t i=0; i < row_count && !MrdbCursor_fetchinternal(self); i++)
     {
         uint32_t j;
         PyObject *Row;
