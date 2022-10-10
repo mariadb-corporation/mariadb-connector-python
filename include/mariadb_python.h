@@ -208,6 +208,7 @@ typedef struct {
     PyObject *status_callback;
 #endif
     PyObject *last_executed_stmt;
+    PyObject *converter;
 } MrdbConnection;
 
 typedef struct {

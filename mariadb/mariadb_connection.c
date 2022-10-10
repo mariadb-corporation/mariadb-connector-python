@@ -181,6 +181,11 @@ PyMemberDef MrdbConnection_Members[] =
         offsetof(MrdbConnection, closed),
         READONLY,
         "Indicates if connection was closed"},
+    {"_converter",
+        T_OBJECT,
+        offsetof(MrdbConnection, converter),
+        0,
+        "Conversion dictionary"},
     {NULL} /* always last */
 };
 #if MARIADB_PACKAGE_VERSION_ID > 30301

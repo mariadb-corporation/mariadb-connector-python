@@ -142,6 +142,7 @@ class DatabaseAPI20Test(unittest.TestCase):
                     # execute is busted.
                     pass
         finally:
+            cur.close()
             con.close()
 
     def _connect(self):
@@ -252,8 +253,8 @@ class DatabaseAPI20Test(unittest.TestCase):
         try:
             cur = con.cursor()
         finally:
+            cur.close()
             con.close()
-            del cur
 
     def test_cursor_isolation(self):
         con = self._connect()
@@ -272,6 +273,8 @@ class DatabaseAPI20Test(unittest.TestCase):
             self.assertEqual(len(booze[0]), 1)
             self.assertEqual(booze[0][0], 'Victoria Bitter')
         finally:
+            cur1.close()
+            cur2.close()
             con.close()
 
     def test_description(self):
@@ -326,6 +329,7 @@ class DatabaseAPI20Test(unittest.TestCase):
                              'executing no-result statements (eg. DDL)'
                              )
         finally:
+            cur.close()
             con.close()
 
     def test_rowcount(self):
@@ -349,6 +353,7 @@ class DatabaseAPI20Test(unittest.TestCase):
                              'executing no-result statements'
                              )
         finally:
+            cur.close()
             con.close()
 
     lower_func = 'lower'

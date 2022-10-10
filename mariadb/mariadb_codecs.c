@@ -57,7 +57,7 @@ enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *fie
 
 /*
    converts a Python date/time/datetime object to MYSQL_TIME
- */
+*/
 static void
 mariadb_pydate_to_tm(enum enum_field_types type,
                      PyObject *obj,
@@ -403,6 +403,27 @@ static PyObject *Mrdb_GetTimeDelta(MYSQL_TIME *tm)
     
     return PyDelta_FromDSU(days, second, second_part);
 }
+
+static PyObject *ma_convert_value(MrdbCursor *self,
+                                  enum enum_field_types type,
+                                  PyObject *value)
+{
+    PyObject *key= PyLong_FromLongLong(type);
+    PyObject *func;
+    PyObject *new_value= NULL;
+
+    if (!self->connection->converter || value == Py_None)
+        return NULL;
+
+    if ((func= PyDict_GetItem(self->connection->converter, key)) &&
+            PyCallable_Check(func))
+    {
+        PyObject *arglist= PyTuple_New(1);
+        PyTuple_SetItem(arglist, 0, value);
+        new_value= PyObject_CallObject(func, arglist);
+    }
+    return new_value;
+}
  
 void
 field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
@@ -540,6 +561,20 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         }
         default:
             break;
+    }
+        /* check if values need to be converted */
+    if (self->connection->converter)
+    {
+        PyObject *val;
+        enum enum_field_types type;
+
+        if (ext_type == EXT_TYPE_JSON)
+          type= MYSQL_TYPE_JSON;
+        else
+          type= self->fields[column].type;
+
+        if ((val= ma_convert_value(self, type, self->values[column])))
+            self->values[column]= val;
     }
 } 
 
@@ -771,6 +806,20 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         }
         default:
             break;
+    }
+    /* check if values need to be converted */
+    if (self->connection->converter)
+    {
+        PyObject *val;
+        enum enum_field_types type;
+
+        if (ext_type == EXT_TYPE_JSON)
+          type= MYSQL_TYPE_JSON;
+        else
+          type= self->fields[column].type;
+
+        if ((val= ma_convert_value(self, type, self->values[column])))
+            self->values[column]= val;
     }
 }
 /* 

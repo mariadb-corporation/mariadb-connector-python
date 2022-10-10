@@ -18,7 +18,6 @@
 #
 
 import mariadb
-import collections
 import datetime
 from numbers import Number
 from mariadb.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
@@ -27,6 +26,8 @@ from typing import Sequence
 PARAMSTYLE_QMARK = 1
 PARAMSTYLE_FORMAT = 2
 PARAMSTYLE_PYFORMAT = 3
+
+ROWS_ALL = -1
 
 RESULT_TUPLE = 0
 RESULT_NAMEDTUPLE = 1
@@ -364,7 +365,7 @@ class Cursor(mariadb._mariadb.cursor):
         """
         Internal use only
 
-        fetches row and converts values, if connections has a converter.
+        fetches row and converts values, if connection has a converter.
         """
         self.check_closed()
 
@@ -372,20 +373,7 @@ class Cursor(mariadb._mariadb.cursor):
         # exception
         if not self.field_count:
             raise mariadb.ProgrammingError("Cursor doesn't have a result set")
-        row = super().fetchone()
-        if self._connection._converter and row:
-            tmp_l = list(row)
-            if not self._description:
-                self._description = super().description
-            for i, v in enumerate(row):
-                type = self.description[i][1]
-                if type in self._connection._converter:
-                    func = self._connection._converter[type]
-                    tmp_l[i] = func(v)
-                else:
-                    tmp_l[i] = v
-            row = tuple(tmp_l)
-        return row
+        return super().fetchone()
 
     def close(self):
         """
@@ -412,17 +400,7 @@ class Cursor(mariadb._mariadb.cursor):
         self.check_closed()
 
         row = self._fetch_row()
-        if not row:
-            return row
-        if self._resulttype == RESULT_DICTIONARY:
-            ret = dict(zip(list(d[0] for d in self.description), row))
-        elif self._resulttype == RESULT_NAMEDTUPLE:
-            ret = collections.namedtuple('Row1', list(d[0]
-                                         for d in self.description))
-            ret = ret._make(row)
-        else:
-            ret = row
-        return ret
+        return row
 
     def fetchmany(self, size: int = 0):
         """
@@ -445,9 +423,7 @@ class Cursor(mariadb._mariadb.cursor):
         if size == 0:
             size = self.arraysize
 
-        rows = super().fetchrows(size)
-
-        return rows
+        return super().fetchrows(size)
 
     def fetchall(self):
         """
@@ -458,35 +434,7 @@ class Cursor(mariadb._mariadb.cursor):
         produce a result set or execute() wasn't called before.
         """
         self.check_closed()
-        rows = super().fetchrows(ROWS_EOF)
-
-        if self._connection._converter:
-            for idx, row in enumerate(rows):
-                tmp_l = list(row)
-                if not self._description:
-                    self._description = super().description
-                for i, v in enumerate(row):
-                    type = self.description[i][1]
-                    if type in self._connection._converter:
-                        func = self._connection._converter[type]
-                        tmp_l[i] = func(v)
-                    else:
-                        tmp_l[i] = v
-                rows[idx] = tuple(tmp_l)
-
-        if self._resulttype == RESULT_TUPLE:
-            return rows
-
-        ret = []
-        for row in rows:
-            if self._resulttype == RESULT_DICTIONARY:
-                new_row = dict(zip(list(d[0] for d in self.description), row))
-            elif self._resulttype == RESULT_NAMEDTUPLE:
-                new_row = collections.namedtuple('Row1', list(d[0]
-                                                 for d in self.description))
-                new_row = new_row._make(row)
-            ret.append(new_row)
-        return ret
+        return super().fetchrows(ROWS_EOF)
 
     def __iter__(self):
         return iter(self.fetchone, None)
