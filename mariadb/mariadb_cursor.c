@@ -40,6 +40,9 @@ static PyObject *
 MrdbCursor_execute_text(MrdbCursor *self, PyObject *args);
 
 static PyObject *
+MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args);
+
+static PyObject *
 MrdbCursor_parse(MrdbCursor *self, PyObject *args);
 
 static PyObject *
@@ -125,6 +128,9 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"fetchone", (PyCFunction)MrdbCursor_fetchone,
         METH_NOARGS,
         cursor_fetchone__doc__,},
+    {"fetchrows", (PyCFunction)MrdbCursor_fetchrows,
+        METH_VARARGS,
+        NULL},
     {"_nextset", (PyCFunction)MrdbCursor_nextset,
         METH_NOARGS,
         cursor_nextset__doc__},
@@ -1205,3 +1211,54 @@ error:
     MrdbCursor_clear(self, 0);
     return NULL;
 }
+
+static PyObject *
+MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args)
+{
+    PyObject *List;
+    unsigned int field_count= self->field_count;
+    uint64_t row_count;
+
+    MARIADB_CHECK_STMT(self);
+
+    if (!PyArg_ParseTuple(args, "K", &row_count))
+    {
+        return NULL;
+    }
+
+    if (!field_count)
+    {
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+                "Cursor doesn't have a result set");
+        return NULL;
+    }
+
+    if (!(List= PyList_New(0)))
+    {
+        return NULL;
+    }
+
+    for (uint64_t i=0; i < row_count && !MrdbCursor_fetchinternal(self); i++)
+    {
+        uint32_t j;
+        PyObject *Row;
+
+        self->row_number++;
+
+        if (!(Row= mariadb_get_sequence_or_tuple(self)))
+        {
+            return NULL;
+        }
+
+        for (j=0; j < field_count; j++)
+        {
+            ma_set_result_column_value(self, Row, j);
+        }
+        PyList_Append(List, Row);
+        /* CONPY-99: Decrement Row to prevent memory leak */
+        Py_DECREF(Row);
+    }
+    self->row_count= CURSOR_NUM_ROWS(self);
+    return List;
+}
+

@@ -43,6 +43,8 @@ SQL_DO = 6
 SQL_SELECT = 7
 SQL_OTHER = 255
 
+ROWS_EOF = -1
+
 
 class Cursor(mariadb._mariadb.cursor):
     """
@@ -440,13 +442,11 @@ class Cursor(mariadb._mariadb.cursor):
         """
         self.check_closed()
 
-        rows = []
         if size == 0:
             size = self.arraysize
-        for count in range(0, size):
-            row = self.fetchone()
-            if row:
-                rows.append(row)
+
+        rows = super().fetchrows(size)
+
         return rows
 
     def fetchall(self):
@@ -458,11 +458,35 @@ class Cursor(mariadb._mariadb.cursor):
         produce a result set or execute() wasn't called before.
         """
         self.check_closed()
+        rows = super().fetchrows(ROWS_EOF)
 
-        rows = []
-        for row in self:
-            rows.append((row))
-        return rows
+        if self._connection._converter:
+            for idx, row in enumerate(rows):
+                tmp_l = list(row)
+                if not self._description:
+                    self._description = super().description
+                for i, v in enumerate(row):
+                    type = self.description[i][1]
+                    if type in self._connection._converter:
+                        func = self._connection._converter[type]
+                        tmp_l[i] = func(v)
+                    else:
+                        tmp_l[i] = v
+                rows[idx] = tuple(tmp_l)
+
+        if self._resulttype == RESULT_TUPLE:
+            return rows
+
+        ret = []
+        for row in rows:
+            if self._resulttype == RESULT_DICTIONARY:
+                new_row = dict(zip(list(d[0] for d in self.description), row))
+            elif self._resulttype == RESULT_NAMEDTUPLE:
+                new_row = collections.namedtuple('Row1', list(d[0]
+                                                 for d in self.description))
+                new_row = new_row._make(row)
+            ret.append(new_row)
+        return ret
 
     def __iter__(self):
         return iter(self.fetchone, None)
