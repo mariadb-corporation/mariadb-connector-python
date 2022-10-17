@@ -44,10 +44,12 @@ or if you downloaded the source package
 .. code-block:: console
 
     $ python3 setup.py build
-    $ python3 -m pip install
+    $ python3 -m pip install .
+
 
 Binary installation
 -------------------
+
 MariaDB Connector/Python is also available from PyPi as wheel packages for Windows.
 Please note that dynamic MariaDB plugins (e.g. authentication plugins) are not part
 of the package and must be installed separately by installing MariaDB Connector/C or

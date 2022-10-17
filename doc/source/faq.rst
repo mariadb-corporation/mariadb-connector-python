@@ -138,7 +138,7 @@ Installation
    .. code-block:: console
 
       python3 setup.py build
-      python3 -m pip install
+      python3 -m pip install .
 
 
 Connecting
