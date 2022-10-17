@@ -1,19 +1,21 @@
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Release history &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
+    <title>Release history &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +37,7 @@
         <li class="right" >
           <a href="license.html" title="License"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Release history</a></li> 
       </ul>
     </div>  
@@ -46,12 +48,42 @@
           <div class="body" role="main">
             
   <section id="release-history">
-<h1>Release history<a class="headerlink" href="#release-history" title="Permalink to this headline">¶</a></h1>
-<section id="mariadb-connector-python-1-1-3">
-<h2>MariaDB Connector/Python 1.1.3<a class="headerlink" href="#mariadb-connector-python-1-1-3" title="Permalink to this headline">¶</a></h2>
+<h1>Release history<a class="headerlink" href="#release-history" title="Permalink to this heading">¶</a></h1>
+<section id="mariadb-connector-python-1-1-5">
+<h2>MariaDB Connector/Python 1.1.5<a class="headerlink" href="#mariadb-connector-python-1-1-5" title="Permalink to this heading">¶</a></h2>
 <p>Release date: not released</p>
 <section id="issues-fixed">
-<h3>Issues fixed:<a class="headerlink" href="#issues-fixed" title="Permalink to this headline">¶</a></h3>
+<h3>Issues fixed:<a class="headerlink" href="#issues-fixed" title="Permalink to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-220">CONPY-220</a>: Added _get_socket() method</p></li>
+<li><p>Performance improvement: Instead of iterating via fetchone(), fetchall() and fetchmany() methods now load the data directly at once.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-222">CONPY-222</a>: Removed del() method from cursor</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-224">CONPY-224</a>: Fixed bulk_operation when reexecuted using same cursor</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-225">CONPY-225</a>: Fixed cursor.affected_rows property</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-226">CONPY-226</a>: Replaced deprecated distutils (PEP-632)</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-227">CONPY-227</a>: Replaced collections.named_tuple by PyStruct_Sequence (C-Python)</p></li>
+</ul>
+</section>
+</section>
+<section id="mariadb-connector-python-1-1-4">
+<h2>MariaDB Connector/Python 1.1.4<a class="headerlink" href="#mariadb-connector-python-1-1-4" title="Permalink to this heading">¶</a></h2>
+<p>Release date: Aug 10 2022</p>
+<section id="id1">
+<h3>Issues fixed:<a class="headerlink" href="#id1" title="Permalink to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-217">CONPY-217</a>: Added reconnect keyword for connection</p></li>
+<li><p>Added CAPABILITY constants</p></li>
+<li><p>Code styling fixes (flake8)</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-218">CONPY-218</a>: Allow None as data parameter in cursor-&gt;execute(). Kudos to Luciano Barcaro for providing a fix</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-214">CONPY-214</a>: Replaced cursor iterator by native Python iter() method.</p></li>
+</ul>
+</section>
+</section>
+<section id="mariadb-connector-python-1-1-3">
+<h2>MariaDB Connector/Python 1.1.3<a class="headerlink" href="#mariadb-connector-python-1-1-3" title="Permalink to this heading">¶</a></h2>
+<p>Release date: Jul 07 2022</p>
+<section id="id2">
+<h3>Issues fixed:<a class="headerlink" href="#id2" title="Permalink to this heading">¶</a></h3>
 <blockquote>
 <div><p>CONPY-209: Wrong unicode substitution in SELECT statement
 CONPY-210: Added missing error constants
@@ -60,17 +92,17 @@ CONPY-212: unbuffered cursor.execute() doesn’t work</p>
 </section>
 </section>
 <section id="mariadb-connector-python-1-1-2">
-<h2>MariaDB Connector/Python 1.1.2<a class="headerlink" href="#mariadb-connector-python-1-1-2" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.1.2<a class="headerlink" href="#mariadb-connector-python-1-1-2" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Jun 27 2022</p>
 <section id="notable-changes">
-<h3>Notable changes:<a class="headerlink" href="#notable-changes" title="Permalink to this headline">¶</a></h3>
+<h3>Notable changes:<a class="headerlink" href="#notable-changes" title="Permalink to this heading">¶</a></h3>
 <blockquote>
 <div><p>CONPY-203: Error constants added
 CONPY-204: New connection method dump_debug_info(</p>
 </div></blockquote>
 </section>
-<section id="id1">
-<h3>Issues fixed:<a class="headerlink" href="#id1" title="Permalink to this headline">¶</a></h3>
+<section id="id3">
+<h3>Issues fixed:<a class="headerlink" href="#id3" title="Permalink to this heading">¶</a></h3>
 <blockquote>
 <div><p>Removed utf8 part of internal parser and use binary objects for parameter substitution
 CONPY-205: Fixed inconsistent exceptions: All parameter exceptions are returned as ProgrammingError.
@@ -80,10 +112,10 @@ CONPY-201: Fixed build issues with Python 3.11 beta</p>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-11">
-<h2>MariaDB Connector/Python 1.0.11<a class="headerlink" href="#mariadb-connector-python-1-0-11" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.11<a class="headerlink" href="#mariadb-connector-python-1-0-11" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Apr 12 2022</p>
-<section id="id2">
-<h3>Issues fixed:<a class="headerlink" href="#id2" title="Permalink to this headline">¶</a></h3>
+<section id="id4">
+<h3>Issues fixed:<a class="headerlink" href="#id4" title="Permalink to this heading">¶</a></h3>
 <blockquote>
 <div><p>CONPY-194: executemany() does not work with returning clause
 CONPY-196: Missing decrement of reference pointer when closing cursor
@@ -92,10 +124,10 @@ CONPY-198: Build fix for FreeBSD</p>
 </section>
 </section>
 <section id="mariadb-connector-pyhon-1-0-10">
-<h2>MariaDB Connector/Pyhon 1.0.10<a class="headerlink" href="#mariadb-connector-pyhon-1-0-10" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Pyhon 1.0.10<a class="headerlink" href="#mariadb-connector-pyhon-1-0-10" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Feb 18 2022</p>
-<section id="id3">
-<h3>Issues fixed:<a class="headerlink" href="#id3" title="Permalink to this headline">¶</a></h3>
+<section id="id5">
+<h3>Issues fixed:<a class="headerlink" href="#id5" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
 <li><p>CONPY-184: Display status of connection, cursor and pool class in string representation.</p></li>
 <li><p>CONPY-178: Repeated execution of cursors callproc() method hangs</p></li>
@@ -104,161 +136,160 @@ CONPY-198: Build fix for FreeBSD</p>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-9">
-<h2>MariaDB Connector/Python 1.0.9<a class="headerlink" href="#mariadb-connector-python-1-0-9" title="Permalink to this headline">¶</a></h2>
-<p>Release date: Dec 21 2022</p>
-<section id="id4">
-<h3>Issues fixed:<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h3>
+<h2>MariaDB Connector/Python 1.0.9<a class="headerlink" href="#mariadb-connector-python-1-0-9" title="Permalink to this heading">¶</a></h2>
+<p>Release date: Dec 21 2021</p>
+<section id="id6">
+<h3>Issues fixed:<a class="headerlink" href="#id6" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-184: Display status of connection, cursor and pool class in string representation.</p></li>
-<li><p>CONPY-178: Repeated execution of cursors callproc() method hangs</p></li>
-<li><p>CONPY-175: Fixed crash in escape_string</p></li>
-<li><p>Build fixes for Visual Studio 2022 (Windows)</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-184">CONPY-184</a>: Display status of connection, cursor and pool class in string representation.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-178">CONPY-178</a>: Repeated execution of cursors callproc() method hangs</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-175">CONPY-175</a>: Fixed crash in escape_string</p></li>
 </ul>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-8">
-<h2>MariaDB Connector/Python 1.0.8<a class="headerlink" href="#mariadb-connector-python-1-0-8" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.8<a class="headerlink" href="#mariadb-connector-python-1-0-8" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Oct 22 2021</p>
-<section id="id5">
-<h3>Issues fixed:<a class="headerlink" href="#id5" title="Permalink to this headline">¶</a></h3>
+<section id="id7">
+<h3>Issues fixed:<a class="headerlink" href="#id7" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-173: Fixed windows build for Python 3.10</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-173">CONPY-173</a>: Fixed windows build for Python 3.10</p></li>
 </ul>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-7">
-<h2>MariaDB Connector/Python 1.0.7<a class="headerlink" href="#mariadb-connector-python-1-0-7" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.7<a class="headerlink" href="#mariadb-connector-python-1-0-7" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Jun 8 2021</p>
-<section id="id6">
-<h3>Issues fixed:<a class="headerlink" href="#id6" title="Permalink to this headline">¶</a></h3>
+<section id="id8">
+<h3>Issues fixed:<a class="headerlink" href="#id8" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-155: fixed crash in get_server_version method of connection class</p></li>
-<li><p>CONPY-144: fixed crash in connection pool</p></li>
-<li><p>CONPY-150: convert invalid date types (day, month or year=0) to NULL</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-155">CONPY-155</a>: fixed crash in get_server_version method of connection class</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-144">CONPY-144</a>: fixed crash in connection pool</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-150">CONPY-150</a>: convert invalid date types (day, month or year=0) to NULL</p></li>
 </ul>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-6">
-<h2>MariaDB Connector/Python 1.0.6<a class="headerlink" href="#mariadb-connector-python-1-0-6" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.6<a class="headerlink" href="#mariadb-connector-python-1-0-6" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Feb 24 2021</p>
-<section id="id7">
-<h3>Issues fixed:<a class="headerlink" href="#id7" title="Permalink to this headline">¶</a></h3>
+<section id="id9">
+<h3>Issues fixed:<a class="headerlink" href="#id9" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONC-142: Fixed memory leak in connection class (server_version_info)</p></li>
-<li><p>CONC-138, CONC-141: When using binary protocol, convert data to binary object only if the character set is BINARY (63), not if the flag was set and character set is a non binary character set.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-142">CONPY-142</a>: Fixed memory leak in connection class (server_version_info)</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-138">CONPY-138</a>, <a class="reference external" href="https://jira.mariadb.org/browse/CONPY-141">CONPY-141</a>: When using binary protocol, convert data to binary object only if the character set is BINARY (63), not if the flag was set and character set is a non binary character set.</p></li>
 <li><p>Various build and travis related corrections/fixes.</p></li>
 </ul>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-5">
-<h2>MariaDB Connector/Python 1.0.5<a class="headerlink" href="#mariadb-connector-python-1-0-5" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.5<a class="headerlink" href="#mariadb-connector-python-1-0-5" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Nov 25th 2020</p>
-<section id="id8">
-<h3>Notable changes:<a class="headerlink" href="#id8" title="Permalink to this headline">¶</a></h3>
+<section id="id10">
+<h3>Notable changes:<a class="headerlink" href="#id10" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-127: When establishing a new database connection the connect method now also supports None values instead of strings only.</p></li>
-<li><p>CONPY-128: Added connection attribute server_version_info and (for compatibility) get_server_version() method. Both return a tuple, describing the version number of connected server in following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)</p></li>
-<li><p>CONPY-133: The internal parser now supports the full MariaDB comment syntax</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-127">CONPY-127</a>: When establishing a new database connection the connect method now also supports None values instead of strings only.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-128">CONPY-128</a>: Added connection attribute server_version_info and (for compatibility) get_server_version() method. Both return a tuple, describing the version number of connected server in following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-133">CONPY-133</a>: The internal parser now supports the full MariaDB comment syntax</p></li>
 </ul>
 </section>
-<section id="id9">
-<h3>Issues fixed:<a class="headerlink" href="#id9" title="Permalink to this headline">¶</a></h3>
+<section id="id11">
+<h3>Issues fixed:<a class="headerlink" href="#id11" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-126: Fixed memory leak in connection object</p></li>
-<li><p>CONPY-130: Fixed DeprecationWarning: builtin type Row has no module attribute</p></li>
-<li><p>CONPY-131: Fixed crash type_traverse() called for non-heap type Row (Python 3.6 only)</p></li>
-<li><p>CONPY-132: Fixed memory leak in connection pool</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-126">CONPY-126</a>: Fixed memory leak in connection object</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-130">CONPY-130</a>: Fixed DeprecationWarning: builtin type Row has no module attribute</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-131">CONPY-131</a>: Fixed crash type_traverse() called for non-heap type Row (Python 3.6 only)</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-132">CONPY-132</a>: Fixed memory leak in connection pool</p></li>
 </ul>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-4">
-<h2>MariaDB Connector/Python 1.0.4<a class="headerlink" href="#mariadb-connector-python-1-0-4" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.4<a class="headerlink" href="#mariadb-connector-python-1-0-4" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Oct 20th 2020</p>
-<section id="id10">
-<h3>Notable changes:<a class="headerlink" href="#id10" title="Permalink to this headline">¶</a></h3>
+<section id="id12">
+<h3>Notable changes:<a class="headerlink" href="#id12" title="Permalink to this heading">¶</a></h3>
 <p>Binary wheel packages are now availble for Windows on <a class="reference external" href="http://pypi.org">http://pypi.org</a></p>
 </section>
-<section id="id11">
-<h3>Issues fixed:<a class="headerlink" href="#id11" title="Permalink to this headline">¶</a></h3>
+<section id="id13">
+<h3>Issues fixed:<a class="headerlink" href="#id13" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-123: Free pending result sets when closing cursor</p></li>
-<li><p>CONPY-124: Fix build when building against Connector/C &lt; 3.1.8</p></li>
-<li><p>CONPY-125: Build fix: replace obsolete ULONG_LONG_MAX definitions</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-123">CONPY-123</a>: Free pending result sets when closing cursor</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-124">CONPY-124</a>: Fix build when building against Connector/C &lt; 3.1.8</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-125">CONPY-125</a>: Build fix: replace obsolete ULONG_LONG_MAX definitions</p></li>
 </ul>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-3">
-<h2>MariaDB Connector/Python 1.0.3<a class="headerlink" href="#mariadb-connector-python-1-0-3" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.3<a class="headerlink" href="#mariadb-connector-python-1-0-3" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Oct 7th 2020</p>
-<section id="id12">
-<h3>Notable changes:<a class="headerlink" href="#id12" title="Permalink to this headline">¶</a></h3>
+<section id="id14">
+<h3>Notable changes:<a class="headerlink" href="#id14" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-117: Added support for data type conversion.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-117">CONPY-117</a>: Added support for data type conversion.</p></li>
 </ul>
 </section>
-<section id="id13">
-<h3>Issues fixed:<a class="headerlink" href="#id13" title="Permalink to this headline">¶</a></h3>
+<section id="id15">
+<h3>Issues fixed:<a class="headerlink" href="#id15" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-116: Wrong type reporting for column type MYSQL_TYPE_JSON</p></li>
-<li><p>CONPY-118: Removed statement allocation for text protocol</p></li>
-<li><p>CONPY-119: Fixed memory leak when cursor result is dictionary</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-116">CONPY-116</a>: Wrong type reporting for column type MYSQL_TYPE_JSON</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-118">CONPY-118</a>: Removed statement allocation for text protocol</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-119">CONPY-119</a>: Fixed memory leak when cursor result is dictionary</p></li>
 </ul>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-2">
-<h2>MariaDB Connector/Python 1.0.2<a class="headerlink" href="#mariadb-connector-python-1-0-2" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.2<a class="headerlink" href="#mariadb-connector-python-1-0-2" title="Permalink to this heading">¶</a></h2>
 <p>Release date: Sept 18th 2020</p>
-<section id="id14">
-<h3>Issues fixed:<a class="headerlink" href="#id14" title="Permalink to this headline">¶</a></h3>
+<section id="id16">
+<h3>Issues fixed:<a class="headerlink" href="#id16" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
 <li><p>Fixed datetime initialization</p></li>
-<li><p>CONPY-108: Fixed memory leak</p></li>
-<li><p>CONPY-110: Fixed memory overrun when passing ssl keyword to connect() method.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-108">CONPY-108</a>: Fixed memory leak</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-110">CONPY-110</a>: Fixed memory overrun when passing ssl keyword to connect() method.</p></li>
 </ul>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-1">
-<h2>MariaDB Connector/Python 1.0.1<a class="headerlink" href="#mariadb-connector-python-1-0-1" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.1<a class="headerlink" href="#mariadb-connector-python-1-0-1" title="Permalink to this heading">¶</a></h2>
 <p>Release date: August 18th 2020</p>
-<section id="id15">
-<h3>Notable changes:<a class="headerlink" href="#id15" title="Permalink to this headline">¶</a></h3>
+<section id="id17">
+<h3>Notable changes:<a class="headerlink" href="#id17" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-100: added binary option for cursor which allows to use binary protocol without passing parameters</p></li>
-<li><p>CONPY-102: Default for autocommit is now off</p></li>
-<li><p>CONPY-105: Behavior of rowcount and lastrowid atttributes now conforms to PEP-249</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-100">CONPY-100</a>: added binary option for cursor which allows to use binary protocol without passing parameters</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-102">CONPY-102</a>: Default for autocommit is now off</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-105">CONPY-105</a>: Behavior of rowcount and lastrowid atttributes now conforms to PEP-249</p></li>
 </ul>
 </section>
-<section id="id16">
-<h3>Issues fixed:<a class="headerlink" href="#id16" title="Permalink to this headline">¶</a></h3>
+<section id="id18">
+<h3>Issues fixed:<a class="headerlink" href="#id18" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-82: Unlock mutex in case of ConnectionPool.add_connection failed</p></li>
-<li><p>CONPY-83: Fixed missing reference increment in ConnectionPool class</p></li>
-<li><p>CONPY-85: Fixed version checking in setup.py</p></li>
-<li><p>CONPY-93: Release GIL before calling Python’s memory allocation routine</p></li>
-<li><p>CONPY-94: Support python subclasses for data binding</p></li>
-<li><p>CONPY-95: Added support for MYSQL_TYPE_BIT column type</p></li>
-<li><p>CONPY-98: Return binary object when casting to binary</p></li>
-<li><p>CONPY-99: Fixed memory leak in fetchall() method.</p></li>
-<li><p>CONPY-101: Fixed negative reference count when using callproc() method.</p></li>
-<li><p>CONPY-106: exception handling: type of exception depends now on error code instead of sqlstate</p></li>
-<li><p>CONPY-107: convert negative time values to datetime.timedelta instances</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-82">CONPY-82</a>: Unlock mutex in case of ConnectionPool.add_connection failed</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-83">CONPY-83</a>: Fixed missing reference increment in ConnectionPool class</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-85">CONPY-85</a>: Fixed version checking in setup.py</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-93">CONPY-93</a>: Release GIL before calling Python’s memory allocation routine</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-94">CONPY-94</a>: Support python subclasses for data binding</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-95">CONPY-95</a>: Added support for MYSQL_TYPE_BIT column type</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-98">CONPY-98</a>: Return binary object when casting to binary</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-99">CONPY-99</a>: Fixed memory leak in fetchall() method.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-101">CONPY-101</a>: Fixed negative reference count when using callproc() method.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-106">CONPY-106</a>: exception handling: type of exception depends now on error code instead of sqlstate</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-107">CONPY-107</a>: convert negative time values to datetime.timedelta instances</p></li>
 </ul>
 </section>
 </section>
 <section id="mariadb-connector-python-1-0-0">
-<h2>MariaDB Connector/Python 1.0.0<a class="headerlink" href="#mariadb-connector-python-1-0-0" title="Permalink to this headline">¶</a></h2>
+<h2>MariaDB Connector/Python 1.0.0<a class="headerlink" href="#mariadb-connector-python-1-0-0" title="Permalink to this heading">¶</a></h2>
 <p>Release date: June 24th 2020</p>
-<section id="id17">
-<h3>Issues fixed:<a class="headerlink" href="#id17" title="Permalink to this headline">¶</a></h3>
+<section id="id19">
+<h3>Issues fixed:<a class="headerlink" href="#id19" title="Permalink to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>CONPY-69: Set default character set (utf8mb4) with authentication packet</p></li>
-<li><p>CONPY-70: set_config() method needs to check the passed parameter and raise an exception if the parameter type is not a dictionary.</p></li>
-<li><p>CONPY-72: When deallocating the connection pool class, we need to check beside pool_size if the array containing the connections is valid.</p></li>
-<li><p>CONPY-76: Added aliases username, passwd and db to connection keywords.</p></li>
-<li><p>CONPY-78: Since MaxScale doesn’t support bulk operations yet, we have to check servers extended capability flag to determine if this feature is supported or not.</p></li>
-<li><p>CONPY-79: When inserting NULL values with executemany() method on a server which doesn’t support BULK statements NULL values weren’t inserted correctly.</p></li>
-<li><p>CONPY-80: Parameters in set_config() method of ConnectionPool class have to be checked against the list of DSN keywords</p></li>
-<li><p>CONPY-81: Fixed crash when switching between text and binary protocol with same cursor</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-69">CONPY-69</a>: Set default character set (utf8mb4) with authentication packet</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-70">CONPY-70</a>: set_config() method needs to check the passed parameter and raise an exception if the parameter type is not a dictionary.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-72">CONPY-72</a>: When deallocating the connection pool class, we need to check beside pool_size if the array containing the connections is valid.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-76">CONPY-76</a>: Added aliases username, passwd and db to connection keywords.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-78">CONPY-78</a>: Since MaxScale doesn’t support bulk operations yet, we have to check servers extended capability flag to determine if this feature is supported or not.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-79">CONPY-79</a>: When inserting NULL values with executemany() method on a server which doesn’t support BULK statements NULL values weren’t inserted correctly.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-80">CONPY-80</a>: Parameters in set_config() method of ConnectionPool class have to be checked against the list of DSN keywords</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-81">CONPY-81</a>: Fixed crash when switching between text and binary protocol with same cursor</p></li>
 <li><p>Fixed bug when inserting negative integer values with cursor.execute() method</p></li>
 </ul>
 </section>
@@ -272,80 +303,94 @@ CONPY-198: Build fix for FreeBSD</p>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">Release history</a><ul>
-<li><a class="reference internal" href="#mariadb-connector-python-1-1-3">MariaDB Connector/Python 1.1.3</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-python-1-1-5">MariaDB Connector/Python 1.1.5</a><ul>
 <li><a class="reference internal" href="#issues-fixed">Issues fixed:</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#mariadb-connector-python-1-1-4">MariaDB Connector/Python 1.1.4</a><ul>
+<li><a class="reference internal" href="#id1">Issues fixed:</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#mariadb-connector-python-1-1-3">MariaDB Connector/Python 1.1.3</a><ul>
+<li><a class="reference internal" href="#id2">Issues fixed:</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#mariadb-connector-python-1-1-2">MariaDB Connector/Python 1.1.2</a><ul>
 <li><a class="reference internal" href="#notable-changes">Notable changes:</a></li>
-<li><a class="reference internal" href="#id1">Issues fixed:</a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-11">MariaDB Connector/Python 1.0.11</a><ul>
-<li><a class="reference internal" href="#id2">Issues fixed:</a></li>
-</ul>
-</li>
-<li><a class="reference internal" href="#mariadb-connector-pyhon-1-0-10">MariaDB Connector/Pyhon 1.0.10</a><ul>
 <li><a class="reference internal" href="#id3">Issues fixed:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-9">MariaDB Connector/Python 1.0.9</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-11">MariaDB Connector/Python 1.0.11</a><ul>
 <li><a class="reference internal" href="#id4">Issues fixed:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-8">MariaDB Connector/Python 1.0.8</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-pyhon-1-0-10">MariaDB Connector/Pyhon 1.0.10</a><ul>
 <li><a class="reference internal" href="#id5">Issues fixed:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-7">MariaDB Connector/Python 1.0.7</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-9">MariaDB Connector/Python 1.0.9</a><ul>
 <li><a class="reference internal" href="#id6">Issues fixed:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-6">MariaDB Connector/Python 1.0.6</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-8">MariaDB Connector/Python 1.0.8</a><ul>
 <li><a class="reference internal" href="#id7">Issues fixed:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-5">MariaDB Connector/Python 1.0.5</a><ul>
-<li><a class="reference internal" href="#id8">Notable changes:</a></li>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-7">MariaDB Connector/Python 1.0.7</a><ul>
+<li><a class="reference internal" href="#id8">Issues fixed:</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-6">MariaDB Connector/Python 1.0.6</a><ul>
 <li><a class="reference internal" href="#id9">Issues fixed:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-4">MariaDB Connector/Python 1.0.4</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-5">MariaDB Connector/Python 1.0.5</a><ul>
 <li><a class="reference internal" href="#id10">Notable changes:</a></li>
 <li><a class="reference internal" href="#id11">Issues fixed:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-3">MariaDB Connector/Python 1.0.3</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-4">MariaDB Connector/Python 1.0.4</a><ul>
 <li><a class="reference internal" href="#id12">Notable changes:</a></li>
 <li><a class="reference internal" href="#id13">Issues fixed:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-2">MariaDB Connector/Python 1.0.2</a><ul>
-<li><a class="reference internal" href="#id14">Issues fixed:</a></li>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-3">MariaDB Connector/Python 1.0.3</a><ul>
+<li><a class="reference internal" href="#id14">Notable changes:</a></li>
+<li><a class="reference internal" href="#id15">Issues fixed:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#mariadb-connector-python-1-0-1">MariaDB Connector/Python 1.0.1</a><ul>
-<li><a class="reference internal" href="#id15">Notable changes:</a></li>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-2">MariaDB Connector/Python 1.0.2</a><ul>
 <li><a class="reference internal" href="#id16">Issues fixed:</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#mariadb-connector-python-1-0-1">MariaDB Connector/Python 1.0.1</a><ul>
+<li><a class="reference internal" href="#id17">Notable changes:</a></li>
+<li><a class="reference internal" href="#id18">Issues fixed:</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#mariadb-connector-python-1-0-0">MariaDB Connector/Python 1.0.0</a><ul>
-<li><a class="reference internal" href="#id17">Issues fixed:</a></li>
+<li><a class="reference internal" href="#id19">Issues fixed:</a></li>
 </ul>
 </li>
 </ul>
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="license.html"
-                        title="previous chapter">License</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="bugs.html"
-                        title="next chapter">Bug reports</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="license.html"
+                          title="previous chapter">License</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="bugs.html"
+                          title="next chapter">Bug reports</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -355,7 +400,7 @@ CONPY-198: Build fix for FreeBSD</p>
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -375,13 +420,13 @@ CONPY-198: Build fix for FreeBSD</p>
         <li class="right" >
           <a href="license.html" title="License"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Release history</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>
 </html>

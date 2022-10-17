@@ -1,19 +1,21 @@
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>The MariaDB Connector/Python module &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
+    <title>The MariaDB Connector/Python module &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +37,7 @@
         <li class="right" >
           <a href="api.html" title="API Reference"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The MariaDB Connector/Python module</a></li> 
       </ul>
@@ -47,28 +49,30 @@
           <div class="body" role="main">
             
   <section id="module-mariadb">
-<span id="the-mariadb-connector-python-module"></span><span id="module"></span><h1>The MariaDB Connector/Python module<a class="headerlink" href="#module-mariadb" title="Permalink to this headline">¶</a></h1>
-<p>MariaDB Connector/Python module enables python programs to access MariaDB and MySQL
-databases, using an API which is compliant with the Python DB API 2.0 (PEP-249).</p>
+<span id="the-mariadb-connector-python-module"></span><span id="module"></span><h1>The MariaDB Connector/Python module<a class="headerlink" href="#module-mariadb" title="Permalink to this heading">¶</a></h1>
+<p>MariaDB Connector/Python module enables python programs to access MariaDB and
+MySQL databases, using an API which is compliant with the Python DB API 2.0
+(PEP-249).</p>
 <section id="constructors">
-<h2>Constructors<a class="headerlink" href="#constructors" title="Permalink to this headline">¶</a></h2>
+<h2>Constructors<a class="headerlink" href="#constructors" title="Permalink to this heading">¶</a></h2>
 <section id="connection">
-<h3>Connection<a class="headerlink" href="#connection" title="Permalink to this headline">¶</a></h3>
+<h3>Connection<a class="headerlink" href="#connection" title="Permalink to this heading">¶</a></h3>
 <dl class="py function">
 <dt class="sig sig-object py" id="mariadb.connect">
 <span class="sig-name descname"><span class="pre">connect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connectionclass</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">mariadb.connections.Connection</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connect" title="Permalink to this definition">¶</a></dt>
 <dd><p>Creates a MariaDB Connection object.</p>
-<p>By default the standard connectionclass mariadb.connections.Connection will
-be created.</p>
-<p>Parameter connectionclass specifies a subclass of mariadb.Connection object. If not
-specified default will be used. This optional parameter was added in version 1.1.0.</p>
+<p>By default the standard connectionclass mariadb.connections.Connection
+will be created.</p>
+<p>Parameter connectionclass specifies a subclass of
+mariadb.Connection object. If not specified default will be used.
+This optional parameter was added in version 1.1.0.</p>
 <dl class="simple">
 <dt>Connection parameters are provided as a set of keyword arguments:</dt><dd><ul class="simple">
 <li><dl class="simple">
 <dt>host:</dt><dd><p>The host name or IP address of the database server.
-If MariaDB Connector/Python was built with MariaDB Connector/C 3.3 it is also
-possible to provide a comma separated list of hosts for simple fail over in
-case of one or more hosts are not available.</p>
+If MariaDB Connector/Python was built with MariaDB Connector/C 3.3
+it is also possible to provide a comma separated list of hosts for
+simple fail over in case of one or more hosts are not available.</p>
 </dd>
 </dl>
 </li>
@@ -83,14 +87,15 @@ case of one or more hosts are not available.</p>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>database, db:</dt><dd><p>database (schema) name to use when connecting with the database server</p>
+<dt>database, db:</dt><dd><p>database (schema) name to use when connecting with the database
+server</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>unix_socket:</dt><dd><p>The location of the unix socket file to use instead of using an IP port
-to connect. If socket authentication is enabled, this can also be used
-in place of a password.</p>
+<dt>unix_socket:</dt><dd><p>The location of the unix socket file to use instead of using an IP
+port to connect. If socket authentication is enabled, this can also
+be used in place of a password.</p>
 </dd>
 </dl>
 </li>
@@ -121,21 +126,21 @@ value of 3306 will be used.</p>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>compress= False:</dt><dd><p>Uses the compressed protocol for client server communication. If the
-server doesn’t support compressed protocol, the default protocol will
-be used.</p>
+<dt>compress= False:</dt><dd><p>Uses the compressed protocol for client server communication. If
+the server doesn’t support compressed protocol, the default
+protocol will be used.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>init_command:</dt><dd><p>Command(s) which will be executed when connecting and reconnecting to
-the database server</p>
+<dt>init_command:</dt><dd><p>Command(s) which will be executed when connecting and reconnecting
+to the database server</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>default_file:</dt><dd><p>Read options from the specified option file. If the file is an empty
-string, default configuration file(s) will be used</p>
+<dt>default_file:</dt><dd><p>Read options from the specified option file. If the file is an
+empty string, default configuration file(s) will be used</p>
 </dd>
 </dl>
 </li>
@@ -146,6 +151,12 @@ string, default configuration file(s) will be used</p>
 </li>
 <li><dl class="simple">
 <dt>plugin_dir:</dt><dd><p>Directory which contains MariaDB client plugins.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt>reconnect:</dt><dd><p>Enables or disables automatic reconnect. Available since
+version 1.1.4</p>
 </dd>
 </dl>
 </li>
@@ -165,15 +176,16 @@ path. The X609 certificate must be in PEM format.</p>
 </li>
 <li><dl class="simple">
 <dt>ssl_ca:</dt><dd><p>Defines a path to a PEM file that should contain one or more X509
-certificates for trusted Certificate Authorities (CAs) to use for TLS.
-This option requires that you use the absolute path, not a relative
-path.</p>
+certificates for trusted Certificate Authorities (CAs) to use for
+TLS.  This option requires that you use the absolute path, not a
+relative path.</p>
 </dd>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>ssl_capath:</dt><dd><p>Defines a path to a directory that contains one or more PEM files that
-contains one X509 certificate for a trusted Certificate Authority (CA)</p>
+<dt>ssl_capath:</dt><dd><p>Defines a path to a directory that contains one or more PEM files
+that contains one X509 certificate for a trusted Certificate
+Authority (CA)</p>
 </dd>
 </dl>
 </li>
@@ -183,9 +195,9 @@ contains one X509 certificate for a trusted Certificate Authority (CA)</p>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>ssl_crlpath:</dt><dd><p>Defines a path to a PEM file that should contain one or more revoked
-X509 certificates to use for TLS. This option requires that you use
-the absolute path, not a relative path.</p>
+<dt>ssl_crlpath:</dt><dd><p>Defines a path to a PEM file that should contain one or more
+revoked X509 certificates to use for TLS. This option requires
+that you use the absolute path, not a relative path.</p>
 </dd>
 </dl>
 </li>
@@ -206,7 +218,8 @@ True will enable autocommit, False will disable it (default).</p>
 </dl>
 </li>
 <li><dl class="simple">
-<dt>converter:</dt><dd><p>Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions</p>
+<dt>converter:</dt><dd><p>Specifies a conversion dictionary, where keys are FIELD_TYPE
+values and values are conversion functions</p>
 </dd>
 </dl>
 </li>
@@ -233,7 +246,7 @@ True will enable autocommit, False will disable it (default).</p>
 </div>
 </section>
 <section id="connection-pool">
-<h3>Connection Pool<a class="headerlink" href="#connection-pool" title="Permalink to this headline">¶</a></h3>
+<h3>Connection Pool<a class="headerlink" href="#connection-pool" title="Permalink to this heading">¶</a></h3>
 <dl class="py function">
 <dt class="sig sig-object py" id="mariadb.ConnectionPool">
 <span class="sig-name descname"><span class="pre">ConnectionPool</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool" title="Permalink to this definition">¶</a></dt>
@@ -241,22 +254,24 @@ True will enable autocommit, False will disable it (default).</p>
 <p>MariaDB Connector/Python supports simple connection pooling.
 A connection pool holds a number of open connections and handles
 thread safety when providing connections to threads.</p>
-<p>The size of a connection pool is configurable at creation time, 
+<p>The size of a connection pool is configurable at creation time,
 but cannot be changed afterwards. The maximum size of a connection
 pool is limited to 64 connections.</p>
 <p>Keyword Arguments:</p>
 <blockquote>
 <div><ul class="simple">
 <li><p>pool_name (str) – Name of connection pool</p></li>
-<li><p>pool_size (int)=5 – Size of pool. If not specified default value of 5 will be used. Maximum allowed number is 64.</p></li>
-<li><p>pool_reset_connection (bool)=True – Will reset the connection before returning it to the pool.  Default value is True.</p></li>
+<li><p>pool_size (int)=5 – Size of pool. If not specified default value
+of 5 will be used. Maximum allowed number is 64.</p></li>
+<li><p>pool_reset_connection (bool)=True – Will reset the connection before
+returning it to the pool.  Default value is True.</p></li>
 </ul>
 </div></blockquote>
 </dd></dl>
 
 </section>
 <section id="type-constructors">
-<h3>Type constructors<a class="headerlink" href="#type-constructors" title="Permalink to this headline">¶</a></h3>
+<h3>Type constructors<a class="headerlink" href="#type-constructors" title="Permalink to this heading">¶</a></h3>
 <dl class="py function">
 <dt class="sig sig-object py" id="mariadb.Binary">
 <span class="sig-name descname"><span class="pre">Binary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.Binary" title="Permalink to this definition">¶</a></dt>
@@ -311,7 +326,7 @@ time module.</p>
 </section>
 </section>
 <section id="attributes">
-<h2>Attributes<a class="headerlink" href="#attributes" title="Permalink to this headline">¶</a></h2>
+<h2>Attributes<a class="headerlink" href="#attributes" title="Permalink to this heading">¶</a></h2>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.apilevel">
 <span class="sig-name descname"><span class="pre">apilevel</span></span><a class="headerlink" href="#mariadb.apilevel" title="Permalink to this definition">¶</a></dt>
@@ -364,71 +379,71 @@ following format:
 
 </section>
 <section id="exceptions">
-<h2>Exceptions<a class="headerlink" href="#exceptions" title="Permalink to this headline">¶</a></h2>
+<h2>Exceptions<a class="headerlink" href="#exceptions" title="Permalink to this heading">¶</a></h2>
 <p>Compliant to DB API 2.0 MariaDB Connector/C provides information about errors
 through the following exceptions:</p>
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.DataError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">DataError</span></span><a class="headerlink" href="#mariadb.DataError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">DataError</span></span><a class="headerlink" href="#mariadb.DataError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are due to problems with the processed data like division by zero, numeric value out of range, etc.</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.DatabaseError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">DatabaseError</span></span><a class="headerlink" href="#mariadb.DatabaseError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">DatabaseError</span></span><a class="headerlink" href="#mariadb.DatabaseError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are related to the database</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.InterfaceError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">InterfaceError</span></span><a class="headerlink" href="#mariadb.InterfaceError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">InterfaceError</span></span><a class="headerlink" href="#mariadb.InterfaceError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are related to the database interface rather than the database itself</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.Warning">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">Warning</span></span><a class="headerlink" href="#mariadb.Warning" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Warning</span></span><a class="headerlink" href="#mariadb.Warning" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for important warnings like data truncations while inserting, etc</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.PoolError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">PoolError</span></span><a class="headerlink" href="#mariadb.PoolError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">PoolError</span></span><a class="headerlink" href="#mariadb.PoolError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors related to ConnectionPool class.</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.OperationalError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">OperationalError</span></span><a class="headerlink" href="#mariadb.OperationalError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">OperationalError</span></span><a class="headerlink" href="#mariadb.OperationalError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for errors that are related to the database’s operation and not necessarily under the control of the programmer.</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.IntegrityError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">IntegrityError</span></span><a class="headerlink" href="#mariadb.IntegrityError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">IntegrityError</span></span><a class="headerlink" href="#mariadb.IntegrityError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised when the relational integrity of the database is affected, e.g. a foreign key check fails</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.InternalError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">InternalError</span></span><a class="headerlink" href="#mariadb.InternalError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">InternalError</span></span><a class="headerlink" href="#mariadb.InternalError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised when the database encounters an internal error, e.g. the cursor is not valid anymore</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.ProgrammingError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">ProgrammingError</span></span><a class="headerlink" href="#mariadb.ProgrammingError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ProgrammingError</span></span><a class="headerlink" href="#mariadb.ProgrammingError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised for programming errors, e.g. table not found or already exists, syntax error in the SQL statement</p>
 </dd></dl>
 
 <dl class="py exception">
 <dt class="sig sig-object py" id="mariadb.NotSupportedError">
-<em class="property"><span class="pre">exception</span> </em><span class="sig-name descname"><span class="pre">NotSupportedError</span></span><a class="headerlink" href="#mariadb.NotSupportedError" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">exception</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">NotSupportedError</span></span><a class="headerlink" href="#mariadb.NotSupportedError" title="Permalink to this definition">¶</a></dt>
 <dd><p>Exception raised in case a method or database API was used which is not supported by the database</p>
 </dd></dl>
 
 <section id="type-objects">
-<h3>Type objects<a class="headerlink" href="#type-objects" title="Permalink to this headline">¶</a></h3>
+<h3>Type objects<a class="headerlink" href="#type-objects" title="Permalink to this heading">¶</a></h3>
 <p>MariaDB Connector/Python type objects are immutable sets for type settings
 and defined in DBAPI 2.0 (PEP-249).</p>
 <p>Example:</p>
@@ -490,30 +505,76 @@ an empty set.</p>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">The MariaDB Connector/Python module</a><ul>
 <li><a class="reference internal" href="#constructors">Constructors</a><ul>
-<li><a class="reference internal" href="#connection">Connection</a></li>
-<li><a class="reference internal" href="#connection-pool">Connection Pool</a></li>
-<li><a class="reference internal" href="#type-constructors">Type constructors</a></li>
+<li><a class="reference internal" href="#connection">Connection</a><ul>
+<li><a class="reference internal" href="#mariadb.connect"><code class="docutils literal notranslate"><span class="pre">connect()</span></code></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#attributes">Attributes</a></li>
+<li><a class="reference internal" href="#connection-pool">Connection Pool</a><ul>
+<li><a class="reference internal" href="#mariadb.ConnectionPool"><code class="docutils literal notranslate"><span class="pre">ConnectionPool()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#type-constructors">Type constructors</a><ul>
+<li><a class="reference internal" href="#mariadb.Binary"><code class="docutils literal notranslate"><span class="pre">Binary()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.Date"><code class="docutils literal notranslate"><span class="pre">Date()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.DateFromTicks"><code class="docutils literal notranslate"><span class="pre">DateFromTicks()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.Time"><code class="docutils literal notranslate"><span class="pre">Time()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.TimeFromTicks"><code class="docutils literal notranslate"><span class="pre">TimeFromTicks()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.Timestamp"><code class="docutils literal notranslate"><span class="pre">Timestamp()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.TimestampFromTicks"><code class="docutils literal notranslate"><span class="pre">TimestampFromTicks()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#attributes">Attributes</a><ul>
+<li><a class="reference internal" href="#mariadb.apilevel"><code class="docutils literal notranslate"><span class="pre">apilevel</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.threadsafety"><code class="docutils literal notranslate"><span class="pre">threadsafety</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.paramstyle"><code class="docutils literal notranslate"><span class="pre">paramstyle</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.mariadbapi_version"><code class="docutils literal notranslate"><span class="pre">mariadbapi_version</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.client_version"><code class="docutils literal notranslate"><span class="pre">client_version</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.client_version_info"><code class="docutils literal notranslate"><span class="pre">client_version_info</span></code></a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#exceptions">Exceptions</a><ul>
-<li><a class="reference internal" href="#type-objects">Type objects</a></li>
+<li><a class="reference internal" href="#mariadb.DataError"><code class="docutils literal notranslate"><span class="pre">DataError</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.DatabaseError"><code class="docutils literal notranslate"><span class="pre">DatabaseError</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.InterfaceError"><code class="docutils literal notranslate"><span class="pre">InterfaceError</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.Warning"><code class="docutils literal notranslate"><span class="pre">Warning</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.PoolError"><code class="docutils literal notranslate"><span class="pre">PoolError</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.OperationalError"><code class="docutils literal notranslate"><span class="pre">OperationalError</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.IntegrityError"><code class="docutils literal notranslate"><span class="pre">IntegrityError</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.InternalError"><code class="docutils literal notranslate"><span class="pre">InternalError</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.ProgrammingError"><code class="docutils literal notranslate"><span class="pre">ProgrammingError</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.NotSupportedError"><code class="docutils literal notranslate"><span class="pre">NotSupportedError</span></code></a></li>
+<li><a class="reference internal" href="#type-objects">Type objects</a><ul>
+<li><a class="reference internal" href="#mariadb.STRING"><code class="docutils literal notranslate"><span class="pre">STRING</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.BINARY"><code class="docutils literal notranslate"><span class="pre">BINARY</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.NUMBER"><code class="docutils literal notranslate"><span class="pre">NUMBER</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.DATETIME"><code class="docutils literal notranslate"><span class="pre">DATETIME</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.ROWID"><code class="docutils literal notranslate"><span class="pre">ROWID</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="api.html"
-                        title="previous chapter">API Reference</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="connection.html"
-                        title="next chapter">The connection class</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="api.html"
+                          title="previous chapter">API Reference</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="connection.html"
+                          title="next chapter">The connection class</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -523,7 +584,7 @@ an empty set.</p>
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -543,14 +604,14 @@ an empty set.</p>
         <li class="right" >
           <a href="api.html" title="API Reference"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The MariaDB Connector/Python module</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>
 </html>

@@ -38,7 +38,8 @@ add_module_names= False
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.doctest', 'sphinx.ext.autodoc', 'sphinx.ext.intersphinx', 'recommonmark' ]
+extensions = ['sphinx.ext.doctest', 'sphinx.ext.autodoc', 'sphinx.ext.intersphinx', 'recommonmark',
+              'sphinx.ext.extlinks', 'sphinx_toolbox.collapse' ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -71,5 +72,12 @@ highlight_language = 'python'
 rst_epilog="""
 .. |MCP| replace:: MariaDB Connector/Python
 .. |MCC| replace:: MariaDB Connector/C
-.. |DBAPI| replace:: DB API 2.0 (PEP-249)
+.. |MCC_minversion| replace:: 3.2.4
+.. |DBAPI| replace:: DB API 2.0 (:PEP:`249`)
+.. |MCDP| replace:: `MariaDB Connector Download page <https://mariadb.com/downloads/connectors/>`__
 """
+
+extlinks= {
+           'conpy' : ('https://jira.mariadb.org/browse/CONPY-%s', 'CONPY-%s'),
+           'PEP'   : ('https://peps.python.org/pep-%s', 'PEP-%s')
+          }

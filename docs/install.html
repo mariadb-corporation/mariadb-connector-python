@@ -1,19 +1,21 @@
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Installation &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
+    <title>Installation &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +37,7 @@
         <li class="right" >
           <a href="index.html" title="MariaDB Connector/Python"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Installation</a></li> 
       </ul>
     </div>  
@@ -46,24 +48,28 @@
           <div class="body" role="main">
             
   <section id="installation">
-<span id="id1"></span><h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
+<span id="id1"></span><h1>Installation<a class="headerlink" href="#installation" title="Permalink to this heading">¶</a></h1>
 <section id="prerequisites">
-<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Permalink to this headline">¶</a></h2>
-<ul class="simple">
-<li><p>Python 3 (minimum supported version is 3.6)</p></li>
-<li><p>MariaDB Server (&gt;= 10.2) or MySQL Server (&gt;= 5.7)</p></li>
-<li><p>MariaDB Connector/C</p></li>
-</ul>
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Permalink to this heading">¶</a></h2>
+<p>The current MariaDB Connector/Python implementation supports
+* Python versions from 3.7 to 3.11
+* MariaDB server versions from version 10.3 or MySQL server versions from version 5.7.
+* MariaDB client library (MariaDB Connector/C) from version 3.2.4.</p>
+</section>
 <section id="build-prerequisites">
-<h3>Build prerequisites<a class="headerlink" href="#build-prerequisites" title="Permalink to this headline">¶</a></h3>
-<p>The following build prerequisites are required to install or build MariaDB Connector/Python.
-For Windows operating platforms the pypi.org download page provides binary versions.</p>
+<h2>Build prerequisites<a class="headerlink" href="#build-prerequisites" title="Permalink to this heading">¶</a></h2>
+<p>The following build prerequisites are required to install or build MariaDB Connector/Python from source code, github or from
+pypi.org.</p>
+<p>For Windows operating platforms the pypi.org download page provides binary versions.</p>
+<p>To install MariaDB Connector/Python from sources you will need:</p>
 <ul class="simple">
 <li><p>C compiler</p></li>
-<li><p>Python development files (Usually they are installed with package <strong>python-dev</strong>). The minimum supported version of Python is 3.7</p></li>
+<li><p>Python development files (Usually they are installed with package <strong>python3-dev</strong>). The minimum supported version of Python is 3.7.</p></li>
 <li><p>MariaDB Connector/C libraries and header files (Either from MariaDB server package or
 from MariaDB Connector/C package). Minimum required version for MariaDB Connector/Python &lt; 1.1.0 is 3.1.5, for later versions 3.2.4.</p></li>
+<li><p>The mariadb_config program from MariaDB Connector/C, which should be in your PATH directory.</p></li>
 <li><p>For Posix systems: TLS libraries, e.g. GnuTLS or OpenSSL (default)</p></li>
+<li><p>Since MariaDB Connector/Python 1.1.5: Python’s “packaging” module.</p></li>
 </ul>
 <p>On Posix systems make sure that the path environment variable contains the directory which
 contains the mariadb_config utility.</p>
@@ -72,38 +78,37 @@ contains the mariadb_config utility.</p>
 </pre></div>
 </div>
 <p>or if you downloaded the source package</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>python setup.py build
-<span class="gp">$ </span>python setup.py install
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>python3 setup.py build
+<span class="gp">$ </span>python3 -m pip install
 </pre></div>
 </div>
-</section>
-</section>
 <section id="binary-installation">
-<h2>Binary installation<a class="headerlink" href="#binary-installation" title="Permalink to this headline">¶</a></h2>
+<h3>Binary installation<a class="headerlink" href="#binary-installation" title="Permalink to this heading">¶</a></h3>
 <p>MariaDB Connector/Python is also available from PyPi as wheel packages for Windows.
 Please note that dynamic MariaDB plugins (e.g. authentication plugins) are not part
 of the package and must be installed separately by installing MariaDB Connector/C or
 MariaDB Server package.</p>
-<p>Make sure you have an up to date version of pip and install it with</p>
+<p>Make sure you have an up-to-date version of pip and install MariaDB Connector/Python with</p>
 <div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>pip3 install mariadb
 </pre></div>
 </div>
 </section>
 <section id="test-suite">
-<h2>Test suite<a class="headerlink" href="#test-suite" title="Permalink to this headline">¶</a></h2>
+<h3>Test suite<a class="headerlink" href="#test-suite" title="Permalink to this heading">¶</a></h3>
 <p>If you have installed the sources, after successful build you can run the test suite
 from the source directory.</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>python -m unittest discover -v
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>python3 -m unittest discover -v
 </pre></div>
 </div>
 <p>You can configure the connection parameters by using the following environment variables</p>
 <ul class="simple">
-<li><p>TEST_USER (default root)</p></li>
-<li><p>TEST_PASSWORD</p></li>
-<li><p>TEST_DATABASE (default 'testp')</p></li>
-<li><p>TEST_HOST (default 'localhost')</p></li>
-<li><p>TEST_PORT (default 3306)</p></li>
+<li><p>TEST_DB_USER (default root)</p></li>
+<li><p>TEST_DB_PASSWORD</p></li>
+<li><p>TEST_DB_DATABASE (default ‘testp’)</p></li>
+<li><p>TEST_DB_HOST (default ‘localhost’)</p></li>
+<li><p>TEST_DB_PORT (default 3306)</p></li>
 </ul>
+</section>
 </section>
 </section>
 
@@ -114,25 +119,31 @@ from the source directory.</p>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">Installation</a><ul>
-<li><a class="reference internal" href="#prerequisites">Prerequisites</a><ul>
-<li><a class="reference internal" href="#build-prerequisites">Build prerequisites</a></li>
-</ul>
-</li>
+<li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li><a class="reference internal" href="#build-prerequisites">Build prerequisites</a><ul>
 <li><a class="reference internal" href="#binary-installation">Binary installation</a></li>
 <li><a class="reference internal" href="#test-suite">Test suite</a></li>
 </ul>
 </li>
 </ul>
+</li>
+</ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="index.html"
-                        title="previous chapter">MariaDB Connector/Python</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="usage.html"
-                        title="next chapter">Basic usage</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="index.html"
+                          title="previous chapter">MariaDB Connector/Python</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="usage.html"
+                          title="next chapter">Basic usage</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -142,7 +153,7 @@ from the source directory.</p>
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -162,13 +173,13 @@ from the source directory.</p>
         <li class="right" >
           <a href="index.html" title="MariaDB Connector/Python"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Installation</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>
 </html>

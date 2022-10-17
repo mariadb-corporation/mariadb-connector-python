@@ -1,19 +1,21 @@
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>API Reference &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
+    <title>API Reference &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +37,7 @@
         <li class="right" >
           <a href="pooling.html" title="Connection pooling"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">API Reference</a></li> 
       </ul>
     </div>  
@@ -46,7 +48,7 @@
           <div class="body" role="main">
             
   <section id="api-reference">
-<h1>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this headline">¶</a></h1>
+<h1>API Reference<a class="headerlink" href="#api-reference" title="Permalink to this heading">¶</a></h1>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
@@ -57,17 +59,20 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="connection.html">The connection class</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="connection.html#mariadb.connections.Connection"><code class="docutils literal notranslate"><span class="pre">Connection</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="connection.html#connection-constructors">Connection constructors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="connection.html#connection-methods">Connection methods</a></li>
 <li class="toctree-l2"><a class="reference internal" href="connection.html#connection-attributes">Connection attributes</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="cursor.html">The cursor class</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="cursor.html#mariadb.cursors.Cursor"><code class="docutils literal notranslate"><span class="pre">Cursor</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="cursor.html#cursor-methods">Cursor methods</a></li>
 <li class="toctree-l2"><a class="reference internal" href="cursor.html#cursor-attributes">Cursor attributes</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="pool.html">The ConnectionPool class</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="pool.html#mariadb.ConnectionPool"><code class="docutils literal notranslate"><span class="pre">ConnectionPool</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="pool.html#connectionpool-methods">ConnectionPool methods</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pool.html#connectionpool-attributes">ConnectionPool attributes</a></li>
 </ul>
@@ -96,12 +101,16 @@
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="pooling.html"
-                        title="previous chapter">Connection pooling</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="module.html"
-                        title="next chapter">The MariaDB Connector/Python module</a></p>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="pooling.html"
+                          title="previous chapter">Connection pooling</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="module.html"
+                          title="next chapter">The MariaDB Connector/Python module</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -111,7 +120,7 @@
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -131,13 +140,13 @@
         <li class="right" >
           <a href="pooling.html" title="Connection pooling"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">API Reference</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>
 </html>

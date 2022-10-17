@@ -1,22 +1,25 @@
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Bug reports &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
+    <title>Bug reports &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="MariaDB Connector/Python FAQ" href="faq.html" />
     <link rel="prev" title="Release history" href="release.html" /> 
   </head><body>
     <div class="related" role="navigation" aria-label="related navigation">
@@ -29,9 +32,12 @@
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
+          <a href="faq.html" title="MariaDB Connector/Python FAQ"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
           <a href="release.html" title="Release history"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Bug reports</a></li> 
       </ul>
     </div>  
@@ -42,49 +48,49 @@
           <div class="body" role="main">
             
   <section id="bug-reports">
-<h1>Bug reports<a class="headerlink" href="#bug-reports" title="Permalink to this headline">¶</a></h1>
+<h1>Bug reports<a class="headerlink" href="#bug-reports" title="Permalink to this heading">¶</a></h1>
 <p>If you think that you have found a bug in MariaDB Software, please report it at
 <a class="reference external" href="https://jira.mariadb.org">Jira issue tracker</a> and file it under Project CONPY (abbreviation for Connector/Python).</p>
 <section id="how-to-report-a-bug">
-<h2>How to report a bug?<a class="headerlink" href="#how-to-report-a-bug" title="Permalink to this headline">¶</a></h2>
+<h2>How to report a bug?<a class="headerlink" href="#how-to-report-a-bug" title="Permalink to this heading">¶</a></h2>
 <section id="search-first">
-<h3>Search first<a class="headerlink" href="#search-first" title="Permalink to this headline">¶</a></h3>
+<h3>Search first<a class="headerlink" href="#search-first" title="Permalink to this heading">¶</a></h3>
 <p>Always search the bug database first. Especially if you are using an older version of MariaDB Connector/Python it could
 be reported already by someone else or it was already fixed in a more recent version.</p>
 </section>
 <section id="what">
-<h3>What?<a class="headerlink" href="#what" title="Permalink to this headline">¶</a></h3>
+<h3>What?<a class="headerlink" href="#what" title="Permalink to this heading">¶</a></h3>
 <p>We need to know what you did, what happened and what you wanted to happen. A report stating that method xyz() hangs, will
-not allow us to provide you with an advice or fix, since we just don't know what the method is doing.
+not allow us to provide you with an advice or fix, since we just don’t know what the method is doing.
 Beside versions a good bug report contains a short script which reproduces the problem. Sometimes it is also necessary to
 provide the definition (and data) of used tables.</p>
 </section>
 <section id="versions-of-components">
-<h3>Versions of components<a class="headerlink" href="#versions-of-components" title="Permalink to this headline">¶</a></h3>
+<h3>Versions of components<a class="headerlink" href="#versions-of-components" title="Permalink to this heading">¶</a></h3>
 <p>MariaDB Connector/Python interacts with two other components: The database server and MariaDB Connector/C. Latter one is responsible for client/server communication. An error does not necessarily have to exist in Connector / Python; it can also be an error in the database server or in Connector/C. In this case we will reclassify the bug (MDEV or CONC).</p>
 </section>
 <section id="avoid-screenshots">
-<h3>Avoid screenshots!<a class="headerlink" href="#avoid-screenshots" title="Permalink to this headline">¶</a></h3>
+<h3>Avoid screenshots!<a class="headerlink" href="#avoid-screenshots" title="Permalink to this heading">¶</a></h3>
 <p>Use copy and paste instead. Screenshots create a lot more data volume and are often difficult to
 read on mobile devices. Typing program code from a screenshot is also an unnecessary effort.</p>
 </section>
 <section id="keep-it-simple">
-<h3>Keep it simple!<a class="headerlink" href="#keep-it-simple" title="Permalink to this headline">¶</a></h3>
+<h3>Keep it simple!<a class="headerlink" href="#keep-it-simple" title="Permalink to this heading">¶</a></h3>
 <p>Scripts which are longer than 10 lines often contain code which is not relevant to the problem and increases
 the time to figure out the real problem. So try to keep it simple and focus on the real problem.</p>
 <p>The sane applies for database related components like tables, views and stored procedures. Avoid table definitions with
 hundred of columns if the problem can be reproduced with only 4 columns,</p>
 </section>
 <section id="only-report-one-problem-in-one-bug-report">
-<h3>Only report one problem in one bug report<a class="headerlink" href="#only-report-one-problem-in-one-bug-report" title="Permalink to this headline">¶</a></h3>
+<h3>Only report one problem in one bug report<a class="headerlink" href="#only-report-one-problem-in-one-bug-report" title="Permalink to this heading">¶</a></h3>
 <p>If you have encountered two or more bugs which are not related, please file an issue for each of them.</p>
 </section>
 <section id="crashes">
-<h3>Crashes<a class="headerlink" href="#crashes" title="Permalink to this headline">¶</a></h3>
+<h3>Crashes<a class="headerlink" href="#crashes" title="Permalink to this heading">¶</a></h3>
 <p>If your application crashes, please also provide if possible a backtrace and output of the exception.</p>
 </section>
 <section id="report-bugs-in-english-only">
-<h3>Report bugs in English only!<a class="headerlink" href="#report-bugs-in-english-only" title="Permalink to this headline">¶</a></h3>
+<h3>Report bugs in English only!<a class="headerlink" href="#report-bugs-in-english-only" title="Permalink to this heading">¶</a></h3>
 </section>
 </section>
 </section>
@@ -96,8 +102,9 @@ hundred of columns if the problem can be reproduced with only 4 columns,</p>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">Bug reports</a><ul>
 <li><a class="reference internal" href="#how-to-report-a-bug">How to report a bug?</a><ul>
 <li><a class="reference internal" href="#search-first">Search first</a></li>
@@ -114,9 +121,17 @@ hundred of columns if the problem can be reproduced with only 4 columns,</p>
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="release.html"
-                        title="previous chapter">Release history</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="release.html"
+                          title="previous chapter">Release history</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="faq.html"
+                          title="next chapter">MariaDB Connector/Python FAQ</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -126,7 +141,7 @@ hundred of columns if the problem can be reproduced with only 4 columns,</p>
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -141,15 +156,18 @@ hundred of columns if the problem can be reproduced with only 4 columns,</p>
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
+          <a href="faq.html" title="MariaDB Connector/Python FAQ"
+             >next</a> |</li>
+        <li class="right" >
           <a href="release.html" title="Release history"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Bug reports</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>
 </html>

@@ -37,7 +37,7 @@ MariaDB Connector/C client library for client server communication.
    license
    release
    bugs
-
+   faq
 
 ------------------
 Indices and tables

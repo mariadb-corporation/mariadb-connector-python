@@ -1,19 +1,21 @@
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>The connection class &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
+    <title>The connection class &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +37,7 @@
         <li class="right" >
           <a href="module.html" title="The MariaDB Connector/Python module"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>
@@ -47,10 +49,10 @@
           <div class="body" role="main">
             
   <section id="the-connection-class">
-<h1>The connection class<a class="headerlink" href="#the-connection-class" title="Permalink to this headline">¶</a></h1>
+<h1>The connection class<a class="headerlink" href="#the-connection-class" title="Permalink to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mariadb.connections.Connection">
-<em class="property"><span class="pre">class</span> </em><span class="sig-name descname"><span class="pre">Connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection" title="Permalink to this definition">¶</a></dt>
 <dd><p>MariaDB Connector/Python Connection Object</p>
 <p>Handles the connection to a MariaDB or MySQL database server.
 It encapsulates a database session.</p>
@@ -58,39 +60,45 @@ It encapsulates a database session.</p>
 </dd></dl>
 
 <section id="connection-constructors">
-<h2>Connection constructors<a class="headerlink" href="#connection-constructors" title="Permalink to this headline">¶</a></h2>
+<h2>Connection constructors<a class="headerlink" href="#connection-constructors" title="Permalink to this heading">¶</a></h2>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.cursor">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></em>, <em class="sig-param"><span class="pre">**kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.cursor" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">**kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.cursor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a new cursor object for the current connection.</p>
-<p>If no cursorclass was specified, a cursor with default mariadb.Cursor class
-will be created.</p>
+<p>If no cursorclass was specified, a cursor with default mariadb.Cursor
+class will be created.</p>
 <p>Optional keyword parameters:</p>
 <ul class="simple">
-<li><p>buffered= True
-If set to False the result will be unbuffered, which means before executing
-another statement with the same connection the entire result set must be fetched.
-Please note that the default was False for MariaDB Connector/Python versions &lt; 1.1.0.</p></li>
-<li><p>dictionary= False
+<li><p>buffered = True
+If set to False the result will be unbuffered, which means before
+executing another statement with the same connection the entire
+result set must be fetched.
+Please note that the default was False for MariaDB Connector/Python
+versions &lt; 1.1.0.</p></li>
+<li><p>dictionary = False
 Return fetch values as dictionary.</p></li>
-<li><p>named_tuple= False
-Return fetch values as named tuple. This feature exists for compatibility reasons
-and should be avoided due to possible inconsistency.</p></li>
-<li><p>cursor_type= CURSOR_TYPE.NONE
-If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for the
-statement invoked with cursors execute() method.</p></li>
-<li><p>prepared= False
-When set to True cursor will remain in prepared state after the first execute()
-method was called. Further calls to execute() method will ignore the sql statement.</p></li>
-<li><p>binary= False
+<li><p>named_tuple = False
+Return fetch values as named tuple. This feature exists for
+compatibility reasons and should be avoided due to possible
+inconsistency.</p></li>
+<li><p>cursor_type = CURSOR_TYPE.NONE
+If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened
+for the statement invoked with cursors execute() method.</p></li>
+<li><p>prepared = False
+When set to True cursor will remain in prepared state after the first
+execute() method was called. Further calls to execute() method will
+ignore the sql statement.</p></li>
+<li><p>binary = False
 Always execute statement in MariaDB client/server binary protocol.</p></li>
 </ul>
-<p>In versions prior to 1.1.0 results were unbuffered by default, which means before executing another 
-statement with the same connection the entire result set must be fetched.</p>
-<p>fetch* methods of the cursor class by default return result set values as a 
-tuple, unless named_tuple or dictionary was specified. The latter one exists 
-for compatibility reasons and should be avoided due to possible inconsistency
-in case two or more fields in a result set have the same name.</p>
+<p>In versions prior to 1.1.0 results were unbuffered by default,
+which means before executing another statement with the same
+connection the entire result set must be fetched.</p>
+<p>fetch* methods of the cursor class by default return result set values
+as a tuple, unless named_tuple or dictionary was specified.
+The latter one exists for compatibility reasons and should be avoided
+due to possible inconsistency in case two or more fields in a result
+set have the same name.</p>
 <p>If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
 the statement invoked with cursors execute() method.</p>
 </dd></dl>
@@ -100,20 +108,24 @@ the statement invoked with cursors execute() method.</p>
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.xid">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">xid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format_id</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_transaction_id</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">branch_qualifier</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.xid" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">xid</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">global_transaction_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">branch_qualifier</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.xid" title="Permalink to this definition">¶</a></dt>
 <dd><p>Creates a transaction ID object suitable for passing to the .tpc_*()
 methods of this connection.</p>
 <p>Parameters:</p>
 <ul class="simple">
 <li><p>format_id: Format id. If not set default value <cite>0</cite> will be used.</p></li>
-<li><p>global_transaction_id: Global transaction qualifier, which must be unique. The maximum length of the global transaction id is limited to 64 characters.</p></li>
-<li><p>branch_qualifier: Branch qualifier which represents a local transaction identifier. The maximum length of the branch qualifier is limited to 64 characters.</p></li>
+<li><p>global_transaction_id: Global transaction qualifier, which must be
+unique. The maximum length of the global transaction id is
+limited to 64 characters.</p></li>
+<li><p>branch_qualifier: Branch qualifier which represents a local
+transaction identifier. The maximum length of the branch qualifier
+is limited to 64 characters.</p></li>
 </ul>
 </dd></dl>
 
 </section>
 <section id="connection-methods">
-<h2>Connection methods<a class="headerlink" href="#connection-methods" title="Permalink to this headline">¶</a></h2>
+<h2>Connection methods<a class="headerlink" href="#connection-methods" title="Permalink to this heading">¶</a></h2>
 <div class="versionadded">
 <p><span class="versionmodified added">New in version 1.1.0.</span></p>
 </div>
@@ -163,36 +175,42 @@ will cause an implicit rollback to be performed.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="id0">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></em>, <em class="sig-param"><span class="pre">**kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#id0" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cursorclass=&lt;class</span> <span class="pre">'mariadb.cursors.Cursor'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">**kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#id0" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns a new cursor object for the current connection.</p>
-<p>If no cursorclass was specified, a cursor with default mariadb.Cursor class
-will be created.</p>
+<p>If no cursorclass was specified, a cursor with default mariadb.Cursor
+class will be created.</p>
 <p>Optional keyword parameters:</p>
 <ul class="simple">
-<li><p>buffered= True
-If set to False the result will be unbuffered, which means before executing
-another statement with the same connection the entire result set must be fetched.
-Please note that the default was False for MariaDB Connector/Python versions &lt; 1.1.0.</p></li>
-<li><p>dictionary= False
+<li><p>buffered = True
+If set to False the result will be unbuffered, which means before
+executing another statement with the same connection the entire
+result set must be fetched.
+Please note that the default was False for MariaDB Connector/Python
+versions &lt; 1.1.0.</p></li>
+<li><p>dictionary = False
 Return fetch values as dictionary.</p></li>
-<li><p>named_tuple= False
-Return fetch values as named tuple. This feature exists for compatibility reasons
-and should be avoided due to possible inconsistency.</p></li>
-<li><p>cursor_type= CURSOR_TYPE.NONE
-If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for the
-statement invoked with cursors execute() method.</p></li>
-<li><p>prepared= False
-When set to True cursor will remain in prepared state after the first execute()
-method was called. Further calls to execute() method will ignore the sql statement.</p></li>
-<li><p>binary= False
+<li><p>named_tuple = False
+Return fetch values as named tuple. This feature exists for
+compatibility reasons and should be avoided due to possible
+inconsistency.</p></li>
+<li><p>cursor_type = CURSOR_TYPE.NONE
+If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened
+for the statement invoked with cursors execute() method.</p></li>
+<li><p>prepared = False
+When set to True cursor will remain in prepared state after the first
+execute() method was called. Further calls to execute() method will
+ignore the sql statement.</p></li>
+<li><p>binary = False
 Always execute statement in MariaDB client/server binary protocol.</p></li>
 </ul>
-<p>In versions prior to 1.1.0 results were unbuffered by default, which means before executing another 
-statement with the same connection the entire result set must be fetched.</p>
-<p>fetch* methods of the cursor class by default return result set values as a 
-tuple, unless named_tuple or dictionary was specified. The latter one exists 
-for compatibility reasons and should be avoided due to possible inconsistency
-in case two or more fields in a result set have the same name.</p>
+<p>In versions prior to 1.1.0 results were unbuffered by default,
+which means before executing another statement with the same
+connection the entire result set must be fetched.</p>
+<p>fetch* methods of the cursor class by default return result set values
+as a tuple, unless named_tuple or dictionary was specified.
+The latter one exists for compatibility reasons and should be avoided
+due to possible inconsistency in case two or more fields in a result
+set have the same name.</p>
 <p>If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
 the statement invoked with cursors execute() method.</p>
 </dd></dl>
@@ -249,7 +267,7 @@ an SQL statement. The given string is encoded to an escaped SQL string.</p>
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.kill">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">kill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.kill" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">kill</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.kill" title="Permalink to this definition">¶</a></dt>
 <dd><p>This function is used to ask the server to kill a database connection
 specified by the processid parameter.</p>
 <p>The connection id can be be retrieved by SHOW PROCESSLIST sql command.</p>
@@ -288,11 +306,12 @@ results. Open cursors will become invalid and cannot be used anymore.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.rollback">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">rollback</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.rollback" title="Permalink to this definition">¶</a></dt>
-<dd><p>Causes the database to roll back to the start of any pending transaction</p>
-<p>Closing a connection without committing the changes first will cause an
-implicit rollback to be performed.
-Note that rollback() will not work as expected if autocommit mode was set to True
-or the storage engine does not support transactions.&quot;</p>
+<dd><p>Causes the database to roll back to the start of any pending
+transaction</p>
+<p>Closing a connection without committing the changes first will
+cause an implicit rollback to be performed.
+Note that rollback() will not work as expected if autocommit mode
+was set to True or the storage engine does not support transactions.”</p>
 </dd></dl>
 
 <div class="versionadded">
@@ -300,9 +319,10 @@ or the storage engine does not support transactions.&quot;</p>
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.select_db">
-<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">select_db</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_db</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.select_db" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">select_db</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_db</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.select_db" title="Permalink to this definition">¶</a></dt>
 <dd><p>Gets the default database for the current connection.</p>
-<p>The default database can also be obtained or changed by database attribute.</p>
+<p>The default database can also be obtained or changed by database
+attribute.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -315,7 +335,10 @@ or the storage engine does not support transactions.&quot;</p>
 <dt class="sig sig-object py" id="mariadb.connections.Connection.tpc_begin">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tpc_begin</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xid</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.tpc_begin" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="simple">
-<dt>Parameter:</dt><dd><p>xid: xid object which was created by .xid() method of connection class</p>
+<dt>Parameter:</dt><dd><dl class="simple">
+<dt>xid: xid object which was created by .xid() method of connection</dt><dd><p>class</p>
+</dd>
+</dl>
 </dd>
 </dl>
 <p>Begins a TPC transaction with the given transaction ID xid.</p>
@@ -330,17 +353,18 @@ calls .commit() or .rollback() during an active TPC transaction.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.tpc_commit">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">tpc_commit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">xid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.connections.Connection.tpc_commit" title="Permalink to this definition">¶</a></dt>
-<dd><p>Optional parameter:&quot;
+<dd><p>Optional parameter:”
 xid: xid object which was created by .xid() method of connection class.</p>
 <p>When called with no arguments, .tpc_commit() commits a TPC transaction
 previously prepared with .tpc_prepare().</p>
-<p>If .tpc_commit() is called prior to .tpc_prepare(), a single phase commit
-is performed. A transaction manager may choose to do this if only a
-single resource is participating in the global transaction.
+<p>If .tpc_commit() is called prior to .tpc_prepare(), a single phase
+commit is performed. A transaction manager may choose to do this if
+only a single resource is participating in the global transaction.
 When called with a transaction ID xid, the database commits the given
-transaction. If an invalid transaction ID is provided, a ProgrammingError
-will be raised. This form should be called outside of a transaction, and
-is intended for use in recovery.&quot;</p>
+transaction. If an invalid transaction ID is provided,
+a ProgrammingError will be raised.
+This form should be called outside of a transaction, and
+is intended for use in recovery.”</p>
 </dd></dl>
 
 <dl class="py method">
@@ -379,7 +403,7 @@ transaction.</p>
 
 </section>
 <section id="connection-attributes">
-<h2>Connection attributes<a class="headerlink" href="#connection-attributes" title="Permalink to this headline">¶</a></h2>
+<h2>Connection attributes<a class="headerlink" href="#connection-attributes" title="Permalink to this heading">¶</a></h2>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.auto_reconnect">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">auto_reconnect</span></span><a class="headerlink" href="#mariadb.connections.Connection.auto_reconnect" title="Permalink to this definition">¶</a></dt>
@@ -397,7 +421,7 @@ the connection to a database server died due to timeout or other errors.</p>
 <p>Autocommit mode only affects operations on transactional table types.
 Be aware that rollback() will not work, if autocommit mode was switched
 on.</p>
-<p>By default autocommit mode is set to False.&quot;</p>
+<p>By default autocommit mode is set to False.”</p>
 </dd></dl>
 
 <dl class="py attribute">
@@ -461,7 +485,8 @@ non processed pending result sets.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.extended_server_capabilities">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">extended_server_capabilities</span></span><a class="headerlink" href="#mariadb.connections.Connection.extended_server_capabilities" title="Permalink to this definition">¶</a></dt>
-<dd><p>Extended server capability flags (only for MariaDB database servers).</p>
+<dd><p>Extended server capability flags (only for MariaDB
+database servers).</p>
 </dd></dl>
 
 <dl class="py attribute">
@@ -479,7 +504,8 @@ non processed pending result sets.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.connections.Connection.server_port">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">server_port</span></span><a class="headerlink" href="#mariadb.connections.Connection.server_port" title="Permalink to this definition">¶</a></dt>
-<dd><p>Database server TCP/IP port. This value will be 0 in case of a unix socket connection.</p>
+<dd><p>Database server TCP/IP port. This value will be 0 in case of a unix
+socket connection.</p>
 </dd></dl>
 
 <div class="versionadded">
@@ -530,7 +556,7 @@ VERSION_MAJOR * 10000 + VERSION_MINOR * 100 + VERSION_PATCH</p>
 <dt class="sig sig-object py" id="mariadb.connections.Connection.user">
 <span class="sig-prename descclassname"><span class="pre">Connection.</span></span><span class="sig-name descname"><span class="pre">user</span></span><a class="headerlink" href="#mariadb.connections.Connection.user" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the user name for the current connection or empty
-string if it can't be determined, e.g. when using socket
+string if it can’t be determined, e.g. when using socket
 authentication.</p>
 </dd></dl>
 
@@ -551,22 +577,78 @@ if there are no warnings.</p>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">The connection class</a><ul>
-<li><a class="reference internal" href="#connection-constructors">Connection constructors</a></li>
-<li><a class="reference internal" href="#connection-methods">Connection methods</a></li>
-<li><a class="reference internal" href="#connection-attributes">Connection attributes</a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection"><code class="docutils literal notranslate"><span class="pre">Connection</span></code></a></li>
+<li><a class="reference internal" href="#connection-constructors">Connection constructors</a><ul>
+<li><a class="reference internal" href="#mariadb.connections.Connection.cursor"><code class="docutils literal notranslate"><span class="pre">Connection.cursor()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.xid"><code class="docutils literal notranslate"><span class="pre">Connection.xid()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#connection-methods">Connection methods</a><ul>
+<li><a class="reference internal" href="#mariadb.connections.Connection.begin"><code class="docutils literal notranslate"><span class="pre">Connection.begin()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.commit"><code class="docutils literal notranslate"><span class="pre">Connection.commit()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.change_user"><code class="docutils literal notranslate"><span class="pre">Connection.change_user()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.close"><code class="docutils literal notranslate"><span class="pre">Connection.close()</span></code></a></li>
+<li><a class="reference internal" href="#id0"><code class="docutils literal notranslate"><span class="pre">Connection.cursor()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.dump_debug_info"><code class="docutils literal notranslate"><span class="pre">Connection.dump_debug_info()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.get_server_version"><code class="docutils literal notranslate"><span class="pre">Connection.get_server_version()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.escape_string"><code class="docutils literal notranslate"><span class="pre">Connection.escape_string()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.kill"><code class="docutils literal notranslate"><span class="pre">Connection.kill()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.ping"><code class="docutils literal notranslate"><span class="pre">Connection.ping()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.reconnect"><code class="docutils literal notranslate"><span class="pre">Connection.reconnect()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.reset"><code class="docutils literal notranslate"><span class="pre">Connection.reset()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.rollback"><code class="docutils literal notranslate"><span class="pre">Connection.rollback()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.select_db"><code class="docutils literal notranslate"><span class="pre">Connection.select_db()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.show_warnings"><code class="docutils literal notranslate"><span class="pre">Connection.show_warnings()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.tpc_begin"><code class="docutils literal notranslate"><span class="pre">Connection.tpc_begin()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.tpc_commit"><code class="docutils literal notranslate"><span class="pre">Connection.tpc_commit()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.tpc_prepare"><code class="docutils literal notranslate"><span class="pre">Connection.tpc_prepare()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.tpc_recover"><code class="docutils literal notranslate"><span class="pre">Connection.tpc_recover()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.tpc_rollback"><code class="docutils literal notranslate"><span class="pre">Connection.tpc_rollback()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#connection-attributes">Connection attributes</a><ul>
+<li><a class="reference internal" href="#mariadb.connections.Connection.auto_reconnect"><code class="docutils literal notranslate"><span class="pre">Connection.auto_reconnect</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.autocommit"><code class="docutils literal notranslate"><span class="pre">Connection.autocommit</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.character_set"><code class="docutils literal notranslate"><span class="pre">Connection.character_set</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.client_capabilities"><code class="docutils literal notranslate"><span class="pre">Connection.client_capabilities</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.collation"><code class="docutils literal notranslate"><span class="pre">Connection.collation</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.connection_id"><code class="docutils literal notranslate"><span class="pre">Connection.connection_id</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.database"><code class="docutils literal notranslate"><span class="pre">Connection.database</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.open"><code class="docutils literal notranslate"><span class="pre">Connection.open</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.server_capabilities"><code class="docutils literal notranslate"><span class="pre">Connection.server_capabilities</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.extended_server_capabilities"><code class="docutils literal notranslate"><span class="pre">Connection.extended_server_capabilities</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.server_info"><code class="docutils literal notranslate"><span class="pre">Connection.server_info</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.server_name"><code class="docutils literal notranslate"><span class="pre">Connection.server_name</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.server_port"><code class="docutils literal notranslate"><span class="pre">Connection.server_port</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.server_status"><code class="docutils literal notranslate"><span class="pre">Connection.server_status</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.server_version"><code class="docutils literal notranslate"><span class="pre">Connection.server_version</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.server_version_info"><code class="docutils literal notranslate"><span class="pre">Connection.server_version_info</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.tls_cipher"><code class="docutils literal notranslate"><span class="pre">Connection.tls_cipher</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.tls_version"><code class="docutils literal notranslate"><span class="pre">Connection.tls_version</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.unix_socket"><code class="docutils literal notranslate"><span class="pre">Connection.unix_socket</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.user"><code class="docutils literal notranslate"><span class="pre">Connection.user</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.connections.Connection.warnings"><code class="docutils literal notranslate"><span class="pre">Connection.warnings</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="module.html"
-                        title="previous chapter">The MariaDB Connector/Python module</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="cursor.html"
-                        title="next chapter">The cursor class</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="module.html"
+                          title="previous chapter">The MariaDB Connector/Python module</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="cursor.html"
+                          title="next chapter">The cursor class</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -576,7 +658,7 @@ if there are no warnings.</p>
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -596,14 +678,14 @@ if there are no warnings.</p>
         <li class="right" >
           <a href="module.html" title="The MariaDB Connector/Python module"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The connection class</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>
 </html>

@@ -1,19 +1,21 @@
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Basic usage &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
+    <title>Basic usage &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +37,7 @@
         <li class="right" >
           <a href="install.html" title="Installation"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Basic usage</a></li> 
       </ul>
     </div>  
@@ -46,11 +48,11 @@
           <div class="body" role="main">
             
   <section id="basic-usage">
-<h1>Basic usage<a class="headerlink" href="#basic-usage" title="Permalink to this headline">¶</a></h1>
+<h1>Basic usage<a class="headerlink" href="#basic-usage" title="Permalink to this heading">¶</a></h1>
 <section id="connecting">
-<h2>Connecting<a class="headerlink" href="#connecting" title="Permalink to this headline">¶</a></h2>
+<h2>Connecting<a class="headerlink" href="#connecting" title="Permalink to this heading">¶</a></h2>
 <p>The basic usage of MariaDB Connector/Python is similar to other database drivers which
-implement DB API 2.0 (PEP-249).</p>
+implement DB API 2.0 (<a class="reference external" href="https://peps.python.org/pep-249">PEP-249</a>).</p>
 <p>Below is a simple example of a typical use of MariaDB Connector/Python</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">mariadb</span>
 
@@ -102,7 +104,7 @@ the form of a tuple as a second parameter.</p>
 <p>At the end we free resources and close cursor and connection.</p>
 </section>
 <section id="passing-parameters-to-sql-statements">
-<h2>Passing parameters to SQL statements<a class="headerlink" href="#passing-parameters-to-sql-statements" title="Permalink to this headline">¶</a></h2>
+<h2>Passing parameters to SQL statements<a class="headerlink" href="#passing-parameters-to-sql-statements" title="Permalink to this heading">¶</a></h2>
 <p>As shown in previous example, passing parameters to SQL statements happens by using placeholders in the statement. By default
 MariaDB Connector/Python uses a question mark as a placeholder, for compatibility reason also %s placeholders are supported.
 Passing parameters is supported in methods <code class="xref py py-func docutils literal notranslate"><span class="pre">execute()</span></code> and <code class="xref py py-func docutils literal notranslate"><span class="pre">executemany()</span></code> of the cursor class.</p>
@@ -199,7 +201,7 @@ a loop, but much more effective is using the <code class="xref py py-func docuti
 - All tuples must have the same types as in first tuple. E.g. the parameter [(1),(1.0)] or [(1),(None)] are invalid.
 - Special values like None or column default value needs to be indicated by an indicator.</p>
 <section id="using-indicators">
-<h3>Using indicators<a class="headerlink" href="#using-indicators" title="Permalink to this headline">¶</a></h3>
+<h3>Using indicators<a class="headerlink" href="#using-indicators" title="Permalink to this heading">¶</a></h3>
 <p>In certain situations, for example when inserting default values or NULL, special indicators must be used.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">mariadb</span>
 <span class="kn">from</span> <span class="nn">mariadb.constants</span> <span class="kn">import</span> <span class="o">*</span>
@@ -246,7 +248,7 @@ a loop, but much more effective is using the <code class="xref py py-func docuti
 </ul>
 </div>
 <section id="supported-data-types">
-<h4>Supported Data types<a class="headerlink" href="#supported-data-types" title="Permalink to this headline">¶</a></h4>
+<h4>Supported Data types<a class="headerlink" href="#supported-data-types" title="Permalink to this heading">¶</a></h4>
 <p>Several standard python types are converted into SQL types and returned as Python objects when a statement is executed.</p>
 <table class="docutils align-left" id="id1">
 <caption><span class="caption-text">Supported Data Types</span><a class="headerlink" href="#id1" title="Permalink to this table">¶</a></caption>
@@ -307,8 +309,9 @@ a loop, but much more effective is using the <code class="xref py py-func docuti
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">Basic usage</a><ul>
 <li><a class="reference internal" href="#connecting">Connecting</a></li>
 <li><a class="reference internal" href="#passing-parameters-to-sql-statements">Passing parameters to SQL statements</a><ul>
@@ -322,12 +325,17 @@ a loop, but much more effective is using the <code class="xref py py-func docuti
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="install.html"
-                        title="previous chapter">Installation</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="pooling.html"
-                        title="next chapter">Connection pooling</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="install.html"
+                          title="previous chapter">Installation</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="pooling.html"
+                          title="next chapter">Connection pooling</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -337,7 +345,7 @@ a loop, but much more effective is using the <code class="xref py py-func docuti
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -357,13 +365,13 @@ a loop, but much more effective is using the <code class="xref py py-func docuti
         <li class="right" >
           <a href="install.html" title="Installation"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Basic usage</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>
 </html>

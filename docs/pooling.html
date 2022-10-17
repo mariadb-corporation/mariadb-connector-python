@@ -1,19 +1,21 @@
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Connection pooling &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
+    <title>Connection pooling &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +37,7 @@
         <li class="right" >
           <a href="usage.html" title="Basic usage"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Connection pooling</a></li> 
       </ul>
     </div>  
@@ -46,14 +48,14 @@
           <div class="body" role="main">
             
   <section id="connection-pooling">
-<h1>Connection pooling<a class="headerlink" href="#connection-pooling" title="Permalink to this headline">¶</a></h1>
+<h1>Connection pooling<a class="headerlink" href="#connection-pooling" title="Permalink to this heading">¶</a></h1>
 <p>A connection pool is a cache of connections to a database server where connections can be reused for future requests.
 Since establishing a connection is resource-expensive and time-consuming, especially when used inside a middle tier
 environment which maintains multiple connections and requires connections to be immediately available on the fly.</p>
 <p>Especially for server-side web applications, a connection pool is the standard way to maintain a pool of database connections
 which are reused across requests.</p>
 <section id="configuring-and-using-a-connection-pool">
-<h2>Configuring and using a connection pool<a class="headerlink" href="#configuring-and-using-a-connection-pool" title="Permalink to this headline">¶</a></h2>
+<h2>Configuring and using a connection pool<a class="headerlink" href="#configuring-and-using-a-connection-pool" title="Permalink to this heading">¶</a></h2>
 <p>The typical way for creating and using a connection pool is</p>
 <ol class="arabic simple">
 <li><p>Create (and configure) a connection pool</p></li>
@@ -62,7 +64,7 @@ which are reused across requests.</p>
 <li><p>Close the connection instance and return it to the connection pool.</p></li>
 </ol>
 <section id="creating-a-connection-pool">
-<h3>Creating a connection pool<a class="headerlink" href="#creating-a-connection-pool" title="Permalink to this headline">¶</a></h3>
+<h3>Creating a connection pool<a class="headerlink" href="#creating-a-connection-pool" title="Permalink to this heading">¶</a></h3>
 <p>When creating a connection pool, the following parameters have to be provided:</p>
 <ol class="arabic simple">
 <li><p>Connection pool specific parameters</p></li>
@@ -118,8 +120,9 @@ Current database: test
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">Connection pooling</a><ul>
 <li><a class="reference internal" href="#configuring-and-using-a-connection-pool">Configuring and using a connection pool</a><ul>
 <li><a class="reference internal" href="#creating-a-connection-pool">Creating a connection pool</a></li>
@@ -129,12 +132,17 @@ Current database: test
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="usage.html"
-                        title="previous chapter">Basic usage</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="api.html"
-                        title="next chapter">API Reference</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="usage.html"
+                          title="previous chapter">Basic usage</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="api.html"
+                          title="next chapter">API Reference</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -144,7 +152,7 @@ Current database: test
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -164,13 +172,13 @@ Current database: test
         <li class="right" >
           <a href="usage.html" title="Basic usage"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Connection pooling</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>
 </html>

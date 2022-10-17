@@ -1,19 +1,21 @@
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>The cursor class &#8212; MariaDB Connector/Python 1.1.4- documentation</title>
+    <title>The cursor class &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
     <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
     <script src="_static/jquery.js"></script>
     <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -35,7 +37,7 @@
         <li class="right" >
           <a href="connection.html" title="The connection class"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The cursor class</a></li> 
       </ul>
@@ -47,27 +49,31 @@
           <div class="body" role="main">
             
   <section id="the-cursor-class">
-<h1>The cursor class<a class="headerlink" href="#the-cursor-class" title="Permalink to this headline">¶</a></h1>
+<h1>The cursor class<a class="headerlink" href="#the-cursor-class" title="Permalink to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor">
-<em class="property"><span class="pre">class</span> </em><span class="sig-name descname"><span class="pre">Cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor" title="Permalink to this definition">¶</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Cursor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor" title="Permalink to this definition">¶</a></dt>
 <dd><p>MariaDB Connector/Python Cursor Object</p>
 </dd></dl>
 
 <section id="cursor-methods">
-<h2>Cursor methods<a class="headerlink" href="#cursor-methods" title="Permalink to this headline">¶</a></h2>
+<h2>Cursor methods<a class="headerlink" href="#cursor-methods" title="Permalink to this heading">¶</a></h2>
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.callproc">
-<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">callproc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sp</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Sequence</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">()</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.callproc" title="Permalink to this definition">¶</a></dt>
-<dd><p>Executes a stored procedure sp. The data sequence must contain an entry for
-each parameter the procedure expects.</p>
-<p>Input/Output or Output parameters have to be retrieved by .fetch methods,
-the .sp_outparams attribute indicates if the result set contains output
-parameters.</p>
+<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">callproc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">()</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.callproc" title="Permalink to this definition">¶</a></dt>
+<dd><p>Executes a stored procedure sp. The data sequence must contain an
+entry for each parameter the procedure expects.</p>
+<p>Input/Output or Output parameters have to be retrieved by .fetch
+methods, the .sp_outparams attribute indicates if the result set
+contains output parameters.</p>
 <dl class="simple">
 <dt>Arguments:</dt><dd><ul class="simple">
 <li><p>sp: Name of stored procedure.</p></li>
-<li><p>data: Optional sequence containing data for placeholder substitution.</p></li>
+<li><dl class="simple">
+<dt>data: Optional sequence containing data for placeholder</dt><dd><p>substitution.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </dd>
 </dl>
@@ -94,32 +100,35 @@ parameters.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.execute">
-<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">statement</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">Sequence</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">buffered</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.execute" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">execute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">statement</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Sequence</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">()</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">buffered</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.execute" title="Permalink to this definition">¶</a></dt>
 <dd><p>Prepare and execute a SQL statement.</p>
 <p>Parameters may be provided as sequence or mapping and will be bound
 to variables in the operation. Variables are specified as question
-marks (paramstyle=’qmark’), however for compatibility reasons MariaDB
+marks (paramstyle =’qmark’), however for compatibility reasons MariaDB
 Connector/Python also supports the ‘format’ and ‘pyformat’ paramstyles
 with the restriction, that different paramstyles can’t be mixed within
 a statement.</p>
 <p>A reference to the operation will be retained by the cursor.
-If the cursor was created with attribute prepared=True the statement
+If the cursor was created with attribute prepared =True the statement
 string for following execute operations will be ignored.
 This is most effective for algorithms where the same operation is used,
 but different parameters are bound to it (many times).</p>
-<p>By default execute() method generates an buffered result unless the optional
-parameter buffered was set to False or the cursor was generated as an
-unbuffered cursor.</p>
+<p>By default execute() method generates an buffered result unless the
+optional parameter buffered was set to False or the cursor was
+generated as an unbuffered cursor.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.executemany">
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">executemany</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">statement</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.executemany" title="Permalink to this definition">¶</a></dt>
-<dd><p>Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE statement) and
-execute it against all parameter found in sequence.</p>
-<p>Exactly behaves like .execute() but accepts a list of tuples, where each
-tuple represents data of a row within a table.
+<dd><p>Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE
+statement) and execute it against all parameter found in sequence.</p>
+<p>Exactly behaves like .execute() but accepts a list of tuples, where
+each tuple represents data of a row within a table.
 .executemany() only supports DML (insert, update, delete) statements.</p>
+<p>If the SQL statement contains a RETURNING clause, executemany()
+returns a result set containing the values for columns listed in the
+RETURNING clause.</p>
 <p>Example:</p>
 <p>The following example will insert 3 rows:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="o">=</span> <span class="p">[</span>
@@ -149,25 +158,25 @@ tuple represents data of a row within a table.
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.fetchall">
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">fetchall</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.fetchall" title="Permalink to this definition">¶</a></dt>
-<dd><p>Fetch all remaining rows of a query result, returning them as a 
+<dd><p>Fetch all remaining rows of a query result, returning them as a
 sequence of sequences (e.g. a list of tuples).</p>
-<p>An exception will be raised if the previous call to execute() didn’t 
+<p>An exception will be raised if the previous call to execute() didn’t
 produce a result set or execute() wasn’t called before.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.fetchmany">
-<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">fetchmany</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span> <span class="o"><span class="pre">=</span></span> <span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.fetchmany" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">fetchmany</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.fetchmany" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fetch the next set of rows of a query result, returning a sequence
 of sequences (e.g. a list of tuples). An empty sequence is returned
 when no more rows are available.</p>
-<p>The number of rows to fetch per call is specified by the parameter. 
+<p>The number of rows to fetch per call is specified by the parameter.
 If it is not given, the cursor’s arraysize determines the number
-of rows to be fetched. The method should try to fetch as many rows 
-as indicated by the size parameter. 
+of rows to be fetched. The method should try to fetch as many rows
+as indicated by the size parameter.
 If this is not possible due to the specified number of rows not being
 available, fewer rows may be returned.</p>
-<p>An exception will be raised if the previous call to execute() didn’t 
+<p>An exception will be raised if the previous call to execute() didn’t
 produce a result set or execute() wasn’t called before.</p>
 </dd></dl>
 
@@ -176,7 +185,7 @@ produce a result set or execute() wasn’t called before.</p>
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">fetchone</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.fetchone" title="Permalink to this definition">¶</a></dt>
 <dd><p>Fetch the next row of a query result set, returning a single sequence,
 or None if no more data is available.</p>
-<p>An exception will be raised if the previous call to execute() didn’t 
+<p>An exception will be raised if the previous call to execute() didn’t
 produce a result set or execute() wasn’t called before.</p>
 </dd></dl>
 
@@ -196,11 +205,12 @@ discarding any remaining rows from the current set.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.scroll">
-<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">scroll</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'relative'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.scroll" title="Permalink to this definition">¶</a></dt>
-<dd><p>Scroll the cursor in the result set to a new position according to mode.</p>
-<p>If mode is “relative” (default), value is taken as offset to the current
-position in the result set, if set to absolute, value states an absolute
-target position.</p>
+<span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">scroll</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'relative'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.cursors.Cursor.scroll" title="Permalink to this definition">¶</a></dt>
+<dd><p>Scroll the cursor in the result set to a new position according to
+mode.</p>
+<p>If mode is “relative” (default), value is taken as offset to the
+current position in the result set, if set to absolute, value states
+an absolute target position.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -217,7 +227,7 @@ target position.</p>
 
 </section>
 <section id="cursor-attributes">
-<h2>Cursor attributes<a class="headerlink" href="#cursor-attributes" title="Permalink to this headline">¶</a></h2>
+<h2>Cursor attributes<a class="headerlink" href="#cursor-attributes" title="Permalink to this heading">¶</a></h2>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="mariadb.cursors.Cursor.arraysize">
 <span class="sig-prename descclassname"><span class="pre">Cursor.</span></span><span class="sig-name descname"><span class="pre">arraysize</span></span><a class="headerlink" href="#mariadb.cursors.Cursor.arraysize" title="Permalink to this definition">¶</a></dt>
@@ -372,21 +382,54 @@ if there are no warnings.</p>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="index.html">Table of Contents</a></h3>
-  <ul>
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
 <li><a class="reference internal" href="#">The cursor class</a><ul>
-<li><a class="reference internal" href="#cursor-methods">Cursor methods</a></li>
-<li><a class="reference internal" href="#cursor-attributes">Cursor attributes</a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor"><code class="docutils literal notranslate"><span class="pre">Cursor</span></code></a></li>
+<li><a class="reference internal" href="#cursor-methods">Cursor methods</a><ul>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.callproc"><code class="docutils literal notranslate"><span class="pre">Cursor.callproc()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.execute"><code class="docutils literal notranslate"><span class="pre">Cursor.execute()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.executemany"><code class="docutils literal notranslate"><span class="pre">Cursor.executemany()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.fetchall"><code class="docutils literal notranslate"><span class="pre">Cursor.fetchall()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.fetchmany"><code class="docutils literal notranslate"><span class="pre">Cursor.fetchmany()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.fetchone"><code class="docutils literal notranslate"><span class="pre">Cursor.fetchone()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.next"><code class="docutils literal notranslate"><span class="pre">Cursor.next()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.nextset"><code class="docutils literal notranslate"><span class="pre">Cursor.nextset()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.scroll"><code class="docutils literal notranslate"><span class="pre">Cursor.scroll()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.setinputsizes"><code class="docutils literal notranslate"><span class="pre">Cursor.setinputsizes()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.setoutputsize"><code class="docutils literal notranslate"><span class="pre">Cursor.setoutputsize()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#cursor-attributes">Cursor attributes</a><ul>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.arraysize"><code class="docutils literal notranslate"><span class="pre">Cursor.arraysize</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.buffered"><code class="docutils literal notranslate"><span class="pre">Cursor.buffered</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.closed"><code class="docutils literal notranslate"><span class="pre">Cursor.closed</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.connection"><code class="docutils literal notranslate"><span class="pre">Cursor.connection</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.description"><code class="docutils literal notranslate"><span class="pre">Cursor.description</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.lastrowid"><code class="docutils literal notranslate"><span class="pre">Cursor.lastrowid</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.sp_outparams"><code class="docutils literal notranslate"><span class="pre">Cursor.sp_outparams</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.paramcount"><code class="docutils literal notranslate"><span class="pre">Cursor.paramcount</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.rowcount"><code class="docutils literal notranslate"><span class="pre">Cursor.rowcount</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.statement"><code class="docutils literal notranslate"><span class="pre">Cursor.statement</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.cursors.Cursor.warnings"><code class="docutils literal notranslate"><span class="pre">Cursor.warnings</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
 
-  <h4>Previous topic</h4>
-  <p class="topless"><a href="connection.html"
-                        title="previous chapter">The connection class</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="pool.html"
-                        title="next chapter">The ConnectionPool class</a></p>
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="connection.html"
+                          title="previous chapter">The connection class</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="pool.html"
+                          title="next chapter">The ConnectionPool class</a></p>
+  </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -396,7 +439,7 @@ if there are no warnings.</p>
     </form>
     </div>
 </div>
-<script>$('#searchbox').show(0);</script>
+<script>document.getElementById('searchbox').style.display = "block"</script>
         </div>
       </div>
       <div class="clearer"></div>
@@ -416,14 +459,14 @@ if there are no warnings.</p>
         <li class="right" >
           <a href="connection.html" title="The connection class"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.4- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The cursor class</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
         &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.1.2.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>
 </html>
