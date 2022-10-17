@@ -1,0 +1,289 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>MariaDB Connector/Python FAQ &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css" />
+    
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/sphinx_highlight.js"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Bug reports" href="bugs.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="bugs.html" title="Bug reports"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">MariaDB Connector/Python FAQ</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="mcp-faq">
+<span id="faq"></span><h1>MariaDB Connector/Python FAQ<a class="headerlink" href="#mcp-faq" title="Permalink to this heading">¶</a></h1>
+<p>This is a list of frequently asked questions about MariaDB Connector/Python. Feel free to suggest new
+entries!</p>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this heading">¶</a></h2>
+<details class="summary-error-python-h-no-such-file-or-directory">
+<summary>Error: "Python.h: No such file or directory"</summary><p>The header files and libraries of the Python development package weren’t properly installed.
+Use your package manager to install them system-wide:</p>
+<details class="summary-alpine-using-apk">
+<summary>Alpine (using apk):</summary><div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo apk add python3-dev</span>
+</pre></div>
+</div>
+</details><details class="summary-ubuntu-debian-using-apt">
+<summary>Ubuntu/Debian (using apt):</summary><div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo apt-get install python3-dev</span>
+</pre></div>
+</div>
+</details><details class="summary-centos-rhel-using-yum">
+<summary>CentOS/RHEL (using yum):</summary><div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo yum install python3-devel</span>
+</pre></div>
+</div>
+</details><details class="summary-fedora-using-dnf">
+<summary>Fedora (using dnf):</summary><div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo dnf install python3-devel</span>
+</pre></div>
+</div>
+</details><details class="summary-macosx-using-homebrew">
+<summary>MacOSX (using homebrew)</summary><div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">brew install mariadb-connector-c</span>
+</pre></div>
+</div>
+</details><details class="summary-opensuse-using-zypper">
+<summary>OpenSuse (using zypper):</summary><div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo zypper in python3-devel</span>
+</pre></div>
+</div>
+</details><p>Note: The python3 development packages of your distribution might not cover all minor versions
+of python3. If you are using python3.10 you may need install python3.10-dev.</p>
+</details><details class="summary-modulenotfounderror-no-module-named-packaging">
+<summary>ModuleNotFoundError: No module named 'packaging'</summary><p>With deprecation of distutils (see <a class="reference external" href="https://peps.python.org/pep-632">PEP-632</a>) version functions of distutils module were
+replaced in MariaDB Connector/Python 1.1.5 by packaging version functions.</p>
+<p>Before you can install MariaDB Connector/Python you have to install the packaging module:</p>
+<blockquote>
+<div><div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">pip3 install packaging</span>
+</pre></div>
+</div>
+</div></blockquote>
+</details><details class="summary-mariadb-connector-python-requires-mariadb-connector-c-3-2-4-found-version-3-1-2">
+<summary>MariaDB Connector/Python requires MariaDB Connector/C >= 3.2.4, found version 3.1.2</summary><p>The previously installed version of MariaDB Connector/C is too old and cannot be used for the MariaDB Connector/Python version
+you are trying to install.</p>
+<ul class="simple">
+<li><p>Check if your distribution can be upgraded to a more recent version of MariaDB Connector/C, which fits the requirements.</p></li>
+<li><p>If your distribution doesn’t provide a recent version of MariaDB Connector/C, check the <a class="reference external" href="https://mariadb.com/downloads/connectors/">MariaDB Connector Download page</a>, which provides
+latest versions for the major distributions.</p></li>
+<li><p>If none of the above will work for, build and install MariaDB Connector/C from source.</p></li>
+</ul>
+</details><details class="summary-oserror-mariadb-config-not-found">
+<summary>OSError: mariadb_config not found.</summary><p>The mariadb_config program is used to retrieve configuration information (such as the location of
+header files and libraries, installed version, ..) from MariaDB Connector/C</p>
+<p>This error indicates that MariaDB Connector/C, an important dependency for client/server communication that needs
+to be preinstalled, either was not installed or could not be found.</p>
+<ul>
+<li><p>If MariaDB Connector/C was previously installed, the installation script cannot detect the location of mariadb_config.
+Locate the directory where mariadb_config was installed and add this directory to your PATH.</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp"># </span>locate mariadb_config
+<span class="go">sudo find / -name &quot;mariadb_config&quot;</span>
+</pre></div>
+</div>
+</li>
+<li><p>If MariaDB Connector/C was not installed and the location of mariadb_config couldn’t be detected, please install
+MariaDB Connector/C.</p></li>
+</ul>
+</details><details class="summary-error-struct-st-mariadb-methods-has-no-member-named-db-execute-generate-request">
+<summary>Error: struct st_mariadb_methods’ has no member named ‘db_execute_generate_request’</summary><p>Even if the correct version of MariaDB Connector/C was installed, there are multiple mysql.h include files installed
+on your system, either from libmysql or an older MariaDB Connector/C installation. This can be checked  by executing</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">export CFLAGS=&quot;-V -E&quot;</span>
+<span class="go">pip3 install mariadb &gt; output.txt</span>
+</pre></div>
+</div>
+<p>Open output.txt in your favourite editor and search for “search starts here” where you can see the include
+files and paths used for the build.</p>
+</details><details class="summary-q-my-distribution-doesn-t-provide-a-recent-version-of-mariadb-connector-c">
+<summary>Q: My distribution doesn't provide a recent version of MariaDB Connector/C</summary><p>If you distribution doesn’t provide a recent version of MariaDB Connector/C (required version is 3.2.4 ) you either
+can download a version of MariaDB Connector/C from the <a class="reference external" href="https://mariadb.com/downloads/connectors/">MariaDB Connector Download page</a> or build the package from source:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">mkdir bld</span>
+<span class="go">cd bld</span>
+<span class="go">cmake ..</span>
+<span class="go">make</span>
+<span class="go">make install</span>
+</pre></div>
+</div>
+</details><details class="summary-q-does-mariadb-connector-python-provide-pre-releases-or-snapshot-builds-which-contain-recent-bug-fixes">
+<summary>Q: Does MariaDB Connector/Python provide pre-releases or snapshot builds which contain recent bug fixes?</summary><p>No. If an issue was fixed, the fix will be available in the next release via Python’s package
+manager repository (pypi.org).</p>
+</details><details class="summary-q-how-can-i-build-an-actual-version-from-github-sources">
+<summary>Q: How can I build an actual version from github sources?</summary><p>To build MariaDB Connector/Python from github sources, checkout latest sources from github</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">git clone https://github.com/mariadb-corporation/mariadb-conector-pyhon.git</span>
+</pre></div>
+</div>
+<p>and build and install it with</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">python3 setup.py build</span>
+<span class="go">python3 -m pip install</span>
+</pre></div>
+</div>
+</details></section>
+<section id="connecting">
+<h2>Connecting<a class="headerlink" href="#connecting" title="Permalink to this heading">¶</a></h2>
+<details class="summary-mariadb-operationalerror-can-t-connect-to-local-server-through-socket-tmp-mysql-sock">
+<summary>mariadb.OperationalError: Can't connect to local server through socket '/tmp/mysql.sock'</summary><ol class="arabic">
+<li><p>Check if MariaDB server has been started.</p></li>
+<li><p>Check if the MariaDB server was correctly configured and uses the right socket file:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">mysqld --help --verbose | grep socket</span>
+</pre></div>
+</div>
+<p>If the socket is different and cannot be changed, you can specify the socket in your
+connection parameters.</p>
+<blockquote>
+<div><div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">connection</span><span class="o">=</span> <span class="n">mariab</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">unix_socket</span><span class="o">=</span><span class="s2">&quot;/path_socket/mysql.sock&quot;</span><span class="p">,</span> <span class="o">....</span><span class="p">)</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>Another option is setting the environment variable MYSQL_UNIX_PORT.</p>
+<blockquote>
+<div><div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">export MYSQL_UNIX_PORT=/path_to/mysql.sock</span>
+</pre></div>
+</div>
+</div></blockquote>
+</li>
+</ol>
+</details><details class="summary-q-which-authentication-methods-are-supported-by-mariadb-connector-python">
+<summary>Q: Which authentication methods are supported by MariaDB Connector/Python?</summary><p>MariaDB Connector/Python uses MariaDB Connector/C for client-server communication. That means all authenticatoin plugins shipped
+together with MariaDB Connector/C can be used for user authentication.</p>
+</details></section>
+<section id="general">
+<h2>General:<a class="headerlink" href="#general" title="Permalink to this heading">¶</a></h2>
+<details class="summary-q-how-do-i-execute-multipe-statements-with-cursor-execute">
+<summary>Q: How do I execute multipe statements with cursor.execute() ?</summary><p>Since MariaDB Connector/Python uses binary protocol for client-server communication, this feature is not supported yet.</p>
+</details><details class="summary-q-does-mariadb-connector-python-works-with-python-2-x">
+<summary>Q: Does MariaDB Connector/Python works with Python 2.x ?</summary><p>Python versions which reached their end of life are not officially supported. While MariaDB Connector/Python might still work
+with older Python 3.x versions, it doesn’t work with Python version 2.x.</p>
+</details><details class="summary-q-how-can-i-see-a-transformed-statement-is-there-a-mogrify-method-available">
+<summary>Q: How can I see a transformed statement? Is there a mogrify() method available?</summary><p>No, MariaDB Connector/Python Python uses binary protocol for client/server communication. Before a statement will be executed
+it will be parsed and parameter markers which are different than question marks will be replaced by question
+marks. Afterwards the statement will be sent together with data to the server. The transformed statement can
+be obtained by cursor.statement attribute</p>
+<p>Example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;Future&quot;</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span>
+<span class="n">statement</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;SELECT DATE_FORMAT(creation_time, &#39;%h:%m:</span><span class="si">%s</span><span class="s2">&#39;) as time, topic, amount</span>
+<span class="s2">               FROM mytable WHERE topic=</span><span class="si">%s</span><span class="s2"> and id &gt; </span><span class="si">%s</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">statement</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">cursor</span><span class="o">.</span><span class="n">statement</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">SELECT DATE_FORMAT(creation_time, &#39;%h:%m:%s&#39;) as time, topic, amount FROM mytable WHERE topic=? and id &gt; ?</span>
+</pre></div>
+</div>
+<p>Please note, that there is no need to escape ‘%s’ by ‘%%s’ for the time conversion in DATE_FORMAT() function.</p>
+</details><details class="summary-q-does-mariadb-connector-python-supports-paramstyle-pyformat">
+<summary>Q: Does MariaDB Connector/Python supports paramstyle "pyformat" ?</summary><p>The default paramstyle (see <a class="reference external" href="https://peps.python.org/pep-249">PEP-249</a>) is <strong>qmark</strong> (question mark) for parameter markers. For compatibility
+with other drivers MariaDB Connector/Python also supports (and automatically recognizes) the <strong>format</strong> and <strong>pyformat</strong> parameter
+styles.</p>
+<p>Mixing different paramstyles within the same query is not supported and will raise an exception.</p>
+</details></section>
+<section id="transactions">
+<h2>Transactions<a class="headerlink" href="#transactions" title="Permalink to this heading">¶</a></h2>
+<details class="summary-q-previously-inserted-records-disappeared-after-my-program-finished">
+<summary>Q: Previously inserted records disappeared after my program finished.</summary><p>Default for autocommit in MariaDB Connector/Python is off, which means every transaction must be committed.
+Uncommitted pending transactions are rolled back automatically when the connection is closed.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">cursor</span><span class="o">=</span> <span class="n">connection</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+<span class="n">cursor</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;CREATE TABLE t1 (id int, name varchar(20))&quot;</span><span class="p">)</span>
+
+<span class="c1">#insert</span>
+<span class="n">data</span><span class="o">=</span> <span class="p">[(</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;Andy&quot;</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;George&quot;</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="s2">&quot;Betty&quot;</span><span class="p">)]</span>
+<span class="n">cursor</span><span class="o">.</span><span class="n">executemany</span><span class="p">(</span><span class="s2">&quot;INSERT INTO t1 VALUES (?,?)&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+
+<span class="c1">#commit pending transactions</span>
+<span class="n">connection</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+<span class="c1">#close handles</span>
+<span class="n">cursor</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<span class="n">connection</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</pre></div>
+</div>
+</details></section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">MariaDB Connector/Python FAQ</a><ul>
+<li><a class="reference internal" href="#installation">Installation</a></li>
+<li><a class="reference internal" href="#connecting">Connecting</a></li>
+<li><a class="reference internal" href="#general">General:</a></li>
+<li><a class="reference internal" href="#transactions">Transactions</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="bugs.html"
+                          title="previous chapter">Bug reports</a></p>
+  </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="bugs.html" title="Bug reports"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">MariaDB Connector/Python FAQ</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
+    </div>
+  </body>
+</html>
