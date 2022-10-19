@@ -56,17 +56,41 @@
 * MariaDB server versions from version 10.3 or MySQL server versions from version 5.7.
 * MariaDB client library (MariaDB Connector/C) from version 3.2.4.</p>
 </section>
+<section id="binary-installation">
+<h2>Binary installation<a class="headerlink" href="#binary-installation" title="Permalink to this heading">¶</a></h2>
+<section id="microsoft-windows">
+<h3>Microsoft Windows<a class="headerlink" href="#microsoft-windows" title="Permalink to this heading">¶</a></h3>
+<p>To install MariaDB Connector/Python on Microsoft Windows, you first have to install a recent version of MariaDB Connector/C. MSI installer for
+both 32-bit and 64-bit operating systems are available from <a class="reference external" href="https://mariadb.com/downloads/connectors/">MariaDB Connector Download page</a>.</p>
+<p>After installation of MariaDB Connector/C download and install MariaDB Connector/Python with the following command:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">pip3 install mariadb</span>
+</pre></div>
+</div>
+<p>On success, you should see a message at the end “Successfully installed mariadb-x.y.z”, where x.y.z is
+the recent version of MariaDB Connector/Python.</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">Collecting mariadb</span>
+<span class="go">Downloading mariadb-1.1.5-cp310-cp310-win_amd64.whl (190 kB)</span>
+<span class="go">---------------------------------------- 190.9/190.9 kB 2.9 MB/s eta 0:00:00</span>
+<span class="go">Installing collected packages: mariadb</span>
+<span class="go">Successfully installed mariadb-1.1.5</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="installation-from-source">
+<h2>Installation from Source<a class="headerlink" href="#installation-from-source" title="Permalink to this heading">¶</a></h2>
 <section id="build-prerequisites">
-<h2>Build prerequisites<a class="headerlink" href="#build-prerequisites" title="Permalink to this heading">¶</a></h2>
+<h3>Build prerequisites<a class="headerlink" href="#build-prerequisites" title="Permalink to this heading">¶</a></h3>
 <p>The following build prerequisites are required to install or build MariaDB Connector/Python from source code, github or from
 pypi.org.</p>
-<p>For Windows operating platforms the pypi.org download page provides binary versions.</p>
 <p>To install MariaDB Connector/Python from sources you will need:</p>
 <ul class="simple">
 <li><p>C compiler</p></li>
 <li><p>Python development files (Usually they are installed with package <strong>python3-dev</strong>). The minimum supported version of Python is 3.7.</p></li>
 <li><p>MariaDB Connector/C libraries and header files (Either from MariaDB server package or
-from MariaDB Connector/C package). Minimum required version for MariaDB Connector/Python &lt; 1.1.0 is 3.1.5, for later versions 3.2.4.</p></li>
+from  MariaDB Connector/C package). Minimum required version for MariaDB Connector/Python &lt; 1.1.0 is 3.1.5, for later versions 3.2.4.
+If your distribution doesn’t provide a recent version of MariaDB Connector/C you can either download binary packages from <a class="reference external" href="https://mariadb.com/downloads/connectors/">MariaDB Connector Download page</a> or build
+the package from source.</p></li>
 <li><p>The mariadb_config program from MariaDB Connector/C, which should be in your PATH directory.</p></li>
 <li><p>For Posix systems: TLS libraries, e.g. GnuTLS or OpenSSL (default)</p></li>
 <li><p>Since MariaDB Connector/Python 1.1.5: Python’s “packaging” module.</p></li>
@@ -74,30 +98,22 @@ from MariaDB Connector/C package). Minimum required version for MariaDB Connecto
 <p>On Posix systems make sure that the path environment variable contains the directory which
 contains the mariadb_config utility.</p>
 <p>Once everything is in place, run</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>pip3 install mariadb
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">pip3 install mariadb</span>
 </pre></div>
 </div>
 <p>or if you downloaded the source package</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>python3 setup.py build
-<span class="gp">$ </span>python3 -m pip install .
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">python3 setup.py build</span>
+<span class="go">python3 -m pip install .</span>
 </pre></div>
 </div>
-<section id="binary-installation">
-<h3>Binary installation<a class="headerlink" href="#binary-installation" title="Permalink to this heading">¶</a></h3>
-<p>MariaDB Connector/Python is also available from PyPi as wheel packages for Windows.
-Please note that dynamic MariaDB plugins (e.g. authentication plugins) are not part
-of the package and must be installed separately by installing MariaDB Connector/C or
-MariaDB Server package.</p>
-<p>Make sure you have an up-to-date version of pip and install MariaDB Connector/Python with</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>pip3 install mariadb
-</pre></div>
-</div>
+<p>For troubleshooting please also check the chapter <a class="reference internal" href="faq.html#installation-faq"><span class="std std-ref">Installation</span></a> from the FAQ page.</p>
+</section>
 </section>
 <section id="test-suite">
-<h3>Test suite<a class="headerlink" href="#test-suite" title="Permalink to this heading">¶</a></h3>
+<h2>Test suite<a class="headerlink" href="#test-suite" title="Permalink to this heading">¶</a></h2>
 <p>If you have installed the sources, after successful build you can run the test suite
 from the source directory.</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">$ </span>python3 -m unittest discover -v
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">python3 -m unittest discover -v</span>
 </pre></div>
 </div>
 <p>You can configure the connection parameters by using the following environment variables</p>
@@ -108,7 +124,6 @@ from the source directory.</p>
 <li><p>TEST_DB_HOST (default ‘localhost’)</p></li>
 <li><p>TEST_DB_PORT (default 3306)</p></li>
 </ul>
-</section>
 </section>
 </section>
 
@@ -124,11 +139,15 @@ from the source directory.</p>
     <ul>
 <li><a class="reference internal" href="#">Installation</a><ul>
 <li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
-<li><a class="reference internal" href="#build-prerequisites">Build prerequisites</a><ul>
-<li><a class="reference internal" href="#binary-installation">Binary installation</a></li>
-<li><a class="reference internal" href="#test-suite">Test suite</a></li>
+<li><a class="reference internal" href="#binary-installation">Binary installation</a><ul>
+<li><a class="reference internal" href="#microsoft-windows">Microsoft Windows</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#installation-from-source">Installation from Source</a><ul>
+<li><a class="reference internal" href="#build-prerequisites">Build prerequisites</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#test-suite">Test suite</a></li>
 </ul>
 </li>
 </ul>

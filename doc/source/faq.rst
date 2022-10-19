@@ -6,6 +6,8 @@
 This is a list of frequently asked questions about |MCP|. Feel free to suggest new
 entries!
 
+.. _installation_faq:
+
 Installation
 ^^^^^^^^^^^^
 
