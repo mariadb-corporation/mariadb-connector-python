@@ -252,6 +252,9 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
       if (!strncmp(key->str, "character_set_client", key->length) &&
            strncmp(val->str, "utf8mb4", val->length))
       {
+        /* mariadb_throw_exception (PyUnicode_FormatV)
+           doesn't support string with length,
+           so we need a temporary variable */
         char charset[128];
 
         memcpy(charset, val->str, val->length);

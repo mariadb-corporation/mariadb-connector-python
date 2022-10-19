@@ -412,7 +412,7 @@ static PyObject *ma_convert_value(MrdbCursor *self,
     PyObject *func;
     PyObject *new_value= NULL;
 
-    if (!self->connection->converter || value == Py_None)
+    if (!self->connection->converter)
         return NULL;
 
     if ((func= PyDict_GetItem(self->connection->converter, key)) &&
@@ -431,17 +431,14 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
     MYSQL_TIME tm;
     unsigned long *length;
     enum enum_extended_field_type ext_type= mariadb_extended_field_type(&self->fields[column]);
+    uint16_t type= self->fields[column].type;
 
     if (!data)
-    {
-        Py_INCREF(Py_None);
-        self->values[column]= Py_None;
-        return;
-    }
+      type= MYSQL_TYPE_NULL;
 
     length= mysql_fetch_lengths(self->result);
 
-    switch (self->fields[column].type)
+    switch (type)
     {
         case MYSQL_TYPE_NULL:
             Py_INCREF(Py_None);
