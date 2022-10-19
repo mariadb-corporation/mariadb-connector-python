@@ -95,6 +95,7 @@ setup(name='mariadb',
          "Source Code": "https://www.github.com/mariadb-corporation/"
                         "mariadb-connector-python",
       },
+      install_requires=['packaging'],
       ext_modules=[Extension('mariadb._mariadb',
                              ['mariadb/mariadb.c',
                               'mariadb/mariadb_codecs.c',
