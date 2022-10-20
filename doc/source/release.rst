@@ -6,17 +6,22 @@ MariaDB Connector/Python 1.1.5
 
 Release date: not released
 
-Issues fixed:
-^^^^^^^^^^^^^
-
+Notable changes:
+^^^^^^^^^^^^^^^^
 
 - :conpy:`220`: Added _get_socket() method
 - Performance improvement: Instead of iterating via fetchone(), fetchall() and fetchmany() methods now load the data directly at once. 
+
+Issues fixed:
+^^^^^^^^^^^^^
+
 - :conpy:`222`: Removed del() method from cursor
 - :conpy:`224`: Fixed bulk_operation when reexecuted using same cursor
 - :conpy:`225`: Fixed cursor.affected_rows property
 - :conpy:`226`: Replaced deprecated distutils (PEP-632)
 - :conpy:`227`: Replaced collections.named_tuple by PyStruct_Sequence (C-Python) 
+- .conpy:`228`: Fixed Installation error (if C/C version < 3.2.4 was found)
+- .conpy:`229`: Converter: added missing support for None conversions
 
 MariaDB Connector/Python 1.1.4
 ------------------------------

@@ -86,6 +86,7 @@ from the source directory.
 
 .. code-block:: console
 
+    cd testing
     python3 -m unittest discover -v
 
 You can configure the connection parameters by using the following environment variables

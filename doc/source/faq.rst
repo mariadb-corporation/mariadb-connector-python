@@ -75,7 +75,7 @@ Installation
    - Check if your distribution can be upgraded to a more recent version of |MCC|, which fits the requirements.
    - If your distribution doesn't provide a recent version of |MCC|, check the |MCDP|, which provides
      latest versions for the major distributions.
-   - If none of the above will work for, build and install |MCC| from source.
+   - If none of the above will work for you, build and install |MCC| from source.
 
 .. collapse:: OSError: mariadb_config not found.
 
