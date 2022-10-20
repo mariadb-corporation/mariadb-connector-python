@@ -90,6 +90,10 @@ replaced in MariaDB Connector/Python 1.1.5 by packaging version functions.</p>
 </details><details class="summary-mariadb-connector-python-requires-mariadb-connector-c-3-2-4-found-version-3-1-2">
 <summary>MariaDB Connector/Python requires MariaDB Connector/C >= 3.2.4, found version 3.1.2</summary><p>The previously installed version of MariaDB Connector/C is too old and cannot be used for the MariaDB Connector/Python version
 you are trying to install.</p>
+<p>To determine the installed version of MariaDB Connector/C, execute the command</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">mariadb_config --cc_version</span>
+</pre></div>
+</div>
 <ul class="simple">
 <li><p>Check if your distribution can be upgraded to a more recent version of MariaDB Connector/C, which fits the requirements.</p></li>
 <li><p>If your distribution doesn’t provide a recent version of MariaDB Connector/C, check the <a class="reference external" href="https://mariadb.com/downloads/connectors/">MariaDB Connector Download page</a>, which provides

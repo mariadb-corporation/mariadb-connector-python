@@ -72,6 +72,12 @@ Installation
    The previously installed version of |MCC| is too old and cannot be used for the |MCP| version
    you are trying to install.
 
+   To determine the installed version of |MCC|, execute the command
+
+   .. code-block:: console
+
+      mariadb_config --cc_version
+
    - Check if your distribution can be upgraded to a more recent version of |MCC|, which fits the requirements.
    - If your distribution doesn't provide a recent version of |MCC|, check the |MCDP|, which provides
      latest versions for the major distributions.
