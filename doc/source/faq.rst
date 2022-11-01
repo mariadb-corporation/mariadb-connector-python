@@ -128,6 +128,7 @@ Installation
       make
       make install
 
+
 .. collapse:: Q: Does MariaDB Connector/Python provide pre-releases or snapshot builds which contain recent bug fixes?
 
    No. If an issue was fixed, the fix will be available in the next release via Python's package
