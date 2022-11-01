@@ -386,6 +386,11 @@ class Cursor(mariadb._mariadb.cursor):
         (or subclass) exception will be raised if any operation is attempted
         with the cursor."
         """
+
+        # CONPY-231: fix memory leak
+        if self._data:
+            del self._data
+
         if not self.connection._closed:
             super().close()
 
