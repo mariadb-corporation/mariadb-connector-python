@@ -10,7 +10,7 @@ from test.base_test import create_connection, is_skysql, is_maxscale
 from test.conf_test import conf
 from mariadb.constants import STATUS
 import platform
-from distutils.version import StrictVersion
+from packaging.version import parse as parse_version
 
 
 class TestConnection(unittest.TestCase):
@@ -253,8 +253,8 @@ class TestConnection(unittest.TestCase):
         try:
             mariadb.connect(**default_conf)
         except mariadb.ProgrammingError:
-            self.assertLess(StrictVersion(mariadb.mariadbapi_version),
-                            StrictVersion('3.3.0'))
+            self.assertLess(parse_version(mariadb.mariadbapi_version),
+                            parse_version('3.3.0'))
             pass
 
 
