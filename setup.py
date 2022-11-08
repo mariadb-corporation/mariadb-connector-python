@@ -31,24 +31,44 @@ PY_MARIADB_AUTHORS = "Georg Richter"
 PY_MARIADB_MAJOR_VERSION = 1
 PY_MARIADB_MINOR_VERSION = 1
 PY_MARIADB_PATCH_VERSION = 5
-PY_MARIADB_PRE_RELEASE_SEGMENT = ""
+PY_MARIADB_PRE_RELEASE_SEGMENT = None
+PY_MARIADB_PRE_RELEASE_NR = 0
+PY_MARIADB_POST_RELEASE_SEGMENT = "post"
+PY_MARIADB_POST_RELEASE_NR = "1"
 
 PY_MARIADB_VERSION = "%s.%s.%s" % (PY_MARIADB_MAJOR_VERSION,
                                    PY_MARIADB_MINOR_VERSION,
                                    PY_MARIADB_PATCH_VERSION)
 
-PY_MARIADB_PRE_RELEASE_NR = 0
+if PY_MARIADB_POST_RELEASE_SEGMENT:
+    PY_MARIADB_VERSION += ".%s" % (PY_MARIADB_POST_RELEASE_SEGMENT +
+                                   PY_MARIADB_POST_RELEASE_NR)
+
 PY_MARIADB_VERSION_INFO = (PY_MARIADB_MAJOR_VERSION,
                            PY_MARIADB_MINOR_VERSION,
-                           PY_MARIADB_PATCH_VERSION,
-                           PY_MARIADB_PRE_RELEASE_SEGMENT,
-                           PY_MARIADB_PRE_RELEASE_NR)
+                           PY_MARIADB_PATCH_VERSION)
+
+if PY_MARIADB_PRE_RELEASE_SEGMENT:
+    PY_MARIADB_VERSION_INFO = PY_MARIADB_VERSION_INFO + (
+                                  PY_MARIADB_PRE_RELEASE_SEGMENT,
+                                  PY_MARIADB_PRE_RELEASE_NR)
+
+if PY_MARIADB_POST_RELEASE_SEGMENT:
+    PY_MARIADB_VERSION_INFO = PY_MARIADB_VERSION_INFO + (
+                                  PY_MARIADB_POST_RELEASE_SEGMENT,
+                                  PY_MARIADB_POST_RELEASE_NR)
 
 define_macros.append(("PY_MARIADB_MAJOR_VERSION", PY_MARIADB_MAJOR_VERSION))
 define_macros.append(("PY_MARIADB_MINOR_VERSION", PY_MARIADB_MINOR_VERSION))
 define_macros.append(("PY_MARIADB_PATCH_VERSION", PY_MARIADB_PATCH_VERSION))
 define_macros.append(("PY_MARIADB_PRE_RELEASE_SEGMENT", "\"%s\"" %
                       PY_MARIADB_PRE_RELEASE_SEGMENT))
+define_macros.append(("PY_MARIADB_PRE_RELEASE_NR", "\"%s\"" %
+                      PY_MARIADB_PRE_RELEASE_NR))
+define_macros.append(("PY_MARIADB_POST_RELEASE_SEGMENT", "\"%s\"" %
+                      PY_MARIADB_POST_RELEASE_SEGMENT))
+define_macros.append(("PY_MARIADB_POST_RELEASE_NR", "\"%s\"" %
+                      PY_MARIADB_POST_RELEASE_NR))
 
 
 with open("mariadb/release_info.py", "w") as rel_info:
