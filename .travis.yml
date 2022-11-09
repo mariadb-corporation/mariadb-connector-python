@@ -100,8 +100,9 @@ notifications:
 
 script:
   - python --version
-  - python setup.py build
-  - python setup.py install
+  - python -m pip install .
+#  - python setup.py build
+#  - python setup.py install
   - cd testing
   - |-
     if [ -z "$BENCH" ] ; then
