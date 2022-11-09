@@ -333,8 +333,9 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 "Use of status_callback requires Connector/C version 3.3.2 or higher.");
         return -1;
     }
-#endif
+#else
     self->status_callback= status_callback;
+#endif
 
     if (!(self->mysql= mysql_init(NULL)))
     {
