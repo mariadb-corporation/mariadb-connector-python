@@ -100,7 +100,6 @@ notifications:
 
 script:
   - python --version
-  - pip install packaging
   - python setup.py build
   - python setup.py install
   - cd testing
