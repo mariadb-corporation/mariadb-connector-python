@@ -72,7 +72,7 @@ highlight_language = 'python'
 rst_epilog="""
 .. |MCP| replace:: MariaDB Connector/Python
 .. |MCC| replace:: MariaDB Connector/C
-.. |MCC_minversion| replace:: 3.2.4
+.. |MCC_minversion| replace:: 3.3.1
 .. |DBAPI| replace:: DB API 2.0 (:PEP:`249`)
 .. |MCDP| replace:: `MariaDB Connector Download page <https://mariadb.com/downloads/connectors/>`__
 """

@@ -22,6 +22,7 @@ Issues fixed:
 - :conpy:`227`: Replaced collections.named_tuple by PyStruct_Sequence (C-Python) 
 - .conpy:`228`: Fixed Installation error (if C/C version < 3.2.4 was found)
 - .conpy:`229`: Converter: added missing support for None conversions
+- .conpy:`231`: Fixed memory leak
 
 MariaDB Connector/Python 1.1.4
 ------------------------------

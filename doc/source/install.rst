@@ -53,7 +53,7 @@ To install |MCP| from sources you will need:
 - C compiler
 - Python development files (Usually they are installed with package **python3-dev**). The minimum supported version of Python is 3.7.
 - |MCC| libraries and header files (Either from MariaDB server package or
-  from  |MCC| package). Minimum required version for |MCP| < 1.1.0 is 3.1.5, for later versions 3.2.4.
+  from  |MCC| package). Minimum required version for |MCP| < 1.1.0 is 3.1.5, for later versions |MCC_minversion|.
   If your distribution doesn't provide a recent version of |MCC| you can either download binary packages from |MCDP| or build
   the package from source.
 - The mariadb_config program from MariaDB Connector/C, which should be in your PATH directory.

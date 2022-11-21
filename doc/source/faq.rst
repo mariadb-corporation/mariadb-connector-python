@@ -67,7 +67,7 @@ Installation
 
          pip3 install packaging
 
-.. collapse:: MariaDB Connector/Python requires MariaDB Connector/C >= 3.2.4, found version 3.1.2
+.. collapse:: MariaDB Connector/Python requires MariaDB Connector/C >= 3.3.1, found version 3.1.2
 
    The previously installed version of |MCC| is too old and cannot be used for the |MCP| version
    you are trying to install.

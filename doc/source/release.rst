@@ -9,6 +9,7 @@ Release date: not released
 Notable changes:
 ^^^^^^^^^^^^^^^^
 
+- Since Connector/C 3.2 is discontinued, minimum required version for MariaDB Connector/Python 1.1.5 is Connector/C 3.3.1
 - :conpy:`220`: Added _get_socket() method
 - Performance improvement: Instead of iterating via fetchone(), fetchall() and fetchmany() methods now load the data directly at once. 
 
