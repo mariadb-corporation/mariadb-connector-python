@@ -46,7 +46,7 @@ def dequote(s):
 
 
 def get_config(options):
-    required_version = "3.2.4"
+    required_version = "3.3.1"
     static = options["link_static"]
 
     try:
@@ -54,7 +54,7 @@ def get_config(options):
             config_prg = os.environ["MARIADB_CONFIG"]
         except KeyError:
             config_prg = options["mariadb_config"]
-        subprocess.call([config_prg, "--version"])
+        subprocess.call([config_prg, "--cc_version"])
     except FileNotFoundError:
         # using default from path
         config_prg = "mariadb_config"

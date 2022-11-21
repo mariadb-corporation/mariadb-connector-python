@@ -774,8 +774,10 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *args)
       case MARIADB_CONNECTION_SERVER_CAPABILITIES:
       case MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES:
       case MARIADB_CONNECTION_CLIENT_CAPABILITIES:
+#ifdef MARIADB_CONNECTION_BYTES_READ
       case MARIADB_CONNECTION_BYTES_READ:
       case MARIADB_CONNECTION_BYTES_SENT:
+#endif
         return PyLong_FromLong((long)val.num);
         break;
       default:
