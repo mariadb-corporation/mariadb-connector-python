@@ -171,6 +171,13 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 
     return module;
 error:
-    PyErr_SetString(PyExc_ImportError, "Mariadb module initialization failed");
+    if (PyErr_Occurred())
+    {
+      PyObject *type,*value, *traceback;
+
+      PyErr_Fetch(&type, &value, &traceback);
+      return PyErr_Format(PyExc_ImportError, "MariaDB module initialization failed: %s\n", PyUnicode_AsUTF8(value));
+    }
+    PyErr_SetString(PyExc_ImportError, "Mariadb module initialization failed.");
     return NULL;
 }
