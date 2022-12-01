@@ -109,7 +109,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 
     /* Import Decimal support (CONPY-49) */
     if (!(decimal_module= PyImport_ImportModule("decimal")) ||
-        !(decimal_type= PyObject_GetAttrString(decimal_module, "Decimal")))
+        !(decimal_type= PyObject_GetAttr(decimal_module, PyUnicode_FromString("Decimal"))))
     {
         goto error;
     }
@@ -173,10 +173,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 error:
     if (PyErr_Occurred())
     {
-      PyObject *type,*value, *traceback;
-
-      PyErr_Fetch(&type, &value, &traceback);
-      return PyErr_Format(PyExc_ImportError, "MariaDB module initialization failed: %s\n", PyUnicode_AsUTF8(value));
+        return NULL;
     }
     PyErr_SetString(PyExc_ImportError, "Mariadb module initialization failed.");
     return NULL;
