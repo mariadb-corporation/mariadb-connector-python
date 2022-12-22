@@ -146,6 +146,6 @@ def connect(*args, connectionclass=mariadb.connections.Connection, **kwargs):
     return connection
 
 
-client_version_info = tuple(int(x, 10) for x in mariadbapi_version.split('.'))
+client_version_info = tuple(int(x, 10) for x in mariadbapi_version.split('-')[0].split('.'))
 client_version = client_version_info[0] * 10000 +\
     client_version_info[1] * 1000 + client_version_info[2]
