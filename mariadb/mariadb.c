@@ -94,6 +94,18 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 {
     PyObject *module= PyModule_Create(&mariadb_module);
 
+    /* check if client library is compatible */
+    if (mysql_get_client_version() < MARIADB_PACKAGE_VERSION_ID)
+    {
+      char errmsg[255];
+
+      snprintf(errmsg, 254, "MariaDB Connector/Python was build with MariaDB Connector/C %s, "
+               "while the loaded MariaDB Connector/C library has version %s.",
+               MARIADB_PACKAGE_VERSION, mysql_get_client_info());
+      PyErr_SetString(PyExc_ImportError, errmsg);
+      goto error;
+    }
+
     /* Initialize DateTimeAPI */
     if (mariadb_datetime_init() ||
         codecs_datetime_init())
