@@ -36,6 +36,29 @@ class TestPooling(unittest.TestCase):
         except mariadb.ProgrammingError:
             pass
 
+    def test_conpy245(self):
+        # we can't test performance here, but we can check if LRU works.
+        # All connections must have been used the same number of times.
+
+        default_conf = conf()
+        pool_size = 64
+        iterations = 100
+
+        pool = mariadb.ConnectionPool(pool_name="CONPY245",
+                                      pool_size=pool_size,
+                                      **default_conf)
+        for i in range(0, iterations):
+            for j in range(0, pool_size):
+                conn = pool.get_connection()
+                conn.close()
+
+        for i in range(0, pool_size):
+            conn = pool.get_connection()
+            self.assertEqual(conn._used, iterations + 1)
+            conn.close()
+
+        pool.close()
+
     def test_connection_pool_conf(self):
         pool = mariadb.ConnectionPool(pool_name="test_conf")
         default_conf = conf()

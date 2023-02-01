@@ -19,7 +19,6 @@
 
 import mariadb
 import _thread
-import time
 
 MAX_POOL_SIZE = 64
 POOL_IDLE_TIMEOUT = 1800
@@ -63,7 +62,8 @@ class ConnectionPool(object):
             Will reset the connection before returning it to the pool.
             Default value is True.
         """
-        self._connections = []
+        self._connections_free = []
+        self._connections_used = []
         self._pool_args = {}
         self._conn_args = {}
         self._lock_pool = _thread.RLock()
@@ -107,15 +107,15 @@ class ConnectionPool(object):
                     except mariadb.Error:
                         # if an error occurred, close all connections
                         # and raise exception
-                        for j in range(0, len(self._connections)):
+                        for j in range(0, len(self._connections_free)):
                             try:
-                                self._connections[j].close()
+                                self._connections_free[j].close()
                             except mariadb.Error:
                                 # connect failed, so we are not
                                 # interested in errors
                                 # from close() method
                                 pass
-                            del self._connections[j]
+                            del self._connections_free[j]
                         raise
                     self.add_connection(connection)
 
@@ -151,20 +151,19 @@ class ConnectionPool(object):
             raise mariadb.PoolError("Can't get configuration for pool %s" %
                                     self._pool_args["name"])
 
-        if len(self._connections) >= self._pool_args["size"]:
+        total = len(self._connections_free) + len(self._connections_used)
+        if total >= self._pool_args["size"]:
             raise mariadb.PoolError("Can't add connection to pool %s: "
                                     "No free slot available (%s)." %
                                     (self._pool_args["name"],
-                                     len(self._connections)))
+                                     total))
 
         with self._lock_pool:
             if connection is None:
                 connection = mariadb.Connection(**self._conn_args)
 
             connection._Connection__pool = self
-            connection._Connection__in_use = 0
-            connection._Connection__last_used = time.monotonic()
-            self._connections.append(connection)
+            self._connections_free.append(connection)
 
     def get_connection(self):
         """
@@ -172,25 +171,21 @@ class ConnectionPool(object):
         exception if a connection is not available.
         """
 
-        now = time.monotonic()
         conn = None
-        timediff = -1
 
         with self._lock_pool:
-            for i in range(0, len(self._connections)):
-                if not self._connections[i]._Connection__in_use:
-                    try:
-                        self._connections[i].ping()
-                    except mariadb.Error:
-                        continue
-                    t = now - self._connections[i]._Connection__last_used
-                    if t > timediff:
-                        conn = self._connections[i]
-                        timediff = t
+            for i in range(0, len(self._connections_free)):
+                try:
+                    self._connections_free[i].ping()
+                except mariadb.Error:
+                    continue
+                conn = self._connections_free[i]
+                conn._used += 1
+                self._connections_used.append(conn)
+                del self._connections_free[i]
+                return conn
 
-            if conn:
-                conn._Connection__in_use = 1
-        return conn
+        return None
 
     def _close_connection(self, connection):
         """
@@ -201,8 +196,12 @@ class ConnectionPool(object):
         with self._lock_pool:
             if self._pool_args["reset_connection"]:
                 connection.reset()
-            connection._Connection__in_use = 0
-            connection._Connection__last_used = time.monotonic()
+
+            for i in range(0, len(self._connections_used)):
+                if self._connections_used[i] == connection:
+                    del self._connections_used[i]
+                    self._connections_free.append(connection)
+                    return
 
     def set_config(self, **kwargs):
         """
@@ -218,11 +217,15 @@ class ConnectionPool(object):
     def close(self):
         """Closes connection pool and all connections."""
         try:
-            for c in self._connections:
+            for c in self._connections_free:
+                c._Connection__pool = None
+                c.close()
+            for c in self._connections_used:
                 c._Connection__pool = None
                 c.close()
         finally:
-            self._connections = None
+            self._connections_free = None
+            self._connections_used = None
             del mariadb._CONNECTION_POOLS[self._pool_args["name"]]
 
     @property
