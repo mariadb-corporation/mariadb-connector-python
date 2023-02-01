@@ -328,10 +328,10 @@ MrdbConnection_Initialize(MrdbConnection *self,
 
 #if MARIADB_PACKAGE_VERSION_ID < 30302
     if (status_callback)
-    {
-        mariadb_throw_exception(NULL, Mariadb_OperationalError, 1,
-                "Use of status_callback requires Connector/C version 3.3.2 or higher.");
-        return -1;
+      {
+        /* status callback requires C/C 3.3.2 */
+        PyErr_WarnFormat(PyExc_RuntimeWarning, 1, "status_callback support requires MariaDB Connector/C >= 3.3.2 "\
+                                                  "(found version %s)", mysql_get_client_info());
     }
 #else
     self->status_callback= status_callback;
@@ -346,7 +346,13 @@ MrdbConnection_Initialize(MrdbConnection *self,
 
 #if MARIADB_PACKAGE_VERSION_ID > 30301
    if (mysql_optionsv(self->mysql, MARIADB_OPT_STATUS_CALLBACK, MrdbConnection_process_status_info, self))
-      goto end;
+   {
+     /* Generate a warning, not an error - this will allow to run the module if Connector/C installation
+        was overwritten */
+      PyErr_WarnFormat(PyExc_RuntimeWarning, 1, "MariaDB Connector/Python was build with MariaDB Connector/C version %s "\
+                                             "but loaded Connector/C library has version %s", MARIADB_PACKAGE_VERSION,
+                                             mysql_get_client_info());
+   }
 #endif
 
     MARIADB_BEGIN_ALLOW_THREADS(self);
