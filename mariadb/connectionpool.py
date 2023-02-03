@@ -19,6 +19,8 @@
 
 import mariadb
 import _thread
+import time
+
 from mariadb.constants import STATUS
 
 MAX_POOL_SIZE = 64
@@ -45,6 +47,13 @@ class ConnectionPool(object):
 
         * pool_reset_connection (bool)=True -- Will reset the connection before
           returning it to the pool.  Default value is True.
+
+        * pool_validation_interval (int)=500 -- Specifies the validation
+          interval in milliseconds after which the status of a connection
+          requested from the pool is checked.
+          The default values is 500 milliseconds, a value of 0 means that
+          the status will always be checked.
+          (Added in version 1.1.6)
     """
 
     def __init__(self, *args, **kwargs):
@@ -69,7 +78,8 @@ class ConnectionPool(object):
         self._lock_pool = _thread.RLock()
         self.__closed = 0
 
-        key_words = ["pool_name", "pool_size", "pool_reset_connection"]
+        key_words = ["pool_name", "pool_size", "pool_reset_connection",
+                     "pool_validation_interval"]
 
         # check if pool_name was provided
         if kwargs and "pool_name" in kwargs:
@@ -83,9 +93,11 @@ class ConnectionPool(object):
 
         # save pool keyword arguments
         self._pool_args["name"] = kwargs.get("pool_name")
-        self._pool_args["size"] = kwargs.get("pool_size", 5)
+        self._pool_args["size"] = int(kwargs.get("pool_size", 5))
         self._pool_args["reset_connection"] = \
-            kwargs.get("pool_reset_connection", True)
+            bool(kwargs.get("pool_reset_connection", True))
+        self._pool_args["validation_interval"] = \
+            int(kwargs.get("pool_validation_interval", 500))
 
         # validate pool size (must be in range between 1 and MAX_POOL_SIZE)
         if not (0 < self._pool_args["size"] <= MAX_POOL_SIZE):
@@ -163,6 +175,7 @@ class ConnectionPool(object):
                 connection = mariadb.Connection(**self._conn_args)
 
             connection._Connection__pool = self
+            connection.__last_used = time.perf_counter_ns()
             self._connections_free.append(connection)
 
     def get_connection(self):
@@ -175,10 +188,14 @@ class ConnectionPool(object):
 
         with self._lock_pool:
             for i in range(0, len(self._connections_free)):
-                try:
-                    self._connections_free[i].ping()
-                except mariadb.Error:
-                    continue
+                dt = (time.perf_counter_ns() -
+                      self._connections_free[i].__last_used) / 1000000
+                if dt > self._pool_args["validation_interval"]:
+                    try:
+                        self._connections_free[i].ping()
+                    except mariadb.Error:
+                        continue
+
                 conn = self._connections_free[i]
                 conn._used += 1
                 self._connections_used.append(conn)
@@ -203,6 +220,7 @@ class ConnectionPool(object):
             for i in range(0, len(self._connections_used)):
                 if self._connections_used[i] == connection:
                     del self._connections_used[i]
+                    connection.__last_used = time.perf_counter_ns()
                     self._connections_free.append(connection)
                     return
 
