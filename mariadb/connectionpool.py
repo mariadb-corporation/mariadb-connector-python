@@ -19,9 +19,9 @@
 
 import mariadb
 import _thread
+from mariadb.constants import STATUS
 
 MAX_POOL_SIZE = 64
-POOL_IDLE_TIMEOUT = 1800
 
 
 class ConnectionPool(object):
@@ -193,9 +193,12 @@ class ConnectionPool(object):
         by connection object.
         """
 
+        if self._pool_args["reset_connection"]:
+            connection.reset()
+        elif connection.server_status & STATUS.IN_TRANS:
+            connection.rollback()
+
         with self._lock_pool:
-            if self._pool_args["reset_connection"]:
-                connection.reset()
 
             for i in range(0, len(self._connections_used)):
                 if self._connections_used[i] == connection:

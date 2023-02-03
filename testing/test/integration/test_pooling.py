@@ -36,6 +36,30 @@ class TestPooling(unittest.TestCase):
         except mariadb.ProgrammingError:
             pass
 
+    def test_conpy246(self):
+        # test if a pooled connection will be roll backed
+
+        default_conf = conf()
+
+        pool = mariadb.ConnectionPool(pool_name="CONPY246",
+                                      pool_size=1,
+                                      pool_reset_connection=False,
+                                      **default_conf)
+        conn = pool.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("CREATE OR REPLACE TABLE conpy246(a int)")
+        cursor.execute("INSERT INTO conpy246 VALUES (1)")
+        cursor.close()
+        conn.close()
+        conn = pool.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM conpy246")
+        self.assertEqual(cursor.rowcount, 0)
+        cursor.execute("DROP TABLE conpy246")
+        cursor.close()
+        conn.close()
+        pool.close()
+
     def test_conpy245(self):
         # we can't test performance here, but we can check if LRU works.
         # All connections must have been used the same number of times.
