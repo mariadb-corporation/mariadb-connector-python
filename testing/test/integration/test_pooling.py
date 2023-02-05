@@ -60,6 +60,100 @@ class TestPooling(unittest.TestCase):
         conn.close()
         pool.close()
 
+    def test_conpy247_1(self):
+        default_conf = conf()
+        pool = mariadb.ConnectionPool(pool_name="CONPY247_1",
+                                      pool_size=1,
+                                      pool_reset_connection=False,
+                                      pool_validation_interval=0,
+                                      **default_conf)
+
+        # service connection
+        conn = create_connection()
+        cursor = conn.cursor()
+
+        pconn = pool.get_connection()
+        old_id = pconn.connection_id
+        cursor.execute("KILL %s" % (old_id,))
+        pconn.close()
+
+        pconn = pool.get_connection()
+        self.assertNotEqual(old_id, pconn.connection_id)
+
+        conn.close()
+        pool.close()
+
+    def test_conpy247_2(self):
+        default_conf = conf()
+        pool = mariadb.ConnectionPool(pool_name="CONPY247_2",
+                                      pool_size=1,
+                                      pool_reset_connection=True,
+                                      pool_validation_interval=0,
+                                      **default_conf)
+
+        # service connection
+        conn = create_connection()
+        cursor = conn.cursor()
+
+        pconn = pool.get_connection()
+        old_id = pconn.connection_id
+        cursor.execute("KILL %s" % (old_id,))
+        pconn.close()
+
+        pconn = pool.get_connection()
+        self.assertNotEqual(old_id, pconn.connection_id)
+
+        conn.close()
+        pool.close()
+
+    def test_conpy247_3(self):
+        default_conf = conf()
+        pool = mariadb.ConnectionPool(pool_name="CONPY247_3",
+                                      pool_size=10,
+                                      pool_reset_connection=True,
+                                      pool_validation_interval=0,
+                                      **default_conf)
+
+        # service connection
+        conn = create_connection()
+        cursor = conn.cursor()
+        ids = []
+
+        sql = """CREATE OR REPLACE PROCEDURE p1()
+                 BEGIN
+                   SELECT 1;
+                   SELECT 2;
+                 END"""
+
+        cursor.execute(sql)
+
+        for i in range(0, 10):
+            pconn = pool.get_connection()
+            ids.append(pconn.connection_id)
+            cursor.execute("KILL %s" % (pconn.connection_id,))
+            pconn.close()
+
+        new_ids = []
+
+        for i in range(0, 10):
+            pconn = pool.get_connection()
+            new_ids.append(pconn.connection_id)
+            self.assertEqual(pconn.connection_id in ids, False)
+            cursor = pconn.cursor(buffered=False, binary=False)
+            cursor.callproc("P1")
+            pconn.close()
+
+        print("new_ids", new_ids)
+
+        for i in range(0, 10):
+            pconn = pool.get_connection()
+            print("new_id: ", pconn.connection_id)
+            self.assertEqual(pconn.connection_id in new_ids, True)
+            pconn.close()
+
+        conn.close()
+        pool.close()
+
     def test_conpy245(self):
         # we can't test performance here, but we can check if LRU works.
         # All connections must have been used the same number of times.

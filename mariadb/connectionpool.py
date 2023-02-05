@@ -134,6 +134,23 @@ class ConnectionPool(object):
         # store connection pool in _CONNECTION_POOLS
         mariadb._CONNECTION_POOLS[self._pool_args["name"]] = self
 
+    def _replace_connection(self, connection):
+        """
+        Removes the given connection and adds a new connection.
+        """
+
+        if connection:
+            if connection in self._connections_free:
+                x = self._connections_free.index(connection)
+                del self._connections_free[x]
+            elif connection in self._connections_used:
+                x = self._connections_used.index(connection)
+                del self._connections_used[x]
+
+            connection._Connection__pool = None
+            connection.close()
+        return self.add_connection()
+
     def __repr__(self):
         if (self.__closed):
             return "<mariadb.connectionPool.ConnectionPool object (closed) "\
@@ -163,7 +180,7 @@ class ConnectionPool(object):
             raise mariadb.PoolError("Can't get configuration for pool %s" %
                                     self._pool_args["name"])
 
-        total = len(self._connections_free) + len(self._connections_used)
+        total = len(self._connections_free + self._connections_used)
         if total >= self._pool_args["size"]:
             raise mariadb.PoolError("Can't add connection to pool %s: "
                                     "No free slot available (%s)." %
@@ -177,6 +194,7 @@ class ConnectionPool(object):
             connection._Connection__pool = self
             connection.__last_used = time.perf_counter_ns()
             self._connections_free.append(connection)
+            return connection
 
     def get_connection(self):
         """
@@ -188,15 +206,16 @@ class ConnectionPool(object):
 
         with self._lock_pool:
             for i in range(0, len(self._connections_free)):
-                dt = (time.perf_counter_ns() -
-                      self._connections_free[i].__last_used) / 1000000
+                conn = self._connections_free[i]
+                dt = (time.perf_counter_ns() - conn.__last_used) / 1000000
                 if dt > self._pool_args["validation_interval"]:
                     try:
-                        self._connections_free[i].ping()
+                        conn.ping()
                     except mariadb.Error:
-                        continue
+                        conn = self._replace_connection(conn)
+                        if not conn:
+                            continue
 
-                conn = self._connections_free[i]
                 conn._used += 1
                 self._connections_used.append(conn)
                 del self._connections_free[i]
@@ -209,20 +228,22 @@ class ConnectionPool(object):
         Returns connection to the pool. Internally used
         by connection object.
         """
-
-        if self._pool_args["reset_connection"]:
-            connection.reset()
-        elif connection.server_status & STATUS.IN_TRANS:
-            connection.rollback()
-
         with self._lock_pool:
 
-            for i in range(0, len(self._connections_used)):
-                if self._connections_used[i] == connection:
-                    del self._connections_used[i]
+            try:
+                if self._pool_args["reset_connection"]:
+                    connection.reset()
+                elif connection.server_status & STATUS.IN_TRANS:
+                    connection.rollback()
+            except mariadb.Error:
+                self._replace_connection(connection)
+
+            if connection:
+                if connection in self._connections_used:
+                    x = self._connections_used.index(connection)
+                    del self._connections_used[x]
                     connection.__last_used = time.perf_counter_ns()
                     self._connections_free.append(connection)
-                    return
 
     def set_config(self, **kwargs):
         """
@@ -238,10 +259,7 @@ class ConnectionPool(object):
     def close(self):
         """Closes connection pool and all connections."""
         try:
-            for c in self._connections_free:
-                c._Connection__pool = None
-                c.close()
-            for c in self._connections_used:
+            for c in (self._connections_free + self._connections_used):
                 c._Connection__pool = None
                 c.close()
         finally:
