@@ -1081,7 +1081,7 @@ MrdbCursor_execute_binary(MrdbCursor *self)
 
     if ((rc= Mrdb_execute_direct(self, self->parseinfo.statement, self->parseinfo.statement_len)))
     {
-        mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
+        mariadb_throw_exception(self->stmt, NULL, 1, NULL);
         goto error;
     }
     

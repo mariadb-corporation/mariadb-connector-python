@@ -60,6 +60,16 @@ class TestPooling(unittest.TestCase):
         conn.close()
         pool.close()
 
+    def test_conpy250(self):
+        default_conf = conf()
+        pool = mariadb.ConnectionPool(pool_name="CONPY250",
+                                      pool_size=16,
+                                      pool_reset_connection=False,
+                                      pool_validation_interval=0,
+                                      **default_conf)
+        self.assertEqual(pool.connection_count, 16)
+        pool.close()
+
     def test_conpy247_1(self):
         default_conf = conf()
         pool = mariadb.ConnectionPool(pool_name="CONPY247_1",
@@ -139,15 +149,13 @@ class TestPooling(unittest.TestCase):
             pconn = pool.get_connection()
             new_ids.append(pconn.connection_id)
             self.assertEqual(pconn.connection_id in ids, False)
-            cursor = pconn.cursor(buffered=False, binary=False)
-            cursor.callproc("P1")
+            cursor = pconn.cursor()
+            cursor.callproc("p1")
+            cursor.close()
             pconn.close()
-
-        print("new_ids", new_ids)
 
         for i in range(0, 10):
             pconn = pool.get_connection()
-            print("new_id: ", pconn.connection_id)
             self.assertEqual(pconn.connection_id in new_ids, True)
             pconn.close()
 
