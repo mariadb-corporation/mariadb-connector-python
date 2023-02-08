@@ -289,7 +289,10 @@ class ConnectionPool(object):
     def connection_count(self):
         "Returns the number of connections in connection pool."""
 
-        return len(self._connections_free + self._connections_used)
+        try:
+            return len(self._connections_free + self._connections_used)
+        except Exception:
+            return 0
 
     @property
     def pool_reset_connection(self):
