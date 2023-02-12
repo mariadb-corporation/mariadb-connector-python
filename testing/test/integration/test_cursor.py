@@ -29,6 +29,12 @@ class TestCursor(unittest.TestCase):
     def tearDown(self):
         del self.connection
 
+    def test_conpy251(self):
+        cursor = self.connection.cursor()
+        x = cursor.nextset()
+        self.assertEqual(x, None)
+        cursor.close()
+
     def test_multiple_close(self):
         cursor = self.connection.cursor()
         cursor.close()

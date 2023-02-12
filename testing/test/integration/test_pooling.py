@@ -69,6 +69,7 @@ class TestPooling(unittest.TestCase):
                                       **default_conf)
         self.assertEqual(pool.connection_count, 16)
         pool.close()
+        self.assertEqual(pool.connection_count, 0)
 
     def test_conpy247_1(self):
         default_conf = conf()

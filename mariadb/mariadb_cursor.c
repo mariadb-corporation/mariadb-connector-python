@@ -900,9 +900,14 @@ MrdbCursor_nextset(MrdbCursor *self)
         return NULL;
     }
 
-    MARIADB_BEGIN_ALLOW_THREADS(self->connection);
     if (!self->parseinfo.is_text)
+    {
+        if (!self->stmt)
+            Py_RETURN_NONE;
+        MARIADB_BEGIN_ALLOW_THREADS(self->connection);
         rc= mysql_stmt_next_result(self->stmt);
+        MARIADB_END_ALLOW_THREADS(self->connection);
+    }
     else
     {
         if (self->result)
@@ -910,9 +915,10 @@ MrdbCursor_nextset(MrdbCursor *self)
             mysql_free_result(self->result);
             self->result= NULL;
         }
+        MARIADB_BEGIN_ALLOW_THREADS(self->connection);
         rc= mysql_next_result(self->connection->mysql);
+        MARIADB_END_ALLOW_THREADS(self->connection);
     }
-    MARIADB_END_ALLOW_THREADS(self->connection);
 
     if (rc)
     {
