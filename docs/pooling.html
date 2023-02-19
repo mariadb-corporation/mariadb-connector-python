@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>Connection pooling &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
+    <title>Connection pooling &#8212; MariaDB Connector/Python 1.1.6 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
@@ -37,7 +37,7 @@
         <li class="right" >
           <a href="usage.html" title="Basic usage"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.6 documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Connection pooling</a></li> 
       </ul>
     </div>  
@@ -73,6 +73,12 @@ which are reused across requests.</p>
 <li><p>pool_name: The name of the pool, if not specified MariaDB Connector/Python will raise an exception.</p></li>
 <li><p>pool_size: The size of the pool, if not specified a default of 5 will be set.</p></li>
 <li><p>pool_reset_session: If set to True, the connection will be resetted before returned to the pool</p></li>
+</ul>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 1.1.0.</span></p>
+</div>
+<ul class="simple">
+<li><p>pool_invalidation_interval: specifies the validation interval in milliseconds after which the status of a connection requested from the pool is checked. The default values is 500 milliseconds, a value of 0 means that the status will always be checked.</p></li>
 </ul>
 <ol class="arabic simple" start="2">
 <li><p>Connection parameters</p></li>
@@ -172,12 +178,12 @@ Current database: test
         <li class="right" >
           <a href="usage.html" title="Basic usage"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.6 documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Connection pooling</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
-        &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
+        &#169; Copyright 2019-2023 MariaDB Corporation and Georg Richter.
       Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>

@@ -33,3 +33,4 @@ ConnectionPool attributes
        
 .. versionadded:: 1.1.0
 .. autoattribute:: mariadb.ConnectionPool.pool_reset_connection
+

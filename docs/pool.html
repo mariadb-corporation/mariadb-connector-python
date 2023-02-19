@@ -6,7 +6,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
-    <title>The ConnectionPool class &#8212; MariaDB Connector/Python 1.1.5- documentation</title>
+    <title>The ConnectionPool class &#8212; MariaDB Connector/Python 1.1.6 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css" />
     
@@ -37,7 +37,7 @@
         <li class="right" >
           <a href="cursor.html" title="The cursor class"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.6 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The ConnectionPool class</a></li> 
       </ul>
@@ -68,6 +68,12 @@ pool is limited to 64 connections.</p>
 of 5 will be used. Maximum allowed number is 64.</p></li>
 <li><p>pool_reset_connection (bool)=True – Will reset the connection before
 returning it to the pool.  Default value is True.</p></li>
+<li><p>pool_validation_interval (int)=500 – Specifies the validation
+interval in milliseconds after which the status of a connection
+requested from the pool is checked.
+The default values is 500 milliseconds, a value of 0 means that
+the status will always be checked.
+(Added in version 1.1.6)</p></li>
 </ul>
 </div></blockquote>
 </dd></dl>
@@ -218,13 +224,13 @@ side after .close() method was called</p>
         <li class="right" >
           <a href="cursor.html" title="The cursor class"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.5- documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.6 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The ConnectionPool class</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
-        &#169; Copyright 2019-2022 MariaDB Corporation and Georg Richter.
+        &#169; Copyright 2019-2023 MariaDB Corporation and Georg Richter.
       Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 5.2.3.
     </div>
   </body>

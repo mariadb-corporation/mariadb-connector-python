@@ -1,10 +1,32 @@
 Release history
 ===============
 
+MariaDB Connector/Python 1.1.6
+------------------------------
+
+Release date: Feb 20 2023
+
+Notable changes:
+^^^^^^^^^^^^^^^^
+
+- :conpy:`247`: Added optional parameter "pool_invalidation_interval", which specifies the validation interval in milliseconds after which the status of a connection requested from the pool is checked. The default values is 500 milliseconds, a value of 0 means that the status will always be checked. 
+
+Issues fixed:
+^^^^^^^^^^^^^
+
+- :conpy:`251`: Check if stmt was already initialized in cursor nextset() method.
+- :conpy:`250`: Fixed calculation of connection pool size
+- :conpy:`248`: Replace broken connections in connection pool
+- :conpy:`246`: Rollback transaction if connection pool was created without pool_reset_connection option.
+- :conpy:`245`: Implementation of LRU cache in connection pool.
+- :conpy:`240`: Don't overwrite errormessage/stacktrace if an exception was generated during module initialization. 
+
+
+
 MariaDB Connector/Python 1.1.5
 ------------------------------
 
-Release date: not released
+Release date: Nov 7 2022
 
 Notable changes:
 ^^^^^^^^^^^^^^^^
