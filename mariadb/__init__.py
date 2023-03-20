@@ -39,6 +39,10 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "__author__", "Cursor", "fieldinfo"]
 
 
+def binlog(*args, **kwargs):
+    return mariadb._mariadb.BinaryLog(args, kwargs)
+
+
 def connect(*args, connectionclass=mariadb.connections.Connection, **kwargs):
     """
     Creates a MariaDB Connection object.
