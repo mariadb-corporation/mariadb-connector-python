@@ -39,7 +39,7 @@ char *dsn_keys[]= {
     "client_flag", "pool_name", "pool_size", 
     "pool_reset_connection", "plugin_dir",
     "username", "db", "passwd",
-    "status_callback",
+    "status_callback", "tls_version",
     NULL
 };
 
@@ -291,7 +291,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
          *default_group= NULL,
          *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
          *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
-         *plugin_dir= NULL;
+         *plugin_dir= NULL, *tls_version= NULL;
     char *pool_name= 0;
     uint32_t pool_size= 0;
     uint8_t ssl_enforce= 0;
@@ -303,7 +303,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     PyObject *status_callback= NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|zzzzziziiibbzzzzzzzzzzibizibzzzzO:connect",
+                "|zzzzziziiibbzzzzzzzzzzibizibzzzzOz:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -314,7 +314,8 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_verify_cert, &ssl_enforce,
                 &client_flags, &pool_name, &pool_size,
                 &reset_session, &plugin_dir,
-                &user, &schema, &password, &status_callback))
+                &user, &schema, &password, &status_callback,
+                &tls_version))
     {
         return -1;
     }
@@ -418,7 +419,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     }
 
     /* set TLS/SSL options */
-    if (ssl_enforce || ssl_key || ssl_ca || ssl_cert || ssl_capath || ssl_cipher)
+    if (ssl_enforce || ssl_key || ssl_ca || ssl_cert || ssl_capath || ssl_cipher || tls_version)
         mysql_ssl_set(self->mysql, (const char *)ssl_key,
                 (const char *)ssl_cert,
                 (const char *)ssl_ca,
@@ -437,6 +438,11 @@ MrdbConnection_Initialize(MrdbConnection *self,
     if (ssl_verify_cert)
     {
         if (mysql_options(self->mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (unsigned char *) &ssl_verify_cert))
+          goto end;
+    }
+    if (tls_version)
+    {
+        if (mysql_options(self->mysql, MARIADB_OPT_TLS_VERSION, tls_version))
           goto end;
     }
 

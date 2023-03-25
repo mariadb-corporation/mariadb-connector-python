@@ -73,6 +73,16 @@ class TestConnection(unittest.TestCase):
         del cursor
         del new_conn
 
+    def test_tls_version(self):
+        default_conf = conf()
+        conn = mariadb.connect(**default_conf, tls_version="TLSv1.2")
+        cursor = conn.cursor()
+        cursor.execute("SHOW STATUS LIKE 'ssl_version'")
+        row = cursor.fetchone()
+        self.assertEqual(row[1], "TLSv1.2")
+        cursor.close()
+        conn.close()
+
     def test_init_command(self):
         default_conf = conf()
         new_conn = mariadb.connect(**default_conf, init_command="SET @a:=1")
