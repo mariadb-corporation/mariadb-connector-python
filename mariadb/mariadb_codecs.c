@@ -450,8 +450,18 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         case MYSQL_TYPE_INT24:
         case MYSQL_TYPE_LONG:
         case MYSQL_TYPE_LONGLONG:
-            self->values[column]= PyLong_FromString(data, NULL, 0);
+        {
+            char *p= data;
+
+            /* CONPY-258: remove leading zero's */
+            if (strlen(p) > 1)
+            {
+                while (*p && *p == '0')
+                p++;
+            }
+            self->values[column]= PyLong_FromString(p, NULL, 0);
             break;
+        }
         case MYSQL_TYPE_FLOAT:  
         case MYSQL_TYPE_DOUBLE: 
         {

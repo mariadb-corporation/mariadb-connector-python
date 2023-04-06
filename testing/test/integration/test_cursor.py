@@ -1490,6 +1490,22 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.affected_rows, 1)
         self.assertEqual(cursor.rowcount, 1)
 
+    def test_conpy258(self):
+        connection = create_connection()
+        cursor = connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a INT(9) ZEROFILL)")
+        cursor.execute("INSERT INTO t1 VALUES(123)")
+        cursor.execute("SELECT a FROM t1")
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 123)
+        cursor.close()
+        cursor = connection.cursor(binary=True)
+        cursor.execute("SELECT a FROM t1")
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 123)
+        cursor.close()
+        connection.close()
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:
