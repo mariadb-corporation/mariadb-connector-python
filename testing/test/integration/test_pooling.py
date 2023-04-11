@@ -207,18 +207,15 @@ class TestPooling(unittest.TestCase):
 
     def test_connection_pool_maxconn(self):
         default_conf = conf()
-        pool = mariadb.ConnectionPool(pool_name="test_max_size",
+        pool = mariadb.ConnectionPool(pool_name="test_max_size", pool_size=6,
                                       **default_conf)
         connections = []
-        for i in range(1, 6):
+        for i in range(0, 6):
             connections.append(pool.get_connection())
-        try:
-            pool.get_connection()
-        except mariadb.PoolError:
-            pass
+        self.assertRaises(mariadb.PoolError, lambda:pool.get_connection())
+
         for c in connections:
             c.close()
-        pool.get_connection()
         pool.close()
 
     def test_connection_pool_add(self):

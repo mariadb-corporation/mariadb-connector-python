@@ -221,7 +221,7 @@ class ConnectionPool(object):
                 del self._connections_free[i]
                 return conn
 
-        return None
+        raise mariadb.PoolError("No connection available")
 
     def _close_connection(self, connection):
         """
