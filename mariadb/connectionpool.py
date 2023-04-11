@@ -218,7 +218,8 @@ class ConnectionPool(object):
 
                 conn._used += 1
                 self._connections_used.append(conn)
-                del self._connections_free[i]
+                idx = self._connections_free.index(conn)
+                del self._connections_free[idx]
                 return conn
 
         raise mariadb.PoolError("No connection available")

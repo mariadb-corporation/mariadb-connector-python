@@ -356,6 +356,18 @@ class TestPooling(unittest.TestCase):
         pool.close()
         self.assertEqual(mariadb._CONNECTION_POOLS, {})
 
+    def test_conpy256(self):
+        size = 10
+        connections = []
+        default_conf = conf()
+        pool = mariadb.ConnectionPool(pool_name="test_conpy256",
+                               pool_size=size, **default_conf)
+        for i in range(size):
+            c= pool.get_connection()
+            self.assertNotEqual(c in connections, True)
+            connections.append(c)
+
+        pool.close()
 
 if __name__ == '__main__':
     unittest.main()
