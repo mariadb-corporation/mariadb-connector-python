@@ -653,18 +653,20 @@ PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
         self->result= NULL;
     }
 
-    if (Mrdb_GetFieldInfo(self))
-        return NULL;
-
-    if (!(self->values= (PyObject**)PyMem_RawCalloc(self->field_count, sizeof(PyObject *))))
-        return NULL;
-    if (!self->parseinfo.is_text)
-        mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
-
     if (self->field_count)
     {
-      self->row_count= CURSOR_NUM_ROWS(self);
-      self->affected_rows= 0;
+        if (Mrdb_GetFieldInfo(self))
+        {
+            return NULL;
+        }
+
+        if (!(self->values= (PyObject**)PyMem_RawCalloc(self->field_count, sizeof(PyObject *))))
+            return NULL;
+        if (!self->parseinfo.is_text)
+            mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
+
+        self->row_count= CURSOR_NUM_ROWS(self);
+        self->affected_rows= 0;
     } else {
       self->row_count= self->affected_rows= CURSOR_AFFECTED_ROWS(self);
     }
@@ -1284,6 +1286,7 @@ static PyObject *
 MrdbCursor_check_text_types(MrdbCursor *self)
 {
   PyDateTime_IMPORT;
+  Py_ssize_t ofs= 0;
 
   if (!self || !self->data || !self->parseinfo.paramcount)
   {
@@ -1292,7 +1295,14 @@ MrdbCursor_check_text_types(MrdbCursor *self)
 
   for (uint32_t i= 0; i < self->parseinfo.paramcount; i++)
   {
-    PyObject *obj= ListOrTuple_GetItem(self->data, i);
+    PyObject *obj;
+
+    if (PyDict_Check(self->data))
+    {
+      PyDict_Next(self->data, &ofs, NULL, &obj);
+    }    
+    else 
+       obj= ListOrTuple_GetItem(self->data, i);
     if (PyBytes_Check(obj) ||
         PyByteArray_Check(obj) ||
         PyDate_Check(obj))

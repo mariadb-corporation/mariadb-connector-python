@@ -296,7 +296,7 @@ class Cursor(mariadb._mariadb.cursor):
 
         # if one of the provided parameters has byte or datetime value,
         # we don't use text protocol
-        if self._check_text_types() == True:
+        if data and self._check_text_types() == True:
             self._text = False
 
         if self._text:
