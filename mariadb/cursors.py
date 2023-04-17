@@ -294,11 +294,10 @@ class Cursor(mariadb._mariadb.cursor):
         if self._force_binary:
             self._text = False
 
-        for val in data:
-            if isinstance(val, (bytes, bytearray, datetime.datetime,
-                                datetime.date, datetime.time)):
-                self._text = False
-                break
+        # if one of the provided parameters has byte or datetime value,
+        # we don't use text protocol
+        if self._check_text_types() == True:
+            self._text = False
 
         if self._text:
             # in text mode we need to substitute parameters

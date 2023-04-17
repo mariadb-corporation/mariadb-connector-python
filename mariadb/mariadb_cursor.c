@@ -19,6 +19,7 @@
 
 #include <mariadb_python.h>
 #include <docs/cursor.h>
+#include <datetime.h>
 
 static void
 MrdbCursor_dealloc(MrdbCursor *self);
@@ -38,6 +39,9 @@ MrdbCursor_InitResultSet(MrdbCursor *self);
 
 static PyObject *
 MrdbCursor_execute_text(MrdbCursor *self, PyObject *args);
+
+static PyObject *
+MrdbCursor_check_text_types(MrdbCursor *self);
 
 static PyObject *
 MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args);
@@ -138,6 +142,9 @@ static PyMethodDef MrdbCursor_Methods[] =
         METH_NOARGS,
         cursor_next__doc__},
     /* internal helper functions */
+    {"_check_text_types", (PyCFunction) MrdbCursor_check_text_types,
+        METH_NOARGS,
+        NULL},
     {"_seek", (PyCFunction)MrdbCursor_seek,
         METH_VARARGS,
         NULL},
@@ -1273,3 +1280,23 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args)
     return List;
 }
 
+static PyObject *
+MrdbCursor_check_text_types(MrdbCursor *self)
+{
+  PyDateTime_IMPORT;
+
+  if (!self || !self->data || !self->parseinfo.paramcount)
+  {
+    Py_RETURN_NONE;
+  }
+
+  for (uint32_t i= 0; i < self->parseinfo.paramcount; i++)
+  {
+    PyObject *obj= ListOrTuple_GetItem(self->data, i);
+    if (PyBytes_Check(obj) ||
+        PyByteArray_Check(obj) ||
+        PyDate_Check(obj))
+      Py_RETURN_TRUE;
+  }
+  Py_RETURN_NONE;
+}

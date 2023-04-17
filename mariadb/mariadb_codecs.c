@@ -891,7 +891,7 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
     return 1;
 }
 
-static PyObject *ListOrTuple_GetItem(PyObject *obj, Py_ssize_t index)
+PyObject *ListOrTuple_GetItem(PyObject *obj, Py_ssize_t index)
 {
     if (CHECK_TYPE(obj, &PyList_Type))
     {

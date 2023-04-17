@@ -319,6 +319,7 @@ extern PyTypeObject Mariadb_Fieldinfo_Type;
 extern PyTypeObject MrdbConnection_Type;
 extern PyTypeObject MrdbCursor_Type;
 
+PyObject *ListOrTuple_GetItem(PyObject *obj, Py_ssize_t index);
 int Mariadb_traverse(PyObject *self,
     visitproc visit,
     void *arg);
