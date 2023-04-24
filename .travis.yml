@@ -73,7 +73,7 @@ jobs:
     - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.9"
     - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.10"
     - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.11"
-    - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.10" BENCH=1
+#    - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.10" BENCH=1
     - if: type = push AND fork = false
       env: srv=maxscale
     - if: type = push AND fork = false
