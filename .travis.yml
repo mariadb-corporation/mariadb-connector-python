@@ -65,17 +65,15 @@ jobs:
     - env: srv=mysql v=8.0
 
   include:
-    - env: srv=mariadb v=10.3 local=1
-    - env: srv=mariadb v=10.4 local=1
-    - env: srv=mariadb v=10.5 local=1
     - env: srv=mariadb v=10.6 local=1
     - env: srv=mariadb v=10.7 local=1
     - env: srv=mariadb v=10.8 local=1
-    - env: srv=mariadb v=10.8 local=1 PYTHON_VER="3.7"
-    - env: srv=mariadb v=10.8 local=1 PYTHON_VER="3.8"
-    - env: srv=mariadb v=10.8 local=1 PYTHON_VER="3.9"
-    - env: srv=mariadb v=10.8 local=1 PYTHON_VER="3.10"
-    - env: srv=mariadb v=10.8 local=1 PYTHON_VER="3.10" BENCH=1
+    - env: srv=mariadb v=10.11 local=1
+    - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.8"
+    - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.9"
+    - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.10"
+    - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.11"
+    - env: srv=mariadb v=10.11 local=1 PYTHON_VER="3.10" BENCH=1
     - if: type = push AND fork = false
       env: srv=maxscale
     - if: type = push AND fork = false
@@ -85,7 +83,7 @@ jobs:
     - if: type = push AND fork = false
       env: srv=skysql-ha RUN_LONG_TEST=0
     - if: type = push AND fork = false
-      env: srv=build v=10.6
+      env: srv=build v=10.11
     - if: type = push AND fork = false
       env: srv=mysql v=5.7
     - if: type = push AND fork = false
