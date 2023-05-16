@@ -9,6 +9,7 @@ Prerequisites
 ^^^^^^^^^^^^^
 
 The current |MCP| implementation supports
+
 * Python versions from 3.7 to 3.11
 * MariaDB server versions from version 10.3 or MySQL server versions from version 5.7.
 * MariaDB client library (MariaDB Connector/C) from version |MCC_minversion|.
@@ -73,7 +74,7 @@ or if you downloaded the source package
 
 .. code-block:: console
 
-    python3 setup.py build
+    cd source_package_dir
     python3 -m pip install .
 
 For troubleshooting please also check the chapter :ref:`installation_faq` from the FAQ page.
