@@ -97,6 +97,32 @@ class Cursor(mariadb._mariadb.cursor):
         # call initialization of main class
         super().__init__(connection, **kwargs)
 
+    def __iter__(self):
+        """
+        Select which object will be used as iteration source.
+
+        SQLite3 connector provides a facility to loop over the
+        results provided by a Cursor object after a query.
+        This method tells which object will be able to provide
+        every result of the query set.
+
+        That object should generally be the current cursor, unless
+        some optimization can be pulled.
+        """
+        return self
+
+    def __next__(self):
+        """
+        Return the next record of the cursor.
+
+        This method is used by the `for` keyword to retrieve
+        the next record of a cursor.
+        """
+        result = self.fetchone()
+        if result is None:
+            raise StopIteration("End of result set.")
+        return result
+
     def _substitute_parameters(self):
         """
         Internal use only.
