@@ -110,8 +110,8 @@ class Connection(mariadb._mariadb.connection):
           compatibility reasons and should be avoided due to possible
           inconsistency.
 
-        - cursor_type = CURSOR_TYPE.NONE
-          If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened
+        - cursor_type = CURSOR.NONE
+          If cursor_type is set to CURSOR.READ_ONLY, a cursor is opened
           for the statement invoked with cursors execute() method.
 
         - prepared = False
@@ -132,7 +132,7 @@ class Connection(mariadb._mariadb.connection):
         due to possible inconsistency in case two or more fields in a result
         set have the same name.
 
-        If cursor_type is set to CURSOR_TYPE.READ_ONLY, a cursor is opened for
+        If cursor_type is set to CURSOR.READ_ONLY, a cursor is opened for
         the statement invoked with cursors execute() method.
         """
         self._check_closed()
