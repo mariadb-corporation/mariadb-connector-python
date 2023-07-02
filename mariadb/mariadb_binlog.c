@@ -619,8 +619,25 @@ static PyObject *MrdbBinlog_fetch(MrdbBinlog *self)
                                 PyLong_FromUnsignedLong((unsigned long)event->event.gtid.domain_id));
         MA_SET_DICT_ITEM_STRING(d_event, "flags", 
                                 PyLong_FromUnsignedLong((unsigned long)event->event.gtid.flags));
-        MA_SET_DICT_ITEM_STRING(d_event, "commit_id",
-                                PyLong_FromUnsignedLong((unsigned long)event->event.gtid.commit_id));
+        if (event->event.gtid.flags & FL_GROUP_COMMIT_ID)
+        {
+          MA_SET_DICT_ITEM_STRING(d_event, "commit_id",
+                                  PyLong_FromUnsignedLong((unsigned long)event->event.gtid.commit_id));
+        }
+#ifdef MARIADB_PACKAGE_VERSION_ID > 30305
+        else if (event->event.gtid.flags & (FL_PREPARED_XA | FL_COMPLETED_XA))
+        {
+          MA_SET_DICT_ITEM_STRING(d_event, "format_id",
+                                  PyLong_FromUnsignedLong((unsigned long)event->event.gtid.format_id));
+          MA_SET_DICT_ITEM_STRING(d_event, "gtrid_length",
+                                  PyLong_FromUnsignedLong((unsigned long)event->event.gtid.gtrid_len));
+          MA_SET_DICT_ITEM_STRING(d_event, "bqual_length",
+                                  PyLong_FromUnsignedLong((unsigned long)event->event.gtid.bqual_len));
+          MA_SET_DICT_ITEM_STRING(d_event, "xid",
+                                  PyBytes_FromStringAndSize(event->event.gtid.xid.str,
+                                                            event->event.gtid.xid.length));
+        }
+#endif
         break;
       }
       case START_ENCRYPTION_EVENT:
