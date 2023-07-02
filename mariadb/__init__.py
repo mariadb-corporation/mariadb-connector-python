@@ -122,6 +122,10 @@ def connect(*args, connectionclass=mariadb.connections.Connection, **kwargs):
             Enables server certificate verification.
         - ssl:
             The connection must use TLS security or it will fail.
+        - tls_version:
+            A comma-separated list (without whitespaces) of TLS versions.
+            Valid versions are TLSv1.0, TLSv1.1,TLSv1.2 and TLSv1.3.
+            Added in version 1.1.7.
         - autocommit=False:
             Specifies the autocommit settings.
             True will enable autocommit, False will disable it (default).
