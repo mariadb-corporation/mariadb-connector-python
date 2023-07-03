@@ -79,7 +79,7 @@ with open("mariadb/release_info.py", "w") as rel_info:
 
 setup(name='mariadb',
       version=PY_MARIADB_VERSION,
-      python_requires='>=3.7',
+      python_requires='>=3.8',
       classifiers=[
           'Development Status :: 5 - Production/Stable',
           'Environment :: Console',
