@@ -1,6 +1,24 @@
 Release history
 ===============
 
+MariaDB Connector/Python 1.1.7
+------------------------------
+
+Release date: Jul 5 2023
+
+Notable changes:
+^^^^^^^^^^^^^^^^
+
+- :conpy:`253`: The connection method now offers the option of specifying the version of the TLS protocol using tls_version. 
+
+Issues fixed:
+^^^^^^^^^^^^^
+
+- :conpy:`258`: Fixed ValueError exception if ZEROFILL flag is defined.
+- :conpy:`256`: Fix indexing when moving a free connection to used connections to avoid returning the same connection twice. Kudos and thanks to G.Mech for reporting this bug and providing the fix.
+- :conpy:`255`: If all connections from a pool are in use, pool.get_connection now returns None instead of raising an exception.
+
+
 MariaDB Connector/Python 1.1.6
 ------------------------------
 
