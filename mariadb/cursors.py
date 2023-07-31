@@ -119,6 +119,10 @@ class Cursor(mariadb._mariadb.cursor):
                     val = self._data[i]
                 if val is None:
                     replace = "NULL"
+                elif type(val) is datetime.datetime:
+                    val = val.strftime('%Y-%m-%d %H:%M:%S')
+                elif type(val) is datetime.date:
+                    val = val.strftime('%Y-%m-%d')
                 else:
                     if isinstance(val, INDICATOR.MrdbIndicator):
                         if val == INDICATOR.NULL:
