@@ -516,7 +516,15 @@ class Cursor(mariadb._mariadb.cursor):
         on the cursor or the rowcount of the last operation  cannot be
         determined by the interface.
         """
-        self.check_closed()
+
+        # Even if PEP-249 permits operations on a closed cursor, we don't
+        # raise an exception if the cursor or the underlying connection
+        # was closed (See CONPY-269), instead we will return -1
+        try:
+            self.check_closed()
+        except mariadb.ProgrammingError:
+            return -1
+
         if self._rowcount > 0:
             return self._rowcount
         return super().rowcount

@@ -1490,6 +1490,15 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.affected_rows, 1)
         self.assertEqual(cursor.rowcount, 1)
 
+    def test_conpy269(self):
+        connection = create_connection()
+        cursor = connection.cursor()
+        cursor.execute("SELECT 1 UNION SELECT 2")
+        self.assertEqual(cursor.rowcount, 2)
+        cursor.close()
+        self.assertEqual(cursor.rowcont, -1)
+        connection.close()
+
     def test_conpy258(self):
         connection = create_connection()
         cursor = connection.cursor()
