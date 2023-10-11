@@ -31,7 +31,7 @@ PyDoc_STRVAR(
   "- field_flags\n"
   "- table_name\n"
   "- original_column_name\n"
-  "- original_table_name\n"
+  "- original_table_name\n\n"
   "This attribute will be None for operations that do not return rows or if the cursor has\n"
   "not had an operation invoked via the .execute*() method yet.\n\n"
   "extended field type information was added in MariaDB Connector/Python 1.1.8. It will be available\n"
