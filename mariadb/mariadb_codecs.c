@@ -41,18 +41,46 @@ int codecs_datetime_init(void)
     return 0;
 }
 
-enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *field)
+Mrdb_ExtFieldType extended_field_types[] = {
+  {EXT_TYPE_JSON, {"json", 4}},
+  {EXT_TYPE_UUID, {"uuid", 4}},
+  {EXT_TYPE_INET4, {"inet4", 5}},
+  {EXT_TYPE_INET6, {"inet6", 5}},
+  {EXT_TYPE_POINT, {"point", 5}},
+  {EXT_TYPE_MULTIPOINT, {"multipoint", 10}},
+  {EXT_TYPE_LINESTRING, {"linestring", 10}},
+  {EXT_TYPE_MULTILINESTRING, {"multilinestring", 15}},
+  {EXT_TYPE_POLYGON, {"polygon", 7}},
+  {EXT_TYPE_MULTIPOLYGON, {"multipolygon", 12}},
+  {EXT_TYPE_GEOMETRYCOLLECTION, {"geometrycollection", 18}},
+  {0, {NULL, 0}}
+};
+
+Mrdb_ExtFieldType *mariadb_extended_field_type(const MYSQL_FIELD *field)
 {
 #if MARIADB_PACKAGE_VERSION_ID > 30107
-    MARIADB_CONST_STRING str;
+    MARIADB_CONST_STRING str= {0,0};
 
-    if (!mariadb_field_attr(&str, field, MARIADB_FIELD_ATTR_FORMAT_NAME))
-    {
-      if (str.length == 4 && !strncmp(str.str, "json", 4))
-          return EXT_TYPE_JSON;
+    /* Extended field type has either format name or type name */
+    if (mariadb_field_attr(&str, field, MARIADB_FIELD_ATTR_FORMAT_NAME))
+      return NULL;
+    if (!str.length && mariadb_field_attr(&str, field, MARIADB_FIELD_ATTR_DATA_TYPE_NAME))
+      return NULL;
+    if (str.length) {
+      uint8_t i= 0;
+
+      while (extended_field_types[i].ext_type)
+      {
+        if (extended_field_types[i].str.length == str.length &&
+            !strncmp(str.str, extended_field_types[i].str.str, str.length))
+        {
+          return &extended_field_types[i];
+        }
+        i++;
+      }
     }
 #endif
-    return EXT_TYPE_NONE;
+    return NULL;
 }
 
 /*
@@ -430,8 +458,10 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
 {
     MYSQL_TIME tm;
     unsigned long *length;
-    enum enum_extended_field_type ext_type= mariadb_extended_field_type(&self->fields[column]);
+    Mrdb_ExtFieldType *ext_field_type;
     uint16_t type= self->fields[column].type;
+
+    ext_field_type= mariadb_extended_field_type(&self->fields[column]);
 
     if (!data)
       type= MYSQL_TYPE_NULL;
@@ -519,8 +549,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             {
                 self->fields[column].max_length= length[column];
             }
-            if (self->fields[column].charsetnr== CHARSET_BINARY &&
-                ext_type != EXT_TYPE_JSON)
+            if (self->fields[column].charsetnr== CHARSET_BINARY)
             {
                 self->values[column]= 
                        PyBytes_FromStringAndSize((const char *)data,
@@ -575,7 +604,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         PyObject *val;
         enum enum_field_types type;
 
-        if (ext_type == EXT_TYPE_JSON)
+        if (ext_field_type && ext_field_type->ext_type == EXT_TYPE_JSON)
           type= MYSQL_TYPE_JSON;
         else
           type= self->fields[column].type;
@@ -599,7 +628,9 @@ void
 field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 {
     MrdbCursor *self= (MrdbCursor *)data;
-    enum enum_extended_field_type ext_type= mariadb_extended_field_type(&self->fields[column]);
+    Mrdb_ExtFieldType *ext_field_type;
+
+    ext_field_type= mariadb_extended_field_type(&self->fields[column]);
 
     if (!row)
     {
@@ -749,8 +780,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 unsigned long length= mysql_net_field_length(row);
                 if (length > self->fields[column].max_length)
                     self->fields[column].max_length= length;
-                if (self->fields[column].charsetnr == CHARSET_BINARY &&
-                    ext_type != EXT_TYPE_JSON)
+                if (self->fields[column].charsetnr== CHARSET_BINARY)
                 {
                     self->values[column]= 
                             PyBytes_FromStringAndSize((const char *)*row, 
@@ -793,8 +823,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
             unsigned long utf8len;
             length= mysql_net_field_length(row);
 
-            if ((self->fields[column].flags & BINARY_FLAG ||
-                self->fields[column].charsetnr == CHARSET_BINARY))
+            if (self->fields[column].charsetnr== CHARSET_BINARY)
             {
                 self->values[column]=
                         PyBytes_FromStringAndSize((const char *)*row,
@@ -820,7 +849,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         PyObject *val;
         enum enum_field_types type;
 
-        if (ext_type == EXT_TYPE_JSON)
+        if (ext_field_type && ext_field_type->ext_type == EXT_TYPE_JSON)
           type= MYSQL_TYPE_JSON;
         else
           type= self->fields[column].type;

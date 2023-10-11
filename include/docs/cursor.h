@@ -31,9 +31,30 @@ PyDoc_STRVAR(
   "- field_flags\n"
   "- table_name\n"
   "- original_column_name\n"
-  "- original_table_name\n\n"
+  "- original_table_name\n"
   "This attribute will be None for operations that do not return rows or if the cursor has\n"
-  "not had an operation invoked via the .execute*() method yet."
+  "not had an operation invoked via the .execute*() method yet.\n\n"
+  "extended field type information was added in MariaDB Connector/Python 1.1.8. It will be available\n"
+  "only, if the cursor or connection was created with optional parameter ext_field_type=True.\n"
+);
+
+PyDoc_STRVAR(
+  cursor_metadata__doc__,
+  "Similiar to description property, this property returns a dictionary with complete metadata.\n\n"
+  "The dictionary contains the following keys:\n"
+  "- catalog:     catalog (always 'def')\n"
+  "- schema:      current schema\n"
+  "- field:       alias column name or if no alias was specified column name\n"
+  "- org_field:   original column name\n"
+  "- table:       alias table name or if no alias was specified table name\n"
+  "- org_table:   original table name\n"
+  "- type:        column type\n"
+  "- charset:     character set (utf8mb4 or binary)\n"
+  "- length:      The length of the column\n"
+  "- max length:  The maximum length of the column\n"
+  "- decimals:    The numer of decimals\n"
+  "- flags:       Flags (flags are defined in constants.FIELD_FLAG)\n"
+  "- ext_type:    Extended data type (types are defined in constants.EXT_FIELD_TYPE)\n"
 );
 
 PyDoc_STRVAR(

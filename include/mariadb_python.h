@@ -127,7 +127,17 @@ enum enum_binary_command {
 enum enum_extended_field_type
 {
   EXT_TYPE_NONE=0,
-  EXT_TYPE_JSON=1
+  EXT_TYPE_JSON,
+  EXT_TYPE_UUID,
+  EXT_TYPE_INET4,
+  EXT_TYPE_INET6,
+  EXT_TYPE_POINT,
+  EXT_TYPE_MULTIPOINT,
+  EXT_TYPE_LINESTRING,
+  EXT_TYPE_MULTILINESTRING,
+  EXT_TYPE_POLYGON,
+  EXT_TYPE_MULTIPOLYGON,
+  EXT_TYPE_GEOMETRYCOLLECTION
 };
 
 enum enum_result_format
@@ -161,6 +171,11 @@ enum enum_paramstyle
     FORMAT= 2,
     PYFORMAT= 3
 };
+
+typedef struct st_ext_field_type {
+  enum enum_extended_field_type ext_type;
+  MARIADB_CONST_STRING str;
+} Mrdb_ExtFieldType;
 
 typedef struct st_parser {
     MrdbString statement;
@@ -332,7 +347,7 @@ mariadb_throw_exception(void *handle,
     const char *message,
     ...);
 
-enum enum_extended_field_type mariadb_extended_field_type(const MYSQL_FIELD *field);
+Mrdb_ExtFieldType *mariadb_extended_field_type(const MYSQL_FIELD *field);
 
 PyObject *
 MrdbConnection_ping(MrdbConnection *self);

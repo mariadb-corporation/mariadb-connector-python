@@ -9,7 +9,7 @@ import json
 from decimal import Decimal
 
 import mariadb
-from mariadb.constants import FIELD_TYPE, ERR, CURSOR, INDICATOR, CLIENT
+from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CLIENT
 
 from test.base_test import create_connection, is_maxscale, is_mysql
 
@@ -241,6 +241,52 @@ class TestCursor(unittest.TestCase):
         row = cursor.fetchone()
         self.assertEqual(row[0], 2)
         del cursor
+
+    def test_ext_field_types(self):
+        if is_mysql():
+            self.skipTest("Skip (MySQL)")
+        cursor = self.connection.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a json, b uuid, c inet4, d inet6,"\
+                       "e point)")
+        cursor.execute("SELECT a,b,c,d,e FROM t1")
+        metadata= cursor.metadata
+        self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
+        self.assertEqual(metadata["type"][0], FIELD_TYPE.BLOB)
+        self.assertEqual(metadata["ext_type_or_format"][1], EXT_FIELD_TYPE.UUID)
+        self.assertEqual(metadata["type"][1], FIELD_TYPE.STRING)
+        self.assertEqual(metadata["ext_type_or_format"][2], EXT_FIELD_TYPE.INET4)
+        self.assertEqual(metadata["type"][2], FIELD_TYPE.STRING)
+        self.assertEqual(metadata["ext_type_or_format"][3], EXT_FIELD_TYPE.INET6)
+        self.assertEqual(metadata["type"][3], FIELD_TYPE.STRING)
+        self.assertEqual(metadata["ext_type_or_format"][4], EXT_FIELD_TYPE.POINT)
+        self.assertEqual(metadata["type"][4], FIELD_TYPE.GEOMETRY)
+        cursor.execute("SELECT a,b,c,d,e FROM t1 WHERE 1=?", (1,))
+        metadata= cursor.metadata
+        self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
+        self.assertEqual(metadata["type"][0], FIELD_TYPE.BLOB)
+        self.assertEqual(metadata["ext_type_or_format"][1], EXT_FIELD_TYPE.UUID)
+        self.assertEqual(metadata["type"][1], FIELD_TYPE.STRING)
+        self.assertEqual(metadata["ext_type_or_format"][2], EXT_FIELD_TYPE.INET4)
+        self.assertEqual(metadata["type"][2], FIELD_TYPE.STRING)
+        self.assertEqual(metadata["ext_type_or_format"][3], EXT_FIELD_TYPE.INET6)
+        self.assertEqual(metadata["type"][3], FIELD_TYPE.STRING)
+        self.assertEqual(metadata["ext_type_or_format"][4], EXT_FIELD_TYPE.POINT)
+        self.assertEqual(metadata["type"][4], FIELD_TYPE.GEOMETRY)
+
+        cursor.close()
+
+    def test_xfield_types(self):
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT a,b,c,d,e FROM t1")
+        description= cursor.description
+        self.assertEqual(12, len(description[0]))
+        self.assertEqual(description[0][11], EXT_FIELD_TYPE.JSON)
+        cursor.execute("SELECT a,b,c,d,e FROM t1 WHERE 1=?", (1,))
+        description= cursor.description
+        self.assertEqual(12, len(description[0]))
+        self.assertEqual(description[0][11], EXT_FIELD_TYPE.JSON)
+        cursor.close()
+        connection.close()
 
     def test_xfield_types(self):
         cursor = self.connection.cursor()
@@ -1490,7 +1536,29 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.affected_rows, 1)
         self.assertEqual(cursor.rowcount, 1)
 
+    def test_conpy270(self):
+        connection = create_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("create or replace table t1 (a uuid)")
+        cursor.execute("insert into t1 values (uuid())")
+
+        # text protocol
+        cursor.execute("select a from t1")
+        self.assertEqual(cursor.description[0][1], mariadb.STRING);
+        cursor.fetchall()
+
+        # binary protcol
+        cursor.execute("select a from t1 WHERE 1=?", (1,))
+        self.assertEqual(cursor.description[0][1], mariadb.STRING);
+        cursor.fetchall()
+
+        cursor.close()
+        connection.close()
+    
     def test_conpy269(self):
+        if is_mysql():
+            self.skipTest("Skip (MySQL)")
         connection = create_connection()
         cursor = connection.cursor()
         cursor.execute("SELECT 1 UNION SELECT 2")

@@ -1,4 +1,4 @@
-/*****************************************************************************
+ /*****************************************************************************
   Copyright (C) 2018-2020 Georg Richter and MariaDB Corporation AB
 
   This library is free software; you can redistribute it and/or
@@ -106,12 +106,15 @@ static PyObject *Mariadb_row_count(MrdbCursor *self);
 static PyObject *Mariadb_row_number(MrdbCursor *self);
 static PyObject *MrdbCursor_warnings(MrdbCursor *self);
 static PyObject *MrdbCursor_closed(MrdbCursor *self);
+static PyObject *MrdbCursor_metadata(MrdbCursor *self);
 
 
 static PyGetSetDef MrdbCursor_sets[]=
 {
     {"description", (getter)MrdbCursor_description, NULL,
         cursor_description__doc__, NULL},
+    {"metadata", (getter)MrdbCursor_metadata, NULL,
+        cursor_metadata__doc__, NULL},
     {"rowcount", (getter)Mariadb_row_count, NULL,
         NULL, NULL},
     {"warnings", (getter)MrdbCursor_warnings, NULL,
@@ -715,6 +718,70 @@ end:
    return rc;
 }
 
+/* {{{ MrdbCursor_metadata */
+static PyObject *MrdbCursor_metadata(MrdbCursor *self)
+{
+    uint32_t i;
+    PyObject *dict;
+    const char *keys[14]= {"catalog", "schema", "field", "org_field", "table",
+                           "org_table", "type", "charset", "length",
+                           "max_length", "decimals", "flags", "ext_type_or_format"};
+    PyObject *tuple[14]= {0};
+    Mrdb_ExtFieldType *ext_field_type= NULL;
+
+    if (!self->field_count)
+        Py_RETURN_NONE;
+
+    if (PyErr_Occurred())
+        return NULL;
+
+    for (i=0; i < 13; i++)
+      if (!(tuple[i] = PyTuple_New(self->field_count)))
+        goto error;
+
+
+    for (i=0; i < self->field_count; i++)
+    {
+      PyTuple_SetItem(tuple[0], i, PyUnicode_FromString(self->fields[i].catalog));
+      PyTuple_SetItem(tuple[1], i, PyUnicode_FromString(self->fields[i].db));
+      PyTuple_SetItem(tuple[2], i, PyUnicode_FromString(self->fields[i].name));
+      PyTuple_SetItem(tuple[3], i, PyUnicode_FromString(self->fields[i].org_name));
+      PyTuple_SetItem(tuple[4], i, PyUnicode_FromString(self->fields[i].table));
+      PyTuple_SetItem(tuple[5], i, PyUnicode_FromString(self->fields[i].org_table));
+      PyTuple_SetItem(tuple[6], i, PyLong_FromLong((long)self->fields[i].type));
+      PyTuple_SetItem(tuple[7], i, PyLong_FromLong((long)self->fields[i].charsetnr));
+      PyTuple_SetItem(tuple[8], i, PyLong_FromLongLong((long long)self->fields[i].max_length));
+      PyTuple_SetItem(tuple[9], i, PyLong_FromLongLong((long long)self->fields[i].length));
+      PyTuple_SetItem(tuple[10], i, PyLong_FromLong((long)self->fields[i].decimals));
+      PyTuple_SetItem(tuple[11], i, PyLong_FromLong((long)self->fields[i].flags));
+
+      if (ext_field_type= mariadb_extended_field_type(&self->fields[i]))
+          PyTuple_SetItem(tuple[12], i, PyLong_FromLong((long)ext_field_type->ext_type));
+      else
+          PyTuple_SetItem(tuple[12], i, PyLong_FromLong((long)EXT_TYPE_NONE));
+    }
+
+    if (!(dict =PyDict_New()))
+        goto error;
+
+    for (i=0; i < 13; i++)
+    {
+        if (PyDict_SetItem(dict, PyUnicode_FromString(keys[i]), tuple[i]))
+            goto error;
+        Py_DECREF(tuple[i]);
+        tuple[i]= NULL;
+    }
+    return dict;
+error:
+    for (i=0; i < 13; i++)
+        if (tuple[i])
+            Py_DECREF(tuple[i]);
+    if (dict)
+        Py_DECREF(dict);
+    return NULL;
+}
+/* }}}*/
+
 /* {{{ MrdbCursor_description
    PEP-249 description method()
 
@@ -730,7 +797,6 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
     if (PyErr_Occurred())
         return NULL;
 
-
     if (self->fields && field_count)
     {
         uint32_t i;
@@ -742,22 +808,22 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
         {
             uint32_t precision= 0;
             uint32_t decimals= 0;
+            uint8_t err= 0;
             MY_CHARSET_INFO cs;
             unsigned long display_length;
             long packed_len= 0;
             PyObject *desc;
-            enum enum_extended_field_type ext_type= mariadb_extended_field_type(&self->fields[i]);
+            Mrdb_ExtFieldType *ext_field_type= mariadb_extended_field_type(&self->fields[i]);
 
             display_length= self->fields[i].max_length > self->fields[i].length ? 
                             self->fields[i].max_length : self->fields[i].length;
             mysql_get_character_set_info(self->connection->mysql, &cs);
             if (cs.mbmaxlen > 1)
             {
-              packed_len= display_length;
-              display_length/= cs.mbmaxlen;
-            }
-            else {
-              packed_len= mysql_ps_fetch_functions[self->fields[i].type].pack_len;
+                packed_len= display_length;
+                display_length/= cs.mbmaxlen;
+            } else {
+                packed_len= mysql_ps_fetch_functions[self->fields[i].type].pack_len;
             }
 
             if (self->fields[i].decimals)
@@ -770,9 +836,11 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
                 }
             }
 
-            if (ext_type == EXT_TYPE_JSON)
-                self->fields[i].type= MYSQL_TYPE_JSON;
-
+            if (ext_field_type)
+            {
+                if (ext_field_type->ext_type == EXT_TYPE_JSON)
+                    self->fields[i].type= MYSQL_TYPE_JSON;
+            }
             if (!(desc= Py_BuildValue("(sIIiIIOIsss)",
                             self->fields[i].name,
                             self->fields[i].type,
@@ -788,7 +856,7 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
             {
                 Py_XDECREF(obj);
                 mariadb_throw_exception(NULL, Mariadb_OperationalError, 0,
-                        "Can't build descriptor record");
+                         "Can't build descriptor record");
                 return NULL;
             }
             PyTuple_SetItem(obj, i, desc);
