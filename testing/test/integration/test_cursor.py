@@ -1539,6 +1539,10 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy270(self):
         connection = create_connection()
+        x = connection.server_version_info
+        if x < (10, 7, 0) or is_mysql():
+            self.skipTest("Skip (MySQL and MariaDB < 10.7)")
+
         cursor = connection.cursor()
 
         cursor.execute("create or replace table t1 (a uuid)")
