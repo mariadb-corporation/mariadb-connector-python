@@ -114,6 +114,10 @@ Cursor attributes
 
 .. autoattribute:: mariadb.cursors.Cursor.lastrowid
 
+.. versionadded:: 1.1.8
+
+.. autoattribute:: mariadb.cursors.Cursor.metadata
+
 .. autoattribute:: mariadb.cursors.Cursor.sp_outparams
 
 
