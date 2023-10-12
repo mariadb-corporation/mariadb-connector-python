@@ -243,8 +243,9 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_ext_field_types(self):
-        if is_mysql():
-            self.skipTest("Skip (MySQL)")
+        x = self.connection.server_version_info
+        if x < (10, 10, 0) or is_mysql():
+            self.skipTest("Skip (MySQL and MariaDB < 10.10)")
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE t1 (a json, b uuid, c inet4, d inet6,"\
                        "e point)")
