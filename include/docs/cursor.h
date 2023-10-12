@@ -41,7 +41,7 @@ PyDoc_STRVAR(
 PyDoc_STRVAR(
   cursor_metadata__doc__,
   "Similiar to description property, this property returns a dictionary with complete metadata.\n\n"
-  "The dictionary contains the following keys:\n"
+  "The dictionary contains the following keys:\n\n"
   "- catalog:     catalog (always 'def')\n"
   "- schema:      current schema\n"
   "- field:       alias column name or if no alias was specified column name\n"
