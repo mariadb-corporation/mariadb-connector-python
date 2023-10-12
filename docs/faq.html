@@ -1,17 +1,17 @@
 <!DOCTYPE html>
 
-<html lang="en">
+<html lang="en" data-content_root="./">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>MariaDB Connector/Python FAQ &#8212; MariaDB Connector/Python 1.1.7 documentation</title>
-    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="_static/classic.css" />
+    <title>MariaDB Connector/Python FAQ &#8212; MariaDB Connector/Python 1.1.8 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=514cf933" />
     
-    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-    <script src="_static/doctools.js"></script>
-    <script src="_static/sphinx_highlight.js"></script>
+    <script src="_static/documentation_options.js?v=df104e6e"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -29,7 +29,7 @@
         <li class="right" >
           <a href="bugs.html" title="Bug reports"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.7 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.8 documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">MariaDB Connector/Python FAQ</a></li> 
       </ul>
     </div>  
@@ -40,11 +40,11 @@
           <div class="body" role="main">
             
   <section id="mcp-faq">
-<span id="faq"></span><h1>MariaDB Connector/Python FAQ<a class="headerlink" href="#mcp-faq" title="Permalink to this heading">¶</a></h1>
+<span id="faq"></span><h1>MariaDB Connector/Python FAQ<a class="headerlink" href="#mcp-faq" title="Link to this heading">¶</a></h1>
 <p>This is a list of frequently asked questions about MariaDB Connector/Python. Feel free to suggest new
 entries!</p>
 <section id="installation">
-<span id="installation-faq"></span><h2>Installation<a class="headerlink" href="#installation" title="Permalink to this heading">¶</a></h2>
+<span id="installation-faq"></span><h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
 <details class="summary-error-python-h-no-such-file-or-directory">
 <summary>Error: "Python.h: No such file or directory"</summary><p>The header files and libraries of the Python development package weren’t properly installed.
 Use your package manager to install them system-wide:</p>
@@ -146,7 +146,7 @@ manager repository (pypi.org).</p>
 </div>
 </details></section>
 <section id="connecting">
-<h2>Connecting<a class="headerlink" href="#connecting" title="Permalink to this heading">¶</a></h2>
+<h2>Connecting<a class="headerlink" href="#connecting" title="Link to this heading">¶</a></h2>
 <details class="summary-mariadb-operationalerror-can-t-connect-to-local-server-through-socket-tmp-mysql-sock">
 <summary>mariadb.OperationalError: Can't connect to local server through socket '/tmp/mysql.sock'</summary><ol class="arabic">
 <li><p>Check if MariaDB server has been started.</p></li>
@@ -174,7 +174,7 @@ connection parameters.</p>
 together with MariaDB Connector/C can be used for user authentication.</p>
 </details></section>
 <section id="general">
-<h2>General:<a class="headerlink" href="#general" title="Permalink to this heading">¶</a></h2>
+<h2>General:<a class="headerlink" href="#general" title="Link to this heading">¶</a></h2>
 <details class="summary-q-how-do-i-execute-multipe-statements-with-cursor-execute">
 <summary>Q: How do I execute multipe statements with cursor.execute() ?</summary><p>Since MariaDB Connector/Python uses binary protocol for client-server communication, this feature is not supported yet.</p>
 </details><details class="summary-q-does-mariadb-connector-python-works-with-python-2-x">
@@ -204,7 +204,7 @@ styles.</p>
 <p>Mixing different paramstyles within the same query is not supported and will raise an exception.</p>
 </details></section>
 <section id="transactions">
-<h2>Transactions<a class="headerlink" href="#transactions" title="Permalink to this heading">¶</a></h2>
+<h2>Transactions<a class="headerlink" href="#transactions" title="Link to this heading">¶</a></h2>
 <details class="summary-q-previously-inserted-records-disappeared-after-my-program-finished">
 <summary>Q: Previously inserted records disappeared after my program finished.</summary><p>Default for autocommit in MariaDB Connector/Python is off, which means every transaction must be committed.
 Uncommitted pending transactions are rolled back automatically when the connection is closed.</p>
@@ -277,13 +277,13 @@ Uncommitted pending transactions are rolled back automatically when the connecti
         <li class="right" >
           <a href="bugs.html" title="Bug reports"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.7 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.8 documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">MariaDB Connector/Python FAQ</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
-        &#169; Copyright 2019-2023 MariaDB Corporation and Georg Richter.
-      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.0.1.
+    &#169; Copyright 2019-2023 MariaDB Corporation and Georg Richter.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
     </div>
   </body>
 </html>
