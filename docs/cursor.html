@@ -5,11 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>The cursor class &#8212; MariaDB Connector/Python 1.1.8 documentation</title>
+    <title>The cursor class &#8212; MariaDB Connector/Python 1.1.9 documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css?v=514cf933" />
     
-    <script src="_static/documentation_options.js?v=df104e6e"></script>
+    <script src="_static/documentation_options.js?v=7b68ca77"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     
@@ -33,7 +33,7 @@
         <li class="right" >
           <a href="connection.html" title="The connection class"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.9 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The cursor class</a></li> 
       </ul>
@@ -273,8 +273,6 @@ Each of these sequences contains information describing one result column:</p>
 </ul>
 <p>This attribute will be None for operations that do not return rows or if the cursor has
 not had an operation invoked via the .execute*() method yet.</p>
-<p>extended field type information was added in MariaDB Connector/Python 1.1.8. It will be available
-only, if the cursor or connection was created with optional parameter ext_field_type=True.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The 8th parameter ‘field_flags’ is an extension to the PEP-249 DB API standard.
@@ -303,7 +301,7 @@ LAST_INSERT_ID().</p>
 <p>If the last query wasn’t an INSERT or UPDATE
 statement or if the modified table does not have a column with the
 AUTO_INCREMENT attribute and LAST_INSERT_ID was not used, the returned
-value will be zero</p>
+value will be None</p>
 </dd></dl>
 
 <div class="versionadded">
@@ -483,7 +481,7 @@ if there are no warnings.</p>
         <li class="right" >
           <a href="connection.html" title="The connection class"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.8 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.9 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">The cursor class</a></li> 
       </ul>
