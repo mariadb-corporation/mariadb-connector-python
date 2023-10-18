@@ -549,7 +549,7 @@ class Cursor(mariadb._mariadb.cursor):
         If the last query wasn't an INSERT or UPDATE
         statement or if the modified table does not have a column with the
         AUTO_INCREMENT attribute and LAST_INSERT_ID was not used, the returned
-        value will be zero
+        value will be None
         """
         self.check_closed()
 
