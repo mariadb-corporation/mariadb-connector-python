@@ -874,7 +874,7 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
         return NULL;
 
     from= (char *)PyUnicode_AsUTF8AndSize(string, (Py_ssize_t *)&from_length);
-    if (!(to= (char *)PyMem_RawCalloc(1, from_length * 2 + 1)))
+    if (!(to= (char *)PyMem_Calloc(1, from_length * 2 + 1)))
     {
         return NULL;
     }
