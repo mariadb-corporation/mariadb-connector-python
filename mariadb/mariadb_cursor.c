@@ -22,7 +22,7 @@
 #include <datetime.h>
 
 static void
-MrdbCursor_dealloc(MrdbCursor *self);
+MrdbCursor_finalize(MrdbCursor *self);
 
 static PyObject *
 MrdbCursor_close(MrdbCursor *self);
@@ -352,69 +352,18 @@ static PyObject *MrdbCursor_repr(MrdbCursor *self)
 PyTypeObject MrdbCursor_Type =
 {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "mariadb.cursor",
-    sizeof(MrdbCursor),
-    0,
-    (destructor)MrdbCursor_dealloc, /* tp_dealloc */
-    0, /*tp_print*/
-    0, /* tp_getattr */
-    0, /* tp_setattr */
-    0, /* PyAsyncMethods * */
-    (reprfunc)MrdbCursor_repr, /* tp_repr */
-
-    /* Method suites for standard classes */
-
-    0, /* (PyNumberMethods *) tp_as_number */
-    0, /* (PySequenceMethods *) tp_as_sequence */
-    0, /* (PyMappingMethods *) tp_as_mapping */
-
-    /* More standard operations (here for binary compatibility) */
-
-    0, /* (hashfunc) tp_hash */
-    0, /* (ternaryfunc) tp_call */
-    0, /* (reprfunc) tp_str */
-    0, /* tp_getattro */
-    0, /* tp_setattro */
-
-    /* Functions to access object as input/output buffer */
-    0, /* (PyBufferProcs *) tp_as_buffer */
-
-    /* (tp_flags) Flags to define presence of optional/expanded features */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
-    mariadb_cursor_documentation, /* tp_doc Documentation string */
-
-    /* call function for all accessible objects */
-    (traverseproc)MrdbCursor_traverse,/* tp_traverse */
-
-    /* delete references to contained objects */
-    0, /* tp_clear */
-
-    /* rich comparisons */
-    0, /* (richcmpfunc) tp_richcompare */
-
-    /* weak reference enabler */
-    0, /* (long) tp_weaklistoffset */
-
-    /* Iterators */
-    0,
-    0,
-
-    /* Attribute descriptor and subclassing stuff */
-    (struct PyMethodDef *)MrdbCursor_Methods, /* tp_methods */
-    (struct PyMemberDef *)MrdbCursor_Members, /* tp_members */
-    MrdbCursor_sets,
-    0, /* (struct _typeobject *) tp_base; */
-    0, /* (PyObject *) tp_dict */
-    0, /* (descrgetfunc) tp_descr_get */
-    0, /* (descrsetfunc) tp_descr_set */
-    0, /* (long) tp_dictoffset */
-    (initproc)MrdbCursor_initialize, /* tp_init */
-    PyType_GenericAlloc, //NULL, /* tp_alloc */
-    PyType_GenericNew, //NULL, /* tp_new */
-    NULL, /* tp_free Low-level free-memory routine */ 
-    0, /* (PyObject *) tp_bases */
-    0, /* (PyObject *) tp_mro method resolution order */
-    0, /* (PyObject *) tp_defined */
+    .tp_name = "mariadb.cursor",
+    .tp_basicsize= (Py_ssize_t)sizeof(MrdbCursor),
+    .tp_repr= (reprfunc)MrdbCursor_repr, 
+    .tp_flags= Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
+    .tp_doc= mariadb_cursor_documentation, 
+    .tp_traverse= (traverseproc)MrdbCursor_traverse,/* tp_traverse */
+    .tp_methods= (struct PyMethodDef *)MrdbCursor_Methods,
+    .tp_members= (struct PyMemberDef *)MrdbCursor_Members,
+    .tp_getset= MrdbCursor_sets,
+    .tp_init= (initproc)MrdbCursor_initialize,
+    .tp_new= PyType_GenericNew,
+    .tp_finalize= (destructor)MrdbCursor_finalize
 };
 
 void MrdbCursor_clearparseinfo(MrdbParseInfo *parseinfo)
@@ -437,13 +386,16 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
     {
         /* free current result */
         if (mysql_stmt_field_count(self->stmt))
+        {
             mysql_stmt_free_result(self->stmt);
-
+        }
         /* check if there are more pending result sets */
         while (mysql_stmt_next_result(self->stmt) == 0)
         {
             if (mysql_stmt_field_count(self->stmt))
+            {
                 mysql_stmt_free_result(self->stmt);
+            }
         }
     } else if (self->parseinfo.is_text)
     {
@@ -462,6 +414,7 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
             } while (!mysql_next_result(self->connection->mysql));
         }
     }
+    MARIADB_END_ALLOW_THREADS(self->connection);
     /* CONPY-52: Avoid possible double free */
     self->result= NULL;
     Py_RETURN_NONE;
@@ -560,12 +513,6 @@ void ma_cursor_close(MrdbCursor *self)
         }
         MrdbCursor_clear(self, 0);
 
-        if (!self->parseinfo.is_text && self->stmt)
-        {
-            mysql_stmt_close(self->stmt);
-            self->stmt= NULL;
-        }
-
         MrdbCursor_clearparseinfo(&self->parseinfo);
         self->closed= 1;
     }
@@ -579,12 +526,11 @@ PyObject * MrdbCursor_close(MrdbCursor *self)
 }
 /* }}} */
 
-/*{{{ MrDBCursor_dealloc */
-void MrdbCursor_dealloc(MrdbCursor *self)
+/* {{{ MrdbCursor_Finalize */
+static void MrdbCursor_finalize(MrdbCursor *self)
 {
     if (self->connection && self->connection->mysql)
         ma_cursor_close(self);
-    Py_TYPE(self)->tp_free((PyObject*)self);
 }
 /* }}} */
 
@@ -722,7 +668,7 @@ end:
 static PyObject *MrdbCursor_metadata(MrdbCursor *self)
 {
     uint32_t i;
-    PyObject *dict;
+    PyObject *dict = NULL;
     const char *keys[14]= {"catalog", "schema", "field", "org_field", "table",
                            "org_table", "type", "charset", "length",
                            "max_length", "decimals", "flags", "ext_type_or_format"};
@@ -755,7 +701,7 @@ static PyObject *MrdbCursor_metadata(MrdbCursor *self)
       PyTuple_SetItem(tuple[10], i, PyLong_FromLong((long)self->fields[i].decimals));
       PyTuple_SetItem(tuple[11], i, PyLong_FromLong((long)self->fields[i].flags));
 
-      if (ext_field_type= mariadb_extended_field_type(&self->fields[i]))
+      if ((ext_field_type= mariadb_extended_field_type(&self->fields[i])))
           PyTuple_SetItem(tuple[12], i, PyLong_FromLong((long)ext_field_type->ext_type));
       else
           PyTuple_SetItem(tuple[12], i, PyLong_FromLong((long)EXT_TYPE_NONE));
@@ -808,7 +754,6 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
         {
             uint32_t precision= 0;
             uint32_t decimals= 0;
-            uint8_t err= 0;
             MY_CHARSET_INFO cs;
             unsigned long display_length;
             long packed_len= 0;

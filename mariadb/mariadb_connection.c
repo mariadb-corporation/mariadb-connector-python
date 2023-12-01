@@ -46,8 +46,8 @@ char *dsn_keys[]= {
 const char *mariadb_default_charset= "utf8mb4";
 const char *mariadb_default_collation= "utf8mb4_general_ci";
 
-void
-MrdbConnection_dealloc(MrdbConnection *self);
+static void
+MrdbConnection_finalize(MrdbConnection *self);
 
 static PyObject *
 MrdbConnection_exception(PyObject *self, void *closure);
@@ -496,69 +496,19 @@ static PyObject *MrdbConnection_repr(MrdbConnection *self)
 
 PyTypeObject MrdbConnection_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "mariadb.connection",
-    sizeof(MrdbConnection),
-    0,
-    (destructor)MrdbConnection_dealloc, /* tp_dealloc */
-    0, /*tp_print*/
-    0, /* tp_getattr */
-    0, /* tp_setattr */
-    0, /* PyAsyncMethods* */
-    (reprfunc)MrdbConnection_repr, /* tp_repr */
-
-    /* Method suites for standard classes */
-
-    0, /* (PyNumberMethods *) tp_as_number */
-    0, /* (PySequenceMethods *) tp_as_sequence */
-    0, /* (PyMappingMethods *) tp_as_mapping */
-
-    /* More standard operations (here for binary compatibility) */
-
-    0, /* (hashfunc) tp_hash */
-    0, /* (ternaryfunc) tp_call */
-    0, /* (reprfunc) tp_str */
-    0, /* tp_getattro */
-    0, /* tp_setattro */
-
-    /* Functions to access object as input/output buffer */
-    0, /* (PyBufferProcs *) tp_as_buffer */
-
-    /* (tp_flags) Flags to define presence of optional/expanded features */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
-    connection__doc__, /* tp_doc Documentation string */
-
-    /* call function for all accessible objects */
-    (traverseproc)MrdbConnection_traverse, /* tp_traverse */
-
-    /* delete references to contained objects */
-    0, /* tp_clear */
-
-    /* rich comparisons */
-    0, /* (richcmpfunc) tp_richcompare */
-
-    /* weak reference enabler */
-    0, /* (long) tp_weaklistoffset */
-
-    /* Iterators */
-    0, /* (getiterfunc) tp_iter */
-    0, /* (iternextfunc) tp_iternext */
-
-    /* Attribute descriptor and subclassing stuff */
-    (struct PyMethodDef *)MrdbConnection_Methods, /* tp_methods */
-    (struct PyMemberDef *)MrdbConnection_Members, /* tp_members */
-    MrdbConnection_sets, /* (struct getsetlist *) tp_getset; */
-    0, /* (struct _typeobject *) tp_base; */
-    0, /* (PyObject *) tp_dict */
-    0, /* (descrgetfunc) tp_descr_get */
-    0, /* (descrsetfunc) tp_descr_set */
-    0, /* (long) tp_dictoffset */
-    (initproc)MrdbConnection_Initialize, /* tp_init */
-    PyType_GenericAlloc, //NULL, /* tp_alloc */
-    PyType_GenericNew, //NULL, /* tp_new */
-    NULL, /* tp_free Low-level free-memory routine */ 
-    0, /* (PyObject *) tp_bases */
-    0, /* (PyObject *) tp_mro method resolution order */
-    0, /* (PyObject *) tp_defined */
+    .tp_name = "mariadb.connection",
+    .tp_basicsize = (Py_ssize_t)sizeof(MrdbConnection),
+    .tp_repr = (reprfunc)MrdbConnection_repr,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
+    .tp_doc = connection__doc__,
+    .tp_new = PyType_GenericNew,
+    .tp_traverse = (traverseproc)MrdbConnection_traverse,
+    .tp_methods = (struct PyMethodDef *)MrdbConnection_Methods,
+    .tp_members = (struct PyMemberDef *)MrdbConnection_Members,
+    .tp_getset = MrdbConnection_sets,
+    .tp_init = (initproc)MrdbConnection_Initialize,
+    .tp_alloc = PyType_GenericAlloc,
+    .tp_finalize = (destructor)MrdbConnection_finalize
 };
 
 PyObject *
@@ -580,8 +530,8 @@ MrdbConnection_connect(
     return (PyObject *) c;
 }
 
-/* destructor of MariaDB Connection object */
-void MrdbConnection_dealloc(MrdbConnection *self)
+static
+void MrdbConnection_finalize(MrdbConnection *self)
 {
     if (self)
     {
@@ -592,7 +542,6 @@ void MrdbConnection_dealloc(MrdbConnection *self)
             MARIADB_END_ALLOW_THREADS(self)
             self->mysql= NULL;
         }
-        Py_TYPE(self)->tp_free((PyObject*)self);
     }
 }
 
