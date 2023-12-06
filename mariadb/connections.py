@@ -21,6 +21,8 @@ import mariadb
 import socket
 import mariadb.cursors
 
+from contextlib import ExitStack
+
 from mariadb.constants import STATUS, TPC_STATE, INFO
 from packaging import version
 
@@ -58,6 +60,7 @@ class Connection(mariadb._mariadb.connection):
         self.__last_used = 0
         self.tpc_state = TPC_STATE.NONE
         self._xid = None
+        self._exit_stack = ExitStack()
 
         autocommit = kwargs.pop("autocommit", False)
         reconnect = kwargs.pop("reconnect", False)
@@ -140,6 +143,7 @@ class Connection(mariadb._mariadb.connection):
         if not isinstance(cursor, mariadb._mariadb.cursor):
             raise mariadb.ProgrammingError("%s is not an instance of "
                                            "mariadb.cursor" % cursor)
+        self._exit_stack.push(cursor)
         return cursor
 
     def close(self):
@@ -156,6 +160,7 @@ class Connection(mariadb._mariadb.connection):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self._exit_stack.pop_all().close()
         self._check_closed()
         "Closes connection."
 
