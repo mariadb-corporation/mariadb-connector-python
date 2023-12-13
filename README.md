@@ -20,7 +20,7 @@ client library for client server communication.
 
 ## License
 
-MariaDB Connector/Python is licensed under the LGPL 2.1
+MariaDB Connector/Python is licensed under the LGPL 2.1 or later (LGPL-2.1-or-later)
 
 ## Source code
 
