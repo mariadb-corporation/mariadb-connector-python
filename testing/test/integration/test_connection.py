@@ -74,6 +74,8 @@ class TestConnection(unittest.TestCase):
         del new_conn
 
     def test_tls_version(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE test has no SSL on port by default")
         default_conf = conf()
         conn = mariadb.connect(**default_conf, tls_version="TLSv1.2")
         cursor = conn.cursor()
