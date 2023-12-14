@@ -109,8 +109,6 @@ class TestConnection(unittest.TestCase):
         del new_conn
 
     def test_schema(self):
-        if self.connection.server_version < 100103:
-            self.skipTest("CREATE OR REPLACE SCHEMA not supported")
         if self.connection.server_version < 100202:
             self.skipTest("session tracking not supported")
         if is_maxscale():
@@ -120,7 +118,8 @@ class TestConnection(unittest.TestCase):
         conn = self.connection
         self.assertEqual(conn.database, default_conf["database"])
         cursor = conn.cursor()
-        cursor.execute("CREATE OR REPLACE SCHEMA test1")
+        cursor.execute("DROP SCHEMA IF EXISTS test1")
+        cursor.execute("CREATE SCHEMA test1")
         cursor.execute("USE test1")
         self.assertEqual(conn.database, "test1")
         conn.database = default_conf["database"]

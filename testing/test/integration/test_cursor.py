@@ -213,12 +213,10 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test1_multi_result(self):
-        if self.connection.server_version < 100103:
-            self.skipTest("CREATE OR REPLACE PROCEDURE not supported")
-
         cursor = self.connection.cursor()
+        cursor.execute("DROP PROCEDURE IF EXISTS p1")
         sql = """
-           CREATE OR REPLACE PROCEDURE p1()
+           CREATE PROCEDURE p1()
            BEGIN
              SELECT 1 FROM DUAL;
              SELECT 2 FROM DUAL;
@@ -557,12 +555,10 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_conpy_8(self):
-        if self.connection.server_version < 100103:
-            self.skipTest("CREATE OR REPLACE PROCEDURE not supported")
-
         cursor = self.connection.cursor()
+        cursor.execute("DROP PROCEDURE IF EXISTS p1")
         sql = """
-           CREATE OR REPLACE PROCEDURE p1()
+           CREATE PROCEDURE p1()
            BEGIN
              SELECT 1 FROM DUAL UNION SELECT 0 FROM DUAL;
              SELECT 2 FROM DUAL;
@@ -1545,7 +1541,8 @@ class TestCursor(unittest.TestCase):
 
         cursor = connection.cursor()
 
-        cursor.execute("create or replace table t1 (a uuid)")
+        cursor.execute("drop table if exists t1")
+        cursor.execute("create table t1 (a uuid)")
         cursor.execute("insert into t1 values (uuid())")
 
         # text protocol

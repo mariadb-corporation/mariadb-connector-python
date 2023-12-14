@@ -41,8 +41,6 @@ class CursorTest(unittest.TestCase):
     def test_change_user(self):
         if is_skysql():
             self.skipTest("SkySQL failure")
-        if self.connection.server_version < 100103:
-            self.skipTest("CREATE OR REPLACE USER not supported")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't get new user immediately")
         if self.connection.server_name == "localhost":

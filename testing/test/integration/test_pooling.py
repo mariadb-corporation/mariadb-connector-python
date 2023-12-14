@@ -47,7 +47,8 @@ class TestPooling(unittest.TestCase):
                                       **default_conf)
         conn = pool.get_connection()
         cursor = conn.cursor()
-        cursor.execute("CREATE OR REPLACE TABLE conpy246(a int)")
+        cursor.execute("DROP TABLE IF EXISTS conpy246")
+        cursor.execute("CREATE TABLE conpy246(a int)")
         cursor.execute("INSERT INTO conpy246 VALUES (1)")
         cursor.close()
         conn.close()
@@ -129,8 +130,8 @@ class TestPooling(unittest.TestCase):
         conn = create_connection()
         cursor = conn.cursor()
         ids = []
-
-        sql = """CREATE OR REPLACE PROCEDURE p1()
+        cursor.execute("DROP PROCEDURE IF EXISTS p1")
+        sql = """CREATE PROCEDURE p1()
                  BEGIN
                    SELECT 1;
                    SELECT 2;
