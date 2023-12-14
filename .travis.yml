@@ -10,7 +10,7 @@ before_install:
   - export PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
   # install c dependency
   - |-
-    if [ "$TRAVIS_OS_NAME" != "osx" ] ; then
+    if [ "$TRAVIS_OS_NAME" == "linux" ] ; then
       sudo apt-get install software-properties-common
       sudo apt-get install -f libssl-dev libssl1.1
       sudo apt-get install -f

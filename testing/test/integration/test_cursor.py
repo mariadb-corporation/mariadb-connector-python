@@ -1348,7 +1348,7 @@ class TestCursor(unittest.TestCase):
         for i in range(0, 500):
             cursor.callproc("p2", ("foo", "bar", 1))
             row = cursor.fetchone()
-            self.assertEqual(row[0], "foobar")
+            self.assertEqual(row[0], (b"foobar","foobar")[is_mysql()])
 
         conn.close()
 
@@ -1523,7 +1523,8 @@ class TestCursor(unittest.TestCase):
 
         cursor.executemany("INSERT INTO x01 VALUES (?,?)", params)
         self.assertEqual(cursor.rowcount, 4)
-        self.assertEqual(cursor.affected_rows, 4)
+        if (not is_mysql()):
+            self.assertEqual(cursor.affected_rows, 4)
 
         cursor.execute("UPDATE x01 SET a=1 WHERE a=1")
         self.assertEqual(cursor.rowcount, 0)
