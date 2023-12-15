@@ -46,10 +46,11 @@ class TestCA(unittest.TestCase):
     def test_tpc_commit(self):
         con = create_connection()
         xid = con.xid(0, "1234567891", "2345")
+        cursor = con.cursor()
+        cursor.execute("DROP TABLE IF EXISTS t1")
         try:
             con.tpc_begin(xid)
-            cursor = con.cursor()
-            cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
+            cursor.execute("CREATE TABLE t1 (a int)")
             cursor.execute("INSERT INTO t1 VALUES (1),(2)")
             cursor.close()
             con.tpc_commit()

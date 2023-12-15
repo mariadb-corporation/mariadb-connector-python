@@ -20,12 +20,20 @@ before_install:
   - mkdir bld
   - cd bld
   - |-
-    if [ "$TRAVIS_OS_NAME" = "osx" ] ; then
-      cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
-    else
-      cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
-    fi
-  - make -j4
+    case $TRAVIS_OS_NAME in
+      windows)
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        cmake --build . --config RelWithDebInfo
+        ;;
+      osx)
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
+        make -j4
+        ;;
+      linux)
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        make -j4
+        ;;
+    esac
   - sudo make install
   - export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
   - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
