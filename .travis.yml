@@ -22,7 +22,7 @@ before_install:
   - |-
     case $TRAVIS_OS_NAME in
       windows)
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_MSI=ON
         cmake --build . --config RelWithDebInfo
         ;;
       osx)
@@ -34,10 +34,17 @@ before_install:
         make -j4
         ;;
     esac
-  - sudo make install
-  - export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
-  - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
-  # install "install-latest" to retrieve latest python version corresponding to major.minor version
+  - |-
+    if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
+        which win\packaging:*.msi > msi.txt
+        set /p msipackage < msi.txt
+        msiexec /i %msipackage% /qn ADDLOCAL=ProductFeature,IncludeFeature INSTALLLEVEL=1000
+    else
+        sudo make install
+        export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
+        # install "install-latest" to retrieve latest python version corresponding to major.minor version
+    fi
   - git clone https://github.com/momo-lab/pyenv-install-latest.git "$(pyenv root)"/plugins/pyenv-install-latest
   - export REAL_PYTHON_VERSION=$(pyenv install-latest --print $PYTHON_VER)
   - echo $REAL_PYTHON_VERSION
