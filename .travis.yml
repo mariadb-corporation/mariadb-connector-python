@@ -16,6 +16,7 @@ before_install:
       sudo apt-get install -f
     fi
     if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
+      powershell Install-WindowsFeature Net-Framework-Core
       cinst -y wixtoolset
     fi
   - git clone https://github.com/mariadb-corporation/mariadb-connector-c.git ~/.cc_3
