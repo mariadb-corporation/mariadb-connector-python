@@ -15,6 +15,9 @@ before_install:
       sudo apt-get install -f libssl-dev libssl1.1
       sudo apt-get install -f
     fi
+    if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
+      cinst -y wixtoolset
+    fi
   - git clone https://github.com/mariadb-corporation/mariadb-connector-c.git ~/.cc_3
   - cd ~/.cc_3
   - mkdir bld
