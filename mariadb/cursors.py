@@ -366,7 +366,8 @@ class Cursor(mariadb._mariadb.cursor):
 
         fetches row and converts values, if connection has a converter.
         """
-        self.check_closed()
+        if not self.buffered:
+            self.check_closed()
 
         # if there is no result set, PEP-249 requires to raise an
         # exception
@@ -401,7 +402,8 @@ class Cursor(mariadb._mariadb.cursor):
         An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
-        self.check_closed()
+        if not self.buffered:
+            self.check_closed()
 
         row = self._fetch_row()
         return row
@@ -422,7 +424,8 @@ class Cursor(mariadb._mariadb.cursor):
         An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
-        self.check_closed()
+        if not self.buffered:
+            self.check_closed()
 
         if size == 0:
             size = self.arraysize
@@ -437,7 +440,8 @@ class Cursor(mariadb._mariadb.cursor):
         An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
-        self.check_closed()
+        if not self.buffered:
+            self.check_closed()
         return super().fetchrows(ROWS_EOF)
 
     def __iter__(self):
@@ -520,10 +524,11 @@ class Cursor(mariadb._mariadb.cursor):
         # Even if PEP-249 permits operations on a closed cursor, we don't
         # raise an exception if the cursor or the underlying connection
         # was closed (See CONPY-269), instead we will return -1
-        try:
-            self.check_closed()
-        except mariadb.ProgrammingError:
-            return -1
+        if not self.buffered:
+            try:
+                self.check_closed()
+            except mariadb.ProgrammingError:
+                return -1
 
         if self._rowcount > 0:
             return self._rowcount
@@ -564,6 +569,5 @@ class Cursor(mariadb._mariadb.cursor):
         Read-Only attribute which returns the reference to the connection
         object on which the cursor was created.
         """
-        self.check_closed()
 
         return self._connection

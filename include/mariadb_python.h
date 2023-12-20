@@ -469,6 +469,13 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
         mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
       "Invalid cursor or not connected");\
     }
+#define MARIADB_CHECK_STMT_FETCH(cursor)\
+    if (cursor->closed || (!cursor->connection->mysql && !self->is_buffered))\
+    {\
+       (cursor)->closed= 1;\
+        mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
+      "Invalid cursor or not connected");\
+    }
 
 
 

@@ -1252,7 +1252,7 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args)
     unsigned int field_count= self->field_count;
     uint64_t row_count;
 
-    MARIADB_CHECK_STMT(self);
+    MARIADB_CHECK_STMT_FETCH(self);
 
     if (!PyArg_ParseTuple(args, "K", &row_count))
     {
