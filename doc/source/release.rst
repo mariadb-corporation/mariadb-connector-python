@@ -1,6 +1,19 @@
 Release history
 ===============
 
+MariaDB Connector/Python 1.1.9
+------------------------------
+
+Release date: Dec 22 2023
+
+**Issues fixed:**
+
+- :conpy:`273`: Fixed crash in escape_string method (debug)
+
+- :conpy:`274`: Instead of releasing non freed objects (cursor and connection) in tp_dealloc, they are freed now in tp_finalize to avoid possible crashes
+
+- :conpy:`276`: Allow to retrieve data from buffered cursor if the connection was already closed before
+
 MariaDB Connector/Python 1.1.8
 ------------------------------
 

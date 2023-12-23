@@ -45,6 +45,16 @@
             
   <section id="release-history">
 <h1>Release history<a class="headerlink" href="#release-history" title="Link to this heading">¶</a></h1>
+<section id="mariadb-connector-python-1-1-9">
+<h2>MariaDB Connector/Python 1.1.9<a class="headerlink" href="#mariadb-connector-python-1-1-9" title="Link to this heading">¶</a></h2>
+<p>Release date: Dec 22 2023</p>
+<p><strong>Issues fixed:</strong></p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-273">CONPY-273</a>: Fixed crash in escape_string method (debug)</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-274">CONPY-274</a>: Instead of releasing non freed objects (cursor and connection) in tp_dealloc, they are freed now in tp_finalize to avoid possible crashes</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-276">CONPY-276</a>: Allow to retrieve data from buffered cursor if the connection was already closed before</p></li>
+</ul>
+</section>
 <section id="mariadb-connector-python-1-1-8">
 <h2>MariaDB Connector/Python 1.1.8<a class="headerlink" href="#mariadb-connector-python-1-1-8" title="Link to this heading">¶</a></h2>
 <p>Release date: Oct 12 2023</p>
@@ -313,6 +323,7 @@ CONPY-198: Build fix for FreeBSD</p>
     <h3><a href="index.html">Table of Contents</a></h3>
     <ul>
 <li><a class="reference internal" href="#">Release history</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-python-1-1-9">MariaDB Connector/Python 1.1.9</a></li>
 <li><a class="reference internal" href="#mariadb-connector-python-1-1-8">MariaDB Connector/Python 1.1.8</a></li>
 <li><a class="reference internal" href="#mariadb-connector-python-1-1-7">MariaDB Connector/Python 1.1.7</a></li>
 <li><a class="reference internal" href="#mariadb-connector-python-1-1-6">MariaDB Connector/Python 1.1.6</a></li>
