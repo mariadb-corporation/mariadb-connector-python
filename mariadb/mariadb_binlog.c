@@ -40,10 +40,12 @@ static PyObject *MrdbBinlog_filename(MrdbBinlog *self);
     PyDict_SetItemString(dict, key, x);\
     Py_DECREF(x);\
   }\
+#ifdef DEBUG
   else {\
     printf("File: %s Line: %d\n", __FILE__, __LINE__);\
     PyErr_Print();\
   }\
+#endif
 }
 
 #define STR_AND_LEN(a)  (a).str, (a).length
