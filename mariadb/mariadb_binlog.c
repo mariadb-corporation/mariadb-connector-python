@@ -40,12 +40,10 @@ static PyObject *MrdbBinlog_filename(MrdbBinlog *self);
     PyDict_SetItemString(dict, key, x);\
     Py_DECREF(x);\
   }\
-#ifdef DEBUG
   else {\
     printf("File: %s Line: %d\n", __FILE__, __LINE__);\
     PyErr_Print();\
   }\
-#endif
 }
 
 #define STR_AND_LEN(a)  (a).str, (a).length
@@ -897,7 +895,7 @@ static PyObject *MrdbBinlog_repr(MrdbBinlog *self)
         snprintf(cobj_repr, 384, "<mariadb.binlog connected to '%s' at %p>",
                 self->connection->host, self);
     else
-        snprintf(cobj_repr, 384, "<mariadb.connection (closed) at %p>",
+        snprintf(cobj_repr, 384, "<mariadb.binlog (closed) at %p>",
                 self);
     return PyUnicode_FromString(cobj_repr);
 }
