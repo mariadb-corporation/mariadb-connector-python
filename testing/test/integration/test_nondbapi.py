@@ -132,6 +132,16 @@ class CursorTest(unittest.TestCase):
         cursor.execute(cmd)
         del cursor
 
+    def test_conpy279(self):
+        conn = self.connection
+        default_conf = conf()
+        try:
+            conn.change_user(None, None, None)
+        except TypeError:
+            pass
+        conn.change_user(default_conf["user"], None, None)
+        conn.close()
+
 
 if __name__ == '__main__':
     unittest.main()

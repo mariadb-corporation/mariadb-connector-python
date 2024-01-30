@@ -624,7 +624,7 @@ PyObject *MrdbConnection_change_user(MrdbConnection *self,
     int rc= 0;
     MARIADB_CHECK_CONNECTION(self, NULL);
 
-    if (!PyArg_ParseTuple(args, "sss", &user, &password, &database))
+    if (!PyArg_ParseTuple(args, "szz", &user, &password, &database))
         return NULL;
 
     MARIADB_BEGIN_ALLOW_THREADS(self);
