@@ -58,6 +58,9 @@ MrdbConnection_exception(PyObject *self, void *closure);
 static PyObject *
 MrdbConnection_getreconnect(MrdbConnection *self, void *closure);
 
+static PyObject *
+MrdbConnection_connection_id(MrdbConnection *self);
+
 static int
 MrdbConnection_setreconnect(MrdbConnection *self, PyObject *args,
                             void *closure);
@@ -89,6 +92,8 @@ MrdbConnection_sets[]=
     {"auto_reconnect", (getter)MrdbConnection_getreconnect,
         (setter)MrdbConnection_setreconnect,
         connection_auto_reconnect__doc__, NULL},
+    {"connection_id", (getter)MrdbConnection_connection_id,
+        NULL, "Id of current connection", NULL},
     {"warnings", (getter)MrdbConnection_warnings, NULL,
         connection_warnings__doc__, NULL},
     GETTER_EXCEPTION("Error", Mariadb_Error, ""),
@@ -166,11 +171,6 @@ MrdbConnection_Methods[] =
 static struct
 PyMemberDef MrdbConnection_Members[] =
 {
-    {"connection_id",
-        T_LONG,
-        offsetof(MrdbConnection, thread_id),
-        READONLY,
-        "Id of current connection."},
     {"dsn",
         T_OBJECT,
         offsetof(MrdbConnection, dsn),
@@ -454,7 +454,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
         goto end;
     }
 
-    self->thread_id= mysql_thread_id(self->mysql);
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
 
     has_error= 0;
@@ -606,9 +605,6 @@ PyObject *MrdbConnection_ping(MrdbConnection *self)
         mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
         return NULL;
     }
-
-    /* in case a reconnect occurred, we need to obtain new thread_id */
-    self->thread_id= mysql_thread_id(self->mysql);
 
     Py_RETURN_NONE;
 }
@@ -777,7 +773,6 @@ PyObject *MrdbConnection_reconnect(MrdbConnection *self)
         return NULL;
     }
     /* get capabilities */
-    self->thread_id= mysql_thread_id(self->mysql);
     Py_RETURN_NONE;
 }
 /* }}} */
@@ -798,6 +793,15 @@ PyObject *MrdbConnection_reset(MrdbConnection *self)
         return NULL;
     }
     Py_RETURN_NONE;
+}
+/* }}} */
+
+/* {{{ MrdbConnection_connection_id */
+static PyObject *MrdbConnection_connection_id(MrdbConnection *self)
+{
+    MARIADB_CHECK_CONNECTION(self, NULL);
+
+    return PyLong_FromUnsignedLong(mysql_thread_id(self->mysql));
 }
 /* }}} */
 

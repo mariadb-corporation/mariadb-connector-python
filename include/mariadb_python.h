@@ -218,7 +218,6 @@ typedef struct {
     uint8_t status;
     uint8_t asynchronous;
     struct timespec last_used;
-    unsigned long thread_id;
     char *server_info;
     uint8_t closed;
 #if MARIADB_PACKAGE_VERSION_ID > 30301

@@ -268,6 +268,44 @@ class TestConnection(unittest.TestCase):
                             parse_version('3.3.0'))
             pass
 
+    def test_conpy278(self):
+         test_conf= conf()
+         test_conf["reconnect"]= True
+         conn= mariadb.connect(**test_conf)
+         old_id= conn.connection_id
+         try:
+             conn.kill(conn.connection_id)
+         except mariadb.OperationalError:
+             conn.ping()
+         self.assertNotEqual(old_id, conn.connection_id)
+         conn.close()
+         conn= mariadb.connect(**test_conf)
+         old_id= conn.connection_id
+         try:
+             conn.kill(conn.connection_id)
+         except mariadb.OperationalError:
+             conn.ping()
+         self.assertNotEqual(old_id, conn.connection_id)
+         conn.close()
+         conn= mariadb.connect(**test_conf)
+         old_id= conn.connection_id
+         try:
+             conn.kill(conn.connection_id)
+         except mariadb.OperationalError:
+             pass
+         cursor= conn.cursor()
+         try:
+             cursor.execute("set @a:=1")
+         except mariadb.InterfaceError:
+             pass
+         cursor.execute("set @a:=1")
+         self.assertNotEqual(old_id, conn.connection_id)
+
+         old_id= conn.connection_id
+         conn.reconnect()
+         self.assertNotEqual(old_id, conn.connection_id)
+         conn.close()
+
 
 if __name__ == '__main__':
     unittest.main()
