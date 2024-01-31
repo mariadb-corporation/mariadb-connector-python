@@ -62,10 +62,10 @@ static int
 MrdbConnection_setreconnect(MrdbConnection *self, PyObject *args,
                             void *closure);
 static PyObject *
-MrdbConnection_escape_string(MrdbConnection *self, PyObject *args);
+MrdbConnection_escape_string(MrdbConnection *self, PyObject *str);
 
 static PyObject *
-MrdbConnection_getinfo(MrdbConnection *self, PyObject *args);
+MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval);
 
 static PyObject *
 MrdbConnection_dump_debug_info(MrdbConnection *self);
@@ -75,7 +75,7 @@ MrdbConnection_warnings(MrdbConnection *self);
 
 static PyObject *
 MrdbConnection_executecommand(MrdbConnection *self,
-                             PyObject *args);
+                             PyObject *command);
 
 static PyObject *
 MrdbConnection_readresponse(MrdbConnection *self);
@@ -138,7 +138,7 @@ MrdbConnection_Methods[] =
     },
     { "escape_string",
         (PyCFunction)MrdbConnection_escape_string,
-        METH_VARARGS,
+        METH_O,
         connection_escape_string__doc__
     },
     { "dump_debug_info",
@@ -149,13 +149,13 @@ MrdbConnection_Methods[] =
     /* Internal methods */
     { "_execute_command", 
       (PyCFunction)MrdbConnection_executecommand,
-      METH_VARARGS,
+      METH_O,
       "For internal use only"},
     {"_read_response", (PyCFunction)MrdbConnection_readresponse,
       METH_NOARGS,
       "For internal use only"},
     {"_mariadb_get_info", (PyCFunction)MrdbConnection_getinfo,
-      METH_VARARGS,
+      METH_O,
       "For internal use only"},
     {"_get_socket", (PyCFunction)MrdbConnection_socket,
       METH_NOARGS,
@@ -547,14 +547,14 @@ void MrdbConnection_finalize(MrdbConnection *self)
 
 static PyObject *
 MrdbConnection_executecommand(MrdbConnection *self,
-                             PyObject *args)
+                             PyObject *command)
 {
-  char *cmd;
+  const char *cmd;
   int rc;
 
   MARIADB_CHECK_CONNECTION(self, NULL);
-  if (!PyArg_ParseTuple(args, "s", &cmd))
-    return NULL;
+
+  cmd= PyUnicode_AsUTF8AndSize(command, NULL);
 
   MARIADB_BEGIN_ALLOW_THREADS(self);
   rc= mysql_send_query(self->mysql, cmd, (long)strlen(cmd));
@@ -681,7 +681,7 @@ static int MrdbConnection_setreconnect(MrdbConnection *self,
 /* }}} */
 
 static PyObject *
-MrdbConnection_getinfo(MrdbConnection *self, PyObject *args)
+MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval)
 {
     union {
         char *str;
@@ -691,8 +691,12 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *args)
 
     uint32_t option;
 
-    if (!PyArg_ParseTuple(args, "i", &option))
-          return NULL;
+    if (!optionval || !CHECK_TYPE_NO_NONE(optionval, &PyLong_Type)) {
+        PyErr_SetString(PyExc_TypeError, "Parameter must be an integer value");
+        return NULL;
+    }
+
+    option= (uint32_t)PyLong_AsUnsignedLong(optionval);
 
     memset(&val, 0, sizeof(val));
 
@@ -808,7 +812,7 @@ static PyObject *MrdbConnection_warnings(MrdbConnection *self)
 
 /* {{{ MrdbConnection_escape_string */
 static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
-        PyObject *args)
+        PyObject *str)
 {
     PyObject *string= NULL,
              *new_string= NULL;
@@ -819,10 +823,12 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
        connection */
     MARIADB_CHECK_CONNECTION(self, NULL);
 
-    if (!PyArg_ParseTuple(args, "O!", &PyUnicode_Type, &string))
+    if (!CHECK_TYPE_NO_NONE(str, &PyUnicode_Type)) {
+        PyErr_SetString(PyExc_TypeError, "Parameter must be a string");
         return NULL;
+    }
 
-    from= (char *)PyUnicode_AsUTF8AndSize(string, (Py_ssize_t *)&from_length);
+    from= (char *)PyUnicode_AsUTF8AndSize(str, (Py_ssize_t *)&from_length);
     if (!(to= (char *)PyMem_Calloc(1, from_length * 2 + 1)))
     {
         return NULL;

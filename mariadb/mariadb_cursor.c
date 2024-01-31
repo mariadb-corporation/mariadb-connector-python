@@ -38,16 +38,16 @@ static PyObject *
 MrdbCursor_InitResultSet(MrdbCursor *self);
 
 static PyObject *
-MrdbCursor_execute_text(MrdbCursor *self, PyObject *args);
+MrdbCursor_execute_text(MrdbCursor *self, PyObject *stmt);
 
 static PyObject *
 MrdbCursor_check_text_types(MrdbCursor *self);
 
 static PyObject *
-MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args);
+MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows);
 
 static PyObject *
-MrdbCursor_parse(MrdbCursor *self, PyObject *args);
+MrdbCursor_parse(MrdbCursor *self, PyObject *stmt);
 
 static PyObject *
 MrdbCursor_description(MrdbCursor *self);
@@ -57,7 +57,7 @@ MrdbCursor_fetchone(MrdbCursor *self);
 
 static PyObject *
 MrdbCursor_seek(MrdbCursor *self,
-                PyObject *args);
+                PyObject *offset);
 
 static PyObject *
 MrdbCursor_execute_bulk(MrdbCursor *self);
@@ -136,7 +136,7 @@ static PyMethodDef MrdbCursor_Methods[] =
         METH_NOARGS,
         cursor_fetchone__doc__,},
     {"fetchrows", (PyCFunction)MrdbCursor_fetchrows,
-        METH_VARARGS,
+        METH_O,
         NULL},
     {"_nextset", (PyCFunction)MrdbCursor_nextset,
         METH_NOARGS,
@@ -149,19 +149,19 @@ static PyMethodDef MrdbCursor_Methods[] =
         METH_NOARGS,
         NULL},
     {"_seek", (PyCFunction)MrdbCursor_seek,
-        METH_VARARGS,
+        METH_O,
         NULL},
     {"_initresult", (PyCFunction)MrdbCursor_InitResultSet,
         METH_NOARGS,
         NULL},
     {"_parse", (PyCFunction)MrdbCursor_parse,
-        METH_VARARGS,
+        METH_O,
         NULL},
     {"_readresponse", (PyCFunction)MrdbCursor_readresponse,
         METH_NOARGS,
          NULL},
     {"_execute_text", (PyCFunction)MrdbCursor_execute_text,
-        METH_VARARGS,
+        METH_O,
         NULL},
     {"_execute_binary", (PyCFunction)MrdbCursor_execute_binary,
         METH_NOARGS,
@@ -879,14 +879,17 @@ MrdbCursor_fetchone(MrdbCursor *self)
     return row;
 }
 
-static PyObject *MrdbCursor_seek(MrdbCursor *self, PyObject *args)
+static PyObject *MrdbCursor_seek(MrdbCursor *self, PyObject *pos)
 {
-    uint64_t new_position;    
+    uint64_t new_position= 0;
 
-    if (!PyArg_ParseTuple(args, "K", &new_position))
-    {
+    if (!CHECK_TYPE_NO_NONE(pos, &PyLong_Type)) {
+        PyErr_SetString(PyExc_TypeError, "Parameter must be an integer value");
         return NULL;
     }
+
+    new_position= (uint64_t)PyLong_AsUnsignedLongLong(pos);
+
     MARIADB_BEGIN_ALLOW_THREADS(self->connection);
     if (self->parseinfo.is_text)
         mysql_data_seek(self->result, new_position);
@@ -995,7 +998,7 @@ static PyObject
 }
 
 static PyObject *
-MrdbCursor_parse(MrdbCursor *self, PyObject *args)
+MrdbCursor_parse(MrdbCursor *self, PyObject *stmt)
 {
     const char *statement= NULL;
     Py_ssize_t statement_len= 0;
@@ -1009,10 +1012,7 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *args)
       MrdbCursor_clearparseinfo(&self->parseinfo);
     }
  
-    if (!PyArg_ParseTuple(args, "s#|Ob", &statement, &statement_len))
-    {
-        return NULL;
-    }
+    statement = (char *)PyUnicode_AsUTF8AndSize(stmt, (Py_ssize_t *)&statement_len);
 
     if (!(parser= MrdbParser_init(self->connection->mysql, statement, statement_len)))
     {
@@ -1121,20 +1121,26 @@ error:
 }
 
 static PyObject *
-MrdbCursor_execute_text(MrdbCursor *self, PyObject *args)
+MrdbCursor_execute_text(MrdbCursor *self, PyObject *stmt)
 {
     int rc;
     MYSQL *db;
-    char *statement;
-    size_t statement_len;
+    const char *statement;
+    size_t statement_len= 0;
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
-    if (!PyArg_ParseTuple(args, "s#", &statement, &statement_len))
+    if (Py_TYPE(stmt) == &PyUnicode_Type)
     {
+        statement = PyUnicode_AsUTF8AndSize(stmt, (Py_ssize_t *)&statement_len);
+    } else if (Py_TYPE(stmt) == &PyBytes_Type)
+    {
+        PyBytes_AsStringAndSize(stmt, &statement, (Py_ssize_t *)&statement_len);
+    }
+    else {
+        PyErr_SetString(PyExc_TypeError, "Parameter must be a string or bytes");
         return NULL;
     }
-
     db= self->connection->mysql;
 
     MARIADB_BEGIN_ALLOW_THREADS(self->connection);
@@ -1246,7 +1252,7 @@ error:
 }
 
 static PyObject *
-MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args)
+MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
 {
     PyObject *List;
     unsigned int field_count= self->field_count;
@@ -1254,17 +1260,19 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *args)
 
     MARIADB_CHECK_STMT_FETCH(self);
 
-    if (!PyArg_ParseTuple(args, "K", &row_count))
-    {
-        return NULL;
-    }
-
     if (!field_count)
     {
         mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                 "Cursor doesn't have a result set");
         return NULL;
     }
+
+    if (!CHECK_TYPE_NO_NONE(rows, &PyLong_Type)) {
+        PyErr_SetString(PyExc_TypeError, "Parameter must be an integer value");
+        return NULL;
+    }
+
+    row_count= (uint64_t)PyLong_AsLongLong(rows);
 
     if (!(List= PyList_New(0)))
     {

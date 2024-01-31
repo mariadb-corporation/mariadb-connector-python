@@ -306,7 +306,6 @@ class Cursor(mariadb._mariadb.cursor):
                 self._transformed_statement = self._substitute_parameters()
             else:
                 self._transformed_statement = self.statement
-
             self._execute_text(self._transformed_statement)
             self._readresponse()
         else:
