@@ -135,11 +135,13 @@ class CursorTest(unittest.TestCase):
     def test_conpy279(self):
         conn = self.connection
         default_conf = conf()
+        if "password" not in default_conf:
+            default_conf["password"] = None
         try:
             conn.change_user(None, None, None)
         except TypeError:
             pass
-        conn.change_user(default_conf["user"], None, None)
+        conn.change_user(default_conf["user"], default_conf["password"], None)
         conn.close()
 
 
