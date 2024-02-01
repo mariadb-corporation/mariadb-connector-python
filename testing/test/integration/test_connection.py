@@ -243,11 +243,16 @@ class TestConnection(unittest.TestCase):
 
     def test_conpy175(self):
         default_conf = conf()
-        c1 = mariadb.connect(**default_conf)
-        str = '"' * 4194304
-        newstr = c1.escape_string(str)
-        self.assertEqual(newstr, '\\"' * 4194304)
-        c1.close()
+        conn = mariadb.connect(**default_conf)
+        str = "Bob's"
+        cursor= conn.cursor()
+        cursor.execute("SET session sql_mode='NO_BACKSLASH_ESCAPES'")
+        newstr = conn.escape_string(str)
+        self.assertEqual(newstr, "Bob''s")
+        cursor.execute("SET session sql_mode=''")
+        newstr = conn.escape_string(str)
+        self.assertEqual(newstr, "Bob\\'s")
+        conn.close()
 
     def test_closed(self):
         default_conf = conf()
