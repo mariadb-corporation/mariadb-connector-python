@@ -274,6 +274,8 @@ class TestConnection(unittest.TestCase):
             pass
 
     def test_conpy278(self):
+         if is_maxscale():
+            self.skipTest("MAXSCALE bug MXS-4961")
          test_conf= conf()
          test_conf["reconnect"]= True
          conn= mariadb.connect(**test_conf)

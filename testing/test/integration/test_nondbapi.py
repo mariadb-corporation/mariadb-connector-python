@@ -133,8 +133,6 @@ class CursorTest(unittest.TestCase):
         del cursor
 
     def test_conpy279(self):
-        if is_maxscale():
-            self.skipTest("MAXSCALE bug MXS-4961")
         conn = self.connection
         default_conf = conf()
         if "password" not in default_conf:
