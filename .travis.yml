@@ -48,9 +48,9 @@ before_install:
         export PATH=$(cmd.exe //c "refreshenv > nul & C:\Progra~1\Git\bin\bash -c 'echo \$PATH' ")
         python --version    
         mkdir C:/cc
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="c:\Program Files\MariaDB\MariaDB Connector C 64-bit"
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="C:/Program Files/MariaDB/MariaDB Connector C 64-bit"
         cmake --build . --target install --config Release
-        export MARIADB_CC_INSTALL_DIR="c:\Program Files\MariaDB\MariaDB Connector C 64-bit"
+        export MARIADB_CC_INSTALL_DIR="C:/Program Files/MariaDB/MariaDB Connector C 64-bit"
         ;;
       osx)
         cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
