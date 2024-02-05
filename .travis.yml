@@ -47,9 +47,10 @@ before_install:
         python --version
         export PATH=$(cmd.exe //c "refreshenv > nul & C:\Progra~1\Git\bin\bash -c 'echo \$PATH' ")
         python --version    
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        mkdir C:/cc
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=C:/cc
         cmake --build . --target install --config RelWithDebInfo
-        export MARIADB_CC_INSTALL_DIR="C:/Program Files/Git/usr/lib/mariadb/"
+        export MARIADB_CC_INSTALL_DIR="C:/cc"
         ;;
       osx)
         cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
