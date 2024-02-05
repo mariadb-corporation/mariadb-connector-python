@@ -1431,11 +1431,21 @@ class TestCursor(unittest.TestCase):
                                    b'INFORMATION_SCHEMA.TABLES ',
                                    b'WHERE TABLE_TYPE=\'SEQUENCE\'',
                                    b' and TABLE_NAME=',
-                                   b'"col_Unit\xc3\xa9ble_id_seq" ',
-                                   b'and TABLE_SCHEMA="foobar"'])
+                                   b'\'col_Unit\xc3\xa9ble_id_seq\'',
+                                   b' and TABLE_SCHEMA=\'foobar\''])
         cursor.execute(sql, data)
         self.assertEqual(transformed, cursor._transformed_statement)
         del cursor
+
+    def test_conpy277(self):
+        conn = create_connection()
+        cursor = conn.cursor()
+        cursor.execute("SET session sql_mode='TRADITIONAL,ANSI_QUOTES,ONLY_FULL_GROUP_BY,PIPES_AS_CONCAT'")
+        cursor.execute('select ? as x', ('hi',))
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 'hi')
+        cursor.close()
+        conn.close()
 
     def test_conpy213(self):
         conversions = {**{FIELD_TYPE.NEWDECIMAL: float}}

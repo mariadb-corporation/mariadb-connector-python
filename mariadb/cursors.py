@@ -129,10 +129,10 @@ class Cursor(mariadb._mariadb.cursor):
                         replace = val.__str__()
                     else:
                         if isinstance(val, (bytes, bytearray)):
-                            replace = "\"%s\"" % self.connection.escape_string(
+                            replace = "'%s'" % self.connection.escape_string(
                                 val.decode(encoding='latin1'))
                         else:
-                            replace = "\"%s\"" % self.connection.escape_string(
+                            replace = "'%s'" % self.connection.escape_string(
                                 val.__str__())
                             extra_bytes = len(replace.encode("utf-8")) -\
                                 len(replace)
