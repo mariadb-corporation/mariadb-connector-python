@@ -119,6 +119,13 @@ PyMODINIT_FUNC PyInit__mariadb(void)
         goto error;
     }
 
+    Py_SET_TYPE(&MrdbBinlog_Type, &PyType_Type);
+    if (PyType_Ready(&MrdbBinlog_Type) == -1)
+    {
+        goto error;
+    }
+    PyModule_AddObject(module, "binlog", (PyObject *)&MrdbBinlog_Type);
+
     /* Import Decimal support (CONPY-49) */
     if (!(decimal_module= PyImport_ImportModule("decimal")) ||
         !(decimal_type= PyObject_GetAttr(decimal_module, PyUnicode_FromString("Decimal"))))

@@ -31,6 +31,8 @@
 #include <docs/common.h>
 #include <limits.h>
 
+#include <mariadb_rpl.h>
+
 #define CHECK_TYPE(obj, type) \
 (Py_TYPE((obj)) == type || PyType_IsSubtype(Py_TYPE((obj)), type))
 #define CHECK_TYPE_NO_NONE(obj, type) \
@@ -124,6 +126,29 @@ enum enum_binary_command {
     SQL_DO,
     SQL_SELECT,
     SQL_OTHER=255
+};
+
+enum enum_binlog_query_status {
+    QS_FLAGS2= 0x00,
+    QS_SQL_MODE= 0x01,
+    QS_CATALOG= 0x02,
+    QS_AUTO_INCREMENT= 0x03,
+    QS_CHARSET= 0x04,
+    QS_TIMEZONE= 0x05,
+    QS_CATALOG_NZ= 0x06,
+    QS_LC_TIME_NAMES= 0x07,
+    QS_CHARSET_DATABASE= 0x08,
+    QS_TABLE_MAP_FOR_UPDATE= 0x09,
+    QS_MASTER_DATA_WRITTEN= 0x0A,
+    QS_INVOKERS= 0x0B,
+    QS_UPDATED_DB_NAMES= 0x0C,
+    QS_MICROSECONDS= 0x0D,
+    QS_DDL_LOGGED_WITH_XID= 0x10,
+    QS_DEFAULT_COLLATION_FOR_UTF8MB4=0x11,
+    QS_SQL_REQUIRE_PRIMARY_KEY=0x12,
+    QS_DEFAULT_TABLE_ENCRYPTION=0x13,
+    QS_HR_NOW=128,
+    QS_XID=129
 };
 
 enum enum_extended_field_type
@@ -243,6 +268,17 @@ typedef struct {
 } MrdbParamInfo;
 
 typedef struct {
+    PyObject_HEAD
+    PyThreadState *thread_state;
+    MrdbConnection *connection;
+    MARIADB_RPL *rpl;
+    uint8_t closed;
+    uint8_t raw_data;
+    MARIADB_RPL_EVENT *tm_event;
+    PyObject *decryption_key;
+} MrdbBinlog;
+
+typedef struct {
     PyObject *value;
     char indicator;
     enum enum_field_types type;
@@ -334,6 +370,7 @@ extern PyTypeObject MrdbPool_Type;
 extern PyTypeObject Mariadb_Fieldinfo_Type;
 extern PyTypeObject MrdbConnection_Type;
 extern PyTypeObject MrdbCursor_Type;
+extern PyTypeObject MrdbBinlog_Type;
 
 PyObject *ListOrTuple_GetItem(PyObject *obj, Py_ssize_t index);
 int Mariadb_traverse(PyObject *self,
@@ -422,6 +459,7 @@ MrdbParser_end(MrdbParser *p);
 uint8_t
 MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_len);
 
+PyObject *Mrdb_GetTimeDelta(MYSQL_TIME *tm);
 /* Global defines */
 
 
@@ -530,7 +568,7 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
       (((uint32_t)    ((unsigned char) (A)[3])) << 24)) + \
       (((unsigned long long) ((unsigned char) (A)[4])) << 32) +       \
       (((unsigned long long) ((unsigned char) (A)[5])) << 40))
-#define uint8_tkorr(A)	(*((unsigned long long *) (A)))
+#define uint8korr(A)	(*((unsigned long long *) (A)))
 #define sint8korr(A)	(*((long long *) (A)))
 #define int2store(T,A)	*((uint16_t*) (T))= (uint16_t) (A)
 #define int3store(T,A)  do { *(T)=  (unsigned char) ((A));\

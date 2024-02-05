@@ -416,7 +416,7 @@ error:
   return 1;
 }
 
-static PyObject *Mrdb_GetTimeDelta(MYSQL_TIME *tm)
+PyObject *Mrdb_GetTimeDelta(MYSQL_TIME *tm)
 {
     int days, hour, minute, second, second_part;
  
