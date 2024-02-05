@@ -49,7 +49,7 @@ before_install:
         python --version    
         mkdir C:/cc
         cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="c:\Program Files\MariaDB\MariaDB Connector C 64-bit"
-        cmake --build . --target install --config RelWithDebInfo
+        cmake --build . --target install --config Release
         export MARIADB_CC_INSTALL_DIR="c:\Program Files\MariaDB\MariaDB Connector C 64-bit"
         ;;
       osx)

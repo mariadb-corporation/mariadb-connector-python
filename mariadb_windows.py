@@ -64,9 +64,9 @@ def get_config(options):
 
     print("Found MariaDB Connector/C in '%s'" % mariadb_dir)
     cfg = MariaDBConfiguration()
-    cfg.includes = [".\\include", mariadb_dir + "\\include", mariadb_dir +
-                    "\\include\\mysql", mariadb_dir + "\\include\\mariadb"]
-    cfg.lib_dirs = [mariadb_dir + "\\lib", mariadb_dir + "\\lib\\mariadb"]
+    cfg.includes = ["./include", mariadb_dir + "/include", mariadb_dir +
+                    "/include/mysql", mariadb_dir + "/include/mariadb"]
+    cfg.lib_dirs = [mariadb_dir + "/lib", mariadb_dir + "/lib/mariadb"]
     cfg.libs = ["ws2_32", "advapi32", "kernel32", "shlwapi", "crypt32",
                 "secur32", "bcrypt"]
     if static.lower() == "on" or static.lower() == "default":
