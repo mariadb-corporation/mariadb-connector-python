@@ -87,6 +87,7 @@ jobs:
       name: "CS 10.6 - Windows"
 
 script:
+  - ls -lrt
   - python --version
   - python -m pip install .
 #  - python setup.py build
