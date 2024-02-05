@@ -56,22 +56,22 @@ before_install:
         cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
         make -j4
         sudo make install
+        git clone https://github.com/momo-lab/pyenv-install-latest.git "$(pyenv root)"/plugins/pyenv-install-latest
+        export REAL_PYTHON_VERSION=$(pyenv install-latest --print $PYTHON_VER)
+        echo $REAL_PYTHON_VERSION
+        pyenv install $REAL_PYTHON_VERSION
+        export PYENV_VERSION=$REAL_PYTHON_VERSION
+        pyenv versions
         ;;
     esac
   - export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
   - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
   # install "install-latest" to retrieve latest python version corresponding to major.minor version
-  - git clone https://github.com/momo-lab/pyenv-install-latest.git "$(pyenv root)"/plugins/pyenv-install-latest
-  - export REAL_PYTHON_VERSION=$(pyenv install-latest --print $PYTHON_VER)
-  - echo $REAL_PYTHON_VERSION
-  - pyenv install $REAL_PYTHON_VERSION
-  - export PYENV_VERSION=$REAL_PYTHON_VERSION
-  - pyenv versions
   # install server
   - cd $MAIN_PATH
 
 env:
-  global: PYTHON_VER="3.10" HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 DB=testp CLEAR_TEXT=0
+  global: PYTHON_VER=3.10 HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 DB=testp CLEAR_TEXT=0
 
 
 jobs:
