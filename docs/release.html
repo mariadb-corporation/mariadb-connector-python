@@ -5,11 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Release history &#8212; MariaDB Connector/Python 1.1.9 documentation</title>
+    <title>Release history &#8212; MariaDB Connector/Python 1.2.0.a1-a documentation</title>
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=fa44fd50" />
     <link rel="stylesheet" type="text/css" href="_static/classic.css?v=514cf933" />
     
-    <script src="_static/documentation_options.js?v=7b68ca77"></script>
+    <script src="_static/documentation_options.js?v=09bbb30e"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     
@@ -33,7 +33,7 @@
         <li class="right" >
           <a href="license.html" title="License"
              accesskey="P">previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.9 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.2.0.a1-a documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Release history</a></li> 
       </ul>
     </div>  
@@ -45,6 +45,17 @@
             
   <section id="release-history">
 <h1>Release history<a class="headerlink" href="#release-history" title="Link to this heading">¶</a></h1>
+<section id="mariadb-connector-python-1-1-10">
+<h2>MariaDB Connector/Python 1.1.10<a class="headerlink" href="#mariadb-connector-python-1-1-10" title="Link to this heading">¶</a></h2>
+<p>Release date: Feb 07 2024</p>
+<p><strong>Issues fixed:</strong></p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-273">CONPY-273</a>: cursor.execute fails when running in sql_mode ANSI_QUOTES.</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-278">CONPY-278</a>: Return updated connection_id in case of automatic reconnect</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-279">CONPY-279</a>: Allow None values for password and database in change_user() method</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-281">CONPY-281</a>: Use METH_O calling conventions for c functions which accept only one parameter</p></li>
+</ul>
+</section>
 <section id="mariadb-connector-python-1-1-9">
 <h2>MariaDB Connector/Python 1.1.9<a class="headerlink" href="#mariadb-connector-python-1-1-9" title="Link to this heading">¶</a></h2>
 <p>Release date: Dec 22 2023</p>
@@ -138,9 +149,11 @@
 <p>Release date: Jul 07 2022</p>
 <p><strong>Issues fixed:</strong></p>
 <blockquote>
-<div><p>CONPY-209: Wrong unicode substitution in SELECT statement
-CONPY-210: Added missing error constants
-CONPY-212: unbuffered cursor.execute() doesn’t work</p>
+<div><ul class="simple">
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-209">CONPY-209</a>: Wrong unicode substitution in SELECT statement</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-210">CONPY-210</a>: Added missing error constants</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-212">CONPY-212</a>: unbuffered cursor.execute() doesn’t work</p></li>
+</ul>
 </div></blockquote>
 </section>
 <section id="mariadb-connector-python-1-1-2">
@@ -148,15 +161,17 @@ CONPY-212: unbuffered cursor.execute() doesn’t work</p>
 <p>Release date: Jun 27 2022</p>
 <p><strong>Notable changes:</strong></p>
 <blockquote>
-<div><p>CONPY-203: Error constants added
-CONPY-204: New connection method dump_debug_info(</p>
+<div><ul class="simple">
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-203">CONPY-203</a>: Error constants added</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-204">CONPY-204</a>: New connection method dump_debug_info(</p></li>
+</ul>
 </div></blockquote>
 <p><strong>Issues fixed:</strong></p>
 <blockquote>
 <div><p>Removed utf8 part of internal parser and use binary objects for parameter substitution
-CONPY-205: Fixed inconsistent exceptions: All parameter exceptions are returned as ProgrammingError.
+- <a class="reference external" href="https://jira.mariadb.org/browse/CONPY-205">CONPY-205</a>: Fixed inconsistent exceptions: All parameter exceptions are returned as ProgrammingError.
 Fixed memory leak when using decimal parameters
-CONPY-201: Fixed build issues with Python 3.11 beta</p>
+- <a class="reference external" href="https://jira.mariadb.org/browse/CONPY-201">CONPY-201</a>: Fixed build issues with Python 3.11 beta</p>
 </div></blockquote>
 </section>
 <section id="mariadb-connector-python-1-0-11">
@@ -164,9 +179,11 @@ CONPY-201: Fixed build issues with Python 3.11 beta</p>
 <p>Release date: Apr 12 2022</p>
 <p><strong>Issues fixed:</strong></p>
 <blockquote>
-<div><p>CONPY-194: executemany() does not work with returning clause
-CONPY-196: Missing decrement of reference pointer when closing cursor
-CONPY-198: Build fix for FreeBSD</p>
+<div><ul class="simple">
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-194">CONPY-194</a>: executemany() does not work with returning clause</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-196">CONPY-196</a>: Missing decrement of reference pointer when closing cursor</p></li>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-198">CONPY-198</a>: Build fix for FreeBSD</p></li>
+</ul>
 </div></blockquote>
 </section>
 <section id="mariadb-connector-pyhon-1-0-10">
@@ -174,9 +191,18 @@ CONPY-198: Build fix for FreeBSD</p>
 <p>Release date: Feb 18 2022</p>
 <p><strong>Issues fixed:</strong></p>
 <ul class="simple">
-<li><p>CONPY-184: Display status of connection, cursor and pool class in string representation.</p></li>
-<li><p>CONPY-178: Repeated execution of cursors callproc() method hangs</p></li>
-<li><p>CONPY-175: Fixed crash in escape_string</p></li>
+<li><ul>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-184">CONPY-184</a>: Display status of connection, cursor and pool class in string representation.</p></li>
+</ul>
+</li>
+<li><ul>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-178">CONPY-178</a>: Repeated execution of cursors callproc() method hangs</p></li>
+</ul>
+</li>
+<li><ul>
+<li><p><a class="reference external" href="https://jira.mariadb.org/browse/CONPY-175">CONPY-175</a>: Fixed crash in escape_string</p></li>
+</ul>
+</li>
 </ul>
 </section>
 <section id="mariadb-connector-python-1-0-9">
@@ -323,6 +349,7 @@ CONPY-198: Build fix for FreeBSD</p>
     <h3><a href="index.html">Table of Contents</a></h3>
     <ul>
 <li><a class="reference internal" href="#">Release history</a><ul>
+<li><a class="reference internal" href="#mariadb-connector-python-1-1-10">MariaDB Connector/Python 1.1.10</a></li>
 <li><a class="reference internal" href="#mariadb-connector-python-1-1-9">MariaDB Connector/Python 1.1.9</a></li>
 <li><a class="reference internal" href="#mariadb-connector-python-1-1-8">MariaDB Connector/Python 1.1.8</a></li>
 <li><a class="reference internal" href="#mariadb-connector-python-1-1-7">MariaDB Connector/Python 1.1.7</a></li>
@@ -387,12 +414,12 @@ CONPY-198: Build fix for FreeBSD</p>
         <li class="right" >
           <a href="license.html" title="License"
              >previous</a> |</li>
-        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.9 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.2.0.a1-a documentation</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">Release history</a></li> 
       </ul>
     </div>
     <div class="footer" role="contentinfo">
-    &#169; Copyright 2019-2023 MariaDB Corporation and Georg Richter.
+    &#169; Copyright 2019-2024 MariaDB Corporation and Georg Richter.
       Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
     </div>
   </body>

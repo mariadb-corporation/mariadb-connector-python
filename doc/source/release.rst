@@ -1,6 +1,19 @@
 Release history
 ===============
 
+MariaDB Connector/Python 1.1.10
+-------------------------------
+
+Release date: Feb 07 2024
+
+**Issues fixed:**
+
+- :conpy:`273`: cursor.execute fails when running in sql_mode ANSI_QUOTES.
+- :conpy:`278`: Return updated connection_id in case of automatic reconnect
+- :conpy:`279`: Allow None values for password and database in change_user() method
+- :conpy:`281`: Use METH_O calling conventions for c functions which accept only one parameter
+
+
 MariaDB Connector/Python 1.1.9
 ------------------------------
 
@@ -116,9 +129,9 @@ Release date: Jul 07 2022
 
 **Issues fixed:**
 
-    CONPY-209: Wrong unicode substitution in SELECT statement
-    CONPY-210: Added missing error constants
-    CONPY-212: unbuffered cursor.execute() doesn't work 
+    - :conpy:`209`: Wrong unicode substitution in SELECT statement
+    - :conpy:`210`: Added missing error constants
+    - :conpy:`212`: unbuffered cursor.execute() doesn't work 
 
 MariaDB Connector/Python 1.1.2
 -------------------------------
@@ -126,15 +139,15 @@ Release date: Jun 27 2022
 
 **Notable changes:**
 
-    CONPY-203: Error constants added
-    CONPY-204: New connection method dump_debug_info(
+    - :conpy:`203`: Error constants added
+    - :conpy:`204`: New connection method dump_debug_info(
 
 **Issues fixed:**
 
     Removed utf8 part of internal parser and use binary objects for parameter substitution
-    CONPY-205: Fixed inconsistent exceptions: All parameter exceptions are returned as ProgrammingError. 
+    - :conpy:`205`: Fixed inconsistent exceptions: All parameter exceptions are returned as ProgrammingError. 
     Fixed memory leak when using decimal parameters
-    CONPY-201: Fixed build issues with Python 3.11 beta 
+    - :conpy:`201`: Fixed build issues with Python 3.11 beta 
 
 
 MariaDB Connector/Python 1.0.11
@@ -145,9 +158,9 @@ Release date: Apr 12 2022
 **Issues fixed:**
 
 
-    CONPY-194: executemany() does not work with returning clause
-    CONPY-196: Missing decrement of reference pointer when closing cursor
-    CONPY-198: Build fix for FreeBSD 
+    - :conpy:`194`: executemany() does not work with returning clause
+    - :conpy:`196`: Missing decrement of reference pointer when closing cursor
+    - :conpy:`198`: Build fix for FreeBSD 
 
 MariaDB Connector/Pyhon 1.0.10
 ------------------------------
@@ -157,9 +170,9 @@ Release date: Feb 18 2022
 **Issues fixed:**
 
 
-- CONPY-184: Display status of connection, cursor and pool class in string representation.
-- CONPY-178: Repeated execution of cursors callproc() method hangs
-- CONPY-175: Fixed crash in escape_string 
+- - :conpy:`184`: Display status of connection, cursor and pool class in string representation.
+- - :conpy:`178`: Repeated execution of cursors callproc() method hangs
+- - :conpy:`175`: Fixed crash in escape_string 
 
 MariaDB Connector/Python 1.0.9
 ------------------------------
