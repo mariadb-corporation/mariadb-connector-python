@@ -43,7 +43,10 @@ before_install:
   - |-
     case $TRAVIS_OS_NAME in
       windows)
-        choco install python --pre 
+        choco install python
+        python --version
+        export PATH=$(cmd.exe //c "refreshenv > nul & C:\Progra~1\Git\bin\bash -c 'echo \$PATH' ")
+        python --version    
         cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
         cmake --build . --target install --config RelWithDebInfo
         export MARIADB_CC_INSTALL_DIR=$MAIN_PATH/~/.cc_3/bld\unittest\libmariadb\RelWithDebInfo
