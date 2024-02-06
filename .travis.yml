@@ -45,10 +45,11 @@ before_install:
       windows)
         choco install python
         python --version
+        choco install wixtoolset
         export PATH=$(cmd.exe //c "refreshenv > nul & C:\Progra~1\Git\bin\bash -c 'echo \$PATH' ")
-        python --version    
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="C:/Program Files/MariaDB/MariaDB Connector C 64-bit"  -DWITH_MSI=ON
-        cmake --build . --config Release
+        python --version
+        cmake .. -DWITH_MSI=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX="C:/temp/cc"
+        cmake --build . --config RelWithDebInfo
         dir C:/Users/travis/.cc_3/bld/unittest/libmariadb/Release
         Start-Process C:\Temp\7z1900-x64.msi -ArgumentList "/quiet"
         ;;
