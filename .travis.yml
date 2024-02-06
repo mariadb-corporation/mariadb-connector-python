@@ -43,13 +43,14 @@ before_install:
   - |-
     case $TRAVIS_OS_NAME in
       windows)
+        powershell Install-WindowsFeature Net-Framework-Core
+        cinst -y wixtoolset    
         choco install python -y
         python --version
-        choco install wixtoolset -y
         export PATH=$(cmd.exe //c "refreshenv > nul & C:\Progra~1\Git\bin\bash -c 'echo \$PATH' ")
         python --version
-        cmake .. -DWITH_MSI=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX="C:/temp/cc"
-        cmake --build . --config RelWithDebInfo
+        cmake .. -DWITH_MSI=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        cmake --build . --config RelWithDebInfo --target package
         dir C:/Users/travis/.cc_3/bld/unittest/libmariadb/Release
         Start-Process C:\Temp\7z1900-x64.msi -ArgumentList "/quiet"
         ;;
