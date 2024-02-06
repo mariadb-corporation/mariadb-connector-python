@@ -51,8 +51,8 @@ before_install:
         python --version
         cmake .. -DWITH_MSI=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
         cmake --build . --config RelWithDebInfo --target package
-        dir C:/Users/travis/.cc_3/bld/unittest/libmariadb/Release
-        Start-Process C:\Temp\7z1900-x64.msi -ArgumentList "/quiet"
+        dir .
+#        Start-Process C:\Temp\7z1900-x64.msi -ArgumentList "/quiet"
         ;;
       osx)
         cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
