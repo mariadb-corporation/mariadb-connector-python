@@ -50,7 +50,8 @@ before_install:
         
         cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="C:/Program Files/MariaDB/MariaDB Connector C 64-bit"
         cmake --build . --config Release
-        ls -lrt C:\Users\travis\.cc_3\bld\unittest\libmariadb\
+        dir C:/Users/travis/.cc_3/bld/unittest/libmariadb/
+        dir C:/Users/travis/.cc_3/bld/unittest/
         Start-Process C:\Temp\7z1900-x64.msi -ArgumentList "/quiet"
         ;;
       osx)
