@@ -22,19 +22,23 @@ before_install:
   - |-
     case $TRAVIS_OS_NAME in
       windows)
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DWITH_MSI=ON
         cmake --build . --config RelWithDebInfo
+        echo "msiexec /i /qn " > install_cc.bat
+        dir *.msi /s /A-D /B >> install_cc.bat
+        call install_cc.bat
         ;;
       osx)
         cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
         make -j4
+        sudo make install
         ;;
       linux)
         cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
         make -j4
+        sudo make install
         ;;
     esac
-  - sudo make install
   - export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
   - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
   # install "install-latest" to retrieve latest python version corresponding to major.minor version
