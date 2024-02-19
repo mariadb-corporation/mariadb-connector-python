@@ -26,8 +26,7 @@ before_install:
         choco install wixtoolset
         echo "refresh environment"
         refreshenv
-
-        # set WIX="c:/Program Files (x86)/WiX Toolset v3.11"
+        export WIX="c:/Program Files (x86)/WiX Toolset v3.11"
         cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_MSI=ON -DDEFAULT_SSL_VERIFY_SERVER_CERT=OFF
         cmake --build . --config RelWithDebInfo
         msi=$(find ~+ -type f -name "*.msi")
