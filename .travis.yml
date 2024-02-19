@@ -23,19 +23,18 @@ before_install:
     case $TRAVIS_OS_NAME in
       windows)
         set WIX="c:/Program Files (x86)/WiX Toolset v3.11"
-        cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_MSI=ON
+        cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_MSI=ON -DDEFAULT_SSL_VERIFY_SERVER_CERT=OFF
         cmake --build . --config RelWithDebInfo
-        echo "msiexec /i /qn " > install_cc.bat
-        dir *.msi /s /A-D /B >> install_cc.bat
-        call install_cc.bat
+        msi=$(find ~+ -type f -name "*.msi")
+        msiexec /i /qn $msi
         ;;
       osx)
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1 -DDEFAULT_SSL_VERIFY_SERVER_CERT=OFF
         make -j4
         sudo make install
         ;;
       linux)
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DDEFAULT_SSL_VERIFY_SERVER_CERT=OFF
         make -j4
         sudo make install
         ;;
