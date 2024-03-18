@@ -40,6 +40,24 @@ class TestCursor(unittest.TestCase):
         cursor.close()
         del cursor
 
+    def test_conpy283(self):
+        conn= create_connection()
+        cursor= conn.cursor(dictionary=True)
+        self.assertEqual(cursor._resulttype, 2)
+        cursor.execute("select 1 as A union SELECT 2 as A")
+        row= cursor.fetchone()
+        self.assertEqual(row, {'A' : 1})
+        self.assertEqual(cursor._resulttype, 2)
+        cursor.scroll(-1)
+        self.assertEqual(cursor._resulttype, 2)
+        row= cursor.fetchone()
+        self.assertEqual(row, {'A' : 1})
+        row= cursor.fetchone()
+        self.assertEqual(row, {'A' : 2})
+        self.assertEqual(cursor._resulttype, 2)
+        cursor.close()
+        conn.close()
+
     def test_date(self):
         v = self.connection.server_version
         i = self.connection.server_info.lower()

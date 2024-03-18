@@ -290,7 +290,7 @@ typedef struct {
     uint32_t field_count;
     int64_t row_count;
     uint64_t lastrow_id;
-    unsigned long row_number;
+    uint64_t row_number;
     enum enum_result_format result_format;
     uint8_t is_prepared;
     char is_buffered;
