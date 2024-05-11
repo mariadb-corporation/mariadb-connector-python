@@ -818,8 +818,7 @@ static PyObject *MrdbConnection_warnings(MrdbConnection *self)
 static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
         PyObject *str)
 {
-    PyObject *string= NULL,
-             *new_string= NULL;
+    PyObject *new_string= NULL;
     size_t from_length, to_length;
     char *from, *to;
 
