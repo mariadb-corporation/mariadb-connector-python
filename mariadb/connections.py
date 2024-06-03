@@ -53,7 +53,6 @@ class Connection(mariadb._mariadb.connection):
         self._socket = None
         self._used = 0
         self._last_executed_statement = None
-        self._socket = None
         self.__pool = None
         self.__last_used = 0
         self.tpc_state = TPC_STATE.NONE
