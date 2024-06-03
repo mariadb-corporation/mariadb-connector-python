@@ -1135,7 +1135,7 @@ MrdbCursor_execute_text(MrdbCursor *self, PyObject *stmt)
         statement = PyUnicode_AsUTF8AndSize(stmt, (Py_ssize_t *)&statement_len);
     } else if (Py_TYPE(stmt) == &PyBytes_Type)
     {
-        PyBytes_AsStringAndSize(stmt, &statement, (Py_ssize_t *)&statement_len);
+        PyBytes_AsStringAndSize(stmt, (char **)&statement, (Py_ssize_t *)&statement_len);
     }
     else {
         PyErr_SetString(PyExc_TypeError, "Parameter must be a string or bytes");
