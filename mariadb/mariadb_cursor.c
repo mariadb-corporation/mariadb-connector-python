@@ -1225,7 +1225,10 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
     mysql_stmt_bind_param(self->stmt, self->params);
 
     if (!(buf= self->connection->mysql->methods->db_execute_generate_request(self->stmt, &buflen, 1)))
+    {
+        mariadb_throw_exception(self->stmt, NULL, 1, NULL);
         goto error;
+    }
 
     if ((rc= Mrdb_execute_direct(self, self->parseinfo.statement, self->parseinfo.statement_len)))
     {

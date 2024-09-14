@@ -1614,6 +1614,20 @@ class TestCursor(unittest.TestCase):
         cursor.close()
         connection.close()
 
+    def test_conpy291(self):
+        connection = create_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("DROP TABLE IF EXISTS t1")
+        cursor.execute("CREATE TABLE t1 (a int, b int, c varchar(100), d int)")
+
+        data= [(1, INDICATOR.NULL, "foo", INDICATOR.NULL),
+               (2, 3, "foo", 5)]
+        cursor.executemany("INSERT INTO t1 VALUES (?,?,?,?)", data)
+        self.assertEqual(cursor.rowcount, 2)
+        cursor.execute("DROP TABLE IF EXISTS t1")
+               
+
     def test_conpy276(self):
         connection = create_connection()
         cursor = connection.cursor()
