@@ -186,6 +186,11 @@ PyMemberDef MrdbConnection_Members[] =
         offsetof(MrdbConnection, converter),
         0,
         "Conversion dictionary"},
+    {"_tls",
+        T_BOOL,
+        offsetof(MrdbConnection, tls_in_use),
+        0,
+        "Indicates if connection uses TLS/SSL"},
     {NULL} /* always last */
 };
 #if MARIADB_PACKAGE_VERSION_ID > 30301
@@ -435,11 +440,8 @@ MrdbConnection_Initialize(MrdbConnection *self,
         if (mysql_options(self->mysql, MYSQL_OPT_SSL_CRLPATH, ssl_crlpath))
           goto end;
     }
-    if (ssl_verify_cert)
-    {
-        if (mysql_options(self->mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (unsigned char *) &ssl_verify_cert))
-          goto end;
-    }
+    if (mysql_options(self->mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (unsigned char *) &ssl_verify_cert))
+        goto end;
     if (tls_version)
     {
         if (mysql_options(self->mysql, MARIADB_OPT_TLS_VERSION, tls_version))
@@ -453,6 +455,9 @@ MrdbConnection_Initialize(MrdbConnection *self,
     {
         goto end;
     }
+
+    if (mysql_get_ssl_cipher(self->mysql))
+        self->tls_in_use= 1;
 
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
 

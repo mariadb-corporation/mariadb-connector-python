@@ -225,6 +225,7 @@ typedef struct {
 #endif
     PyObject *last_executed_stmt;
     PyObject *converter;
+    uint8_t tls_in_use;
 } MrdbConnection;
 
 typedef struct {

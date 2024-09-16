@@ -579,14 +579,18 @@ class Connection(mariadb._mariadb.connection):
         """TLS cipher suite if a secure connection is used."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SSL_CIPHER)
+        if self._tls:
+            return self._mariadb_get_info(INFO.SSL_CIPHER)
+        return None
 
     @property
     def tls_version(self):
         """TLS protocol version if a secure connection is used."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.TLS_VERSION)
+        if self._tls:
+            return self._mariadb_get_info(INFO.TLS_VERSION)
+        return None
 
     @property
     def server_status(self):
