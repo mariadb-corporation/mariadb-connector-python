@@ -1125,14 +1125,14 @@ MrdbCursor_execute_text(MrdbCursor *self, PyObject *stmt)
 {
     int rc;
     MYSQL *db;
-    const char *statement;
+    char *statement;
     size_t statement_len= 0;
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
     if (Py_TYPE(stmt) == &PyUnicode_Type)
     {
-        statement = PyUnicode_AsUTF8AndSize(stmt, (Py_ssize_t *)&statement_len);
+        statement = (char *)PyUnicode_AsUTF8AndSize(stmt, (Py_ssize_t *)&statement_len);
     } else if (Py_TYPE(stmt) == &PyBytes_Type)
     {
         PyBytes_AsStringAndSize(stmt, &statement, (Py_ssize_t *)&statement_len);
