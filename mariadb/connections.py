@@ -475,6 +475,15 @@ class Connection(mariadb._mariadb.connection):
         return result
 
     @property
+    def tls_peer_cert_info(self):
+        """Get peer certificate information."""
+
+        self._check_closed()
+        if self._tls:
+            return self._mariadb_get_info(INFO.TLS_PEER_CERT_INFO)
+        return None
+
+    @property
     def database(self):
         """Get default database for connection."""
 
@@ -590,6 +599,15 @@ class Connection(mariadb._mariadb.connection):
         self._check_closed()
         if self._tls:
             return self._mariadb_get_info(INFO.TLS_VERSION)
+        return None
+
+    @property
+    def _tls_verify_status(self):
+        """Returns the result of the peer certificate verification."""
+
+        self._check_closed()
+        if self._tls:
+            return self._mariadb_get_info(INFO.TLS_VERIFY_STATUS)
         return None
 
     @property

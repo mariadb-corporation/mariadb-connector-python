@@ -20,6 +20,7 @@
 #include "mariadb_python.h"
 #include "docs/connection.h"
 #include "docs/exception.h"
+#include <datetime.h>
 
 #define MADB_SET_OPTION(m,o,v)\
 if (mysql_optionsv((m), (o), (v)))\
@@ -40,6 +41,7 @@ char *dsn_keys[]= {
     "pool_reset_connection", "plugin_dir",
     "username", "db", "passwd",
     "status_callback", "tls_version",
+    "tls_fp", "tls_fp_list",
     NULL
 };
 
@@ -193,6 +195,19 @@ PyMemberDef MrdbConnection_Members[] =
         "Indicates if connection uses TLS/SSL"},
     {NULL} /* always last */
 };
+
+int connection_datetime_init(void)
+{
+    PyDateTime_IMPORT;
+
+    if (!PyDateTimeAPI) {
+        PyErr_SetString(PyExc_ImportError, "DateTimeAPI initialization failed");
+        return 1;
+    }
+    return 0;
+}
+
+
 #if MARIADB_PACKAGE_VERSION_ID > 30301
 void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_info type, ...)
 {
@@ -296,7 +311,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
          *default_group= NULL,
          *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
          *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
-         *plugin_dir= NULL, *tls_version= NULL;
+         *plugin_dir= NULL, *tls_version= NULL, *tls_fp= NULL, *tls_fp_list= NULL;
     char *pool_name= 0;
     uint32_t pool_size= 0;
     uint8_t ssl_enforce= 0;
@@ -308,7 +323,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     PyObject *status_callback= NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|zzzzziziiibbzzzzzzzzzzibizibzzzzOz:connect",
+                "|zzzzziziiibbzzzzzzzzzzibizibzzzzOzzz:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -320,7 +335,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &client_flags, &pool_name, &pool_size,
                 &reset_session, &plugin_dir,
                 &user, &schema, &password, &status_callback,
-                &tls_version))
+                &tls_version, &tls_fp, &tls_fp_list))
     {
         return -1;
     }
@@ -424,7 +439,8 @@ MrdbConnection_Initialize(MrdbConnection *self,
     }
 
     /* set TLS/SSL options */
-    if (ssl_enforce || ssl_key || ssl_ca || ssl_cert || ssl_capath || ssl_cipher || tls_version)
+    if (ssl_enforce || ssl_key || ssl_ca || ssl_cert || ssl_capath || ssl_cipher || tls_version ||
+        tls_fp || tls_fp_list)
         mysql_ssl_set(self->mysql, (const char *)ssl_key,
                 (const char *)ssl_cert,
                 (const char *)ssl_ca,
@@ -445,6 +461,16 @@ MrdbConnection_Initialize(MrdbConnection *self,
     if (tls_version)
     {
         if (mysql_options(self->mysql, MARIADB_OPT_TLS_VERSION, tls_version))
+          goto end;
+    }
+    if (tls_fp)
+    {
+        if (mysql_options(self->mysql, MARIADB_OPT_SSL_FP, tls_fp))
+          goto end;
+    }
+    if (tls_fp_list)
+    {
+        if (mysql_options(self->mysql, MARIADB_OPT_SSL_FP_LIST, tls_fp_list))
           goto end;
     }
 
@@ -682,12 +708,66 @@ static int MrdbConnection_setreconnect(MrdbConnection *self,
 /* }}} */
 
 static PyObject *
+MrdbConnection_X509info(MARIADB_X509_INFO *info)
+{
+  PyObject *dict, *key, *val;
+  struct tm *tmp;
+  if (!info)
+    Py_RETURN_NONE;
+
+  dict= PyDict_New();
+
+  key= PyUnicode_FromString("version");
+  val= PyLong_FromLong((long)info->version);
+  PyDict_SetItem(dict, key, val);
+  Py_DECREF(key);
+  Py_DECREF(val);
+
+  key= PyUnicode_FromString("subject");
+  val= PyUnicode_FromString(info->subject);
+  PyDict_SetItem(dict, key, val);
+  Py_DECREF(key);
+  Py_DECREF(val);
+
+  key= PyUnicode_FromString("issuer");
+  val= PyUnicode_FromString(info->issuer);
+  PyDict_SetItem(dict, key, val);
+  Py_DECREF(key);
+  Py_DECREF(val);
+
+  key= PyUnicode_FromString("fingerprint");
+  val= PyUnicode_FromString(info->fingerprint);
+  PyDict_SetItem(dict, key, val);
+  Py_DECREF(key);
+  Py_DECREF(val);
+
+  tmp= &info->not_before;
+  key= PyUnicode_FromString("not_before");
+  val= PyDateTime_FromDateAndTime(tmp->tm_year + 1900, tmp->tm_mon + 1, tmp->tm_mday,
+                                  tmp->tm_hour, tmp->tm_min, tmp->tm_sec, 0);
+  PyDict_SetItem(dict, key, val);
+  Py_DECREF(key);
+  Py_DECREF(val);
+
+  tmp= &info->not_after;
+  key= PyUnicode_FromString("not_after");
+  val= PyDateTime_FromDateAndTime(tmp->tm_year + 1900, tmp->tm_mon + 1, tmp->tm_mday,
+                                  tmp->tm_hour, tmp->tm_min, tmp->tm_sec, 0);
+  PyDict_SetItem(dict, key, val);
+  Py_DECREF(key);
+  Py_DECREF(val);
+
+  return dict;
+}
+
+static PyObject *
 MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval)
 {
     union {
         char *str;
         uint64_t num;
         uint8_t b;
+        void *ptr;
     } val;
 
     uint32_t option;
@@ -709,43 +789,53 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval)
     }
 
     switch (option) {
-      case MARIADB_CONNECTION_UNIX_SOCKET:
-      case MARIADB_CONNECTION_USER:
-      case MARIADB_CHARSET_NAME: 
-      case MARIADB_TLS_LIBRARY:
-      case MARIADB_CLIENT_VERSION:
-      case MARIADB_CONNECTION_HOST:
-      case MARIADB_CONNECTION_INFO:
-      case MARIADB_CONNECTION_SCHEMA:
-      case MARIADB_CONNECTION_SQLSTATE:
-      case MARIADB_CONNECTION_SOCKET:
-      case MARIADB_CONNECTION_SSL_CIPHER:
-      case MARIADB_CONNECTION_TLS_VERSION:
-      case MARIADB_CONNECTION_SERVER_VERSION:
+      case PYMARIADB_CONNECTION_UNIX_SOCKET:
+      case PYMARIADB_CONNECTION_USER:
+      case PYMARIADB_CHARSET_NAME:
+      case PYMARIADB_TLS_LIBRARY:
+      case PYMARIADB_CLIENT_VERSION:
+      case PYMARIADB_CONNECTION_HOST:
+      case PYMARIADB_CONNECTION_INFO:
+      case PYMARIADB_CONNECTION_SCHEMA:
+      case PYMARIADB_CONNECTION_SQLSTATE:
+      case PYMARIADB_CONNECTION_SOCKET:
+      case PYMARIADB_CONNECTION_SSL_CIPHER:
+      case PYMARIADB_CONNECTION_TLS_VERSION:
+      case PYMARIADB_CONNECTION_SERVER_VERSION:
         return PyUnicode_FromString(val.str ? val.str : "");
         break;
 
-      case MARIADB_CHARSET_ID:
-      case MARIADB_CLIENT_VERSION_ID:
-      case MARIADB_CONNECTION_ASYNC_TIMEOUT:
-      case MARIADB_CONNECTION_ASYNC_TIMEOUT_MS:
-      case MARIADB_CONNECTION_PORT:
-      case MARIADB_CONNECTION_PROTOCOL_VERSION_ID:
-      case MARIADB_CONNECTION_SERVER_TYPE:
-      case MARIADB_CONNECTION_SERVER_VERSION_ID:
-      case MARIADB_CONNECTION_TLS_VERSION_ID:
-      case MARIADB_MAX_ALLOWED_PACKET:
-      case MARIADB_NET_BUFFER_LENGTH:
-      case MARIADB_CONNECTION_SERVER_STATUS:
-      case MARIADB_CONNECTION_SERVER_CAPABILITIES:
-      case MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES:
-      case MARIADB_CONNECTION_CLIENT_CAPABILITIES:
-#ifdef MARIADB_CONNECTION_BYTES_READ
-      case MARIADB_CONNECTION_BYTES_READ:
-      case MARIADB_CONNECTION_BYTES_SENT:
-#endif
+      case PYMARIADB_CHARSET_ID:
+      case PYMARIADB_CLIENT_VERSION_ID:
+      case PYMARIADB_CONNECTION_ASYNC_TIMEOUT:
+      case PYMARIADB_CONNECTION_ASYNC_TIMEOUT_MS:
+      case PYMARIADB_CONNECTION_PORT:
+      case PYMARIADB_CONNECTION_PROTOCOL_VERSION_ID:
+      case PYMARIADB_CONNECTION_SERVER_TYPE:
+      case PYMARIADB_CONNECTION_SERVER_VERSION_ID:
+      case PYMARIADB_CONNECTION_TLS_VERSION_ID:
+      case PYMARIADB_MAX_ALLOWED_PACKET:
+      case PYMARIADB_NET_BUFFER_LENGTH:
+      case PYMARIADB_CONNECTION_SERVER_STATUS:
+      case PYMARIADB_CONNECTION_SERVER_CAPABILITIES:
+      case PYMARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES:
+      case PYMARIADB_CONNECTION_CLIENT_CAPABILITIES:
+      case PYMARIADB_CONNECTION_BYTES_READ:
+      case PYMARIADB_CONNECTION_BYTES_SENT:
+      case PYMARIADB_TLS_VERIFY_STATUS:
         return PyLong_FromLong((long)val.num);
         break;
+      case PYMARIADB_TLS_PEER_CERT_INFO:
+      {
+        MARIADB_X509_INFO *info;
+
+        if (!self->tls_in_use)
+          Py_RETURN_NONE;
+
+        mariadb_get_infov(self->mysql, option, &info, 256);
+        return MrdbConnection_X509info(info);
+        break;
+      }
       default:
         Py_RETURN_NONE;
     }

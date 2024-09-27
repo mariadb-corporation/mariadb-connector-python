@@ -273,6 +273,38 @@ class TestConnection(unittest.TestCase):
                             parse_version('3.3.0'))
             pass
 
+    def test_tls_verification(self):
+        default_conf= conf()
+        default_conf["ssl"] = False
+        conn= mariadb.connect(**default_conf)
+        self.assertEqual(conn._tls_verify_status, None)
+        conn.close()
+        default_conf= conf()
+        default_conf["ssl"] = True 
+        conn= mariadb.connect(**default_conf)
+        self.assertNotEqual(conn._tls_verify_status, None)
+        conn.close()
+
+    def test_tls_fp(self):
+        default_conf= conf()
+        default_conf["ssl"] = True
+        conn= mariadb.connect(**default_conf)
+        self.assertEqual(conn._tls, True)
+        x509_info= conn.tls_peer_cert_info
+        if not x509_info:
+            conn.close()
+            self.skipTest("Peer certificate information not supported")
+        fp= x509_info["fingerprint"]
+        self.assertEqual(len(fp), 64)
+        conn.close()
+        default_conf= conf()
+        default_conf["tls_fp"] = fp
+        conn= mariadb.connect(**default_conf)
+        self.assertEqual(conn._tls, True)
+        x509_info= conn.tls_peer_cert_info
+        self.assertEqual(fp, x509_info["fingerprint"])
+        conn.close()
+
     def test_conpy278(self):
          if is_maxscale():
             self.skipTest("MAXSCALE bug MXS-4961")

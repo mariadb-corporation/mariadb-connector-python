@@ -25,6 +25,7 @@
 #include <datetime.h>
 
 extern int codecs_datetime_init(void);
+extern int connection_datetime_init(void);
 
 PyObject *decimal_module= NULL,
          *decimal_type= NULL,
@@ -108,6 +109,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 
     /* Initialize DateTimeAPI */
     if (mariadb_datetime_init() ||
+        connection_datetime_init() ||
         codecs_datetime_init())
     {
         goto error;
