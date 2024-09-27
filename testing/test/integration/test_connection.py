@@ -11,6 +11,7 @@ from test.conf_test import conf
 from mariadb.constants import STATUS
 import platform
 from packaging.version import parse as parse_version
+from packaging import version
 
 
 class TestConnection(unittest.TestCase):
@@ -274,6 +275,9 @@ class TestConnection(unittest.TestCase):
             pass
 
     def test_tls_verification(self):
+        if version.Version(mariadb.mariadbapi_version) <\
+               version.Version('3.4.2'):
+            self.skipTest("Requires C/C 3.4.2 or newer")
         default_conf= conf()
         default_conf["ssl"] = False
         conn= mariadb.connect(**default_conf)
@@ -286,6 +290,9 @@ class TestConnection(unittest.TestCase):
         conn.close()
 
     def test_tls_fp(self):
+        if version.Version(mariadb.mariadbapi_version) <\
+               version.Version('3.4.2'):
+            self.skipTest("Requires C/C 3.4.2 or newer")
         default_conf= conf()
         default_conf["ssl"] = True
         conn= mariadb.connect(**default_conf)

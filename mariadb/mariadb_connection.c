@@ -707,6 +707,7 @@ static int MrdbConnection_setreconnect(MrdbConnection *self,
 }
 /* }}} */
 
+#ifdef MARIADB_X509_INFO
 static PyObject *
 MrdbConnection_X509info(MARIADB_X509_INFO *info)
 {
@@ -759,6 +760,7 @@ MrdbConnection_X509info(MARIADB_X509_INFO *info)
 
   return dict;
 }
+#endif
 
 static PyObject *
 MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval)
@@ -822,11 +824,16 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval)
       case PYMARIADB_CONNECTION_CLIENT_CAPABILITIES:
       case PYMARIADB_CONNECTION_BYTES_READ:
       case PYMARIADB_CONNECTION_BYTES_SENT:
+#if MARIADB_PACKAGE_VERSION_ID > 30401
       case PYMARIADB_TLS_VERIFY_STATUS:
+#endif
         return PyLong_FromLong((long)val.num);
         break;
       case PYMARIADB_TLS_PEER_CERT_INFO:
       {
+#if MARIADB_PACKAGE_VERSION_ID < 30402
+        Py_RETURN_NONE;
+#else
         MARIADB_X509_INFO *info;
 
         if (!self->tls_in_use)
@@ -835,6 +842,7 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval)
         mariadb_get_infov(self->mysql, option, &info, 256);
         return MrdbConnection_X509info(info);
         break;
+#endif
       }
       default:
         Py_RETURN_NONE;
