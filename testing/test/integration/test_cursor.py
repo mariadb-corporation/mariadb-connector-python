@@ -1645,6 +1645,23 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.rowcount, 4)
         cursor.close()
 
+    def test_conpy289(self):
+        with create_connection() as conn:
+            cursor= conn.cursor()
+            cursor.execute("CREATE OR REPLACE TABLE t289 (a bigint unsigned,"\
+                           "b bigint unsigned, c bigint unsigned,"\
+                           "d bigint unsigned)")
+
+            data= [(0, 9232974212090577672, 11529232914765115761, 58),
+                   (0, 13837380911034793984, 11529233872889843812, 0),
+                   (0, 0, 2351636844950589488, 9999)]
+
+            cursor.executemany("insert into t289 values (?,?,?,?)", data)
+
+            cursor.execute("SELECT * FROM t289")
+            rows= cursor.fetchall()
+            self.assertEqual(rows, data)
+
     def test_conpy91(self):
         with create_connection() as connection:
             with connection.cursor() as cursor:
