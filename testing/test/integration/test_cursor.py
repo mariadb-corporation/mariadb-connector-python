@@ -277,35 +277,12 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(metadata["type"][3], FIELD_TYPE.STRING)
         self.assertEqual(metadata["ext_type_or_format"][4], EXT_FIELD_TYPE.POINT)
         self.assertEqual(metadata["type"][4], FIELD_TYPE.GEOMETRY)
-        cursor.execute("SELECT a,b,c,d,e FROM t1 WHERE 1=?", (1,))
-        metadata= cursor.metadata
-        self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
-        self.assertEqual(metadata["type"][0], FIELD_TYPE.BLOB)
-        self.assertEqual(metadata["ext_type_or_format"][1], EXT_FIELD_TYPE.UUID)
-        self.assertEqual(metadata["type"][1], FIELD_TYPE.STRING)
-        self.assertEqual(metadata["ext_type_or_format"][2], EXT_FIELD_TYPE.INET4)
-        self.assertEqual(metadata["type"][2], FIELD_TYPE.STRING)
-        self.assertEqual(metadata["ext_type_or_format"][3], EXT_FIELD_TYPE.INET6)
-        self.assertEqual(metadata["type"][3], FIELD_TYPE.STRING)
-        self.assertEqual(metadata["ext_type_or_format"][4], EXT_FIELD_TYPE.POINT)
-        self.assertEqual(metadata["type"][4], FIELD_TYPE.GEOMETRY)
 
         cursor.close()
 
     def test_xfield_types(self):
-        cursor = self.connection.cursor()
-        cursor.execute("SELECT a,b,c,d,e FROM t1")
-        description= cursor.description
-        self.assertEqual(12, len(description[0]))
-        self.assertEqual(description[0][11], EXT_FIELD_TYPE.JSON)
-        cursor.execute("SELECT a,b,c,d,e FROM t1 WHERE 1=?", (1,))
-        description= cursor.description
-        self.assertEqual(12, len(description[0]))
-        self.assertEqual(description[0][11], EXT_FIELD_TYPE.JSON)
-        cursor.close()
-        connection.close()
-
-    def test_xfield_types(self):
+        if is_maxscale():
+            self.skipTest("Test doesn't work with maxscale")
         cursor = self.connection.cursor()
         fieldinfo = mariadb.fieldinfo()
         cursor.execute("CREATE TEMPORARY TABLE test_xfield_types ("

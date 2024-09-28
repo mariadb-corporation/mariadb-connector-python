@@ -275,6 +275,8 @@ class TestConnection(unittest.TestCase):
             pass
 
     def test_tls_verification(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE test has no SSL on port by default")
         if version.Version(mariadb.mariadbapi_version) <\
                version.Version('3.4.2'):
             self.skipTest("Requires C/C 3.4.2 or newer")
@@ -290,6 +292,8 @@ class TestConnection(unittest.TestCase):
         conn.close()
 
     def test_tls_fp(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE test has no SSL on port by default")
         if version.Version(mariadb.mariadbapi_version) <\
                version.Version('3.4.2'):
             self.skipTest("Requires C/C 3.4.2 or newer")
