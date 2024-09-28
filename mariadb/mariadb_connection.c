@@ -707,7 +707,7 @@ static int MrdbConnection_setreconnect(MrdbConnection *self,
 }
 /* }}} */
 
-#ifdef MARIADB_X509_INFO
+#if MARIADB_PACKAGE_VERSION_ID > 30401
 static PyObject *
 MrdbConnection_X509info(MARIADB_X509_INFO *info)
 {
