@@ -37,7 +37,7 @@ before_install:
     esac
   - |-
     if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
-        msipackage = ${ls ./win/packaging/*.msi}
+        msipackage = `ls ./win/packaging/*.msi`
         msiexec /i $msipackage /qn ADDLOCAL=ProductFeature,IncludeFeature INSTALLLEVEL=1000
     else
         sudo make install
