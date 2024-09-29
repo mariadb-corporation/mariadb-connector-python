@@ -4,10 +4,15 @@ language: c
 before_install:
   - export MAIN_PATH=`pwd`
   # install pyenv to test multiple python version
-  - git clone https://github.com/pyenv/pyenv.git ~/.pyenv
-  - export PYENV_ROOT="$HOME/.pyenv"
-  - eval "$(pyenv init -)"
-  - export PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
+  - |-
+    case $TRAVIS_OS_NAME in
+      windows)
+      choco install pyenv-win
+    else
+      git clone https://github.com/pyenv/pyenv.git ~/.pyenv
+      export PYENV_ROOT="$HOME/.pyenv"
+      eval "$(pyenv init -)"
+      export PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
   # install c dependency
   - |-
     if [ "$TRAVIS_OS_NAME" == "linux" ] ; then
