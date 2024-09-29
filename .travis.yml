@@ -37,7 +37,7 @@ before_install:
     esac
   - |-
     if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
-        which win\packaging:*.msi > msi.txt
+        where win\packaging:*.msi > msi.txt
         set /p msipackage < msi.txt
         msiexec /i %msipackage% /qn ADDLOCAL=ProductFeature,IncludeFeature INSTALLLEVEL=1000
     else
