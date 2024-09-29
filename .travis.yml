@@ -37,9 +37,8 @@ before_install:
     esac
   - |-
     if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
-        where /R . *.msi > msi.txt
-        set /p msipackage < msi.txt
-        msiexec /i %msipackage% /qn ADDLOCAL=ProductFeature,IncludeFeature INSTALLLEVEL=1000
+        msipackage = ${ls ./win/packaging/*.msi}
+        msiexec /i $msipackage /qn ADDLOCAL=ProductFeature,IncludeFeature INSTALLLEVEL=1000
     else
         sudo make install
         export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
