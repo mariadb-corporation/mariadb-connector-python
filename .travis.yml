@@ -23,8 +23,9 @@ before_install:
     case $TRAVIS_OS_NAME in
       windows)
         export WIX="c:/Program Files (x86)/WiX Toolset v3.14"
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=c:\conc
         cmake --build . --config RelWithDebInfo
+        cmake --install . --config RelWithDebInfo
         ;;
       osx)
         cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
@@ -37,8 +38,7 @@ before_install:
     esac
   - |-
     if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
-        msipackage = `ls ./win/packaging/*.msi`
-        msiexec /i $msipackage /qn ADDLOCAL=ProductFeature,IncludeFeature INSTALLLEVEL=1000
+        export MARIADB_CC_INSTALL_DIR=c:\conc
     else
         sudo make install
         export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
