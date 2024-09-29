@@ -22,6 +22,7 @@ before_install:
   - |-
     case $TRAVIS_OS_NAME in
       windows)
+        export WIX="c:/Program Files (x86)/WiX Toolset v3.14"
         cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
         cmake --build . --config RelWithDebInfo
         ;;
