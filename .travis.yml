@@ -54,7 +54,7 @@ before_install:
     fi
 
   # install "install-latest" to retrieve latest python version corresponding to major.minor version
-  - git clone https://github.com/momo-lab/pyenv-install-latest.git "$(pyenv root)"/plugins/pyenv-install-latest
+  - git clone https://github.com/momo-lab/pyenv-install-latest.git $PYENV_ROOT/plugins/pyenv-install-latest
   - export REAL_PYTHON_VERSION=$(pyenv install-latest --print $PYTHON_VER)
   - echo $REAL_PYTHON_VERSION
   - pyenv install $REAL_PYTHON_VERSION
