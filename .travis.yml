@@ -7,15 +7,15 @@ before_install:
   - |-
     case $TRAVIS_OS_NAME in
       windows)
-      choco install pyenv-win
-      export PYENV_ROOT=$HOME/.pyenv
-      export PATH=$PYENV_ROOT/pyenv-win/bin:$PYENV_ROOT/pyenv-win/shims:$PATH
-      pyenv update
-    *)
-      git clone https://github.com/pyenv/pyenv.git ~/.pyenv
-      export PYENV_ROOT="$HOME/.pyenv"
-      eval "$(pyenv init -)"
-      export PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
+        choco install pyenv-win
+        export PYENV_ROOT=$HOME/.pyenv
+        export PATH=$PYENV_ROOT/pyenv-win/bin:$PYENV_ROOT/pyenv-win/shims:$PATH
+        pyenv update
+      *)
+        git clone https://github.com/pyenv/pyenv.git ~/.pyenv
+        export PYENV_ROOT="$HOME/.pyenv"
+        eval "$(pyenv init -)"
+        export PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
     esac
   # install c dependency
   - |-
