@@ -32,10 +32,9 @@ before_install:
       windows)
         export WIX="c:/Program Files (x86)/WiX Toolset v3.14"
         export MARIADB_CC_INSTALL_DIR=$HOME/conc
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$MARIADB_CC_INSTALL_DIR
+        cmake .. -DCMAKE_GENERATOR_PLATFORM=x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$MARIADB_CC_INSTALL_DIR
         cmake --build . --config RelWithDebInfo
         cmake --install . --config RelWithDebInfo
-        objdump -f $MARIADB_CC_INSTALL_DIR/lib/mariadb/mariadbclient.lib
         ;;
       osx)
         cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
