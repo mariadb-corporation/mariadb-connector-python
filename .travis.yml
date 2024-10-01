@@ -4,10 +4,18 @@ language: c
 before_install:
   - export MAIN_PATH=`pwd`
   # install pyenv to test multiple python version
-  - git clone https://github.com/pyenv/pyenv.git ~/.pyenv
-  - export PYENV_ROOT="$HOME/.pyenv"
-  - eval "$(pyenv init -)"
-  - export PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
+  - |-
+    if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
+      choco install pyenv-win
+      export PYENV_ROOT=$HOME/.pyenv
+      export PATH=$PYENV_ROOT/pyenv-win/bin:$PYENV_ROOT/pyenv-win/shims:$PATH
+      pyenv update
+    else
+      git clone https://github.com/pyenv/pyenv.git ~/.pyenv
+      export PYENV_ROOT="$HOME/.pyenv"
+      export PATH="$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH"
+      eval "$(pyenv init -)"
+    fi
   # install c dependency
   - |-
     if [ "$TRAVIS_OS_NAME" == "linux" ] ; then
@@ -22,8 +30,11 @@ before_install:
   - |-
     case $TRAVIS_OS_NAME in
       windows)
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        export WIX="c:/Program Files (x86)/WiX Toolset v3.14"
+        export MARIADB_CC_INSTALL_DIR=$HOME/conc
+        cmake .. -DCMAKE_GENERATOR_PLATFORM=x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$MARIADB_CC_INSTALL_DIR
         cmake --build . --config RelWithDebInfo
+        cmake --install . --config RelWithDebInfo
         ;;
       osx)
         cmake .. -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB:BOOL=ON -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl@1.1
@@ -34,12 +45,18 @@ before_install:
         make -j4
         ;;
     esac
-  - sudo make install
-  - export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
-  - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
+  - |-
+    if [ "$TRAVIS_OS_NAME" != "windows" ] ; then
+        sudo make install
+        export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
+    else
+        export MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL/lib/mariadb/plugin
+    fi
+
   # install "install-latest" to retrieve latest python version corresponding to major.minor version
-  - git clone https://github.com/momo-lab/pyenv-install-latest.git "$(pyenv root)"/plugins/pyenv-install-latest
-  - export REAL_PYTHON_VERSION=$(pyenv install-latest --print $PYTHON_VER)
+  - git clone https://github.com/momo-lab/pyenv-install-latest.git $PYENV_ROOT/plugins/pyenv-install-latest
+  - export REAL_PYTHON_VERSION=$(pyenv install --list | grep --extended-regexp "^\s*[0-9][0-9.]*[0-9]\s*$" | tail -1 | tr -d ' ')
   - echo $REAL_PYTHON_VERSION
   - pyenv install $REAL_PYTHON_VERSION
   - export PYENV_VERSION=$REAL_PYTHON_VERSION

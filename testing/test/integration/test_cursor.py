@@ -1592,6 +1592,8 @@ class TestCursor(unittest.TestCase):
         connection.close()
 
     def test_conpy291(self):
+        if is_mysql:
+            self.skipTest("Skip (MySQL doesn't support batch/indicators)")
         connection = create_connection()
         cursor = connection.cursor()
 
@@ -1623,6 +1625,8 @@ class TestCursor(unittest.TestCase):
         cursor.close()
 
     def test_conpy289(self):
+        if is_mysql:
+            self.skipTest("Skip (MySQL doesn't support batch)")
         with create_connection() as conn:
             cursor= conn.cursor()
             cursor.execute("CREATE OR REPLACE TABLE t289 (a bigint unsigned,"\
