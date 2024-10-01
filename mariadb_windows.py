@@ -78,7 +78,7 @@ def get_config(options):
     cfg.extra_compile_args = ["/MD"]
 
     f = open("./include/config_win.h", "w")
-    f.write("#define DEFAULT_PLUGINS_SUBDIR \"%s\\\\lib\\\\plugin\"" %
+    f.write("#define DEFAULT_PLUGINS_SUBDIR \"%s\\\\lib\\\\mariadb\\\\plugin\"" %
             mariadb_dir.replace(""'\\', '\\\\'))
     f.close()
     return cfg
