@@ -50,6 +50,8 @@ before_install:
         sudo make install
         export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
         export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
+    else
+        export MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL/lib/mariadb/plugin
     fi
 
   # install "install-latest" to retrieve latest python version corresponding to major.minor version
