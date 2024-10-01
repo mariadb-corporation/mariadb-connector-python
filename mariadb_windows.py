@@ -79,6 +79,6 @@ def get_config(options):
 
     f = open("./include/config_win.h", "w")
     f.write("#define DEFAULT_PLUGINS_SUBDIR \"%s\\\\lib\\\\plugin\"" %
-            options["install_dir"].replace(""'\\', '\\\\'))
+            mariadb_dir.replace(""'\\', '\\\\'))
     f.close()
     return cfg
