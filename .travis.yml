@@ -46,7 +46,7 @@ before_install:
     esac
   - |-
     if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
-        export MARIADB_CC_INSTALL_DIR=c:\conc
+        export MARIADB_CC_INSTALL_DIR=c:/conc
     else
         sudo make install
         export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
