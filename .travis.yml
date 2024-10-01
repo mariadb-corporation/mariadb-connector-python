@@ -31,7 +31,8 @@ before_install:
     case $TRAVIS_OS_NAME in
       windows)
         export WIX="c:/Program Files (x86)/WiX Toolset v3.14"
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=c:\conc
+        export MARIADB_CC_INSTALL_DIR=$HOME/conc
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$MARIADB_CC_INSTALL_DIR
         cmake --build . --config RelWithDebInfo
         cmake --install . --config RelWithDebInfo
         ;;
@@ -45,9 +46,7 @@ before_install:
         ;;
     esac
   - |-
-    if [ "$TRAVIS_OS_NAME" == "windows" ] ; then
-        export MARIADB_CC_INSTALL_DIR=c:/conc
-    else
+    if [ "$TRAVIS_OS_NAME" != "windows" ] ; then
         sudo make install
         export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
         export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
