@@ -127,7 +127,7 @@ class Connection(mariadb._mariadb.connection):
         connection the entire result set must be fetched.
 
         fetch* methods of the cursor class by default return result set values
-        as a tuple, unless named_tuple or dictionary was specified.
+        as a tuple, unless dictionary or named_tuple was specified.
         The latter one exists for compatibility reasons and should be avoided
         due to possible inconsistency in case two or more fields in a result
         set have the same name.
