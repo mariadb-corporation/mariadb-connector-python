@@ -51,9 +51,12 @@ class ConnectionPool(object):
         * pool_validation_interval (int)=500 -- Specifies the validation
           interval in milliseconds after which the status of a connection
           requested from the pool is checked.
-          The default values is 500 milliseconds, a value of 0 means that
+          The default value is 500 milliseconds, a value of 0 means that
           the status will always be checked.
           (Added in version 1.1.6)
+
+         * **kwargs: Optional additional connection arguments, as described in
+           mariadb.connect() method.
     """
 
     def __init__(self, *args, **kwargs):
@@ -70,6 +73,10 @@ class ConnectionPool(object):
         :param bool pool_reset_connection:
             Will reset the connection before returning it to the pool.
             Default value is True.
+
+        :param **kwargs kwargs:
+            Optional additional connection arguments, as described in
+             mariadb.connect() method.
         """
         self._connections_free = []
         self._connections_used = []
