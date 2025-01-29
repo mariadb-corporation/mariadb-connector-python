@@ -50,13 +50,15 @@ before_install:
         sudo make install
         export MARIADB_PLUGIN_DIR==`mariadb_config --plugindir`
         export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb
+        # install "install-latest" to retrieve latest python version corresponding to major.minor version
+        git clone https://github.com/momo-lab/pyenv-install-latest.git $PYENV_ROOT/plugins/pyenv-install-latest
+        export REAL_PYTHON_VERSION=$(pyenv install-latest --print $PYTHON_VER)
     else
         export MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL/lib/mariadb/plugin
+        # On Windows we test against latest stable only
+        export REAL_PYTHON_VERSION=$(pyenv install --list | grep --extended-regexp "^\s*[0-9][0-9.]*[0-9]\s*$" | tail -1 | tr -d ' ')
     fi
 
-  # install "install-latest" to retrieve latest python version corresponding to major.minor version
-  - git clone https://github.com/momo-lab/pyenv-install-latest.git $PYENV_ROOT/plugins/pyenv-install-latest
-  - export REAL_PYTHON_VERSION=$(pyenv install --list | grep --extended-regexp "^\s*[0-9][0-9.]*[0-9]\s*$" | tail -1 | tr -d ' ')
   - echo $REAL_PYTHON_VERSION
   - pyenv install $REAL_PYTHON_VERSION
   - export PYENV_VERSION=$REAL_PYTHON_VERSION
