@@ -858,6 +858,34 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
             self->values[column]= val;
     }
 }
+
+static uint8_t ma_is_vector(PyObject *obj)
+{
+  PyObject *TypeCodeObj= NULL;
+  const char *typecode;
+  uint8_t rc= 0;
+
+  if (!obj)
+    return 0;
+
+  if (strcmp(Py_TYPE(obj)->tp_name, "array.array") &&
+      strcmp(Py_TYPE(obj)->tp_name, "array"))
+    return 0;
+
+  if (!(TypeCodeObj= PyObject_GetAttrString(obj, "typecode")) ||
+      !PyUnicode_Check(TypeCodeObj))
+    goto end;
+
+  if ((typecode = PyUnicode_AsUTF8(TypeCodeObj)) &&
+      !strcmp(typecode, "f"))
+    rc= 1;
+
+end:
+  if (TypeCodeObj)
+    Py_DECREF(TypeCodeObj);
+  return rc;
+}
+
 /* 
    mariadb_get_column_info
    This function analyzes the Python object and calculates the corresponding
@@ -909,6 +937,10 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
         /* CONPY-49: C-API has no correspondent data type for DECIMAL column type,
            so we need to convert decimal.Decimal Object to string during callback */
         paraminfo->type= MYSQL_TYPE_NEWDECIMAL;
+        return 0;
+    } else if (ma_is_vector(obj)) {
+        /* CONPY-299: Vectors are defined as array of floats */
+        paraminfo->type= MYSQL_TYPE_LONG_BLOB;
         return 0;
     }
     else {
@@ -1396,8 +1428,31 @@ mariadb_param_to_bind(MrdbCursor *self,
             *(double *)value->num= (double)PyFloat_AsDouble(value->value);
             break;
         case MYSQL_TYPE_LONG_BLOB:
-            bind->buffer_length= (unsigned long)PyBytes_GET_SIZE(value->value);
-            bind->buffer= (void *) PyBytes_AS_STRING(value->value);
+            if (!strcmp(Py_TYPE(value->value)->tp_name, "array.array") ||
+                !strcmp(Py_TYPE(value->value)->tp_name, "array"))
+            {
+               Py_ssize_t size= PySequence_Length(value->value);
+               PyObject *byte_array= NULL;
+
+               bind->buffer= NULL;
+
+               if (!size)
+                 goto end;
+
+               if (!PyObject_HasAttrString(value->value, "tobytes"))
+                 goto end;
+
+               if (!(byte_array= PyObject_CallMethod(value->value, "tobytes", NULL)))
+                 goto end;
+
+               bind->buffer= (void *)PyBytes_AS_STRING(byte_array);
+               bind->buffer_length= (unsigned long)PyBytes_GET_SIZE(byte_array);
+
+               Py_DECREF(byte_array);
+            } else {
+                bind->buffer_length= (unsigned long)PyBytes_GET_SIZE(value->value);
+                bind->buffer= (void *) PyBytes_AS_STRING(value->value);
+            }
             break;
         case MYSQL_TYPE_DATE:
         case MYSQL_TYPE_TIME:

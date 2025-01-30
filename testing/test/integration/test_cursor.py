@@ -7,6 +7,7 @@ import os
 import decimal
 import json
 from decimal import Decimal
+import array
 
 import mariadb
 from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CLIENT
@@ -57,6 +58,39 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor._resulttype, 2)
         cursor.close()
         conn.close()
+
+    def test_conpy299(self):
+        if is_mysql():
+            self.skipTest("Skip (MySQL)")
+        if self.connection.server_version < 110702:
+            self.skipTest("Requires server version >= 11.7.2")
+
+        cursor= self.connection.cursor()
+        cursor.execute("DROP TABLE IF EXISTS t_vector")
+        cursor.execute("CREATE TABLE t_vector (id int not null, v VECTOR(3) NOT NULL, VECTOR INDEX(v))")
+
+        # Vector can't be empty
+        empty= array.array('f', [])
+        try:
+            cursor.execute("INSERT INTO t_vector VALUES (?,?)", (1, empty))
+        except mariadb.IntegrityError:
+            pass
+
+        # Valid vector
+        data= array.array('f', [201.1, 302.2, 403.3])
+
+        cursor.execute("INSERT INTO t_vector VALUES (?,?)", (1, data))
+        cursor.execute("SELECT id, v, Vec_ToText(v) FROM t_vector")
+        row= cursor.fetchone()
+
+        check_data= [row[1], array.array('f', eval(row[2]))]
+
+        cursor.execute("DROP TABLE t_vector")
+        cursor.close()
+
+        self.assertEqual(check_data[0], data.tobytes())
+        self.assertEqual(check_data[1], data)
+
 
     def test_date(self):
         v = self.connection.server_version
