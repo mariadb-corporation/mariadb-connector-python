@@ -59,6 +59,18 @@ class TestCursor(unittest.TestCase):
         cursor.close()
         conn.close()
 
+    def test_conpy295(self):
+        cursor= self.connection.cursor()
+        cursor.execute("DROP TABLE IF EXISTS items")
+        cursor.execute("CREATE TABLE items(id int, dsc varchar(200),d varchar(20), p tinyint, price int)")
+        data= [(1408531143, 'Amazon', '2021-04-16', True, -1),
+               (1442076847, 'Uber', '2021-04-15', True, -100000)]
+        cursor.executemany("INSERT INTO items VALUES (?,?,?,?,?)", data)
+        cursor.execute("SELECT * FROM items")
+        rows= cursor.fetchall()
+        self.assertEqual(rows, data)
+        cursor.close()
+
     def test_conpy299(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")

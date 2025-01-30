@@ -1132,9 +1132,9 @@ mariadb_get_parameter_info(MrdbCursor *self,
 
         if (pinfo.type == MYSQL_TYPE_LONGLONG)
         {
-            uint64_t tmp= PyLong_AsLongLong(paramvalue.value);
+            int64_t tmp= PyLong_AsLongLong(paramvalue.value);
 
-            if (tmp == (uint64_t)-1 && PyErr_Occurred)
+            if (PyErr_Occurred())
             {
               param->is_unsigned= 1;
               PyErr_Clear();
