@@ -94,7 +94,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("INSERT INTO t_vector VALUES (?,?)", (1, data))
         cursor.execute("SELECT id, v, Vec_ToText(v) FROM t_vector")
         row= cursor.fetchone()
-
+        self.connection.commit()
         check_data= [row[1], array.array('f', eval(row[2]))]
 
         cursor.execute("DROP TABLE t_vector")
@@ -612,6 +612,27 @@ class TestCursor(unittest.TestCase):
         row = cursor.fetchone()
         self.assertEqual(row[0], 2)
         del cursor
+
+    def test_conpy298(self):
+        import uuid, ipaddress
+
+        cursor= self.connection.cursor()
+        cursor.execute("DROP TABLE IF EXISTS t1")
+        cursor.execute("CREATE TABLE t1 (a inet6, b inet4, c uuid)")
+
+        values= (ipaddress.ip_address('::'), ipaddress.ip_address('192.168.0.1'),
+                 uuid.uuid4())
+
+        cursor.execute("INSERT INTO t1 VALUES (?, ?, ?)", values)
+        cursor.execute("SELECT a,b,c FROM t1")
+        row= cursor.fetchone()
+
+        self.assertEqual(row[0], values[0].__str__())
+        self.assertEqual(row[1], values[1].__str__())
+        self.assertEqual(row[2], values[2].__str__())
+
+        cursor.execute("DROP TABLE t1")
+        cursor.close()
 
     def test_conpy34(self):
         cursor = self.connection.cursor()
