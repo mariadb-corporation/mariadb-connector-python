@@ -616,6 +616,10 @@ class TestCursor(unittest.TestCase):
     def test_conpy298(self):
         import uuid, ipaddress
 
+        x = self.connection.server_version_info
+        if x < (10, 10, 0) or is_mysql():
+            self.skipTest("Skip (MySQL and MariaDB < 10.10)")
+
         cursor= self.connection.cursor()
         cursor.execute("DROP TABLE IF EXISTS t1")
         cursor.execute("CREATE TABLE t1 (a inet6, b inet4, c uuid)")
