@@ -212,18 +212,20 @@ int connection_datetime_init(void)
 void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_info type, ...)
 {
   va_list ap;
-  PyThreadState *_save= NULL;
   MrdbConnection *self= (MrdbConnection *)data;
   PyObject *dict= NULL;
   PyObject *dict_key= NULL, *dict_val= NULL;
-  va_start(ap, type);
 
+  PyGILState_STATE gstate;
+  /* Acquire the GIL */
+  gstate = PyGILState_Ensure();
+
+  va_start(ap, type);
   if (self->status_callback) {
     if (type == STATUS_TYPE)
     {
       unsigned int server_status= va_arg(ap, int);
       
-      MARIADB_UNBLOCK_THREADS(self);
       dict_key= PyUnicode_FromString("server_status");
       dict_val= PyLong_FromLong(server_status);
       dict= PyDict_New();
@@ -231,14 +233,12 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
       Py_DECREF(dict_key);
       Py_DECREF(dict_val);
       PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
-      MARIADB_BLOCK_THREADS(self);
     }
   }
   if (type == SESSION_TRACK_TYPE)
   {
     enum enum_session_state_type track_type= va_arg(ap, enum enum_session_state_type);
 
-    MARIADB_UNBLOCK_THREADS(self);
 
     if (self->status_callback) {
       switch (track_type) {
@@ -279,9 +279,9 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
 
         memcpy(charset, val->str, val->length);
         charset[val->length]= 0;
-        va_end(ap);
         mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
                 "Character set '%s' is not supported", charset);
+        goto end;
       }
       if (self->status_callback)
       {
@@ -294,9 +294,11 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
         PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
       }
     }
-    MARIADB_BLOCK_THREADS(self);
   }
+end:
   va_end(ap);
+  /* Release the GIL */
+  PyGILState_Release(gstate);
 } 
 #endif
 
@@ -375,8 +377,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
                                              mysql_get_client_info());
    }
 #endif
-
-    MARIADB_BEGIN_ALLOW_THREADS(self);
 
     if (mysql_options(self->mysql, MYSQL_SET_CHARSET_NAME, mariadb_default_charset))
        goto end;
@@ -474,8 +474,10 @@ MrdbConnection_Initialize(MrdbConnection *self,
           goto end;
     }
 
+    Py_BEGIN_ALLOW_THREADS;
     mysql_real_connect(self->mysql, host, user, password, schema, port,
             socket, client_flags);
+    Py_END_ALLOW_THREADS;
    
     if (mysql_errno(self->mysql))
     {
@@ -489,7 +491,6 @@ MrdbConnection_Initialize(MrdbConnection *self,
 
     has_error= 0;
 end:
-    MARIADB_END_ALLOW_THREADS(self);
 
     if (has_error)
     {
@@ -567,9 +568,9 @@ void MrdbConnection_finalize(MrdbConnection *self)
     {
         if (self->mysql)
         {
-            MARIADB_BEGIN_ALLOW_THREADS(self)
+            Py_BEGIN_ALLOW_THREADS
             mysql_close(self->mysql);
-            MARIADB_END_ALLOW_THREADS(self)
+            Py_END_ALLOW_THREADS
             self->mysql= NULL;
         }
     }
@@ -586,9 +587,9 @@ MrdbConnection_executecommand(MrdbConnection *self,
 
   cmd= PyUnicode_AsUTF8AndSize(command, NULL);
 
-  MARIADB_BEGIN_ALLOW_THREADS(self);
+  Py_BEGIN_ALLOW_THREADS;
   rc= mysql_send_query(self->mysql, cmd, (long)strlen(cmd));
-  MARIADB_END_ALLOW_THREADS(self);
+  Py_END_ALLOW_THREADS;
 
   if (rc)
   {
@@ -604,9 +605,9 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
     /* Todo: check if all the cursor stuff is deleted (when using prepared
        statements this should be handled in mysql_close) */
 
-    MARIADB_BEGIN_ALLOW_THREADS(self)
+    Py_BEGIN_ALLOW_THREADS
     mysql_close(self->mysql);
-    MARIADB_END_ALLOW_THREADS(self)
+    Py_END_ALLOW_THREADS
     self->mysql= NULL;
     self->closed= 1;
     Py_RETURN_NONE;
@@ -628,9 +629,9 @@ PyObject *MrdbConnection_ping(MrdbConnection *self)
 
     MARIADB_CHECK_CONNECTION(self, NULL);
 
-    MARIADB_BEGIN_ALLOW_THREADS(self);
+    Py_BEGIN_ALLOW_THREADS;
     rc= mysql_ping(self->mysql);
-    MARIADB_END_ALLOW_THREADS(self);
+    Py_END_ALLOW_THREADS;
 
     if (rc) {
         mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
@@ -654,9 +655,9 @@ PyObject *MrdbConnection_change_user(MrdbConnection *self,
     if (!PyArg_ParseTuple(args, "szz", &user, &password, &database))
         return NULL;
 
-    MARIADB_BEGIN_ALLOW_THREADS(self);
+    Py_BEGIN_ALLOW_THREADS;
     rc= mysql_change_user(self->mysql, user, password, database);
-    MARIADB_END_ALLOW_THREADS(self);
+    Py_END_ALLOW_THREADS;
 
     if (rc)
     {
@@ -863,9 +864,9 @@ PyObject *MrdbConnection_reconnect(MrdbConnection *self)
     if (!save_reconnect)
         mysql_optionsv(self->mysql, MYSQL_OPT_RECONNECT, &reconnect);
 
-    MARIADB_BEGIN_ALLOW_THREADS(self);
+    Py_BEGIN_ALLOW_THREADS;
     rc= mariadb_reconnect(self->mysql);
-    MARIADB_END_ALLOW_THREADS(self);
+    Py_END_ALLOW_THREADS;
 
     if (!save_reconnect)
         mysql_optionsv(self->mysql, MYSQL_OPT_RECONNECT, &save_reconnect);
@@ -886,9 +887,9 @@ PyObject *MrdbConnection_reset(MrdbConnection *self)
     int rc;
     MARIADB_CHECK_CONNECTION(self, NULL);
 
-    MARIADB_BEGIN_ALLOW_THREADS(self);
+    Py_BEGIN_ALLOW_THREADS;
     rc= mysql_reset_connection(self->mysql);
-    MARIADB_END_ALLOW_THREADS(self);
+    Py_END_ALLOW_THREADS;
 
     if (rc)
     {
@@ -952,9 +953,9 @@ MrdbConnection_dump_debug_info(MrdbConnection *self)
     int rc;
     MARIADB_CHECK_CONNECTION(self, NULL);
 
-    MARIADB_BEGIN_ALLOW_THREADS(self);
+    Py_BEGIN_ALLOW_THREADS;
     rc= mysql_dump_debug_info(self->mysql);
-    MARIADB_END_ALLOW_THREADS(self);
+    Py_END_ALLOW_THREADS;
 
     if (rc)
     {
@@ -968,9 +969,9 @@ static PyObject *MrdbConnection_readresponse(MrdbConnection *self)
 {
     int rc;
 
-    MARIADB_BEGIN_ALLOW_THREADS(self);
+    Py_BEGIN_ALLOW_THREADS;
     rc= self->mysql->methods->db_read_query_result(self->mysql);
-    MARIADB_END_ALLOW_THREADS(self);
+    Py_END_ALLOW_THREADS;
 
     if (rc)
     {

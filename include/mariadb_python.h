@@ -241,7 +241,6 @@ typedef struct st_parser {
 /* PEP-249: Connection object */
 typedef struct {
     PyObject_HEAD
-    PyThreadState *thread_state;
     MYSQL *mysql;
     int open;
     uint8_t is_buffered;
@@ -808,33 +807,3 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
 
 #endif /* __i386__ OR _WIN32 */
 
-/* Due to callback functions we cannot use PY_BEGIN/END_ALLOW_THREADS */
-
-#define MARIADB_BEGIN_ALLOW_THREADS(obj)\
-{\
-  (obj)->thread_state= PyEval_SaveThread();\
-}
-
-#define MARIADB_END_ALLOW_THREADS(obj)\
-if ((obj)->thread_state)\
-{\
-    PyEval_RestoreThread((obj)->thread_state);\
-    (obj)->thread_state= NULL;\
-}
-
-#define MARIADB_UNBLOCK_THREADS(obj)\
-{\
-    if ((obj)->thread_state)\
-    {\
-        _save= (obj)->thread_state;\
-        PyEval_RestoreThread(_save);\
-        (obj)->thread_state= NULL;\
-    }\
-}
-
-#define MARIADB_BLOCK_THREADS(obj)\
-    if (_save)\
-    {\
-        (obj)->thread_state= PyEval_SaveThread();\
-        _save= NULL;\
-    }

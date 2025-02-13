@@ -677,13 +677,18 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     MrdbCursor *self= (MrdbCursor *)data;
     Mrdb_ExtFieldType *ext_field_type;
 
+    PyGILState_STATE gstate;
+
+    /* Acquire the GIL */
+    gstate = PyGILState_Ensure();
+
     ext_field_type= mariadb_extended_field_type(&self->fields[column]);
 
     if (!row)
     {
         Py_INCREF(Py_None);
         self->values[column]= Py_None;
-        return;
+        goto end;
     }
     switch(self->fields[column].type) {
         case MYSQL_TYPE_NULL:
@@ -904,6 +909,10 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         if ((val= ma_convert_value(self, type, self->values[column])))
             self->values[column]= val;
     }
+
+end:
+  /* Release the GIL */
+  PyGILState_Release(gstate);
 }
 
 static uint8_t ma_is_vector(PyObject *obj)
