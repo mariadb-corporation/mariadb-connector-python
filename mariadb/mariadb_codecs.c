@@ -24,6 +24,7 @@
 #define IS_DECIMAL_TYPE(type) \
 ((type) == MYSQL_TYPE_NEWDECIMAL || (type) == MYSQL_TYPE_DOUBLE || (type) == MYSQL_TYPE_FLOAT)
 
+#if PY_BIG_ENDIAN == 1
 static char *ma_byteswap(char *buf, size_t itemsize, size_t len)
 {
     char *p;
@@ -70,6 +71,7 @@ static char *ma_byteswap(char *buf, size_t itemsize, size_t len)
     }
     return buf;
 }
+#endif
 
 long MrdbIndicator_AsLong(PyObject *column)
 {
@@ -1199,7 +1201,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
 
         if (pinfo.type == MYSQL_TYPE_LONGLONG)
         {
-            int64_t tmp= PyLong_AsLongLong(paramvalue.value);
+            PyLong_AsLongLong(paramvalue.value);
 
             if (PyErr_Occurred())
             {
@@ -1503,7 +1505,6 @@ mariadb_param_to_bind(MrdbCursor *self,
             if (!strcmp(Py_TYPE(value->value)->tp_name, "array.array") ||
                 !strcmp(Py_TYPE(value->value)->tp_name, "array"))
             {
-               PyObject *byte_array= NULL;
                Py_buffer v;
 
                bind->buffer= NULL;
