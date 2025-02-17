@@ -8,7 +8,7 @@ def init_db(conn, paramstyle):
     cursor = conn.cursor()
     cursor.execute("DROP TABLE IF EXISTS str_test")
     cursor.execute("CREATE TABLE str_test ("
-                   "col1 varchar(200), col2 TEXT, col3 TEXT)")
+                   "col1 varchar(200), col2 TEXT, col3 TEXT) CHARACTER SET utf8mb4")
     vals = [(str1, str2, str3) for i in range(100)]
     if paramstyle == 'qmark':
         cursor.executemany("INSERT INTO str_test VALUES (?, ?, ?)", vals)
