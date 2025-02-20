@@ -1,4 +1,6 @@
-recursive-include test *.py
+recursive-include testing/test/ *.py
+prune testing/benchmarks
+exclude testing/bench*.py
 recursive-include include *.h
 include LICENSE
 include mariadb_windows.py
