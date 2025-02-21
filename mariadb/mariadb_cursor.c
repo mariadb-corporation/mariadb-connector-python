@@ -69,6 +69,7 @@ static PyObject *
 MrdbCursor_readresponse(MrdbCursor *self);
 
 PyObject *MrdbCursor_clear_result(MrdbCursor *self);
+static void ma_cursor_close(MrdbCursor *self);
 
 void
 field_fetch_callback(void *data, unsigned int column, unsigned char **row);
@@ -346,20 +347,28 @@ static PyObject *MrdbCursor_repr(MrdbCursor *self)
     return PyUnicode_FromString(cobj_repr);
 }
 
+static void MrdbCursor_dealloc(PyObject *obj)
+{
+  MrdbCursor *self = (MrdbCursor *)obj;
+  ma_cursor_close(self);
+  Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
 PyTypeObject MrdbCursor_Type =
 {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "mariadb.cursor",
     .tp_basicsize= (Py_ssize_t)sizeof(MrdbCursor),
-    .tp_repr= (reprfunc)MrdbCursor_repr, 
+    .tp_repr= (reprfunc)MrdbCursor_repr,
     .tp_flags= Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
-    .tp_doc= mariadb_cursor_documentation, 
+    .tp_doc= mariadb_cursor_documentation,
     .tp_traverse= (traverseproc)MrdbCursor_traverse,/* tp_traverse */
     .tp_methods= (struct PyMethodDef *)MrdbCursor_Methods,
     .tp_members= (struct PyMemberDef *)MrdbCursor_Members,
     .tp_getset= MrdbCursor_sets,
     .tp_init= (initproc)MrdbCursor_initialize,
     .tp_new= PyType_GenericNew,
+    .tp_dealloc= MrdbCursor_dealloc,
     .tp_finalize= (destructor)MrdbCursor_finalize
 };
 
