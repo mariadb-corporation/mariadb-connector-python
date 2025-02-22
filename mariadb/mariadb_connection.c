@@ -602,8 +602,6 @@ MrdbConnection_executecommand(MrdbConnection *self,
 PyObject *MrdbConnection_close(MrdbConnection *self)
 {
     MARIADB_CHECK_CONNECTION(self, NULL);
-    /* Todo: check if all the cursor stuff is deleted (when using prepared
-       statements this should be handled in mysql_close) */
 
     Py_BEGIN_ALLOW_THREADS
     mysql_close(self->mysql);

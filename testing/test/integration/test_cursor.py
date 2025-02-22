@@ -8,6 +8,7 @@ import decimal
 import json
 from decimal import Decimal
 import array
+import time
 
 import mariadb
 from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CLIENT
@@ -40,6 +41,51 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.close()
         del cursor
+
+    def test_cursor_reconnect(self):
+        conn= create_connection({'reconnect' : True})
+        self.assertEqual(conn.auto_reconnect, True)
+        cursor= conn.cursor(binary=True)
+        cursor.execute("SET session wait_timeout=3")
+
+        # binary protocol should fail
+        cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
+        time.sleep(5)
+        try:
+             cursor.fetchone()
+        except mariadb.ProgrammingError:
+             pass
+
+        cursor.close()
+
+        # Text protocol unbuffered should fail
+        cursor= conn.cursor(binary=False, buffered=False)
+        cursor.execute("SET session wait_timeout=3")
+
+        # text protocol unbuffered should fail
+        cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
+        time.sleep(5)
+        try:
+            cursor.fetchone()
+        except mariadb.ProgrammingError:
+            pass
+
+        # reeusing cursor should work
+        cursor= conn.cursor(binary=False, buffered=True)
+        cursor.execute("SET session wait_timeout=3")
+        time.sleep(5)
+        # reconnect
+        cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
+        self.assertNotEqual(cursor._thread_id, cursor.connection.thread_id)
+        row= cursor.fetchone()
+        self.assertEqual(row[0],1)
+        # execute should update cursor._thread_id
+        cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
+        self.assertEqual(cursor._thread_id, cursor.connection.thread_id)
+
+        cursor.close()
+        conn.close()
+
 
     def test_conpy283(self):
         conn= create_connection()

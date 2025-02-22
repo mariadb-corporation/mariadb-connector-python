@@ -53,9 +53,11 @@ class Cursor(mariadb._mariadb.cursor):
     """
 
     def check_closed(self):
-        if self.closed:
-            self._connection._check_closed()
-            raise mariadb.ProgrammingError("Cursor is closed")
+        if self._thread_id != self.connection.thread_id:
+            raise mariadb.ProgrammingError(f"Cursor cannot be used anymore (the connection aborted and reconnected).")
+        if self._closed:
+            raise mariadb.ProgrammingError("Cursor cannot be used anymore (it was already closed before).")
+        self._connection._check_closed()
 
     def __init__(self, connection, **kwargs):
         """
@@ -75,6 +77,8 @@ class Cursor(mariadb._mariadb.cursor):
         self.buffered = True
         self._parseinfo = None
         self._data = None
+        self._thread_id = connection.thread_id
+        self._closed= None
 
         if not connection:
             raise mariadb.ProgrammingError("Invalid or no connection provided")
@@ -183,6 +187,8 @@ class Cursor(mariadb._mariadb.cursor):
                     substitution.
         """
 
+        if self.connection.auto_reconnect:
+            self._thread_id= self.connection.thread_id
         self.check_closed()
 
         # create statement
@@ -250,6 +256,8 @@ class Cursor(mariadb._mariadb.cursor):
         optional parameter buffered was set to False or the cursor was
         generated as an unbuffered cursor.
         """
+        if self.connection.auto_reconnect:
+            self._thread_id= self.connection.thread_id
 
         self.check_closed()
 
@@ -328,6 +336,10 @@ class Cursor(mariadb._mariadb.cursor):
         returns a result set containing the values for columns listed in the
         RETURNING clause.
         """
+
+        if self.connection.auto_reconnect:
+            self._thread_id= self.connection.thread_id
+
         self.check_closed()
 
         if not parameters or not len(parameters):
@@ -393,6 +405,8 @@ class Cursor(mariadb._mariadb.cursor):
         if not self.connection._closed:
             super().close()
 
+        self._closed= True
+
     def fetchone(self):
         """
         Fetch the next row of a query result set, returning a single sequence,
@@ -401,7 +415,7 @@ class Cursor(mariadb._mariadb.cursor):
         An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
-        if not self.buffered:
+        if not (self.buffered and self._text):
             self.check_closed()
 
         row = self._fetch_row()
@@ -423,7 +437,7 @@ class Cursor(mariadb._mariadb.cursor):
         An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
-        if not self.buffered:
+        if not (self.buffered and self._text):
             self.check_closed()
 
         if size == 0:
@@ -439,7 +453,8 @@ class Cursor(mariadb._mariadb.cursor):
         An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
-        if not self.buffered:
+
+        if not (self.buffered and self._text):
             self.check_closed()
         return super().fetchrows(ROWS_EOF)
 
@@ -455,6 +470,8 @@ class Cursor(mariadb._mariadb.cursor):
         current position in the result set, if set to absolute, value states
         an absolute target position.
         """
+        if not (self.buffered and self._text):
+            self.check_closed()
 
         if self.field_count == 0:
             raise mariadb.ProgrammingError("Cursor doesn't have a result set")
