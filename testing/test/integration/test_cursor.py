@@ -42,6 +42,24 @@ class TestCursor(unittest.TestCase):
         cursor.close()
         del cursor
 
+    def test_conpy306(self):
+        conn= create_connection()
+        cursor=conn.cursor(binary=False)
+        cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
+        try:
+            cursor.fetchone()
+        except Exception:
+            pass
+        cursor.close()
+        cursor=conn.cursor(binary=True)
+        cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
+        try:
+            cursor.fetchone()
+        except Exception:
+            pass
+        cursor.close()
+        conn.close()
+
     def test_cursor_reconnect(self):
         conn= create_connection({'reconnect' : True})
         self.assertEqual(conn.auto_reconnect, True)
@@ -683,6 +701,32 @@ class TestCursor(unittest.TestCase):
 
         cursor.execute("DROP TABLE t1")
         cursor.close()
+
+    def test_conpy298_text(self):
+        import uuid, ipaddress
+
+        x = self.connection.server_version_info
+        if x < (10, 10, 0) or is_mysql():
+            self.skipTest("Skip (MySQL and MariaDB < 10.10)")
+
+        cursor= self.connection.cursor(binary=False)
+        cursor.execute("DROP TABLE IF EXISTS t1")
+        cursor.execute("CREATE TABLE t1 (a inet6, b inet4, c uuid)")
+
+        values= (ipaddress.ip_address('::'), ipaddress.ip_address('192.168.0.1'),
+                 uuid.uuid4())
+
+        cursor.execute("INSERT INTO t1 VALUES (?, ?, ?)", values)
+        cursor.execute("SELECT a,b,c FROM t1")
+        row= cursor.fetchone()
+
+        self.assertEqual(row[0], values[0].__str__())
+        self.assertEqual(row[1], values[1].__str__())
+        self.assertEqual(row[2], values[2].__str__())
+
+        cursor.execute("DROP TABLE t1")
+        cursor.close()
+
 
     def test_conpy34(self):
         cursor = self.connection.cursor()

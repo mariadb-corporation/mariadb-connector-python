@@ -225,7 +225,7 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
     if (type == STATUS_TYPE)
     {
       unsigned int server_status= va_arg(ap, int);
-      
+
       dict_key= PyUnicode_FromString("server_status");
       dict_val= PyLong_FromLong(server_status);
       dict= PyDict_New();
