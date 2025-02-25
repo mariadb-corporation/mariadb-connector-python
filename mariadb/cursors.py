@@ -385,6 +385,18 @@ class Cursor(mariadb._mariadb.cursor):
         if self.field_count:
             self._clear_result()
 
+        # CONPY-152:
+        # Special case: No parameters supplied. This is not supported
+        # by MariaDB Server's bulk implementation - as a workaround we
+        # use a for loop for server side execution
+        if len(parameters[0]) == 0:
+            if not all(not t for t in parameters):
+                raise mariadb.ProgrammingError("Inconsistent data. Not all provided tuples are empty.")
+            sql=f"FOR i IN 1..{len(parameters)}\nDO\n{statement};\nEND FOR"
+            self.execute(sql,())
+            return
+
+
         # If the server doesn't support bulk operations, we need to emulate
         # by looping
         # TODO: insert/replace statements are not optimized yet

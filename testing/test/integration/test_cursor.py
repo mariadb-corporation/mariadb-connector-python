@@ -103,6 +103,25 @@ class TestCursor(unittest.TestCase):
 
         cursor.close()
 
+    def test_conpy152(self):
+        conn = create_connection()
+        cursor = conn.cursor()
+        cursor.execute("DROP TABLE IF EXISTS t1")
+        cursor.execute("CREATE TABLE t1 (a INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY)")
+        data= [(),(),("not empty",)]
+        try:
+            cursor.executemany("INSERT INTO t1 VALUES (DEFAULT)", data)
+        except mariadb.ProgrammingError:
+            pass
+        data= [() for i in range(0,5000)]
+        cursor.executemany("INSERT INTO t1 VALUES (DEFAULT)", data)
+        cursor.execute("SELECT a FROM t1 ORDER BY A DESC LIMIT 1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0], 5000)
+        cursor.execute("DROP TABLE t1")
+        cursor.close()
+        conn.close()
+
     def test_cursor_reconnect(self):
         if is_maxscale():
             self.skipTest("skip test for maxscale")
