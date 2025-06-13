@@ -9,6 +9,7 @@ import json
 from decimal import Decimal
 import array
 import time
+import sys, gc
 
 import mariadb
 from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CLIENT
@@ -1502,7 +1503,7 @@ class TestCursor(unittest.TestCase):
                        "char CHARACTER SET utf8mb4);\nEND")
 
         for i in range(0, 500):
-            cursor.callproc("p2", ("foo", "bar", 1))
+            cursor.callproc("p2", ("foo", "bar", 0))
             row = cursor.fetchone()
             self.assertEqual(row[0], b"foobar" if is_mysql() else "foobar")
 
@@ -1561,6 +1562,8 @@ class TestCursor(unittest.TestCase):
             cursor.execute("SELECT")
         except mariadb.ProgrammingError as err:
             self.assertEqual(err.errno, ERR.ER_PARSE_ERROR)
+        cursor.close()
+        conn.close()
 
     def test_unicode_parsing(self):
         conn = create_connection()

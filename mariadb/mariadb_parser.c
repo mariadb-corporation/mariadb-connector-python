@@ -382,7 +382,7 @@ cont:
                 a += 7;
                 continue;
             }
-        } 
+        }
         else {
           /* determine SQL command */
           if (p->command == SQL_NONE)

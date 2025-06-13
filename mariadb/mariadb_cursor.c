@@ -327,14 +327,6 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
 }
 /* }}} */
 
-static int MrdbCursor_traverse(
-        MrdbCursor *self,
-        visitproc visit,
-        void *arg)
-{
-    return 0;
-}
-
 static PyObject *MrdbCursor_repr(MrdbCursor *self)
 {
     char cobj_repr[384];
@@ -347,12 +339,66 @@ static PyObject *MrdbCursor_repr(MrdbCursor *self)
     return PyUnicode_FromString(cobj_repr);
 }
 
+
+static int MrdbCursor_traverse(
+        MrdbCursor *self,
+        visitproc visit,
+        void *arg)
+{
+    printf("traverse cursor\n");
+
+    Py_VISIT(self->connection);
+    Py_VISIT(self->data);
+    Py_VISIT(self->sequence_type);
+
+    if (self->values) {
+        for (uint32_t i = 0; i < self->field_count; ++i) {
+            Py_VISIT(self->values[i]);
+        }
+    }
+
+    return 0;
+}
+
+
+static int MrdbCursor_tpclear(MrdbCursor *self) {
+    printf("clear cursor\n");
+    Py_CLEAR(self->data);
+    Py_CLEAR(self->sequence_type);
+    Py_CLEAR(self->connection);
+
+    if (self->values) {
+        for (uint32_t i = 0; i < self->field_count; ++i) {
+            Py_CLEAR(self->values[i]);
+        }
+        PyMem_Free(self->values);  // Don't forget to free the array itself
+        self->values = NULL;
+    }
+
+    return 0;
+}
+
 static void MrdbCursor_dealloc(PyObject *obj)
 {
-  MrdbCursor *self = (MrdbCursor *)obj;
-  ma_cursor_close(self);
-  Py_TYPE(self)->tp_free((PyObject *)self);
+    MrdbCursor *self = (MrdbCursor *)obj;
+    printf(" dealloc cursor\n");
+    PyObject_GC_UnTrack(self);         // Untrack before breaking references
+    MrdbCursor_tpclear(self);          // Call tp_clear manually
+    ma_cursor_close(self);
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
+
+
+/* {{{ MrdbCursor_Finalize */
+static void MrdbCursor_finalize(MrdbCursor *self)
+{
+    printf("cursor finalize\n");
+    if (self->connection && self->connection->mysql)
+        ma_cursor_close(self);
+}
+/* }}} */
+
+
 
 PyTypeObject MrdbCursor_Type =
 {
@@ -368,12 +414,15 @@ PyTypeObject MrdbCursor_Type =
     .tp_getset= MrdbCursor_sets,
     .tp_init= (initproc)MrdbCursor_initialize,
     .tp_new= PyType_GenericNew,
+    .tp_alloc = PyType_GenericAlloc,
     .tp_dealloc= MrdbCursor_dealloc,
-    .tp_finalize= (destructor)MrdbCursor_finalize
+    .tp_finalize= (destructor)MrdbCursor_finalize,
+    .tp_clear= (inquiry)MrdbCursor_tpclear
 };
 
 void MrdbCursor_clearparseinfo(MrdbParseInfo *parseinfo)
 {
+  printf("clear parseinfo\n");
   if (parseinfo->statement)
     MARIADB_FREE_MEM(parseinfo->statement);
   Py_XDECREF(parseinfo->keys);
@@ -497,17 +546,18 @@ static void ma_set_result_column_value(MrdbCursor *self, PyObject *row, uint32_t
 }
 
 
-/* {{{ ma_cursor_close 
+/* {{{ ma_cursor_close
    closes the statement handle of current cursor. After call to
    cursor_close the cursor can't be reused anymore
  */
 static
 void ma_cursor_close(MrdbCursor *self)
 {
+    printf("ma_cursor close\n");
     if (!self->closed)
     {
         MrdbCursor_clear_result(self);
-        if (!self->parseinfo.is_text && self->stmt)
+        if (self->stmt)
         {
             /* Todo: check if all the cursor stuff is deleted (when using prepared
                statements this should be handled in mysql_stmt_close) */
@@ -526,16 +576,9 @@ void ma_cursor_close(MrdbCursor *self)
 static
 PyObject * MrdbCursor_close(MrdbCursor *self)
 {
+    printf("cursor close\n");
     ma_cursor_close(self);
     Py_RETURN_NONE;
-}
-/* }}} */
-
-/* {{{ MrdbCursor_Finalize */
-static void MrdbCursor_finalize(MrdbCursor *self)
-{
-    if (self->connection && self->connection->mysql)
-        ma_cursor_close(self);
 }
 /* }}} */
 
@@ -1206,13 +1249,13 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
         return NULL;
     }
 
-    if (!self->stmt)
+    if (self->stmt)
+        mysql_stmt_close(self->stmt);
+
+    if (!(self->stmt= mysql_stmt_init(self->connection->mysql)))
     {
-        if (!(self->stmt= mysql_stmt_init(self->connection->mysql)))
-        {
-            mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
-            goto error;
-        }
+        mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
+        goto error;
     }
     if (mariadb_check_bulk_parameters(self, self->data))
         goto error;

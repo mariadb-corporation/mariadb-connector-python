@@ -525,6 +525,15 @@ static PyObject *MrdbConnection_repr(MrdbConnection *self)
     return PyUnicode_FromString(cobj_repr);
 }
 
+static void MrdbConnection_dealloc(PyObject *obj)
+{
+  MrdbConnection *self = (MrdbConnection *)obj;
+  printf("*********** connection dealloc *************\n");
+  if (self->mysql)
+      MrdbConnection_close(self);
+  Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
 PyTypeObject MrdbConnection_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "mariadb.connection",
@@ -539,6 +548,7 @@ PyTypeObject MrdbConnection_Type = {
     .tp_getset = MrdbConnection_sets,
     .tp_init = (initproc)MrdbConnection_Initialize,
     .tp_alloc = PyType_GenericAlloc,
+    .tp_dealloc = MrdbConnection_dealloc,
     .tp_finalize = (destructor)MrdbConnection_finalize
 };
 

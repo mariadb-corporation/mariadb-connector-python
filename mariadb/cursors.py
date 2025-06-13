@@ -261,7 +261,7 @@ class Cursor(mariadb._mariadb.cursor):
 
         self.check_closed()
 
-        self.connection._last_executed_statement = statement
+#       self.connection._last_executed_statement = statement
 
         # Parse statement
         do_parse = True
@@ -398,14 +398,17 @@ class Cursor(mariadb._mariadb.cursor):
         with the cursor."
         """
 
+        print("close self")
+
         # CONPY-231: fix memory leak
         if self._data:
             del self._data
 
-        if not self.connection._closed:
-            super().close()
+        super().close()
 
         self._closed= True
+
+    __del__ = close
 
     def fetchone(self):
         """

@@ -8,8 +8,11 @@ from configparser import ConfigParser
 # read the contents of your README file
 from os import path
 
+asan_flags = []
+
 if os.name == "posix":
     from mariadb_posix import get_config
+#   asan_flags = ['-fsanitize=address', '-O1', '-fno-omit-frame-pointer', '-g']
 if os.name == "nt":
     from mariadb_windows import get_config  # noqa: F811
 
@@ -128,8 +131,8 @@ setup(name='mariadb',
                              include_dirs=cfg.includes,
                              library_dirs=cfg.lib_dirs,
                              libraries=cfg.libs,
-                             extra_compile_args=cfg.extra_compile_args,
-                             extra_link_args=cfg.extra_link_args,
+                             extra_compile_args=cfg.extra_compile_args + asan_flags,
+                             extra_link_args=cfg.extra_link_args + asan_flags,
                              extra_objects=cfg.extra_objects
                              )],
       py_modules=['mariadb.__init__',
