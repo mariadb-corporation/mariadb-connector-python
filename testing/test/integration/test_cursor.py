@@ -729,15 +729,15 @@ class TestCursor(unittest.TestCase):
 
 
     def test_conpy34(self):
-        cursor = self.connection.cursor()
-        cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20),"
-                       "b varchar(20))")
-        try:
-            cursor.execute("INSERT INTO test.t1(fname, sname) VALUES (?, ?)",
-                           (("Walker", "Percy"), ("Flannery", "O'Connor")))
-        except (mariadb.ProgrammingError, mariadb.NotSupportedError):
-            pass
-        del cursor
+        with create_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20),"
+                               "b varchar(20))")
+                try:
+                    cursor.execute("INSERT INTO test.t1(fname, sname) VALUES (?, ?)",
+                                   (("Walker", "Percy"), ("Flannery", "O'Connor")))
+                except (mariadb.ProgrammingError, mariadb.NotSupportedError):
+                    pass
 
     def test_scroll(self):
         cursor = self.connection.cursor(buffered=True)
@@ -987,6 +987,7 @@ class TestCursor(unittest.TestCase):
         row = cursor.fetchone()
         self.assertEqual(row[0], 1)
         cursor.execute("DROP PROCEDURE IF EXISTS p1")
+        con.close()
 
     def test_sp2(self):
         con = create_connection()
@@ -1052,6 +1053,7 @@ class TestCursor(unittest.TestCase):
                                b'\x00\xf0?'])
         self.assertEqual(row[0], expected)
         del cursor
+        con.close()
 
     def test_conpy35(self):
         con = create_connection()
@@ -1071,6 +1073,7 @@ class TestCursor(unittest.TestCase):
             i = i + 1
             self.assertEqual(row[0], i)
         del cursor
+        con.close()
 
     def test_conpy45(self):
         con = create_connection()
@@ -1108,6 +1111,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT ?", (False,))
         row = cursor.fetchone()
         self.assertEqual(row[0], 0)
+        cursor.close()
         del con
 
     def test_conpy48(self):
@@ -1123,6 +1127,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 1)
         row = cur.fetchone()
         self.assertEqual(row[0], 2)
+        cur.close()
         del con
 
     def test_conpy51(self):
@@ -1136,6 +1141,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0][0], 1)
         self.assertEqual(row[1][0], 2)
         self.assertEqual(row[2][0], 3)
+        cur.close()
         del con
 
     def test_conpy52(self):
@@ -1156,6 +1162,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[1][0], 2)
         self.assertEqual(row[2][0], 3)
         cur.execute("drop table if exists temp")
+        cur.close()
         del con
 
     def test_conpy49(self):
@@ -1166,6 +1173,7 @@ class TestCursor(unittest.TestCase):
         cur.execute("select a from t1")
         row = cur.fetchone()
         self.assertEqual(row[0], Decimal('10.20'))
+        cur.close()
         del con
 
     def test_conpy56(self):
@@ -1175,6 +1183,7 @@ class TestCursor(unittest.TestCase):
         row = cur.fetchone()
         self.assertEqual(row["foo"], "bar")
         self.assertEqual(row["bar"], "foo")
+        cur.close()
         del con
 
     def test_conpy53(self):
@@ -1186,6 +1195,7 @@ class TestCursor(unittest.TestCase):
         cur.execute("select 1", [])
         row = cur.fetchone()
         self.assertEqual(row[0], 1)
+        cur.close()
         del con
 
     def test_conpy58(self):
@@ -1201,6 +1211,7 @@ class TestCursor(unittest.TestCase):
         row = cursor.fetchall()
         self.assertEqual(row[0][0], 1)
         self.assertEqual(row[1][0], 2)
+        cursor.close()
         del con
 
     def test_conpy59(self):
@@ -1211,6 +1222,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT a FROM t1")
         row = cursor.fetchone()
         self.assertEqual(row[0], None)
+        cursor.close()
         del con
 
     def test_conpy61(self):
@@ -1243,6 +1255,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[2], None)
 
         del cursor
+        con.close()
 
     def test_conpy62(self):
         con = create_connection()
@@ -1392,45 +1405,43 @@ class TestCursor(unittest.TestCase):
     def test_conpy133(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
-        conn = create_connection()
+        with create_connection() as conn:
 
-        cursor = conn.cursor()
-        cursor.execute("SELECT /*! ? */", (1,))
-        row = cursor.fetchone()
-        self.assertEqual(row[0], 1)
-        del cursor
+            cursor = conn.cursor()
+            cursor.execute("SELECT /*! ? */", (1,))
+            row = cursor.fetchone()
+            self.assertEqual(row[0], 1)
+            del cursor
 
-        cursor = conn.cursor()
-        cursor.execute("SELECT /*M! ? */", (1,))
-        row = cursor.fetchone()
-        self.assertEqual(row[0], 1)
-        del cursor
+            cursor = conn.cursor()
+            cursor.execute("SELECT /*M! ? */", (1,))
+            row = cursor.fetchone()
+            self.assertEqual(row[0], 1)
+            del cursor
 
-        cursor = conn.cursor()
-        cursor.execute("SELECT /*M!50601 ? */", (1,))
-        row = cursor.fetchone()
-        self.assertEqual(row[0], 1)
-        del cursor
+            cursor = conn.cursor()
+            cursor.execute("SELECT /*M!50601 ? */", (1,))
+            row = cursor.fetchone()
+            self.assertEqual(row[0], 1)
+            del cursor
 
-        cursor = conn.cursor()
-        cursor.execute("SELECT /*!40301 ? */", (1,))
-        row = cursor.fetchone()
-        self.assertEqual(row[0], 1)
-        del cursor
+            cursor = conn.cursor()
+            cursor.execute("SELECT /*!40301 ? */", (1,))
+            row = cursor.fetchone()
+            self.assertEqual(row[0], 1)
+            del cursor
 
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT /*!50701 ? */", (1,))
-        except mariadb.ProgrammingError:
-            pass
-        del cursor
+            with conn.cursor() as cursor:
+                try:
+                    cursor.execute("SELECT /*!50701 ? */", (1,))
+                except mariadb.ProgrammingError:
+                    pass
 
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT /*!250701 ? */", (1,))
-        except mariadb.ProgrammingError:
-            pass
-        del cursor
+            with conn.cursor() as cursor:
+                try:
+                    cursor.execute("SELECT /*!250701 ? */", (1,))
+                except mariadb.ProgrammingError:
+                    pass
 
     def check_closed(self):
         conn = create_connection()
@@ -1552,15 +1563,15 @@ class TestCursor(unittest.TestCase):
             pass
 
         cursor.close()
+        conn.close()
 
     def test_conpy203(self):
-        conn = create_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute("SELECT")
-        except mariadb.ProgrammingError as err:
-            self.assertEqual(err.errno, ERR.ER_PARSE_ERROR)
+        with create_connection() as conn:
+            with conn.cursor() as cursor:
+                try:
+                    cursor.execute("SELECT")
+                except mariadb.ProgrammingError as err:
+                    self.assertEqual(err.errno, ERR.ER_PARSE_ERROR)
 
     def test_unicode_parsing(self):
         conn = create_connection()

@@ -4,6 +4,7 @@
 import unittest
 from datetime import datetime
 import mariadb
+import sys, traceback
 
 from test.base_test import create_connection
 
@@ -25,6 +26,9 @@ class TestException(unittest.TestCase):
             self.assertEqual(err.errno, 1064)
             self.assertTrue(err.errmsg.find("You have an error "
                                             "in your SQL syntax") > -1)
+            if mariadb._have_asan:
+                tb = sys.exc_info()[2]
+                traceback.clear_frames(tb)
             pass
 
         del cursor
@@ -36,6 +40,9 @@ class TestException(unittest.TestCase):
             self.assertEqual(err.sqlstate, "42000")
             self.assertEqual(err.errno, 1049)
             self.assertTrue(err.errmsg.find("Unknown database 'unknown'") > -1)
+            if mariadb._have_asan:
+                tb = sys.exc_info()[2]
+                traceback.clear_frames(tb)
             pass
 
     def test_conn_timeout_exception(self):
@@ -50,6 +57,9 @@ class TestException(unittest.TestCase):
             difference = end - start
             self.assertEqual(difference.days, 0)
             self.assertTrue(difference.seconds, 1)
+            if mariadb._have_asan:
+                tb = sys.exc_info()[2]
+                traceback.clear_frames(tb)
             pass
 
 

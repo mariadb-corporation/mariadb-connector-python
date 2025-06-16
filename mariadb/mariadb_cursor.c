@@ -27,6 +27,8 @@ MrdbCursor_finalize(MrdbCursor *self);
 static PyObject *
 MrdbCursor_close(MrdbCursor *self);
 
+static PyObject *
+MrdbCursor_reset(MrdbCursor *self);
 
 static PyObject *
 MrdbCursor_nextset(MrdbCursor *self);
@@ -147,6 +149,9 @@ static PyMethodDef MrdbCursor_Methods[] =
         cursor_next__doc__},
     /* internal helper functions */
     {"_check_text_types", (PyCFunction) MrdbCursor_check_text_types,
+        METH_NOARGS,
+        NULL},
+    {"_reset", (PyCFunction)MrdbCursor_reset,
         METH_NOARGS,
         NULL},
     {"_seek", (PyCFunction)MrdbCursor_seek,
@@ -332,6 +337,15 @@ static int MrdbCursor_traverse(
         visitproc visit,
         void *arg)
 {
+    Py_VISIT(self->connection);
+    Py_VISIT(self->data);
+    return 0;
+}
+
+static int MrdbCursor_tpclear(MrdbCursor *self)
+{
+    Py_CLEAR(self->connection);
+    Py_CLEAR(self->data);
     return 0;
 }
 
@@ -369,6 +383,7 @@ PyTypeObject MrdbCursor_Type =
     .tp_init= (initproc)MrdbCursor_initialize,
     .tp_new= PyType_GenericNew,
     .tp_dealloc= MrdbCursor_dealloc,
+    .tp_clear = (inquiry)MrdbCursor_tpclear,
     .tp_finalize= (destructor)MrdbCursor_finalize
 };
 
@@ -496,13 +511,8 @@ static void ma_set_result_column_value(MrdbCursor *self, PyObject *row, uint32_t
     }
 }
 
-
-/* {{{ ma_cursor_close 
-   closes the statement handle of current cursor. After call to
-   cursor_close the cursor can't be reused anymore
- */
 static
-void ma_cursor_close(MrdbCursor *self)
+void ma_cursor_reset(MrdbCursor *self)
 {
     if (!self->closed)
     {
@@ -519,8 +529,24 @@ void ma_cursor_close(MrdbCursor *self)
         MrdbCursor_clear(self, 0);
 
         MrdbCursor_clearparseinfo(&self->parseinfo);
-        self->closed= 1;
     }
+}
+
+/* {{{ ma_cursor_close
+   closes the statement handle of current cursor. After call to
+   cursor_close the cursor can't be reused anymore
+ */
+static
+void ma_cursor_close(MrdbCursor *self)
+{
+    ma_cursor_reset(self);
+    self->closed= 1;
+}
+
+static PyObject * MrdbCursor_reset(MrdbCursor *self)
+{
+    ma_cursor_reset(self);
+    Py_RETURN_NONE;
 }
 
 static

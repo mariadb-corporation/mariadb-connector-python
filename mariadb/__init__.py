@@ -17,6 +17,7 @@ from ._mariadb import (
     ProgrammingError,
     Warning,
     mariadbapi_version,
+    _have_asan,
 )
 
 from .field import fieldinfo
@@ -36,7 +37,7 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "InterfaceError", "InternalError", "NotSupportedError",
            "OperationalError", "PoolError", "ProgrammingError",
            "Warning", "Connection", "__version__", "__version_info__",
-           "__author__", "Cursor", "fieldinfo"]
+           "__author__", "Cursor", "fieldinfo", "_have_asan"]
 
 
 def connect(*args, connectionclass=mariadb.connections.Connection, **kwargs):

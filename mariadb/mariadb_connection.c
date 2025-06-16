@@ -478,7 +478,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     mysql_real_connect(self->mysql, host, user, password, schema, port,
             socket, client_flags);
     Py_END_ALLOW_THREADS;
-   
+
     if (mysql_errno(self->mysql))
     {
         goto end;
@@ -509,6 +509,11 @@ static int MrdbConnection_traverse(
         visitproc visit,
         void *arg)
 {
+    Py_VISIT(self->last_executed_stmt);
+    Py_VISIT(self->converter);
+#if MARIADB_PACKAGE_VERSION_ID > 30301
+    Py_VISIT(self->status_callback);
+#endif
     return 0;
 }
 
@@ -525,6 +530,30 @@ static PyObject *MrdbConnection_repr(MrdbConnection *self)
     return PyUnicode_FromString(cobj_repr);
 }
 
+static void ma_connection_close(MrdbConnection *conn)
+{
+    if (conn)
+    {
+        if (conn->mysql)
+        {
+            Py_BEGIN_ALLOW_THREADS
+            mysql_close(conn->mysql);
+            Py_END_ALLOW_THREADS
+            conn->mysql= NULL;
+        }
+    }
+
+}
+
+static void MrdbConnection_dealloc(PyObject *obj)
+{
+    MrdbConnection *self = (MrdbConnection *)obj;
+
+    if (self && self->mysql)
+        ma_connection_close(self);
+    Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
 PyTypeObject MrdbConnection_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     .tp_name = "mariadb.connection",
@@ -539,6 +568,7 @@ PyTypeObject MrdbConnection_Type = {
     .tp_getset = MrdbConnection_sets,
     .tp_init = (initproc)MrdbConnection_Initialize,
     .tp_alloc = PyType_GenericAlloc,
+    .tp_dealloc = MrdbConnection_dealloc,
     .tp_finalize = (destructor)MrdbConnection_finalize
 };
 
@@ -564,16 +594,7 @@ MrdbConnection_connect(
 static
 void MrdbConnection_finalize(MrdbConnection *self)
 {
-    if (self)
-    {
-        if (self->mysql)
-        {
-            Py_BEGIN_ALLOW_THREADS
-            mysql_close(self->mysql);
-            Py_END_ALLOW_THREADS
-            self->mysql= NULL;
-        }
-    }
+    ma_connection_close(self);
 }
 
 static PyObject *
@@ -603,10 +624,7 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
 {
     MARIADB_CHECK_CONNECTION(self, NULL);
 
-    Py_BEGIN_ALLOW_THREADS
-    mysql_close(self->mysql);
-    Py_END_ALLOW_THREADS
-    self->mysql= NULL;
+    ma_connection_close(self);
     self->closed= 1;
     Py_RETURN_NONE;
 }

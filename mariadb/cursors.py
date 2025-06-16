@@ -190,6 +190,7 @@ class Cursor(mariadb._mariadb.cursor):
         if self.connection.auto_reconnect:
             self._thread_id= self.connection.thread_id
         self.check_closed()
+        self._reset()
 
         # create statement
         params = ""
@@ -260,6 +261,8 @@ class Cursor(mariadb._mariadb.cursor):
             self._thread_id= self.connection.thread_id
 
         self.check_closed()
+        if not self._prepared:
+            self._reset()
 
         self.connection._last_executed_statement = statement
 
@@ -341,6 +344,7 @@ class Cursor(mariadb._mariadb.cursor):
             self._thread_id= self.connection.thread_id
 
         self.check_closed()
+        self._reset()
 
         if not parameters or not len(parameters):
             raise mariadb.ProgrammingError("No data provided")

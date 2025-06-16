@@ -12,6 +12,7 @@ from mariadb.constants import STATUS
 import platform
 from packaging.version import parse as parse_version
 from packaging import version
+import traceback, sys
 
 
 class TestConnection(unittest.TestCase):
@@ -32,6 +33,9 @@ class TestConnection(unittest.TestCase):
                             port=default_conf["port"],
                             host=default_conf["host"])
         except (mariadb.OperationalError,):
+            # make asan happy
+            tb = sys.exc_info()[2]
+            traceback.clear_frames(tb)
             pass
 
     def test_connection_default_file(self):
@@ -61,6 +65,7 @@ class TestConnection(unittest.TestCase):
         # revert
         conn.autocommit = True
         self.assertEqual(conn.autocommit, True)
+        conn.close()
 
     def test_local_infile(self):
         default_conf = conf()
@@ -70,6 +75,10 @@ class TestConnection(unittest.TestCase):
         try:
             cursor.execute("LOAD DATA LOCAL INFILE 'x.x' INTO TABLE t1")
         except (mariadb.OperationalError,):
+            # make asan happy
+            if mariadb._have_asan:
+                tb = sys.exc_info()[2]
+                traceback.clear_frames(tb)
             pass
         del cursor
         del new_conn
@@ -116,7 +125,7 @@ class TestConnection(unittest.TestCase):
             self.skipTest("MAXSCALE doesn't tell schema change for now")
 
         default_conf = conf()
-        conn = self.connection
+        conn = create_connection()
         self.assertEqual(conn.database, default_conf["database"])
         cursor = conn.cursor()
         cursor.execute("DROP SCHEMA IF EXISTS test1")
@@ -125,23 +134,25 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn.database, "test1")
         conn.database = default_conf["database"]
         self.assertEqual(conn.database, default_conf["database"])
+        cursor.close()
+        conn.close()
 
     def test_ping(self):
         if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
-        conn = self.connection
-        cursor = conn.cursor()
-        oldid = conn.connection_id
+        with create_connection() as conn:
+            with conn.cursor() as cursor:
+                oldid = conn.connection_id
 
-        try:
-            cursor.execute("KILL {id}" . format(id=oldid))
-        except mariadb.Error:
-            pass
+                try:
+                    cursor.execute("KILL {id}" . format(id=oldid))
+                except mariadb.Error:
+                    pass
 
-        conn.auto_reconnect = True
-        conn.ping()
-        self.assertNotEqual(oldid, conn.connection_id)
-        self.assertNotEqual(0, conn.connection_id)
+            conn.auto_reconnect = True
+            conn.ping()
+            self.assertNotEqual(oldid, conn.connection_id)
+            self.assertNotEqual(0, conn.connection_id)
 
     def test_ed25519(self):
         if is_skysql():
@@ -152,7 +163,7 @@ class TestConnection(unittest.TestCase):
         if self.connection.server_version < 100122:
             self.skipTest("ed25519 not supported")
 
-        conn = self.connection
+        conn = create_connection()
         curs = conn.cursor(buffered=True)
 
         if self.connection.server_name == "localhost":
@@ -190,7 +201,7 @@ class TestConnection(unittest.TestCase):
         except (mariadb.OperationalError):
             pass
         cursor.execute("DROP USER IF EXISTS eduser")
-        del cursor, conn2
+        del cursor, conn2, conn
 
     def test_conpy46(self):
         with create_connection() as con:
@@ -211,28 +222,29 @@ class TestConnection(unittest.TestCase):
         default_conf = conf()
         c1 = mariadb.connect(**default_conf)
         self.assertEqual(c1.autocommit, False)
+        c1.close()
         c1 = mariadb.connect(**default_conf, autocommit=True)
         self.assertEqual(c1.autocommit, True)
+        c1.close()
 
     def test_db_attribute(self):
-        con = create_connection()
-        cursor = con.cursor()
-        db = con.database
-        try:
-            cursor.execute("create schema test123")
-        except mariadb.Error:
-            pass
-        con.database = "test123"
-        cursor.execute("select database()", buffered=True)
-        row = cursor.fetchone()
-        self.assertEqual(row[0], "test123")
-        con.database = db
-        cursor.execute("select database()", buffered=True)
-        row = cursor.fetchone()
-        self.assertEqual(row[0], db)
-        self.assertEqual(row[0], con.database)
-        cursor.execute("drop schema test123")
-        del cursor
+        with create_connection() as con:
+             with con.cursor() as cursor:
+                 db = con.database
+                 try:
+                     cursor.execute("create schema test123")
+                 except mariadb.Error:
+                     pass
+                 con.database = "test123"
+                 cursor.execute("select database()", buffered=True)
+                 row = cursor.fetchone()
+                 self.assertEqual(row[0], "test123")
+                 con.database = db
+                 cursor.execute("select database()", buffered=True)
+                 row = cursor.fetchone()
+                 self.assertEqual(row[0], db)
+                 self.assertEqual(row[0], con.database)
+                 cursor.execute("drop schema test123")
 
     def test_server_status(self):
         con = create_connection()
@@ -319,42 +331,37 @@ class TestConnection(unittest.TestCase):
     def test_conpy278(self):
          if is_maxscale():
             self.skipTest("MAXSCALE bug MXS-4961")
-         test_conf= conf()
-         test_conf["reconnect"]= True
-         conn= mariadb.connect(**test_conf)
-         old_id= conn.connection_id
-         try:
-             conn.kill(conn.connection_id)
-         except mariadb.OperationalError:
-             conn.ping()
-         self.assertNotEqual(old_id, conn.connection_id)
-         conn.close()
-         conn= mariadb.connect(**test_conf)
-         old_id= conn.connection_id
-         try:
-             conn.kill(conn.connection_id)
-         except mariadb.OperationalError:
-             conn.ping()
-         self.assertNotEqual(old_id, conn.connection_id)
-         conn.close()
-         conn= mariadb.connect(**test_conf)
-         old_id= conn.connection_id
-         try:
-             conn.kill(conn.connection_id)
-         except mariadb.OperationalError:
-             pass
-         cursor= conn.cursor()
-         try:
-             cursor.execute("set @a:=1")
-         except mariadb.InterfaceError:
-             pass
-         cursor.execute("set @a:=1")
-         self.assertNotEqual(old_id, conn.connection_id)
+         with create_connection({"reconnect" : True}) as conn:
+             old_id= conn.connection_id
+             try:
+                 conn.kill(conn.connection_id)
+             except mariadb.OperationalError:
+                 conn.ping()
+             self.assertNotEqual(old_id, conn.connection_id)
+         with create_connection({"reconnect" : True}) as conn:
+             old_id= conn.connection_id
+             try:
+                 conn.kill(conn.connection_id)
+             except mariadb.OperationalError:
+                 conn.ping()
+             self.assertNotEqual(old_id, conn.connection_id)
+         with create_connection({"reconnect" : True}) as conn:
+             old_id= conn.connection_id
+             try:
+                 conn.kill(conn.connection_id)
+             except mariadb.OperationalError:
+                 pass
+             with conn.cursor() as cursor:
+                 try:
+                     cursor.execute("set @a:=1")
+                 except mariadb.InterfaceError:
+                     pass
+                 cursor.execute("set @a:=1")
+                 self.assertNotEqual(old_id, conn.connection_id)
 
-         old_id= conn.connection_id
-         conn.reconnect()
-         self.assertNotEqual(old_id, conn.connection_id)
-         conn.close()
+                 old_id= conn.connection_id
+                 conn.reconnect()
+                 self.assertNotEqual(old_id, conn.connection_id)
 
 
 if __name__ == '__main__':

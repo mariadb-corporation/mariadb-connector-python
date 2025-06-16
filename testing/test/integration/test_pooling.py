@@ -87,6 +87,7 @@ class TestPooling(unittest.TestCase):
         pconn = pool.get_connection()
         old_id = pconn.connection_id
         cursor.execute("KILL %s" % (old_id,))
+        cursor.close()
         pconn.close()
 
         pconn = pool.get_connection()
@@ -110,6 +111,7 @@ class TestPooling(unittest.TestCase):
         pconn = pool.get_connection()
         old_id = pconn.connection_id
         cursor.execute("KILL %s" % (old_id,))
+        cursor.close()
         pconn.close()
 
         pconn = pool.get_connection()

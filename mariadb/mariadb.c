@@ -24,6 +24,22 @@
 #include <structmember.h>
 #include <datetime.h>
 
+#ifdef __clang__
+#  if defined(__has_feature) && __has_feature(address_sanitizer)
+#    define HAVE_ASAN Py_True
+#  else
+#    define HAVE_ASAN Py_False
+#  endif
+#elif defined(__GNUC__)
+#  ifdef __SANITIZE_ADDRESS__
+#    define HAVE_ASAN Py_True
+#  else
+#    define HAVE_ASAN Py_False
+#  endif
+#else
+#  define HAVE_ASAN Py_False
+#endif
+
 extern int codecs_datetime_init(void);
 extern int connection_datetime_init(void);
 
@@ -182,6 +198,8 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 
     Py_INCREF(&MrdbConnection_Type);
     PyModule_AddObject(module, "connection", (PyObject *)&MrdbConnection_Type);
+    PyModule_AddObject(module, "_have_asan", HAVE_ASAN);
+    Py_INCREF(HAVE_ASAN);
 
     return module;
 error:
