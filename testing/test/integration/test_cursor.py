@@ -61,6 +61,8 @@ class TestCursor(unittest.TestCase):
         conn.close()
 
     def test_cursor_reconnect(self):
+        if is_maxscale():
+            self.skipTest("skip test for maxscale")
         conn= create_connection({'reconnect' : True})
         self.assertEqual(conn.auto_reconnect, True)
         cursor= conn.cursor(binary=True)
