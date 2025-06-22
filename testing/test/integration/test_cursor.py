@@ -60,6 +60,26 @@ class TestCursor(unittest.TestCase):
         cursor.close()
         conn.close()
 
+    def test_conpy313(self):
+        cursor = self.connection.cursor()
+        invalid = ("NaN", "sNaN", "Infinity", "-Infinity")
+        for val in invalid:
+            try:
+                cursor.execute("SELECT ?", (decimal.Decimal(val),))
+            except mariadb.NotSupportedError as e:
+                self.assertEqual(f"'{decimal.Decimal(val).__str__()}'" in str(e), True)
+                pass
+
+        invalid = ("inf", "+inf", "nan", "-inf")
+        for val in invalid:
+            try:
+                cursor.execute("SELECT ?", (float(val),))
+            except mariadb.NotSupportedError as e:
+                self.assertEqual(f"'{float(val)}'" in str(e), True)
+                pass
+
+        cursor.close()
+
     def test_cursor_reconnect(self):
         if is_maxscale():
             self.skipTest("skip test for maxscale")

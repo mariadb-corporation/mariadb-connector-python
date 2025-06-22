@@ -22,6 +22,7 @@ import datetime
 from numbers import Number
 from mariadb.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
 from typing import Sequence
+import decimal
 
 PARAMSTYLE_QMARK = 1
 PARAMSTYLE_FORMAT = 2
@@ -147,12 +148,34 @@ class Cursor(mariadb._mariadb.cursor):
                 replace_diff += len(replace) - 1 + extra_bytes
         return new_stmt
 
+    def _check_decimal_parameter(self, val):
+        """
+        Internal use only
+
+        Checks for unsupported parameters.
+        The following parameters are not supported by MariaDB/MySQL (but also
+        not part of the SQL Standard)
+
+        - float("nan" | "inf" | "-inf")
+        - Decimal("NaN" | "sNaN" | "Infinity" | "-Infinity")
+        """
+
+        if isinstance(val, float) and repr(val) in ("nan", "inf", "-inf"):
+            raise mariadb.NotSupportedError(f"Float value '{repr(val)}' is not supported.")
+        elif isinstance(val, decimal.Decimal) and val.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
+            raise mariadb.NotSupportedError(f"Decimal value '{val.__str__()}' is not supported.")
+
+        return None
+
+
     def _check_execute_params(self):
         # check data format
+        values = ()
         if self._paramstyle in (PARAMSTYLE_QMARK, PARAMSTYLE_FORMAT):
             if not isinstance(self._data, (tuple, list)):
                 raise mariadb.ProgrammingError("Data argument must be "
                                                "Tuple or List")
+            values = self._data
 
         if self._paramstyle == PARAMSTYLE_PYFORMAT:
             if not isinstance(self._data, dict):
@@ -162,6 +185,7 @@ class Cursor(mariadb._mariadb.cursor):
                 if self._keys[i] not in self._data:
                     raise mariadb.ProgrammingError("Dictionary doesn't contain"
                                                    " key '%s'" % self._keys[i])
+            values = self._data.values()
         else:
             # check if number of place holders matches the number of
             # supplied elements in data tuple
@@ -171,6 +195,12 @@ class Cursor(mariadb._mariadb.cursor):
                 raise mariadb.ProgrammingError(
                     "statement (%s) doesn't match the number of data elements"
                     " (%s)." % (len(self._paramlist), len(self._data)))
+
+        # CONPY-313: Check if parameter types are supported
+        if len(values):
+            for val in values:
+                if isinstance(val, float) or isinstance(val, decimal.Decimal):
+                    self._check_decimal_parameter(val)
 
     def callproc(self, sp: str, data: Sequence = ()):
         """

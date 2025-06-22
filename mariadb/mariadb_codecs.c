@@ -1201,6 +1201,16 @@ mariadb_get_parameter_info(MrdbCursor *self,
             return 1;
         }
 
+        if (paramvalue.value && (PyFloat_Check(paramvalue.value) ||
+           (!strcmp(Py_TYPE(paramvalue.value)->tp_name, "decimal.Decimal") || !strcmp(Py_TYPE(paramvalue.value)->tp_name, "Decimal"))))
+        if (paramvalue.value != Py_None && pinfo.type == MYSQL_TYPE_NEWDECIMAL)
+        {
+            PyObject *res = PyObject_CallMethod((PyObject *)self, "_check_decimal_parameter", "O", paramvalue.value);
+            Py_XDECREF(res);
+            if (PyErr_Occurred())
+                return 1;
+        }
+
         if (pinfo.type == MYSQL_TYPE_LONGLONG)
         {
             PyLong_AsLongLong(paramvalue.value);
