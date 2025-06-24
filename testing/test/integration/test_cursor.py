@@ -1274,27 +1274,21 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0], Decimal(1.25))
             del cur
 
-    @unittest.skipIf(
-        os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
-        "Test skipped for PyPy"
-    )
     def test_conpy67(self):
         with create_connection() as con:
-            cur = con.cursor(buffered=False)
-            cur.execute("SELECT 1")
-            self.assertEqual(cur.rowcount, 0)
-            cur = con.cursor()
-            cur.execute("SELECT 1", buffered=False)
-            self.assertEqual(cur.rowcount, 0)
-            cur.close()
+            with con.cursor(buffered=False) as cur:
+                cur.execute("SELECT 1")
+                self.assertEqual(cur.rowcount, 0)
+            with con.cursor() as cur:
+                cur.execute("SELECT 1", buffered=False)
+                self.assertEqual(cur.rowcount, 0)
 
-            cur = con.cursor()
-            cur.execute("CREATE TEMPORARY TABLE test_conpy67 (a int)")
-            cur.execute("SELECT * from test_conpy67")
-            self.assertEqual(cur.rowcount, 0)
-            cur.fetchall()
-            self.assertEqual(cur.rowcount, 0)
-            del cur
+            with con.cursor() as cur:
+                cur.execute("CREATE TEMPORARY TABLE test_conpy67 (a int)")
+                cur.execute("SELECT * from test_conpy67")
+                self.assertEqual(cur.rowcount, 0)
+                cur.fetchall()
+                self.assertEqual(cur.rowcount, 0)
 
     def test_negative_numbers(self):
         with create_connection() as con:
