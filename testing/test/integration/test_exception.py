@@ -49,9 +49,9 @@ class TestException(unittest.TestCase):
             end = datetime.today()
             difference = end - start
             self.assertEqual(difference.days, 0)
-            self.assertTrue(difference.seconds, 1)
+            self.assertGreaterEqual(difference.total_seconds(), 0.95,
+                                    "Connection should have timed out after ~1 second")
             pass
-
 
 if __name__ == '__main__':
     unittest.main()

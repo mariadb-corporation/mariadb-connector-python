@@ -1,0 +1,131 @@
+---
+name: Run CI Tests
+
+on:
+  push:
+    branches: ['1.1', '1.0']
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  MYSQL_TEST_HOST: mariadb.example.com
+  MYSQL_TEST_PORT: 3306
+  MYSQL_TEST_USER: root
+  MYSQL_TEST_PASSWD: "heyPassw-!*20oRd"
+  MYSQL_TEST_DB: testp
+
+jobs:
+
+  setup:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'schedule' || 
+      github.ref == 'refs/heads/3.4' || 
+      github.ref == 'refs/heads/3.1' || 
+      github.ref == 'refs/heads/3.2'
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.final-matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        name: build matrix
+        uses: rusher/mariadb-test-build-matrix@main
+        with:
+          additional-matrix: '[{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.9"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.10"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.11"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "pypy3.11", "continue-on-error": true}]'
+
+  ci:
+    name: ${{ matrix.name }} ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
+    needs: setup
+    timeout-minutes: 50
+    strategy:
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.continue-on-error || false }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Test Environment
+        id: setup-env
+        uses: rusher/mariadb-test-setup@master
+        with:
+          node-version: ${{ matrix.node }}
+          db-type: ${{ matrix.db-type }}
+          db-tag: ${{ matrix.db-tag }}
+          test-db-password: ${{ env.MYSQL_TEST_PASSWD }}
+          test-db-database: ${{ env.MYSQL_TEST_DB }}
+          test-db-port: ${{ env.MYSQL_TEST_PORT }}
+          additional-conf: ${{ matrix.additional-conf || '' }}
+          registry-user: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_USER || (secrets.DOCKER_PWD != '' && 'mariadbtest' || '') }}
+          registry-password: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_TOKEN || secrets.DOCKER_PWD }}
+          os: ${{ matrix.os }}
+
+      - uses: actions/setup-python@v5
+        id: setup-python
+        with:
+          python-version: ${{ matrix.python || '3.13' }}
+
+      - name: Clone C/C
+        uses: GuillaumeFalourd/clone-github-repo-action@v2.3
+        with:
+          branch: '3.4'
+          owner: 'mariadb-corporation'
+          repository: 'mariadb-connector-c'
+
+      - name: c/c make ubuntu
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        run: |
+          cd ${{ github.workspace }}/mariadb-connector-c
+          cmake . -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB=On -DCMAKE_INSTALL_PREFIX=/usr
+          make -j4
+          sudo make install
+          echo "MARIADB_PLUGIN_DIR=`mariadb_config --plugindir`" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb" >> $GITHUB_ENV
+
+      - name: c/c make macos
+        if: ${{ startsWith(matrix.os, 'mac') }}
+        run: |
+          cd ${{ github.workspace }}/mariadb-connector-c
+          cmake . -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB=On
+          make -j4
+          sudo make install
+          ls -lrt /usr/local/lib/mariadb/plugin
+          echo "MARIADB_PLUGIN_DIR=`mariadb_config --plugindir`" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb" >> $GITHUB_ENV
+          echo "DYLD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/mariadb:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "DYLD_FALLBACK_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/mariadb" >> $GITHUB_ENV
+
+      - name: c/c make windows
+        if: ${{ startsWith(matrix.os, 'windows') }}
+        shell: powershell
+        run: |
+          cd ${{ github.workspace }}/mariadb-connector-c
+          $MARIADB_CC_INSTALL_DIR = "$env:USERPROFILE/conc"
+          cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_CURL=ON -DCMAKE_INSTALL_PREFIX="$MARIADB_CC_INSTALL_DIR"
+          cmake --build . --config RelWithDebInfo
+          cmake --install . --config RelWithDebInfo
+          echo "MARIADB_CC_INSTALL_DIR=$MARIADB_CC_INSTALL_DIR" >> $env:GITHUB_ENV
+          echo "MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL_DIR/lib/mariadb/plugin" >> $env:GITHUB_ENV
+
+      - name: Run test suite
+        shell: bash
+        run: |
+          python --version
+          python -m pip install .
+          cd testing
+          python -m unittest discover -v
+        env:
+          TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
+          TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
+          TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
+          TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
+          TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
+          LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
+          PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}

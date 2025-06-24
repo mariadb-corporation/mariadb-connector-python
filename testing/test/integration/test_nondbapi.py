@@ -5,7 +5,7 @@
 import unittest
 import mariadb
 
-from test.base_test import create_connection, is_skysql, is_maxscale, is_mysql
+from test.base_test import create_connection, is_skysql, is_maxscale, is_mysql, get_host_suffix
 from test.conf_test import conf
 
 
@@ -57,20 +57,20 @@ class CursorTest(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.execute("drop user if exists foo")
         if is_mysql() and self.connection.server_version < 80000:
-            cursor.execute("create user foo@'%'")
+            cursor.execute("create user foo"+get_host_suffix())
             cursor.execute("GRANT ALL on `"
                            + default_conf["database"] +
-                           "`.* TO foo@'%' IDENTIFIED BY "
+                           "`.* TO foo"+get_host_suffix()+" IDENTIFIED BY "
                            "'heyPassw-!µ20§rd'")
         else:
-            cursor.execute("create user foo@'%' IDENTIFIED "
+            cursor.execute("create user foo"+get_host_suffix()+" IDENTIFIED "
                            "BY 'heyPassw-!µ20§rd'")
             cursor.execute("GRANT ALL on `" + default_conf["database"] +
-                           "`.* TO foo@'%'")
+                           "`.* TO foo"+get_host_suffix())
         new_conn = create_connection()
         new_conn.change_user("foo", "heyPassw-!µ20§rd", "")
         self.assertEqual("foo", new_conn.user)
-        cursor.execute("drop user foo")
+        cursor.execute("drop user foo"+get_host_suffix())
         del new_conn
         del cursor
 
