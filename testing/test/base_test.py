@@ -26,9 +26,12 @@ def is_mysql():
     row = cursor.fetchone()
     if "MARIADB" in row[0].upper():
         mysql_server = 0
+    conn.close()
     del cursor, conn
     return mysql_server
 
+def get_host_suffix():
+    return "@'localhost'" if os.getenv("LOCAL_DB", "container") == "local" else "@'%'"
 
 def create_connection(additional_conf=None):
     default_conf = conf()
