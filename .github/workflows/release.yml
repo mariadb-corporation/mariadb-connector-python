@@ -48,12 +48,55 @@ jobs:
         run: |
           sphinx-build -b markdown docs/source docs/_build/markdown
 
-      - name: Checkout documentation repository
+      - name: Ensure fork exists and is up to date
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.SPHINX_TOKEN }}
+          script: |
+            const owner = 'rusher';
+            const repo = 'mariadb-docs';
+            const upstream = 'mariadb-corporation';
+            const upstreamRepo = 'mariadb-docs';
+            // Check if fork exists
+            let forkExists = false;
+            try {
+              await github.rest.repos.get({ owner, repo });
+              forkExists = true;
+            } catch (e) {
+              forkExists = false;
+            }
+            // Create fork if not exists
+            if (!forkExists) {
+              await github.rest.repos.createFork({ owner: upstream, repo: upstreamRepo });
+              // Wait for fork to be ready
+              let ready = false;
+              for (let i = 0; i < 10; i++) {
+                try {
+                  await github.rest.repos.get({ owner, repo });
+                  ready = true;
+                  break;
+                } catch (e) {
+                  await new Promise(res => setTimeout(res, 5000));
+                }
+              }
+              if (!ready) throw new Error('Fork not ready after waiting.');
+            }
+
+      - name: Checkout documentation repository (fork)
         uses: actions/checkout@v4
         with:
-          repository: mariadb-corporation/mariadb-docs  # Replace with actual repo
+          repository: rusher/mariadb-docs
           token: ${{ secrets.SPHINX_TOKEN }}
           path: mariadb-docs
+          ref: main
+
+      - name: Add upstream and fetch latest main
+        run: |
+          cd mariadb-docs
+          git remote add upstream https://github.com/mariadb-corporation/mariadb-docs.git || true
+          git fetch upstream
+          git checkout main
+          git pull upstream main
 
       - name: Update documentation subdirectory
         run: |
@@ -67,19 +110,47 @@ jobs:
           # Optional: Add any additional processing here
           # e.g., update index files, fix relative links, etc.
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
+      - name: Commit and push changes to fork
+        run: |
+          cd mariadb-docs
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b auto-docs-update-${{ github.run_number }}
+          git add connectors/mariadb-connector-python/api/
+          git commit -m "Update API documentation from ${{ github.repository }}"
+          git push https://x-access-token:${{ secrets.SPHINX_TOKEN }}@github.com/rusher/mariadb-docs.git auto-docs-update-${{ github.run_number }}
+
+      - name: Create Pull Request to Upstream
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.SPHINX_TOKEN }}
-          path: mariadb-docs
-          commit-message: "Update API documentation from ${{ github.repository }}"
-          title: "Auto-update: API Documentation from ${{ github.repository }}"
-          body: |
-            This PR automatically updates the documentation subdirectory with the latest Sphinx-generated markdown from [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }}).
-            
-            **Changes:**
-            - Updated documentation generated from commit ${{ github.sha }}
-            - Generated on: ${{ github.run_id }}
-            
-          branch: auto-docs-update-${{ github.run_number }}
-          delete-branch: true
+          github-token: ${{ secrets.SPHINX_TOKEN }}
+          script: |
+            const branch = `auto-docs-update-${{ github.run_number }}`;
+            const prTitle = "Auto-update: API Documentation from ${{ github.repository }}";
+            const prBody = `This PR automatically updates the documentation subdirectory with the latest Sphinx-generated markdown from [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }}).\n**Changes:**\n- Updated documentation generated from commit ${{ github.sha }}\n- Generated on: ${{ github.run_id }}`;
+            try {
+              // Check if a PR already exists for this branch
+              const { data: pulls } = await github.rest.pulls.list({
+                owner: 'mariadb-corporation',
+                repo: 'mariadb-docs',
+                head: `rusher:${branch}`,
+                base: 'main',
+                state: 'open',
+              });
+              if (pulls.length === 0) {
+                const pr = await github.rest.pulls.create({
+                  owner: 'mariadb-corporation',
+                  repo: 'mariadb-docs',
+                  title: prTitle,
+                  head: `rusher:${branch}`,
+                  base: 'main',
+                  body: prBody,
+                  maintainer_can_modify: false
+                });
+                console.log('PR created: ', pr.data.html_url);
+              } else {
+                console.log('PR already exists: ', pulls[0].html_url);
+              }
+            } catch (error) {
+              core.setFailed(`Failed to create PR: ${error.message}`);
+            }
