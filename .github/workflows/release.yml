@@ -1,0 +1,65 @@
+name: Generate Docs and Update Documentation Repository
+
+on:
+  push:
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Python project
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          # Install your project dependencies
+          pip install -r docs/requirements.txt
+          pip install -e .
+
+      - name: Generate Sphinx documentation
+        run: |
+          sphinx-build -b markdown docs/source docs/_build/markdown
+
+      - name: Checkout documentation repository
+        uses: actions/checkout@v4
+        with:
+          repository: rusher/mariadb-docs  # Replace with actual repo
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          path: docs-repo
+
+      - name: Update documentation subdirectory
+        run: |
+          # Remove existing documentation in target subdirectory
+          rm -rf docs-repo/mariadb-docs/connectors/mariadb-connector-python/api/*
+          
+          # Copy new documentation
+          cp -r docs/_build/markdown/* docs-repo/mariadb-docs/connectors/mariadb-connector-python/api/
+          
+          # Optional: Add any additional processing here
+          # e.g., update index files, fix relative links, etc.
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          path: docs-repo
+          commit-message: "Update API documentation from ${{ github.repository }}"
+          title: "Auto-update: API Documentation from ${{ github.repository }}"
+          body: |
+            This PR automatically updates the documentation subdirectory with the latest Sphinx-generated markdown from [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }}).
+            
+            **Changes:**
+            - Updated documentation generated from commit ${{ github.sha }}
+            - Generated on: ${{ github.run_id }}
+            
+          branch: auto-docs-update-${{ github.run_number }}
+          delete-branch: true
