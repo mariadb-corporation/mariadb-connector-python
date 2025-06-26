@@ -1,8 +1,9 @@
-name: Generate Docs and Update Documentation Repository
+name: Generate and Update API Docs
 
 on:
-  push:
   workflow_dispatch:  # Allow manual triggering
+  release:
+    types: [published]  # Runs when release is published
 
 jobs:
   update-docs:
@@ -19,6 +20,24 @@ jobs:
         with:
           python-version: '3.12'
 
+
+      - name: Clone C/C
+        uses: GuillaumeFalourd/clone-github-repo-action@v2.3
+        with:
+          branch: '3.4'
+          owner: 'mariadb-corporation'
+          repository: 'mariadb-connector-c'
+
+      - name: c/c make ubuntu
+        run: |
+          cd ${{ github.workspace }}/mariadb-connector-c
+          cmake . -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB=On -DCMAKE_INSTALL_PREFIX=/usr
+          make -j4
+          sudo make install
+          echo "MARIADB_PLUGIN_DIR=`mariadb_config --plugindir`" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb" >> $GITHUB_ENV
+
+
       - name: Install dependencies
         run: |
           # Install your project dependencies
@@ -32,17 +51,18 @@ jobs:
       - name: Checkout documentation repository
         uses: actions/checkout@v4
         with:
-          repository: rusher/mariadb-docs  # Replace with actual repo
-          token: ${{ secrets.DOCS_REPO_TOKEN }}
-          path: docs-repo
+          repository: mariadb-corporation/mariadb-docs  # Replace with actual repo
+          token: ${{ secrets.SPHINX_TOKEN }}
+          path: mariadb-docs
 
       - name: Update documentation subdirectory
         run: |
           # Remove existing documentation in target subdirectory
-          rm -rf docs-repo/mariadb-docs/connectors/mariadb-connector-python/api/*
           
+          mkdir -p mariadb-docs/connectors/mariadb-connector-python/api/
+          rm -rf mariadb-docs/connectors/mariadb-connector-python/api/*
           # Copy new documentation
-          cp -r docs/_build/markdown/* docs-repo/mariadb-docs/connectors/mariadb-connector-python/api/
+          cp -r docs/_build/markdown/* mariadb-docs/connectors/mariadb-connector-python/api/
           
           # Optional: Add any additional processing here
           # e.g., update index files, fix relative links, etc.
@@ -50,8 +70,8 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.DOCS_REPO_TOKEN }}
-          path: docs-repo
+          token: ${{ secrets.SPHINX_TOKEN }}
+          path: mariadb-docs
           commit-message: "Update API documentation from ${{ github.repository }}"
           title: "Auto-update: API Documentation from ${{ github.repository }}"
           body: |
