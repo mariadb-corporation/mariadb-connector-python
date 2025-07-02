@@ -6,19 +6,16 @@ MariaDB Connector/Python
 
 .. testsetup::
 
-    import mariadb
-    conn_params= {
-        "host" : "localhost",
-        "database" : "test"
-    }
-
-    conn=mariadb.connect(**conn_params)
-    cursor=conn.cursor()
-    cursor.execute("CREATE USER IF NOT EXISTS example_user@localhost identified by 'GHbe_Su3B8'")
-    cursor.execute("grant all on test.* to example_user@localhost")
-    cursor.execute("DROP TABLE IF EXISTS book")
-    cursor.close()
-    conn.close()
+   import mariadb
+   conn_params= {
+      "host" : "localhost",
+      "database" : "test"
+   }
+   with mariadb.connect(**conn_params) as conn:
+      with conn.cursor() as cursor:
+         cursor.execute("CREATE USER IF NOT EXISTS example_user@localhost identified by 'GHbe_Su3B8'")
+         cursor.execute("grant all on test.* to example_user@localhost")
+         cursor.execute("DROP TABLE IF EXISTS book")
 
 |MCP| enables python programs to access MariaDB and MySQL databases, using an API
 which is compliant with the Python |DBAPI|. It is written in C and Python and uses
@@ -27,7 +24,7 @@ MariaDB Connector/C client library for client server communication.
 .. rubric:: Contents
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
    :caption: Contents:
 
    install
@@ -35,14 +32,7 @@ MariaDB Connector/C client library for client server communication.
    pooling
    api
    license
-   release
    bugs
    faq
 
-------------------
-Indices and tables
-------------------
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+{% @marketo/form formId=\"4316\" %}

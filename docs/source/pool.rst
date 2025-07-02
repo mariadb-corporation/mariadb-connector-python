@@ -22,8 +22,9 @@ ConnectionPool methods
 ConnectionPool attributes
 -------------------------
 
-.. versionadded:: 1.1.0
 .. autoattribute:: mariadb.ConnectionPool.connection_count
+
+   *Since version 1.1.0*
 
 .. autoattribute:: mariadb.ConnectionPool.max_size
 
@@ -31,6 +32,7 @@ ConnectionPool attributes
 
 .. autoattribute:: mariadb.ConnectionPool.pool_name
        
-.. versionadded:: 1.1.0
 .. autoattribute:: mariadb.ConnectionPool.pool_reset_connection
+   *Since version 1.1.0*
 
+{% @marketo/form formId=\"4316\" %}

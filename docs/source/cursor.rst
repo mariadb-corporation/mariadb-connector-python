@@ -99,7 +99,8 @@ Cursor attributes
     In combination with the type element field, it can be determined for example,
     whether a column is a BLOB or TEXT field:
 
-.. versionadded:: 1.1.0
+    *Since version 1.1.0*
+
     The parameter table_name, original_column_name and original_table_name are an
     extension to the PEP-249 DB API standard.
 
@@ -114,16 +115,16 @@ Cursor attributes
 
 .. autoattribute:: mariadb.cursors.Cursor.lastrowid
 
-.. versionadded:: 1.1.8
-
 .. autoattribute:: mariadb.cursors.Cursor.metadata
+
+   *Since version 1.1.8*
 
 .. autoattribute:: mariadb.cursors.Cursor.sp_outparams
 
 
-.. versionadded:: 1.1.0
-
 .. autoattribute:: mariadb.cursors.Cursor.paramcount
+
+   *Since version 1.1.0*
 
 .. autoattribute:: mariadb.cursors.Cursor.rowcount
 
@@ -155,3 +156,5 @@ Cursor attributes
   .. note::
 
     Warnings can be retrieved by the show_warnings() method of connection class.
+
+{% @marketo/form formId=\"4316\" %}

@@ -3,7 +3,7 @@ Constants
 
   Constants are declared in mariadb.constants module.
  
-  For using constants of various types they have to be imported first:
+  For using constants of various types, they have to be imported first:
 
 .. code-block:: python
 
@@ -13,9 +13,9 @@ Constants
 CAPABILITY
 ----------
 
-.. versionadded:: 1.1.4
-
 .. automodule:: mariadb.constants.CAPABILITY
+
+   *Since version 1.1.4*
 
 .. testcode::
 
@@ -29,12 +29,10 @@ CAPABILITY
         "host" : "localhost"
     }
 
-    # Establish a connection
-    connection= mariadb.connect(**conn_params)
-
-    # test if LOAD DATA LOCAL INFILE is supported
-    if connection.server_capabilities & CAPABILITY.LOCAL_FILES:
-        print("Server supports LOCAL INFILE")
+    with mariadb.connect(**conn_params) as connection:
+        # test if LOAD DATA LOCAL INFILE is supported
+        if connection.server_capabilities & CAPABILITY.LOCAL_FILES:
+            print("Server supports LOCAL INFILE")
     
 *Output*:
 
@@ -47,20 +45,17 @@ CAPABILITY
 CLIENT
 --------------
 
-.. versionadded:: 1.1.0
-
 .. automodule:: mariadb.constants.CLIENT
 
-.. deprecated:: 1.1.4
-   Use CAPABILITY constants instead
+   *Since version 1.1.0, deprecated in 1.1.4*
 
 --------------
 CURSOR
 --------------
 
-.. versionadded:: 1.1.0
-
 .. automodule:: mariadb.constants.CURSOR
+
+   *Since version 1.1.0*
 
 .. py:data:: CURSOR.NONE
 
@@ -75,11 +70,10 @@ CURSOR
 ERR (Error)
 --------------
 
-.. versionadded:: 1.1.2
-
-
 Using ERR constants instead of error numbers make the code more readable. Error constants
 are defined in constants.ERR module
+
+*Since version 1.1.2*
 
 .. testcode::
 
@@ -110,9 +104,9 @@ are defined in constants.ERR module
 FIELD_FLAG
 --------------
 
-.. versionadded:: 1.1.0
-
 .. automodule:: mariadb.constants.FIELD_FLAG
+
+   *Since version 1.1.0*
 
 
 .. py:data:: FIELD_FLAG.NOT_NULL
@@ -281,7 +275,7 @@ FIELD_TYPE
 
 .. py:data:: FIELD_TYPE.STRING
 
-   column tyoe is CHAR (fixed length)
+   column type is CHAR (fixed length)
 
 .. py:data:: FIELD_TYPE.GEOMETRY
 
@@ -315,25 +309,21 @@ indicates not to update the entire row.
 INFO
 ---------------
 
-.. versionadded:: 1.1.0
-
 For internal use only
 
 ---------------
 TPC_STATE
 ---------------
 
-.. versionadded:: 1.1.0
-
 For internal use only
+
 
 ---------------
 STATUS
 ---------------
-.. versionadded:: 1.1.0
+The STATUS constants are used to check the server status of the current connection.
 
-The STATUS constants are used to check the server status of
-the current connection.
+*Since version 1.1.0*
 
   Example:
 
@@ -403,3 +393,5 @@ the current connection.
 .. py:data:: STATUS.ANSI_QUOTES
 
    SQL mode ANSI_QUOTES is active,
+
+{% @marketo/form formId=\"4316\" %}

@@ -1,7 +1,7 @@
-.. _module:
-
 The MariaDB Connector/Python module
 ===================================
+
+.. _module:
 
 .. sectionauthor:: Georg Richter <georg@mariadb.com>
 
@@ -24,11 +24,10 @@ Example:
 
 .. testcode::
 
-      import mariadb
+    import mariadb
 
-      connection= mariadb.connect(user="example_user", host="localhost", database="test", password="GHbe_Su3B8")
-
-      print(connection.character_set)
+    with mariadb.connect(user="example_user", host="localhost", database="test", password="GHbe_Su3B8") as connection:
+        print(connection.character_set)
 
 Output:
 
@@ -83,16 +82,17 @@ Attributes
 
     String constant stating the version of the used MariaDB Connector/C library.
 
-.. versionadded:: 1.1.0
 .. attribute:: client_version
+
+    *Since version 1.1.0*
 
     Returns the version of MariaDB Connector/C library in use as an integer.
     The number has the following format:
     MAJOR_VERSION * 10000 + MINOR_VERSION * 1000 + PATCH_VERSION
 
-.. versionadded:: 1.1.0
 .. attribute:: client_version_info
 
+    *Since version 1.1.0*
     Returns the version of MariaDB Connector/C library as a tuple in the
     following format:
     (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)
@@ -176,3 +176,5 @@ Output:
 
     This type object is not supported in MariaDB Connector/Python and represents
     an empty set.
+
+{% @marketo/form formId=\"4316\" %}

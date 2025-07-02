@@ -31,32 +31,18 @@ class ConnectionPool(object):
     Class defining a pool of database connections
 
     MariaDB Connector/Python supports simple connection pooling.
-    A connection pool holds a number of open connections and handles
-    thread safety when providing connections to threads.
+    A connection pool holds a number of open connections and handles thread safety when providing connections to threads.
 
-    The size of a connection pool is configurable at creation time,
-    but cannot be changed afterwards. The maximum size of a connection
-    pool is limited to 64 connections.
+    The size of a connection pool is configurable at creation time, but cannot be changed afterward. The maximum size of a connection pool is limited to 64 connections.
 
     Keyword Arguments:
 
-        * pool_name (str) -- Name of connection pool
+    - **`pool_name`** (``str``) - Name of connection pool
+    - **`pool_size`** (``int``) - Size of pool. The Maximum allowed number is 64. Default to 5
+    - **`pool_reset_connection`** (``bool``) - Will reset the connection before returning it to the pool. Default to True.
+    - **`pool_validation_interval`** (``int``) - Specifies the validation interval in milliseconds after which the status of a connection requested from the pool is checked. A value of 0 means that the status will always be checked. Default to 500 (Added in version 1.1.6)
+    - **\*\*kwargs** - Optional additional connection arguments, as described in mariadb.connect() method.
 
-        * pool_size (int)=5 -- Size of pool. If not specified default value
-          of 5 will be used. Maximum allowed number is 64.
-
-        * pool_reset_connection (bool)=True -- Will reset the connection before
-          returning it to the pool.  Default value is True.
-
-        * pool_validation_interval (int)=500 -- Specifies the validation
-          interval in milliseconds after which the status of a connection
-          requested from the pool is checked.
-          The default value is 500 milliseconds, a value of 0 means that
-          the status will always be checked.
-          (Added in version 1.1.6)
-
-         * **kwargs: Optional additional connection arguments, as described in
-           mariadb.connect() method.
     """
 
     def __init__(self, *args, **kwargs):
@@ -67,12 +53,12 @@ class ConnectionPool(object):
             Name of connection pool
 
         :param int pool_size:
-            Size of pool. If not specified default value of 5 will be used.
-            Maximum allowed number is 64.
+            Size of pool. If not specified, the default value of 5 will be used.
+            The Maximum allowed number is 64.
 
         :param bool pool_reset_connection:
             Will reset the connection before returning it to the pool.
-            Default value is True.
+            The Default value is True.
 
         :param **kwargs kwargs:
             Optional additional connection arguments, as described in
@@ -170,7 +156,7 @@ class ConnectionPool(object):
         """
         Adds a connection object to the connection pool.
 
-        In case that the pool doesn’t have a free slot or is not configured
+        In case that the pool doesn’t have a free slot or is not configured,
         a PoolError exception will be raised.
         """
 
@@ -256,10 +242,10 @@ class ConnectionPool(object):
     def set_config(self, **kwargs):
         """
         Sets the connection configuration for the connection pool.
-        For valid connection arguments check the mariadb.connect() method.
+        For valid connection arguments, check the mariadb.connect() method.
 
         Note: This method doesn't create connections in the pool.
-        To fill the pool one has to use add_connection() ḿethod.
+        To fill the pool, one has to use add_connection() ḿethod.
         """
 
         self._conn_args = kwargs
