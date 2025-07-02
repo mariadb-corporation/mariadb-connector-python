@@ -1,17 +1,17 @@
-***********
-Basic usage
-***********
+# Basic usage
 
+```{eval-rst}
 .. sectionauthor:: Georg Richter <georg@mariadb.com>
+```
 
-Connecting
-##########
+## Connecting
 
 The basic usage of MariaDB Connector/Python is similar to other database drivers which
-implement |DBAPI|. 
+implement {{ DBAPI }}.
 
 Below is a simple example of a typical use of MariaDB Connector/Python
 
+```{eval-rst}
 .. testsetup::
 
     import mariadb
@@ -40,7 +40,9 @@ Below is a simple example of a typical use of MariaDB Connector/Python
 
     cursor.close()
     connection.close()
+```
 
+```{eval-rst}
 .. testcode::
 
     import mariadb
@@ -72,21 +74,24 @@ Below is a simple example of a typical use of MariaDB Connector/Python
     # free resources
     cursor.close()
     connection.close()
+```
 
 *Output*:
 
+```{eval-rst}
 .. testoutput::
 
     Germany GER Berlin
 
+```
 
-Before MariaDB Connector/Python can be used, the MariaDB Connector/Python module must be 
+Before MariaDB Connector/Python can be used, the MariaDB Connector/Python module must be
 imported.
 Once the mariadb module is loaded, a connection to a database server will be established
-using the method :func:`~mariadb.connect`.
+using the method {func}`~mariadb.connect`.
 
-In order to be able to communicate with the database server in the form of SQL statements, 
-a cursor object must be created first. 
+In order to be able to communicate with the database server in the form of SQL statements,
+a cursor object must be created first.
 
 The method name cursor may be a little misleading: unlike a cursor in MariaDB that can only
 read and return data, a cursor in Python can be used for all types of SQL statements.
@@ -99,14 +104,15 @@ After creating and populating the table mytest the cursor will be used to retrie
 
 At the end we free resources and close cursor and connection.
 
-Passing parameters to SQL statements
-####################################
+## Passing parameters to SQL statements
+
 As shown in previous example, passing parameters to SQL statements happens by using placeholders in the statement. By default
 MariaDB Connector/Python uses a question mark as a placeholder, for compatibility reason also %s placeholders are supported.
-Passing parameters is supported in methods :func:`~execute` and :func:`~executemany` of the cursor class.
+Passing parameters is supported in methods {func}`~execute` and {func}`~executemany` of the cursor class.
 
-Since |MCP| uses binary protocol, escaping strings or binary data like in other database drivers is not required.
+Since {{ MCP }} uses binary protocol, escaping strings or binary data like in other database drivers is not required.
 
+```{eval-rst}
 .. testcode::
 
     import mariadb
@@ -141,11 +147,13 @@ Since |MCP| uses binary protocol, escaping strings or binary data like in other 
     connection.close()
 
 
-  
 
-Often there is a requirement to update, delete or insert multiple records. This could be done be using :func:`~execute` in
-a loop, but much more effective is using the :func:`executemany` method, especially when using a MariaDB database server 10.2 and above, which supports a special "bulk" protocol. The executemany() works similar to execute(), but accepts data as a list of tuples:
+```
 
+Often there is a requirement to update, delete or insert multiple records. This could be done be using {func}`~execute` in
+a loop, but much more effective is using the {func}`executemany` method, especially when using a MariaDB database server 10.2 and above, which supports a special "bulk" protocol. The executemany() works similar to execute(), but accepts data as a list of tuples:
+
+```{eval-rst}
 .. testcode:: python
 
     import mariadb
@@ -170,7 +178,7 @@ a loop, but much more effective is using the :func:`executemany` method, especia
            ("France", "FR", "Paris"),
            ("Iceland", "IS", "Reykjavik"),
            ("Nepal", "NP", "Kathmandu")]
-    
+
     # insert data
     cursor.executemany(sql, data)
 
@@ -187,7 +195,7 @@ a loop, but much more effective is using the :func:`executemany` method, especia
            ("Iceland", "ISL"),
            ("Nepal", "NPL")]
     cursor.executemany(sql, data)
-  
+
     # Now let's delete all non European countries
     sql= "DELETE FROM countries WHERE name=?"
     data= [("Malaysia",), ("Nepal",)]
@@ -200,16 +208,17 @@ a loop, but much more effective is using the :func:`executemany` method, especia
     # free resources
     cursor.close()
     connection.close()
+```
 
 When using executemany(), there are a few restrictions:
-- All tuples must have the same types as in first tuple. E.g. the parameter [(1),(1.0)] or [(1),(None)] are invalid.
-- Special values like None or column default value needs to be indicated by an indicator.
+\- All tuples must have the same types as in first tuple. E.g. the parameter [(1),(1.0)] or [(1),(None)] are invalid.
+\- Special values like None or column default value needs to be indicated by an indicator.
 
-Using indicators
-****************
+### Using indicators
 
 In certain situations, for example when inserting default values or NULL, special indicators must be used.
 
+```{eval-rst}
 .. testcode::
 
     import mariadb
@@ -236,24 +245,27 @@ In certain situations, for example when inserting default values or NULL, specia
     sql= "INSERT INTO cakes (id, cake, price) VALUES (?,?,?)"
     data= [(1, "Cherry Cake", 2.10), (2, "Apple Cake", INDICATOR.DEFAULT)]
     cursor.executemany(sql, data)
+```
 
 Beside the default indicator which inserts the default value of 1.99, the following indicators are supported:
-   * INDICATOR.IGNORE: Ignores the value (only update commands)
-   * INDICATOR.NULL: Value is NULL
-   * INDICATOR.IGNORE_ROW: Don't update or insert row
+: - INDICATOR.IGNORE: Ignores the value (only update commands)
+  - INDICATOR.NULL: Value is NULL
+  - INDICATOR.IGNORE_ROW: Don't update or insert row
 
+```{eval-rst}
 .. note::
   * Mixing different parameter styles is not supported and will raise an exception
   * The Python string operator % must not be used. The :func:`~execute` method accepts a tuple or list as second parameter.
   * Placeholders between quotation marks are interpreted as a string.
   * Parameters for :func:`~execute` needs to be passed as a tuple. If only one parameter will be passed, tuple needs to contain a comma at the end.
   * Parameters for :func:`~executemany` need to be passed as a list of tuples.
+```
 
-Supported Data types
---------------------
+#### Supported Data types
 
 Several standard python types are converted into SQL types and returned as Python objects when a statement is executed.
 
+```{eval-rst}
 .. list-table:: Supported Data Types
     :align: left
     :header-rows: 1
@@ -282,3 +294,4 @@ Several standard python types are converted into SQL types and returned as Pytho
       - TIME
     * - Timestamp
       - TIMESTAMP
+```

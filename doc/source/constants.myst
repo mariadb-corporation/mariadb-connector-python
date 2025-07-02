@@ -1,22 +1,23 @@
-Constants
-====================
+# Constants
 
-  Constants are declared in mariadb.constants module.
- 
-  For using constants of various types they have to be imported first:
+> Constants are declared in mariadb.constants module.
+>
+> For using constants of various types they have to be imported first:
 
-.. code-block:: python
+```python
+from mariadb.constants import *
+```
 
-    from mariadb.constants import *
+## CAPABILITY
 
-----------
-CAPABILITY
-----------
+:::{versionadded} 1.1.4
+:::
 
-.. versionadded:: 1.1.4
-
+```{eval-rst}
 .. automodule:: mariadb.constants.CAPABILITY
+```
 
+```{eval-rst}
 .. testcode::
 
     import mariadb
@@ -35,52 +36,60 @@ CAPABILITY
     # test if LOAD DATA LOCAL INFILE is supported
     if connection.server_capabilities & CAPABILITY.LOCAL_FILES:
         print("Server supports LOCAL INFILE")
-    
+```
+
 *Output*:
 
+```{eval-rst}
 .. testoutput::
 
     Server supports LOCAL INFILE
 
+```
 
---------------
-CLIENT
---------------
+## CLIENT
 
-.. versionadded:: 1.1.0
+:::{versionadded} 1.1.0
+:::
 
+```{eval-rst}
 .. automodule:: mariadb.constants.CLIENT
+```
 
-.. deprecated:: 1.1.4
-   Use CAPABILITY constants instead
+:::{deprecated} 1.1.4 Use CAPABILITY constants instead
+:::
 
---------------
-CURSOR
---------------
+## CURSOR
 
-.. versionadded:: 1.1.0
+:::{versionadded} 1.1.0
+:::
 
+```{eval-rst}
 .. automodule:: mariadb.constants.CURSOR
+```
 
+```{eval-rst}
 .. py:data:: CURSOR.NONE
 
    This is the default setting (no cursor)
+```
 
+```{eval-rst}
 .. py:data:: CURSOR.READ_ONLY
 
    Will create a server side read only cursor. The cursor is a forward cursor, which
    means it is not possible to scroll back.
+```
 
---------------
-ERR (Error)
---------------
+## ERR (Error)
 
-.. versionadded:: 1.1.2
-
+:::{versionadded} 1.1.2
+:::
 
 Using ERR constants instead of error numbers make the code more readable. Error constants
 are defined in constants.ERR module
 
+```{eval-rst}
 .. testcode::
 
     import mariadb
@@ -98,308 +107,425 @@ are defined in constants.ERR module
         connection= mariadb.connect(**conn_params)
     except mariadb.OperationalError as Err:
         if Err.errno == ERR.ER_ACCESS_DENIED_ERROR:
-            print("Access denied. Wrong password!") 
+            print("Access denied. Wrong password!")
+```
 
 *Output*:
 
+```{eval-rst}
 .. testoutput::
 
     Access denied. Wrong password!
+```
 
---------------
-FIELD_FLAG
---------------
+## FIELD_FLAG
 
-.. versionadded:: 1.1.0
+:::{versionadded} 1.1.0
+:::
 
+```{eval-rst}
 .. automodule:: mariadb.constants.FIELD_FLAG
 
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.NOT_NULL
 
    column is defined as not NULL
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.PRIMARY_KEY
 
    column is (part of) a primary key
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.UNIQUE_KEY
 
-   column is (part of) a unique key 
+   column is (part of) a unique key
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.MULTIPLE_KEY
 
    column is (part of) a key
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.BLOB
 
    column contains a binary object
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.UNSIGNED
 
    numeric column is defined as unsigned
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.ZEROFILL
 
    column has zerofill attribute
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.BINARY
 
    column is a binary
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.ENUM
 
    column is defined as enum
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.AUTO_INCREMENT
 
    column is an auto_increment column
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.TIMESTAMP
 
    column is defined as time stamp
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.SET
 
    column is defined as SET
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.NO_DEFAULT
 
    column hasn't a default value
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.ON_UPDATE_NOW
 
    column will be set to current timestamp on UPDATE
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.NUMERIC
 
    column contains numeric value
+```
 
+```{eval-rst}
 .. py:data:: FIELD_FLAG.PART_OF_KEY
 
    column is part of a key
+```
 
-----------
-FIELD_TYPE
-----------
+## FIELD_TYPE
 
+```{eval-rst}
 .. automodule:: mariadb.constants.FIELD_TYPE
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.TINY
 
    column type is TINYINT  (1-byte integer)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.SHORT
 
    column type is SMALLINT (2-byte integer)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.LONG
 
    column tyoe is INT (4-byte integer)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.FLOAT
 
    column type is FLOAT (4-byte single precision)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.DOUBLE
 
    column type is DOUBLE (8-byte double precision)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.NULL
 
    column type is NULL
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.TIMESTAMP
 
    column tyoe is TIMESTAMP
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.LONGLONG
 
    column tyoe is BIGINT (8-byte Integer)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.INT24
 
    column type is MEDIUMINT (3-byte Integer)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.DATE
 
    column type is DATE
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.TIME
 
    column type is TIME
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.DATETIME
 
    column type is YEAR
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.YEAR
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.VARCHAR
 
    column type is YEAR
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.BIT
 
    column type is BIT
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.JSON
 
    column type is JSON
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.NEWDECIMAL
 
    column type is DECIMAL
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.ENUM
 
    column type is ENUM
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.SET
 
    column type is SET
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.TINY_BLOB
 
    column type is TINYBLOB (max. length of 255 bytes)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.MEDIUM_BLOB
 
    column type is MEDIUMBLOB (max. length of 16,777,215 bytes)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.LONG_BLOB
 
    column type is LONGBLOB (max. length 4GB bytes)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.BLOB
 
    column type is BLOB (max. length of 65.535 bytes)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.VAR_STRING
 
    column type is VARCHAR (variable length)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.STRING
 
    column tyoe is CHAR (fixed length)
+```
 
+```{eval-rst}
 .. py:data:: FIELD_TYPE.GEOMETRY
 
    column type is GEOMETRY
+```
 
---------------
-INDICATORS
---------------
+## INDICATORS
 
 Indicator values are used in executemany() method of cursor class to
 indicate special values when connected to a MariaDB server 10.2 or newer.
 
+```{eval-rst}
 .. py:data:: INDICATOR.NULL
+```
 
 indicates a NULL value
 
+```{eval-rst}
 .. py:data:: INDICATOR.DEFAULT
+```
 
 indicates to use default value of column
 
+```{eval-rst}
 .. py:data:: INDICATOR.IGNORE
+```
 
 indicates to ignore value for column for UPDATE statements.
 If set, the column will not be updated.
 
+```{eval-rst}
 .. py:data:: INDICATOR.IGNORE_ROW
+```
 
 indicates not to update the entire row.
 
----------------
-INFO
----------------
+## INFO
 
-.. versionadded:: 1.1.0
-
-For internal use only
-
----------------
-TPC_STATE
----------------
-
-.. versionadded:: 1.1.0
+:::{versionadded} 1.1.0
+:::
 
 For internal use only
 
----------------
-STATUS
----------------
-.. versionadded:: 1.1.0
+## TPC_STATE
+
+:::{versionadded} 1.1.0
+:::
+
+For internal use only
+
+## STATUS
+
+:::{versionadded} 1.1.0
+:::
 
 The STATUS constants are used to check the server status of
 the current connection.
 
-  Example:
+> Example:
+>
+> ```python
+> cursor.callproc("my_storedprocedure", (1,"foo"))
+>
+> if (connection.server_status & STATUS.SP_OUT_PARAMS):
+>     print("retrieving output parameters from store procedure")
+>     ...
+> else:
+>     print("retrieving data from stored procedure")
+>     ....
+> ```
 
-  .. code-block:: python
-
-      cursor.callproc("my_storedprocedure", (1,"foo"))
-
-      if (connection.server_status & STATUS.SP_OUT_PARAMS):
-          print("retrieving output parameters from store procedure")
-          ...
-      else:
-          print("retrieving data from stored procedure")
-          ....
-      
-
+```{eval-rst}
 .. py:data:: STATUS.IN_TRANS
 
    Pending transaction
+```
 
+```{eval-rst}
 .. py:data:: STATUS.AUTOCOMMIT
 
    Server operates in autocommit mode
+```
 
+```{eval-rst}
 .. py:data:: STATUS.MORE_RESULTS_EXIST
 
    The result from last executed statement contained two or more result
    sets which can be retrieved by cursors nextset() method.
+```
 
+```{eval-rst}
 .. py:data:: STATUS.QUERY_NO_GOOD_INDEX_USED
 
    The last executed statement didn't use a good index.
+```
 
+```{eval-rst}
 .. py:data:: STATUS.QUERY_NO_INDEX_USED
 
    The last executed statement didn't use an index.
+```
 
+```{eval-rst}
 .. py:data:: STATUS.CURSOR_EXISTS
 
    The last executed statement opened a server side cursor.
+```
 
+```{eval-rst}
 .. py:data:: STATUS.LAST_ROW_SENT
 
    For server side cursors this flag indicates end of a result set.
+```
 
+```{eval-rst}
 .. py:data:: STATUS.DB_DROPPED
 
    The current database in use was dropped and there is no default
    database for the connection anymore.
+```
 
+```{eval-rst}
 .. py:data:: STATUS.NO_BACKSLASH_ESCAPES
 
    Indicates that SQL mode NO_BACKSLASH_ESCAPE is active, which means
    that the backslash character '\' becomes an ordinary character.
+```
 
+```{eval-rst}
 .. py:data:: STATUS.QUERY_WAS_SLOW
 
    The previously executed statement was slow (and needs to be optimized).
+```
 
+```{eval-rst}
 .. py:data:: STATUS.PS_OUT_PARAMS
 
    The current result set contains output parameters of a stored procedure.
+```
 
+```{eval-rst}
 .. py:data:: STATUS.SESSION_STATE_CHANGED
 
    The session status has been changed.
+```
 
+```{eval-rst}
 .. py:data:: STATUS.ANSI_QUOTES
 
    SQL mode ANSI_QUOTES is active,
+```
