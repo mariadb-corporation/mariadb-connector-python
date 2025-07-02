@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>The ConnectionPool class &#8212; MariaDB Connector/Python 1.1.13 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=2bf1fcf8" />
+    
+    <script src="_static/documentation_options.js?v=1240c0c0"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Constants" href="constants.html" />
+    <link rel="prev" title="The cursor class" href="cursor.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="constants.html" title="Constants"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="cursor.html" title="The cursor class"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.13 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="api.html" accesskey="U">API Reference</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">The ConnectionPool class</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section class="tex2jax_ignore mathjax_ignore" id="the-connectionpool-class">
+<h1>The ConnectionPool class<a class="headerlink" href="#the-connectionpool-class" title="Link to this heading">¶</a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ConnectionPool</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool" title="Link to this definition">¶</a></dt>
+<dd><p>Class defining a pool of database connections</p>
+<p>MariaDB Connector/Python supports simple connection pooling.
+A connection pool holds a number of open connections and handles
+thread safety when providing connections to threads.</p>
+<p>The size of a connection pool is configurable at creation time,
+but cannot be changed afterwards. The maximum size of a connection
+pool is limited to 64 connections.</p>
+<p>Keyword Arguments:</p>
+<blockquote>
+<div><p>pool_name (str) – Name of connection pool</p>
+<p>pool_size (int)=5 – Size of pool. If not specified default value
+of 5 will be used. Maximum allowed number is 64.</p>
+<p>pool_reset_connection (bool)=True – Will reset the connection before
+returning it to the pool.  Default value is True.</p>
+<p>pool_validation_interval (int)=500 – Specifies the validation
+interval in milliseconds after which the status of a connection
+requested from the pool is checked.
+The default value is 500 milliseconds, a value of 0 means that
+the status will always be checked.
+(Added in version 1.1.6)</p>
+<dl class="simple">
+<dt><a href="#id1"><span class="problematic" id="id2">**</span></a>kwargs: Optional additional connection arguments, as described in</dt><dd><p>mariadb.connect() method.</p>
+</dd>
+</dl>
+</div></blockquote>
+</dd></dl>
+
+<section id="connectionpool-methods">
+<h2>ConnectionPool methods<a class="headerlink" href="#connectionpool-methods" title="Link to this heading">¶</a></h2>
+<dl class="py method">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.add_connection">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">add_connection</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">connection</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool.add_connection" title="Link to this definition">¶</a></dt>
+<dd><p>Adds a connection object to the connection pool.</p>
+<p>In case that the pool doesn’t have a free slot or is not configured
+a PoolError exception will be raised.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.close">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool.close" title="Link to this definition">¶</a></dt>
+<dd><p>Closes connection pool and all connections.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.get_connection">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">get_connection</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool.get_connection" title="Link to this definition">¶</a></dt>
+<dd><p>Returns a connection from the connection pool or raises a PoolError
+exception if a connection is not available.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.set_config">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">set_config</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mariadb.ConnectionPool.set_config" title="Link to this definition">¶</a></dt>
+<dd><p>Sets the connection configuration for the connection pool.
+For valid connection arguments check the mariadb.connect() method.</p>
+<p>Note: This method doesn’t create connections in the pool.
+To fill the pool one has to use add_connection() ḿethod.</p>
+</dd></dl>
+
+</section>
+<section id="connectionpool-attributes">
+<h2>ConnectionPool attributes<a class="headerlink" href="#connectionpool-attributes" title="Link to this heading">¶</a></h2>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 1.1.0.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.connection_count">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">connection_count</span></span><a class="headerlink" href="#mariadb.ConnectionPool.connection_count" title="Link to this definition">¶</a></dt>
+<dd><p>Returns the number of connections in connection pool.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.max_size">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">max_size</span></span><a class="headerlink" href="#mariadb.ConnectionPool.max_size" title="Link to this definition">¶</a></dt>
+<dd><p>Returns the maximum size for connection pools.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.pool_size">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">pool_size</span></span><a class="headerlink" href="#mariadb.ConnectionPool.pool_size" title="Link to this definition">¶</a></dt>
+<dd><p>Returns the size of the connection pool.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.pool_name">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">pool_name</span></span><a class="headerlink" href="#mariadb.ConnectionPool.pool_name" title="Link to this definition">¶</a></dt>
+<dd><p>Returns the name of the connection pool.</p>
+</dd></dl>
+
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 1.1.0.</span></p>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="mariadb.ConnectionPool.pool_reset_connection">
+<span class="sig-prename descclassname"><span class="pre">ConnectionPool.</span></span><span class="sig-name descname"><span class="pre">pool_reset_connection</span></span><a class="headerlink" href="#mariadb.ConnectionPool.pool_reset_connection" title="Link to this definition">¶</a></dt>
+<dd><p>If set to true, the connection will be reset on both client and server
+side after .close() method was called</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">The ConnectionPool class</a><ul>
+<li><a class="reference internal" href="#mariadb.ConnectionPool"><code class="docutils literal notranslate"><span class="pre">ConnectionPool</span></code></a></li>
+<li><a class="reference internal" href="#connectionpool-methods">ConnectionPool methods</a><ul>
+<li><a class="reference internal" href="#mariadb.ConnectionPool.add_connection"><code class="docutils literal notranslate"><span class="pre">ConnectionPool.add_connection()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.ConnectionPool.close"><code class="docutils literal notranslate"><span class="pre">ConnectionPool.close()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.ConnectionPool.get_connection"><code class="docutils literal notranslate"><span class="pre">ConnectionPool.get_connection()</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.ConnectionPool.set_config"><code class="docutils literal notranslate"><span class="pre">ConnectionPool.set_config()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#connectionpool-attributes">ConnectionPool attributes</a><ul>
+<li><a class="reference internal" href="#mariadb.ConnectionPool.connection_count"><code class="docutils literal notranslate"><span class="pre">ConnectionPool.connection_count</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.ConnectionPool.max_size"><code class="docutils literal notranslate"><span class="pre">ConnectionPool.max_size</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.ConnectionPool.pool_size"><code class="docutils literal notranslate"><span class="pre">ConnectionPool.pool_size</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.ConnectionPool.pool_name"><code class="docutils literal notranslate"><span class="pre">ConnectionPool.pool_name</span></code></a></li>
+<li><a class="reference internal" href="#mariadb.ConnectionPool.pool_reset_connection"><code class="docutils literal notranslate"><span class="pre">ConnectionPool.pool_reset_connection</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="cursor.html"
+                          title="previous chapter">The cursor class</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="constants.html"
+                          title="next chapter">Constants</a></p>
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="constants.html" title="Constants"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="cursor.html" title="The cursor class"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">MariaDB Connector/Python 1.1.13 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="api.html" >API Reference</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">The ConnectionPool class</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright 2019-2025 MariaDB Corporation and Georg Richter.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.1.
+    </div>
+  </body>
+</html>

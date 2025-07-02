@@ -1,43 +1,73 @@
-====================
-The connection class
-====================
+# The connection class
 
+```{eval-rst}
 .. sectionauthor:: Georg Richter <georg@mariadb.com>
+```
 
+```{eval-rst}
 .. autoclass:: mariadb.connections.Connection
+```
 
------------------------
-Connection constructors 
------------------------
+## Connection constructors
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.cursor
+```
 
-.. versionadded:: 1.0.1
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.xid
 
-------------------
-Connection methods 
-------------------
+```
 
-.. versionadded:: 1.1.0
+### History:
+
+:::{versionadded} 1.0.1 The xid object.
+:::
+
+## Connection methods
+
+:::{versionadded} 1.1.0
+:::
+
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.begin
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.commit
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.change_user(user, password, database)
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.close
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.cursor
+```
 
-.. versionadded:: 1.1.2
+:::{versionadded} 1.1.2
+:::
+
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.dump_debug_info
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.get_server_version
+```
 
-.. versionadded:: 1.0.5
+:::{versionadded} 1.0.5
+:::
+
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.escape_string
+```
 
+```{eval-rst}
 .. testcode::
 
     import mariadb
@@ -51,97 +81,182 @@ Connection methods
 
     # Establish a connection
     connection= mariadb.connect(**conn_params)
-    
+
     string= 'This string contains the following special characters: \,"'
     print(connection.escape_string(string))
+```
 
 *Output*:
 
+```{eval-rst}
 .. testoutput::
 
     This string contains the following special characters: \\,\"
 
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.kill
 
   .. note::
     A thread_id from other connections can be determined by executing the SQL statement ``SHOW PROCESSLIST``
     The thread_id of the current connection the current connection is stored in :data:`connection_id` attribute.
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.ping()
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.reconnect
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.reset
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.rollback()
+```
 
-.. versionadded:: 1.1.0
+:::{versionadded} 1.1.0
+:::
+
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.select_db
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.show_warnings
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.tpc_begin
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.tpc_commit
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.tpc_prepare
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.tpc_recover
+```
 
+```{eval-rst}
 .. automethod:: mariadb.connections.Connection.tpc_rollback
+```
 
----------------------
-Connection attributes
----------------------
+## Connection attributes
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.auto_reconnect
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.autocommit
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.character_set
+```
 
-.. versionadded:: 1.1.0:
+:::{versionadded} 1.1.0:
+:::
+
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.client_capabilities
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.collation
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.connection_id
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.database
+```
 
-.. versionadded:: 1.1.0
+:::{versionadded} 1.1.0
+:::
+
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.open
+```
 
-.. versionadded:: 1.1.0
+:::{versionadded} 1.1.0
+:::
+
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.server_capabilities
+```
 
-.. versionadded:: 1.1.0
+:::{versionadded} 1.1.0
+:::
+
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.extended_server_capabilities
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.server_info
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.server_name
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.server_port
+```
 
-.. versionadded:: 1.1.0
+:::{versionadded} 1.1.0
+:::
+
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.server_status
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.server_version
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.server_version_info
+```
 
-.. versionadded:: 1.0.5
+:::{versionadded} 1.0.5
+:::
+
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.tls_cipher
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.tls_version
+```
 
-.. versionadded:: 1.1.11
+:::{versionadded} 1.1.11
+:::
+
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.tls_peer_cert_info
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.unix_socket
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.user
+```
 
+```{eval-rst}
 .. autoattribute:: mariadb.connections.Connection.warnings
+```

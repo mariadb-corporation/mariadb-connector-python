@@ -1,0 +1,16 @@
+# API Reference
+
+```{eval-rst}
+.. sectionauthor:: Georg Richter <georg@mariadb.com>
+```
+
+```{toctree}
+:caption: 'Contents:'
+:maxdepth: 2
+
+module
+connection
+cursor
+pool
+constants
+```

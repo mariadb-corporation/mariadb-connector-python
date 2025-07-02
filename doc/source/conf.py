@@ -38,8 +38,9 @@ add_module_names= False
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.doctest', 'sphinx.ext.autodoc', 'sphinx.ext.intersphinx', 'recommonmark',
-              'sphinx.ext.extlinks', 'sphinx_toolbox.collapse', 'sphinx_markdown_builder' ]
+extensions = ['sphinx.ext.doctest', 'sphinx.ext.autodoc', 'sphinx.ext.intersphinx',
+# 'recommonmark',
+              'sphinx.ext.extlinks', 'sphinx_toolbox.collapse', 'sphinx_markdown_builder', 'myst_parser' ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -48,6 +49,24 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
+
+source_suffix = {
+    '.myst': 'markdown',
+}
+
+myst_enable_extensions = [
+    "deflist",
+    "dollarmath",
+    "amsmath",
+    "colon_fence",
+    "html_image",
+    "linkify",
+    "replacements",
+    "smartquotes",
+    "substitution",
+    "attrs_inline",
+    "html_admonition",
+]
 
 pygments_style = 'sphinx'
 
@@ -69,13 +88,13 @@ html_show_sourcelink = False
 
 highlight_language = 'python'
 
-rst_epilog="""
-.. |MCP| replace:: MariaDB Connector/Python
-.. |MCC| replace:: MariaDB Connector/C
-.. |MCC_minversion| replace:: 3.3.1
-.. |DBAPI| replace:: DB API 2.0 (:PEP:`249`)
-.. |MCDP| replace:: `MariaDB Connector Download page <https://mariadb.com/downloads/connectors/>`__
-"""
+myst_substitutions = {
+    "MCP" : "MariaDB Connector/Python",
+    "MCC" : "MariaDB Connector/C",
+    "MCC_minversion" : "3.3.1",
+    "DBAPI" : "DB API 2.0 (:PEP:`249`)",
+    "MCDP" : "`MariaDB Connector Download page <https://mariadb.com/downloads/connectors/>`__"
+}
 
 extlinks= {
            'conpy' : ('https://jira.mariadb.org/browse/CONPY-%s', 'CONPY-%s'),
