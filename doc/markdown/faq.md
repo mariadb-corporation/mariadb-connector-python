@@ -161,6 +161,8 @@ and build and install it with
     python3 -m pip install .
 ```
 
+</details>
+
 ## Connecting
 
 <details>
