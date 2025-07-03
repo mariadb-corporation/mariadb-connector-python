@@ -85,41 +85,41 @@ Before you can install {{ MCP }} you have to install the packaging module:
 <details>
 <summary>MariaDB Connector/Python requires MariaDB Connector/C >= 3.3.1, found version 3.1.2</summary>
 
-The previously installed version of |MCC| is too old and cannot be used for the {{ MCP }} version
+The previously installed version of {{ MCC }} is too old and cannot be used for the {{ MCP }} version
 you are trying to install.
 
-To determine the installed version of |MCC|, execute the command
+To determine the installed version of {{ MCC }}, execute the command
 
 ```bash
     mariadb_config --cc_version
 ```
 
-- Check if your distribution can be upgraded to a more recent version of |MCC|, which fits the requirements.
-- If your distribution doesn't provide a recent version of |MCC|, check the |MCDP|, which provides latest versions for the major distributions.
-- If none of the above will work for you, build and install |MCC| from source.
+- Check if your distribution can be upgraded to a more recent version of {{ MCC }}, which fits the requirements.
+- If your distribution doesn't provide a recent version of {{ MCC }}, check the |MCDP|, which provides latest versions for the major distributions.
+- If none of the above will work for you, build and install {{ MCC }} from source.
 </details>
 
 <details>
 <summary>OSError: mariadb_config not found.</summary>
 
-The mariadb_config program is used to retrieve configuration information (such as the location of header files and libraries, installed version, ..) from |MCC|.
+The mariadb_config program is used to retrieve configuration information (such as the location of header files and libraries, installed version, ..) from {{ MCC }}.
 
-This error indicates that |MCC|, an important dependency for client/server communication that needs to be preinstalled, either was not installed or could not be found.
+This error indicates that {{ MCC }}, an important dependency for client/server communication that needs to be preinstalled, either was not installed or could not be found.
 
-* If |MCC| was previously installed, the installation script cannot detect the location of mariadb_config.  Locate the directory where mariadb_config was installed and add this directory to your PATH.
+* If {{ MCC }} was previously installed, the installation script cannot detect the location of mariadb_config.  Locate the directory where mariadb_config was installed and add this directory to your PATH.
 
 ```bash
     # locate mariadb_config
     sudo find / -name "mariadb_config"
 ```
 
-* If |MCC| was not installed and the location of mariadb_config couldn't be detected, please install MariaDB Connector/C.
+* If {{ MCC }} was not installed and the location of mariadb_config couldn't be detected, please install MariaDB Connector/C.
 </details>
 
 <details>
 <summary>Error: struct st_mariadb_methods’ has no member named ‘db_execute_generate_request’</summary>
 
-Even if the correct version of |MCC| was installed, there are multiple mysql.h include files installed on your system, either from libmysql or an older |MCC| installation. This can be checked  by executing
+Even if the correct version of {{ MCC }} was installed, there are multiple mysql.h include files installed on your system, either from libmysql or an older {{ MCC }} installation. This can be checked  by executing
 
 ```bash
    .. code-block:: console
@@ -134,8 +134,8 @@ Open output.txt in your favourite editor and search for "search starts here" whe
 <details>
 <summary>My distribution doesn't provide a recent version of MariaDB Connector/C</summary>
 
-If you distribution doesn't provide a recent version of |MCC| (required version is |MCC_minversion| ) you either
-can download a version of |MCC| from the |MCDP| or build the package from source:
+If you distribution doesn't provide a recent version of {{ MCC }} (required version is |MCC_minversion| ) you either
+can download a version of {{ MCC }} from the |MCDP| or build the package from source:
 
 ```bash
       mkdir bld
@@ -166,6 +166,7 @@ and build and install it with
 ```bash
     python3 -m pip install .
 ```
+</details>
 
 ## Connecting
 
@@ -196,7 +197,7 @@ Another option is setting the environment variable MYSQL_UNIX_PORT.
 <details>
 <summary>Which authentication methods are supported by MariaDB Connector/Python?</summary>
 
-{{ MCP }} uses |MCC| for client-server communication. That means all authenticatoin plugins shipped together with |MCC| can be used for user authentication.
+{{ MCP }} uses {{ MCC }} for client-server communication. That means all authenticatoin plugins shipped together with {{ MCC }} can be used for user authentication.
 
 </details>
 
@@ -217,7 +218,7 @@ Python versions which reached their end of life are not officially supported. Wh
 <details>
 <summary>How can I see a transformed statement? Is there a mogrify() method available?</summary>
 
-No, {{ MCP }} Python uses binary protocol for client/server communication. Before a statement will be executed it will be parsed and parameter markers which are different than question marks will be replaced by question marks. Afterwards the statement will be sent together with data to the server. The transformed statement can be obtained by cursor.statement attribute
+No, {{ MCP }} uses binary protocol for client/server communication. Before a statement will be executed it will be parsed and parameter markers which are different than question marks will be replaced by question marks. Afterwards the statement will be sent together with data to the server. The transformed statement can be obtained by cursor.statement attribute
 
 Example:
 
@@ -231,9 +232,9 @@ Example:
 :::{note}
 There is no need to escape '%s' by '%%s' for the time conversion in DATE_FORMAT() function.
 :::
-</display>
+</details>
 
-<display>
+<details>
 <summary>Does MariaDB Connector/Python supports paramstyle "pyformat" ?</summary>
 
 The default paramstyle (see :PEP:`249`) is **qmark** (question mark) for parameter markers. For compatibility
@@ -243,12 +244,12 @@ styles.
 :::{note}
 Mixing different paramstyles within the same statement is not supported and will raise an exception.
 :::
-</display>
+</details>
 
 
 ## Transactions
 
-<display>
+<details>
 <summary>Previously inserted records disappeared after my program finished.</summary>
 
 Default for autocommit in {{ MCP }} is off, which means every transaction must be committed.
@@ -269,4 +270,4 @@ Uncommitted pending transactions are rolled back automatically when the connecti
     cursor.close()
     connection.close()
 ```
-</display>
+</details>
