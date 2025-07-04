@@ -1,0 +1,55 @@
+# The ConnectionPool class
+
+```{eval-rst}
+.. sectionauthor:: Georg Richter <georg@mariadb.com>
+```
+
+```{eval-rst}
+.. autoclass:: mariadb.ConnectionPool
+```
+
+## ConnectionPool methods
+
+```{eval-rst}
+.. automethod:: mariadb.ConnectionPool.add_connection
+```
+
+```{eval-rst}
+.. automethod:: mariadb.ConnectionPool.close
+```
+
+```{eval-rst}
+.. automethod:: mariadb.ConnectionPool.get_connection
+```
+
+```{eval-rst}
+.. automethod:: mariadb.ConnectionPool.set_config
+```
+
+## ConnectionPool attributes
+
+:::{versionadded} 1.1.0
+:::
+
+```{eval-rst}
+.. autoattribute:: mariadb.ConnectionPool.connection_count
+```
+
+```{eval-rst}
+.. autoattribute:: mariadb.ConnectionPool.max_size
+```
+
+```{eval-rst}
+.. autoattribute:: mariadb.ConnectionPool.pool_size
+```
+
+```{eval-rst}
+.. autoattribute:: mariadb.ConnectionPool.pool_name
+```
+
+:::{versionadded} 1.1.0
+:::
+
+```{eval-rst}
+.. autoattribute:: mariadb.ConnectionPool.pool_reset_connection
+```
