@@ -15,53 +15,37 @@ entries!
 The header files and libraries of the Python development package weren't properly installed.
 Use your package manager to install them system-wide:
 
-<details>
-<summary>Alpine (using apk):</summary>
+- Alpine (using apk):
 
 ```console
-    sudo apk add python3-dev
+sudo apk add python3-dev
 ```
-</details>
 
-<details>
-<summary>Ubuntu/Debian (using apt):</summary>
+- Ubuntu/Debian (using apt):
 
 ```console
-    sudo apt-get install python3-dev
+sudo apt-get install python3-dev
 ```
-</details>
-
-<details>
-<summary>CentOS/RHEL (using yum):</summary>
+- CentOS/RHEL (using yum):
 
 ```console
-    sudo yum install python3-devel
+sudo yum install python3-devel
 ```
-</details>
-
-<details>
-<summary>Fedora (using dnf)</summary>
+- Fedora (using dnf)
 
 ```console
-    sudo dnf install python3-devel
+sudo dnf install python3-devel
 ```
-</details>
-
-<details>
-<summary>MacOSX (using homebrew)</summary>
+- MacOSX (using homebrew):
 
 ```console
-    brew install mariadb-connector-c
+brew install mariadb-connector-c
 ```
-</details>
-
-<details>
-<summary>OpenSuse (using zypper):</summary>
+- OpenSuse (using zypper):
 
 ```console
-    sudo zypper in python3-devel
+sudo zypper in python3-devel
 ```
-</details>
 
 :::{note}
 The python3 development packages of your distribution might not cover all minor versions
@@ -78,7 +62,7 @@ replaced in {{ MCP }} 1.1.5 by packaging version functions.
 Before you can install {{ MCP }} you have to install the packaging module:
 
 ```console
-    pip3 install packaging
+pip3 install packaging
 ```
 </details>
 
@@ -91,7 +75,7 @@ you are trying to install.
 To determine the installed version of {{ MCC }}, execute the command
 
 ```console
-    mariadb_config --cc_version
+mariadb_config --cc_version
 ```
 
 - Check if your distribution can be upgraded to a more recent version of {{ MCC }}, which fits the requirements.
@@ -109,8 +93,8 @@ This error indicates that {{ MCC }}, an important dependency for client/server c
 * If {{ MCC }} was previously installed, the installation script cannot detect the location of mariadb_config.  Locate the directory where mariadb_config was installed and add this directory to your PATH.
 
 ```console
-    # locate mariadb_config
-    sudo find / -name "mariadb_config"
+# locate mariadb_config
+sudo find / -name "mariadb_config"
 ```
 
 * If {{ MCC }} was not installed and the location of mariadb_config couldn't be detected, please install MariaDB Connector/C.
@@ -122,10 +106,8 @@ This error indicates that {{ MCC }}, an important dependency for client/server c
 Even if the correct version of {{ MCC }} was installed, there are multiple mysql.h include files installed on your system, either from libmysql or an older {{ MCC }} installation. This can be checked  by executing
 
 ```console
-   .. code-block:: console
-
-      export CFLAGS="-V -E"
-      pip3 install mariadb > output.txt
+export CFLAGS="-V -E"
+pip3 install mariadb > output.txt
 ```
 
 Open output.txt in your favourite editor and search for "search starts here" where you can see the include files and paths used for the build.
@@ -138,11 +120,11 @@ If you distribution doesn't provide a recent version of {{ MCC }} (required vers
 can download a version of {{ MCC }} from the |MCDP| or build the package from source:
 
 ```console
-      mkdir bld
-      cd bld
-      cmake ..
-      make
-      make install
+mkdir bld
+cd bld
+cmake ..
+make
+make install
 ```
 </details>
 
@@ -158,13 +140,13 @@ No. If an issue was fixed, the fix will be available in the next release via Pyt
 To build {{ MCP }} from github sources, checkout latest sources from github
 
 ```console
-    git clone https://github.com/mariadb-corporation/mariadb-conector-pyhon.git
+git clone https://github.com/mariadb-corporation/mariadb-conector-pyhon.git
 ```
 
 and build and install it with
 
 ```console
-    python3 -m pip install .
+python3 -m pip install .
 ```
 </details>
 
@@ -178,7 +160,7 @@ and build and install it with
 * Check if the MariaDB server was correctly configured and uses the right socket file:
 
 ```console
-    mysqld --help --verbose | grep socket
+mysqld --help --verbose | grep socket
 ```
 
 If the socket is different and cannot be changed, you can specify the socket in your connection parameters.
@@ -190,7 +172,7 @@ If the socket is different and cannot be changed, you can specify the socket in 
 Another option is setting the environment variable MYSQL_UNIX_PORT.
 
 ```console
-    export MYSQL_UNIX_PORT=/path_to/mysql.sock
+export MYSQL_UNIX_PORT=/path_to/mysql.sock
 ```
 </details>
 
@@ -271,3 +253,4 @@ Uncommitted pending transactions are rolled back automatically when the connecti
     connection.close()
 ```
 </details>
+

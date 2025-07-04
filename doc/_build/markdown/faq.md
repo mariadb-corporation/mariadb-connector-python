@@ -15,48 +15,41 @@ entries!
 The header files and libraries of the Python development package weren’t properly installed.
 Use your package manager to install them system-wide:
 
-<details>
-<summary>Alpine (using apk):</summary>
+- Alpine (using apk):
+
 ```console
 sudo apk add python3-dev
 ```
 
-</details>
-<details>
-<summary>Ubuntu/Debian (using apt):</summary>
+- Ubuntu/Debian (using apt):
+
 ```console
 sudo apt-get install python3-dev
 ```
 
-</details>
-<details>
-<summary>CentOS/RHEL (using yum):</summary>
+- CentOS/RHEL (using yum):
+
 ```console
 sudo yum install python3-devel
 ```
 
-</details>
-<details>
-<summary>Fedora (using dnf)</summary>
+- Fedora (using dnf)
+
 ```console
 sudo dnf install python3-devel
 ```
 
-</details>
-<details>
-<summary>MacOSX (using homebrew)</summary>
+- MacOSX (using homebrew):
+
 ```console
 brew install mariadb-connector-c
 ```
 
-</details>
-<details>
-<summary>OpenSuse (using zypper):</summary>
+- OpenSuse (using zypper):
+
 ```console
 sudo zypper in python3-devel
 ```
-
-</details>
 
 #### NOTE
 The python3 development packages of your distribution might not cover all minor versions

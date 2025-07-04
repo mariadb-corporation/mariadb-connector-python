@@ -49,42 +49,42 @@ entries!</p>
 <summary>"Python.h: No such file or directory"</summary>
 <p>The header files and libraries of the Python development package weren’t properly installed.
 Use your package manager to install them system-wide:</p>
-<details>
-<summary>Alpine (using apk):</summary>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    sudo apk add python3-dev</span>
+<ul class="simple">
+<li><p>Alpine (using apk):</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo apk add python3-dev</span>
 </pre></div>
 </div>
-</details>
-<details>
-<summary>Ubuntu/Debian (using apt):</summary>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    sudo apt-get install python3-dev</span>
+<ul class="simple">
+<li><p>Ubuntu/Debian (using apt):</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo apt-get install python3-dev</span>
 </pre></div>
 </div>
-</details>
-<details>
-<summary>CentOS/RHEL (using yum):</summary>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    sudo yum install python3-devel</span>
+<ul class="simple">
+<li><p>CentOS/RHEL (using yum):</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo yum install python3-devel</span>
 </pre></div>
 </div>
-</details>
-<details>
-<summary>Fedora (using dnf)</summary>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    sudo dnf install python3-devel</span>
+<ul class="simple">
+<li><p>Fedora (using dnf)</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo dnf install python3-devel</span>
 </pre></div>
 </div>
-</details>
-<details>
-<summary>MacOSX (using homebrew)</summary>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    brew install mariadb-connector-c</span>
+<ul class="simple">
+<li><p>MacOSX (using homebrew):</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">brew install mariadb-connector-c</span>
 </pre></div>
 </div>
-</details>
-<details>
-<summary>OpenSuse (using zypper):</summary>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    sudo zypper in python3-devel</span>
+<ul class="simple">
+<li><p>OpenSuse (using zypper):</p></li>
+</ul>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">sudo zypper in python3-devel</span>
 </pre></div>
 </div>
-</details>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The python3 development packages of your distribution might not cover all minor versions
@@ -96,7 +96,7 @@ of python3. If you are using python3.10 you may need install python3.10-dev.</p>
 <p>With deprecation of distutils (see :PEP:<code class="docutils literal notranslate"><span class="pre">632</span></code>) version functions of distutils module were
 replaced in MariaDB Connector/Python 1.1.5 by packaging version functions.</p>
 <p>Before you can install MariaDB Connector/Python you have to install the packaging module:</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    pip3 install packaging</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">pip3 install packaging</span>
 </pre></div>
 </div>
 </details>
@@ -105,7 +105,7 @@ replaced in MariaDB Connector/Python 1.1.5 by packaging version functions.</p>
 <p>The previously installed version of MariaDB Connector/C is too old and cannot be used for the MariaDB Connector/Python version
 you are trying to install.</p>
 <p>To determine the installed version of MariaDB Connector/C, execute the command</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    mariadb_config --cc_version</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">mariadb_config --cc_version</span>
 </pre></div>
 </div>
 <ul class="simple">
@@ -121,8 +121,8 @@ you are trying to install.</p>
 <ul class="simple">
 <li><p>If MariaDB Connector/C was previously installed, the installation script cannot detect the location of mariadb_config.  Locate the directory where mariadb_config was installed and add this directory to your PATH.</p></li>
 </ul>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">    # </span>locate<span class="w"> </span>mariadb_config
-<span class="go">    sudo find / -name &quot;mariadb_config&quot;</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp"># </span>locate<span class="w"> </span>mariadb_config
+<span class="go">sudo find / -name &quot;mariadb_config&quot;</span>
 </pre></div>
 </div>
 <ul class="simple">
@@ -132,10 +132,8 @@ you are trying to install.</p>
 <details>
 <summary>Error: struct st_mariadb_methods’ has no member named ‘db_execute_generate_request’</summary>
 <p>Even if the correct version of MariaDB Connector/C was installed, there are multiple mysql.h include files installed on your system, either from libmysql or an older MariaDB Connector/C installation. This can be checked  by executing</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">   .. code-block:: console</span>
-
-<span class="go">      export CFLAGS=&quot;-V -E&quot;</span>
-<span class="go">      pip3 install mariadb &gt; output.txt</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">export CFLAGS=&quot;-V -E&quot;</span>
+<span class="go">pip3 install mariadb &gt; output.txt</span>
 </pre></div>
 </div>
 <p>Open output.txt in your favourite editor and search for “search starts here” where you can see the include files and paths used for the build.</p>
@@ -144,11 +142,11 @@ you are trying to install.</p>
 <summary>My distribution doesn't provide a recent version of MariaDB Connector/C</summary>
 <p>If you distribution doesn’t provide a recent version of MariaDB Connector/C (required version is |MCC_minversion| ) you either
 can download a version of MariaDB Connector/C from the |MCDP| or build the package from source:</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">      mkdir bld</span>
-<span class="go">      cd bld</span>
-<span class="go">      cmake ..</span>
-<span class="go">      make</span>
-<span class="go">      make install</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">mkdir bld</span>
+<span class="go">cd bld</span>
+<span class="go">cmake ..</span>
+<span class="go">make</span>
+<span class="go">make install</span>
 </pre></div>
 </div>
 </details>
@@ -159,11 +157,11 @@ can download a version of MariaDB Connector/C from the |MCDP| or build the packa
 <details>
 <summary>How can I build an actual version from github sources?</summary>
 <p>To build MariaDB Connector/Python from github sources, checkout latest sources from github</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    git clone https://github.com/mariadb-corporation/mariadb-conector-pyhon.git</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">git clone https://github.com/mariadb-corporation/mariadb-conector-pyhon.git</span>
 </pre></div>
 </div>
 <p>and build and install it with</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    python3 -m pip install .</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">python3 -m pip install .</span>
 </pre></div>
 </div>
 </details>
@@ -176,7 +174,7 @@ can download a version of MariaDB Connector/C from the |MCDP| or build the packa
 <li><p>Check if MariaDB server has been started.</p></li>
 <li><p>Check if the MariaDB server was correctly configured and uses the right socket file:</p></li>
 </ul>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    mysqld --help --verbose | grep socket</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">mysqld --help --verbose | grep socket</span>
 </pre></div>
 </div>
 <p>If the socket is different and cannot be changed, you can specify the socket in your connection parameters.</p>
@@ -184,7 +182,7 @@ can download a version of MariaDB Connector/C from the |MCDP| or build the packa
 </pre></div>
 </div>
 <p>Another option is setting the environment variable MYSQL_UNIX_PORT.</p>
-<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">    export MYSQL_UNIX_PORT=/path_to/mysql.sock</span>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">export MYSQL_UNIX_PORT=/path_to/mysql.sock</span>
 </pre></div>
 </div>
 </details>
