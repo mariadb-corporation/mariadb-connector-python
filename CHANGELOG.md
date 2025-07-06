@@ -1,5 +1,21 @@
 # Release history
 
+## MariaDB Connector/Python 1.1.13
+
+Release date: Jul 7 2025
+
+## Notable changes
+
+- If a cursor will be reused, methods execute(), executemany() and callproc() will aways reset the cursor to avoid possible memory leaks
+- Fixed various memory leaks in unittest suite
+
+## Bug fixes
+
+* [CONPY-313](https://jira.mariadb.org/browse/CONPY-313): Raise NotSupportedError for unsupported float and Decimal values like "nan" and "inf"
+* [CONPY-300](https://jira.mariadb.org/browse/CONPY-306): Fix crash when getting invalid unicode from server
+* [CONPY-314](https://jira.mariadb.org/browse/CONPY-306): Always use binary protocol for callproc() method
+
+
 ## MariaDB Connector/Python 1.1.12
 
 Release date: Feb 24 2025
