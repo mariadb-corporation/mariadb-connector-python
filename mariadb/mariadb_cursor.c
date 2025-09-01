@@ -426,7 +426,7 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
             mysql_free_result(self->result);
         }
         /* clear pending result sets */
-        if (self->connection->mysql)
+        if (self->connection && self->connection->mysql)
         {
             do {
                 MYSQL_RES *res;
