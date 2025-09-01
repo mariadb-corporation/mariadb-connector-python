@@ -344,8 +344,10 @@ static int MrdbCursor_traverse(
 
 static int MrdbCursor_tpclear(MrdbCursor *self)
 {
-    Py_CLEAR(self->connection);
-    Py_CLEAR(self->data);
+    if (self->connection)
+        Py_CLEAR(self->connection);
+    if (self->data)
+        Py_CLEAR(self->data);
     return 0;
 }
 
