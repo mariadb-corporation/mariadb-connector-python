@@ -3,7 +3,7 @@ name: Run CI Tests
 
 on:
   push:
-    branches: ['1.1', '1.0']
+    branches: ['1.1', '1.0', 'sqlalchemy']
   pull_request:
   workflow_dispatch:
   schedule:
@@ -38,7 +38,7 @@ jobs:
         name: build matrix
         uses: rusher/mariadb-test-build-matrix@main
         with:
-          additional-matrix: '[{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.9"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.10"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.11"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "pypy3.11", "continue-on-error": true}]'
+          additional-matrix: '[{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.9"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.10"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.11"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.13"}, {"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "pypy3.11", "continue-on-error": true}]'
 
   ci:
     name: ${{ matrix.name }} ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
@@ -66,6 +66,7 @@ jobs:
           registry-user: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_USER || (secrets.DOCKER_PWD != '' && 'mariadbtest' || '') }}
           registry-password: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_TOKEN || secrets.DOCKER_PWD }}
           os: ${{ matrix.os }}
+          init-script-folder: ${{ format('{0}/.github/workflows/init', github.workspace) }}
 
       - uses: actions/setup-python@v5
         id: setup-python
@@ -78,6 +79,14 @@ jobs:
           branch: '3.4'
           owner: 'mariadb-corporation'
           repository: 'mariadb-connector-c'
+
+      - name: Clone SQLAlchemy
+        if: ${{ startsWith(matrix.python, '3.13') }}
+        uses: GuillaumeFalourd/clone-github-repo-action@v2.3
+        with:
+          branch: main
+          owner: 'sqlalchemy'
+          repository: 'sqlalchemy'
 
       - name: c/c make ubuntu
         if: ${{ startsWith(matrix.os, 'ubuntu') }}
@@ -113,6 +122,23 @@ jobs:
           cmake --install . --config RelWithDebInfo
           echo "MARIADB_CC_INSTALL_DIR=$MARIADB_CC_INSTALL_DIR" >> $env:GITHUB_ENV
           echo "MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL_DIR/lib/mariadb/plugin" >> $env:GITHUB_ENV
+
+      - name: Run SQLAlchemy tests
+        if: ${{ startsWith(matrix.python, '3.13') }}
+        shell: bash
+        run: |
+          python --version
+          python -m pip install .
+          python -m pip install pytest typing_extensions
+          cd ${{ github.workspace }}/sqlalchemy
+          python -m pytest --dburi=mysql+mariadbconnector://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB --backend-only
+        env:
+          TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
+          TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
+          TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
+          TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
+          TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
+          TEST_DB: ${{ env.MYSQL_TEST_DB }}
 
       - name: Run test suite
         shell: bash
