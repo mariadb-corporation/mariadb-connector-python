@@ -112,7 +112,7 @@ class ConnectionPool(object):
                     except mariadb.Error:
                         # if an error occurred, close all connections
                         # and raise exception
-                        for j in range(0, len(self._connections_free)):
+                        for j in reversed(range(0, len(self._connections_free))):
                             try:
                                 self._connections_free[j].close()
                             except mariadb.Error:
