@@ -45,11 +45,7 @@ jobs:
     needs: setup
     timeout-minutes: 50
     strategy:
-      matrix: 
-        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
-        exclude:
-          - db-type: "enterprise"
-            run-condition: "${{ github.event_name == 'pull_request' || !startsWith(github.repository, 'mariadb-corporation/') }}"
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.continue-on-error || false }}
@@ -100,11 +96,7 @@ jobs:
     needs: setup
     timeout-minutes: 50
     strategy:
-      matrix: 
-        include: ${{ fromJSON(needs.setup.outputs.matrix) }}
-        exclude:
-          - db-type: "enterprise"
-            run-condition: "${{ github.event_name == 'pull_request' || !startsWith(github.repository, 'mariadb-corporation/') }}"
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.continue-on-error || false }}
