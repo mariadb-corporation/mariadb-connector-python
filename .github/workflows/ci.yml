@@ -199,6 +199,7 @@ jobs:
           python --version
           python -m pip install pytest typing_extensions
           python -m pip install .
+          cd mariadb_c && python -m pip install . && cd ..
           python -m pytest tests -v -s
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
