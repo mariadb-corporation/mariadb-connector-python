@@ -1,5 +1,5 @@
 # Import MariaDB Connector/Python module
-import mariadb
+import mariadb_c
 
 # connection parameters
 conn_params= {
@@ -10,7 +10,7 @@ conn_params= {
 }
 
 # Establish a connection
-connection= mariadb.connect(**conn_params)
+connection= mariadb_c.connect(**conn_params)
 
 cursor= connection.cursor()
 

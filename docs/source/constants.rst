@@ -42,14 +42,6 @@ CAPABILITY
 
 
 --------------
-CLIENT
---------------
-
-.. automodule:: mariadb.constants.CLIENT
-
-   *Since version 1.1.0, deprecated in 1.1.4*
-
---------------
 CURSOR
 --------------
 

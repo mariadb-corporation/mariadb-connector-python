@@ -12,10 +12,10 @@
 #
 import os
 import sys
-import mariadb
+import mariadb_c
 from typing import Sequence
 from datetime import datetime
-print(mariadb.__path__)
+print(mariadb_c.__path__)
 sys.path.insert(0, os.path.abspath('../..'))
 sys.setrecursionlimit(1500)
 
@@ -27,9 +27,9 @@ copyright = '2019-%s MariaDB Corporation and Georg Richter' % datetime.now().yea
 author = 'Georg Richter'
 
 # The full version, including alpha/beta/rc tags
-release = mariadb.__version__
-if len(mariadb.__version_info__) > 3:
-    release= release + "-" + mariadb.__version_info__[3]
+release = mariadb_c.__version__
+if len(mariadb_c.__version_info__) > 3:
+    release= release + "-" + mariadb_c.__version_info__[3]
 add_module_names= False
 
 

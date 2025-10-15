@@ -1,11 +1,31 @@
 recursive-include testing/test/ *.py
-prune testing/benchmarks
-exclude testing/bench*.py
-recursive-include include *.h
-include LICENSE
-include mariadb_windows.py
-include mariadb_posix.py
-include MANIFEST.in
-include MANIFEST
+prune test
 include README.md
-include site.cfg
+include LICENSE
+include CHANGELOG.md
+include pyproject.toml
+include setup.py
+include SOCKET_IMPLEMENTATION.md
+recursive-include mariadb *.py *.pyi
+recursive-include mariadb/src *.py *.pyi
+recursive-include mariadb/src/constants *.py
+recursive-include mariadb/src/impl *.py
+recursive-include mariadb/src/impl/client *.py
+recursive-include mariadb/src/impl/client/socket *.py
+recursive-include mariadb/src/impl/client/result *.py
+recursive-include mariadb/src/impl/message *.py
+recursive-include mariadb/src/impl/message/client *.py
+recursive-include mariadb/src/impl/export *.py
+recursive-include mariadb_c *.py *.c *.h *.toml
+exclude mariadb_c/src/constants
+recursive-include mariadb_pool *.py *.toml
+recursive-include tests *.py
+recursive-include benchmarks *.py
+recursive-include docs *.py *.rst *.txt *.md
+recursive-include example_*.py
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * .DS_Store
+recursive-exclude * *.so
+recursive-exclude * *.dylib
+recursive-exclude * *.dll

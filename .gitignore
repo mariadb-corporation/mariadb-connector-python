@@ -29,6 +29,10 @@
 # Build/Dist
 build/
 dist/
+.idea/
+.venv/
+.pytest_cache/
+mariadb.egg-info/
 
 # Cache
 __pycache__
@@ -50,3 +54,4 @@ RelWithDebInfo
 
 #vim backups
 *.*~
+/mariadb/src/mariadb.egg-info/

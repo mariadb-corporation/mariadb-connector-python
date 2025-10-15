@@ -1,0 +1,64 @@
+[build-system]
+requires = [
+  "setuptools>=68",
+  "wheel",
+  "packaging",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mariadb_c"
+version = "2.0.0-dev"
+description = "Python MariaDB extension"
+readme = {file = "README.md", content-type = "text/markdown"}
+requires-python = ">=3.10"
+license = {text = "LGPL 2.1"}
+authors = [
+  {name = "Georg Richter"}
+]
+keywords = ["MariaDB", "MySQL", "database", "connector"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Environment :: MacOS X",
+  "Environment :: Win32 (MS Windows)",
+  "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+  "Programming Language :: C",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX",
+  "Intended Audience :: End Users/Desktop",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Topic :: Database",
+]
+dependencies = [
+  "packaging",
+]
+
+[project.urls]
+Homepage = "https://www.github.com/mariadb-corporation/mariadb-connector-python"
+Documentation = "https://mariadb-corporation.github.io/mariadb-connector-python/"
+Repository = "https://www.github.com/mariadb-corporation/mariadb-connector-python"
+"Bug Tracker" = "https://jira.mariadb.org/"
+"Source Code" = "https://www.github.com/mariadb-corporation/mariadb-connector-python"
+
+[tool.setuptools.packages.find]
+include = ["mariadb_c*"]
+
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = ["tests"]

@@ -38,10 +38,61 @@ jobs:
         name: build matrix
         uses: mariadb-corporation/connector-ci-build-matrix@main
         with:
-          additional-matrix: '[{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.9"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.10"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.11"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.13"}, {"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.14"}, {"name": "MariaDB 11.4", "os": "windows-latest", "db-type": "community", "db-tag": "11.4", "python": "3.14"}, {"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "pypy3.11", "continue-on-error": true}]'
+          additional-matrix: '[{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.10"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.11"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"},{"name": "MariaDB 11.4", "os": "windows-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"}, {"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "pypy3.11", "continue-on-error": true}]'
 
-  ci:
-    name: ${{ matrix.name }} ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
+  ci-pure-python:
+    name: ${{ matrix.name }} (Pure Python) ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
+    needs: setup
+    timeout-minutes: 50
+    strategy:
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.continue-on-error || false }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Test Environment
+        id: setup-env
+        uses: mariadb-corporation/connector-ci-setup@master
+        with:
+          node-version: ${{ matrix.node }}
+          db-type: ${{ matrix.db-type }}
+          db-tag: ${{ matrix.db-tag }}
+          test-db-password: ${{ env.MYSQL_TEST_PASSWD }}
+          test-db-database: ${{ env.MYSQL_TEST_DB }}
+          test-db-port: ${{ env.MYSQL_TEST_PORT }}
+          additional-conf: ${{ matrix.additional-conf || '' }}
+          registry-user: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_USER || (secrets.DOCKER_PWD != '' && 'mariadbtest' || '') }}
+          registry-password: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_TOKEN || secrets.DOCKER_PWD }}
+          os: ${{ matrix.os }}
+          init-script-folder: ${{ format('{0}/.github/workflows/init', github.workspace) }}
+
+      - uses: actions/setup-python@v5
+        id: setup-python
+        with:
+          python-version: ${{ matrix.python || '3.13' }}
+          allow-prereleases: true
+
+      - name: Run test suite (Pure Python)
+        shell: bash
+        run: |
+          python --version
+          python -m pip install .
+          python -m pip install pytest typing_extensions
+          python -m pytest tests -v -s
+        env:
+          TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
+          TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
+          TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
+          TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
+          TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
+          LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
+          PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
+          MARIADB_PYTHON_CONNECTOR: mariadb
+
+  ci-c-extension:
+    name: ${{ matrix.name }} (C Extension) ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
     needs: setup
     timeout-minutes: 50
     strategy:
@@ -145,9 +196,9 @@ jobs:
         shell: bash
         run: |
           python --version
+          python -m pip install pytest typing_extensions
           python -m pip install .
-          cd testing
-          python -m unittest discover -v
+          python -m pytest tests -v -s
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
           TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
@@ -156,3 +207,4 @@ jobs:
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
           LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
+          MARIADB_PYTHON_CONNECTOR: mariadb_c
