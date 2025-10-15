@@ -4,7 +4,7 @@
 import datetime
 import unittest
 
-from mariadb_c.constants import FIELD_TYPE
+from mariadb.constants import FIELD_TYPE
 from ..base_test import create_connection
 
 

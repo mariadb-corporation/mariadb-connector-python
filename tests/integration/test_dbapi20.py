@@ -98,7 +98,7 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     # The self.driver module. This should be the module where the 'connect'
     # method is to be found
-    driver = mariadb_c
+    driver = mariadb
     connect_args = ()  # List of arguments to pass to connect
     connect_kw_args = conf()  # Keyword arguments for connect
     table_prefix = 'dbapi20test_'  # If you need to specify a prefix for tables

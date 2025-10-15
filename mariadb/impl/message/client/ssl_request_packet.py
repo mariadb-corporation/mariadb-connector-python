@@ -25,8 +25,8 @@ See https://mariadb.com/kb/en/connection/#sslrequest-packet
 """
 
 
-from mariadb.src.impl.client.context import Context
-from mariadb.src.impl.client.socket.packet_writer import PacketWriter
+from mariadb.impl.client.context import Context
+from mariadb.impl.client.socket.packet_writer import PacketWriter
 from ..client_message import ClientMessage
 from .... import constants
 

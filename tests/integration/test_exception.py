@@ -21,12 +21,12 @@ class TestException(unittest.TestCase):
         cursor = self.connection.cursor()
         try:
             cursor.execute("WRONG QUERY")
-        except mariadb_c.ProgrammingError as err:
+        except mariadb.ProgrammingError as err:
             self.assertEqual(err.sqlstate, "42000")
             self.assertEqual(err.errno, 1064)
             self.assertTrue(err.errmsg.find("You have an error "
                                             "in your SQL syntax") > -1)
-            if mariadb_c._have_asan:
+            if mariadb._have_asan:
                 tb = sys.exc_info()[2]
                 traceback.clear_frames(tb)
             pass
@@ -36,11 +36,11 @@ class TestException(unittest.TestCase):
     def test_db_unknown_exception(self):
         try:
             create_connection({"database": "unknown"})
-        except mariadb_c.ProgrammingError as err:
+        except mariadb.ProgrammingError as err:
             self.assertEqual(err.sqlstate, "42000")
             self.assertEqual(err.errno, 1049)
             self.assertTrue(err.errmsg.find("Unknown database 'unknown'") > -1)
-            if mariadb_c._have_asan:
+            if mariadb._have_asan:
                 tb = sys.exc_info()[2]
                 traceback.clear_frames(tb)
             pass
@@ -49,7 +49,7 @@ class TestException(unittest.TestCase):
         start = datetime.today()
         try:
             create_connection({"connect_timeout": 1, "host": "8.8.8.8"})
-        except mariadb_c.OperationalError as err:
+        except mariadb.OperationalError as err:
             self.assertEqual(err.sqlstate, "HY000")
             self.assertEqual(err.errno, 2002)
             self.assertTrue(err.errmsg.find("server on '8.8.8.8'") > -1)
@@ -58,7 +58,7 @@ class TestException(unittest.TestCase):
             self.assertEqual(difference.days, 0)
             self.assertGreaterEqual(difference.total_seconds(), 0.95,
                                     "Connection should have timed out after ~1 second")
-            if mariadb_c._have_asan:
+            if mariadb._have_asan:
                 tb = sys.exc_info()[2]
                 traceback.clear_frames(tb)
             pass

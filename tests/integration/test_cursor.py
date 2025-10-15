@@ -11,7 +11,7 @@ import array
 import time
 
 import mariadb
-from mariadb_c.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CLIENT
+from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CAPABILITY as CLIENT
 
 from ..base_test import create_connection, is_maxscale, is_mysql
 
@@ -70,7 +70,7 @@ class TestCursor(unittest.TestCase):
         for val in invalid:
             try:
                 cursor.execute("SELECT ?", (decimal.Decimal(val),))
-            except mariadb_c.NotSupportedError as e:
+            except mariadb.NotSupportedError as e:
                 self.assertEqual(f"'{decimal.Decimal(val).__str__()}'" in str(e), True)
                 pass
 
@@ -78,7 +78,7 @@ class TestCursor(unittest.TestCase):
         for val in invalid:
             try:
                 cursor.execute("SELECT ?", (float(val),))
-            except mariadb_c.NotSupportedError as e:
+            except mariadb.NotSupportedError as e:
                 self.assertEqual(f"'{float(val)}'" in str(e), True)
                 pass
 
@@ -98,7 +98,7 @@ class TestCursor(unittest.TestCase):
             time.sleep(5)
             try:
                  cursor.fetchone()
-            except mariadb_c.ProgrammingError:
+            except mariadb.ProgrammingError:
                  pass
 
             cursor.close()
@@ -112,7 +112,7 @@ class TestCursor(unittest.TestCase):
             time.sleep(5)
             try:
                 cursor.fetchone()
-            except mariadb_c.ProgrammingError:
+            except mariadb.ProgrammingError:
                 pass
 
             # reeusing cursor should work
@@ -173,7 +173,7 @@ class TestCursor(unittest.TestCase):
         empty= array.array('f', [])
         try:
             cursor.execute("INSERT INTO t_vector VALUES (?,?)", (1, empty))
-        except mariadb_c.IntegrityError:
+        except mariadb.IntegrityError:
             pass
 
         # Valid vector
@@ -330,11 +330,11 @@ class TestCursor(unittest.TestCase):
 
         # test Errors
         # a) if no select was executed
-        self.assertRaises(mariadb_c.Error, cursor.fetchall)
+        self.assertRaises(mariadb.Error, cursor.fetchall)
         # b ) if cursor was not executed
         del cursor
         cursor = self.connection.cursor(buffered=False)
-        self.assertRaises(mariadb_c.Error, cursor.fetchall)
+        self.assertRaises(mariadb.Error, cursor.fetchall)
 
         cursor.execute("SELECT id, name, city FROM test_fetchmany ORDER BY id")
         self.assertEqual(0, cursor.rowcount)
@@ -418,7 +418,7 @@ class TestCursor(unittest.TestCase):
         if is_maxscale():
             self.skipTest("Test doesn't work with maxscale")
         cursor = self.connection.cursor()
-        fieldinfo = mariadb_c.fieldinfo()
+        fieldinfo = mariadb.fieldinfo()
         cursor.execute("CREATE TEMPORARY TABLE test_xfield_types ("
                        "a tinyint not null auto_increment primary "
                        "key, b smallint, c int, d bigint, e float, "
@@ -603,11 +603,11 @@ class TestCursor(unittest.TestCase):
                        "(1, 'foo', 'blabla', now(), 10.2)")
         cursor.execute("SELECT * FROM test_dbapi_type ORDER BY a")
         expected_typecodes = [
-            mariadb_c.NUMBER,
-            mariadb_c.STRING,
-            mariadb_c.BINARY,
-            mariadb_c.DATETIME,
-            mariadb_c.NUMBER
+            mariadb.NUMBER,
+            mariadb.STRING,
+            mariadb.BINARY,
+            mariadb.DATETIME,
+            mariadb.NUMBER
         ]
         cursor.fetchone()
         typecodes = [row[1] for row in cursor.description]
@@ -620,7 +620,7 @@ class TestCursor(unittest.TestCase):
         tpl = (1, 2, 3)
         try:
             cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
-        except mariadb_c.ProgrammingError:
+        except mariadb.ProgrammingError:
             pass
         del cursor
 
@@ -668,7 +668,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("set @a:=1")
         try:
             cursor.fetchone()
-        except mariadb_c.ProgrammingError:
+        except mariadb.ProgrammingError:
             pass
         del cursor
 
@@ -760,7 +760,7 @@ class TestCursor(unittest.TestCase):
                 try:
                     cursor.execute("INSERT INTO test.t1(fname, sname) VALUES (?, ?)",
                                    (("Walker", "Percy"), ("Flannery", "O'Connor")))
-                except (mariadb_c.ProgrammingError, mariadb_c.NotSupportedError):
+                except (mariadb.ProgrammingError, mariadb.NotSupportedError):
                     pass
 
     def test_scroll(self):
@@ -770,7 +770,7 @@ class TestCursor(unittest.TestCase):
 
         try:
             cursor.scroll(0)
-        except mariadb_c.ProgrammingError:
+        except mariadb.ProgrammingError:
             pass
 
         cursor.scroll(2, mode='relative')
@@ -785,7 +785,7 @@ class TestCursor(unittest.TestCase):
 
         try:
             cursor.scroll(1)
-        except mariadb_c.DatabaseError:
+        except mariadb.DatabaseError:
             pass
 
         cursor.scroll(0, mode='absolute')
@@ -798,7 +798,7 @@ class TestCursor(unittest.TestCase):
 
         try:
             cursor.scroll(-2, mode='absolute')
-        except mariadb_c.ProgrammingError:
+        except mariadb.ProgrammingError:
             pass
 
         del cursor
@@ -869,7 +869,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.closed, True)
         try:
             cursor.execute("set @a:=1")
-        except mariadb_c.ProgrammingError:
+        except mariadb.ProgrammingError:
             pass
         del cursor
 
@@ -877,7 +877,7 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         try:
             cursor.execute("")
-        except mariadb_c.ProgrammingError:
+        except mariadb.ProgrammingError:
             pass
         del cursor
 
@@ -1118,7 +1118,7 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0], "foo")
             try:
                 cursor.execute("SELECT 'bar'")
-            except mariadb_c.ProgrammingError:
+            except mariadb.ProgrammingError:
                 pass
 
     def test_conpy47(self):
@@ -1440,13 +1440,13 @@ class TestCursor(unittest.TestCase):
             with conn.cursor() as cursor:
                 try:
                     cursor.execute("SELECT /*!50701 ? */", (1,))
-                except mariadb_c.ProgrammingError:
+                except mariadb.ProgrammingError:
                     pass
 
             with conn.cursor() as cursor:
                 try:
                     cursor.execute("SELECT /*!250701 ? */", (1,))
-                except mariadb_c.ProgrammingError:
+                except mariadb.ProgrammingError:
                     pass
 
     def check_closed(self):
@@ -1457,14 +1457,14 @@ class TestCursor(unittest.TestCase):
 
             try:
                 cursor1.execute("select 1")
-            except (mariadb_c.ProgrammingError):
+            except (mariadb.ProgrammingError):
                 pass
             del cursor1
 
             conn.close()
             try:
                 cursor2.execute("select 1")
-            except (mariadb_c.ProgrammingError):
+            except (mariadb.ProgrammingError):
                 pass
             del cursor2
 
@@ -1537,32 +1537,32 @@ class TestCursor(unittest.TestCase):
 
             try:
                 cursor.execute("select ?", {"noname": "unknown"})
-            except (mariadb_c.ProgrammingError):
+            except (mariadb.ProgrammingError):
                 pass
 
             try:
                 cursor.execute("select %(name)s", (1,))
-            except (mariadb_c.ProgrammingError):
+            except (mariadb.ProgrammingError):
                 pass
 
             try:
                 cursor.execute("select %(name)s", {"noname": "unknown"})
-            except (mariadb_c.ProgrammingError):
+            except (mariadb.ProgrammingError):
                 pass
 
             try:
                 cursor.execute("select ?")
-            except (mariadb_c.ProgrammingError):
+            except (mariadb.ProgrammingError):
                 pass
 
             try:
                 cursor.execute("select ?,?,?", (1, 2))
-            except (mariadb_c.ProgrammingError):
+            except (mariadb.ProgrammingError):
                 pass
 
             try:
                 cursor.execute("select ?,?,?", (1, 2, 3, 4))
-            except (mariadb_c.ProgrammingError):
+            except (mariadb.ProgrammingError):
                 pass
 
             cursor.close()
@@ -1572,7 +1572,7 @@ class TestCursor(unittest.TestCase):
             with conn.cursor() as cursor:
                 try:
                     cursor.execute("SELECT")
-                except mariadb_c.ProgrammingError as err:
+                except mariadb.ProgrammingError as err:
                     self.assertEqual(err.errno, ERR.ER_PARSE_ERROR)
 
     def test_unicode_parsing(self):
@@ -1725,12 +1725,12 @@ class TestCursor(unittest.TestCase):
 
             # text protocol
             cursor.execute("select a from t1")
-            self.assertEqual(cursor.description[0][1], mariadb_c.STRING);
+            self.assertEqual(cursor.description[0][1], mariadb.STRING);
             cursor.fetchall()
 
             # binary protcol
             cursor.execute("select a from t1 WHERE 1=?", (1,))
-            self.assertEqual(cursor.description[0][1], mariadb_c.STRING);
+            self.assertEqual(cursor.description[0][1], mariadb.STRING);
             cursor.fetchall()
 
             cursor.close()

@@ -28,11 +28,11 @@ class TestCA(unittest.TestCase):
         # parameter too long:
         try:
             xid = con.xid(0, "a" * 65, "bar")
-        except mariadb_c.ProgrammingError:
+        except mariadb.ProgrammingError:
             pass
         try:
             xid = con.xid(0, "foo", "b" * 65)
-        except mariadb_c.ProgrammingError:
+        except mariadb.ProgrammingError:
             pass
 
     def test_tpc_begin(self):
@@ -40,7 +40,7 @@ class TestCA(unittest.TestCase):
         xid = con.xid(0, "1234567890", "2345")
         try:
             con.tpc_begin(xid)
-        except mariadb_c.NotSupportedError:
+        except mariadb.NotSupportedError:
             pass
 
     def test_tpc_commit(self):
@@ -104,7 +104,7 @@ class TestCA(unittest.TestCase):
             cursor.execute("BEGIN")
             cursor.execute("SELECT 1")
             cursor.close()
-            self.assertRaises(mariadb_c.IntegrityError,
+            self.assertRaises(mariadb.IntegrityError,
                               con.tpc_begin, xid)
         finally:
             con.close()
@@ -115,7 +115,7 @@ class TestCA(unittest.TestCase):
             xid = con.xid(0, "1234567897", "2345")
             con.tpc_begin(xid)
 
-            self.assertRaises(mariadb_c.ProgrammingError, con.commit)
+            self.assertRaises(mariadb.ProgrammingError, con.commit)
         finally:
             con.close()
 
@@ -127,7 +127,7 @@ class TestCA(unittest.TestCase):
             xid = con.xid(0, "1234567898", "2345")
             con.tpc_begin(xid)
 
-            self.assertRaises(mariadb_c.ProgrammingError, con.rollback)
+            self.assertRaises(mariadb.ProgrammingError, con.rollback)
         finally:
             con.close()
 

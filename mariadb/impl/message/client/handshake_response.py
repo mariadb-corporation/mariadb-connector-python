@@ -26,8 +26,8 @@ Equivalent to the Java HandshakeResponse class.
 import hashlib
 from typing import Any, Optional
 
-from mariadb.src.impl.client.context import Context
-from mariadb.src.impl.client.socket.packet_writer import PacketWriter
+from mariadb.impl.client.context import Context
+from mariadb.impl.client.socket.packet_writer import PacketWriter
 from ..client_message import ClientMessage
 from ...configuration import Configuration
 from .... import constants

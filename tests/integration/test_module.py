@@ -17,8 +17,8 @@ class TestConnection(unittest.TestCase):
         del self.connection
 
     def test_conpy_63(self):
-        version = mariadb_c.__version__
-        version_info = mariadb_c.__version_info__
+        version = mariadb.__version__
+        version_info = mariadb.__version_info__
 
         str_version = list(map(str, version.split('.')))
 

@@ -81,11 +81,10 @@ Changelog = "https://github.com/mariadb-corporation/mariadb-connector-python/blo
 mariadb-test = "mariadb.testing:main"
 
 [tool.setuptools]
-package-dir = {"mariadb" = "mariadb/src"}
 include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["mariadb/src"]
+where = ["mariadb"]
 include = ["*"]
 
 [tool.setuptools.package-data]
