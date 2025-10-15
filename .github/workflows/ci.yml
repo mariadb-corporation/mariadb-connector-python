@@ -46,6 +46,7 @@ jobs:
     timeout-minutes: 50
     strategy:
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    if: ${{ !matrix.run-condition || fromJSON(matrix.run-condition) }}
 
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.continue-on-error || false }}
@@ -97,6 +98,7 @@ jobs:
     timeout-minutes: 50
     strategy:
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    if: ${{ !matrix.run-condition || fromJSON(matrix.run-condition) }}
 
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.continue-on-error || false }}
