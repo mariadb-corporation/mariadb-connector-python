@@ -71,9 +71,8 @@ class Context:
         
         # Connection state
         self.database: Optional[str] = None
-        self.charset: str = "utf8mb4"
-        self.collation: str = "utf8mb4_general_ci"
-        self.default_collation: int = 33  # utf8mb4_general_ci
+        self.charset: str = ""
+        self.collation: str = ""
         
         # Server status
         self._server_status: int = 0

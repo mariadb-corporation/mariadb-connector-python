@@ -63,7 +63,7 @@ def _select_connection_implementation():
     c_extension_available = False
     try:
         import importlib.util
-        spec = importlib.util.find_spec('mariadb_c._mariadb')
+        spec = importlib.util.find_spec('mariadb_c.src')
         if spec is not None:
             # Module exists - assume it's available
             # We'll do the actual import later when needed

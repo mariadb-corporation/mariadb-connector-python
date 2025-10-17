@@ -23,11 +23,16 @@ Standard Client implementation for MariaDB connections
 Equivalent to the Java StandardClient class.
 """
 
+import decimal
+import datetime
 import socket
 import ssl
 import sys
 import threading
 import time
+import struct
+import ipaddress
+import uuid
 from typing import List, Optional, Any, Dict, Union, Tuple
 from .context import Context
 from .socket.packet_reader import PacketReader
@@ -39,9 +44,14 @@ from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
 from ..message.client.query_packet import QueryPacket
 from ..message.client.ping_packet import PingPacket
+from ..message.client.prepare_packet import PreparePacket
+from ..message.client.execute_packet import ExecutePacket
+from ..prepared_statement import PreparedStatement
 from ..completion import Completion
 from ..export.exception_factory import ExceptionFactory
-from ...exceptions import OperationalError, DatabaseError
+from ..string_utils import StringEscaper
+from ...exceptions import OperationalError, DatabaseError, NotSupportedError
+from ...constants import STATUS, FIELD_TYPE, FIELD_FLAG
 from ... import constants
 
 
@@ -207,6 +217,9 @@ class Client:
             # Enable compression if negotiated
             self._enable_compression_if_negotiated()
             
+            # Ensure autocommit and charset are correctly set
+            self._ensure_default()
+            
             # Execute init command if specified
             if self.configuration.init_command:
                 self._execute_init_command()
@@ -214,6 +227,23 @@ class Client:
         except Exception as e:
             self.close()
             raise OperationalError(f"Connection failed: {e}")
+    
+    def _ensure_default(self) -> None:
+        """
+        Ensure the connection charset is set to utf8mb4.
+        If not already set, execute SET NAMES utf8mb4 command.
+        """
+        sql_commands = []
+        if ((self.context.server_status & constants.STATUS.AUTOCOMMIT) > 0) != self.configuration.autocommit:
+            sql_commands.append('autocommit = ' + str(int(self.configuration.autocommit)))
+        if (self.context.charset != 'utf8mb4'):
+            sql_commands.append('NAMES utf8mb4')
+            self.context.charset = 'utf8mb4'
+
+        if len(sql_commands) > 0:
+            sql_command = 'SET ' + ', '.join(sql_commands)
+            query_packet = QueryPacket(sql_command)
+            self.execute(query_packet, self.configuration, can_redo=True)
     
     def _parse_handshake(self, packet: bytes) -> Context:
         """
@@ -231,7 +261,6 @@ class Client:
         if len(packet) < 10:
             raise OperationalError("Invalid handshake packet: too short")
         
-        import struct
         pos = 0
         
         # Protocol version (1 byte)
@@ -405,9 +434,7 @@ class Client:
             Client capabilities flags
         """
         capabilities = (
-            constants.CAPABILITY.LONG_PASSWORD |
-            constants.CAPABILITY.FOUND_ROWS |
-            constants.CAPABILITY.LONG_FLAG |
+            constants.CAPABILITY.IGNORE_SPACE |
             constants.CAPABILITY.PROTOCOL_41 |
             constants.CAPABILITY.TRANSACTIONS |
             constants.CAPABILITY.SECURE_CONNECTION |
@@ -460,10 +487,7 @@ class Client:
         client_capabilities |= constants.CAPABILITY.SSL
         
         # Send SSL request packet
-        ssl_request = SslRequestPacket(
-            client_capabilities,
-            self.context.default_collation
-        )
+        ssl_request = SslRequestPacket(client_capabilities)
         ssl_request.encode(self.writer, self.context)
         
         # Upgrade socket to SSL
@@ -629,7 +653,7 @@ class Client:
                     query_packet = QueryPacket(init_command)
                     
                     # Execute the query - this handles all the packet framing and response parsing
-                    completions = self.execute(query_packet, can_redo=False)
+                    completions = self.execute(query_packet, config=self.configuration, can_redo=False)
                     
                     # For init commands, we just need to ensure they executed successfully
                     # The execute method will handle OK/ERROR packets and throw exceptions if needed
@@ -667,16 +691,19 @@ class Client:
         """
         try:
             message.encode(self.writer, self.context)
+        except NotSupportedError as e:
+            raise e    
         except Exception as e:
             raise OperationalError(f"Failed to send message: {e}")
     
-    def execute(self, message: ClientMessage, can_redo: bool = False) -> List[Completion]:
+    def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False) -> List[Completion]:
         """
         Send client message and read result
         
         Args:
             message: Client message to send
             can_redo: Whether the message can be redone in case of failover
+            config: Configuration to use for parsing (defaults to client config if None)
             
         Returns:
             List of completion results
@@ -689,67 +716,34 @@ class Client:
                 raise OperationalError("Connection is closed")
             
             try:
+                
                 # Send message
                 self._send_message(message)
                 
+                # Check if this is a binary result set (from ExecutePacket)
+                from ..message.client.execute_packet import ExecutePacket
+                is_binary = isinstance(message, ExecutePacket)
+                
                 # Read and parse results
                 results = []
-                result_packet = self.reader.read_packet()
-                completion = self._parse_result_packet(result_packet)
-                results.append(completion)
+                
+                # Continue reading results while MORE_RESULTS_EXIST is set
+                while True:
+                    result_packet = self.reader.read_packet()
+                    completion = self._parse_result_packet(result_packet, config, is_binary)
+                    results.append(completion)
+                    
+                    # Check if there are more results to read
+                    if (self.context and 
+                        (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0):
+                        break
                 
                 return results
-                
+            except DatabaseError as e:
+                raise e    
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")
     
-    def execute_with_statement(self, message: ClientMessage, stmt: Any, can_redo: bool = False) -> List[Completion]:
-        """Execute with statement context"""
-        return self.execute(message, can_redo)
-    
-    def execute_with_options(self, 
-                           message: ClientMessage,
-                           stmt: Any,
-                           fetch_size: int,
-                           max_rows: int,
-                           result_set_concurrency: int,
-                           result_set_type: int,
-                           close_on_completion: bool,
-                           can_redo: bool = False) -> List[Completion]:
-        """Execute with full options"""
-        return self.execute(message, can_redo)
-    
-    def execute_pipeline(self,
-                        messages: List[ClientMessage],
-                        stmt: Any,
-                        fetch_size: int,
-                        max_rows: int,
-                        result_set_concurrency: int,
-                        result_set_type: int,
-                        close_on_completion: bool,
-                        can_redo: bool = False) -> List[Completion]:
-        """Execute pipeline of messages"""
-        results = []
-        for message in messages:
-            result = self.execute(message, can_redo)
-            results.extend(result)
-        return results
-    
-    def read_streaming_results(self,
-                             completions: List[Completion],
-                             fetch_size: int,
-                             max_rows: int,
-                             result_set_concurrency: int,
-                             result_set_type: int,
-                             close_on_completion: bool) -> None:
-        """Read streaming results"""
-        # Simplified implementation
-        pass
-    
-    def close_prepare(self, prepare: Any) -> None:
-        """Close prepare command"""
-        # Simplified implementation
-        pass
     
     def abort(self, executor: Any) -> None:
         """Abort connection"""
@@ -811,7 +805,7 @@ class Client:
                 return None
         return None
     
-    def _parse_result_packet(self, packet: bytes) -> Completion:
+    def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False) -> Completion:
         """
         Parse result packet into completion
         
@@ -834,10 +828,10 @@ class Client:
             return self._parse_ok_packet(packet)
         elif packet_type == 0xFF:
             # Error packet
-            self._parse_error_packet(packet)
+            return self._parse_error_packet(packet)
         else:
             # Result set packet - parse according to MySQL/MariaDB protocol
-            return self._parse_result_set(packet)
+            return self._parse_result_set(packet, config, is_binary)
     
     def _parse_ok_packet(self, packet: bytes) -> Completion:
         """
@@ -849,7 +843,6 @@ class Client:
         Returns:
             Completion object
         """
-        import struct
         pos = 1  # Skip OK marker (0x00)
         
         # Affected rows (length-encoded)
@@ -913,7 +906,7 @@ class Client:
                 # Read session state buffer length
                 session_length, pos = self.reader.read_length_encoded_int(packet, pos)
                 session_end = pos + session_length
-                
+
                 if session_end > len(packet):
                     break
                 
@@ -925,9 +918,9 @@ class Client:
                     # Read session tracking type
                     tracking_type = packet[pos]
                     pos += 1
-                    
                     if tracking_type == self.SESSION_TRACK_SYSTEM_VARIABLES:
                         pos = self._process_system_variables(packet, pos, session_end)
+
                     elif tracking_type == self.SESSION_TRACK_SCHEMA:
                         pos = self._process_schema_change(packet, pos, session_end)
                     else:
@@ -946,43 +939,40 @@ class Client:
     def _process_system_variables(self, packet: bytes, pos: int, end_pos: int) -> int:
         """Process system variable changes"""
         try:
-            while pos < end_pos:
-                # Read variable data length
-                var_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                var_end = pos + var_length
-                
-                if var_end > end_pos:
-                    break
-                
-                # Read variable name
-                name_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                if pos + name_length > var_end:
-                    break
-                
-                var_name = packet[pos:pos + name_length].decode('utf-8', errors='replace')
-                pos += name_length
-                
-                # Read variable value (can be null)
-                if pos < var_end:
-                    value_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                    if value_length > 0 and pos + value_length <= var_end:
-                        var_value = packet[pos:pos + value_length].decode('utf-8', errors='replace')
-                        pos += value_length
-                    else:
-                        var_value = None
+
+            # Read variable data length
+            var_length, pos = self.reader.read_length_encoded_int(packet, pos)
+            var_end = pos + var_length
+            
+            if var_end > end_pos:
+                return
+            
+            # Read variable name
+            name_length, pos = self.reader.read_length_encoded_int(packet, pos)
+            if pos + name_length > var_end:
+                return
+            
+            var_name = packet[pos:pos + name_length].decode('utf-8', errors='replace')
+            pos += name_length
+            
+            # Read variable value (can be null)
+            if pos < var_end:
+                value_length, pos = self.reader.read_length_encoded_int(packet, pos)
+                if value_length > 0 and pos + value_length <= var_end:
+                    var_value = packet[pos:pos + value_length].decode('utf-8', errors='replace')
+                    pos += value_length
                 else:
                     var_value = None
-                
-                # Update context based on variable
-                if self.context:
-                    if var_name == 'character_set_client':
-                        self.context.charset = var_value or 'utf8mb4'
-                    elif var_name == 'connection_id':
-                        if var_value:
-                            self.context.connection_id = int(var_value)
-                
-                
-                pos = var_end
+            else:
+                var_value = None
+            print("session state variable;",var_name, var_value)
+            # Update context based on variable
+            if self.context:
+                if var_name == 'character_set_client':
+                    self.context.charset = var_value
+                elif var_name == 'connection_id':
+                    if var_value:
+                        self.context.connection_id = int(var_value)
                 
         except Exception as e:
             pass
@@ -1017,7 +1007,7 @@ class Client:
         
         return pos
     
-    def _parse_result_set(self, packet: bytes) -> 'Completion':
+    def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False) -> 'Completion':
         """
         Parse result set according to MySQL/MariaDB protocol
         
@@ -1067,39 +1057,44 @@ class Client:
                     
                     if not self.context.isEofDeprecated():
                         # Traditional EOF packet
-                        if len(row_packet) >= 5:
-                            import struct
-                            warnings = struct.unpack('<H', row_packet[pos:pos + 2])[0]
-                            server_status = struct.unpack('<H', row_packet[pos + 2:pos + 4])[0]
-                            
+                        warnings = struct.unpack('<H', row_packet[pos:pos + 2])[0]
+                        server_status = struct.unpack('<H', row_packet[pos + 2:pos + 4])[0]
+                        self.context.setServerStatus(server_status)                            
+                    
+                        # Create completion with result set
+                        completion = Completion(
+                            affected_rows=0,
+                            insert_id=0,
+                            warning_count=warnings,
+                            is_result_set=True,
+                            is_output_parameters=(server_status & STATUS.PS_OUT_PARAMS) != 0
+                        )
                     else:
                         # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
                         ok_completion = self._parse_ok_packet(row_packet)
-                        
+                        # Create completion with result set
+                        completion = Completion(
+                            affected_rows=ok_completion.affected_rows,
+                            insert_id=ok_completion.insert_id,
+                            warning_count=ok_completion.warning_count,
+                            is_result_set=True,
+                            is_output_parameters=(self.context.server_status & STATUS.PS_OUT_PARAMS) != 0
+                        )
                     
-                    break
+                    # Store result set data in completion
+                    completion.result_set = {
+                        'columns': columns,
+                        'rows': rows,
+                        'column_count': column_count
+                    }
+                                        
+                    return completion
+                    
                 else:
                     # Row data packet
-                    row_data = self._parse_row_data(row_packet, columns)
+                    row_data = self._parse_row_data(row_packet, columns, config, is_binary)
                     rows.append(row_data)
             
-            # Create completion with result set
-            completion = Completion(
-                affected_rows=len(rows),
-                insert_id=0,
-                warning_count=0,
-                is_result_set=True
-            )
-            
-            # Store result set data in completion
-            completion.result_set = {
-                'columns': columns,
-                'rows': rows,
-                'column_count': column_count
-            }
-            
-            
-            return completion
             
         except Exception as e:
             raise OperationalError(f"Failed to parse result set: {e}")
@@ -1161,31 +1156,19 @@ class Client:
                 # Skip the 0 byte
                 pos += 1
         
-        # Skip length field (always 0x0c) - this should be at the current position now
-        if pos < len(packet) and packet[pos] == 0x0C:
-            pos += 1
+        # Skip length field (always 0x0c)
+        pos += 1
         
-        # Read fixed-length fields (12 bytes total)
-        import struct
-        if pos + 12 <= len(packet):
-            # charset (2 bytes, little endian)
-            charset = struct.unpack('<H', packet[pos:pos + 2])[0]
-            pos += 2
-            # column length (4 bytes, little endian)  
-            column_length = struct.unpack('<I', packet[pos:pos + 4])[0]
-            pos += 4
-            # column type (1 byte)
-            column_type = packet[pos]
-            pos += 1
-            # flags (2 bytes, little endian)
-            flags = struct.unpack('<H', packet[pos:pos + 2])[0]
-            pos += 2
-            # decimals (1 byte)
-            decimals = packet[pos]
-            pos += 1
+        # Read fixed-length fields (12 bytes total) in one operation
+        if pos + 10 <= len(packet):
+            # Unpack all fixed fields: charset(2), column_length(4), column_type(1), flags(2), decimals(1)
+            charset, column_length, column_type, flags, decimals = struct.unpack('<HIBHB', packet[pos:pos + 10])
         else:
-            charset = column_length = column_type = flags = decimals = 0
+            raise OperationalError(f"Column definition packet too short: expected {pos + 10} bytes, got {len(packet)} bytes")
         
+        if (ext_type_format == 'json'):
+            column_type = FIELD_TYPE.JSON
+
         column_info = {
             'catalog': catalog,
             'schema': schema,
@@ -1205,7 +1188,7 @@ class Client:
         
         return column_info
     
-    def _parse_row_data(self, packet: bytes, columns: list) -> tuple:
+    def _parse_row_data(self, packet: bytes, columns: List[Dict[str, Any]], config: 'Configuration', is_binary: bool = False) -> tuple:
         """
         Parse row data packet
         
@@ -1217,27 +1200,130 @@ class Client:
             Tuple of row values
         """
         try:
+            if is_binary:
+                return self._parse_binary_row_data(packet, columns, config)
+            
             pos = 0
             row_values = []
             
             for column in columns:
-                if pos >= len(packet):
-                    row_values.append(None)
-                    continue
-                
-                # Read length-encoded string for each column value
-                value, pos = self.reader.read_length_encoded_string(packet, pos)
-                
-                # Convert value based on column type
-                if value is None:
-                    row_values.append(None)
-                else:
-                    # Basic type conversion
-                    column_type = column.get('column_type', 253)
-                    converted_value = self._convert_column_value(value, column_type)
-                    
-                    
-                    row_values.append(converted_value)
+                match column['column_type']:
+                    case (FIELD_TYPE.TINY | FIELD_TYPE.SHORT | FIELD_TYPE.LONG | 
+                          FIELD_TYPE.LONGLONG | FIELD_TYPE.INT24 | FIELD_TYPE.YEAR):
+                        # Read as string and convert to integer (simpler and more reliable)
+                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        try:
+                            value = int(val) if val is not None else None
+                        except (ValueError, TypeError):
+                            value = None
+                    case FIELD_TYPE.FLOAT | FIELD_TYPE.DOUBLE:
+                        # Read as string and convert to float
+                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        value = float(val) if val is not None else None
+                    case FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE:
+                        # Parse DATE as datetime.date
+                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        if val is not None:
+                            try:
+                                year, month, day = map(int, val.split('-'))
+                                value = datetime.date(year, month, day)
+                            except (ValueError, AttributeError) as e:
+                                value = None  # Fallback to None if parsing fails
+                        else:
+                            value = None
+                    case FIELD_TYPE.TIME:
+                        # Parse TIME as datetime.time
+                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        if val is not None:
+                            try:
+                                # Handle TIME format: HH:MM:SS or HHH:MM:SS (can be > 24 hours)
+                                parts = val.split(':')
+                                if len(parts) >= 3:
+                                    hours = int(parts[0])
+                                    minutes = int(parts[1])
+                                    seconds_parts = parts[2].split('.')
+                                    seconds = int(seconds_parts[0])
+                                    microseconds = int(seconds_parts[1].ljust(6, '0')[:6]) if len(seconds_parts) > 1 else 0
+                                    value = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
+                                else:
+                                    value = val  # Fallback to string
+                            except (ValueError, AttributeError):
+                                value = val  # Fallback to string if parsing fails
+                        else:
+                            value = None
+                    case (FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP):
+                        # Parse DATETIME as datetime.datetime
+                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        if val is not None:
+                            try:
+                                # Handle DATETIME format: YYYY-MM-DD HH:MM:SS[.ffffff]
+                                if ' ' in val:
+                                    date_part, time_part = val.split(' ', 1)
+                                    year, month, day = map(int, date_part.split('-'))
+                                    
+                                    time_parts = time_part.split(':')
+                                    hours = int(time_parts[0])
+                                    minutes = int(time_parts[1])
+                                    seconds_parts = time_parts[2].split('.')
+                                    seconds = int(seconds_parts[0])
+                                    microseconds = int(seconds_parts[1].ljust(6, '0')[:6]) if len(seconds_parts) > 1 else 0
+                                    
+                                    value = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                                else:
+                                    # Date only
+                                    year, month, day = map(int, val.split('-'))
+                                    value = datetime.datetime(year, month, day)
+                            except (ValueError, AttributeError):
+                                value = val  # Fallback to string if parsing fails
+                        else:
+                            value = None
+                    case (FIELD_TYPE.BLOB | FIELD_TYPE.TINY_BLOB | FIELD_TYPE.MEDIUM_BLOB | 
+                          FIELD_TYPE.LONG_BLOB):
+                        # BLOB types must return bytes
+                        value, pos = self.reader.read_length_encoded_bytes(packet, pos)
+                    case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
+                        # DECIMAL types must return decimal.Decimal
+                        val, pos = self.reader.read_length_encoded_string(packet, pos, encoding='ascii')
+                        value = decimal.Decimal(val) if val is not None else None
+                    case FIELD_TYPE.JSON:
+                        value, pos = self.reader.read_length_encoded_string(packet, pos)
+                    case _:
+                        match column['ext_type_name']:
+                            case ('inet6' | 'inet4'):
+                                value, pos = self.reader.read_length_encoded_string(packet, pos)
+                                if config.native_object:
+                                    value = ipaddress.ip_address(value)
+                            case 'uuid':
+                                value, pos = self.reader.read_length_encoded_string(packet, pos)
+                                if config.native_object:
+                                    value = uuid.UUID(value)
+                            case _:
+                                # Default case for VARCHAR, STRING, etc.
+                                # Check if BINARY flag is set to determine if we should read as bytes or string
+                                if (column['flags'] & FIELD_FLAG.BINARY):
+                                    # Binary data - read as bytes
+                                    value, pos = self.reader.read_length_encoded_bytes(packet, pos)
+                                else:
+                                    # Text data - read as string
+                                    value, pos = self.reader.read_length_encoded_string(packet, pos)
+
+
+                row_values.append(value)
+            
+            # Apply converters if configured (after parsing all values)
+            if self.configuration.converter:
+                converted_values = []
+                for i, value in enumerate(row_values):
+                    column_type = columns[i]['column_type']
+                    if column_type in self.configuration.converter:
+                        converter_func = self.configuration.converter[column_type]
+                        try:
+                            value = converter_func(value)
+                        except Exception:
+                            # If conversion fails, keep original value
+                            pass
+                    converted_values.append(value)
+                return tuple(converted_values)
             
             return tuple(row_values)
             
@@ -1245,51 +1331,294 @@ class Client:
             # Return tuple with None values if parsing fails
             return tuple(None for _ in columns)
     
-    def _convert_column_value(self, value: str, column_type: int):
+    def _parse_binary_row_data(self, packet: bytes, columns: List[Dict[str, Any]], config: 'Configuration') -> tuple:
         """
-        Convert column value based on MySQL type
+        Parse binary row data packet (from COM_STMT_EXECUTE)
         
         Args:
-            value: String value from packet
-            column_type: MySQL column type
+            packet: Binary row data packet
+            columns: Column definitions
             
         Returns:
-            Converted value
+            Tuple of row values
         """
-        if value is None:
-            return None
+        if len(packet) == 0:
+            return tuple(None for _ in columns)
         
-        try:
-            # Basic type conversions for common types
-            if column_type in (1, 2, 3, 8, 9):  # TINY, SHORT, LONG, LONGLONG, INT24
-                return int(value)
-            elif column_type in (4, 5):  # FLOAT, DOUBLE
-                return float(value)
-            elif column_type in (0, 10, 11, 12, 13, 14):  # DECIMAL, DATE, TIME, DATETIME, YEAR, NEWDATE
-                return value  # Keep as string for now
-            else:
-                # Default to string for VARCHAR, TEXT, etc.
-                return value
-        except (ValueError, TypeError):
-            # If conversion fails, return as string
-            return value
+        pos = 0
+        
+        # Skip 0x00 header byte
+        if packet[pos] != 0x00:
+            raise ValueError(f"Expected 0x00 header for binary row, got 0x{packet[pos]:02x}")
+        pos += 1
+        
+        # Read NULL bitmap
+        null_bitmap_length = (len(columns) + 9) // 8
+        if pos + null_bitmap_length > len(packet):
+            raise ValueError("Packet too short for NULL bitmap")
+        
+        null_bitmap = packet[pos:pos + null_bitmap_length]
+        pos += null_bitmap_length
+        
+        # Parse column values
+        row_values = []
+        
+        for i, column in enumerate(columns):
+            # Check if column is NULL using bitmap
+            if self._is_null_bitmap(i, null_bitmap):
+                row_values.append(None)
+                continue
+            
+            # Parse non-NULL value based on column type
+            value, pos = self._parse_binary_column_value(packet, pos, column, config)
+            row_values.append(value)
+        
+        # Apply converters if configured (after parsing all values)
+        if self.configuration.converter:
+            converted_values = []
+            for i, value in enumerate(row_values):
+                column_type = columns[i]['column_type']
+                if column_type in self.configuration.converter:
+                    converter_func = self.configuration.converter[column_type]
+                    try:
+                        value = converter_func(value)
+                    except Exception:
+                        # If conversion fails, keep original value
+                        pass
+                converted_values.append(value)
+            return tuple(converted_values)
+        
+        return tuple(row_values)
     
-    def _parse_error_packet(self, packet: bytes) -> None:
+    def _is_null_bitmap(self, index: int, null_bitmap: bytes) -> bool:
+        """
+        Check if column is NULL using binary result set NULL bitmap
+        
+        Args:
+            index: Column index
+            null_bitmap: NULL bitmap bytes
+            
+        Returns:
+            True if column is NULL
+        """
+        # Formula from Node.js connector: (nullBitmap[~~((index + 2) / 8)] & (1 << (index + 2) % 8)) > 0
+        byte_pos = (index + 2) // 8
+        bit_pos = (index + 2) % 8
+        
+        if byte_pos >= len(null_bitmap):
+            return False
+        
+        return (null_bitmap[byte_pos] & (1 << bit_pos)) > 0
+    
+    def _parse_binary_column_value(self, packet: bytes, pos: int, column: Dict[str, Any], config: 'Configuration') -> tuple[Any, int]:
+        """
+        Parse binary column value
+        
+        Args:
+            packet: Packet data
+            pos: Current position
+            column: Column definition
+            
+        Returns:
+            Tuple of (value, new_position)
+        """
+        column_type = column['column_type']
+        match column_type:
+            case FIELD_TYPE.TINY:
+                if pos + 1 > len(packet):
+                    return None, pos
+                value = struct.unpack('<b', packet[pos:pos + 1])[0]
+                return value, pos + 1
+                
+            case FIELD_TYPE.SHORT:
+                if pos + 2 > len(packet):
+                    return None, pos
+                value = struct.unpack('<h', packet[pos:pos + 2])[0]
+                return value, pos + 2
+                
+            case FIELD_TYPE.YEAR:
+                # YEAR is returned as int
+                if pos + 2 > len(packet):
+                    return None, pos
+                value = struct.unpack('<H', packet[pos:pos + 2])[0]  # Unsigned for YEAR
+
+                if (column['column_length'] == 2):
+                    # YEAR(2) - deprecated
+                    if value <= 69:
+                        value += 2000
+                    else:
+                        value += 1900
+                return value, pos + 2
+                
+            case FIELD_TYPE.LONG | FIELD_TYPE.INT24:
+                if pos + 4 > len(packet):
+                    return None, pos
+                value = struct.unpack('<i', packet[pos:pos + 4])[0]
+                return value, pos + 4
+                
+            case FIELD_TYPE.LONGLONG:
+                if pos + 8 > len(packet):
+                    return None, pos
+                value = struct.unpack('<q', packet[pos:pos + 8])[0]
+                return value, pos + 8
+                
+            case FIELD_TYPE.FLOAT:
+                if pos + 4 > len(packet):
+                    return None, pos
+                value = struct.unpack('<f', packet[pos:pos + 4])[0]
+                return value, pos + 4
+                
+            case FIELD_TYPE.DOUBLE:
+                if pos + 8 > len(packet):
+                    return None, pos
+                value = struct.unpack('<d', packet[pos:pos + 8])[0]
+                return value, pos + 8
+                
+            case (FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE):
+                # Binary DATE format: 1 + 4 bytes (length + year + month + day)
+                length_byte = packet[pos] if pos < len(packet) else 0
+                pos += 1
+
+                if length_byte == 0:
+                    return None, pos
+                elif length_byte >= 4:
+                    if pos + 4 > len(packet):
+                        return None, pos
+                    year = struct.unpack('<H', packet[pos:pos + 2])[0]
+                    month = packet[pos + 2]
+                    day = packet[pos + 3]
+                    try:
+                        value = datetime.date(year, month, day)
+                    except ValueError as e:
+                        value = None
+                    return value, pos + length_byte
+                else:
+                    return None, pos + length_byte
+                    
+            case FIELD_TYPE.TIME:
+                # Binary TIME format: 1 + 8 or 12 bytes
+                length_byte = packet[pos] if pos < len(packet) else 0
+                pos += 1
+                
+                if length_byte == 0:
+                    return None, pos
+                elif length_byte >= 8:
+                    if pos + 8 > len(packet):
+                        return None, pos
+                    negative = packet[pos]
+                    days = struct.unpack('<I', packet[pos + 1:pos + 5])[0]
+                    hours = packet[pos + 5]
+                    minutes = packet[pos + 6]
+                    seconds = packet[pos + 7]
+                    microseconds = 0
+                    
+                    if length_byte == 12 and pos + 12 <= len(packet):
+                        microseconds = struct.unpack('<I', packet[pos + 8:pos + 12])[0]
+                    
+                    # Calculate total hours
+                    total_hours = days * 24 + hours
+                    
+                    try:
+                        # Use timedelta for TIME values >= 24 hours
+                        value = datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
+                        if negative:
+                            value = -value
+                    except ValueError:
+                        value = None
+                        
+                    return value, pos + length_byte
+                else:
+                    return None, pos + length_byte
+                    
+            case FIELD_TYPE.DATETIME | FIELD_TYPE.NEWDATE | FIELD_TYPE.TIMESTAMP:
+                # Binary DATETIME format: 1 + 4, 7, or 11 bytes
+                length_byte = packet[pos] if pos < len(packet) else 0
+                pos += 1
+                
+                if length_byte == 0:
+                    return None, pos
+                elif length_byte >= 4:
+                    if pos + 4 > len(packet):
+                        return None, pos
+                    year = struct.unpack('<H', packet[pos:pos + 2])[0]
+                    month = packet[pos + 2]
+                    day = packet[pos + 3]
+                    
+                    hours = minutes = seconds = microseconds = 0
+                    
+                    if length_byte >= 7 and pos + 7 <= len(packet):
+                        hours = packet[pos + 4]
+                        minutes = packet[pos + 5]
+                        seconds = packet[pos + 6]
+                        
+                    if length_byte == 11 and pos + 11 <= len(packet):
+                        microseconds = struct.unpack('<I', packet[pos + 7:pos + 11])[0]
+                    
+                    try:
+                        value = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                    except ValueError:
+                        value = None
+                        
+                    return value, pos + length_byte
+                else:
+                    return None, pos + length_byte
+                
+            case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
+                # DECIMAL types must return decimal.Decimal
+                val, pos = self.reader.read_length_encoded_string(packet, pos)
+                value = decimal.Decimal(val) if val is not None else None
+                return value, pos
+            case FIELD_TYPE.JSON:
+                return self.reader.read_length_encoded_string(packet, pos)
+            case (FIELD_TYPE.BLOB | FIELD_TYPE.TINY_BLOB | FIELD_TYPE.MEDIUM_BLOB | FIELD_TYPE.LONG_BLOB):
+                # BLOB types must return bytes
+                return self.reader.read_length_encoded_bytes(packet, pos)
+                
+            case (FIELD_TYPE.VAR_STRING | FIELD_TYPE.STRING | FIELD_TYPE.VARCHAR):
+                match (column['ext_type_name']):
+                    case ("inet6" | "inet4"):
+                        value, pos = self.reader.read_length_encoded_bytes(packet, pos)
+                        if config.native_object:
+                            value = ipaddress.ip_address(value)
+                        return value, pos
+                    case "uuid":
+                        value, pos = self.reader.read_length_encoded_bytes(packet, pos)
+                        if config.native_object:
+                            value = uuid.UUID(value)
+                        return value, pos
+                    case _:
+                        # String types - check BINARY flag
+                        if column['flags'] & FIELD_FLAG.BINARY:
+                            # Binary string - return bytes
+                            return self.reader.read_length_encoded_bytes(packet, pos)
+                        else:
+                            # Text string - return string
+                            return self.reader.read_length_encoded_string(packet, pos)
+                
+            case _:
+                # Default to length-encoded string
+                return self.reader.read_length_encoded_string(packet, pos)
+
+
+    def _parse_error_packet(self, packet: bytes, sql: Optional[str] = None) -> None:
         """Parse error packet and raise exception"""
-        if len(packet) < 3:
+        if len(packet) < 5:
             raise DatabaseError("Invalid error packet")
+        pos = 1
+        error_code = struct.unpack('<H', packet[1:3])[0]
+        pos = 3
+        if packet[3] == 35: # '#' symbol:
+            pos += 1
+            sql_state = packet[pos:pos + 5].decode('utf-8', errors='replace')
+            pos += 5
+            error_message = packet[pos:].decode('utf-8', errors='replace')
+        else:    
+            # Pre-4.1 message, still can be output in newer versions (e.g. with 'Too many connections')
+            error_message = packet[pos:].decode('utf-8', errors='replace')
+            sql_state = "HY000"
         
-        import struct
-        pos = 1  # Skip error marker
+        raise self.exception_factory.create_exception(error_message, sql_state, error_code, sql);
         
-        # Error code
-        error_code = struct.unpack('<H', packet[pos:pos + 2])[0]
-        pos += 2
-        
-        # Error message
-        error_message = packet[pos:].decode('utf-8', errors='replace')
-        
-        raise DatabaseError(f"MySQL Error {error_code}: {error_message}")
     
     def _cleanup_connection(self) -> None:
         """Clean up connection resources"""
@@ -1322,27 +1651,135 @@ class Client:
                 pass
             self.socket = None
     
-    def escape_string(self, string: str) -> str:
+    def prepare_statement(self, sql: str) -> PreparedStatement:
         """
-        Escape a string for use in SQL statements
+        Prepare a SQL statement
         
         Args:
-            string: String to escape
+            sql: SQL statement to prepare
             
         Returns:
-            str: Escaped string with quotes
+            PreparedStatement object
+            
+        Raises:
+            OperationalError: If preparation fails
         """
-        no_backslash_escapes = (self.context.server_status & constants.STATUS.NO_BACKSLASH_ESCAPES) > 0
+        with self.lock:
+            if self.closed:
+                raise OperationalError("Connection is closed")
+            
+            try:
+                # Send prepare packet
+                prepare_packet = PreparePacket(sql)
+                self._send_message(prepare_packet)
+                
+                # Read prepare response - this has special handling
+                response_packet = self.reader.read_packet()
+                return self._parse_prepare_response(response_packet, sql)
+                
+            except DatabaseError as e:
+                raise e
+            except Exception as e:
+                raise OperationalError(f"Statement preparation failed: {e}")
+    
+    def _parse_prepare_response(self, packet: bytes, sql: str) -> PreparedStatement:
+        """
+        Parse prepare response packet
         
-        # Use proper escaping logic based on server mode
-        if no_backslash_escapes:
-            # When NO_BACKSLASH_ESCAPES is set, single quotes are escaped by doubling them
-            escaped = string.replace("'", "''")
+        Args:
+            packet: Response packet data
+            sql: Original SQL statement
+            
+        Returns:
+            PreparedStatement object
+            
+        Raises:
+            OperationalError: If response is invalid
+        """
+        if len(packet) == 0:
+            raise OperationalError("Empty prepare response packet")
+        
+        packet_type = packet[0]
+        
+        if packet_type == 0xFF:
+            # Error packet
+            self._parse_error_packet(packet, sql)
+        elif packet_type == 0x00:
+            # OK packet with prepare result
+            pos = 1  # Skip OK marker
+            
+            # Statement ID (4 bytes)
+            if pos + 4 > len(packet):
+                raise OperationalError("Invalid prepare response: missing statement ID")
+            statement_id = struct.unpack('<I', packet[pos:pos + 4])[0]
+            pos += 4
+            
+            # Number of columns (2 bytes)
+            if pos + 2 > len(packet):
+                raise OperationalError("Invalid prepare response: missing column count")
+            column_count = struct.unpack('<H', packet[pos:pos + 2])[0]
+            pos += 2
+            
+            # Number of parameters (2 bytes)
+            if pos + 2 > len(packet):
+                raise OperationalError("Invalid prepare response: missing parameter count")
+            parameter_count = struct.unpack('<H', packet[pos:pos + 2])[0]
+            pos += 2
+            
+            # Skip reserved byte and warning count
+            pos += 3
+            
+            # Create prepared statement
+            stmt = PreparedStatement(statement_id, sql, parameter_count, column_count)
+            
+            # Read parameter metadata if present
+            if parameter_count > 0:
+                for _ in range(parameter_count):
+                    param_packet = self.reader.read_packet()
+                    param_metadata = self._parse_column_definition(param_packet)
+                    stmt.add_parameter_metadata(param_metadata)
+                
+                # Read EOF packet after parameters (if not deprecated)
+                if not self.context.isEofDeprecated():
+                    self.reader.read_packet()
+            
+            # Read column metadata if present
+            if column_count > 0:
+                for _ in range(column_count):
+                    col_packet = self.reader.read_packet()
+                    col_metadata = self._parse_column_definition(col_packet)
+                    stmt.add_column_metadata(col_metadata)
+                
+                # Read EOF packet after columns (if not deprecated)
+                if not self.context.isEofDeprecated():
+                    self.reader.read_packet()
+            
+            return stmt
         else:
-            # Standard escaping: backslash, quote, double quote, zero byte
-            escaped = string.replace('\\', '\\\\')  # Backslash first
-            escaped = escaped.replace("'", "\\'")   # Single quote
-            escaped = escaped.replace('"', '\\"')   # Double quote  
-            escaped = escaped.replace('\0', '\\0')  # Zero byte
+            raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
+    
+    def close_prepared_statement(self, stmt: PreparedStatement) -> None:
+        """
+        Close a prepared statement
         
-        return escaped
+        Args:
+            stmt: Prepared statement to close
+        """
+        if stmt.is_closed():
+            return
+        
+        try:
+            # Send COM_STMT_CLOSE packet
+            with self.lock:
+                if not self.closed:
+                    # COM_STMT_CLOSE (0x19) + statement_id (4 bytes)
+                    self.writer.start_payload()
+                    close_packet = struct.pack('<BI', 0x19, stmt.statement_id)
+                    self.writer.write_bytes(close_packet)
+                    self.writer.send_payload("COM_STMT_CLOSE")
+        except:
+            # Ignore errors when closing
+            pass
+        finally:
+            stmt.close()
+    

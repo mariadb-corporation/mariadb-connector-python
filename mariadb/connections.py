@@ -18,7 +18,6 @@
 #
 
 import socket
-import ssl
 from typing import Optional, Any, Dict, Union, Type
 from .cursors import Cursor
 from . import constants
@@ -27,11 +26,11 @@ from packaging import version
 from .impl.client.client import Client
 from .impl.configuration import Configuration
 from .impl.host_address import HostAddress
+from .impl.string_utils import StringEscaper
 
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
 _MAX_TPC_XID_SIZE = 64
-
 
 class Connection:
     """
@@ -63,8 +62,6 @@ class Connection:
         self.port = kwargs.get('port', 3306)
         self.user = kwargs.get('user') or kwargs.get('username')
         self._database = kwargs.get('database') or kwargs.get('db')
-        self._server_version = None
-        self._server_info = None
         
         # Store all connection parameters
         self._connection_params = kwargs
@@ -81,11 +78,7 @@ class Connection:
             # Connect using the Java-equivalent client implementation
             self._client.connect()
             
-            # Update connection info from client context
-            if self._client and self._client.context:
-                context = self._client.context
-                self._server_version = context.server_version
-                self._server_info = context.server_version
+            # Connection info is available directly from client context
                 
         except Exception as e:
             self._closed = True
@@ -98,17 +91,38 @@ class Connection:
         
         Args:
             cursor_class: Optional custom cursor class
-            **kwargs: Additional cursor parameters
+            **kwargs: Additional cursor parameters (named_tuple, dictionary, etc.)
             
         Returns:
             Cursor object
         """
         self._check_closed()
         
-        if cursor_class is None:
-            return Cursor(self)
+        # Update configuration with cursor-specific options
+        if kwargs:
+            # Create a temporary configuration with cursor options
+            temp_config = Configuration.from_dict({**self._connection_params, **kwargs})
+            # Update the client's configuration temporarily
+            original_config = self._client.configuration
+            self._client.configuration = temp_config
+            
+            try:
+                if cursor_class is None:
+                    cursor = Cursor(self)
+                else:
+                    cursor = cursor_class(self, **kwargs)
+                    
+                # Store the configuration on the cursor for later use
+                cursor._cursor_config = temp_config
+                return cursor
+            finally:
+                # Restore original configuration
+                self._client.configuration = original_config
         else:
-            return cursor_class(self, **kwargs)
+            if cursor_class is None:
+                return Cursor(self)
+            else:
+                return cursor_class(self, **kwargs)
         
     def commit(self) -> None:
         """Commit the current transaction"""
@@ -139,7 +153,7 @@ class Connection:
             try:
                 from .impl.message.client.ping_packet import PingPacket
                 ping_packet = PingPacket()
-                results = self._client.execute(ping_packet)
+                results = self._client.execute(ping_packet, self._configuration)
                 return True  # If no exception, ping succeeded
             except Exception as e:
                 raise OperationalError(f"Ping failed: {e}")
@@ -196,7 +210,7 @@ class Connection:
         if self._client and value:
             from .impl.message.client.change_db_packet import ChangeDbPacket
             packet = ChangeDbPacket(value)
-            self._client.execute(packet)
+            self._client.execute(packet, self._configuration)
             
         self._database = value
     
@@ -223,7 +237,7 @@ class Connection:
             from .impl.message.client.query_packet import QueryPacket
             query = f"SET autocommit={1 if value else 0}"
             packet = QueryPacket(query)
-            self._client.execute(packet)
+            self._client.execute(packet, self._configuration)
     
     @property
     def server_status(self) -> int:
@@ -236,7 +250,8 @@ class Connection:
     def escape_string(self, string: str) -> str:
         """Escape a string for use in SQL statements"""
         self._check_closed()
-        return self._client.escape_string(string)
+        no_backslash_escapes = (self._client.context.server_status & constants.STATUS.NO_BACKSLASH_ESCAPES) > 0
+        return StringEscaper.escape_string_with_quotes(string, no_backslash_escapes)        
         
     def __enter__(self) -> 'Connection':
         """Context manager entry"""
@@ -254,12 +269,13 @@ class Connection:
     @property
     def server_version(self) -> int:
         """Get server version as integer in format MMPPRR (major, minor, patch with 2 digits each)"""
-        if not self._server_version:
+        self._check_closed()
+        if not self._client or not self._client.context or not self._client.context.server_version:
             return 0
         
         # Parse version string like "12.1.1-MariaDB-ubu2404" or "8.4.0"
         import re
-        version_match = re.search(r'(\d+)\.(\d+)\.(\d+)', self._server_version)
+        version_match = re.search(r'(\d+)\.(\d+)\.(\d+)', self._client.context.server_version)
         if version_match:
             major = int(version_match.group(1))
             minor = int(version_match.group(2))
@@ -269,11 +285,34 @@ class Connection:
             return major * 10000 + minor * 100 + patch
         
         return 0
-        
+
+    @property
+    def server_version_info(self):
+        """
+        Returns numeric version of connected database server in tuple format.
+        """
+
+        self._check_closed()
+        version = self.server_version
+        return (int(version / 10000),
+                int((version % 10000) / 100),
+                version % 100)
+
+    def get_server_version(self):
+        """
+        Returns a tuple representing the version of the connected server in
+        the following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)
+        """
+
+        return self.server_version_info
+
     @property
     def server_info(self) -> Optional[str]:
         """Get server version as string"""
-        return self._server_info
+        self._check_closed()
+        if self._client and self._client.context:
+            return self._client.context.server_version
+        return None
         
     @property
     def character_set(self) -> str:

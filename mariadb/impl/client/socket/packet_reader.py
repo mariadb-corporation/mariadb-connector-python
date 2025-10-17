@@ -216,6 +216,93 @@ class PacketReader:
         
         return value, new_pos + length
     
+    def read_length_string_encoded_int(self, packet: bytes, pos: int) -> Tuple[Optional[int], int]:
+        """
+        Read MySQL length-encoded string and convert to integer (atoll equivalent)
+        
+        Args:
+            packet: Packet data
+            pos: Current position in packet
+            
+        Returns:
+            Tuple of (int_value, new_position). Value is None for NULL.
+            
+        Raises:
+            IOError: If packet is too short
+            ValueError: If data cannot be converted to integer
+        """
+        if pos >= len(packet):
+            raise IOError("Packet too short for length-encoded integer")
+        
+        # Check for NULL marker
+        if packet[pos] == 0xFB:
+            return None, pos + 1
+        
+        # Read string length
+        length, new_pos = self.read_length_encoded_int(packet, pos)
+        
+        if new_pos + length > len(packet):
+            raise IOError("Packet too short for integer data")
+        
+        # Parse integer directly from binary data
+        value = 0
+        is_negative = False
+        start_pos = new_pos
+        
+        # Handle empty string
+        if length == 0:
+            return 0, new_pos
+        
+        # Check for negative sign
+        if packet[new_pos] == 0x2D:  # '-' character
+            is_negative = True
+            new_pos += 1
+            length -= 1
+        elif packet[new_pos] == 0x2B:  # '+' character
+            new_pos += 1
+            length -= 1
+        
+        # Parse digits directly from bytes
+        for i in range(length):
+            digit = packet[new_pos + i] - 0x30
+            value = value * 10 + digit
+        
+        # Calculate correct end position including the sign character if present
+        total_length = length + (1 if is_negative else 0)
+        return -value if is_negative else value, start_pos + total_length
+    
+    def read_length_encoded_bytes(self, packet: bytes, pos: int) -> Tuple[Optional[bytes], int]:
+        """
+        Read MySQL length-encoded binary data directly as bytes (optimized for BLOBs)
+        
+        Args:
+            packet: Packet data
+            pos: Current position in packet
+            
+        Returns:
+            Tuple of (bytes_value, new_position). Value is None for NULL.
+            
+        Raises:
+            IOError: If packet is too short
+        """
+        if pos >= len(packet):
+            raise IOError("Packet too short for length-encoded bytes")
+        
+        # Check for NULL marker
+        if packet[pos] == 0xFB:
+            return None, pos + 1
+        
+        # Read data length
+        length, new_pos = self.read_length_encoded_int(packet, pos)
+        
+        if new_pos + length > len(packet):
+            raise IOError("Packet too short for binary data")
+        
+        # Extract binary data directly (no encoding/decoding)
+        binary_data = packet[new_pos:new_pos + length]
+        
+        return binary_data, new_pos + length
+    
     def read_null_terminated_string(self, packet: bytes, pos: int, encoding: str = 'utf-8') -> Tuple[str, int]:
         """
         Read null-terminated string from packet

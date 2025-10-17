@@ -20,11 +20,14 @@
 import datetime
 import decimal
 from numbers import Number
-from typing import Sequence, Optional, List, Any, Union
+from collections import namedtuple
+from typing import Sequence, Optional, List, Any, Union, Dict
 
-from .exceptions import ProgrammingError, NotSupportedError, OperationalError
+from .exceptions import DatabaseError, ProgrammingError, NotSupportedError, OperationalError
 from .impl.message.client.query_packet import QueryPacket
+from .impl.string_utils import StringEscaper
 from .constants.STATUS import NO_BACKSLASH_ESCAPES
+from .constants import EXT_FIELD_TYPE
 
 # Forward reference to avoid circular import
 from typing import TYPE_CHECKING
@@ -58,7 +61,7 @@ class Cursor:
     MariaDB Cursor Object
     """
 
-    def __init__(self, connection: 'Connection'):
+    def __init__(self, connection: 'Connection', **kwargs):
         """
         Initialize cursor with a connection
         
@@ -70,20 +73,56 @@ class Cursor:
         self.arraysize: int = 1
         self.rowcount: int = -1
         self.description: Optional[List[Any]] = None
-        self.lastrowid: int = 0
+        self.lastrowid: Optional[int] = None
         self._result: List[Any] = []
         self._result_index: int = 0
-        
+        self._completions: List[Any] = []  # Store all completions for nextset()
+        self._completion_index: int = 0    # Current completion index
+        self._cursor_config = None  # Will be set by connection if cursor options are provided
+        if kwargs:
+            # create a clone of the connection configuration
+            self._cursor_config = self.connection._configuration.from_dict(self.connection._configuration.to_dict())
+            
+            rtype = kwargs.pop("named_tuple", False)
+            if rtype:
+                self._cursor_config.named_tuple = rtype
+            else:
+                rtype = kwargs.pop("dictionary", False)
+                if rtype:
+                    self._cursor_config.dictionary = rtype
+            
+            # Handle native_object option
+            native_obj = kwargs.pop("native_object", None)
+            if native_obj is not None:
+                self._cursor_config.native_object = bool(native_obj)
+
+    def _get_config(self):
+        """Get the effective configuration (cursor-specific or connection default)"""
+        return getattr(self, '_cursor_config', None) or self.connection._configuration
         
     def _check_closed(self) -> None:
         """Check if cursor is closed"""
-        if self._closed:
+        if self._closed or self.connection._closed:
             raise ProgrammingError("Cursor is closed")
+
+    @property
+    def closed(self) -> bool:
+        """Return True if cursor is closed"""
+        return self._closed or self.connection._closed
 
     def close(self) -> None:
         """Close the cursor"""
         if not self._closed:
             self._closed = True
+            self.arraysize = 1
+            self.rowcount = -1
+            self.description = None
+            self.lastrowid = None
+            self._result = []
+            self._result_index = 0
+            self._completions = []  # Store all completions for nextset()
+            self._completion_index = 0    # Current completion index
+            self._cursor_config = None 
         
     def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: bool = False) -> None:
         """
@@ -94,7 +133,9 @@ class Cursor:
             data: Optional parameters for the statement
         """
         self._check_closed()
-        
+        if (not sql):
+            self._process_completions(None)
+            return
         try:
             
             # Convert data to list format for parameter binding
@@ -109,11 +150,12 @@ class Cursor:
             
             # Create query packet with direct parameter binding (no string substitution!)
             query_packet = QueryPacket(sql, parameters)
-            completions = self.connection._client.execute(query_packet, can_redo=False)
+            completions = self.connection._client.execute(query_packet, config=self._get_config(), can_redo=False)
             
             # Process the completions to extract result data
             self._process_completions(completions)
-            
+        except DatabaseError as e:
+            raise e                
         except Exception as e:
             raise OperationalError(f"Execute failed: {e}")
         
@@ -138,7 +180,7 @@ class Cursor:
         
         match param:
             case str():
-                return self._escape_string(param, no_backslash_escapes)
+                return StringEscaper.escape_string_with_quotes(param, no_backslash_escapes)
             case bytes():
                 return self._escape_bytes(param, no_backslash_escapes)
             case bool():
@@ -178,7 +220,7 @@ class Cursor:
                 return str(param)
             case _:
                 # For other types, convert to string and escape
-                return f"'{self.connection._client.escape_string(str(param))}'"
+                return "'" + StringEscaper.escape_string_with_quotes(str(param), no_backslash_escapes) + "'"
     
     
     def _escape_bytes(self, value: bytes, no_backslash_escapes: bool) -> str:
@@ -210,6 +252,10 @@ class Cursor:
         Args:
             completions: List of completion objects
         """
+        # Store all completions for nextset() functionality
+        self._completions = completions
+        self._completion_index = 0
+        
         if not completions:
             self.rowcount = 0
             self.description = None
@@ -217,8 +263,17 @@ class Cursor:
             self._result_index = 0
             return
         
-        # Handle the first completion
-        completion = completions[0]
+        # Process the first completion
+        self._process_current_completion()
+    
+    def _process_current_completion(self) -> None:
+        """
+        Process the current completion (at _completion_index)
+        """
+        if (self._completion_index >= len(self._completions)):
+            return
+            
+        completion = self._completions[self._completion_index]
         
         # Check if it's a result set or update count
         if completion.is_result_set:
@@ -229,7 +284,7 @@ class Cursor:
             self.rowcount = completion.affected_rows
             self.description = None
             self._result = []
-            self.lastrowid = completion.insert_id
+            self.lastrowid = completion.insert_id is not None and completion.insert_id > 0 and completion.insert_id or None
         
         self._result_index = 0
     
@@ -245,34 +300,74 @@ class Cursor:
             if hasattr(completion, 'result_set') and completion.result_set:
                 result_set = completion.result_set
                 
-                # Extract rows
+                # Extract rows and columns
                 rows = result_set.get('rows', [])
+                columns = result_set.get('columns', [])
+                
+                # Apply row formatting based on configuration
+                config = self._get_config()
+                if config.named_tuple and columns:
+                    rows = self._convert_rows_to_named_tuples(rows, columns)
+                elif config.dictionary and columns:
+                    rows = self._convert_rows_to_dictionaries(rows, columns)
+                
                 self._result = rows
                 self.rowcount = len(rows)
                 
                 # Extract column information for description
-                columns = result_set.get('columns', [])
                 description = []
                 
                 for col in columns:
-                    # Create description tuple: (name, type_code, display_size, internal_size, precision, scale, null_ok)
+                    # Create description tuple to match C extension: 
+                    # (name, type, display_length, packed_len, precision, decimals, nullable, flags, table, org_name, org_table)
                     col_name = col.get('name', 'unknown')
                     col_type = col.get('column_type', 253)  # Default to VARCHAR
                     col_length = col.get('column_length', 0)
                     col_flags = col.get('flags', 0)
                     col_decimals = col.get('decimals', 0)
+                    col_charset = col.get('character_set', 63)  # Default to binary charset
+                    col_table = col.get('table', '')
+                    col_org_name = col.get('org_name', '')
+                    col_org_table = col.get('org_table', '')
                     
                     # Check if column is nullable (flag bit 0 = NOT NULL)
                     nullable = not (col_flags & 1)
                     
+                    # Calculate display_length and packed_len following C extension logic
+                    # Use max_length if available, otherwise use length
+                    display_length = col_length  # We don't have max_length in our implementation
+                    packed_len = 0
+                    precision = 0
+                    decimals = col_decimals
+                    
+                    # Handle charset-specific display length calculation
+                    max_char_len = self._get_charset_max_length(col_charset)
+                    if max_char_len and max_char_len > 1:
+                        packed_len = display_length
+                        display_length = display_length // max_char_len
+                    else:
+                        # For single-byte charsets, packed_len would be from pack_len table
+                        # We'll use a simplified approach
+                        packed_len = -1
+                    
+                    # Handle decimal fields special case
+                    if col_decimals and col_decimals < 31:
+                        decimals = col_decimals
+                        precision = col_length
+                        display_length = precision + 1
+                    
                     description.append((
-                        col_name,
-                        col_type,
-                        None,  # display_size
-                        col_length,  # internal_size
-                        col_length,  # precision
-                        col_decimals,  # scale
-                        nullable  # null_ok
+                        col_name,           # name
+                        col_type,           # type
+                        display_length,     # display_length
+                        packed_len,         # packed_len
+                        precision,          # precision
+                        decimals,           # decimals
+                        nullable,           # nullable
+                        col_flags,          # flags
+                        col_table,          # table
+                        col_org_name,       # org_name
+                        col_org_table       # org_table
                     ))
                 
                 self.description = tuple(description) if description else None
@@ -286,7 +381,196 @@ class Cursor:
         except Exception as e:
             raise OperationalError(f"Failed to process result set: {e}")
     
+    def _process_executemany_completions(self, completions: List[Any]) -> None:
+        """
+        Process completions from executemany - aggregate result sets with compatible metadata
+        
+        Args:
+            completions: List of completion objects from multiple executions
+        """
+        if not completions:
+            self.description = None
+            self._result = []
+            self._result_index = 0
+            return
+        
+        # Find completions with result sets
+        result_set_completions = [c for c in completions if c.has_result_set()]
+        
+        if not result_set_completions:
+            # No result sets - just use the first completion for metadata
+            first_completion = completions[0]
+            self.rowcount = getattr(first_completion, 'affected_rows', 0)
+            self.description = None
+            self._result = []
+            self._result_index = 0
+            return
+        
+        # Check if all result sets have compatible metadata (same columns)
+        first_rs = result_set_completions[0].get_result_set()
+        first_columns = first_rs.get('columns', [])
+        
+        compatible_completions = []
+        for completion in result_set_completions:
+            rs = completion.get_result_set()
+            columns = rs.get('columns', [])
+            
+            # Check if columns are compatible (same count and types)
+            if self._are_columns_compatible(first_columns, columns):
+                compatible_completions.append(completion)
+        
+        if compatible_completions:
+            # Aggregate rows from all compatible result sets
+            aggregated_rows = []
+            
+            for completion in compatible_completions:
+                rs = completion.get_result_set()
+                rows = rs.get('rows', [])
+                aggregated_rows.extend(rows)
+            
+            # Set up cursor state with aggregated data
+            self.description = self._build_description(first_columns)
+            self._result = aggregated_rows
+            self._result_index = 0
+            self.rowcount = len(aggregated_rows)
+        else:
+            # Fallback to first result set if no compatible ones found
+            first_rs = result_set_completions[0].get_result_set()
+            first_columns = first_rs.get('columns', [])
+            first_rows = first_rs.get('rows', [])
+            
+            self.description = self._build_description(first_columns)
+            self._result = first_rows
+            self._result_index = 0
+            self.rowcount = len(first_rows)
     
+    def _are_columns_compatible(self, columns1: List[Dict], columns2: List[Dict]) -> bool:
+        """
+        Check if two column definitions are compatible for aggregation
+        
+        Args:
+            columns1: First set of column definitions
+            columns2: Second set of column definitions
+            
+        Returns:
+            True if columns are compatible (same count, names, and types)
+        """
+        if len(columns1) != len(columns2):
+            return False
+        
+        for col1, col2 in zip(columns1, columns2):
+            # Check column name and type compatibility
+            if (col1.get('name') != col2.get('name') or 
+                col1.get('column_type') != col2.get('column_type')):
+                return False
+        
+        return True
+    
+    def _build_description(self, columns: List[Dict]) -> Optional[tuple]:
+        """
+        Build cursor description tuple from column definitions
+        
+        Args:
+            columns: List of column definition dictionaries
+            
+        Returns:
+            Tuple of column descriptions or None if no columns
+        """
+        if not columns:
+            return None
+        
+        description = []
+        for column in columns:
+            name = column.get('name', '')
+            column_type = column.get('column_type', 0)
+            display_size = column.get('display_size')
+            internal_size = column.get('internal_size', 0)
+            precision = column.get('precision', 0)
+            scale = column.get('scale', 0)
+            nullable = not bool(column.get('flags', 0) & 1)  # NOT_NULL flag
+            
+            description.append((
+                name,           # name
+                column_type,    # type_code
+                display_size,   # display_size
+                internal_size,  # internal_size
+                precision,      # precision
+                scale,          # scale
+                nullable        # null_ok
+            ))
+        
+        return tuple(description)
+    
+    def _create_named_tuple_class(self, columns: List[Dict]) -> type:
+        """
+        Create a namedtuple class from column definitions
+        
+        Args:
+            columns: List of column definition dictionaries
+            
+        Returns:
+            namedtuple class
+        """
+        if not columns:
+            return namedtuple('Row', [])
+        
+        # Extract column names, using name if available, otherwise org_name
+        field_names = []
+        for column in columns:
+            name = column.get('name', '') or column.get('org_name', '')
+            # Ensure valid Python identifier
+            if not name or not name.isidentifier():
+                name = f'column_{len(field_names)}'
+            # Handle duplicate names
+            original_name = name
+            counter = 1
+            while name in field_names:
+                name = f'{original_name}_{counter}'
+                counter += 1
+            field_names.append(name)
+        
+        return namedtuple('Row', field_names)
+    
+    def _convert_rows_to_named_tuples(self, rows: List[tuple], columns: List[Dict]) -> List[Any]:
+        """
+        Convert regular tuples to named tuples
+        
+        Args:
+            rows: List of tuple rows
+            columns: List of column definitions
+            
+        Returns:
+            List of named tuple rows
+        """
+        if not rows or not columns:
+            return rows
+        
+        RowClass = self._create_named_tuple_class(columns)
+        return [RowClass(*row) for row in rows]
+    
+    def _convert_rows_to_dictionaries(self, rows: List[tuple], columns: List[Dict]) -> List[Dict]:
+        """
+        Convert regular tuples to dictionaries
+        
+        Args:
+            rows: List of tuple rows
+            columns: List of column definitions
+            
+        Returns:
+            List of dictionary rows
+        """
+        if not rows or not columns:
+            return rows
+        
+        # Extract column names
+        field_names = []
+        for column in columns:
+            name = column.get('name', '') or column.get('org_name', '')
+            if not name:
+                name = f'column_{len(field_names)}'
+            field_names.append(name)
+        
+        return [dict(zip(field_names, row)) for row in rows]
         
     def executemany(self, sql: str, data: Sequence[Sequence[Any]]) -> None:
         """
@@ -309,35 +593,64 @@ class Cursor:
         self._result = []
         self._result_index = 0
         total_affected = 0
+        lastrowid = None
         
         try:
+            completions = list()
             # Execute the statement for each parameter set
             for params in data:
                 # Execute with current parameter set
-                self.execute(sql, params)
+                # Convert data to list format for parameter binding
+                parameters = None
+                if params:
+                    if isinstance(params, (list, tuple)):
+                        parameters = list(params)
+                    elif isinstance(params, dict):
+                        # For named parameters, we'd need to convert SQL from :name to ? format
+                        # For now, raise an error to indicate this needs implementation
+                        raise NotSupportedError("Named parameters not yet implemented with enhanced parameter binding")
                 
-                # Accumulate affected rows (if available)
-                if hasattr(self, 'rowcount') and self.rowcount >= 0:
-                    total_affected += self.rowcount
+                # Create query packet with direct parameter binding (no string substitution!)
+                query_packet = QueryPacket(sql, parameters)
+                compl = self.connection._client.execute(query_packet, config=self._get_config(), can_redo=False)
+                    
+                completions.extend(compl)
+                for c in compl:
+                    if c.affected_rows >= 0:
+                        total_affected += c.affected_rows
+                    if c.insert_id is not None and c.insert_id > 0:
+                        lastrowid = c.insert_id
+
+            # Process the completions - aggregate result sets with compatible metadata
+            self._process_executemany_completions(completions)
             
+            # Accumulate affected rows from all completions
+
             # Set final rowcount to total affected rows
-            self.rowcount = total_affected
-            
+            self.rowcount = total_affected           
+            self.lastrowid = lastrowid is not None and lastrowid > 0 and lastrowid or None
+
+        except DatabaseError as e:
+            raise e            
         except Exception as e:
             raise OperationalError(f"ExecuteMany failed: {e}")
         
     def fetchone(self) -> Optional[Any]:
         """Fetch the next row of a query result set"""
-        self._check_closed()
         if self._result_index >= len(self._result):
             return None
         row = self._result[self._result_index]
         self._result_index += 1
         return row
+
+    def _seek(self, offset: int) -> None:
+        """Move the cursor to the specified row"""
+        if offset < 0 or offset >= len(self._result):
+            raise ValueError("Invalid row number")
+        self._result_index = offset
         
     def fetchmany(self, size: Optional[int] = None) -> List[Any]:
         """Fetch the next set of rows of a query result"""
-        self._check_closed()
         if size is None:
             size = self.arraysize
         result = []
@@ -350,7 +663,6 @@ class Cursor:
         
     def fetchall(self) -> List[Any]:
         """Fetch all remaining rows of a query result"""
-        self._check_closed()
         result = self._result[self._result_index:]
         self._result_index = len(self._result)
         return result
@@ -363,7 +675,74 @@ class Cursor:
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set"""
         self._check_closed()
-        return None
+        
+        # Move to next completion
+        self._completion_index += 1
+        
+        # Check if there are more completions
+        if self._completion_index >= len(self._completions):
+            return None
+        
+        # Process the next completion
+        self._process_current_completion()
+        return True
+    
+    @property
+    def rownumber(self) -> int:
+        """Current row number (0-based index)"""
+        return self._result_index
+
+    @property
+    def _resulttype(self) -> int:
+        """Current result type"""
+        config = self._get_config()
+        if (config.named_tuple):
+            return RESULT_NAMEDTUPLE
+        elif (config.dictionary):
+            return RESULT_DICTIONARY
+        else:
+            return RESULT_TUPLE
+            
+
+    def scroll(self, value: int, mode: str = "relative") -> None:
+        """
+        Scroll the cursor in the result set to a new position according to mode.
+
+        If mode is "relative" (default), value is taken as offset to the
+        current position in the result set, if set to absolute, value states
+        an absolute target position.
+        
+        Args:
+            value: Position value
+            mode: "relative" or "absolute"
+            
+        Raises:
+            ProgrammingError: If cursor has no result set or invalid parameters
+        """
+        self._check_closed()
+        
+        # Check if we have a result set
+        if not self._result:
+            raise ProgrammingError("Cursor doesn't have a result set")
+        
+        # Validate mode
+        if mode not in ("absolute", "relative"):
+            raise ProgrammingError("Invalid or unknown scroll mode specified.")
+        
+        # Calculate new position
+        if mode == "relative":
+            if value == 0:
+                return  # No movement needed
+            new_pos = self._result_index + value
+        else:  # absolute
+            new_pos = value
+        
+        # Validate new position
+        if new_pos < 0 or new_pos > len(self._result):
+            raise ProgrammingError("Position value is out of range.")
+        
+        # Set new position
+        self._result_index = new_pos
         
     def setinputsizes(self, sizes: Sequence[Optional[int]]) -> None:
         """Predefine memory areas for parameters (no-op in this implementation)"""
@@ -383,6 +762,247 @@ class Cursor:
         if row is None:
             raise StopIteration
         return row
+    
+    def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:
+        """
+        Call a stored procedure with the given name and arguments
+        
+        Args:
+            procname: Name of the stored procedure
+            args: Sequence of arguments for the procedure
+            
+        Returns:
+            Sequence of arguments (modified for output parameters)
+        """
+        self._check_closed()
+        
+        try:
+            # Build CALL statement with placeholders
+            placeholders = ', '.join(['?' for _ in args])
+            call_sql = f"CALL {procname}({placeholders})"
+            
+            # Prepare the statement
+            stmt = self.connection._client.prepare_statement(call_sql)
+            
+            try:
+                # Execute with parameters using ExecutePacket
+                from .impl.message.client.execute_packet import ExecutePacket
+                execute_packet = ExecutePacket(stmt.statement_id, list(args), call_sql)
+                completions = self.connection._client.execute(execute_packet, config=self._get_config(), can_redo=False)
+                
+                # Process all completions
+                self._process_callproc_completions(completions)
+                
+                return None  # Match C extension behavior
+                
+            finally:
+                # Always close the prepared statement
+                self.connection._client.close_prepared_statement(stmt)
+        except DatabaseError as e:
+            raise e                            
+        except Exception as e:
+            raise OperationalError(f"CallProc failed: {e}")
+    
+    def _process_callproc_completions(self, completions: List[Any]) -> None:
+        """
+        Process completions from callproc execution
+        
+        Args:
+            completions: List of completion objects from procedure call
+        """
+        # Store all completions for nextset() functionality
+        self._completions = completions
+        self._completion_index = 0
+        
+        if not completions:
+            self.rowcount = 0
+            self.description = None
+            self._result = []
+            self._result_index = 0
+            return
+        
+        # Find the output parameters result set if it exists
+        output_params_index = -1
+        for i, completion in enumerate(completions):
+            if getattr(completion, 'is_output_parameters', False):
+                output_params_index = i
+                break
+        
+        # If we have output parameters, position cursor there
+        # Otherwise, position on the first result set
+        if output_params_index >= 0:
+            self._completion_index = output_params_index
+        else:
+            self._completion_index = 0
+        
+        # Process the current completion
+        self._process_current_completion()
+    
+    @property
+    def sp_outparams(self) -> bool:
+        """
+        Check if current result set contains output parameters
+        
+        Returns:
+            True if current result set is output parameters, False otherwise
+        """
+        if (hasattr(self, '_completions') and 
+            self._completion_index < len(self._completions)):
+            completion = self._completions[self._completion_index]
+            return getattr(completion, 'is_output_parameters', False)
+        return False
+        
+    @property
+    def affected_rows(self) -> int:
+        """
+        alias for rowcount
+        
+        Returns:
+            rowcount changed by last execution
+        """
+        return int(self.rowcount)
+
+
+    def nextset(self) -> Optional[bool]:
+        """
+        Move to the next result set
+        
+        Returns:
+            True if there are more result sets, False if no more, None if not supported
+        """
+        self._check_closed()
+        
+        if not hasattr(self, '_completions') or not self._completions:
+            return None
+        
+        # Move to next completion
+        self._completion_index += 1
+        
+        if self._completion_index >= len(self._completions):
+            return False
+        
+        # Process the next completion
+        self._process_current_completion()
+        return True
+    
+    def _get_charset_max_length(self, charset_id: int) -> int:
+        """
+        Get maximum character length for a charset ID based on MariaDB charset encoding lengths
+        
+        Args:
+            charset_id: MySQL/MariaDB charset ID
+            
+        Returns:
+            Maximum bytes per character for the charset, or None if unknown
+        """
+        # Key charset encoding lengths from MariaDB Java connector (truncated for space)
+        charset_max_lengths = {
+            1: 2, 8: 1, 28: 2, 33: 3, 45: 4, 46: 4, 63: 1, 77: 1, 
+            224: 4, 225: 4, 226: 4, 227: 4, 228: 4, 229: 4, 230: 4, 231: 4,
+            232: 4, 233: 4, 234: 4, 235: 4, 236: 4, 237: 4, 238: 4, 239: 4,
+            240: 4, 241: 4, 242: 4, 243: 4, 244: 4, 245: 4, 246: 4, 247: 4,
+            248: 4, 249: 4, 250: 4, 255: 4
+        }
+        return charset_max_lengths.get(charset_id)
+    
+    @property
+    def metadata(self) -> Optional[Dict[str, tuple]]:
+        """
+        Get metadata information for result set columns
+        
+        Returns:
+            Dictionary with column metadata or None if no result set
+        """
+        self._check_closed()
+        
+        if not self.description:
+            return None
+        
+        # Extract column information from the current result set
+        if not hasattr(self, '_completions') or not self._completions:
+            return None
+        
+        completion = self._completions[self._completion_index]
+        if not hasattr(completion, 'result_set') or not completion.result_set:
+            return None
+        
+        columns = completion.result_set.get('columns', [])
+        if not columns:
+            return None
+        
+        field_count = len(columns)
+        
+        # Initialize tuples for each metadata field
+        catalog_tuple = tuple(col.get('catalog', '') for col in columns)
+        schema_tuple = tuple(col.get('schema', '') for col in columns)  
+        field_tuple = tuple(col.get('name', '') for col in columns)
+        org_field_tuple = tuple(col.get('org_name', '') for col in columns)
+        table_tuple = tuple(col.get('table', '') for col in columns)
+        org_table_tuple = tuple(col.get('org_table', '') for col in columns)
+        type_tuple = tuple(col.get('column_type', 0) for col in columns)
+        charset_tuple = tuple(col.get('character_set', 0) for col in columns)
+        length_tuple = tuple(col.get('column_length', 0) for col in columns)
+        max_length_tuple = tuple(col.get('column_length', 0) for col in columns)  # We don't have max_length, use length
+        decimals_tuple = tuple(col.get('decimals', 0) for col in columns)
+        flags_tuple = tuple(col.get('flags', 0) for col in columns)
+        
+        # Calculate extended field type dynamically based on ext_type_name or ext_type_format
+        ext_type_list = []
+        for col in columns:
+            ext_field_type = EXT_FIELD_TYPE.NONE
+            
+            ext_type_format = col.get('ext_type_format')
+            ext_type_name = col.get('ext_type_name')
+            
+            if ext_type_format:
+                ext_format_lower = ext_type_format.lower()
+                if ext_format_lower == 'json':
+                    ext_field_type = EXT_FIELD_TYPE.JSON
+            
+            if ext_type_name:
+                ext_name_lower = ext_type_name.lower()
+                if ext_name_lower == 'json':
+                    ext_field_type = EXT_FIELD_TYPE.JSON
+                elif ext_name_lower == 'uuid':
+                    ext_field_type = EXT_FIELD_TYPE.UUID
+                elif ext_name_lower == 'inet4':
+                    ext_field_type = EXT_FIELD_TYPE.INET4
+                elif ext_name_lower == 'inet6':
+                    ext_field_type = EXT_FIELD_TYPE.INET6
+                elif ext_name_lower == 'point':
+                    ext_field_type = EXT_FIELD_TYPE.POINT
+                elif ext_name_lower == 'multipoint':
+                    ext_field_type = EXT_FIELD_TYPE.MULTIPOINT
+                elif ext_name_lower == 'linestring':
+                    ext_field_type = EXT_FIELD_TYPE.LINESTRING
+                elif ext_name_lower == 'multilinestring':
+                    ext_field_type = EXT_FIELD_TYPE.MULTILINESTRING
+                elif ext_name_lower == 'polygon':
+                    ext_field_type = EXT_FIELD_TYPE.POLYGON
+                elif ext_name_lower == 'multipolygon':
+                    ext_field_type = EXT_FIELD_TYPE.MULTIPOLYGON
+                elif ext_name_lower == 'geometrycollection':
+                    ext_field_type = EXT_FIELD_TYPE.GEOMETRYCOLLECTION
+            
+            ext_type_list.append(ext_field_type)
+        
+        ext_type_tuple = tuple(ext_type_list)
+        
+        return {
+            'catalog': catalog_tuple,
+            'schema': schema_tuple,
+            'field': field_tuple,
+            'org_field': org_field_tuple,
+            'table': table_tuple,
+            'org_table': org_table_tuple,
+            'type': type_tuple,
+            'charset': charset_tuple,
+            'length': length_tuple,
+            'max_length': max_length_tuple,
+            'decimals': decimals_tuple,
+            'flags': flags_tuple,
+            'ext_type_or_format': ext_type_tuple
+        }
         
     def __enter__(self) -> 'Cursor':
         """Context manager entry"""

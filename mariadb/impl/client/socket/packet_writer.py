@@ -26,12 +26,20 @@ Equivalent to the Java StandardPacketWriter.
 import struct
 from typing import Optional, Union
 
+from ....constants import CAPABILITY
+
 from .stream.stream import Stream
 from ...debug_utils import log_socket_data
 from .mutable_int import MutableInt
 
 
 class PacketWriter:
+    
+    SLASH_BYTE: int = b"\\"[0]
+    QUOTE_BYTE: int = b"'"[0]
+    DQUOTE_BYTE: int = b"\""[0]
+    NULL_BYTE: int = b"\0"[0]
+
     """
     Packet writer for MariaDB protocol
     
@@ -157,7 +165,6 @@ class PacketWriter:
     
     def write_byte(self, value: int) -> None:
         """Write single byte to buffer or payload"""
-        # Original implementation for non-payload mode
         self._ensure_capacity(1)
         self.buffer[self.position] = value & 0xFF
         self.position += 1
@@ -167,12 +174,29 @@ class PacketWriter:
         if not data:
             return
             
-        # Original implementation for non-payload mode
         data_len = len(data)
         self._ensure_capacity(data_len)
         self.buffer[self.position:self.position + data_len] = data
         self.position += data_len
     
+    def write_escaped_bytes(self, data: Union[bytes, bytearray], no_backslash_escapes: bool) -> None:
+        """Write escaped byte array to buffer or payload"""
+        if not data:
+            return
+
+        self._ensure_capacity(len(data) * 2)
+
+        if no_backslash_escapes:
+            for byte in data:
+                if byte == self.QUOTE_BYTE:
+                    self.write_byte(self.QUOTE_BYTE)
+                self.write_byte(byte)
+        else:    
+            for byte in data:
+                if byte == self.QUOTE_BYTE or byte == self.DQUOTE_BYTE or byte == self.NULL_BYTE or byte == self.SLASH_BYTE:
+                    self.write_byte(self.SLASH_BYTE)
+                self.write_byte(byte)
+
     def write_string(self, value: str, encoding: str = 'utf-8') -> None:
         """Write string to buffer or payload"""
         if value is None:
@@ -180,6 +204,39 @@ class PacketWriter:
             
         data = value.encode(encoding)
         self.write_bytes(data)
+    
+    def write_length_encoded_string(self, value: str, encoding: str = 'utf-8') -> None:
+        """Write length-encoded string"""
+        if value is None:
+            self.write_byte(0xFB)  # NULL marker
+            return
+        
+        data = value.encode(encoding)
+        self.write_length_encoded_int(len(data))
+        self.write_bytes(data)
+    
+    def write_length_encoded_bytes(self, data: bytes) -> None:
+        """Write length-encoded bytes"""
+        if data is None:
+            self.write_byte(0xFB)  # NULL marker
+            return
+        
+        self.write_length_encoded_int(len(data))
+        self.write_bytes(data)
+    
+    def write_length_encoded_int(self, value: int) -> None:
+        """Write length-encoded integer"""
+        if value < 251:
+            self.write_byte(value)
+        elif value < 65536:
+            self.write_byte(0xFC)
+            self.write_bytes(struct.pack('<H', value))
+        elif value < 16777216:
+            self.write_byte(0xFD)
+            self.write_bytes(struct.pack('<I', value)[:3])
+        else:
+            self.write_byte(0xFE)
+            self.write_bytes(struct.pack('<Q', value))
     
     def send_payload(self, packet_type: str) -> None:
         """

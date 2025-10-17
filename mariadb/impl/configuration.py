@@ -79,6 +79,14 @@ class Configuration:
     # Initialization command
     init_command: Optional[str] = None
     
+    # Type conversion options
+    converter: Optional[Dict[int, callable]] = None
+    
+    # Result format options
+    named_tuple: bool = False
+    dictionary: bool = False
+    native_object: bool = False
+    
     # Additional options
     non_mapped_options: Dict[str, Any] = field(default_factory=dict)
     
@@ -212,6 +220,18 @@ class Configuration:
         if 'init_command' in params:
             config.init_command = params['init_command']
         
+        # Type conversion options
+        if 'converter' in params:
+            config.converter = params['converter']
+        
+        # Result format options
+        if 'named_tuple' in params:
+            config.named_tuple = bool(params['named_tuple'])
+        if 'dictionary' in params:
+            config.dictionary = bool(params['dictionary'])
+        if 'native_object' in params:
+            config.native_object = bool(params['native_object'])
+        
         # Store any unmapped options
         valid_params = {
             'host', 'hostname', 'server', 'user', 'username', 'password', 'passwd',
@@ -222,7 +242,7 @@ class Configuration:
             'autocommit', 'read_only',
             'use_compression', 'compress',
             'query_timeout', 'max_allowed_packet',
-            'character_encoding', 'charset', 'debug', 'init_command'
+            'character_encoding', 'charset', 'debug', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object'
         }
         
         for key, value in params.items():

@@ -40,6 +40,7 @@ class Completion:
     warning_count: int = 0
     result_set: Optional[Any] = None
     is_result_set: bool = False
+    is_output_parameters: bool = False
     
     def has_result_set(self) -> bool:
         """Check if completion has result set"""

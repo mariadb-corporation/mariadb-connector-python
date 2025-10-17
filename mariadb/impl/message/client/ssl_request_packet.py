@@ -63,7 +63,7 @@ class SslRequestPacket(ClientMessage):
         # Write SSL request packet content
         writer.write_int(self.client_capabilities & 0xFFFFFFFF)  # Client capabilities (4 bytes)
         writer.write_int(1024 * 1024 * 1024)  # Max packet size (4 bytes)
-        writer.write_byte(self.exchange_charset)  # Charset (1 byte)
+        writer.write_byte(45)  # Charset (1 byte)
         writer.write_bytes(b'\x00' * 19)  # Reserved bytes (19 bytes)
         writer.write_int((self.client_capabilities >> 32) & 0xFFFFFFFF)  # MariaDB extended capabilities (4 bytes)
         
