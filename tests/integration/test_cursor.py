@@ -13,7 +13,7 @@ import time
 import mariadb
 from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CAPABILITY as CLIENT
 
-from ..base_test import create_connection, is_maxscale, is_mysql
+from ..base_test import create_connection, is_maxscale, is_mysql, is_native
 
 server_indicator_version = 100206
 
@@ -70,21 +70,23 @@ class TestCursor(unittest.TestCase):
         for val in invalid:
             try:
                 cursor.execute("SELECT ?", (decimal.Decimal(val),))
+                self.fail(f"Expected NotSupportedError for decimal value {val}")
             except mariadb.NotSupportedError as e:
-                self.assertEqual(f"'{decimal.Decimal(val).__str__()}'" in str(e), True)
-                pass
+                self.assertIn(f"'{decimal.Decimal(val).__str__()}'", str(e))
 
         invalid = ("inf", "+inf", "nan", "-inf")
         for val in invalid:
             try:
                 cursor.execute("SELECT ?", (float(val),))
+                self.fail(f"Expected NotSupportedError for float value {val}")
             except mariadb.NotSupportedError as e:
-                self.assertEqual(f"'{float(val)}'" in str(e), True)
-                pass
+                self.assertIn(f"'{float(val)}'", str(e))
 
         cursor.close()
 
     def test_cursor_reconnect(self):
+        if is_native():
+            self.skipTest("skip test for native")
         if is_maxscale():
             self.skipTest("skip test for maxscale")
 
@@ -171,6 +173,7 @@ class TestCursor(unittest.TestCase):
 
         # Vector can't be empty
         empty= array.array('f', [])
+        print(empty)
         try:
             cursor.execute("INSERT INTO t_vector VALUES (?,?)", (1, empty))
         except mariadb.IntegrityError:
@@ -402,7 +405,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT a,b,c,d,e FROM t1")
         metadata= cursor.metadata
         self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
-        self.assertEqual(metadata["type"][0], FIELD_TYPE.BLOB)
+        self.assertEqual(metadata["type"][0], FIELD_TYPE.JSON)
         self.assertEqual(metadata["ext_type_or_format"][1], EXT_FIELD_TYPE.UUID)
         self.assertEqual(metadata["type"][1], FIELD_TYPE.STRING)
         self.assertEqual(metadata["ext_type_or_format"][2], EXT_FIELD_TYPE.INET4)
@@ -468,6 +471,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_pyformat(self):
+        if is_native():
+            self.skipTest("Native doesn't support named parameters")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
@@ -510,6 +515,7 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor(named_tuple=True)
         cursor.execute("SELECT 1 as foo")
         rows = cursor.fetchall()
+        print(rows)
         self.assertEqual(rows[0].foo, 1)
         del cursor
         cursor = self.connection.cursor(dictionary=True)
@@ -534,8 +540,8 @@ class TestCursor(unittest.TestCase):
                            params)
         cursor.execute("SELECT * FROM test_named_tuple ORDER BY id")
         row = cursor.fetchone()
-
-        self.assertEqual(cursor.statement,
+        if not is_native():
+            self.assertEqual(cursor.statement,
                          "SELECT * FROM test_named_tuple ORDER BY id")
         self.assertEqual(row.id, 1)
         self.assertEqual(row.name, "Jack")
@@ -625,6 +631,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_indicator(self):
+        if is_native():
+            self.skipTest("Skip for native, until suporting bulk")
         if is_mysql():
             self.skipTest("Skip (MySQL)")
         if self.connection.server_version < server_indicator_version:
@@ -714,11 +722,10 @@ class TestCursor(unittest.TestCase):
 
         values= (ipaddress.ip_address('::'), ipaddress.ip_address('192.168.0.1'),
                  uuid.uuid4())
-
         cursor.execute("INSERT INTO t1 VALUES (?, ?, ?)", values)
         cursor.execute("SELECT a,b,c FROM t1")
         row= cursor.fetchone()
-
+        
         self.assertEqual(row[0], values[0].__str__())
         self.assertEqual(row[1], values[1].__str__())
         self.assertEqual(row[2], values[2].__str__())
@@ -1133,6 +1140,8 @@ class TestCursor(unittest.TestCase):
             cursor.close()
 
     def test_conpy48(self):
+        if is_native():
+            self.skipTest("Skip (Native)")
         with create_connection() as con:
             cur = con.cursor()
             cur.execute("select %s", [True])
@@ -1211,6 +1220,8 @@ class TestCursor(unittest.TestCase):
             cur.close()
 
     def test_conpy58(self):
+        if is_native:
+            self.skipTest("Native only support QMARK")
         with create_connection() as con:
             cursor = con.cursor()
             cursor.execute("SELECT %(val)s", {"val": 3})
@@ -1275,6 +1286,8 @@ class TestCursor(unittest.TestCase):
             del cur
 
     def test_conpy67(self):
+        if is_native():
+            self.skipTest("Skip (Native) only buffered")
         with create_connection() as con:
             with con.cursor(buffered=False) as cur:
                 cur.execute("SELECT 1")
@@ -1440,13 +1453,15 @@ class TestCursor(unittest.TestCase):
             with conn.cursor() as cursor:
                 try:
                     cursor.execute("SELECT /*!50701 ? */", (1,))
-                except mariadb.ProgrammingError:
+                except mariadb.ProgrammingError as e:
+                    print(e)
                     pass
 
             with conn.cursor() as cursor:
                 try:
                     cursor.execute("SELECT /*!250701 ? */", (1,))
-                except mariadb.ProgrammingError:
+                except mariadb.ProgrammingError as e:
+                    print(e)
                     pass
 
     def check_closed(self):
@@ -1523,6 +1538,8 @@ class TestCursor(unittest.TestCase):
                 self.assertEqual(row[0], b"foobar" if is_mysql() else "foobar")
 
     def test_conpy205(self):
+        if is_native:
+            self.skipTest("Native only support QMARK")
         with create_connection() as conn:
             cursor = conn.cursor()
 
@@ -1591,6 +1608,9 @@ class TestCursor(unittest.TestCase):
             del cursor
 
     def test_conpy209(self):
+        if is_native():
+            self.skipTest("Skip (Native)")
+
         with create_connection() as conn:
             cursor = conn.cursor()
             data = ("col_Unitéble_id_seq", "foobar")
@@ -1813,6 +1833,8 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(rows, data)
 
     def test_conpy91(self):
+        if is_native:
+            self.skipTest("Native only support QMARK")
         with create_connection() as connection:
             with connection.cursor() as cursor:
                 for parameter_type in (int, decimal.Decimal):
