@@ -37,8 +37,8 @@ except ImportError:
 from ...client.context import Context
 from ...client.socket.packet_writer import PacketWriter
 from ...string_utils import StringEscaper
-from ....constants.STATUS import NO_BACKSLASH_ESCAPES
-from ....constants.INDICATOR import MrdbIndicator
+from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
+from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
 from ....exceptions import NotSupportedError
 BINARY_PREFIX: bytes = bytearray(b"_binary'")

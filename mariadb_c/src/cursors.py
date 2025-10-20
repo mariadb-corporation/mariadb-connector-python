@@ -19,13 +19,10 @@
 
 import datetime
 from numbers import Number
-import mariadb
-CURSOR = mariadb.constants.CURSOR
-STATUS = mariadb.constants.STATUS
-CAPABILITY = mariadb.constants.CAPABILITY
-INDICATOR = mariadb.constants.INDICATOR
-# Import exceptions from main mariadb package
-from mariadb import (
+
+# Import shared constants and exceptions to avoid circular dependencies
+from mariadb_shared.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
+from mariadb_shared.exceptions import (
     Error, Warning, InterfaceError, DatabaseError,
     InternalError, OperationalError, ProgrammingError,
     IntegrityError, DataError, NotSupportedError, PoolError

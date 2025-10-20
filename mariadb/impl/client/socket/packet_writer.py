@@ -26,7 +26,7 @@ Equivalent to the Java StandardPacketWriter.
 import struct
 from typing import Optional, Union
 
-from ....constants import CAPABILITY
+from mariadb_shared.constants import CAPABILITY
 
 from .stream.stream import Stream
 from ...debug_utils import log_socket_data

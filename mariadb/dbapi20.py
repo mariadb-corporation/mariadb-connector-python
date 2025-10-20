@@ -1,4 +1,4 @@
-from . import constants
+from mariadb_shared import constants
 import time
 import datetime
 

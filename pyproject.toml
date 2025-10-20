@@ -98,19 +98,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-# Environment variables for testing
-env = [
-    # Default to pure Python implementation for tests
-    "MARIADB_PYTHON_CONNECTOR = mariadb"
-]
-# Markers for different test types
-markers = [
-    "unit: Unit tests",
-    "integration: Integration tests requiring database",
-    "c_extension: Tests that require C extension (set MARIADB_PYTHON_CONNECTOR=mariadb_c)",
-    "pool: Tests that require connection pooling",
-    "slow: Slow running tests",
-]
+
 
 # Development tools configuration
 [tool.black]

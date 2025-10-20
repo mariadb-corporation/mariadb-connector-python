@@ -19,12 +19,9 @@
 
 import socket
 
-import mariadb
-STATUS = mariadb.constants.STATUS
-TPC_STATE = mariadb.constants.TPC_STATE
-INFO = mariadb.constants.INFO
-# Import exceptions from main mariadb package
-from mariadb import (
+# Import shared constants and exceptions to avoid circular dependencies
+from mariadb_shared.constants import STATUS, TPC_STATE, INFO
+from mariadb_shared.exceptions import (
     Error, Warning, InterfaceError, DatabaseError,
     InternalError, OperationalError, ProgrammingError,
     IntegrityError, DataError, NotSupportedError, PoolError

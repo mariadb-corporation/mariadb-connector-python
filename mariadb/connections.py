@@ -20,7 +20,7 @@
 import socket
 from typing import Optional, Any, Dict, Union, Type
 from .cursors import Cursor
-from . import constants
+from mariadb_shared import constants
 from .exceptions import ProgrammingError, NotSupportedError, OperationalError
 from packaging import version
 from .impl.client.client import Client

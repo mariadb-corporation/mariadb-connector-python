@@ -7,21 +7,16 @@ This is a pure Python implementation. For better performance, install the
 optional C extension: pip install mariadb-python[c-extension]
 '''
 
-from .exceptions import (
-    DataError,
-    DatabaseError,
-    Error,
-    IntegrityError,
-    InterfaceError,
-    InternalError,
-    NotSupportedError,
-    OperationalError,
-    PoolError,
-    ProgrammingError,
-    Warning,
+import os
+
+# Import exceptions from shared package to avoid circular dependencies
+from mariadb_shared.exceptions import (
+    DataError, DatabaseError, Error, IntegrityError,
+    InterfaceError, InternalError, NotSupportedError,
+    OperationalError, PoolError, ProgrammingError, Warning
 )
 
-# Fix module names for proper error display
+# Set the module name for all exceptions to 'mariadb' for compatibility
 DataError.__module__ = 'mariadb'
 DatabaseError.__module__ = 'mariadb'
 Error.__module__ = 'mariadb'
@@ -36,87 +31,36 @@ Warning.__module__ = 'mariadb'
 
 from .field import fieldinfo
 from .dbapi20 import *   # noqa: F401,F403
-from .cursors import Cursor
-from .connections import Connection
-from . import constants
+# Import constants from shared package
+from mariadb_shared import constants
 
-# Connection class selection - determined at module initialization
-_ConnectionClass = None
+# Import implementation selector early (like psycopg does with pq)
+from . import impl_selector  # noqa: F401 import early to stabilize side effects
 
-def _select_connection_implementation():
-    """
-    Select the best connection implementation based on availability and environment variables.
-    
-    This function is called once at module initialization to determine which
-    connection class to use for all subsequent connections.
-    """
-    global _ConnectionClass
-    
-    import os
-    
-    # Import the pure Python implementation (always available)
-    from .connections import Connection as PythonConnection
-    
-    # Check for C extension availability
-    # We only check if the module exists, not if it can be imported yet
-    # The actual import will happen when needed
-    c_extension_available = False
-    try:
-        import importlib.util
-        spec = importlib.util.find_spec('mariadb_c.src')
-        if spec is not None:
-            # Module exists - assume it's available
-            # We'll do the actual import later when needed
-            c_extension_available = True
-    except Exception:
-        c_extension_available = False
-    
-    # Check environment variable preference
-    impl_preference = os.environ.get('MARIADB_PYTHON_CONNECTOR', '').lower()
-    
-    # Select implementation (version info is now handled dynamically)
-    if impl_preference == 'mariadb':
-        # Force pure Python implementation
-        _ConnectionClass = PythonConnection
-    elif impl_preference == 'mariadb_c':
-        # Force C extension
-        if c_extension_available:
-            # Defer the actual import until needed - just mark that we want C extension
-            _ConnectionClass = 'mariadb_c'
-        else:
-            raise ImportError("C extension (mariadb_c) was requested but is not available. "
-                            "The C extension appears to be a placeholder. "
-                            "Use MARIADB_PYTHON_CONNECTOR=mariadb to use the pure Python implementation.")
-    else:
-        # Default behavior: prefer C extension if available, fallback to pure Python
-        if c_extension_available:
-            # Defer the actual import until needed - just mark that we want C extension
-            _ConnectionClass = 'mariadb_c'
-        else:
-            # Use pure Python implementation
-            _ConnectionClass = PythonConnection
+# Re-export the selected implementation classes and implementation info
+Connection = impl_selector.Connection
+Cursor = impl_selector.Cursor
+__impl__ = impl_selector.__impl__
 
-# Note: _select_connection_implementation() will be called after version variables are defined
+# Implementation selection happens at import time in impl_selector
 
 __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "InterfaceError", "InternalError", "NotSupportedError",
            "OperationalError", "PoolError", "ProgrammingError",
            "Warning", "Connection", "__version__", "__version_type__", "__version_info__",
            "__author__", "Cursor", "fieldinfo", "constants",
-           "connect", "mariadbapi_version", "client_version_info", "client_version", "_have_asan"]
-
+           "connect", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__"]
 
 def connect(*args, connectionclass=None, **kwargs):
     """
     Creates a MariaDB Connection object.
 
-    By default, the pure Python Connection class will be used.
-    If the C extension is installed and no connectionclass is specified,
-    the C extension will be used for better performance.
+    The implementation (pure Python or C extension) is automatically selected
+    based on availability and the MARIADB_PYTHON_CONNECTOR environment variable.
 
     Parameter connectionclass specifies a subclass of
-    mariadb.Connection object. If not specified, default will be used.
-    This optional parameter was added in version 1.1.0.
+    mariadb.Connection object. If not specified, the automatically selected
+    implementation will be used.
 
     Connection parameters are provided as a set of keyword arguments:
 
@@ -129,14 +73,12 @@ def connect(*args, connectionclass=None, **kwargs):
     - **`connect_timeout`** - Connect timeout in seconds
     - **`read_timeout`** - Read timeout in seconds
     - **`write_timeout`** - Write timeout in seconds
-    - **`local_infile`** - Enables or disables the use of LOAD DATA LOCAL INFILE statements.
-    - **`compress`** (default: `False`) - Uses the compressed protocol for client server communication. If the server doesn't support compressed protocol, the default protocol will be used.
-    - **`init_command`** - Command(s) which will be executed when connecting and reconnecting to the database server
-    - **`default_file`** - Read options from the specified option file. If the file is an empty string, default configuration file(s) will be used
-    - **`default_group`** - Read options from the specified group
-    - **`plugin_dir`** - Directory which contains MariaDB client plugins.
-    - **`reconnect`** - Enables or disables automatic reconnect. Available since version 1.1.4
-    - **`ssl_key`** - Defines a path to a private key file to use for TLS. This option requires that you use the absolute path, not a relative path. The specified key must be in PEM format
+    - **`local_infile`** - Enable or disable the use of LOAD DATA LOCAL INFILE statements
+    - **`compress`** - Enable or disable protocol compression. If enabled, compression will be used if the server supports it
+    - **`init_command`** - Command which will be executed when connecting and reconnecting to the server
+    - **`default_file`** - Read default values from the given option file. On Windows the file must be an .ini file
+    - **`default_group`** - Read default values from the given group. If not given, the default group name is the connection type
+    - **`ssl_key`** - Defines a path to a private key file to use for TLS. This option requires that you use the absolute path, not a relative path. The private key must be in PEM format
     - **`ssl_cert`** - Defines a path to the X509 certificate file to use for TLS. This option requires that you use the absolute path, not a relative path. The X609 certificate must be in PEM format.
     - **`ssl_ca`** - Defines a path to a PEM file that should contain one or more X509 certificates for trusted Certificate Authorities (CAs) to use for TLS. This option requires that you use the absolute path, not a relative path.
     - **`ssl_capath`** - Defines a path to a directory that contains one or more PEM files that contains one X509 certificate for a trusted Certificate Authority (CA)
@@ -150,39 +92,22 @@ def connect(*args, connectionclass=None, **kwargs):
 
     **Environment Variables:**
     - **`MARIADB_PYTHON_CONNECTOR`** - Controls which connector implementation to use:
-        - `mariadb` - Force pure Python implementation
-        - `mariadb_c` - Force C extension (raises error if not available)
-        - Not set or other values - Default behavior (prefer C extension, fallback to pure Python)
+        - `mariadb` or `python` - Force pure Python implementation
+        - `mariadb_c` or `c` - Force C extension (raises error if not available)
+        - Not set - Default behavior (prefer C extension, fallback to pure Python)
 
     """
-    # Handle connection pooling (simplified for now)
-    # if kwargs and "pool_name" in kwargs:
-    #     pool_name = kwargs["pool_name"]
-    #     if pool_name not in _CONNECTION_POOLS:
-    #         pool = ConnectionPool(**kwargs)
-    #     else:
-    #         pool = _CONNECTION_POOLS[pool_name]
-    #     return pool.get_connection()
-
-    # Use pre-selected connection class if none specified
+    # Use the automatically selected connection class if none specified
     if connectionclass is None:
-        connectionclass = _ConnectionClass
-        
-    # Handle deferred C extension import
-    if connectionclass == 'mariadb_c':
-        # Now it's safe to import the C extension wrapper after injection is complete
-        import mariadb_c.src.connections
-        connectionclass = mariadb_c.src.connections.Connection
+        connectionclass = Connection
 
     connection = connectionclass(*args, **kwargs)
     
     # Validate that it's a proper Connection instance
-    # For now, just check if it's our Connection class
     if not hasattr(connection, 'cursor'):
         raise ProgrammingError(f"{connection} is not a valid mariadb Connection")
         
     return connection
-
 
 
 # Stub for ASAN detection
@@ -251,29 +176,25 @@ def __getattr__(name):
 
 def _get_current_version():
     """Get version based on current implementation selection"""
-    if _ConnectionClass == 'mariadb_c':
+    if __impl__ == 'c':
         # C extension is selected
         try:
             import mariadb_c
             return mariadb_c.__version__
-        except (ImportError, AttributeError):
-            return _base_version + "-c"
-    elif hasattr(_ConnectionClass, '__module__') and 'mariadb_c' in str(_ConnectionClass.__module__):
-        # C extension connection class is loaded
-        try:
-            import mariadb_c
-            return mariadb_c.__version__
-        except (ImportError, AttributeError):
-            return _base_version + "-c"
+        except ModuleNotFoundError:
+            # Fallback for development mode (not installed)
+            try:
+                import mariadb_c.src
+                return mariadb_c.src.__version__
+            except (ImportError, AttributeError):
+                return _base_version + "-c"
     else:
         # Pure Python implementation
         return _base_version + "-native"
 
 def _get_current_version_type():
     """Get version type based on current implementation selection"""
-    if _ConnectionClass == 'mariadb_c':
-        return "c"
-    elif hasattr(_ConnectionClass, '__module__') and 'mariadb_c' in str(_ConnectionClass.__module__):
+    if __impl__ == 'c':
         return "c"
     else:
         return "native"
@@ -282,5 +203,4 @@ def _get_current_version_info():
     """Get version info based on current implementation selection"""
     return version_numeric
 
-# Initialize the connection implementation
-_select_connection_implementation()
+# Implementation selection is handled by impl_selector module at import time

@@ -51,6 +51,9 @@ Repository = "https://www.github.com/mariadb-corporation/mariadb-connector-pytho
 "Bug Tracker" = "https://jira.mariadb.org/"
 "Source Code" = "https://www.github.com/mariadb-corporation/mariadb-connector-python"
 
+[tool.setuptools.package-dir]
+"mariadb_c" = "src"
+
 [tool.setuptools.packages.find]
 include = ["mariadb_c*"]
 

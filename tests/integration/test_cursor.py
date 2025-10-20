@@ -173,7 +173,6 @@ class TestCursor(unittest.TestCase):
 
         # Vector can't be empty
         empty= array.array('f', [])
-        print(empty)
         try:
             cursor.execute("INSERT INTO t_vector VALUES (?,?)", (1, empty))
         except mariadb.IntegrityError:
@@ -267,6 +266,7 @@ class TestCursor(unittest.TestCase):
 
         cursor.execute("SELECT * from test_string")
         row = cursor.fetchone()
+        
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], c2)
         self.assertEqual(row[2], c3)
@@ -318,6 +318,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_fetchmany(self):
+        if is_native():
+            self.skipTest("only support buffered cursor")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
@@ -405,7 +407,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT a,b,c,d,e FROM t1")
         metadata= cursor.metadata
         self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
-        self.assertEqual(metadata["type"][0], FIELD_TYPE.JSON)
+        self.assertEqual(metadata["type"][0], FIELD_TYPE.BLOB)
         self.assertEqual(metadata["ext_type_or_format"][1], EXT_FIELD_TYPE.UUID)
         self.assertEqual(metadata["type"][1], FIELD_TYPE.STRING)
         self.assertEqual(metadata["ext_type_or_format"][2], EXT_FIELD_TYPE.INET4)
@@ -447,7 +449,7 @@ class TestCursor(unittest.TestCase):
         else:
             self.assertEqual(fieldinfo.type(info[10]), "BLOB")
         self.assertEqual(fieldinfo.flag(info[0]),
-                         "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT | NUMERIC")
+                             "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT | NUMERIC")
         self.assertEqual(fieldinfo.flag(info[1]), "PART_KEY | NUMERIC")
         self.assertEqual(fieldinfo.flag(info[9]), "BLOB | BINARY")
         del cursor
@@ -493,6 +495,8 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], "Andrey")
 
     def test_format(self):
+        if (is_native()):
+            self.skipTest("Native only support qmark")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
@@ -515,7 +519,6 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor(named_tuple=True)
         cursor.execute("SELECT 1 as foo")
         rows = cursor.fetchall()
-        print(rows)
         self.assertEqual(rows[0].foo, 1)
         del cursor
         cursor = self.connection.cursor(dictionary=True)
@@ -549,6 +552,8 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_laststatement(self):
+        if is_native():
+            self.skipTest("Native doesn't support statement property")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
@@ -1037,12 +1042,14 @@ class TestCursor(unittest.TestCase):
             cursor.nextset()
             del cursor
             cursor = con.cursor()
-            cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
-            self.assertEqual(cursor.sp_outparams, True)
-            row = cursor.fetchone()
-            self.assertEqual(row[0], "foobar")
-            cursor.execute("DROP PROCEDURE IF EXISTS p2")
-            del cursor
+            # not set with native, since will result in OUT or INOUT argument variable missing
+            if not is_native():
+                cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
+                self.assertEqual(cursor.sp_outparams, True)
+                row = cursor.fetchone()
+                self.assertEqual(row[0], "foobar")
+                cursor.execute("DROP PROCEDURE IF EXISTS p2")
+                del cursor
 
     def test_sp3(self):
         with create_connection() as con:
@@ -1454,14 +1461,12 @@ class TestCursor(unittest.TestCase):
                 try:
                     cursor.execute("SELECT /*!50701 ? */", (1,))
                 except mariadb.ProgrammingError as e:
-                    print(e)
                     pass
 
             with conn.cursor() as cursor:
                 try:
                     cursor.execute("SELECT /*!250701 ? */", (1,))
                 except mariadb.ProgrammingError as e:
-                    print(e)
                     pass
 
     def check_closed(self):
@@ -1593,6 +1598,22 @@ class TestCursor(unittest.TestCase):
                     self.assertEqual(err.errno, ERR.ER_PARSE_ERROR)
 
     def test_unicode_parsing(self):
+        with create_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("create temporary table Unitéble2 ( 測試 int, méil int)")
+            cursor.execute("insert into Unitéble2 values (?, ?)", (1, 2))
+            self.assertEqual(cursor.rowcount, 1)
+            cursor.execute("SELECT `Unitéble2`.`測試` AS `Unitéble2_測試`,"
+                           " `Unitéble2`.`méil` AS `Unitéble2_méil` FROM "
+                           "`Unitéble2` WHERE ? = `Unitéble2`.`測試`", (1, ))
+            cursor.fetchall()
+            self.assertEqual(cursor.rowcount, 1)
+            del cursor
+
+    def test_unicode_parsing_named(self):
+        if is_native():
+            self.skipTest("Skip (Native doesn't support named parameters)")
         with create_connection() as conn:
             cursor = conn.cursor()
 

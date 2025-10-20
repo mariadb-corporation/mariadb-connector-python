@@ -30,7 +30,7 @@ from mariadb.impl.client.context import Context
 from mariadb.impl.client.socket.packet_writer import PacketWriter
 from ..client_message import ClientMessage
 from ...configuration import Configuration
-from .... import constants
+from mariadb_shared import constants
 
 
 class HandshakeResponse(ClientMessage):

@@ -26,8 +26,12 @@ from typing import Sequence, Optional, List, Any, Union, Dict
 from .exceptions import DatabaseError, ProgrammingError, NotSupportedError, OperationalError
 from .impl.message.client.query_packet import QueryPacket
 from .impl.string_utils import StringEscaper
-from .constants.STATUS import NO_BACKSLASH_ESCAPES
-from .constants import EXT_FIELD_TYPE
+from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
+from mariadb_shared.constants import EXT_FIELD_TYPE
+from mariadb_shared.constants.FIELD_TYPE import (
+    INT24, TIMESTAMP, YEAR, NEWDECIMAL, DECIMAL, JSON
+)
+from mariadb_shared.constants.FIELD_FLAG import NUMERIC as NUM_FLAG
 
 # Forward reference to avoid circular import
 from typing import TYPE_CHECKING
@@ -74,8 +78,8 @@ class Cursor:
         self.rowcount: int = -1
         self.description: Optional[List[Any]] = None
         self.lastrowid: Optional[int] = None
-        self._result: List[Any] = []
-        self._result_index: int = 0
+        self._rows: List[Any] = []
+        self._row_index: Optional[int] = None
         self._completions: List[Any] = []  # Store all completions for nextset()
         self._completion_index: int = 0    # Current completion index
         self._cursor_config = None  # Will be set by connection if cursor options are provided
@@ -118,8 +122,8 @@ class Cursor:
             self.rowcount = -1
             self.description = None
             self.lastrowid = None
-            self._result = []
-            self._result_index = 0
+            self._rows = []
+            self._row_index = None
             self._completions = []  # Store all completions for nextset()
             self._completion_index = 0    # Current completion index
             self._cursor_config = None 
@@ -259,8 +263,8 @@ class Cursor:
         if not completions:
             self.rowcount = 0
             self.description = None
-            self._result = []
-            self._result_index = 0
+            self._rows = []
+            self._row_index = None
             return
         
         # Process the first completion
@@ -278,17 +282,17 @@ class Cursor:
         # Check if it's a result set or update count
         if completion.is_result_set:
             # It's a result set
-            self._process_result_set_completion(completion)
+            self._process_rows_set_completion(completion)
         else:
             # It's an update count
             self.rowcount = completion.affected_rows
             self.description = None
-            self._result = []
+            self._rows = []
             self.lastrowid = completion.insert_id is not None and completion.insert_id > 0 and completion.insert_id or None
-        
-        self._result_index = 0
+            self._row_index = None
+       
     
-    def _process_result_set_completion(self, completion: Any) -> None:
+    def _process_rows_set_completion(self, completion: Any) -> None:
         """
         Process a result set completion
         
@@ -311,7 +315,7 @@ class Cursor:
                 elif config.dictionary and columns:
                     rows = self._convert_rows_to_dictionaries(rows, columns)
                 
-                self._result = rows
+                self._rows = rows
                 self.rowcount = len(rows)
                 
                 # Extract column information for description
@@ -322,6 +326,8 @@ class Cursor:
                     # (name, type, display_length, packed_len, precision, decimals, nullable, flags, table, org_name, org_table)
                     col_name = col.get('name', 'unknown')
                     col_type = col.get('column_type', 253)  # Default to VARCHAR
+                    if (col['ext_type_format'] == 'json'):
+                        col_type = JSON
                     col_length = col.get('column_length', 0)
                     col_flags = col.get('flags', 0)
                     col_decimals = col.get('decimals', 0)
@@ -330,6 +336,9 @@ class Cursor:
                     col_org_name = col.get('org_name', '')
                     col_org_table = col.get('org_table', '')
                     
+                    if (col_type <= INT24 and (col_type != TIMESTAMP or col_length == 14 or col_length == 8) or col_type == YEAR or col_type== NEWDECIMAL or col_type == DECIMAL):
+                        col_flags |= NUM_FLAG
+
                     # Check if column is nullable (flag bit 0 = NOT NULL)
                     nullable = not (col_flags & 1)
                     
@@ -371,12 +380,14 @@ class Cursor:
                     ))
                 
                 self.description = tuple(description) if description else None
-                
+                self._row_index = 0
             else:
                 # No result set data available
-                self._result = []
+                self._rows = []
                 self.rowcount = 0
                 self.description = None
+                self._row_index = None
+
             
         except Exception as e:
             raise OperationalError(f"Failed to process result set: {e}")
@@ -390,8 +401,8 @@ class Cursor:
         """
         if not completions:
             self.description = None
-            self._result = []
-            self._result_index = 0
+            self._rows = []
+            self._row_index = None
             return
         
         # Find completions with result sets
@@ -402,8 +413,8 @@ class Cursor:
             first_completion = completions[0]
             self.rowcount = getattr(first_completion, 'affected_rows', 0)
             self.description = None
-            self._result = []
-            self._result_index = 0
+            self._rows = []
+            self._row_index = None
             return
         
         # Check if all result sets have compatible metadata (same columns)
@@ -430,8 +441,8 @@ class Cursor:
             
             # Set up cursor state with aggregated data
             self.description = self._build_description(first_columns)
-            self._result = aggregated_rows
-            self._result_index = 0
+            self._rows = aggregated_rows
+            self._row_index = 0
             self.rowcount = len(aggregated_rows)
         else:
             # Fallback to first result set if no compatible ones found
@@ -440,8 +451,8 @@ class Cursor:
             first_rows = first_rs.get('rows', [])
             
             self.description = self._build_description(first_columns)
-            self._result = first_rows
-            self._result_index = 0
+            self._rows = first_rows
+            self._row_index = 0
             self.rowcount = len(first_rows)
     
     def _are_columns_compatible(self, columns1: List[Dict], columns2: List[Dict]) -> bool:
@@ -590,8 +601,8 @@ class Cursor:
         
         # Reset result state
         self.description = None
-        self._result = []
-        self._result_index = 0
+        self._rows = []
+        self._row_index = None
         total_affected = 0
         lastrowid = None
         
@@ -637,17 +648,17 @@ class Cursor:
         
     def fetchone(self) -> Optional[Any]:
         """Fetch the next row of a query result set"""
-        if self._result_index >= len(self._result):
+        if self._row_index is None or self._row_index >= len(self._rows):
             return None
-        row = self._result[self._result_index]
-        self._result_index += 1
+        row = self._rows[self._row_index]
+        self._row_index += 1
         return row
 
     def _seek(self, offset: int) -> None:
         """Move the cursor to the specified row"""
-        if offset < 0 or offset >= len(self._result):
+        if self._row_index is None or offset < 0 or offset >= len(self._rows):
             raise ValueError("Invalid row number")
-        self._result_index = offset
+        self._row_index = offset
         
     def fetchmany(self, size: Optional[int] = None) -> List[Any]:
         """Fetch the next set of rows of a query result"""
@@ -663,14 +674,9 @@ class Cursor:
         
     def fetchall(self) -> List[Any]:
         """Fetch all remaining rows of a query result"""
-        result = self._result[self._result_index:]
-        self._result_index = len(self._result)
+        result = self._rows[self._row_index:]
+        self._row_index = len(self._rows)
         return result
-        
-    def callproc(self, procname: str, args: Sequence[Any] = ()) -> Any:
-        """Call a stored procedure"""
-        self._check_closed()
-        raise NotSupportedError("Pure Python implementation - callproc not yet implemented")
         
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set"""
@@ -690,7 +696,7 @@ class Cursor:
     @property
     def rownumber(self) -> int:
         """Current row number (0-based index)"""
-        return self._result_index
+        return self._row_index
 
     @property
     def _resulttype(self) -> int:
@@ -722,7 +728,7 @@ class Cursor:
         self._check_closed()
         
         # Check if we have a result set
-        if not self._result:
+        if not self._rows:
             raise ProgrammingError("Cursor doesn't have a result set")
         
         # Validate mode
@@ -733,16 +739,16 @@ class Cursor:
         if mode == "relative":
             if value == 0:
                 return  # No movement needed
-            new_pos = self._result_index + value
+            new_pos = self._row_index + value
         else:  # absolute
             new_pos = value
         
         # Validate new position
-        if new_pos < 0 or new_pos > len(self._result):
+        if new_pos < 0 or new_pos > len(self._rows):
             raise ProgrammingError("Position value is out of range.")
         
         # Set new position
-        self._result_index = new_pos
+        self._row_index = new_pos
         
     def setinputsizes(self, sizes: Sequence[Optional[int]]) -> None:
         """Predefine memory areas for parameters (no-op in this implementation)"""
@@ -817,23 +823,11 @@ class Cursor:
         if not completions:
             self.rowcount = 0
             self.description = None
-            self._result = []
-            self._result_index = 0
+            self._rows = []
+            self._row_index = 0
             return
         
-        # Find the output parameters result set if it exists
-        output_params_index = -1
-        for i, completion in enumerate(completions):
-            if getattr(completion, 'is_output_parameters', False):
-                output_params_index = i
-                break
-        
-        # If we have output parameters, position cursor there
-        # Otherwise, position on the first result set
-        if output_params_index >= 0:
-            self._completion_index = output_params_index
-        else:
-            self._completion_index = 0
+        self._completion_index = 0
         
         # Process the current completion
         self._process_current_completion()
@@ -846,7 +840,7 @@ class Cursor:
         Returns:
             True if current result set is output parameters, False otherwise
         """
-        if (hasattr(self, '_completions') and 
+        if (self._completions and 
             self._completion_index < len(self._completions)):
             completion = self._completions[self._completion_index]
             return getattr(completion, 'is_output_parameters', False)

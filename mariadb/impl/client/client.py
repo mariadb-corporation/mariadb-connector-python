@@ -51,8 +51,8 @@ from ..completion import Completion
 from ..export.exception_factory import ExceptionFactory
 from ..string_utils import StringEscaper
 from ...exceptions import OperationalError, DatabaseError, NotSupportedError
-from ...constants import STATUS, FIELD_TYPE, FIELD_FLAG
-from ... import constants
+from mariadb_shared.constants import STATUS, FIELD_TYPE, FIELD_FLAG
+from mariadb_shared import constants
 
 
 class Client:
@@ -965,7 +965,7 @@ class Client:
                     var_value = None
             else:
                 var_value = None
-            print("session state variable;",var_name, var_value)
+            
             # Update context based on variable
             if self.context:
                 if var_name == 'character_set_client':
@@ -1166,9 +1166,6 @@ class Client:
         else:
             raise OperationalError(f"Column definition packet too short: expected {pos + 10} bytes, got {len(packet)} bytes")
         
-        if (ext_type_format == 'json'):
-            column_type = FIELD_TYPE.JSON
-
         column_info = {
             'catalog': catalog,
             'schema': schema,
@@ -1277,10 +1274,6 @@ class Client:
                                 value = val  # Fallback to string if parsing fails
                         else:
                             value = None
-                    case (FIELD_TYPE.BLOB | FIELD_TYPE.TINY_BLOB | FIELD_TYPE.MEDIUM_BLOB | 
-                          FIELD_TYPE.LONG_BLOB):
-                        # BLOB types must return bytes
-                        value, pos = self.reader.read_length_encoded_bytes(packet, pos)
                     case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
                         # DECIMAL types must return decimal.Decimal
                         val, pos = self.reader.read_length_encoded_string(packet, pos, encoding='ascii')
@@ -1288,24 +1281,27 @@ class Client:
                     case FIELD_TYPE.JSON:
                         value, pos = self.reader.read_length_encoded_string(packet, pos)
                     case _:
-                        match column['ext_type_name']:
-                            case ('inet6' | 'inet4'):
-                                value, pos = self.reader.read_length_encoded_string(packet, pos)
-                                if config.native_object:
-                                    value = ipaddress.ip_address(value)
-                            case 'uuid':
-                                value, pos = self.reader.read_length_encoded_string(packet, pos)
-                                if config.native_object:
-                                    value = uuid.UUID(value)
-                            case _:
-                                # Default case for VARCHAR, STRING, etc.
-                                # Check if BINARY flag is set to determine if we should read as bytes or string
-                                if (column['flags'] & FIELD_FLAG.BINARY):
-                                    # Binary data - read as bytes
-                                    value, pos = self.reader.read_length_encoded_bytes(packet, pos)
-                                else:
-                                    # Text data - read as string
+                        if (column['ext_type_format'] == 'json'):
+                            value, pos = self.reader.read_length_encoded_string(packet, pos)
+                        else:
+                            match column['ext_type_name']:
+                                case ('inet6' | 'inet4'):
                                     value, pos = self.reader.read_length_encoded_string(packet, pos)
+                                    if config.native_object:
+                                        value = ipaddress.ip_address(value)
+                                case 'uuid':
+                                    value, pos = self.reader.read_length_encoded_string(packet, pos)
+                                    if config.native_object:
+                                        value = uuid.UUID(value)
+                                case _:
+                                    # Default case for VARCHAR, STRING, etc.
+                                    # Check if BINARY flag is set to determine if we should read as bytes or string
+                                    if ((column['flags'] & FIELD_FLAG.BINARY) > 0):
+                                        # Binary data - read as bytes
+                                        value, pos = self.reader.read_length_encoded_bytes(packet, pos)
+                                    else:
+                                        # Text data - read as string
+                                        value, pos = self.reader.read_length_encoded_string(packet, pos)
 
 
                 row_values.append(value)
@@ -1571,6 +1567,8 @@ class Client:
             case FIELD_TYPE.JSON:
                 return self.reader.read_length_encoded_string(packet, pos)
             case (FIELD_TYPE.BLOB | FIELD_TYPE.TINY_BLOB | FIELD_TYPE.MEDIUM_BLOB | FIELD_TYPE.LONG_BLOB):
+                if (column['ext_type_format'] == 'json'):
+                    return self.reader.read_length_encoded_string(packet, pos)
                 # BLOB types must return bytes
                 return self.reader.read_length_encoded_bytes(packet, pos)
                 

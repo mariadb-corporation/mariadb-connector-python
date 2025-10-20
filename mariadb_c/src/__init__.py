@@ -4,14 +4,8 @@ MySQL databases, using an API which is compliant with the Python DB API 2.0
 (PEP-249).
 '''
 
-# This package shouldn't be imported before mariadb itself, or weird things
-# will happen with exception identity
-import sys
-if "mariadb" not in sys.modules:
-    raise ImportError("the mariadb package should be imported before mariadb_c")
-
-# Import exceptions from main mariadb package
-from mariadb import (
+# Import exceptions from shared package to avoid circular dependencies
+from mariadb_shared.exceptions import (
     Error,
     Warning,
     InterfaceError,
@@ -19,11 +13,11 @@ from mariadb import (
     InternalError,
     NotSupportedError,
     OperationalError,
-    PoolError,
     ProgrammingError,
+    IntegrityError,
+    DataError,
+    PoolError
 )
-
-from mariadb import fieldinfo
 from .cursors import Cursor
 from .connections import Connection
 # disable for now, until tests are in place

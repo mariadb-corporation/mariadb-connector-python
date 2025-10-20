@@ -37,8 +37,8 @@ except ImportError:
 from ...client.context import Context
 from ...client.socket.packet_writer import PacketWriter
 from ...string_utils import StringEscaper
-from ....constants import FIELD_TYPE
-from ....constants.INDICATOR import MrdbIndicator
+from mariadb_shared.constants import FIELD_TYPE
+from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
 from ....exceptions import NotSupportedError
 

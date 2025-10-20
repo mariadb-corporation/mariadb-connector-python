@@ -11,24 +11,15 @@ import pytest
 import sys
 from pathlib import Path
 
-# Add the mariadb module to the path for testing
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-try:
-    import mariadb
-except ImportError:
-    # If mariadb is not installed, skip tests that require it
-    pytest.skip("mariadb module not available", allow_module_level=True)
-
 
 def get_test_config():
     """Get test configuration from environment variables"""
     config = {
         "user": os.environ.get('TEST_DB_USER', 'root'),
-        "host": os.environ.get('TEST_DB_HOST', 'localhost'),
-        "database": os.environ.get('TEST_DB_DATABASE', 'testp'),
+        "host": os.environ.get('TEST_DB_HOST', '127.0.0.1'),
+        "database": os.environ.get('TEST_DB_DATABASE', 'testj'),
         "port": int(os.environ.get('TEST_DB_PORT', '3306')),
+        "debug": False,
     }
     
     # Optional SSL configuration
@@ -47,14 +38,6 @@ def get_test_config():
     
     return config
 
-
-def get_module_config():
-    """Get module configuration for testing"""
-    return {
-        "module": os.environ.get('TEST_MODULE', 'mariadb'),
-    }
-
-
 @pytest.fixture(scope="session")
 def test_config():
     """Provide test configuration for all tests"""
@@ -71,6 +54,7 @@ def module_config():
 def connection(test_config):
     """Provide a database connection for tests"""
     try:
+        import mariadb
         conn = mariadb.connect(**test_config)
         yield conn
     except Exception as e:

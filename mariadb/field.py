@@ -1,4 +1,4 @@
-from . import constants
+from mariadb_shared import constants
 
 field_types = {constants.FIELD_TYPE.DECIMAL: "DECIMAL",
                constants.FIELD_TYPE.TINY:  "TINY",
