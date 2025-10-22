@@ -21,7 +21,11 @@ import socket
 from typing import Optional, Any, Dict, Union, Type
 from .cursors import Cursor
 from mariadb_shared import constants
-from .exceptions import ProgrammingError, NotSupportedError, OperationalError
+from .exceptions import (
+    ProgrammingError, NotSupportedError, OperationalError,
+    Error, Warning, InterfaceError, DatabaseError,
+    InternalError, IntegrityError, DataError
+)
 from packaging import version
 from .impl.client.client import Client
 from .impl.configuration import Configuration
@@ -44,6 +48,18 @@ class Connection:
     
     Connections are created using the method mariadb.connect()
     """
+    
+    # DB-API 2.0 exception attributes
+    Warning = Warning
+    Error = Error
+    InterfaceError = InterfaceError
+    DatabaseError = DatabaseError
+    DataError = DataError
+    OperationalError = OperationalError
+    IntegrityError = IntegrityError
+    InternalError = InternalError
+    ProgrammingError = ProgrammingError
+    NotSupportedError = NotSupportedError
 
     def _check_closed(self) -> None:
         if self._closed:
@@ -145,6 +161,8 @@ class Connection:
                     self._client.close()
                 except Exception:
                     pass  # Ignore errors during close
+        else:
+            raise ProgrammingError("Connection close() requested while already closed")
             
     def ping(self) -> bool:
         """Check if the connection to the server is alive"""
@@ -251,7 +269,7 @@ class Connection:
         """Escape a string for use in SQL statements"""
         self._check_closed()
         no_backslash_escapes = (self._client.context.server_status & constants.STATUS.NO_BACKSLASH_ESCAPES) > 0
-        return StringEscaper.escape_string_with_quotes(string, no_backslash_escapes)        
+        return StringEscaper.escape_string(string, no_backslash_escapes)        
         
     def __enter__(self) -> 'Connection':
         """Context manager entry"""

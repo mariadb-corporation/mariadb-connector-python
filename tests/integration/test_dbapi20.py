@@ -364,7 +364,7 @@ class DatabaseAPI20Test(unittest.TestCase):
             cur = con.cursor()
         finally:
             con.close()
-
+        
         # cursor.execute should raise an Error if called after connection
         # closed
         self.assertRaises(self.driver.Error, self.executeDDL1, cur)

@@ -1,0 +1,13 @@
+# Auto-generated files
+src/release_info.py
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.so
+*.dylib
+*.dll

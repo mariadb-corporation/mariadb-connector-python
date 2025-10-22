@@ -66,18 +66,21 @@ def update_version():
     
     print(f"Found version: {version}")
     
-    # Update _version.py for main mariadb package
-    version_file = project_root / "mariadb" / "src" / "_version.py"
-    version_content = f'''# This file is auto-generated during build from pyproject.toml
+    # Update release_info.py for main mariadb package
+    mariadb_release_file = project_root / "mariadb" / "release_info.py"
+    mariadb_release_content = f'''# This file is auto-generated during build from root pyproject.toml
 # Do not edit manually
 
 __version__ = "{version}"
 '''
     
-    with open(version_file, "w") as f:
-        f.write(version_content)
+    # Create parent directory if it doesn't exist
+    mariadb_release_file.parent.mkdir(parents=True, exist_ok=True)
     
-    print(f"Updated {version_file}")
+    with open(mariadb_release_file, "w") as f:
+        f.write(mariadb_release_content)
+    
+    print(f"Updated {mariadb_release_file}")
     
     # Update release_info.py for mariadb_c package to ensure version sync
     mariadb_c_release_file = project_root / "mariadb_c" / "src" / "release_info.py"
@@ -89,10 +92,29 @@ __author__ = "MariaDB Corporation"
 __version_info__ = {tuple(int(x) for x in version.split('-')[0].split('.'))}
 '''
     
+    # Create parent directory if it doesn't exist
+    mariadb_c_release_file.parent.mkdir(parents=True, exist_ok=True)
+    
     with open(mariadb_c_release_file, "w") as f:
         f.write(mariadb_c_release_content)
     
     print(f"Updated {mariadb_c_release_file}")
+    
+    # Update release_info.py for mariadb_pool package to ensure version sync
+    mariadb_pool_release_file = project_root / "mariadb_pool" / "src" / "release_info.py"
+    mariadb_pool_release_content = f'''# This file is auto-generated during build from root pyproject.toml
+# Do not edit manually
+
+__version__ = "{version}"
+'''
+    
+    # Create parent directory if it doesn't exist
+    mariadb_pool_release_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(mariadb_pool_release_file, "w") as f:
+        f.write(mariadb_pool_release_content)
+    
+    print(f"Updated {mariadb_pool_release_file}")
 
 
 if __name__ == "__main__":

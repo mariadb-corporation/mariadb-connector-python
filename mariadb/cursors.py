@@ -25,6 +25,7 @@ from typing import Sequence, Optional, List, Any, Union, Dict
 
 from .exceptions import DatabaseError, ProgrammingError, NotSupportedError, OperationalError
 from .impl.message.client.query_packet import QueryPacket
+from .impl.result import CompleteResult
 from .impl.string_utils import StringEscaper
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 from mariadb_shared.constants import EXT_FIELD_TYPE
@@ -71,6 +72,7 @@ class Cursor:
         
         Args:
             connection: Database connection
+            **kwargs: Cursor options (buffered, named_tuple, dictionary, etc.)
         """
         self.connection: 'Connection' = connection
         self._closed: bool = False
@@ -78,11 +80,14 @@ class Cursor:
         self.rowcount: int = -1
         self.description: Optional[List[Any]] = None
         self.lastrowid: Optional[int] = None
-        self._rows: List[Any] = []
-        self._row_index: Optional[int] = None
         self._completions: List[Any] = []  # Store all completions for nextset()
         self._completion_index: int = 0    # Current completion index
         self._cursor_config = None  # Will be set by connection if cursor options are provided
+        
+        # Result object state
+        self._buffered: bool = kwargs.pop('buffered', True)  # Default is buffered
+        self._result: Optional[Any] = None  # Active Result object (CompleteResult or StreamingResult)
+        
         if kwargs:
             # create a clone of the connection configuration
             self._cursor_config = self.connection._configuration.from_dict(self.connection._configuration.to_dict())
@@ -117,26 +122,38 @@ class Cursor:
     def close(self) -> None:
         """Close the cursor"""
         if not self._closed:
+            # Consume any remaining streaming results
+            if self._result is not None and self._result.streaming():
+                try:
+                    self._result.fetch_remaining()
+                except Exception:
+                    pass  # Ignore errors during close
+            
             self._closed = True
             self.arraysize = 1
             self.rowcount = -1
             self.description = None
             self.lastrowid = None
-            self._rows = []
-            self._row_index = None
             self._completions = []  # Store all completions for nextset()
             self._completion_index = 0    # Current completion index
-            self._cursor_config = None 
+            self._cursor_config = None
+            self._result = None 
         
-    def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: bool = False) -> None:
+    def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None) -> None:
         """
         Execute a database query or command
         
         Args:
             sql: SQL statement to execute
             data: Optional parameters for the statement
+            buffered: Override cursor's buffered setting for this execution
         """
         self._check_closed()
+        
+        # Consume any pending streaming results before executing new query
+        if self._result is not None and self._result.streaming():
+            self._result.fetch_remaining()
+        
         if (not sql):
             self._process_completions(None)
             return
@@ -154,7 +171,9 @@ class Cursor:
             
             # Create query packet with direct parameter binding (no string substitution!)
             query_packet = QueryPacket(sql, parameters)
-            completions = self.connection._client.execute(query_packet, config=self._get_config(), can_redo=False)
+            # Use provided buffered parameter or fall back to cursor default
+            effective_buffered = buffered if buffered is not None else self._buffered
+            completions = self.connection._client.execute(query_packet, config=self._get_config(), can_redo=False, buffered=effective_buffered)
             
             # Process the completions to extract result data
             self._process_completions(completions)
@@ -263,8 +282,7 @@ class Cursor:
         if not completions:
             self.rowcount = 0
             self.description = None
-            self._rows = []
-            self._row_index = None
+            self._result = None
             return
         
         # Process the first completion
@@ -287,9 +305,8 @@ class Cursor:
             # It's an update count
             self.rowcount = completion.affected_rows
             self.description = None
-            self._rows = []
+            self._result = None
             self.lastrowid = completion.insert_id is not None and completion.insert_id > 0 and completion.insert_id or None
-            self._row_index = None
        
     
     def _process_rows_set_completion(self, completion: Any) -> None:
@@ -300,23 +317,31 @@ class Cursor:
             completion: Result set completion object
         """
         try:
-            # Extract real result set data from completion
+            # Extract result set from completion
             if hasattr(completion, 'result_set') and completion.result_set:
                 result_set = completion.result_set
                 
-                # Extract rows and columns
-                rows = result_set.get('rows', [])
-                columns = result_set.get('columns', [])
-                
-                # Apply row formatting based on configuration
-                config = self._get_config()
-                if config.named_tuple and columns:
-                    rows = self._convert_rows_to_named_tuples(rows, columns)
-                elif config.dictionary and columns:
-                    rows = self._convert_rows_to_dictionaries(rows, columns)
-                
-                self._rows = rows
-                self.rowcount = len(rows)
+                # Check if it's a Result object (CompleteResult or StreamingResult)
+                if hasattr(result_set, 'streaming'):
+                    # New Result object approach
+                    self._result = result_set
+                    columns = result_set.columns
+                    self.rowcount = result_set.get_row_count()
+                else:
+                    # Legacy dict format - wrap in CompleteResult for consistency
+                    rows = result_set.get('rows', [])
+                    columns = result_set.get('columns', [])
+                    
+                    # Don't format here - will be formatted in fetchone()
+                    # Create CompleteResult to wrap legacy data
+                    self._result = CompleteResult(
+                        columns=columns,
+                        column_count=len(columns),
+                        config=self._get_config(),
+                        rows=rows,
+                        is_binary=False
+                    )
+                    self.rowcount = len(rows)
                 
                 # Extract column information for description
                 description = []
@@ -380,13 +405,11 @@ class Cursor:
                     ))
                 
                 self.description = tuple(description) if description else None
-                self._row_index = 0
             else:
                 # No result set data available
-                self._rows = []
+                self._result = None
                 self.rowcount = 0
                 self.description = None
-                self._row_index = None
 
             
         except Exception as e:
@@ -401,8 +424,7 @@ class Cursor:
         """
         if not completions:
             self.description = None
-            self._rows = []
-            self._row_index = None
+            self._result = None
             return
         
         # Find completions with result sets
@@ -413,18 +435,25 @@ class Cursor:
             first_completion = completions[0]
             self.rowcount = getattr(first_completion, 'affected_rows', 0)
             self.description = None
-            self._rows = []
-            self._row_index = None
+            self._result = None
             return
         
         # Check if all result sets have compatible metadata (same columns)
         first_rs = result_set_completions[0].get_result_set()
-        first_columns = first_rs.get('columns', [])
+        # Get columns from Result object or legacy dict
+        if hasattr(first_rs, 'columns'):
+            first_columns = first_rs.columns
+        else:
+            first_columns = first_rs.get('columns', [])
         
         compatible_completions = []
         for completion in result_set_completions:
             rs = completion.get_result_set()
-            columns = rs.get('columns', [])
+            # Get columns from Result object or legacy dict
+            if hasattr(rs, 'columns'):
+                columns = rs.columns
+            else:
+                columns = rs.get('columns', [])
             
             # Check if columns are compatible (same count and types)
             if self._are_columns_compatible(first_columns, columns):
@@ -436,23 +465,42 @@ class Cursor:
             
             for completion in compatible_completions:
                 rs = completion.get_result_set()
-                rows = rs.get('rows', [])
+                # Get rows from Result object or legacy dict
+                if hasattr(rs, 'rows'):
+                    rows = rs.rows
+                else:
+                    rows = rs.get('rows', [])
                 aggregated_rows.extend(rows)
             
             # Set up cursor state with aggregated data
             self.description = self._build_description(first_columns)
-            self._rows = aggregated_rows
-            self._row_index = 0
+            self._result = CompleteResult(
+                columns=first_columns,
+                column_count=len(first_columns),
+                config=self._get_config(),
+                rows=aggregated_rows,
+                is_binary=False
+            )
             self.rowcount = len(aggregated_rows)
         else:
             # Fallback to first result set if no compatible ones found
             first_rs = result_set_completions[0].get_result_set()
-            first_columns = first_rs.get('columns', [])
-            first_rows = first_rs.get('rows', [])
+            # Get columns and rows from Result object or legacy dict
+            if hasattr(first_rs, 'columns'):
+                first_columns = first_rs.columns
+                first_rows = first_rs.rows
+            else:
+                first_columns = first_rs.get('columns', [])
+                first_rows = first_rs.get('rows', [])
             
             self.description = self._build_description(first_columns)
-            self._rows = first_rows
-            self._row_index = 0
+            self._result = CompleteResult(
+                columns=first_columns,
+                column_count=len(first_columns),
+                config=self._get_config(),
+                rows=first_rows,
+                is_binary=False
+            )
             self.rowcount = len(first_rows)
     
     def _are_columns_compatible(self, columns1: List[Dict], columns2: List[Dict]) -> bool:
@@ -583,16 +631,14 @@ class Cursor:
         
         return [dict(zip(field_names, row)) for row in rows]
         
-    def executemany(self, sql: str, data: Sequence[Sequence[Any]]) -> None:
+    def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None) -> None:
         """
-        Execute a database query or command for multiple rows
-        
-        This method executes the given SQL statement for each parameter sequence
-        in the data sequence. It's essentially a loop of execute() calls.
+        Execute a statement multiple times with different parameter sets
         
         Args:
             sql: SQL statement to execute
             data: Sequence of parameter sequences
+            buffered: Override cursor's buffered setting for this execution
         """
         self._check_closed()
         
@@ -601,8 +647,7 @@ class Cursor:
         
         # Reset result state
         self.description = None
-        self._rows = []
-        self._row_index = None
+        self._result = None
         total_affected = 0
         lastrowid = None
         
@@ -617,14 +662,13 @@ class Cursor:
                     if isinstance(params, (list, tuple)):
                         parameters = list(params)
                     elif isinstance(params, dict):
-                        # For named parameters, we'd need to convert SQL from :name to ? format
-                        # For now, raise an error to indicate this needs implementation
-                        raise NotSupportedError("Named parameters not yet implemented with enhanced parameter binding")
+                        raise NotSupportedError("Named parameters not yet implemented")
                 
-                # Create query packet with direct parameter binding (no string substitution!)
+                # Create query packet and execute
                 query_packet = QueryPacket(sql, parameters)
-                compl = self.connection._client.execute(query_packet, config=self._get_config(), can_redo=False)
-                    
+                # Use provided buffered parameter or fall back to cursor default
+                effective_buffered = buffered if buffered is not None else self._buffered
+                compl = self.connection._client.execute(query_packet, config=self._get_config(), can_redo=False, buffered=effective_buffered)
                 completions.extend(compl)
                 for c in compl:
                     if c.affected_rows >= 0:
@@ -648,20 +692,53 @@ class Cursor:
         
     def fetchone(self) -> Optional[Any]:
         """Fetch the next row of a query result set"""
-        if self._row_index is None or self._row_index >= len(self._rows):
-            return None
-        row = self._rows[self._row_index]
-        self._row_index += 1
-        return row
+        # Allow fetching from buffered results even if connection is closed
+        if self._closed:
+            raise ProgrammingError("Cursor is closed")
+        if self.connection._closed and (self._result is None or self._result.streaming()):
+            raise ProgrammingError("Cursor is closed")
+        
+        # DB-API 2.0: Raise error if no result set (description is None)
+        if self.description is None:
+            raise ProgrammingError("No result set to fetch from")
+        
+        # Delegate to Result object
+        if self._result is not None:
+            row = self._result.fetch_one()
+            if row is not None:
+                # Apply row formatting
+                row = self._apply_row_formatting([row])[0]
+            return row
+        
+        return None
 
     def _seek(self, offset: int) -> None:
         """Move the cursor to the specified row"""
-        if self._row_index is None or offset < 0 or offset >= len(self._rows):
-            raise ValueError("Invalid row number")
-        self._row_index = offset
+        # Allow seeking in buffered results even if connection is closed
+        if self._closed:
+            raise ProgrammingError("Cursor is closed")
+        if self.connection._closed and (self._result is None or self._result.streaming()):
+            raise ProgrammingError("Cursor is closed")
+        
+        if self._result is None:
+            raise ValueError("No result set")
+        if self._result.streaming():
+            raise ValueError("Seek not supported for unbuffered cursors")
+        # For CompleteResult, use scroll with absolute mode
+        self._result.scroll(offset, mode='absolute')
         
     def fetchmany(self, size: Optional[int] = None) -> List[Any]:
         """Fetch the next set of rows of a query result"""
+        # Allow fetching from buffered results even if connection is closed
+        if self._closed:
+            raise ProgrammingError("Cursor is closed")
+        if self.connection._closed and (self._result is None or self._result.streaming()):
+            raise ProgrammingError("Cursor is closed")
+        
+        # DB-API 2.0: Raise error if no result set (description is None)
+        if self.description is None:
+            raise ProgrammingError("No result set to fetch from")
+        
         if size is None:
             size = self.arraysize
         result = []
@@ -674,9 +751,22 @@ class Cursor:
         
     def fetchall(self) -> List[Any]:
         """Fetch all remaining rows of a query result"""
-        result = self._rows[self._row_index:]
-        self._row_index = len(self._rows)
-        return result
+        # Allow fetching from buffered results even if connection is closed
+        if self._closed:
+            raise ProgrammingError("Cursor is closed")
+        if self.connection._closed and (self._result is None or self._result.streaming()):
+            raise ProgrammingError("Cursor is closed")
+        
+        # DB-API 2.0: Raise error if no result set (description is None)
+        if self.description is None:
+            raise ProgrammingError("No result set to fetch from")
+        
+        # Delegate to Result object
+        if self._result is not None:
+            rows = self._result.fetch_all()
+            return self._apply_row_formatting(rows)
+        
+        return []
         
     def nextset(self) -> Optional[bool]:
         """Skip to the next available result set"""
@@ -694,9 +784,11 @@ class Cursor:
         return True
     
     @property
-    def rownumber(self) -> int:
-        """Current row number (0-based index)"""
-        return self._row_index
+    def rownumber(self) -> Optional[int]:
+        """Current row number (1-based, DB-API style)"""
+        if self._result is not None:
+            return self._result.row_number()
+        return None
 
     @property
     def _resulttype(self) -> int:
@@ -725,30 +817,28 @@ class Cursor:
         Raises:
             ProgrammingError: If cursor has no result set or invalid parameters
         """
-        self._check_closed()
+        # Allow scrolling in buffered results even if connection is closed
+        if self._closed:
+            raise ProgrammingError("Cursor is closed")
+        if self.connection._closed and (self._result is None or self._result.streaming()):
+            raise ProgrammingError("Cursor is closed")
         
         # Check if we have a result set
-        if not self._rows:
+        if self._result is None:
             raise ProgrammingError("Cursor doesn't have a result set")
+        
+        if self._result.streaming():
+            raise ProgrammingError("Scroll not supported for unbuffered cursors")
         
         # Validate mode
         if mode not in ("absolute", "relative"):
             raise ProgrammingError("Invalid or unknown scroll mode specified.")
         
-        # Calculate new position
-        if mode == "relative":
-            if value == 0:
-                return  # No movement needed
-            new_pos = self._row_index + value
-        else:  # absolute
-            new_pos = value
-        
-        # Validate new position
-        if new_pos < 0 or new_pos > len(self._rows):
-            raise ProgrammingError("Position value is out of range.")
-        
-        # Set new position
-        self._row_index = new_pos
+        # Delegate to Result object's scroll method
+        try:
+            self._result.scroll(value, mode)
+        except ValueError as e:
+            raise ProgrammingError(str(e))
         
     def setinputsizes(self, sizes: Sequence[Optional[int]]) -> None:
         """Predefine memory areas for parameters (no-op in this implementation)"""
@@ -821,13 +911,11 @@ class Cursor:
         self._completion_index = 0
         
         if not completions:
-            self.rowcount = 0
+            # No result sets with data
             self.description = None
-            self._rows = []
-            self._row_index = 0
+            self._result = None
+            self.rowcount = 0
             return
-        
-        self._completion_index = 0
         
         # Process the current completion
         self._process_current_completion()
@@ -920,7 +1008,13 @@ class Cursor:
         if not hasattr(completion, 'result_set') or not completion.result_set:
             return None
         
-        columns = completion.result_set.get('columns', [])
+        # Get columns from Result object or legacy dict
+        result_set = completion.result_set
+        if hasattr(result_set, 'columns'):
+            columns = result_set.columns
+        else:
+            columns = result_set.get('columns', [])
+        
         if not columns:
             return None
         
@@ -997,6 +1091,29 @@ class Cursor:
             'flags': flags_tuple,
             'ext_type_or_format': ext_type_tuple
         }
+    
+    def _apply_row_formatting(self, rows: List[Any]) -> List[Any]:
+        """
+        Apply row formatting (named_tuple or dictionary) based on configuration
+        
+        Args:
+            rows: List of row tuples
+            
+        Returns:
+            Formatted rows
+        """
+        if not rows:
+            return rows
+        
+        config = self._get_config()
+        columns = self._result.columns if self._result else []
+        
+        if config.named_tuple and columns:
+            return self._convert_rows_to_named_tuples(rows, columns)
+        elif config.dictionary and columns:
+            return self._convert_rows_to_dictionaries(rows, columns)
+        
+        return rows
         
     def __enter__(self) -> 'Cursor':
         """Context manager entry"""

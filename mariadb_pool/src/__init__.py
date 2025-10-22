@@ -10,8 +10,34 @@ Connector/Python, including:
 - Pool statistics and monitoring
 """
 
-__version__ = "1.0.0"
-__version_info__ = (1, 0, 0)
+# Load version from build-time generated release_info.py (ensures version sync)
+try:
+    from .release_info import __version__
+except ImportError:
+    # Fallback if release_info.py doesn't exist (development mode)
+    # Try to get from package metadata
+    try:
+        from importlib.metadata import version
+        __version__ = version('mariadb-pool')
+    except ImportError:
+        try:
+            from importlib_metadata import version
+            __version__ = version('mariadb-pool')
+        except ImportError:
+            # Final fallback - use hardcoded version that matches root project
+            __version__ = "2.0.0-dev"
+
+# Parse version info
+try:
+    import re
+    match = re.match(r'^(\d+)\.(\d+)\.(\d+)', __version__)
+    if match:
+        __version_info__ = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    else:
+        __version_info__ = (2, 0, 0)
+except Exception:
+    __version_info__ = (2, 0, 0)
+
 __author__ = "Georg Richter"
 
 from mariadb_pool.pool import (

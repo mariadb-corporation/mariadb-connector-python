@@ -83,7 +83,7 @@ class TestConnection(unittest.TestCase):
         cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
         try:
             cursor.execute("LOAD DATA LOCAL INFILE 'x.x' INTO TABLE t1")
-        except (mariadb.OperationalError,):
+        except (mariadb.OperationalError, mariadb.DatabaseError):
             # make asan happy
             if mariadb._have_asan:
                 tb = sys.exc_info()[2]

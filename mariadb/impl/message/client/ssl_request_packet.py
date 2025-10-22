@@ -38,7 +38,7 @@ class SslRequestPacket(ClientMessage):
     Equivalent to the Java SslRequestPacket class.
     """
     
-    def __init__(self, client_capabilities: int, exchange_charset: int):
+    def __init__(self, client_capabilities: int):
         """
         Initialize SSL request packet
         
@@ -47,7 +47,6 @@ class SslRequestPacket(ClientMessage):
             exchange_charset: Connection charset to set
         """
         self.client_capabilities: int = client_capabilities
-        self.exchange_charset: int = exchange_charset
     
     def encode(self, writer: PacketWriter, context: Context) -> None:
         """
@@ -77,4 +76,4 @@ class SslRequestPacket(ClientMessage):
         Returns:
             Message description
         """
-        return f"SSL_REQUEST(capabilities=0x{self.client_capabilities:x}, charset={self.exchange_charset})"
+        return f"SSL_REQUEST(capabilities=0x{self.client_capabilities:x})"

@@ -142,13 +142,23 @@ def _parse_version_info(version_string):
         # Fallback for invalid version strings
         return (0, 0, 0), 0
 
-# Load base version from _version.py (generated at build time)
+# Load base version from release_info.py (generated at build time)
 mariadbapi_version = None
 try:
-    from ._version import __version__ as _base_version
+    from .release_info import __version__ as _base_version
 except ImportError:
-    # Fallback if _version.py doesn't exist (development mode)
-    _base_version = "0.0.0-dev"
+    # Fallback if release_info.py doesn't exist (development mode)
+    # Try to get from package metadata
+    try:
+        from importlib.metadata import version
+        _base_version = version('mariadb')
+    except ImportError:
+        try:
+            from importlib_metadata import version
+            _base_version = version('mariadb')
+        except ImportError:
+            # Final fallback
+            _base_version = "2.0.0-dev"
 
 # Parse version info
 version_tuple, version_numeric = _parse_version_info(_base_version)
@@ -159,10 +169,13 @@ client_version = version_numeric
 
 __author__ = "MariaDB Corporation"
 
+# Connection pool support (lazy import)
+_CONNECTION_POOLS = {}
+
 # Dynamic version properties that reflect the actual implementation being used
 def __getattr__(name):
     """
-    Dynamic attribute access for version info.
+    Dynamic attribute access for version info and optional pooling support.
     Returns version information based on the actual implementation being used.
     """
     if name == '__version__':
@@ -171,6 +184,12 @@ def __getattr__(name):
         return _get_current_version_type()
     elif name == '__version_info__':
         return _get_current_version_info()
+    elif name == 'ConnectionPool':
+        # Lazy import and return compatibility wrapper
+        return _get_connection_pool_class()
+    elif name == '_CONNECTION_POOLS':
+        # Return the global connection pools dictionary
+        return _CONNECTION_POOLS
     else:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
@@ -202,5 +221,97 @@ def _get_current_version_type():
 def _get_current_version_info():
     """Get version info based on current implementation selection"""
     return version_numeric
+
+
+def _get_connection_pool_class():
+    """
+    Get ConnectionPool class with compatibility wrapper.
+    Creates a wrapper that matches the C extension API.
+    """
+    try:
+        from mariadb_pool import ConnectionPool as _PoolImpl, PoolConfig
+    except ImportError:
+        raise AttributeError(
+            "ConnectionPool is not available. "
+            "Install mariadb-pool: pip install mariadb[pool]"
+        )
+    
+    class ConnectionPool:
+        """
+        Compatibility wrapper for mariadb_pool.ConnectionPool
+        Matches the C extension API for connection pooling.
+        """
+        
+        def __init__(self, pool_name=None, **kwargs):
+            """
+            Initialize connection pool
+            
+            Args:
+                pool_name: Name of the pool (for registry)
+                **kwargs: Connection parameters and pool configuration
+            """
+            if not pool_name:
+                raise ProgrammingError("pool_name is required")
+            
+            self.pool_name = pool_name
+            
+            # Separate pool config from connection params
+            pool_config_keys = {
+                'pool_size', 'pool_reset_connection', 'pool_validation_interval'
+            }
+            pool_kwargs = {}
+            conn_kwargs = {}
+            
+            for key, value in kwargs.items():
+                if key in pool_config_keys:
+                    pool_kwargs[key] = value
+                else:
+                    conn_kwargs[key] = value
+            
+            # Create pool configuration
+            config = PoolConfig()
+            if 'pool_size' in pool_kwargs:
+                config.max_size = pool_kwargs['pool_size']
+                config.min_size = max(1, pool_kwargs['pool_size'] // 2)
+            if 'pool_validation_interval' in pool_kwargs:
+                config.validation_interval = pool_kwargs['pool_validation_interval']
+            
+            # Create the actual pool
+            self._pool = _PoolImpl(
+                connection_factory=connect,
+                config=config,
+                **conn_kwargs
+            )
+            
+            # Register in global pools dictionary
+            _CONNECTION_POOLS[pool_name] = self
+        
+        def get_connection(self):
+            """Get a connection from the pool"""
+            return self._pool.acquire()
+        
+        def add_connection(self):
+            """Add a connection to the pool"""
+            # For compatibility - pool manages this automatically
+            pass
+        
+        def close(self):
+            """Close the pool and all connections"""
+            self._pool.close()
+            # Unregister from global pools dictionary
+            if self.pool_name in _CONNECTION_POOLS:
+                del _CONNECTION_POOLS[self.pool_name]
+        
+        @property
+        def pool_size(self):
+            """Get current pool size"""
+            return len(self._pool._all_connections)
+        
+        @property
+        def max_size(self):
+            """Get maximum pool size"""
+            return self._pool.config.max_size
+    
+    return ConnectionPool
 
 # Implementation selection is handled by impl_selector module at import time

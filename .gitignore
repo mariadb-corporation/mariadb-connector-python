@@ -55,3 +55,8 @@ RelWithDebInfo
 #vim backups
 *.*~
 /mariadb/src/mariadb.egg-info/
+
+# Auto-generated version files
+mariadb/release_info.py
+mariadb_c/src/release_info.py
+mariadb_pool/src/release_info.py

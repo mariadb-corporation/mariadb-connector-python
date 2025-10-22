@@ -696,7 +696,7 @@ class Client:
         except Exception as e:
             raise OperationalError(f"Failed to send message: {e}")
     
-    def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False) -> List[Completion]:
+    def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False, buffered: bool = True) -> List[Completion]:
         """
         Send client message and read result
         
@@ -704,6 +704,7 @@ class Client:
             message: Client message to send
             can_redo: Whether the message can be redone in case of failover
             config: Configuration to use for parsing (defaults to client config if None)
+            buffered: If True, read all rows immediately. If False, return streaming result.
             
         Returns:
             List of completion results
@@ -730,7 +731,7 @@ class Client:
                 # Continue reading results while MORE_RESULTS_EXIST is set
                 while True:
                     result_packet = self.reader.read_packet()
-                    completion = self._parse_result_packet(result_packet, config, is_binary)
+                    completion = self._parse_result_packet(result_packet, config, is_binary, buffered)
                     results.append(completion)
                     
                     # Check if there are more results to read
@@ -805,12 +806,15 @@ class Client:
                 return None
         return None
     
-    def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False) -> Completion:
+    def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> Completion:
         """
         Parse result packet into completion
         
         Args:
             packet: Result packet data
+            config: Configuration for parsing
+            is_binary: Whether result uses binary protocol
+            buffered: If True, read all rows. If False, create streaming result.
             
         Returns:
             Completion object
@@ -831,7 +835,7 @@ class Client:
             return self._parse_error_packet(packet)
         else:
             # Result set packet - parse according to MySQL/MariaDB protocol
-            return self._parse_result_set(packet, config, is_binary)
+            return self._parse_result_set(packet, config, is_binary, buffered)
     
     def _parse_ok_packet(self, packet: bytes) -> Completion:
         """
@@ -1007,15 +1011,18 @@ class Client:
         
         return pos
     
-    def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False) -> 'Completion':
+    def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> 'Completion':
         """
         Parse result set according to MySQL/MariaDB protocol
         
         Args:
             packet: First packet containing column count
+            config: Configuration for parsing
+            is_binary: Whether result uses binary protocol
+            buffered: If True, read all rows. If False, create streaming result.
             
         Returns:
-            Completion object with result set data
+            Completion object with result set data or streaming result
         """
         from ..completion import Completion
         
@@ -1038,7 +1045,31 @@ class Client:
                 # skip intermediate EOF packet
                 self.reader.read_packet()
             
-            # Step 4: Read row data packets until EOF
+            # Step 4: If unbuffered, create streaming result
+            if not buffered:
+                from ..result import StreamingResult
+                streaming_result = StreamingResult(
+                    reader=self.reader,
+                    context=self.context,
+                    columns=columns,
+                    column_count=column_count,
+                    config=config,
+                    is_binary=is_binary,
+                    row_parser=self._parse_row_data  # Pass row parser function
+                )
+                
+                # Create completion with streaming result
+                completion = Completion(
+                    affected_rows=0,
+                    insert_id=0,
+                    warning_count=0,
+                    is_result_set=True,
+                    is_output_parameters=False
+                )
+                completion.result_set = streaming_result
+                return completion
+            
+            # Step 5: Read row data packets until EOF (buffered mode)
             rows = []
             while True:
                 row_packet = self.reader.read_packet()
@@ -1081,12 +1112,20 @@ class Client:
                             is_output_parameters=(self.context.server_status & STATUS.PS_OUT_PARAMS) != 0
                         )
                     
-                    # Store result set data in completion
-                    completion.result_set = {
-                        'columns': columns,
-                        'rows': rows,
-                        'column_count': column_count
-                    }
+                    # Create CompleteResult with all rows
+                    from ..result import CompleteResult
+                    complete_result = CompleteResult(
+                        columns=columns,
+                        column_count=column_count,
+                        config=config,
+                        rows=rows,
+                        is_binary=is_binary
+                    )
+                    complete_result.warning_count = warnings if not self.context.isEofDeprecated() else ok_completion.warning_count
+                    complete_result.is_output_parameters = (server_status & STATUS.PS_OUT_PARAMS) != 0 if not self.context.isEofDeprecated() else (self.context.server_status & STATUS.PS_OUT_PARAMS) != 0
+                    
+                    # Store result object in completion
+                    completion.result_set = complete_result
                                         
                     return completion
                     
@@ -1614,7 +1653,6 @@ class Client:
             # Pre-4.1 message, still can be output in newer versions (e.g. with 'Too many connections')
             error_message = packet[pos:].decode('utf-8', errors='replace')
             sql_state = "HY000"
-        
         raise self.exception_factory.create_exception(error_message, sql_state, error_code, sql);
         
     
