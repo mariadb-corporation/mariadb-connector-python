@@ -79,6 +79,7 @@ jobs:
         run: |
           python --version
           python -m pip install .
+          cd mariadb_pool && python -m pip install . && cd ..
           python -m pip install pytest typing_extensions
           python -m pytest tests -v -s
         env:
@@ -182,6 +183,7 @@ jobs:
           python --version
           python -m pip install .
           cd mariadb_c && python -m pip install . && cd ..
+          cd mariadb_pool && python -m pip install . && cd ..
           python -m pip install pytest typing_extensions
           cd ${{ github.workspace }}/sqlalchemy
           python -m pytest --dburi=mysql+mariadbconnector://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB --backend-only
@@ -200,6 +202,7 @@ jobs:
           python -m pip install pytest typing_extensions
           python -m pip install .
           cd mariadb_c && python -m pip install . && cd ..
+          cd mariadb_pool && python -m pip install . && cd ..
           python -m pytest tests -v -s
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
