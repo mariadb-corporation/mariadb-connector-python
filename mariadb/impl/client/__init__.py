@@ -25,5 +25,6 @@ Contains client implementation classes for database connectivity.
 
 from .client import Client
 from .context import Context
+from .exception_factory import ExceptionFactory
 
-__all__ = ['Client', 'Context']
+__all__ = ['Client', 'Context', 'ExceptionFactory']

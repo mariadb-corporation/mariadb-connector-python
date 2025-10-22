@@ -34,25 +34,33 @@ class TestException(unittest.TestCase):
         del cursor
 
     def test_db_unknown_exception(self):
+
         try:
             create_connection({"database": "unknown"})
+        except mariadb.OperationalError as err:
+            ending_error = err.__cause__
         except mariadb.ProgrammingError as err:
-            self.assertEqual(err.sqlstate, "42000")
-            self.assertEqual(err.errno, 1049)
-            self.assertTrue(err.errmsg.find("Unknown database 'unknown'") > -1)
-            if mariadb._have_asan:
-                tb = sys.exc_info()[2]
-                traceback.clear_frames(tb)
-            pass
+            ending_error = err
+
+        self.assertEqual(ending_error.sqlstate, "42000")
+        self.assertEqual(ending_error.errno, 1049)
+        self.assertTrue(ending_error.errmsg.find("Unknown database 'unknown'") > -1)
+        if mariadb._have_asan:
+            tb = sys.exc_info()[2]
+            traceback.clear_frames(tb)
 
     def test_conn_timeout_exception(self):
         start = datetime.today()
         try:
             create_connection({"connect_timeout": 1, "host": "8.8.8.8"})
         except mariadb.OperationalError as err:
-            self.assertEqual(err.sqlstate, "HY000")
-            self.assertEqual(err.errno, 2002)
-            self.assertTrue(err.errmsg.find("server on '8.8.8.8'") > -1)
+            if (err.__cause__):
+                ending_error = err.__cause__
+            else:
+                ending_error = err
+            self.assertEqual(ending_error.sqlstate, "HY000")
+            self.assertEqual(ending_error.errno, 2002)
+            self.assertTrue(ending_error.errmsg.find("server on '8.8.8.8'") > -1)
             end = datetime.today()
             difference = end - start
             self.assertEqual(difference.days, 0)

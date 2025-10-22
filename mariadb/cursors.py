@@ -27,6 +27,7 @@ from .exceptions import DatabaseError, ProgrammingError, NotSupportedError, Oper
 from .impl.message.client.query_packet import QueryPacket
 from .impl.result import CompleteResult
 from .impl.string_utils import StringEscaper
+from .impl.client.exception_factory import ExceptionFactory
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 from mariadb_shared.constants import EXT_FIELD_TYPE
 from mariadb_shared.constants.FIELD_TYPE import (
@@ -83,6 +84,7 @@ class Cursor:
         self._completions: List[Any] = []  # Store all completions for nextset()
         self._completion_index: int = 0    # Current completion index
         self._cursor_config = None  # Will be set by connection if cursor options are provided
+        self._exception_factory = ExceptionFactory()  # For consistent error handling
         
         # Result object state
         self._buffered: bool = kwargs.pop('buffered', True)  # Default is buffered
@@ -112,7 +114,11 @@ class Cursor:
     def _check_closed(self) -> None:
         """Check if cursor is closed"""
         if self._closed or self.connection._closed:
-            raise ProgrammingError("Cursor is closed")
+            raise self._exception_factory.create_exception(
+                "Cursor is closed",
+                errno=0,
+                sql_state='HY000'
+            )
 
     @property
     def closed(self) -> bool:
@@ -180,7 +186,11 @@ class Cursor:
         except DatabaseError as e:
             raise e                
         except Exception as e:
-            raise OperationalError(f"Execute failed: {e}")
+            raise self._exception_factory.create_exception(
+                f"Execute failed: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
         
     def _escape_parameter(self, param: Any) -> str:
         """
@@ -413,7 +423,11 @@ class Cursor:
 
             
         except Exception as e:
-            raise OperationalError(f"Failed to process result set: {e}")
+            raise self._exception_factory.create_exception(
+                f"Failed to process result set: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
     
     def _process_executemany_completions(self, completions: List[Any]) -> None:
         """
@@ -688,7 +702,11 @@ class Cursor:
         except DatabaseError as e:
             raise e            
         except Exception as e:
-            raise OperationalError(f"ExecuteMany failed: {e}")
+            raise self._exception_factory.create_exception(
+                f"ExecuteMany failed: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
         
     def fetchone(self) -> Optional[Any]:
         """Fetch the next row of a query result set"""
@@ -897,7 +915,11 @@ class Cursor:
         except DatabaseError as e:
             raise e                            
         except Exception as e:
-            raise OperationalError(f"CallProc failed: {e}")
+            raise self._exception_factory.create_exception(
+                f"CallProc failed: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
     
     def _process_callproc_completions(self, completions: List[Any]) -> None:
         """

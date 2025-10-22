@@ -37,28 +37,6 @@ from ...exceptions import (
 
 
 class ExceptionFactory:
-    """
-    Factory for creating appropriate SQL exceptions
-    
-    Equivalent to the Java ExceptionFactory class.
-    """
-    
-    def __init__(self):
-        """Initialize exception factory"""
-        self.connection = None
-    
-    def set_connection(self, connection: Any) -> 'ExceptionFactory':
-        """
-        Set connection reference
-        
-        Args:
-            connection: Connection object
-            
-        Returns:
-            Self for chaining
-        """
-        self.connection = connection
-        return self
     
     def create_exception(self, 
                         message: str, 
@@ -77,49 +55,44 @@ class ExceptionFactory:
         Returns:
             Appropriate exception instance
         """
-        exception = DatabaseError()
+        exception_class = DatabaseError
 
         # Map SQL states to exception types
         if sql_state:
             if sql_state.startswith('08'):
                 # Connection exception
-                exception = OperationalError()
+                exception_class = OperationalError
             elif sql_state.startswith('23'):
                 # Integrity constraint violation
-                exception = IntegrityError()
+                exception_class = IntegrityError
             elif sql_state.startswith('42'):
                 # Syntax error or access rule violation
-                exception = ProgrammingError()
+                exception_class = ProgrammingError
             elif sql_state.startswith('22'):
                 # Data exception
-                exception = DataError()
+                exception_class = DataError
             elif sql_state.startswith('0A'):
                 # Feature not supported
-                exception = NotSupportedError()
+                exception_class = NotSupportedError
             elif sql_state.startswith('HY'):
                 # General error
-                exception = DatabaseError()
+                exception_class = DatabaseError
         elif errno:
             if errno in (1044, 1045, 1046, 1049, 1142, 1143, 1227, 1370):
-                # Access denied errors
-                exception = OperationalError()
+                # Access denied errors and database errors
+                exception_class = ProgrammingError if errno == 1049 else OperationalError
             elif errno in (1062, 1169, 1216, 1217, 1451, 1452):
                 # Integrity constraint violations
-                exception = IntegrityError()
+                exception_class = IntegrityError
             elif errno in (1054, 1064, 1146, 1149, 1305, 1364):
                 # Syntax and access rule violations
-                exception = ProgrammingError()
+                exception_class = ProgrammingError
             elif errno in (1264, 1265, 1292, 1366, 1411, 1525):
                 # Data exceptions
-                exception = DataError()
+                exception_class = DataError
         
-        # Default to DatabaseError
-        exception.errno = errno
-        exception.errmsg = message
-        exception.sqlstate = sql_state
-    
-        # For MySQL Connector/Python compatibility
-        exception.msg = message
+        # Create exception with proper constructor arguments
+        exception = exception_class(msg=message, errno=errno, sqlstate=sql_state)
     
         return exception
 
@@ -135,7 +108,7 @@ class ExceptionFactory:
         Returns:
             OperationalError instance
         """
-        exc = OperationalError(message, '08S01', 2013)  # Lost connection error code
+        exc = OperationalError(msg=message, errno=2013, sqlstate='08S01')  # Lost connection error code
         if cause:
             exc.__cause__ = cause
         return exc
@@ -150,7 +123,7 @@ class ExceptionFactory:
         Returns:
             OperationalError instance
         """
-        return OperationalError(message, 'HYT00', 1205)  # Lock wait timeout
+        return OperationalError(msg=message, errno=1205, sqlstate='HYT00')  # Lock wait timeout
     
     def create_connection_exception(self, message: str, cause: Optional[Exception] = None) -> OperationalError:
         """
@@ -163,7 +136,7 @@ class ExceptionFactory:
         Returns:
             OperationalError instance
         """
-        exc = OperationalError(message, '08001', 2003)  # Can't connect error code
+        exc = OperationalError(msg=message, errno=2003, sqlstate='08001')  # Can't connect error code
         if cause:
             exc.__cause__ = cause
         return exc

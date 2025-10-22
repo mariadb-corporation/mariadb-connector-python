@@ -84,12 +84,30 @@ __version__ = "{version}"
     
     # Update release_info.py for mariadb_c package to ensure version sync
     mariadb_c_release_file = project_root / "mariadb_c" / "src" / "release_info.py"
+    
+    # Parse version to extract numeric parts and suffix
+    # Handle formats like "2.0.0", "2.0.0.dev", "2.0.0-dev"
+    version_match = re.match(r'^(\d+)\.(\d+)\.(\d+)(?:[.-](.+))?$', version)
+    if version_match:
+        major = int(version_match.group(1))
+        minor = int(version_match.group(2))
+        patch = int(version_match.group(3))
+        suffix = version_match.group(4)
+        
+        if suffix:
+            version_info_tuple = f"({major}, {minor}, {patch}, '{suffix}')"
+        else:
+            version_info_tuple = f"({major}, {minor}, {patch})"
+    else:
+        # Fallback for unexpected format
+        version_info_tuple = "(0, 0, 0)"
+    
     mariadb_c_release_content = f'''# This file is auto-generated during build from root pyproject.toml
 # Do not edit manually
 
 __version__ = "{version}"
 __author__ = "MariaDB Corporation"
-__version_info__ = {tuple(int(x) for x in version.split('-')[0].split('.'))}
+__version_info__ = {version_info_tuple}
 '''
     
     # Create parent directory if it doesn't exist

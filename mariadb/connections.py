@@ -98,7 +98,11 @@ class Connection:
                 
         except Exception as e:
             self._closed = True
-            raise OperationalError(f"Connection failed: {e}")
+            # Re-raise if it's already a proper exception with errno/sqlstate
+            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
+                raise
+            # Otherwise wrap it
+            raise OperationalError(f"Connection failed: {e}", errno=2003, sqlstate='08001')
         self.autocommit = self._configuration.autocommit
         
     def cursor(self, cursor_class: Optional[Type[Cursor]] = None, **kwargs: Any) -> Cursor:

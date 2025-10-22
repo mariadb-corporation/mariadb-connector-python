@@ -48,7 +48,7 @@ from ..message.client.prepare_packet import PreparePacket
 from ..message.client.execute_packet import ExecutePacket
 from ..prepared_statement import PreparedStatement
 from ..completion import Completion
-from ..export.exception_factory import ExceptionFactory
+from .exception_factory import ExceptionFactory
 from ..string_utils import StringEscaper
 from ...exceptions import OperationalError, DatabaseError, NotSupportedError
 from mariadb_shared.constants import STATUS, FIELD_TYPE, FIELD_FLAG
@@ -135,9 +135,10 @@ class Client:
             
             # All hosts failed
             if last_exception:
-                raise OperationalError(f"Connection failed to all hosts: {last_exception}")
+                last_exception_msg = last_exception.msg
+                raise self.exception_factory.create_connection_exception(f"Connection failed to all hosts: {last_exception_msg}", cause=last_exception)
             else:
-                raise OperationalError("Connection failed: No hosts to try")
+                raise self.exception_factory.create_connection_exception("Connection failed: No hosts to try")
     
     def _create_socket(self) -> None:
         """
@@ -150,12 +151,12 @@ class Client:
             if self.configuration.socket_path:
                 # Unix socket connection
                 self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                self.socket.settimeout(self.connect_timeout / 1000.0)
+                self.socket.settimeout(self.connect_timeout)
                 self.socket.connect(self.configuration.socket_path)
             else:
                 # TCP connection
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.socket.settimeout(self.connect_timeout / 1000.0)
+                self.socket.settimeout(self.connect_timeout)
                 
                 # Set socket options
                 self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -181,7 +182,12 @@ class Client:
             except:
                 pass
             self.socket = None
-            raise OperationalError(f"Failed to create socket: {e}")
+            # Use errno 2002 for connection errors (Can't connect to server)
+            raise self.exception_factory.create_exception(
+                f"Failed to create socket server on '{self.host_address.host}':{self.host_address.port}: {e}", 
+                errno=2002, 
+                sql_state='HY000'
+            )
     
     def _perform_handshake(self) -> None:
         """
@@ -226,7 +232,7 @@ class Client:
                 
         except Exception as e:
             self.close()
-            raise OperationalError(f"Connection failed: {e}")
+            raise e
     
     def _ensure_default(self) -> None:
         """
@@ -259,7 +265,11 @@ class Client:
             OperationalError: If packet is invalid
         """
         if len(packet) < 10:
-            raise OperationalError("Invalid handshake packet: too short")
+            raise self.exception_factory.create_exception(
+                "Invalid handshake packet: too short", 
+                errno=2027, 
+                sql_state='HY000'
+            )
         
         pos = 0
         

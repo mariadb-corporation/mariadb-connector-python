@@ -19,7 +19,46 @@ class Error(Exception):
     Exception that is the base class of all other error exceptions.
     You can use this to catch all errors with one single except statement.
     """
-    pass
+    
+    def __init__(self, msg=None, errno=None, sqlstate=None):
+        """
+        Initialize error with message, error number, and SQL state.
+        
+        Args:
+            msg: Error message
+            errno: MySQL/MariaDB error number
+            sqlstate: SQL state code (5 characters)
+        """
+        super().__init__(msg)
+        self._msg = msg or ""
+        self._errno = errno or 0
+        self._sqlstate = sqlstate or "HY000"
+    
+    @property
+    def errmsg(self):
+        """Get error message"""
+        return self._msg
+    
+    @property
+    def msg(self):
+        """Get error message (alias for errmsg)"""
+        return self._msg
+    
+    @property
+    def errno(self):
+        """Get error number"""
+        return self._errno
+    
+    @property
+    def sqlstate(self):
+        """Get SQL state"""
+        return self._sqlstate
+    
+    def __str__(self):
+        """String representation of error"""
+        if self._errno:
+            return f"{self._msg} (errno: {self._errno}, sqlstate: {self._sqlstate})"
+        return self._msg
 
 class InterfaceError(Error):
     """
