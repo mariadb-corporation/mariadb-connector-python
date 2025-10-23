@@ -66,12 +66,3 @@ class PreparePacket(ClientMessage):
         
         # Send packet
         writer.send_payload("COM_STMT_PREPARE")
-    
-    def description(self) -> str:
-        """Get message description"""
-        sql_desc = self.sql[:50] + "..." if len(self.sql) > 50 else self.sql
-        return f"PreparePacket(sql='{sql_desc}')"
-    
-    def can_be_redone(self) -> bool:
-        """Prepare packets can be redone"""
-        return True

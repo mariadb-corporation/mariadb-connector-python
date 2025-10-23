@@ -55,16 +55,38 @@ class Context:
     Equivalent to the Java Context class.
     """
     
-    def __init__(self) -> None:
-        """Initialize context"""
+    def __init__(
+        self,
+        server_version: str = "",
+        connection_id: int = 0,
+        protocol_version: int = 10,
+        server_capabilities: int = 0,
+        server_status: int = 0,
+        auth_plugin: Optional[str] = None,
+        auth_data: Optional[bytes] = None,
+        is_mariadb: bool = False
+    ) -> None:
+        """
+        Initialize context
+        
+        Args:
+            server_version: Server version string
+            connection_id: Connection/thread ID
+            protocol_version: Protocol version (default: 10)
+            server_capabilities: Server capability flags
+            server_status: Server status flags
+            auth_plugin: Authentication plugin name
+            auth_data: Authentication seed/data
+            is_mariadb: Whether server is MariaDB
+        """
         # Server information
-        self.server_version: str = ""
+        self.server_version: str = server_version
         self.version: ServerVersion = ServerVersion()
-        self.connection_id: int = 0
-        self.protocol_version: int = 10
+        self.connection_id: int = connection_id
+        self.protocol_version: int = protocol_version
         
         # Capabilities
-        self.server_capabilities: int = 0
+        self.server_capabilities: int = server_capabilities
         self.client_capabilities: int = 0
         self.eof_deprecated: bool = False
         self.extended_metadata: bool = False
@@ -75,16 +97,19 @@ class Context:
         self.collation: str = ""
         
         # Server status
-        self._server_status: int = 0
+        self._server_status: int = server_status
+        self.warning_count: int = 0
         
         # Authentication
-        self.auth_plugin: Optional[str] = None
-        self.auth_data: Optional[bytes] = None
+        self.auth_plugin: Optional[str] = auth_plugin
+        self.auth_data: Optional[bytes] = auth_data
         
         # Additional properties
         self.properties: Dict[str, Any] = {}
+        
+        self.parse_server_version(server_version, is_mariadb)
     
-    def parse_server_version(self, version_string: str) -> None:
+    def parse_server_version(self, version_string: str, is_mariadb: bool) -> None:
         """
         Parse server version string
         
@@ -93,9 +118,7 @@ class Context:
         """
         self.server_version = version_string
         self.version.raw = version_string
-        
-        # Check if MariaDB
-        self.version.is_mariadb = "MariaDB" in version_string
+        self.version.is_mariadb = is_mariadb
         
         # Extract version numbers
         import re

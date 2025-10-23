@@ -47,22 +47,3 @@ class ClientMessage(ABC):
             IOError: If encoding fails
         """
         pass
-    
-    @abstractmethod
-    def description(self) -> str:
-        """
-        Get message description for debugging
-        
-        Returns:
-            Message description
-        """
-        pass
-    
-    def can_be_redone(self) -> bool:
-        """
-        Check if message can be redone in case of failover
-        
-        Returns:
-            True if message can be redone
-        """
-        return True

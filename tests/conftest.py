@@ -19,7 +19,7 @@ def get_test_config():
         "host": os.environ.get('TEST_DB_HOST', '127.0.0.1'),
         "database": os.environ.get('TEST_DB_DATABASE', 'testj'),
         "port": int(os.environ.get('TEST_DB_PORT', '3306')),
-        "debug": False,
+        "debug": True,
     }
     
     # Optional SSL configuration

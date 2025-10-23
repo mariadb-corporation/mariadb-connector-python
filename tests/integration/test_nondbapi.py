@@ -5,7 +5,7 @@
 import unittest
 import mariadb
 
-from ..base_test import create_connection, is_skysql, is_maxscale, is_mysql, get_host_suffix
+from ..base_test import create_connection, is_native, is_skysql, is_maxscale, is_mysql, get_host_suffix
 from ..conftest import get_test_config as conf
 
 
@@ -26,17 +26,19 @@ class CursorTest(unittest.TestCase):
         self.connection.kill(id)
         try:
             new_conn.ping()
-        except mariadb.InterfaceError:
+        except (mariadb.InterfaceError, mariadb.DatabaseError):
             pass
         del new_conn
-        new_conn = create_connection()
-        new_conn.auto_reconnect = True
-        id = new_conn.connection_id
-        self.connection.kill(id)
-        new_conn.ping()
-        new_id = new_conn.connection_id
-        self.assertTrue(id != new_id)
-        del new_conn
+        # is native connector doesn't implement auto_reconnect
+        if not is_native():
+            new_conn = create_connection()
+            new_conn.auto_reconnect = True
+            id = new_conn.connection_id
+            self.connection.kill(id)
+            new_conn.ping()
+            new_id = new_conn.connection_id
+            self.assertTrue(id != new_id)
+            del new_conn
 
     def test_change_user(self):
         if is_skysql():

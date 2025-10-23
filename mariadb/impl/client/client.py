@@ -34,6 +34,7 @@ import struct
 import ipaddress
 import uuid
 from typing import List, Optional, Any, Dict, Union, Tuple
+
 from .context import Context
 from .socket.packet_reader import PacketReader
 from .socket.packet_writer import PacketWriter
@@ -46,6 +47,9 @@ from ..message.client.query_packet import QueryPacket
 from ..message.client.ping_packet import PingPacket
 from ..message.client.prepare_packet import PreparePacket
 from ..message.client.execute_packet import ExecutePacket
+from ..message.client.change_user_packet import ChangeUserPacket
+from ...plugin.authentication_plugin_loader import AuthenticationPluginLoader
+from ...plugin.authentication.plugin_registry import register_builtin_plugins
 from ..prepared_statement import PreparedStatement
 from ..completion import Completion
 from .exception_factory import ExceptionFactory
@@ -419,19 +423,16 @@ class Client:
                     auth_plugin_name = packet[pos:].decode('utf-8')
         
         # Create context with parsed information
-        context = Context()
-        context.server_version = server_version
-        context.parse_server_version(server_version)
-        context.connection_id = thread_id
-        context.protocol_version = protocol_version
-        context.server_capabilities = server_capabilities
-        context.server_status = server_status
-        context.auth_plugin = auth_plugin_name
-        context.auth_data = seed
-        
-        # Set MariaDB flag in version
-        context.version.is_mariadb = server_mariadb
-        
+        context = Context(
+            server_version=server_version,
+            connection_id=thread_id,
+            protocol_version=protocol_version,
+            server_capabilities=server_capabilities,
+            server_status=server_status,
+            auth_plugin=auth_plugin_name,
+            auth_data=seed,
+            is_mariadb=server_mariadb
+        )
         
         return context
     
@@ -530,7 +531,67 @@ class Client:
             
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
-    
+
+    def change_user(self, user: str, password: str, database: Optional[str] = None) -> None:
+        """
+        Change the user for the current connection
+        
+        Args:
+            user: New username
+            password: New password
+            database: Optional database to select
+            
+        Raises:
+            OperationalError: If change user fails
+        """
+        try:           
+            # Get charset collation from configuration
+            charset_collation = self.configuration.collation_id if hasattr(self.configuration, 'collation_id') else 45
+            
+            # Create COM_CHANGE_USER packet
+            change_user_packet = ChangeUserPacket(
+                username=user,
+                password=password,
+                database=database,
+                charset_collation=charset_collation,
+                connect_attrs=None  # Could add connection attributes if needed
+            )
+            
+            # Send packet directly (don't use execute as it expects result sets)
+            self._send_message(change_user_packet)
+            
+            old_config = self.configuration
+
+            self.configuration = self.configuration.from_dict(self.configuration.to_dict())
+            self.configuration.user = user
+            self.configuration.password = password
+            self.configuration.database = database
+            
+            # Handle authentication response (may be OK, Error, or Auth Switch)
+            try:
+                self._handle_authentication()
+            except Exception as e:
+                self.configuration = old_config
+                raise OperationalError(f"Authentication failed: {e}")
+            
+            # Update connection state
+            self.user = user
+            self.configuration.user = user
+            self.configuration.password = password
+            if database is not None:
+                self.context.database = database
+            
+        except Exception as e:
+            # Re-raise if it's already a proper exception with errno/sqlstate
+            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
+                raise
+            # Otherwise wrap it
+            raise self.exception_factory.create_exception(
+                f"Change user failed: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
+
     def _handle_authentication(self) -> None:
         """
         Handle authentication process using plugin system
@@ -539,8 +600,6 @@ class Client:
             OperationalError: If authentication fails
         """
         # Import plugin system
-        from ...plugin.authentication_plugin_loader import AuthenticationPluginLoader
-        from ...plugin.authentication.plugin_registry import register_builtin_plugins
         
         # Ensure plugins are registered
         register_builtin_plugins()
@@ -595,20 +654,21 @@ class Client:
         
         # Get authentication plugin
         try:
-            from ...plugin.authentication_plugin_loader import AuthenticationPluginLoader
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
             
             # Initialize plugin
-            password = getattr(self.configuration, 'password', None)
-            plugin = plugin_factory.initialize(password, plugin_data, self.configuration, self.host_address)
+            plugin = plugin_factory.initialize(self.configuration.password, plugin_data, self.configuration, self.host_address)
             
-            # Process authentication
+            # Process authentication - plugin will send response and read server's reply
             response = plugin.process(self.writer, self.reader, self.context)
             
             # Handle final response
             self._handle_auth_final_response(response)
             
         except Exception as e:
+            # Re-raise if it's already a proper exception
+            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
+                raise
             raise OperationalError(f"Authentication plugin '{plugin_name}' failed: {e}")
     
     def _handle_plugin_auth_continue(self, packet: bytes) -> None:
@@ -869,19 +929,17 @@ class Client:
         if pos + 2 <= len(packet):
             server_status = struct.unpack('<H', packet[pos:pos + 2])[0]
             pos += 2
-            if self.context:
-                self.context.server_status = server_status
         else:
             server_status = 0
+            self.context.server_status = server_status
         
         # Warning count (2 bytes)
         if pos + 2 <= len(packet):
             warning_count = struct.unpack('<H', packet[pos:pos + 2])[0]
             pos += 2
-            if self.context:
-                self.context.warning_count = warning_count
         else:
             warning_count = 0
+        self.context.warning_count = warning_count
         
         # Process additional information if present
         if pos < len(packet):
@@ -905,7 +963,7 @@ class Client:
                     pass
         
         
-        return Completion(affected_rows=affected_rows, insert_id=last_insert_id)
+        return Completion(affected_rows=affected_rows, insert_id=last_insert_id, warning_count=warning_count)
     
     def _process_session_tracking(self, packet: bytes, pos: int) -> None:
         """
@@ -981,12 +1039,11 @@ class Client:
                 var_value = None
             
             # Update context based on variable
-            if self.context:
-                if var_name == 'character_set_client':
-                    self.context.charset = var_value
-                elif var_name == 'connection_id':
-                    if var_value:
-                        self.context.connection_id = int(var_value)
+            if var_name == 'character_set_client':
+                self.context.charset = var_value
+            elif var_name == 'connection_id':
+                if var_value:
+                    self.context.connection_id = int(var_value)
                 
         except Exception as e:
             pass
@@ -1012,8 +1069,7 @@ class Client:
                 database = None
             
             # Update context
-            if self.context:
-                self.context.database = database
+            self.context.database = database
             
                 
         except Exception as e:

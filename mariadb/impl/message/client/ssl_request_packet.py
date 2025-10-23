@@ -69,11 +69,3 @@ class SslRequestPacket(ClientMessage):
         # Send packet with automatic header and chunking
         writer.send_payload("SSL_REQUEST")
     
-    def description(self) -> str:
-        """
-        Get message description for debugging
-        
-        Returns:
-            Message description
-        """
-        return f"SSL_REQUEST(capabilities=0x{self.client_capabilities:x})"

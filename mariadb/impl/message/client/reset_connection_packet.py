@@ -18,31 +18,32 @@
 #
 
 """
-Ping packet for MariaDB connection testing
+Reset connection packet for MariaDB connection reset
 
-Equivalent to the Java PingPacket class.
+Resets the connection state without re-authenticating.
 """
 
 from typing import Any
 from ..client_message import ClientMessage
 
 
-class PingPacket(ClientMessage):
+class ResetConnectionPacket(ClientMessage):
     """
-    Ping packet for connection testing
+    Reset connection packet
     
-    Equivalent to the Java PingPacket class.
+    Resets the current connection and clears session state and pending results.
+    This is more efficient than reconnecting as it doesn't require re-authentication.
     """
     
-    COM_PING = 0x0E
+    COM_RESET_CONNECTION = 0x1F
     
     def __init__(self):
-        """Initialize ping packet"""
+        """Initialize reset connection packet"""
         pass
         
     def encode(self, writer: Any, context: Any) -> None:
         """
-        Encode ping packet using payload-based approach
+        Encode reset connection packet
         
         Args:
             writer: Packet writer
@@ -54,8 +55,8 @@ class PingPacket(ClientMessage):
         # Start payload mode
         writer.start_payload()
         
-        # Command type (only byte in ping packet)
-        writer.write_byte(self.COM_PING)
+        # Command type (only byte in reset connection packet)
+        writer.write_byte(self.COM_RESET_CONNECTION)
         
         # Send packet with automatic header and chunking
-        writer.send_payload("COM_PING")
+        writer.send_payload("COM_RESET_CONNECTION")

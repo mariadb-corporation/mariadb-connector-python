@@ -50,13 +50,6 @@ class NativePasswordPluginFactory(AuthenticationPluginFactory):
                   conf: Any, host_address: Any) -> AuthenticationPlugin:
         """
         Initialize native password plugin
-        
-        Args:
-            authentication_data: Password string
-            seed: Server provided seed
-            conf: Connection configuration (unused)
-            host_address: Host address (unused)
-            
         Returns:
             Initialized NativePasswordPlugin
         """

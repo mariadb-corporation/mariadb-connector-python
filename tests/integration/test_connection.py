@@ -157,10 +157,10 @@ class TestConnection(unittest.TestCase):
                     cursor.execute("KILL {id}" . format(id=oldid))
                 except (mariadb.Error, mariadb.OperationalError):
                     pass
-        try:
-            conn.ping()
-        except (mariadb.OperationalError, mariadb.ProgrammingError):
-            pass           
+            try:
+                conn.ping()
+            except (mariadb.InterfaceError, mariadb.DatabaseError):
+                pass           
             
 
     def test_ed25519(self):

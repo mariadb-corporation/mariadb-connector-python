@@ -65,13 +65,3 @@ class ChangeDbPacket(ClientMessage):
         # Send packet with automatic header and chunking
         writer.send_payload("COM_INIT_DB")
     
-    def description(self) -> str:
-        """
-        Get message description for debugging
-        
-        Returns:
-            Message description
-        """
-        return f"COM_INIT_DB(database='{self.database}')"
-    
-

@@ -40,7 +40,7 @@ class NativePasswordPlugin(AuthenticationPlugin):
     Equivalent to the Java NativePasswordPlugin class.
     See https://mariadb.com/kb/en/library/authentication-plugin-mysql_native_password/
     """
-    
+        
     def __init__(self, authentication_data: Optional[str], seed: bytes):
         """
         Initialize plugin with authentication data and seed
@@ -51,7 +51,7 @@ class NativePasswordPlugin(AuthenticationPlugin):
         """
         self.authentication_data = authentication_data
         self.seed = seed
-    
+
     @staticmethod
     def encrypt_password(password: Optional[str], seed: bytes) -> bytes:
         """

@@ -323,12 +323,3 @@ class ExecutePacket(ClientMessage):
             writer.write_byte(hours)
             writer.write_byte(minutes)
             writer.write_byte(seconds)
-    
-    def description(self) -> str:
-        """Get message description"""
-        sql_desc = self.sql[:50] + "..." if len(self.sql) > 50 else self.sql
-        return f"ExecutePacket(stmt_id={self.statement_id}, params={len(self.parameters)}, sql='{sql_desc}')"
-    
-    def can_be_redone(self) -> bool:
-        """Execute packets can be redone"""
-        return True

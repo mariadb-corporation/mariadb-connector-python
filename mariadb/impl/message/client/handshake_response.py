@@ -26,11 +26,13 @@ Equivalent to the Java HandshakeResponse class.
 import hashlib
 from typing import Any, Optional
 
-from mariadb.impl.client.context import Context
-from mariadb.impl.client.socket.packet_writer import PacketWriter
+from ...client.context import Context
+from ...client.socket.packet_writer import PacketWriter
+from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from ..client_message import ClientMessage
 from ...configuration import Configuration
 from mariadb_shared import constants
+from ....plugin.authentication.native_password_plugin import NativePasswordPlugin
 
 
 class HandshakeResponse(ClientMessage):
@@ -86,14 +88,18 @@ class HandshakeResponse(ClientMessage):
             writer.write_null_terminated_string(self.configuration.user)
         else:
             writer.write_byte(0)  # Empty username
-        
+
         # Authentication response
-        if self.configuration.password:
-            auth_response = self._calculate_auth_response(context)
-            writer.write_byte(len(auth_response))
-            writer.write_bytes(auth_response)
+        auth_response = NativePasswordPlugin.encrypt_password(self.configuration.password, context.auth_data)
+        if auth_response:
+            if context.server_capabilities & CAPABILITY.SECURE_CONNECTION:
+                # Length-encoded auth response
+                writer.write_byte(len(auth_response))
+                writer.write_bytes(auth_response)
+            else:
+                writer.write_null_terminated_string(auth_response)        
         else:
-            writer.write_byte(0)  # No password
+            writer.write_byte(0)
         
         # Database name (if specified)
         if self.configuration.database and (context.client_capabilities & constants.CAPABILITY.CONNECT_WITH_DB):
@@ -103,8 +109,21 @@ class HandshakeResponse(ClientMessage):
         if (context.client_capabilities & constants.CAPABILITY.PLUGIN_AUTH):
             writer.write_null_terminated_string("mysql_native_password")
         
+        # Connection attributes
         if (context.client_capabilities & constants.CAPABILITY.CONNECT_ATTRS):
-            writer.write_byte(0)  # TODO
+            
+            # Get default attributes
+            host = self.configuration.host if hasattr(self.configuration, 'host') else None
+            default_attrs = get_default_connection_attributes(host=host)
+            
+            # Merge with user-provided attributes if any
+            #if hasattr(self.configuration, 'connect_attrs') and self.configuration.connect_attrs:
+            #    default_attrs.update(self.configuration.connect_attrs)
+            
+            # Encode attributes
+            attr_data = encode_connection_attributes(default_attrs)
+            writer.write_length_encoded_int(len(attr_data))
+            writer.write_bytes(attr_data)
 
         # Send packet with automatic header and chunking
         writer.send_payload("COM_HANDSHAKE_RESPONSE")
@@ -145,10 +164,3 @@ class HandshakeResponse(ClientMessage):
         
         return result
     
-    def description(self) -> str:
-        """Get message description"""
-        return f"HandshakeResponse(user={self.configuration.user}, database={self.configuration.database})"
-    
-    def can_be_redone(self) -> bool:
-        """Handshake response cannot be redone"""
-        return False

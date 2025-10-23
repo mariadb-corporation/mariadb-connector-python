@@ -218,17 +218,3 @@ class QueryPacket(ClientMessage):
                     writer.write_byte(QUOTE_BYTE)
 
     
-    
-    def description(self) -> str:
-        """Get message description"""
-        sql_desc = self.sql[:50] + "..." if len(self.sql) > 50 else self.sql
-        if self.parameters:
-            return f"QueryPacket(sql='{sql_desc}', params={len(self.parameters)})"
-        else:
-            return f"QueryPacket(sql='{sql_desc}')"
-    
-    def can_be_redone(self) -> bool:
-        """Query can be redone if it's a SELECT statement"""
-        sql_upper = self.sql.strip().upper()
-        # Only SELECT statements are safe to redo
-        return sql_upper.startswith('SELECT') or sql_upper.startswith('SHOW') or sql_upper.startswith('DESCRIBE')

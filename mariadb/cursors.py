@@ -117,13 +117,28 @@ class Cursor:
             raise self._exception_factory.create_exception(
                 "Cursor is closed",
                 errno=0,
-                sql_state='HY000'
+                sql_state='42000'
             )
 
     @property
     def closed(self) -> bool:
         """Return True if cursor is closed"""
         return self._closed or self.connection._closed
+    
+    @property
+    def warnings(self) -> int:
+        """
+        Get the number of warnings from the last executed statement
+        
+        Returns:
+            Number of warnings, or 0 if there are no warnings
+        """
+        # Get warning count from the current completion
+        if (hasattr(self, '_completions') and self._completions and 
+            self._completion_index < len(self._completions)):
+            completion = self._completions[self._completion_index]
+            return getattr(completion, 'warning_count', 0)
+        return 0
 
     def close(self) -> None:
         """Close the cursor"""
