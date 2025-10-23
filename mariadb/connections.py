@@ -17,8 +17,8 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-import socket
-from typing import Optional, Any, Dict, Union, Type
+from typing import Optional, Any, Type, List
+
 from .cursors import Cursor
 from mariadb_shared import constants
 from .exceptions import (
@@ -26,11 +26,13 @@ from .exceptions import (
     Error, Warning, InterfaceError, DatabaseError,
     InternalError, IntegrityError, DataError
 )
-from packaging import version
 from .impl.client.client import Client
 from .impl.configuration import Configuration
 from .impl.host_address import HostAddress
 from .impl.string_utils import StringEscaper
+from .impl.client.exception_factory import ExceptionFactory
+from .impl.message.client.query_packet import QueryPacket
+from .impl.message.client.ping_packet import PingPacket
 
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
@@ -63,7 +65,10 @@ class Connection:
 
     def _check_closed(self) -> None:
         if self._closed:
-            raise ProgrammingError("Invalid connection or not connected")
+            raise self._exception_factory.create_exception(
+                "Invalid connection or not connected",
+                sql_state='42000'
+            )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
@@ -74,6 +79,7 @@ class Connection:
         classes.
         """
         self._closed = False
+        self._exception_factory = ExceptionFactory()
         self.host = kwargs.get('host', 'localhost')
         self.port = kwargs.get('port', 3306)
         self.user = kwargs.get('user') or kwargs.get('username')
@@ -101,8 +107,8 @@ class Connection:
             # Re-raise if it's already a proper exception with errno/sqlstate
             if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
                 raise
-            # Otherwise wrap it
-            raise OperationalError(f"Connection failed: {e}", errno=2003, sqlstate='08001')
+            # Otherwise wrap it using exception factory
+            raise self._exception_factory.create_connection_exception(f"Connection failed: {e}", cause=e)
         self.autocommit = self._configuration.autocommit
         
     def cursor(self, cursor_class: Optional[Type[Cursor]] = None, **kwargs: Any) -> Cursor:
@@ -166,36 +172,174 @@ class Connection:
                 except Exception:
                     pass  # Ignore errors during close
         else:
-            raise ProgrammingError("Connection close() requested while already closed")
+            raise self._exception_factory.create_exception(
+                "Connection close() requested while already closed",
+                errno=0,
+                sql_state='08003'
+            )
             
     def ping(self) -> bool:
         """Check if the connection to the server is alive"""
         self._check_closed()
         if hasattr(self, '_client') and self._client:
             try:
-                from .impl.message.client.ping_packet import PingPacket
                 ping_packet = PingPacket()
                 results = self._client.execute(ping_packet, self._configuration)
                 return True  # If no exception, ping succeeded
             except Exception as e:
-                raise OperationalError(f"Ping failed: {e}")
+                raise self._exception_factory.create_exception(
+                    f"Ping failed: {e}",
+                    errno=2013,
+                    sql_state='HY000'
+                )
         else:
-            raise NotSupportedError("Connection client not available")
+            raise self._exception_factory.create_exception(
+                "Connection client not available",
+                errno=0,
+                sql_state='HY000'
+            )
+    
+    def kill(self, id: int) -> None:
+        """
+        Kill a database connection specified by the process id parameter
+        
+        The connection id can be retrieved by SHOW PROCESSLIST SQL command
+        or from the connection_id property.
+        
+        Args:
+            id: Connection/process id to kill
+            
+        Raises:
+            ProgrammingError: If id is not an integer
+            OperationalError: If kill command fails
+        """
+        self._check_closed()
+        
+        if not isinstance(id, int):
+            raise ProgrammingError("id must be of type int.")
+        
+        try:
+            self._client.execute(QueryPacket(f"KILL {id}"), self._configuration)
+        except Exception as e:
+            # Re-raise if it's already a proper exception
+            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
+                raise
+            raise self._exception_factory.create_exception(
+                f"Kill command failed: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
     
     def reconnect(self) -> None:
-        """Reconnect to the database server"""
-        self._check_closed()
-        raise NotSupportedError("Pure Python implementation - reconnect not yet implemented")
+        """
+        Reconnect to the database server
+        
+        Tries to reconnect to the server in case the connection died due to 
+        timeout or other errors. Uses the same credentials which were specified 
+        in the original connect() call.
+        
+        Raises:
+            OperationalError: If reconnection fails
+        """
+        try:
+            # Close existing connection if still open
+            try:
+                self._client.close()
+            except Exception:
+                pass  # Ignore errors during close
+            
+            # Create new host address
+            host_address = HostAddress(
+                host=self._configuration.host,
+                port=self._configuration.port
+            )
+            
+            # Create and connect new client
+            client = Client(self._configuration, host_address)
+            client.connect()
+
+            self._client = client
+            
+        except Exception as e:
+            # Re-raise if it's already a proper exception
+            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
+                raise
+            raise self._exception_factory.create_exception(
+                f"Reconnect failed: {e}",
+                errno=2013,
+                sql_state='08S01'
+            )
         
     def reset(self) -> None:
-        """Reset the connection"""
+        """
+        Reset the connection
+        
+        Resets the current connection and clears session state and pending results.
+        Open cursors will become invalid and cannot be used anymore.
+        
+        This is more efficient than reconnecting as it doesn't require re-authentication.
+        
+        Note: This command is only supported on MariaDB 10.2.4+ and MySQL 5.7.3+
+        
+        Raises:
+            NotSupportedError: If server doesn't support COM_RESET_CONNECTION
+            OperationalError: If reset fails
+        """
         self._check_closed()
-        raise NotSupportedError("Pure Python implementation - reset not yet implemented")
+        
+        # Check if server supports COM_RESET_CONNECTION
+        if hasattr(self, '_client') and self._client and self._client.context:
+            version = self._client.context.version
+            
+            # Check if MariaDB >= 10.2.4 or MySQL >= 5.7.3
+            if version.is_mariadb:
+                if not version.version_greater_or_equal(10, 2, 4):
+                    raise NotSupportedError(
+                        f"COM_RESET_CONNECTION requires MariaDB 10.2.4+, current version: {version.raw}"
+                    )
+            else:
+                # MySQL
+                if not version.version_greater_or_equal(5, 7, 3):
+                    raise NotSupportedError(
+                        f"COM_RESET_CONNECTION requires MySQL 5.7.3+, current version: {version.raw}"
+                    )
+        
+        try:
+            from .impl.message.client.reset_connection_packet import ResetConnectionPacket
+            reset_packet = ResetConnectionPacket()
+            self._client.execute(reset_packet, self._configuration)
+        except Exception as e:
+            # Re-raise if it's already a proper exception
+            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
+                raise
+            raise self._exception_factory.create_exception(
+                f"Reset failed: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
         
     def change_user(self, user: str, password: str, database: Optional[str] = None) -> None:
-        """Change the user and database of the current connection"""
+        """
+        Change the user and database of the current connection
+        
+        Args:
+            user: New username
+            password: New password
+            database: New default database (optional)
+            
+        Raises:
+            OperationalError: If change user fails
+        """
         self._check_closed()
-        raise NotSupportedError("Pure Python implementation - change_user not yet implemented")
+        if user is None:
+            raise TypeError("User cannot be None")
+
+        self._client.change_user(user, password, database if database is not None else self._database)
+        
+        # Update connection state
+        self.user = user
+        if database is not None:
+            self._database = database
         
     def select_db(self, database: str) -> None:
         """Set the current database"""
@@ -269,6 +413,38 @@ class Connection:
             return int(self._client.context.server_status)
         return 0
     
+    @property
+    def warnings(self) -> int:
+        """
+        Get the number of warnings from the last executed statement
+        
+        Returns:
+            Number of warnings, or 0 if there are no warnings
+        """
+        if self._client and self._client.context:
+            return self._client.context.warning_count
+        return 0
+    
+    def show_warnings(self) -> Optional[List[tuple]]:
+        """
+        Shows error, warning and note messages from last executed command
+        
+        Returns:
+            List of tuples (Level, Code, Message) or None if no warnings
+        """
+        self._check_closed()
+        
+        if not self.warnings:
+            return None
+        
+        cursor = self.cursor()
+        try:
+            cursor.execute("SHOW WARNINGS")
+            ret = cursor.fetchall()
+            return ret
+        finally:
+            cursor.close()
+    
     def escape_string(self, string: str) -> str:
         """Escape a string for use in SQL statements"""
         self._check_closed()
@@ -292,21 +468,13 @@ class Connection:
     def server_version(self) -> int:
         """Get server version as integer in format MMPPRR (major, minor, patch with 2 digits each)"""
         self._check_closed()
-        if not self._client or not self._client.context or not self._client.context.server_version:
+        if not self._client or not self._client.context or not self._client.context.version:
             return 0
         
-        # Parse version string like "12.1.1-MariaDB-ubu2404" or "8.4.0"
-        import re
-        version_match = re.search(r'(\d+)\.(\d+)\.(\d+)', self._client.context.server_version)
-        if version_match:
-            major = int(version_match.group(1))
-            minor = int(version_match.group(2))
-            patch = int(version_match.group(3))
-            
-            # Convert to MMPPRR format (e.g., 8.4.0 -> 080400, 12.1.1 -> 120101)
-            return major * 10000 + minor * 100 + patch
-        
-        return 0
+        version = self._client.context.version
+        # Convert to MMPPRR format (e.g., 8.4.0 -> 080400, 12.1.1 -> 120101)
+        return version.major * 10000 + version.minor * 100 + version.patch
+    
 
     @property
     def server_version_info(self):
@@ -315,10 +483,13 @@ class Connection:
         """
 
         self._check_closed()
-        version = self.server_version
-        return (int(version / 10000),
-                int((version % 10000) / 100),
-                version % 100)
+        if not self._client or not self._client.context:
+            return (0, 0, 0)
+        
+        version = self._client.context.version
+        return (version.major,
+                version.minor,
+                version.patch)
 
     def get_server_version(self):
         """
