@@ -31,7 +31,7 @@ from ...client.socket.packet_writer import PacketWriter
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from ..client_message import ClientMessage
 from ...configuration import Configuration
-from mariadb_shared import constants
+from mariadb_shared.constants import CAPABILITY
 from ....plugin.authentication.native_password_plugin import NativePasswordPlugin
 
 
@@ -102,15 +102,15 @@ class HandshakeResponse(ClientMessage):
             writer.write_byte(0)
         
         # Database name (if specified)
-        if self.configuration.database and (context.client_capabilities & constants.CAPABILITY.CONNECT_WITH_DB):
+        if self.configuration.database and (context.client_capabilities & CAPABILITY.CONNECT_WITH_DB):
             writer.write_null_terminated_string(self.configuration.database)
         
         # Authentication plugin name
-        if (context.client_capabilities & constants.CAPABILITY.PLUGIN_AUTH):
+        if (context.client_capabilities & CAPABILITY.PLUGIN_AUTH):
             writer.write_null_terminated_string("mysql_native_password")
         
         # Connection attributes
-        if (context.client_capabilities & constants.CAPABILITY.CONNECT_ATTRS):
+        if (context.client_capabilities & CAPABILITY.CONNECT_ATTRS):
             
             # Get default attributes
             host = self.configuration.host if hasattr(self.configuration, 'host') else None
