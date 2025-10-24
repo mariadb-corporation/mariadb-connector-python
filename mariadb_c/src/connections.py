@@ -67,6 +67,7 @@ class Connection(CConnection):
         self.__last_used = 0
         self.tpc_state = TPC_STATE.NONE
         self._xid = None
+        self._pooled_connection = None  # PooledConnection wrapper for pooled connections
 
         autocommit = kwargs.pop("autocommit", False)
         reconnect = kwargs.pop("reconnect", False)
@@ -125,11 +126,15 @@ class Connection(CConnection):
             cursorclass = Cursor
         cursor = cursorclass(self, **kwargs)
         return cursor
-
+    
+    def _set_pooled_connection(self, pooled_connection):
+        """Set the PooledConnection wrapper for this connection (internal use only)"""
+        self._pooled_connection = pooled_connection
+    
     def close(self):
         self._check_closed()
-        if self._Connection__pool:
-            self._Connection__pool._close_connection(self)
+        if self._pooled_connection:
+            self._pooled_connection.return_to_pool(self)
         else:
             super().close()
 

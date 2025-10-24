@@ -9,10 +9,14 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Dict
 from contextlib import contextmanager
 
-
-class PoolError(Exception):
-    """Exception raised for pool-related errors"""
-    pass
+# Import PoolError from shared exceptions
+try:
+    from mariadb_shared.exceptions import PoolError
+except ImportError:
+    # Fallback for standalone usage
+    class PoolError(Exception):
+        """Exception raised for pool-related errors"""
+        pass
 
 
 @dataclass
@@ -104,14 +108,24 @@ class PooledConnection:
     def is_healthy(self) -> bool:
         """
         Check if connection is healthy
-        
-        This is a stub - actual implementation should ping the database
         """
         try:
-            # Stub: actual implementation would call connection.ping()
+            self.connection.ping()
             return True
         except Exception:
             return False
+    
+    def return_to_pool(self):
+        """Return this connection to the pool"""
+        self.pool.release(self)
+
+    def closeSilently(self):
+        try:
+            self.connection.set_pooled_connection(None)
+            self.connection.close()
+        except Exception:
+            pass
+    
 
 
 class ConnectionPool:
@@ -165,6 +179,8 @@ class ConnectionPool:
             try:
                 conn = self.connection_factory(**self.connection_params)
                 pooled_conn = PooledConnection(conn, self)
+                conn._set_pooled_connection(pooled_conn)
+
                 self._all_connections.append(pooled_conn)
                 self.stats.total_connections += 1
                 return pooled_conn
@@ -195,21 +211,19 @@ class ConnectionPool:
         """Remove expired connections from pool"""
         with self._lock:
             expired = [
-                conn for conn in self._all_connections
-                if not conn.in_use and conn.is_expired(
+                pool_conn for pool_conn in self._all_connections
+                if not pool_conn.in_use and pool_conn.is_expired(
                     self.config.max_lifetime,
                     self.config.max_idle_time
                 )
             ]
             
-            for conn in expired:
-                try:
-                    conn.connection.close()
-                    self._all_connections.remove(conn)
-                except Exception:
-                    pass
-                    
-    def acquire(self, timeout: Optional[float] = None) -> Any:
+            for pool_conn in expired:
+                pool_conn.closeSilently()
+                self._all_connections.remove(pool_conn)
+                self.stats.total_connections -= 1
+
+    def acquire(self, timeout: Optional[float] = None) -> PooledConnection:
         """
         Acquire a connection from the pool
         
@@ -223,22 +237,28 @@ class ConnectionPool:
             raise PoolError("Pool is closed")
             
         timeout = timeout if timeout is not None else self.config.acquire_timeout
+
         start_time = time.time()
         
         self.stats.total_requests += 1
         
+        # Check if we can create a new connection before blocking
+        can_create_new = len(self._all_connections) < self.config.max_size
+        
+        # Use a short timeout if we can create new connections
+        get_timeout = 0.1 if can_create_new else timeout
+        
         try:
             # Try to get an existing connection
-            pooled_conn = self._pool.get(timeout=timeout)
+            pooled_conn = self._pool.get(timeout=get_timeout)
             
             # Validate connection health
             if not pooled_conn.is_healthy():
                 # Connection is unhealthy, create a new one
-                try:
-                    pooled_conn.connection.close()
-                except Exception:
-                    pass
-                self._all_connections.remove(pooled_conn)
+                with self._lock:
+                    pooled_conn.closeSilently()
+                    self._all_connections.remove(pooled_conn)
+                    self.stats.total_connections -= 1
                 pooled_conn = self._create_connection()
                 
         except queue.Empty:
@@ -246,8 +266,16 @@ class ConnectionPool:
             try:
                 pooled_conn = self._create_connection()
             except PoolError:
-                self.stats.failed_requests += 1
-                raise PoolError("No connections available and pool is at maximum size")
+                # Can't create new connection, wait longer for an existing one
+                if timeout and timeout > get_timeout:
+                    try:
+                        pooled_conn = self._pool.get(timeout=timeout - get_timeout)
+                    except queue.Empty:
+                        self.stats.failed_requests += 1
+                        raise PoolError("No connections available and pool is at maximum size")
+                else:
+                    self.stats.failed_requests += 1
+                    raise PoolError("No connections available and pool is at maximum size")
                 
         pooled_conn.mark_in_use()
         
@@ -258,9 +286,9 @@ class ConnectionPool:
         wait_time = time.time() - start_time
         self.stats.record_wait(wait_time)
         
-        return pooled_conn.connection
+        return pooled_conn
         
-    def release(self, connection: Any):
+    def release(self, pool_conn: PooledConnection):
         """
         Release a connection back to the pool
         
@@ -271,37 +299,25 @@ class ConnectionPool:
             return
             
         with self._lock:
-            # Find the pooled connection wrapper
-            pooled_conn = None
-            for pc in self._all_connections:
-                if pc.connection is connection:
-                    pooled_conn = pc
-                    break
-                    
-            if pooled_conn is None:
-                return
                 
-            pooled_conn.mark_idle()
+            pool_conn.mark_idle()
             self.stats.active_connections -= 1
             
             # Check if connection should be kept
-            if pooled_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
-                try:
-                    connection.close()
-                    self._all_connections.remove(pooled_conn)
-                except Exception:
-                    pass
+            if pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
+                pool_conn.closeSilently()
+                self._all_connections.remove(pool_conn)
+                self.stats.total_connections -= 1
+
             else:
                 try:
-                    self._pool.put_nowait(pooled_conn)
+                    self._pool.put_nowait(pool_conn)
                     self.stats.idle_connections = self._pool.qsize()
                 except queue.Full:
                     # Pool is full, close the connection
-                    try:
-                        connection.close()
-                        self._all_connections.remove(pooled_conn)
-                    except Exception:
-                        pass
+                    pool_conn.closeSilently()
+                    self._all_connections.remove(pool_conn)
+                    self.stats.total_connections -= 1
                         
     @contextmanager
     def connection(self, timeout: Optional[float] = None):
@@ -316,11 +332,11 @@ class ConnectionPool:
                 cursor = conn.cursor()
                 cursor.execute("SELECT 1")
         """
-        conn = self.acquire(timeout=timeout)
+        pool_conn = self.acquire(timeout=timeout)
         try:
-            yield conn
+            yield pool_conn.conn
         finally:
-            self.release(conn)
+            self.release(pool_conn)
             
     def close(self):
         """Close the pool and all connections"""
@@ -328,10 +344,7 @@ class ConnectionPool:
         
         with self._lock:
             for pooled_conn in self._all_connections:
-                try:
-                    pooled_conn.connection.close()
-                except Exception:
-                    pass
+                pooled_conn.closeSilently()
             self._all_connections.clear()
             
             # Clear the queue

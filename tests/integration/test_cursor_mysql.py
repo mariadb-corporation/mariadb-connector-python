@@ -4,7 +4,7 @@
 import datetime
 import unittest
 
-from ..base_test import create_connection, is_maxscale
+from ..base_test import create_connection, is_maxscale, is_native
 
 
 class CursorMySQLTest(unittest.TestCase):
@@ -16,6 +16,8 @@ class CursorMySQLTest(unittest.TestCase):
         del self.connection
 
     def test_parameter(self):
+        if is_native():
+            self.skipTest("Native only support qmark")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 

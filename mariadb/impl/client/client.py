@@ -896,7 +896,6 @@ class Client:
             raise OperationalError("Empty result packet")
         
         packet_type = packet[0]
-        
         if packet_type == 0x00:
             # OK packet
             return self._parse_ok_packet(packet)
@@ -926,20 +925,14 @@ class Client:
         last_insert_id, pos = self.reader.read_length_encoded_int(packet, pos)
         
         # Server status (2 bytes)
-        if pos + 2 <= len(packet):
-            server_status = struct.unpack('<H', packet[pos:pos + 2])[0]
-            pos += 2
-        else:
-            server_status = 0
-            self.context.server_status = server_status
+        self.context.server_status = struct.unpack('<H', packet[pos:pos + 2])[0]
+        pos += 2
         
         # Warning count (2 bytes)
-        if pos + 2 <= len(packet):
-            warning_count = struct.unpack('<H', packet[pos:pos + 2])[0]
-            pos += 2
-        else:
-            warning_count = 0
+        warning_count = struct.unpack('<H', packet[pos:pos + 2])[0]
         self.context.warning_count = warning_count
+        pos += 2
+
         
         # Process additional information if present
         if pos < len(packet):

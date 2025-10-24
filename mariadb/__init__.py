@@ -97,6 +97,15 @@ def connect(*args, connectionclass=None, **kwargs):
         - Not set - Default behavior (prefer C extension, fallback to pure Python)
 
     """
+    # Check if pool_name is specified
+    pool_name = kwargs.get('pool_name')
+    if pool_name:
+        if pool_name in _CONNECTION_POOLS:
+            pool = _CONNECTION_POOLS[pool_name]
+        else:
+            pool = _get_connection_pool_class()(**kwargs)
+        return pool.get_connection()
+    
     # Use the automatically selected connection class if none specified
     if connectionclass is None:
         connectionclass = Connection
@@ -232,92 +241,40 @@ def _get_current_version_info():
 
 def _get_connection_pool_class():
     """
-    Get ConnectionPool class with compatibility wrapper.
-    Creates a wrapper that matches the C extension API.
+    Get ConnectionPool class from mariadb_pool package.
     """
     try:
-        from mariadb_pool import ConnectionPool as _PoolImpl, PoolConfig
+        from mariadb_pool import ConnectionPoolWrapper
     except ImportError:
         raise AttributeError(
             "ConnectionPool is not available. "
             "Install mariadb-pool: pip install mariadb[pool]"
         )
     
-    class ConnectionPool:
+    # Create a wrapper class that injects mariadb.connect and manages _CONNECTION_POOLS
+    class ConnectionPool(ConnectionPoolWrapper):
         """
-        Compatibility wrapper for mariadb_pool.ConnectionPool
-        Matches the C extension API for connection pooling.
+        Wrapper around ConnectionPoolWrapper that automatically uses mariadb.connect
         """
         
         def __init__(self, pool_name=None, **kwargs):
-            """
-            Initialize connection pool
+            """Initialize with mariadb.connect as factory and register in _CONNECTION_POOLS
             
             Args:
-                pool_name: Name of the pool (for registry)
+                pool_name: Name of the pool (required)
                 **kwargs: Connection parameters and pool configuration
             """
-            if not pool_name:
-                raise ProgrammingError("pool_name is required")
-            
-            self.pool_name = pool_name
-            
-            # Separate pool config from connection params
-            pool_config_keys = {
-                'pool_size', 'pool_reset_connection', 'pool_validation_interval'
-            }
-            pool_kwargs = {}
-            conn_kwargs = {}
-            
-            for key, value in kwargs.items():
-                if key in pool_config_keys:
-                    pool_kwargs[key] = value
-                else:
-                    conn_kwargs[key] = value
-            
-            # Create pool configuration
-            config = PoolConfig()
-            if 'pool_size' in pool_kwargs:
-                config.max_size = pool_kwargs['pool_size']
-                config.min_size = max(1, pool_kwargs['pool_size'] // 2)
-            if 'pool_validation_interval' in pool_kwargs:
-                config.validation_interval = pool_kwargs['pool_validation_interval']
-            
-            # Create the actual pool
-            self._pool = _PoolImpl(
-                connection_factory=connect,
-                config=config,
-                **conn_kwargs
-            )
-            
-            # Register in global pools dictionary
+            if pool_name is None:
+                raise ProgrammingError("pool_name is required for mariadb.ConnectionPool")
+            super().__init__(connection_factory=connect, pool_name=pool_name, **kwargs)
             _CONNECTION_POOLS[pool_name] = self
         
-        def get_connection(self):
-            """Get a connection from the pool"""
-            return self._pool.acquire()
-        
-        def add_connection(self):
-            """Add a connection to the pool"""
-            # For compatibility - pool manages this automatically
-            pass
-        
         def close(self):
-            """Close the pool and all connections"""
-            self._pool.close()
-            # Unregister from global pools dictionary
-            if self.pool_name in _CONNECTION_POOLS:
-                del _CONNECTION_POOLS[self.pool_name]
-        
-        @property
-        def pool_size(self):
-            """Get current pool size"""
-            return len(self._pool._all_connections)
-        
-        @property
-        def max_size(self):
-            """Get maximum pool size"""
-            return self._pool.config.max_size
+            """Close and unregister from _CONNECTION_POOLS"""
+            pool_name = self.pool_name
+            super().close()
+            if pool_name in _CONNECTION_POOLS:
+                del _CONNECTION_POOLS[pool_name]
     
     return ConnectionPool
 

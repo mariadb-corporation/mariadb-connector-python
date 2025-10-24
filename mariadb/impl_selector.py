@@ -62,8 +62,8 @@ def _select_implementation() -> None:
     # Fall back to pure Python implementation
     if not impl or impl in ("python", "mariadb"):
         try:
-            from .connections import Connection as PythonConnection
-            from .cursors import Cursor as PythonCursor
+            from .connection import Connection as PythonConnection
+            from .cursor import Cursor as PythonCursor
             Connection = PythonConnection
             Cursor = PythonCursor
             __impl__ = "python"

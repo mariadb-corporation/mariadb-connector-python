@@ -38,7 +38,7 @@ from mariadb_shared.constants.FIELD_FLAG import NUMERIC as NUM_FLAG
 # Forward reference to avoid circular import
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from .connections import Connection
+    from .connection import Connection
 
 PARAMSTYLE_QMARK = 1
 PARAMSTYLE_FORMAT = 2
@@ -321,14 +321,13 @@ class Cursor:
             return
             
         completion = self._completions[self._completion_index]
-        
         # Check if it's a result set or update count
         if completion.is_result_set:
             # It's a result set
+            self.rowcount = completion.affected_rows
             self._process_rows_set_completion(completion)
         else:
             # It's an update count
-            self.rowcount = completion.affected_rows
             self.description = None
             self._result = None
             self.lastrowid = completion.insert_id is not None and completion.insert_id > 0 and completion.insert_id or None
@@ -351,7 +350,6 @@ class Cursor:
                     # New Result object approach
                     self._result = result_set
                     columns = result_set.columns
-                    self.rowcount = result_set.get_row_count()
                 else:
                     # Legacy dict format - wrap in CompleteResult for consistency
                     rows = result_set.get('rows', [])
@@ -366,7 +364,6 @@ class Cursor:
                         rows=rows,
                         is_binary=False
                     )
-                    self.rowcount = len(rows)
                 
                 # Extract column information for description
                 description = []

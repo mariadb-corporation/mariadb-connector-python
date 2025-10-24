@@ -19,7 +19,7 @@
 
 from typing import Optional, Any, Type, List
 
-from .cursors import Cursor
+from .cursor import Cursor
 from mariadb_shared import constants
 from .exceptions import (
     ProgrammingError, NotSupportedError, OperationalError,
@@ -80,6 +80,7 @@ class Connection:
         """
         self._closed = False
         self._exception_factory = ExceptionFactory()
+        self._pooled_connection = None  # PooledConnection wrapper for pooled connections
         self.host = kwargs.get('host', 'localhost')
         self.port = kwargs.get('port', 3306)
         self.user = kwargs.get('user') or kwargs.get('username')
@@ -162,11 +163,18 @@ class Connection:
         # Stub implementation
         pass
         
+    def _set_pooled_connection(self, pooled_connection):
+        """Set the PooledConnection wrapper for this connection (internal use only)"""
+        self._pooled_connection = pooled_connection
+    
     def close(self) -> None:
         """Close the connection"""
-        if not self._closed:
+        if self._pooled_connection:
+            # Return connection to pool
+            self._pooled_connection.return_to_pool()
+        elif not self._closed:
             self._closed = True
-            if hasattr(self, '_client') and self._client:
+            if self._client:
                 try:
                     self._client.close()
                 except Exception:
@@ -384,26 +392,18 @@ class Connection:
     def autocommit(self) -> bool:
         """Get current autocommit status"""
         # Get from server status if available, otherwise fall back to stored value
-        if self._client and self._client.context:
-            server_status = self._client.context.server_status
-            return (server_status & constants.STATUS.AUTOCOMMIT) > 0
-        return False
+        return (self._client.context.server_status & constants.STATUS.AUTOCOMMIT) > 0
     
     @autocommit.setter
     def autocommit(self, value: bool) -> None:
         """Set autocommit status"""
         self._check_closed()
-        
         # If already at the desired state, do nothing
         if self.autocommit == bool(value):
             return
-        
+
         # Execute SET autocommit query
-        if self._client:
-            from .impl.message.client.query_packet import QueryPacket
-            query = f"SET autocommit={1 if value else 0}"
-            packet = QueryPacket(query)
-            self._client.execute(packet, self._configuration)
+        self._client.execute(QueryPacket(f"SET autocommit={1 if bool(value) else 0}"), self._configuration)
     
     @property
     def server_status(self) -> int:

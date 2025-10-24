@@ -46,9 +46,11 @@ from mariadb_pool.pool import (
     PoolStats,
     PoolError,
 )
+from mariadb_pool.connection_pool_wrapper import ConnectionPoolWrapper
 
 __all__ = [
     "ConnectionPool",
+    "ConnectionPoolWrapper",
     "PoolConfig",
     "PoolStats",
     "PoolError",
