@@ -66,3 +66,6 @@ class PreparePacket(ClientMessage):
         
         # Send packet
         writer.send_payload("COM_STMT_PREPARE")
+
+    def is_binary(self) -> bool:
+        return True

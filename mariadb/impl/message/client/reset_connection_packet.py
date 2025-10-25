@@ -60,3 +60,6 @@ class ResetConnectionPacket(ClientMessage):
         
         # Send packet with automatic header and chunking
         writer.send_payload("COM_RESET_CONNECTION")
+
+    def is_binary(self) -> bool:
+        return False

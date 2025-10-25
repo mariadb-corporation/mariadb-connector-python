@@ -20,7 +20,8 @@
 from typing import Optional, Any, Type, List
 
 from .cursor import Cursor
-from mariadb_shared import constants
+from mariadb_shared.constants import STATUS, TPC_STATE
+
 from .exceptions import (
     ProgrammingError, NotSupportedError, OperationalError,
     Error, Warning, InterfaceError, DatabaseError,
@@ -81,6 +82,7 @@ class Connection:
         self._closed = False
         self._exception_factory = ExceptionFactory()
         self._pooled_connection = None  # PooledConnection wrapper for pooled connections
+        self._xid = None  # Current XA transaction ID
         self.host = kwargs.get('host', 'localhost')
         self.port = kwargs.get('port', 3306)
         self.user = kwargs.get('user') or kwargs.get('username')
@@ -154,14 +156,20 @@ class Connection:
     def commit(self) -> None:
         """Commit the current transaction"""
         self._check_closed()
-        # Stub implementation
-        pass
+        # Cannot use regular commit during XA transaction
+        if self._xid is not None:
+            raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
+        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
+            self._client.execute(QueryPacket("COMMIT"), self._configuration, True)
         
     def rollback(self) -> None:
         """Rollback the current transaction"""
         self._check_closed()
-        # Stub implementation
-        pass
+        # Cannot use regular rollback during XA transaction
+        if self._xid is not None:
+            raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
+        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
+            self._client.execute(QueryPacket("ROLLBACK"), self._configuration, True)
         
     def _set_pooled_connection(self, pooled_connection):
         """Set the PooledConnection wrapper for this connection (internal use only)"""
@@ -174,11 +182,10 @@ class Connection:
             self._pooled_connection.return_to_pool()
         elif not self._closed:
             self._closed = True
-            if self._client:
-                try:
-                    self._client.close()
-                except Exception:
-                    pass  # Ignore errors during close
+            try:
+                self._client.close()
+            except Exception:
+                pass  # Ignore errors during close
         else:
             raise self._exception_factory.create_exception(
                 "Connection close() requested while already closed",
@@ -189,24 +196,25 @@ class Connection:
     def ping(self) -> bool:
         """Check if the connection to the server is alive"""
         self._check_closed()
-        if hasattr(self, '_client') and self._client:
-            try:
-                ping_packet = PingPacket()
-                results = self._client.execute(ping_packet, self._configuration)
-                return True  # If no exception, ping succeeded
-            except Exception as e:
-                raise self._exception_factory.create_exception(
-                    f"Ping failed: {e}",
-                    errno=2013,
-                    sql_state='HY000'
-                )
-        else:
+        try:
+            ping_packet = PingPacket()
+            results = self._client.execute(ping_packet, self._configuration)
+            return True  # If no exception, ping succeeded
+        except Exception as e:
             raise self._exception_factory.create_exception(
-                "Connection client not available",
-                errno=0,
+                f"Ping failed: {e}",
+                errno=2013,
                 sql_state='HY000'
             )
-    
+
+    def begin(self) -> None:
+        """
+        Start a new transaction which can be committed by .commit() method,
+        or canceled by .rollback() method.
+        """
+        self._check_closed()
+        self._client.execute(QueryPacket("BEGIN"), self._configuration)
+
     def kill(self, id: int) -> None:
         """
         Kill a database connection specified by the process id parameter
@@ -296,21 +304,20 @@ class Connection:
         self._check_closed()
         
         # Check if server supports COM_RESET_CONNECTION
-        if hasattr(self, '_client') and self._client and self._client.context:
-            version = self._client.context.version
-            
-            # Check if MariaDB >= 10.2.4 or MySQL >= 5.7.3
-            if version.is_mariadb:
-                if not version.version_greater_or_equal(10, 2, 4):
-                    raise NotSupportedError(
-                        f"COM_RESET_CONNECTION requires MariaDB 10.2.4+, current version: {version.raw}"
-                    )
-            else:
-                # MySQL
-                if not version.version_greater_or_equal(5, 7, 3):
-                    raise NotSupportedError(
-                        f"COM_RESET_CONNECTION requires MySQL 5.7.3+, current version: {version.raw}"
-                    )
+        version = self._client.context.version
+        
+        # Check if MariaDB >= 10.2.4 or MySQL >= 5.7.3
+        if version.is_mariadb:
+            if not version.version_greater_or_equal(10, 2, 4):
+                raise NotSupportedError(
+                    f"COM_RESET_CONNECTION requires MariaDB 10.2.4+, current version: {version.raw}"
+                )
+        else:
+            # MySQL
+            if not version.version_greater_or_equal(5, 7, 3):
+                raise NotSupportedError(
+                    f"COM_RESET_CONNECTION requires MySQL 5.7.3+, current version: {version.raw}"
+                )
         
         try:
             from .impl.message.client.reset_connection_packet import ResetConnectionPacket
@@ -353,11 +360,233 @@ class Connection:
         """Set the current database"""
         self._check_closed()
         self.database = database
+    
+    class xid(tuple):
+        """
+        xid(format_id: int, global_transaction_id: str, branch_qualifier: str)
+
+        Creates a transaction ID object suitable for passing to the .tpc_*()
+        methods of this connection.
+
+        Parameters:
+
+        - format_id: Format id. Default to value `0`.
+
+        - global_transaction_id: Global transaction qualifier, which must be
+          unique. The maximum length of the global transaction id is
+          limited to 64 characters.
+
+        - branch_qualifier: Branch qualifier which represents a local
+          transaction identifier. The maximum length of the branch qualifier
+          is limited to 64 characters.
+
+        """
+        def __new__(self, format_id, transaction_id, branch_qualifier):
+            if not isinstance(format_id, int):
+                raise ProgrammingError("argument 1 must be int, "
+                                               "not %s",
+                                               type(format_id).__name__)
+            if not isinstance(transaction_id, str):
+                raise ProgrammingError("argument 2 must be str, "
+                                               "not %s",
+                                               type(transaction_id).__mane__)
+            if not isinstance(branch_qualifier, str):
+                raise ProgrammingError("argument 3 must be str, "
+                                               "not %s",
+                                               type(transaction_id).__name__)
+            if len(transaction_id) > _MAX_TPC_XID_SIZE:
+                raise ProgrammingError("Maximum length of "
+                                               "transaction_id exceeded.")
+            if len(branch_qualifier) > _MAX_TPC_XID_SIZE:
+                raise ProgrammingError("Maximum length of "
+                                               "branch_qualifier exceeded.")
+            if format_id == 0:
+                format_id = 1
+            return super().__new__(self, (format_id,
+                                          transaction_id,
+                                          branch_qualifier))
+
+
+
+    def tpc_begin(self, xid):
+        """
+        Parameter:
+          xid: xid object which was created by .xid() method of connection
+               class
+
+        Begins a TPC transaction with the given transaction ID xid.
+
+        This method should be called outside a transaction
+        (i.e., nothing may have been executed since the last .commit()
+        or .rollback()).
+        Furthermore, it is an error to call .commit() or .rollback() within
+        the TPC transaction. A ProgrammingError is raised if the application
+        calls .commit() or .rollback() during an active TPC transaction.
+        """
+
+        self._check_closed()
+        if type(xid).__name__ != "xid":
+            raise ProgrammingError("argument 1 must be xid "
+                                           "not %s", type(xid).__name__)
+        xa_command = "XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0])
+        self._client.execute(QueryPacket(xa_command), self._configuration)
+        self.tpc_state = TPC_STATE.XID
+        self._xid = xid
+    
+    def tpc_prepare(self):
+        """
+        Performs the first phase of a transaction started with .tpc_begin().
+        A ProgrammingError will be raised if this method was called outside
+        a TPC transaction.
+
+        After calling .tpc_prepare(), no statements can be executed until
+        .tpc_commit() or .tpc_rollback() have been called.
+        """
+
+        self._check_closed()
+        if self.tpc_state == TPC_STATE.NONE:
+            raise ProgrammingError("Transaction not started.")
+        if self.tpc_state == TPC_STATE.PREPARE:
+            raise ProgrammingError("Transaction is already in "
+                                           "prepared state.")
+
+        xid = self._xid
+        xa_command = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
+        try:
+            self._client.execute(QueryPacket(xa_command), self._configuration)
+        except Error:
+            self._xid = None
+            self.tpc_state = TPC_STATE.NONE
+            raise
+
+        xa_command = "XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0])
+        try:
+            self._client.execute(QueryPacket(xa_command), self._configuration)
+        except Error:
+            self._xid = None
+            self.tpc_state = TPC_STATE.NONE
+            raise
+
+        self.tpc_state = TPC_STATE.PREPARE
+
+
+    def tpc_commit(self, xid=None):
+        """
+        Optional parameter:
+
+        - xid
+          : xid object which was created by .xid() method of connection class.
+
+        When called with no arguments, .tpc_commit() commits a TPC transaction
+        previously prepared with .tpc_prepare().
+
+        If .tpc_commit() is called prior to .tpc_prepare(), a single phase
+        commit is performed. A transaction manager may choose to do this if
+        only a single resource is participating in the global transaction.
+        When called with a transaction ID xid, the database commits the given
+        transaction. If an invalid transaction ID is provided,
+        a ProgrammingError will be raised.
+        This form should be called outside a transaction, and
+        is intended for use in recovery.
+        """
+
+        self._check_closed()
+        if not xid:
+            xid = self._xid
+
+        if self.tpc_state == TPC_STATE.NONE:
+            raise ProgrammingError("Transaction not started.")
+        if xid is None and self.tpc_state != TPC_STATE.PREPARE:
+            raise ProgrammingError("Transaction is not prepared.")
+        if xid and type(xid).__name__ != "xid":
+            raise ProgrammingError("argument 1 must be xid "
+                                           "not %s" % type(xid).__name__)
+
+        if self.tpc_state < TPC_STATE.PREPARE:
+            xa_command = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
+            try:
+                self._client.execute(QueryPacket(xa_command), self._configuration)
+            except Error:
+                self._xid = None
+                self.tpc_state = TPC_STATE.NONE
+                raise
+
+        xa_command = "XA COMMIT '%s','%s',%s" % (xid[1], xid[2], xid[0])
+        if self.tpc_state < TPC_STATE.PREPARE:
+            xa_command = xa_command + " ONE PHASE"
+        try:
+            self._client.execute(QueryPacket(xa_command), self._configuration)
+        except Error:
+            self._xid = None
+            self.tpc_state = TPC_STATE.NONE
+            raise
+
+        # cleanup
+        self._xid = None
+        self.tpc_state = TPC_STATE.NONE
+
+    
+    def tpc_rollback(self, xid=None):
+        """
+        Parameter:
+           xid: xid object which was created by .xid() method of connection
+                class
+
+        Performs the first phase of a transaction started with .tpc_begin().
+        A ProgrammingError will be raised if this method outside a TPC
+        transaction.
+
+        After calling .tpc_prepare(), no statements can be executed until
+        .tpc_commit() or .tpc_rollback() have been called.
+        """
+
+        self._check_closed()
+        if self.tpc_state == TPC_STATE.NONE:
+            raise ProgrammingError("Transaction not started.")
+        if xid and type(xid).__name__ != "xid":
+            raise ProgrammingError("argument 1 must be xid "
+                                           "not %s" % type(xid).__name__)
+
+        if not xid:
+            xid = self._xid
+
+        if self.tpc_state < TPC_STATE.PREPARE:
+            xa_command = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
+            try:
+                self._client.execute(QueryPacket(xa_command), self._configuration)
+            except Error:
+                self._xid = None
+                self.tpc_state = TPC_STATE.NONE
+                raise
+
+        xa_command = "XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0])
+        try:
+            self._client.execute(QueryPacket(xa_command), self._configuration)
+        except Error:
+            self._xid = None
+            self.tpc_state = TPC_STATE.NONE
+            raise
+
+        self.tpc_state = TPC_STATE.PREPARE
+
+    def tpc_recover(self):
+        """
+        Returns a list of pending transaction IDs suitable for use with
+        tpc_commit(xid) or .tpc_rollback(xid).
+        """
+
+        self._check_closed()
+        cursor = self.cursor()
+        cursor.execute("XA RECOVER")
+        result = cursor.fetchall()
+        del cursor
+        return result
+
 
     @property
     def connection_id(self) -> int:
         """Get current connection_id"""
-        if not self._closed and self._client and self._client.context:
+        if not self._closed:
             return self._client.context.connection_id
         return -1
     
@@ -365,23 +594,21 @@ class Connection:
     def database(self) -> Optional[str]:
         """Get current database name"""
         # Try to get from context first (most up-to-date), then fall back to stored value
-        if self._client and self._client.context:
-            context_db = self._client.context.database
-            if context_db is not None:
-                return context_db
+        context_db = self._client.context.database
+        if context_db is not None:
+            return context_db
         return self._database
     
     @database.setter
     def database(self, value: Optional[str]) -> None:
         """Set database name"""
         self._check_closed()
-        if self._client and self._client.context:
-            context_db = self._client.context.database
-            if context_db is not None and value == context_db:
-                return
+        context_db = self._client.context.database
+        if context_db is not None and value == context_db:
+            return
         
         # Send COM_INIT_DB packet to change database
-        if self._client and value:
+        if value:
             from .impl.message.client.change_db_packet import ChangeDbPacket
             packet = ChangeDbPacket(value)
             self._client.execute(packet, self._configuration)
@@ -392,7 +619,7 @@ class Connection:
     def autocommit(self) -> bool:
         """Get current autocommit status"""
         # Get from server status if available, otherwise fall back to stored value
-        return (self._client.context.server_status & constants.STATUS.AUTOCOMMIT) > 0
+        return (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
     
     @autocommit.setter
     def autocommit(self, value: bool) -> None:
@@ -409,9 +636,7 @@ class Connection:
     def server_status(self) -> int:
         """Get current server_status status"""
         # Get server status if available
-        if self._client and self._client.context:
-            return int(self._client.context.server_status)
-        return 0
+        return int(self._client.context.server_status)
     
     @property
     def warnings(self) -> int:
@@ -421,9 +646,7 @@ class Connection:
         Returns:
             Number of warnings, or 0 if there are no warnings
         """
-        if self._client and self._client.context:
-            return self._client.context.warning_count
-        return 0
+        return self._client.context.warning_count
     
     def show_warnings(self) -> Optional[List[tuple]]:
         """
@@ -448,7 +671,7 @@ class Connection:
     def escape_string(self, string: str) -> str:
         """Escape a string for use in SQL statements"""
         self._check_closed()
-        no_backslash_escapes = (self._client.context.server_status & constants.STATUS.NO_BACKSLASH_ESCAPES) > 0
+        no_backslash_escapes = (self._client.context.server_status & STATUS.NO_BACKSLASH_ESCAPES) > 0
         return StringEscaper.escape_string(string, no_backslash_escapes)        
         
     def __enter__(self) -> 'Connection':
@@ -468,9 +691,6 @@ class Connection:
     def server_version(self) -> int:
         """Get server version as integer in format MMPPRR (major, minor, patch with 2 digits each)"""
         self._check_closed()
-        if not self._client or not self._client.context or not self._client.context.version:
-            return 0
-        
         version = self._client.context.version
         # Convert to MMPPRR format (e.g., 8.4.0 -> 080400, 12.1.1 -> 120101)
         return version.major * 10000 + version.minor * 100 + version.patch
@@ -481,11 +701,7 @@ class Connection:
         """
         Returns numeric version of connected database server in tuple format.
         """
-
         self._check_closed()
-        if not self._client or not self._client.context:
-            return (0, 0, 0)
-        
         version = self._client.context.version
         return (version.major,
                 version.minor,
@@ -503,9 +719,7 @@ class Connection:
     def server_info(self) -> Optional[str]:
         """Get server version as string"""
         self._check_closed()
-        if self._client and self._client.context:
-            return self._client.context.server_version
-        return None
+        return self._client.context.server_version
         
     @property
     def character_set(self) -> str:
@@ -524,9 +738,7 @@ class Connection:
         socket connection.
         """
         self._check_closed()
-        if self._client and self._client.context:
-            return str(self._client.host_address.port)
-        return None
+        return str(self._client.host_address.port)
 
     @property
     def unix_socket(self) -> Optional[str]:
@@ -539,9 +751,7 @@ class Connection:
     def server_name(self) -> Optional[str]:
         """Name or IP address of database server."""
         self._check_closed()
-        if self._client and self._client.context:
-            return str(self._client.host_address.host)
-        return None
+        return str(self._client.host_address.host)
 
     @property
     def _tls(self) -> Optional[str]:
@@ -553,8 +763,7 @@ class Connection:
             False if not using SSL connection
         """
         self._check_closed()
-        if (self._client and 
-            hasattr(self._client, 'ssl_wrapper') and 
+        if (hasattr(self._client, 'ssl_wrapper') and 
             self._client.ssl_wrapper):
             return self._client.ssl_wrapper.get_tls_version() != None
         return False
@@ -585,8 +794,7 @@ class Connection:
             None if not using TLS connection
         """
         self._check_closed()
-        if (self._client and 
-            getattr(self._client, 'ssl_wrapper', None) is not None):
+        if getattr(self._client, 'ssl_wrapper', None) is not None:
             return self._client.ssl_wrapper.get_peer_certificate()
         return None
 
@@ -601,8 +809,7 @@ class Connection:
             0 if SSL is enabled but verification is disabled
         """
         self._check_closed()
-        if (self._client and 
-            getattr(self._client, 'ssl_wrapper', None) is not None):
+        if getattr(self._client, 'ssl_wrapper', None) is not None:
             # SSL is enabled, check verification settings
             ssl_wrapper = self._client.ssl_wrapper
             if hasattr(ssl_wrapper, 'ssl_context'):

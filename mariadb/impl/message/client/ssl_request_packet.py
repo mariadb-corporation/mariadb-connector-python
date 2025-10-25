@@ -68,4 +68,6 @@ class SslRequestPacket(ClientMessage):
         
         # Send packet with automatic header and chunking
         writer.send_payload("SSL_REQUEST")
-    
+
+    def is_binary(self) -> bool:
+        return False

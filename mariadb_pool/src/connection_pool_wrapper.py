@@ -32,6 +32,7 @@ except ImportError:
     # Fallback - import from pool module
     from .pool import PoolError
 
+MAX_POOL_SIZE = 64
 
 class ConnectionPoolWrapper:
     """
@@ -87,9 +88,13 @@ class ConnectionPoolWrapper:
             config.max_size = pool_kwargs['max_size']
         if 'pool_validation_interval' in pool_kwargs:
             config.validation_interval = pool_kwargs['pool_validation_interval']
-        
-        # Handle pool_reset_connection
-        self.pool_reset_connection = pool_kwargs.get('pool_reset_connection', False)
+
+        if (config.max_size >= MAX_POOL_SIZE):
+            config.max_size = MAX_POOL_SIZE
+        if (config.min_size >= MAX_POOL_SIZE):
+            config.min_size = MAX_POOL_SIZE
+            
+        config.reset_connection = bool(pool_kwargs.get('pool_reset_connection', True))
         
         # Create the actual pool
         self._pool = _PoolImpl(
@@ -104,14 +109,6 @@ class ConnectionPoolWrapper:
     def get_connection(self):
         """Get a connection from the pool"""
         pool_conn = self._pool.acquire()
-        
-        # If pool_reset_connection is enabled, reset the connection
-        if self.pool_reset_connection:
-            try:
-                pool_conn.connection.reset()
-            except Exception:
-                pass  # Ignore reset errors
-        
         return pool_conn.connection
     
     def add_connection(self, connection: Optional[Any] = None):
@@ -167,6 +164,12 @@ class ConnectionPoolWrapper:
         return len(self._pool._all_connections)
     
     @property
+    def pool_reset_connection(self):
+        """Get reset_connection value"""
+        return self._pool.config.reset_connection
+
+
+    @property
     def pool_size(self):
         """Get maximum pool size"""
         return self._pool.config.max_size
@@ -174,7 +177,7 @@ class ConnectionPoolWrapper:
     @property
     def max_size(self):
         """Get maximum pool size (alias for pool_size)"""
-        return self._pool.config.max_size
+        return MAX_POOL_SIZE
     
     @classmethod
     def get_pool(cls, pool_name: str) -> 'ConnectionPoolWrapper':

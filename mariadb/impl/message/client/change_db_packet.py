@@ -65,3 +65,5 @@ class ChangeDbPacket(ClientMessage):
         # Send packet with automatic header and chunking
         writer.send_payload("COM_INIT_DB")
     
+    def is_binary(self) -> bool:
+        return False

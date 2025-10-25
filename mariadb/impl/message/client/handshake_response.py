@@ -164,3 +164,5 @@ class HandshakeResponse(ClientMessage):
         
         return result
     
+    def is_binary(self) -> bool:
+        return False

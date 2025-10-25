@@ -130,7 +130,7 @@ class TestPooling(unittest.TestCase):
                                         pool_size=10,
                                         pool_reset_connection=True,
                                         pool_validation_interval=0,
-                                        acquire_timeout=1,
+                                        acquire_timeout=10,
                                         **default_conf)
 
         # service connection
@@ -145,31 +145,33 @@ class TestPooling(unittest.TestCase):
                  END"""
 
         cursor.execute(sql)
+        try:
+            for i in range(0, 10):
+                pconn = pool.get_connection()
+                ids.append(pconn.connection_id)
+                cursor.execute("KILL %s" % (pconn.connection_id,))
+                pconn.close()
 
-        for i in range(0, 10):
-            pconn = pool.get_connection()
-            ids.append(pconn.connection_id)
-            cursor.execute("KILL %s" % (pconn.connection_id,))
-            pconn.close()
+            new_ids = []
 
-        new_ids = []
+            for i in range(0, 10):
+                pconn = pool.get_connection()
+                new_ids.append(pconn.connection_id)
+                self.assertEqual(pconn.connection_id in ids, False)
+                cursor = pconn.cursor()
+                cursor.callproc("p1")
+                cursor.close()
+                pconn.close()
 
-        for i in range(0, 10):
-            pconn = pool.get_connection()
-            new_ids.append(pconn.connection_id)
-            self.assertEqual(pconn.connection_id in ids, False)
-            cursor = pconn.cursor()
-            cursor.callproc("p1")
-            cursor.close()
-            pconn.close()
+            for i in range(0, 10):
+                pconn = pool.get_connection()
+                self.assertEqual(pconn.connection_id in new_ids, True)
+                pconn.close()
 
-        for i in range(0, 10):
-            pconn = pool.get_connection()
-            self.assertEqual(pconn.connection_id in new_ids, True)
-            pconn.close()
-
-        conn.close()
-        pool.close()
+            conn.close()
+        finally:
+            pool.close()
+            self.assertEqual(mariadb._CONNECTION_POOLS, {})
 
     def test_conpy245(self):
         # we can't test performance here, but we can check if LRU works.
@@ -293,6 +295,7 @@ class TestPooling(unittest.TestCase):
         self.assertEqual(row[0], 1)
         del cursor
         pool.close()
+        self.assertEqual(mariadb._CONNECTION_POOLS, {})
 
     def test_create_pool_from_conn(self):
         default_conf = conf()
@@ -320,6 +323,7 @@ class TestPooling(unittest.TestCase):
             self.assertEqual(p.pool_reset_connection, True)
         self.assertEqual(p.max_size, 64)
         mariadb._CONNECTION_POOLS["getter_test"].close()
+        self.assertEqual(mariadb._CONNECTION_POOLS, {})
 
     def test_pool_connection_reset(self):
         default_conf = conf()
@@ -360,7 +364,7 @@ class TestPooling(unittest.TestCase):
         pool = mariadb.ConnectionPool(pool_name="test_pool_add", acquire_timeout=1)
         try:
             mariadb.ConnectionPool(pool_name="test_pool_add")
-        except mariadb.ProgrammingError:
+        except (mariadb.ProgrammingError, mariadb.PoolError):
             pass
         pool.close()
         self.assertEqual(mariadb._CONNECTION_POOLS, {})

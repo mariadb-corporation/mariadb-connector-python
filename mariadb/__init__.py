@@ -266,6 +266,8 @@ def _get_connection_pool_class():
             """
             if pool_name is None:
                 raise ProgrammingError("pool_name is required for mariadb.ConnectionPool")
+            if pool_name in _CONNECTION_POOLS:
+                raise PoolError(f"Pool '{pool_name}' already exists")   
             super().__init__(connection_factory=connect, pool_name=pool_name, **kwargs)
             _CONNECTION_POOLS[pool_name] = self
         

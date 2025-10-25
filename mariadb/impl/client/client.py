@@ -791,12 +791,10 @@ class Client:
                 # Send message
                 self._send_message(message)
                 
-                # Check if this is a binary result set (from ExecutePacket)
-                from ..message.client.execute_packet import ExecutePacket
-                is_binary = isinstance(message, ExecutePacket)
                 
                 # Read and parse results
                 results = []
+                is_binary = message.is_binary()
                 
                 # Continue reading results while MORE_RESULTS_EXIST is set
                 while True:

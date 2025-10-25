@@ -59,3 +59,7 @@ class PingPacket(ClientMessage):
         
         # Send packet with automatic header and chunking
         writer.send_payload("COM_PING")
+    
+    def is_binary(self) -> bool:
+        return False
+        

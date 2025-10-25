@@ -132,3 +132,5 @@ class ChangeUserPacket(ClientMessage):
             writer.write_bytes(attr_data)
         writer.send_payload("COM_CHANGE_USER")
         
+    def is_binary(self) -> bool:
+        return False

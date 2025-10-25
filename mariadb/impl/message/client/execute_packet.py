@@ -323,3 +323,6 @@ class ExecutePacket(ClientMessage):
             writer.write_byte(hours)
             writer.write_byte(minutes)
             writer.write_byte(seconds)
+
+    def is_binary(self) -> bool:
+        return True

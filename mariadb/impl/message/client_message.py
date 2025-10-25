@@ -47,3 +47,11 @@ class ClientMessage(ABC):
             IOError: If encoding fails
         """
         pass
+
+
+    @abstractmethod
+    def is_binary(self) -> bool:
+        """
+        indicate if message is binary
+        """
+        return False

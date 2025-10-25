@@ -21,8 +21,6 @@ class TestConnection(unittest.TestCase):
         version_info = mariadb.__version_info__
 
         str_version = list(map(str, version.split('.')))
-        print(str_version)
-        print('diego', version_info)
         
         self.assertEqual(int(str_version[0]), version_info[0])
         self.assertEqual(int(str_version[1]), version_info[1])

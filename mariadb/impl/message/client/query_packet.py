@@ -217,4 +217,5 @@ class QueryPacket(ClientMessage):
                     writer.write_string(StringEscaper.escape_string(str(param), no_backslash_escapes))
                     writer.write_byte(QUOTE_BYTE)
 
-    
+    def is_binary(self) -> bool:
+        return False

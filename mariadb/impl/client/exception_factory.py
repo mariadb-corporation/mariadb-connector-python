@@ -62,7 +62,7 @@ class ExceptionFactory:
             if sql_state.startswith('08'):
                 # Connection exception
                 exception_class = OperationalError
-            elif sql_state.startswith('23'):
+            elif sql_state.startswith('23') or sql_state.startswith('XA'):
                 # Integrity constraint violation
                 exception_class = IntegrityError
             elif sql_state.startswith('42'):

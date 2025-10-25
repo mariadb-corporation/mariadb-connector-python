@@ -12,6 +12,7 @@ from contextlib import contextmanager
 # Import PoolError from shared exceptions
 try:
     from mariadb_shared.exceptions import PoolError
+    from mariadb_shared.constants.STATUS import IN_TRANS
 except ImportError:
     # Fallback for standalone usage
     class PoolError(Exception):
@@ -40,6 +41,7 @@ class PoolConfig:
     validation_interval: float = 30.0  # 30 seconds
     acquire_timeout: float = 30.0  # 30 seconds
     enable_health_check: bool = True
+    reset_connection: bool = False
 
 
 @dataclass
@@ -210,18 +212,11 @@ class ConnectionPool:
     def _cleanup_expired_connections(self):
         """Remove expired connections from pool"""
         with self._lock:
-            expired = [
-                pool_conn for pool_conn in self._all_connections
-                if not pool_conn.in_use and pool_conn.is_expired(
-                    self.config.max_lifetime,
-                    self.config.max_idle_time
-                )
-            ]
-            
-            for pool_conn in expired:
-                pool_conn.closeSilently()
-                self._all_connections.remove(pool_conn)
-                self.stats.total_connections -= 1
+            for pool_conn in list(self._all_connections):
+                if not pool_conn.in_use and pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
+                    pool_conn.closeSilently()
+                    self._all_connections.remove(pool_conn)
+                    self.stats.total_connections -= 1
 
     def acquire(self, timeout: Optional[float] = None) -> PooledConnection:
         """
@@ -257,8 +252,9 @@ class ConnectionPool:
                 # Connection is unhealthy, create a new one
                 with self._lock:
                     pooled_conn.closeSilently()
-                    self._all_connections.remove(pooled_conn)
-                    self.stats.total_connections -= 1
+                    if pooled_conn in self._all_connections:
+                        self._all_connections.remove(pooled_conn)
+                        self.stats.total_connections -= 1
                 pooled_conn = self._create_connection()
                 
         except queue.Empty:
@@ -303,12 +299,31 @@ class ConnectionPool:
             pool_conn.mark_idle()
             self.stats.active_connections -= 1
             
+            # Reset or rollback connection before returning to pool
+            try:
+                conn = pool_conn.connection
+                
+                # Reset connection if reset_connection is enabled
+                if self.config.reset_connection:
+                    conn.reset()
+                # Or rollback if in transaction
+                elif (conn.server_status & IN_TRANS) > 0:
+                    conn.rollback()
+
+            except Exception:
+                # If reset/rollback fails, close the connection
+                pool_conn.closeSilently()
+                if pool_conn in self._all_connections:
+                    self._all_connections.remove(pool_conn)
+                    self.stats.total_connections -= 1
+                return
+            
             # Check if connection should be kept
             if pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
                 pool_conn.closeSilently()
-                self._all_connections.remove(pool_conn)
-                self.stats.total_connections -= 1
-
+                if pool_conn in self._all_connections:
+                    self._all_connections.remove(pool_conn)
+                    self.stats.total_connections -= 1
             else:
                 try:
                     self._pool.put_nowait(pool_conn)
@@ -316,8 +331,9 @@ class ConnectionPool:
                 except queue.Full:
                     # Pool is full, close the connection
                     pool_conn.closeSilently()
-                    self._all_connections.remove(pool_conn)
-                    self.stats.total_connections -= 1
+                    if pool_conn in self._all_connections:
+                        self._all_connections.remove(pool_conn)
+                        self.stats.total_connections -= 1
                         
     @contextmanager
     def connection(self, timeout: Optional[float] = None):

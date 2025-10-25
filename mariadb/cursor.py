@@ -25,7 +25,7 @@ from typing import Sequence, Optional, List, Any, Union, Dict
 
 from .exceptions import DatabaseError, ProgrammingError, NotSupportedError, OperationalError
 from .impl.message.client.query_packet import QueryPacket
-from .impl.result import CompleteResult
+from .impl.result import CompleteResult, Result
 from .impl.string_utils import StringEscaper
 from .impl.client.exception_factory import ExceptionFactory
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
@@ -78,7 +78,8 @@ class Cursor:
         self.connection: 'Connection' = connection
         self._closed: bool = False
         self.arraysize: int = 1
-        self.rowcount: int = -1
+        self._affected_rows: int = -1  # Number of rows affected by UPDATE/DELETE/INSERT
+        self._rowcount: int = -1       # Number of rows in result set or affected rows
         self.description: Optional[List[Any]] = None
         self.lastrowid: Optional[int] = None
         self._completions: List[Any] = []  # Store all completions for nextset()
@@ -107,6 +108,11 @@ class Cursor:
             if native_obj is not None:
                 self._cursor_config.native_object = bool(native_obj)
 
+    @property
+    def rowcount(self) -> int:
+        """Get the number of rows (read-only property)"""
+        return self._rowcount
+    
     def _get_config(self):
         """Get the effective configuration (cursor-specific or connection default)"""
         return getattr(self, '_cursor_config', None) or self.connection._configuration
@@ -152,7 +158,8 @@ class Cursor:
             
             self._closed = True
             self.arraysize = 1
-            self.rowcount = -1
+            self._rowcount = -1
+            self._affected_rows = -1
             self.description = None
             self.lastrowid = None
             self._completions = []  # Store all completions for nextset()
@@ -305,7 +312,8 @@ class Cursor:
         self._completion_index = 0
         
         if not completions:
-            self.rowcount = 0
+            self._rowcount = 0
+            self._affected_rows = 0
             self.description = None
             self._result = None
             return
@@ -324,122 +332,108 @@ class Cursor:
         # Check if it's a result set or update count
         if completion.is_result_set:
             # It's a result set
-            self.rowcount = completion.affected_rows
-            self._process_rows_set_completion(completion)
+            self._rowcount = completion.result_set.get_row_count()
+            self._affected_rows = completion.affected_rows
+            self._process_rows_set_completion(completion.result_set)
         else:
             # It's an update count
             self.description = None
+            self._affected_rows = completion.affected_rows
+            self._rowcount = completion.affected_rows
             self._result = None
             self.lastrowid = completion.insert_id is not None and completion.insert_id > 0 and completion.insert_id or None
        
     
-    def _process_rows_set_completion(self, completion: Any) -> None:
+    def _process_rows_set_completion(self, result_set: Result) -> None:
         """
         Process a result set completion
         
         Args:
             completion: Result set completion object
         """
-        try:
-            # Extract result set from completion
-            if hasattr(completion, 'result_set') and completion.result_set:
-                result_set = completion.result_set
-                
-                # Check if it's a Result object (CompleteResult or StreamingResult)
-                if hasattr(result_set, 'streaming'):
-                    # New Result object approach
-                    self._result = result_set
-                    columns = result_set.columns
-                else:
-                    # Legacy dict format - wrap in CompleteResult for consistency
-                    rows = result_set.get('rows', [])
-                    columns = result_set.get('columns', [])
-                    
-                    # Don't format here - will be formatted in fetchone()
-                    # Create CompleteResult to wrap legacy data
-                    self._result = CompleteResult(
-                        columns=columns,
-                        column_count=len(columns),
-                        config=self._get_config(),
-                        rows=rows,
-                        is_binary=False
-                    )
-                
-                # Extract column information for description
-                description = []
-                
-                for col in columns:
-                    # Create description tuple to match C extension: 
-                    # (name, type, display_length, packed_len, precision, decimals, nullable, flags, table, org_name, org_table)
-                    col_name = col.get('name', 'unknown')
-                    col_type = col.get('column_type', 253)  # Default to VARCHAR
-                    if (col['ext_type_format'] == 'json'):
-                        col_type = JSON
-                    col_length = col.get('column_length', 0)
-                    col_flags = col.get('flags', 0)
-                    col_decimals = col.get('decimals', 0)
-                    col_charset = col.get('character_set', 63)  # Default to binary charset
-                    col_table = col.get('table', '')
-                    col_org_name = col.get('org_name', '')
-                    col_org_table = col.get('org_table', '')
-                    
-                    if (col_type <= INT24 and (col_type != TIMESTAMP or col_length == 14 or col_length == 8) or col_type == YEAR or col_type== NEWDECIMAL or col_type == DECIMAL):
-                        col_flags |= NUM_FLAG
 
-                    # Check if column is nullable (flag bit 0 = NOT NULL)
-                    nullable = not (col_flags & 1)
-                    
-                    # Calculate display_length and packed_len following C extension logic
-                    # Use max_length if available, otherwise use length
-                    display_length = col_length  # We don't have max_length in our implementation
-                    packed_len = 0
-                    precision = 0
-                    decimals = col_decimals
-                    
-                    # Handle charset-specific display length calculation
-                    max_char_len = self._get_charset_max_length(col_charset)
-                    if max_char_len and max_char_len > 1:
-                        packed_len = display_length
-                        display_length = display_length // max_char_len
-                    else:
-                        # For single-byte charsets, packed_len would be from pack_len table
-                        # We'll use a simplified approach
-                        packed_len = -1
-                    
-                    # Handle decimal fields special case
-                    if col_decimals and col_decimals < 31:
-                        decimals = col_decimals
-                        precision = col_length
-                        display_length = precision + 1
-                    
-                    description.append((
-                        col_name,           # name
-                        col_type,           # type
-                        display_length,     # display_length
-                        packed_len,         # packed_len
-                        precision,          # precision
-                        decimals,           # decimals
-                        nullable,           # nullable
-                        col_flags,          # flags
-                        col_table,          # table
-                        col_org_name,       # org_name
-                        col_org_table       # org_table
-                    ))
-                
-                self.description = tuple(description) if description else None
-            else:
-                # No result set data available
-                self._result = None
-                self.rowcount = 0
-                self.description = None
-
+        # Check if it's a Result object (CompleteResult or StreamingResult)
+        if hasattr(result_set, 'streaming'):
+            # New Result object approach
+            self._result = result_set
+            columns = result_set.columns
+        else:
+            # Legacy dict format - wrap in CompleteResult for consistency
+            rows = result_set.get('rows', [])
+            columns = result_set.get('columns', [])
             
-        except Exception as e:
-            raise self._exception_factory.create_exception(
-                f"Failed to process result set: {e}",
-                errno=2013,
-                sql_state='HY000'
+            # Don't format here - will be formatted in fetchone()
+            # Create CompleteResult to wrap legacy data
+            self._result = CompleteResult(
+                columns=columns,
+                column_count=len(columns),
+                config=self._get_config(),
+                rows=rows,
+                is_binary=False
             )
+        
+        # Extract column information for description
+        description = []
+        
+        for col in columns:
+            # Create description tuple to match C extension: 
+            # (name, type, display_length, packed_len, precision, decimals, nullable, flags, table, org_name, org_table)
+            col_name = col.get('name', 'unknown')
+            col_type = col.get('column_type', 253)  # Default to VARCHAR
+            if (col['ext_type_format'] == 'json'):
+                col_type = JSON
+            col_length = col.get('column_length', 0)
+            col_flags = col.get('flags', 0)
+            col_decimals = col.get('decimals', 0)
+            col_charset = col.get('character_set', 63)  # Default to binary charset
+            col_table = col.get('table', '')
+            col_org_name = col.get('org_name', '')
+            col_org_table = col.get('org_table', '')
+            
+            if (col_type <= INT24 and (col_type != TIMESTAMP or col_length == 14 or col_length == 8) or col_type == YEAR or col_type== NEWDECIMAL or col_type == DECIMAL):
+                col_flags |= NUM_FLAG
+
+            # Check if column is nullable (flag bit 0 = NOT NULL)
+            nullable = not (col_flags & 1)
+            
+            # Calculate display_length and packed_len following C extension logic
+            # Use max_length if available, otherwise use length
+            display_length = col_length  # We don't have max_length in our implementation
+            packed_len = 0
+            precision = 0
+            decimals = col_decimals
+            
+            # Handle charset-specific display length calculation
+            max_char_len = self._get_charset_max_length(col_charset)
+            if max_char_len and max_char_len > 1:
+                packed_len = display_length
+                display_length = display_length // max_char_len
+            else:
+                # For single-byte charsets, packed_len would be from pack_len table
+                # We'll use a simplified approach
+                packed_len = -1
+            
+            # Handle decimal fields special case
+            if col_decimals and col_decimals < 31:
+                decimals = col_decimals
+                precision = col_length
+                display_length = precision + 1
+            
+            description.append((
+                col_name,           # name
+                col_type,           # type
+                display_length,     # display_length
+                packed_len,         # packed_len
+                precision,          # precision
+                decimals,           # decimals
+                nullable,           # nullable
+                col_flags,          # flags
+                col_table,          # table
+                col_org_name,       # org_name
+                col_org_table       # org_table
+            ))
+        
+        self.description = tuple(description) if description else None
     
     def _process_executemany_completions(self, completions: List[Any]) -> None:
         """
@@ -459,7 +453,9 @@ class Cursor:
         if not result_set_completions:
             # No result sets - just use the first completion for metadata
             first_completion = completions[0]
-            self.rowcount = getattr(first_completion, 'affected_rows', 0)
+            affected = getattr(first_completion, 'affected_rows', 0)
+            self._affected_rows = affected
+            self._rowcount = affected
             self.description = None
             self._result = None
             return
@@ -507,7 +503,8 @@ class Cursor:
                 rows=aggregated_rows,
                 is_binary=False
             )
-            self.rowcount = len(aggregated_rows)
+            self._rowcount = len(aggregated_rows)
+            self._affected_rows = sum(c.affected_rows for c in result_set_completions if hasattr(c, 'affected_rows'))
         else:
             # Fallback to first result set if no compatible ones found
             first_rs = result_set_completions[0].get_result_set()
@@ -527,7 +524,8 @@ class Cursor:
                 rows=first_rows,
                 is_binary=False
             )
-            self.rowcount = len(first_rows)
+            self._rowcount = len(first_rows)
+            self._affected_rows = first_rs.affected_rows if hasattr(first_rs, 'affected_rows') else 0
     
     def _are_columns_compatible(self, columns1: List[Dict], columns2: List[Dict]) -> bool:
         """
@@ -708,7 +706,8 @@ class Cursor:
             # Accumulate affected rows from all completions
 
             # Set final rowcount to total affected rows
-            self.rowcount = total_affected           
+            self._affected_rows = total_affected
+            self._rowcount = total_affected
             self.lastrowid = lastrowid is not None and lastrowid > 0 and lastrowid or None
 
         except DatabaseError as e:
@@ -948,7 +947,8 @@ class Cursor:
             # No result sets with data
             self.description = None
             self._result = None
-            self.rowcount = 0
+            self._rowcount = 0
+            self._affected_rows = 0
             return
         
         # Process the current completion
