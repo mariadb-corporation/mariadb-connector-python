@@ -86,7 +86,7 @@ class TestCursor(unittest.TestCase):
 
     def test_cursor_reconnect(self):
         if is_native():
-            self.skipTest("skip test for native")
+            self.skipTest("skip test for native not supprting deprecated reconnect")
         if is_maxscale():
             self.skipTest("skip test for maxscale")
 
@@ -318,8 +318,6 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_fetchmany(self):
-        if is_native():
-            self.skipTest("only support buffered cursor")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         cursor = self.connection.cursor()
@@ -1148,7 +1146,7 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy48(self):
         if is_native():
-            self.skipTest("Skip (Native)")
+            self.skipTest("Native only support QMARK")
         with create_connection() as con:
             cur = con.cursor()
             cur.execute("select %s", [True])
@@ -1227,7 +1225,7 @@ class TestCursor(unittest.TestCase):
             cur.close()
 
     def test_conpy58(self):
-        if is_native:
+        if is_native():
             self.skipTest("Native only support QMARK")
         with create_connection() as con:
             cursor = con.cursor()
@@ -1293,10 +1291,8 @@ class TestCursor(unittest.TestCase):
             del cur
 
     def test_conpy67(self):
-        if is_native():
-            self.skipTest("Skip (Native) only buffered")
-        with create_connection() as con:
-            with con.cursor(buffered=False) as cur:
+         with create_connection() as con:
+            with con.cursor(buffered=False) as cur:                
                 cur.execute("SELECT 1")
                 self.assertEqual(cur.rowcount, 0)
             with con.cursor() as cur:
@@ -1543,7 +1539,7 @@ class TestCursor(unittest.TestCase):
                 self.assertEqual(row[0], b"foobar" if is_mysql() else "foobar")
 
     def test_conpy205(self):
-        if is_native:
+        if is_native():
             self.skipTest("Native only support QMARK")
         with create_connection() as conn:
             cursor = conn.cursor()
@@ -1854,7 +1850,7 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(rows, data)
 
     def test_conpy91(self):
-        if is_native:
+        if is_native():
             self.skipTest("Native only support QMARK")
         with create_connection() as connection:
             with connection.cursor() as cursor:

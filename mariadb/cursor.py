@@ -88,7 +88,7 @@ class Cursor:
         self._exception_factory = ExceptionFactory()  # For consistent error handling
         
         # Result object state
-        self._buffered: bool = kwargs.pop('buffered', True)  # Default is buffered
+        self._buffered: bool = bool(kwargs.pop('buffered', True))  # Default is buffered
         self._result: Optional[Any] = None  # Active Result object (CompleteResult or StreamingResult)
         
         if kwargs:
@@ -734,6 +734,7 @@ class Cursor:
         # Delegate to Result object
         if self._result is not None:
             row = self._result.fetch_one()
+            self._rowcount = self._result.get_row_count()
             if row is not None:
                 # Apply row formatting
                 row = self._apply_row_formatting([row])[0]
@@ -793,6 +794,7 @@ class Cursor:
         # Delegate to Result object
         if self._result is not None:
             rows = self._result.fetch_all()
+            self._rowcount = self._result.get_row_count()
             return self._apply_row_formatting(rows)
         
         return []

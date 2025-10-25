@@ -44,35 +44,6 @@ class PoolConfig:
     reset_connection: bool = False
 
 
-@dataclass
-class PoolStats:
-    """
-    Statistics for connection pool
-    
-    Attributes:
-        total_connections: Total number of connections created
-        active_connections: Number of connections currently in use
-        idle_connections: Number of idle connections in the pool
-        total_requests: Total number of connection requests
-        failed_requests: Number of failed connection requests
-        average_wait_time: Average wait time for acquiring a connection
-    """
-    total_connections: int = 0
-    active_connections: int = 0
-    idle_connections: int = 0
-    total_requests: int = 0
-    failed_requests: int = 0
-    average_wait_time: float = 0.0
-    _wait_times: list = field(default_factory=list, repr=False)
-    
-    def record_wait(self, wait_time: float):
-        """Record a wait time for statistics"""
-        self._wait_times.append(wait_time)
-        if len(self._wait_times) > 1000:
-            self._wait_times = self._wait_times[-1000:]
-        self.average_wait_time = sum(self._wait_times) / len(self._wait_times)
-
-
 class PooledConnection:
     """
     Wrapper for a pooled connection
@@ -152,26 +123,37 @@ class ConnectionPool:
             **connection_params: Parameters to pass to connection factory
         """
         self.connection_factory = connection_factory
-        self.connection_params = connection_params
+        self.connection_params = {}
         self.config = config or PoolConfig()
-        self.stats = PoolStats()
         
         self._pool: queue.Queue = queue.Queue(maxsize=self.config.max_size)
         self._all_connections: list[PooledConnection] = []
         self._lock = threading.RLock()
         self._closed = False
+        self._maintenance_thread = None
+
+        if (len(connection_params) > 0):
+            self._set_config(**connection_params)
+
+    def _set_config(self, **kwargs):
+        """
+        Set pool configuration
         
-        # Start background maintenance thread
-        if self.config.enable_health_check:
-            self._maintenance_thread = threading.Thread(
-                target=self._maintenance_loop,
-                daemon=True
-            )
-            self._maintenance_thread.start()
-        
-        # Create minimum connections
-        self._ensure_min_connections()
-        
+        Args:
+            **kwargs: Connection parameters to update
+        """
+        # Update connection parameters
+        self.connection_params.update(kwargs)        
+        if (len(self.connection_params) > 0):
+            self._ensure_min_connections()
+            # Start background maintenance thread
+            if self.config.enable_health_check and not self._maintenance_thread:
+                self._maintenance_thread = threading.Thread(
+                    target=self._maintenance_loop,
+                    daemon=True
+                )
+                self._maintenance_thread.start()
+
     def _create_connection(self) -> PooledConnection:
         """Create a new pooled connection"""
         with self._lock:
@@ -184,10 +166,8 @@ class ConnectionPool:
                 conn._set_pooled_connection(pooled_conn)
 
                 self._all_connections.append(pooled_conn)
-                self.stats.total_connections += 1
                 return pooled_conn
             except Exception as e:
-                self.stats.failed_requests += 1
                 raise PoolError(f"Failed to create connection: {e}") from e
                 
     def _ensure_min_connections(self):
@@ -216,7 +196,6 @@ class ConnectionPool:
                 if not pool_conn.in_use and pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
                     pool_conn.closeSilently()
                     self._all_connections.remove(pool_conn)
-                    self.stats.total_connections -= 1
 
     def acquire(self, timeout: Optional[float] = None) -> PooledConnection:
         """
@@ -233,10 +212,6 @@ class ConnectionPool:
             
         timeout = timeout if timeout is not None else self.config.acquire_timeout
 
-        start_time = time.time()
-        
-        self.stats.total_requests += 1
-        
         # Check if we can create a new connection before blocking
         can_create_new = len(self._all_connections) < self.config.max_size
         
@@ -246,7 +221,6 @@ class ConnectionPool:
         try:
             # Try to get an existing connection
             pooled_conn = self._pool.get(timeout=get_timeout)
-            
             # Validate connection health
             if not pooled_conn.is_healthy():
                 # Connection is unhealthy, create a new one
@@ -254,7 +228,6 @@ class ConnectionPool:
                     pooled_conn.closeSilently()
                     if pooled_conn in self._all_connections:
                         self._all_connections.remove(pooled_conn)
-                        self.stats.total_connections -= 1
                 pooled_conn = self._create_connection()
                 
         except queue.Empty:
@@ -267,21 +240,11 @@ class ConnectionPool:
                     try:
                         pooled_conn = self._pool.get(timeout=timeout - get_timeout)
                     except queue.Empty:
-                        self.stats.failed_requests += 1
                         raise PoolError("No connections available and pool is at maximum size")
                 else:
-                    self.stats.failed_requests += 1
                     raise PoolError("No connections available and pool is at maximum size")
                 
         pooled_conn.mark_in_use()
-        
-        with self._lock:
-            self.stats.active_connections += 1
-            self.stats.idle_connections = self._pool.qsize()
-            
-        wait_time = time.time() - start_time
-        self.stats.record_wait(wait_time)
-        
         return pooled_conn
         
     def release(self, pool_conn: PooledConnection):
@@ -297,7 +260,6 @@ class ConnectionPool:
         with self._lock:
                 
             pool_conn.mark_idle()
-            self.stats.active_connections -= 1
             
             # Reset or rollback connection before returning to pool
             try:
@@ -315,7 +277,6 @@ class ConnectionPool:
                 pool_conn.closeSilently()
                 if pool_conn in self._all_connections:
                     self._all_connections.remove(pool_conn)
-                    self.stats.total_connections -= 1
                 return
             
             # Check if connection should be kept
@@ -323,17 +284,14 @@ class ConnectionPool:
                 pool_conn.closeSilently()
                 if pool_conn in self._all_connections:
                     self._all_connections.remove(pool_conn)
-                    self.stats.total_connections -= 1
             else:
                 try:
                     self._pool.put_nowait(pool_conn)
-                    self.stats.idle_connections = self._pool.qsize()
                 except queue.Full:
                     # Pool is full, close the connection
                     pool_conn.closeSilently()
                     if pool_conn in self._all_connections:
                         self._all_connections.remove(pool_conn)
-                        self.stats.total_connections -= 1
                         
     @contextmanager
     def connection(self, timeout: Optional[float] = None):
@@ -370,12 +328,6 @@ class ConnectionPool:
                 except queue.Empty:
                     break
                     
-    def get_stats(self) -> PoolStats:
-        """Get current pool statistics"""
-        with self._lock:
-            self.stats.idle_connections = self._pool.qsize()
-            return self.stats
-            
     def __enter__(self):
         """Context manager entry"""
         return self

@@ -1125,7 +1125,7 @@ class Client:
                 )
                 completion.result_set = streaming_result
                 return completion
-            
+
             # Step 5: Read row data packets until EOF (buffered mode)
             rows = []
             while True:

@@ -213,7 +213,7 @@ class TestPooling(unittest.TestCase):
 
         pool.add_connection(conn)
         c = pool.get_connection()
-        self.assertEqual(c, conn)
+        self.assertEqual(c.connection_id, conn.connection_id)
         pool.close()
 
     def test_connection_pool_maxconn(self):

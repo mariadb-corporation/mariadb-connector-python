@@ -261,6 +261,7 @@ class StreamingResult(Result):
         self.context = context
         self.row_parser = row_parser
         self.loaded = False
+        self._row_count = 0  # Track number of rows fetched
         
     def streaming(self) -> bool:
         """Check if this is a streaming result"""
@@ -295,7 +296,7 @@ class StreamingResult(Result):
                     # Traditional EOF packet
                     self.warning_count = struct.unpack('<H', row_packet[pos:pos + 2])[0]
                     server_status = struct.unpack('<H', row_packet[pos + 2:pos + 4])[0]
-                    self.context.setServerStatus(server_status)
+                    self.context.server_status = server_status
                     self.is_output_parameters = (server_status & STATUS.PS_OUT_PARAMS) != 0
                 else:
                     # OK packet with 0xFE header (DEPRECATE_EOF enabled)
@@ -304,7 +305,7 @@ class StreamingResult(Result):
                     insert_id, pos = self.reader.read_length_encoded_int(row_packet, pos)
                     server_status = struct.unpack('<H', row_packet[pos:pos + 2])[0]
                     self.warning_count = struct.unpack('<H', row_packet[pos + 2:pos + 4])[0]
-                    self.context.setServerStatus(server_status)
+                    self.context.server_status = server_status
                     self.is_output_parameters = (self.context.server_status & STATUS.PS_OUT_PARAMS) != 0
                 
                 self.loaded = True
@@ -331,6 +332,9 @@ class StreamingResult(Result):
         row_packet = self._read_next_row_packet()
         if row_packet is None:
             return None
+        
+        # Increment row count
+        self._row_count += 1
         
         # Parse row using the provided parser
         if self.row_parser:
@@ -366,8 +370,10 @@ class StreamingResult(Result):
         """
         if not self.loaded:
             while not self.loaded:
-                self._read_next_row_packet()
+                row_packet = self._read_next_row_packet()
+                if row_packet is not None:
+                    self._row_count += 1
     
     def get_row_count(self) -> int:
-        """Get total row count (-1 for streaming results)"""
-        return -1  # Unknown for streaming results
+        """Get total row count"""
+        return self._row_count

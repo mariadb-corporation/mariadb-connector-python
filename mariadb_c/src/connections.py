@@ -134,7 +134,7 @@ class Connection(CConnection):
     def close(self):
         self._check_closed()
         if self._pooled_connection:
-            self._pooled_connection.return_to_pool(self)
+            self._pooled_connection.return_to_pool()
         else:
             super().close()
 

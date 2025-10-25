@@ -139,7 +139,6 @@ class ConnectionPoolWrapper:
             self._pool._all_connections.append(pooled_conn)
             pooled_conn.mark_idle()
             self._pool._pool.put_nowait(pooled_conn)
-            self._pool.stats.total_connections += 1
     
     def set_config(self, **kwargs):
         """
@@ -149,8 +148,8 @@ class ConnectionPoolWrapper:
             **kwargs: Connection parameters to update
         """
         # Update connection parameters
-        self._pool.connection_params.update(kwargs)
-            
+        self._pool._set_config(**kwargs)        
+
     def close(self):
         """Close the pool and all connections"""
         self._pool.close()

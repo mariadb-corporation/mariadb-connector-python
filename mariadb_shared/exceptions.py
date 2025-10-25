@@ -39,20 +39,40 @@ class Error(Exception):
         """Get error message"""
         return self._msg
     
+    @errmsg.setter
+    def errmsg(self, value):
+        """Set error message"""
+        self._msg = value
+    
     @property
     def msg(self):
         """Get error message (alias for errmsg)"""
         return self._msg
+    
+    @msg.setter
+    def msg(self, value):
+        """Set error message"""
+        self._msg = value
     
     @property
     def errno(self):
         """Get error number"""
         return self._errno
     
+    @errno.setter
+    def errno(self, value):
+        """Set error number"""
+        self._errno = value if value is not None else 0
+    
     @property
     def sqlstate(self):
         """Get SQL state"""
         return self._sqlstate
+    
+    @sqlstate.setter
+    def sqlstate(self, value):
+        """Set SQL state"""
+        self._sqlstate = value if value is not None else "HY000"
     
     def __str__(self):
         """String representation of error"""

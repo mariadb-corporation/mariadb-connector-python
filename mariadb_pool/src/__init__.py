@@ -1,5 +1,5 @@
 """
-MariaDB Advanced Connection Pool
+MariaDB Connection Pool
 
 This module provides advanced connection pooling capabilities for MariaDB
 Connector/Python, including:
@@ -7,7 +7,6 @@ Connector/Python, including:
 - Connection health checking
 - Load balancing
 - Connection lifecycle management
-- Pool statistics and monitoring
 """
 
 # Load version from build-time generated release_info.py (ensures version sync)
@@ -43,7 +42,6 @@ __author__ = "Georg Richter"
 from mariadb_pool.pool import (
     ConnectionPool,
     PoolConfig,
-    PoolStats,
     PoolError,
 )
 from mariadb_pool.connection_pool_wrapper import ConnectionPoolWrapper
@@ -52,7 +50,6 @@ __all__ = [
     "ConnectionPool",
     "ConnectionPoolWrapper",
     "PoolConfig",
-    "PoolStats",
     "PoolError",
     "__version__",
     "__version_info__",

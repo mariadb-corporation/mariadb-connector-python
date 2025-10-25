@@ -137,7 +137,7 @@ class Connection:
             
             try:
                 if cursor_class is None:
-                    cursor = Cursor(self)
+                    cursor = Cursor(self, **kwargs)
                 else:
                     cursor = cursor_class(self, **kwargs)
                     

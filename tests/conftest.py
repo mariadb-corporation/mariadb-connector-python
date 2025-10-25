@@ -16,7 +16,7 @@ def get_test_config():
     """Get test configuration from environment variables"""
     config = {
         "user": os.environ.get('TEST_DB_USER', 'root'),
-        "host": os.environ.get('TEST_DB_HOST', '127.0.0.1'),
+        "host": os.environ.get('TEST_DB_HOST', 'localhost'),
         "database": os.environ.get('TEST_DB_DATABASE', 'testj'),
         "port": int(os.environ.get('TEST_DB_PORT', '3306')),
         "debug": False
