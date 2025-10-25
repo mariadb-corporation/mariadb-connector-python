@@ -1392,7 +1392,7 @@ class Client:
                                 case _:
                                     # Default case for VARCHAR, STRING, etc.
                                     # Check if BINARY flag is set to determine if we should read as bytes or string
-                                    if ((column['flags'] & FIELD_FLAG.BINARY) > 0):
+                                    if ((column['flags'] & FIELD_FLAG.BINARY) > 0) or (column['character_set'] == 63):
                                         # Binary data - read as bytes
                                         value, pos = self.reader.read_length_encoded_bytes(packet, pos)
                                     else:
@@ -1681,8 +1681,9 @@ class Client:
                             value = uuid.UUID(value)
                         return value, pos
                     case _:
-                        # String types - check BINARY flag
-                        if column['flags'] & FIELD_FLAG.BINARY:
+                        # String types - check BINARY flag or binary charset (63)
+                        # MySQL uses charset 63 for OUT parameters instead of BINARY flag
+                        if (column['flags'] & FIELD_FLAG.BINARY) or (column['character_set'] == 63):
                             # Binary string - return bytes
                             return self.reader.read_length_encoded_bytes(packet, pos)
                         else:
