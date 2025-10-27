@@ -114,4 +114,4 @@ for dirpath, dirnames, filenames in os.walk(target):
         if filename in ("__init__.py", "version.py"):
             sed_i(r'__impl__\s*=\s*["\']c["\']', '__impl__ = "binary"', filepath)
 
-print(f"✓ Created mariadb_binary package at {target}")
+print(f"[OK] Created mariadb_binary package at {target}")
