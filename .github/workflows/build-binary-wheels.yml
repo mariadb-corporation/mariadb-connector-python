@@ -6,8 +6,7 @@ name: Build Binary Wheels
 on:
   push:
     branches:
-      - main
-      - master
+      - 2.0
     paths:
       - '.github/workflows/build-binary-wheels.yml'
       - 'mariadb_c/**'
