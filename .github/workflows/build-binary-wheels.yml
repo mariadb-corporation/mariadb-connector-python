@@ -34,7 +34,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
-        pyver: [cp310, cp311, cp312, cp313]
+        pyver: [cp310, cp311, cp312, cp313, cp314]
         platform: [manylinux, musllinux]
 
     steps:
@@ -119,7 +119,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x86_64, arm64]
-        pyver: [cp310, cp311, cp312, cp313]
+        pyver: [cp310, cp311, cp312, cp313, cp314]
 
     steps:
       - name: Checkout repos
@@ -127,24 +127,11 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Download and extract MariaDB Connector/C
-        run: |
-          if [ ! -d "/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx" ]; then
-            cd /tmp
-            if [ "${{matrix.arch}}" = "arm64" ]; then
-              curl -LO https://archive.mariadb.org/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-arm64.tar.gz
-              tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-arm64.tar.gz
-            else
-              curl -LO https://archive.mariadb.org/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-x86_64.tar.gz
-              tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-x86_64.tar.gz
-            fi
-          fi
-
-      - name: Cache MariaDB Connector/C download
+      - name: Cache MariaDB Connector/C build
         uses: actions/cache@v4
         with:
-          path: /tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx
-          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-${{ matrix.arch }}
+          path: /tmp/mariadb-connector-c-${{ matrix.arch }}.build
+          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-${{ matrix.arch }}
 
       - name: Create the binary package source tree
         run: python3 ./tools/ci/copy_to_binary.py
@@ -157,15 +144,31 @@ jobs:
           CIBW_BUILD: ${{matrix.pyver}}-macosx_${{matrix.arch}}
           CIBW_ARCHS_MACOS: ${{matrix.arch}}
           MACOSX_ARCHITECTURE: ${{matrix.arch}}
+          CIBW_BEFORE_ALL_MACOS: |
+            # Build MariaDB Connector/C from source
+            if [ ! -d "/tmp/mariadb-connector-c-${{matrix.arch}}.build" ]; then
+              brew install cmake openssl@3
+              cd /tmp
+              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git mariadb-connector-c-${{matrix.arch}}
+              cd mariadb-connector-c-${{matrix.arch}}
+              cmake -DCMAKE_BUILD_TYPE=Release \
+                    -DCMAKE_INSTALL_PREFIX=/tmp/mariadb-connector-c-${{matrix.arch}}.build \
+                    -DCMAKE_OSX_ARCHITECTURES=${{matrix.arch}} \
+                    -DWITH_EXTERNAL_ZLIB=On \
+                    -DWITH_SSL=OPENSSL \
+                    -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3) .
+              make -j$(sysctl -n hw.ncpu)
+              make install
+            fi
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration -m 'not slow' --color yes -v || true
           CIBW_ENVIRONMENT: >-
             MARIADB_IMPL=binary
-            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx
-            PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx/bin:$PATH"
-            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx/lib"
-            PKG_CONFIG_PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx/lib/pkgconfig"
+            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{matrix.arch}}.build
+            PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/bin:$PATH"
+            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib"
+            PKG_CONFIG_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/pkgconfig"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
