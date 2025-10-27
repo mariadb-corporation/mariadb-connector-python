@@ -91,8 +91,8 @@ jobs:
               make -j$(nproc)
               make install
             fi
-          CIBW_REPAIR_WHEEL_COMMAND: >-
-            auditwheel repair -w {dest_dir} {wheel}
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: >-
+            LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib/mariadb:$LD_LIBRARY_PATH" auditwheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration -m 'not slow' --color yes -v || true
@@ -101,7 +101,7 @@ jobs:
             MARIADB_IMPL=binary
             MARIADB_CONNECTOR_C_DIR=/host/tmp/mariadb-connector-c.build
             PATH="/host/tmp/mariadb-connector-c.build/bin:$PATH"
-            LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib64"
+            LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib/mariadb:/host/tmp/mariadb-connector-c.build/lib64"
             PKG_CONFIG_PATH="/host/tmp/mariadb-connector-c.build/lib/pkgconfig"
 
       - uses: actions/upload-artifact@v4
