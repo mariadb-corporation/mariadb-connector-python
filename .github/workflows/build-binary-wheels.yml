@@ -168,17 +168,17 @@ jobs:
             fi
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
             DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib:/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/mariadb:$DYLD_LIBRARY_PATH"
-            delocate-wheel --require-archs {delocate_archs} --require-target-macos-version 15.0 --ignore-missing-dependencies -w {dest_dir} -v {wheel}
+            delocate-wheel --require-archs {delocate_archs} --require-target-macos-version ${{ matrix.arch == 'arm64' && '15.0' || '12.0' }} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration -m 'not slow' --color yes -v || true
-          CIBW_ENVIRONMENT: >-
+          CIBW_ENVIRONMENT_MACOS: >-
             MARIADB_IMPL=binary
             MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{matrix.arch}}.build
             PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/bin:$PATH"
             DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib:/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/mariadb"
             PKG_CONFIG_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/pkgconfig"
-            MACOSX_DEPLOYMENT_TARGET=15.0
+            MACOSX_DEPLOYMENT_TARGET=${{ matrix.arch == 'arm64' && '15.0' || '12.0' }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -231,8 +231,8 @@ jobs:
             pytest {project}/tests/integration -m "not slow" --color yes -v || exit 0
           CIBW_ENVIRONMENT_WINDOWS: >-
             MARIADB_IMPL=binary
-            MARIADB_CC_INSTALL_DIR=C:\mariadb-connector-c.build
-            PATH="C:\mariadb-connector-c.build\bin;$PATH"
+            MARIADB_CC_INSTALL_DIR=C:\\mariadb-connector-c.build
+            PATH="C:\\mariadb-connector-c.build\\bin;$PATH"
 
       - uses: actions/upload-artifact@v4
         with:

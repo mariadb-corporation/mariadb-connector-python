@@ -9,7 +9,7 @@ version = "2.0.0.dev"
 description = "MariaDB Connector/Python with Java-equivalent implementation"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.8"
-license = {text = "LGPL 2.1"}
+license = "LGPL-2.1-or-later"
 authors = [
     {name = "Georg Richter", email = "georg@mariadb.com"},
     {name = "MariaDB Corporation Ab"}

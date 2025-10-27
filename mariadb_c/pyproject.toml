@@ -12,7 +12,7 @@ version = "2.0.0.dev"
 description = "Python MariaDB extension"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
-license = {text = "LGPL 2.1"}
+license = "LGPL-2.1-or-later"
 authors = [
   {name = "Georg Richter"}
 ]
