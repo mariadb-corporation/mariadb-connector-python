@@ -115,8 +115,8 @@ jobs:
       - name: Cache MariaDB Connector/C download
         uses: actions/cache@v4
         with:
-          path: /tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}
-          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-${{ matrix.arch }}
+          path: /tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx
+          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-${{ matrix.arch }}
 
       - name: Create the binary package source tree
         run: python3 ./tools/ci/copy_to_binary.py
@@ -131,14 +131,14 @@ jobs:
           MACOSX_ARCHITECTURE: ${{matrix.arch}}
           CIBW_BEFORE_ALL_MACOS: |
             # Download pre-built MariaDB Connector/C
-            if [ ! -d "/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}" ]; then
+            if [ ! -d "/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx" ]; then
               cd /tmp
               if [ "${{matrix.arch}}" = "arm64" ]; then
-                curl -LO https://dlm.mariadb.com/${{ env.MARIADB_CONNECTOR_C_VERSION }}/connectors/c/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-arm64.tar.gz
-                tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-arm64.tar.gz
+                curl -LO https://archive.mariadb.org/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-arm64.tar.gz
+                tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-arm64.tar.gz
               else
-                curl -LO https://dlm.mariadb.com/${{ env.MARIADB_CONNECTOR_C_VERSION }}/connectors/c/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-x86_64.tar.gz
-                tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-x86_64.tar.gz
+                curl -LO https://archive.mariadb.org/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-x86_64.tar.gz
+                tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-x86_64.tar.gz
               fi
             fi
           CIBW_TEST_REQUIRES: pytest
@@ -146,10 +146,10 @@ jobs:
             pytest {project}/tests/integration -m 'not slow' --color yes -v || true
           CIBW_ENVIRONMENT: >-
             MARIADB_IMPL=binary
-            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}
-            PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/bin:$PATH"
-            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/lib"
-            PKG_CONFIG_PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/lib/pkgconfig"
+            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx
+            PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx/bin:$PATH"
+            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx/lib"
+            PKG_CONFIG_PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx/lib/pkgconfig"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -191,7 +191,7 @@ jobs:
           CIBW_BEFORE_ALL_WINDOWS: |
             # Download pre-built MariaDB Connector/C
             if not exist "C:\mariadb-connector-c" (
-              curl -LO https://dlm.mariadb.com/${{ env.MARIADB_CONNECTOR_C_VERSION }}/connectors/c/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-win64.msi
+              curl -LO https://archive.mariadb.org/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-win64.msi
               msiexec /i mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-win64.msi /qn INSTALLDIR="C:\mariadb-connector-c"
             )
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
