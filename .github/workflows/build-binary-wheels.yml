@@ -231,7 +231,7 @@ jobs:
             pytest {project}/tests/integration -m "not slow" --color yes -v || exit 0
           CIBW_ENVIRONMENT_WINDOWS: >-
             MARIADB_IMPL=binary
-            MARIADB_CONNECTOR_C_DIR=C:\mariadb-connector-c.build
+            MARIADB_CC_INSTALL_DIR=C:\mariadb-connector-c.build
             PATH="C:\mariadb-connector-c.build\bin;$PATH"
 
       - uses: actions/upload-artifact@v4
