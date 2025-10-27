@@ -112,7 +112,7 @@ jobs:
   # }}}
 
   macos:  # {{{
-    runs-on: macos-latest
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-latest' }}
     if: true
 
     strategy:
@@ -145,7 +145,7 @@ jobs:
           CIBW_ARCHS_MACOS: ${{matrix.arch}}
           MACOSX_ARCHITECTURE: ${{matrix.arch}}
           CIBW_BEFORE_ALL_MACOS: |
-            # Build MariaDB Connector/C from source
+            # Build MariaDB Connector/C from source (native architecture)
             if [ ! -d "/tmp/mariadb-connector-c-${{matrix.arch}}.build" ]; then
               brew install cmake openssl@3
               cd /tmp
