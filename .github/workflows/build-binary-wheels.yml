@@ -222,6 +222,27 @@ jobs:
 
   # }}}
 
+  publish-test:  # {{{
+    runs-on: ubuntu-latest
+    needs: merge
+    if: github.event_name == 'workflow_dispatch'  # Only on manual trigger
+    permissions:
+      id-token: write  # For PyPI trusted publishing
+    
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mariadb-binary-wheels
+          path: dist/
+  
+      - name: Publish to Test PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist/
+  
+  # }}}
+
   publish:  # {{{
     runs-on: ubuntu-latest
     needs: merge
