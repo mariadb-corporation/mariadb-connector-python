@@ -209,16 +209,16 @@ jobs:
           CIBW_ARCHS_WINDOWS: AMD64
           CIBW_BEFORE_ALL_WINDOWS: |
             # Build MariaDB Connector/C from source
-            if not exist "C:\mariadb-connector-c.build" (
-              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git C:\mariadb-connector-c-src
-              cd C:\mariadb-connector-c-src
-              cmake -G "Visual Studio 17 2022" -A x64 ^
-                    -DCMAKE_BUILD_TYPE=Release ^
-                    -DCMAKE_INSTALL_PREFIX=C:\mariadb-connector-c.build ^
+            if [ ! -d "C:/mariadb-connector-c.build" ]; then
+              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git C:/mariadb-connector-c-src
+              cd C:/mariadb-connector-c-src
+              cmake -G "Visual Studio 17 2022" -A x64 \
+                    -DCMAKE_BUILD_TYPE=Release \
+                    -DCMAKE_INSTALL_PREFIX=C:/mariadb-connector-c.build \
                     -DWITH_EXTERNAL_ZLIB=On .
               cmake --build . --config Release
               cmake --install . --config Release
-            )
+            fi
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
             delvewheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
