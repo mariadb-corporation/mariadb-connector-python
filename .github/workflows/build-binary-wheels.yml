@@ -72,7 +72,11 @@ jobs:
               cd /tmp
               git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git
               cd mariadb-connector-c
-              cmake3 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/host/tmp/mariadb-connector-c.build -DWITH_EXTERNAL_ZLIB=On .
+              # Disable parsec plugin - requires OpenSSL 1.1.1+ (manylinux2014 has 1.0.2k)
+              cmake3 -DCMAKE_BUILD_TYPE=Release \
+                     -DCMAKE_INSTALL_PREFIX=/host/tmp/mariadb-connector-c.build \
+                     -DWITH_EXTERNAL_ZLIB=On \
+                     -DPLUGIN_PARSEC=OFF .
               make -j$(nproc)
               make install
             fi
@@ -112,11 +116,11 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Cache MariaDB Connector/C download
+      - name: Cache MariaDB Connector/C build
         uses: actions/cache@v4
         with:
-          path: /tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx
-          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-${{ matrix.arch }}
+          path: /tmp/mariadb-connector-c.build
+          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-${{ matrix.arch }}
 
       - name: Create the binary package source tree
         run: python3 ./tools/ci/copy_to_binary.py
@@ -130,26 +134,30 @@ jobs:
           CIBW_ARCHS_MACOS: ${{matrix.arch}}
           MACOSX_ARCHITECTURE: ${{matrix.arch}}
           CIBW_BEFORE_ALL_MACOS: |
-            # Download pre-built MariaDB Connector/C
-            if [ ! -d "/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx" ]; then
+            # Build MariaDB Connector/C from source
+            if [ ! -d "/tmp/mariadb-connector-c.build" ]; then
+              brew install cmake openssl@3
               cd /tmp
-              if [ "${{matrix.arch}}" = "arm64" ]; then
-                curl -LO https://archive.mariadb.org/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-arm64.tar.gz
-                tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-arm64.tar.gz
-              else
-                curl -LO https://archive.mariadb.org/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-x86_64.tar.gz
-                tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx-x86_64.tar.gz
-              fi
+              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git
+              cd mariadb-connector-c
+              cmake -DCMAKE_BUILD_TYPE=Release \
+                    -DCMAKE_INSTALL_PREFIX=/tmp/mariadb-connector-c.build \
+                    -DCMAKE_OSX_ARCHITECTURES=${{matrix.arch}} \
+                    -DWITH_EXTERNAL_ZLIB=On \
+                    -DWITH_SSL=OPENSSL \
+                    -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3) .
+              make -j$(sysctl -n hw.ncpu)
+              make install
             fi
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration -m 'not slow' --color yes -v || true
           CIBW_ENVIRONMENT: >-
             MARIADB_IMPL=binary
-            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx
-            PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx/bin:$PATH"
-            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx/lib"
-            PKG_CONFIG_PATH="/tmp/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-osx/lib/pkgconfig"
+            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c.build
+            PATH="/tmp/mariadb-connector-c.build/bin:$PATH"
+            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c.build/lib"
+            PKG_CONFIG_PATH="/tmp/mariadb-connector-c.build/lib/pkgconfig"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -189,10 +197,16 @@ jobs:
           CIBW_BUILD: ${{matrix.pyver}}-${{matrix.arch}}
           CIBW_ARCHS_WINDOWS: AMD64
           CIBW_BEFORE_ALL_WINDOWS: |
-            # Download pre-built MariaDB Connector/C
-            if not exist "C:\mariadb-connector-c" (
-              curl -LO https://archive.mariadb.org/connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-win64.msi
-              msiexec /i mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-win64.msi /qn INSTALLDIR="C:\mariadb-connector-c"
+            # Build MariaDB Connector/C from source
+            if not exist "C:\mariadb-connector-c.build" (
+              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git C:\mariadb-connector-c-src
+              cd C:\mariadb-connector-c-src
+              cmake -G "Visual Studio 17 2022" -A x64 ^
+                    -DCMAKE_BUILD_TYPE=Release ^
+                    -DCMAKE_INSTALL_PREFIX=C:\mariadb-connector-c.build ^
+                    -DWITH_EXTERNAL_ZLIB=On .
+              cmake --build . --config Release
+              cmake --install . --config Release
             )
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
             delvewheel repair -w {dest_dir} {wheel}
@@ -201,8 +215,8 @@ jobs:
             pytest {project}/tests/integration -m "not slow" --color yes -v || exit 0
           CIBW_ENVIRONMENT_WINDOWS: >-
             MARIADB_IMPL=binary
-            MARIADB_CONNECTOR_C_DIR=C:\mariadb-connector-c
-            PATH="C:\mariadb-connector-c\bin;$PATH"
+            MARIADB_CONNECTOR_C_DIR=C:\mariadb-connector-c.build
+            PATH="C:\mariadb-connector-c.build\bin;$PATH"
 
       - uses: actions/upload-artifact@v4
         with:
