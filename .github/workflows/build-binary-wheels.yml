@@ -68,15 +68,26 @@ jobs:
           CIBW_BEFORE_ALL_LINUX: |
             # Build MariaDB Connector/C from source
             if [ ! -d "/host/tmp/mariadb-connector-c.build" ]; then
-              yum install -y git cmake3 gcc gcc-c++ make openssl-devel zlib-devel
+              # Detect package manager (yum for manylinux, apk for musllinux)
+              if command -v yum &> /dev/null; then
+                # manylinux (CentOS/RHEL)
+                yum install -y git cmake3 gcc gcc-c++ make openssl-devel zlib-devel
+                CMAKE_CMD=cmake3
+              elif command -v apk &> /dev/null; then
+                # musllinux (Alpine)
+                apk add --no-cache git cmake gcc g++ make openssl-dev zlib-dev linux-headers
+                CMAKE_CMD=cmake
+              fi
+              
               cd /tmp
               git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git
               cd mariadb-connector-c
+              
               # Disable parsec plugin - requires OpenSSL 1.1.1+ (manylinux2014 has 1.0.2k)
-              cmake3 -DCMAKE_BUILD_TYPE=Release \
-                     -DCMAKE_INSTALL_PREFIX=/host/tmp/mariadb-connector-c.build \
-                     -DWITH_EXTERNAL_ZLIB=On \
-                     -DPLUGIN_PARSEC=OFF .
+              $CMAKE_CMD -DCMAKE_BUILD_TYPE=Release \
+                         -DCMAKE_INSTALL_PREFIX=/host/tmp/mariadb-connector-c.build \
+                         -DWITH_EXTERNAL_ZLIB=On \
+                         -DPLUGIN_PARSEC=OFF .
               make -j$(nproc)
               make install
             fi
