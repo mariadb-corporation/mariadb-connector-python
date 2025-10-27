@@ -25,13 +25,17 @@ Equivalent to the Java ParsecPasswordPlugin class.
 See https://mariadb.com/kb/en/connection/#parsec-plugin
 """
 
+from __future__ import annotations
+
 import hashlib
 import secrets
-from typing import Optional, Any
+from typing import Optional, Any, TYPE_CHECKING
 
-from ...impl.client.context import Context
-from ...impl.client.socket.packet_writer import PacketWriter
-from ...impl.client.socket.packet_reader import PacketReader
+if TYPE_CHECKING:
+    from ...impl.client.context import Context
+    from ...impl.client.socket.packet_writer import PacketWriter
+    from ...impl.client.socket.packet_reader import PacketReader
+
 from ..authentication_plugin import AuthenticationPlugin, Credential
 from ...exceptions import OperationalError
 

@@ -24,12 +24,16 @@ Implementation of mysql_native_password authentication plugin.
 Equivalent to the Java NativePasswordPlugin class.
 """
 
-import hashlib
-from typing import Optional, Any
+from __future__ import annotations
 
-from ...impl.client.context import Context
-from ...impl.client.socket.packet_writer import PacketWriter
-from ...impl.client.socket.packet_reader import PacketReader
+import hashlib
+from typing import Optional, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...impl.client.context import Context
+    from ...impl.client.socket.packet_writer import PacketWriter
+    from ...impl.client.socket.packet_reader import PacketReader
+
 from ..authentication_plugin import AuthenticationPlugin, Credential
 
 

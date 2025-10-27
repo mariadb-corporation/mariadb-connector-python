@@ -33,6 +33,7 @@ dist/
 .venv/
 .pytest_cache/
 mariadb.egg-info/
+mariadb_binary/
 
 # Cache
 __pycache__

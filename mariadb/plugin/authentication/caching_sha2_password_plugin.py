@@ -24,13 +24,17 @@ Implementation of caching_sha2_password authentication plugin.
 Equivalent to the Java CachingSha2PasswordPlugin class.
 """
 
+from __future__ import annotations
+
 import hashlib
 import os
-from typing import Optional, Any
+from typing import Optional, Any, TYPE_CHECKING
 
-from ...impl.client.context import Context
-from ...impl.client.socket.packet_writer import PacketWriter
-from ...impl.client.socket.packet_reader import PacketReader
+if TYPE_CHECKING:
+    from ...impl.client.context import Context
+    from ...impl.client.socket.packet_writer import PacketWriter
+    from ...impl.client.socket.packet_reader import PacketReader
+
 from ..authentication_plugin import AuthenticationPlugin, Credential
 from ...exceptions import OperationalError
 

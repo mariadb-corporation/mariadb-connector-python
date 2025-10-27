@@ -92,9 +92,10 @@ def connect(*args, connectionclass=None, **kwargs):
 
     **Environment Variables:**
     - **`MARIADB_PYTHON_CONNECTOR`** - Controls which connector implementation to use:
-        - `mariadb` or `python` - Force pure Python implementation
-        - `mariadb_c` or `c` - Force C extension (raises error if not available)
-        - Not set - Default behavior (prefer C extension, fallback to pure Python)
+        - `c` or `mariadb_c` - Force C extension (requires compilation)
+        - `binary` or `mariadb_binary` - Force binary wheel (precompiled, bundled dependencies)
+        - `python` or `mariadb` - Force pure Python implementation
+        - Not set - Default behavior (try C extension first, then binary, fallback to pure Python)
 
     """
     # Check if pool_name is specified
@@ -216,13 +217,15 @@ def _get_current_version():
         try:
             import mariadb_c
             return mariadb_c.__version__
-        except ModuleNotFoundError:
-            # Fallback for development mode (not installed)
-            try:
-                import mariadb_c.src
-                return mariadb_c.src.__version__
-            except (ImportError, AttributeError):
-                return _base_version + "-c"
+        except (ImportError, AttributeError):
+            return _base_version + "-c"
+    elif __impl__ == 'binary':
+        # Binary wheel is selected
+        try:
+            import mariadb_binary
+            return mariadb_binary.__version__
+        except (ImportError, AttributeError):
+            return _base_version + "-binary"
     else:
         # Pure Python implementation
         return _base_version + "-native"
@@ -231,6 +234,8 @@ def _get_current_version_type():
     """Get version type based on current implementation selection"""
     if __impl__ == 'c':
         return "c"
+    elif __impl__ == 'binary':
+        return "binary"
     else:
         return "native"
 

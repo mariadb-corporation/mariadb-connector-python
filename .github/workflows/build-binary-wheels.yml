@@ -1,0 +1,244 @@
+name: Build Binary Wheels
+
+# Build precompiled binary wheels for mariadb-binary package
+# Similar to psycopg-binary, these wheels include all C dependencies
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - '.github/workflows/build-binary-wheels.yml'
+      - 'mariadb_c/**'
+      - 'tools/ci/**'
+  workflow_dispatch:
+  release:
+    types: [published]
+
+env:
+  # MariaDB Connector/C version to bundle
+  MARIADB_CONNECTOR_C_VERSION: "3.4.7"
+
+concurrency:
+  # Cancel older requests of the same workflow in the same branch
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+
+  linux:  # {{{
+    runs-on: ubuntu-latest
+    if: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+        pyver: [cp310, cp311, cp312, cp313]
+        platform: [manylinux, musllinux]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up QEMU for multi-arch build
+        uses: docker/setup-qemu-action@v3
+        with:
+          image: tonistiigi/binfmt:qemu-v8.1.5
+
+      - name: Cache MariaDB Connector/C build
+        uses: actions/cache@v4
+        with:
+          path: /tmp/mariadb-connector-c.build
+          key: mariadb-connector-c-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.MARIADB_CONNECTOR_C_VERSION }}
+
+      - name: Create the binary package source tree
+        run: python3 ./tools/ci/copy_to_binary.py
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.21
+        with:
+          package-dir: mariadb_binary
+        env:
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+          CIBW_MANYLINUX_AARCH64_IMAGE: manylinux2014
+          CIBW_BUILD: ${{matrix.pyver}}-${{matrix.platform}}_${{matrix.arch}}
+          CIBW_ARCHS_LINUX: auto aarch64
+          CIBW_BEFORE_ALL_LINUX: |
+            # Install MariaDB Connector/C
+            if [ ! -d "/host/tmp/mariadb-connector-c.build" ]; then
+              yum install -y wget cmake3 gcc gcc-c++ make openssl-devel zlib-devel
+              cd /tmp
+              wget https://dlm.mariadb.com/enterprise-release-helpers/mariadb-connector-c/${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-src.tar.gz
+              tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-src.tar.gz
+              cd mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-src
+              cmake3 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/host/tmp/mariadb-connector-c.build .
+              make -j$(nproc)
+              make install
+            fi
+          CIBW_REPAIR_WHEEL_COMMAND: >-
+            auditwheel repair -w {dest_dir} {wheel}
+          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_COMMAND: >-
+            pytest {project}/tests/integration -m 'not slow' --color yes -v || true
+          CIBW_ENVIRONMENT_PASS_LINUX: MARIADB_CONNECTOR_C_VERSION
+          CIBW_ENVIRONMENT: >-
+            MARIADB_IMPL=binary
+            MARIADB_CONNECTOR_C_DIR=/host/tmp/mariadb-connector-c.build
+            PATH="/host/tmp/mariadb-connector-c.build/bin:$PATH"
+            LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib64"
+            PKG_CONFIG_PATH="/host/tmp/mariadb-connector-c.build/lib/pkgconfig"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{matrix.pyver}}-${{matrix.platform}}_${{matrix.arch}}
+          path: ./wheelhouse/*.whl
+
+  # }}}
+
+  macos:  # {{{
+    runs-on: macos-latest
+    if: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+        pyver: [cp310, cp311, cp312, cp313]
+
+    steps:
+      - name: Checkout repos
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache MariaDB Connector/C build
+        uses: actions/cache@v4
+        with:
+          path: /tmp/mariadb-connector-c.build
+          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-${{ matrix.arch }}
+
+      - name: Create the binary package source tree
+        run: python3 ./tools/ci/copy_to_binary.py
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.21
+        with:
+          package-dir: mariadb_binary
+        env:
+          CIBW_BUILD: ${{matrix.pyver}}-macosx_${{matrix.arch}}
+          CIBW_ARCHS_MACOS: ${{matrix.arch}}
+          MACOSX_ARCHITECTURE: ${{matrix.arch}}
+          CIBW_BEFORE_ALL_MACOS: |
+            # Install MariaDB Connector/C
+            if [ ! -d "/tmp/mariadb-connector-c.build" ]; then
+              brew install cmake openssl@3
+              cd /tmp
+              curl -LO https://dlm.mariadb.com/enterprise-release-helpers/mariadb-connector-c/${{ env.MARIADB_CONNECTOR_C_VERSION }}/mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-src.tar.gz
+              tar xzf mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-src.tar.gz
+              cd mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-src
+              cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/tmp/mariadb-connector-c.build -DCMAKE_OSX_ARCHITECTURES=${{matrix.arch}} .
+              make -j$(sysctl -n hw.ncpu)
+              make install
+            fi
+          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_COMMAND: >-
+            pytest {project}/tests/integration -m 'not slow' --color yes -v || true
+          CIBW_ENVIRONMENT: >-
+            MARIADB_IMPL=binary
+            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c.build
+            PATH="/tmp/mariadb-connector-c.build/bin:$PATH"
+            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c.build/lib"
+            PKG_CONFIG_PATH="/tmp/mariadb-connector-c.build/lib/pkgconfig"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{matrix.pyver}}-${{matrix.arch}}
+          path: ./wheelhouse/*.whl
+
+  # }}}
+
+  windows:  # {{{
+    runs-on: windows-latest
+    if: true
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [win_amd64]
+        pyver: [cp310, cp311, cp312, cp313]
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Create the binary package source tree
+        run: python3 ./tools/ci/copy_to_binary.py
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.21
+        with:
+          package-dir: mariadb_binary
+        env:
+          CIBW_BUILD: ${{matrix.pyver}}-${{matrix.arch}}
+          CIBW_ARCHS_WINDOWS: AMD64
+          CIBW_BEFORE_BUILD_WINDOWS: |
+            # Install MariaDB Connector/C via vcpkg
+            vcpkg install libmariadb:x64-windows
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
+            delvewheel repair -w {dest_dir} {wheel}
+          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_COMMAND: >-
+            pytest {project}/tests/integration -m "not slow" --color yes -v || exit 0
+          CIBW_ENVIRONMENT_WINDOWS: >-
+            MARIADB_IMPL=binary
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{matrix.pyver}}-${{matrix.arch}}
+          path: ./wheelhouse/*.whl
+
+  # }}}
+
+  merge:  # {{{
+    runs-on: ubuntu-latest
+    needs:
+      - linux
+      - macos
+      - windows
+    steps:
+      - name: Merge Artifacts
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: mariadb-binary-wheels
+          delete-merged: true
+
+  # }}}
+
+  #publish:  # {{{
+  #  runs-on: ubuntu-latest
+  #  needs: merge
+  #  if: github.event_name == 'release'
+  #  permissions:
+  #    id-token: write  # For PyPI trusted publishing
+  #  
+  #  steps:
+  #    - uses: actions/download-artifact@v4
+  #      with:
+  #        name: mariadb-binary-wheels
+  #        path: dist/
+  #
+  #    - name: Publish to PyPI
+  #      uses: pypa/gh-action-pypi-publish@release/v1
+  #      with:
+  #        packages-dir: dist/
+  #
+  ## }}}

@@ -22,9 +22,10 @@ def _select_implementation() -> None:
     Select the best MariaDB implementation available.
     
     Uses MARIADB_PYTHON_CONNECTOR environment variable:
-    - 'mariadb_c' or 'c': Force C extension
-    - 'mariadb' or 'python': Force pure Python  
-    - Not set: Try C extension first, fallback to pure Python
+    - 'c' or 'mariadb_c': Force C extension (requires compilation)
+    - 'binary' or 'mariadb_binary': Force binary wheel (precompiled with bundled deps)
+    - 'python' or 'mariadb': Force pure Python
+    - Not set: Try binary first, then C extension, fallback to pure Python
     """
     global __impl__, Connection, Cursor
     
@@ -39,27 +40,32 @@ def _select_implementation() -> None:
             msg = f"couldn't import requested mariadb '{name}' implementation: {e}"
             raise ImportError(msg) from e
     
-    # Try C extension first (best performance)
+    
+    # Try C extension (requires compilation, for advanced users)
     if not impl or impl in ("c", "mariadb_c"):
         try:
-            # Try installed package first (mariadb_c maps to src/ via pyproject.toml)
-            try:
-                import mariadb_c.connections
-                import mariadb_c.cursors
-                Connection = mariadb_c.connections.Connection
-                Cursor = mariadb_c.cursors.Cursor
-            except ModuleNotFoundError:
-                # Fallback for development mode (not installed)
-                import mariadb_c.src.connections
-                import mariadb_c.src.cursors
-                Connection = mariadb_c.src.connections.Connection
-                Cursor = mariadb_c.src.cursors.Cursor
+            import mariadb_c.connections
+            import mariadb_c.cursors
+            Connection = mariadb_c.connections.Connection
+            Cursor = mariadb_c.cursors.Cursor
             __impl__ = "c"
             return
         except Exception as e:
             handle_error("c", e)
-    
-    # Fall back to pure Python implementation
+
+    # Try binary wheel  (best for end users - precompiled with deps)
+    if not impl or impl in ("binary", "mariadb_binary"):
+        try:
+            import mariadb_binary.connections
+            import mariadb_binary.cursors
+            Connection = mariadb_binary.connections.Connection
+            Cursor = mariadb_binary.cursors.Cursor
+            __impl__ = "binary"
+            return
+        except Exception as e:
+            handle_error("binary", e)
+
+    # Fall back to pure Python implementation (slowest, but always works)
     if not impl or impl in ("python", "mariadb"):
         try:
             from .connection import Connection as PythonConnection

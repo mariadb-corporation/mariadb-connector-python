@@ -81,12 +81,12 @@ setup(
         Extension(
             'mariadb_c._mariadb',
             [
-                'src/mariadb.c',
-                'src/mariadb_codecs.c',
-                'src/mariadb_connection.c',
-                'src/mariadb_cursor.c',
-                'src/mariadb_exception.c',
-                'src/mariadb_parser.c',
+                'mariadb_c/mariadb.c',
+                'mariadb_c/mariadb_codecs.c',
+                'mariadb_c/mariadb_connection.c',
+                'mariadb_c/mariadb_cursor.c',
+                'mariadb_c/mariadb_exception.c',
+                'mariadb_c/mariadb_parser.c',
             ],
             define_macros=define_macros,
             include_dirs=cfg.includes,
