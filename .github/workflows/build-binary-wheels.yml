@@ -125,7 +125,7 @@ jobs:
             LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib/mariadb:$LD_LIBRARY_PATH" auditwheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
-            pytest {project}/tests/integration --color yes -v || true
+            pytest {project}/tests/integration --color yes -v
           CIBW_ENVIRONMENT_PASS_LINUX: MARIADB_CONNECTOR_C_VERSION TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
           CIBW_ENVIRONMENT: >-
             MARIADB_IMPL=binary
@@ -213,7 +213,7 @@ jobs:
             delocate-wheel --require-archs {delocate_archs} --require-target-macos-version ${{ matrix.arch == 'arm64' && '15.0' || '13.0' }} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
-            pytest {project}/tests/integration --color yes -v || true
+            pytest {project}/tests/integration --color yes -v
           CIBW_ENVIRONMENT_MACOS: >-
             MARIADB_IMPL=binary
             MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{matrix.arch}}.build
@@ -257,7 +257,7 @@ jobs:
       - name: Add hosts entry
         shell: bash
         run: echo "127.0.0.1 mariadb.example.com" >> /c/Windows/System32/drivers/etc/hosts
-        
+
       - name: Setup MariaDB Server
         uses: rusher/action-setup-mariadb@v1.6
         with:
@@ -296,7 +296,7 @@ jobs:
             delvewheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
-            pytest {project}/tests/integration --color yes -v || exit 0
+            pytest {project}/tests/integration --color yes -v
           CIBW_ENVIRONMENT_WINDOWS: >-
             MARIADB_IMPL=binary
             MARIADB_CC_INSTALL_DIR=C:\\mariadb-connector-c.build
