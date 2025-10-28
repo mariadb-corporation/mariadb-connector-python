@@ -49,7 +49,7 @@ jobs:
           submodules: recursive
 
       - name: Setup MariaDB Server
-        uses: rusher/action-setup-mariadb@v1
+        uses: rusher/action-setup-mariadb@v1.6
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
@@ -149,7 +149,7 @@ jobs:
           submodules: recursive
 
       - name: Setup MariaDB Server
-        uses: rusher/action-setup-mariadb@v1
+        uses: rusher/action-setup-mariadb@v1.6
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
@@ -232,7 +232,7 @@ jobs:
           submodules: recursive
 
       - name: Setup MariaDB Server
-        uses: rusher/action-setup-mariadb@v1
+        uses: rusher/action-setup-mariadb@v1.6
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
