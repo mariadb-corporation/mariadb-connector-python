@@ -8,11 +8,11 @@ import platform
 
 from ..base_test import create_connection, conf, is_skysql, is_maxscale
 
-# Check if mariadb_pool is available
+# Check if mariadb_pool is available and functional
 try:
-    import mariadb_pool
+    from mariadb_pool import ConnectionPoolWrapper
     HAS_MARIADB_POOL = True
-except ImportError:
+except (ImportError, AttributeError):
     HAS_MARIADB_POOL = False
 
 
