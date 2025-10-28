@@ -6,6 +6,12 @@ on:
     branches: ['1.1', '2.0', 'sqlalchemy']
   pull_request:
   workflow_dispatch:
+    inputs:
+      test_pypi:
+        description: 'Publish to Test PyPI'
+        required: false
+        default: true
+        type: boolean
   schedule:
     # Run weekly on Sundays at 2 AM UTC
     - cron: '0 2 * * 0'
@@ -213,3 +219,105 @@ jobs:
           LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
           MARIADB_PYTHON_CONNECTOR: mariadb_c
+
+  build-source-packages:
+    name: Build Source Packages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
+    needs: [ci-pure-python, ci-c-extension]
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build setuptools wheel
+
+      - name: Build mariadb (pure Python) package
+        run: |
+          python -m build --sdist --wheel --outdir dist/
+        env:
+          MARIADB_IMPL: pure
+
+      - name: Build mariadb_c (C extension) package
+        run: |
+          python ./tools/ci/copy_to_c.py
+          cd mariadb_c
+          python -m build --sdist --outdir ../dist/
+        env:
+          MARIADB_IMPL: c
+
+      - name: Build mariadb_pool package
+        run: |
+          python ./tools/ci/copy_to_pool.py
+          cd mariadb_pool
+          python -m build --sdist --wheel --outdir ../dist/
+
+      - name: List built packages
+        run: |
+          echo "Built packages:"
+          ls -lh dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-packages
+          path: dist/*
+
+  publish-test-pypi:
+    name: Publish to Test PyPI
+    runs-on: ubuntu-latest
+    needs: build-source-packages
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_pypi == 'true' || github.event.inputs.test_pypi == '')
+    permissions:
+      id-token: write  # For PyPI trusted publishing
+    
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-packages
+          path: dist/
+
+      - name: List packages to publish
+        run: |
+          echo "Publishing to Test PyPI:"
+          ls -lh dist/
+
+      - name: Publish to Test PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist/
+          skip-existing: true
+
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: build-source-packages
+    if: github.event_name == 'release'
+    permissions:
+      id-token: write  # For PyPI trusted publishing
+    
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-packages
+          path: dist/
+
+      - name: List packages to publish
+        run: |
+          echo "Publishing to PyPI:"
+          ls -lh dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
