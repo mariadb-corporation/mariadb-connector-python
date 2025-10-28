@@ -40,6 +40,10 @@ for cleanup_dir in ["build", "dist", "__pycache__", ".pytest_cache"]:
     if cleanup_path.exists():
         shutil.rmtree(cleanup_path)
 
+# Remove build.py if it was accidentally copied (mariadb_c shouldn't have one)
+if (target / "build.py").exists():
+    (target / "build.py").unlink()
+
 # Remove egg-info directories (will be recreated with correct name)
 for egg_info in target.rglob("*.egg-info"):
     if egg_info.is_dir():
