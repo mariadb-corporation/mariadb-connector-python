@@ -223,20 +223,8 @@ jobs:
         env:
           CIBW_BUILD: ${{matrix.pyver}}-${{matrix.arch}}
           CIBW_ARCHS_WINDOWS: AMD64
-          CIBW_BEFORE_ALL_WINDOWS: |
-            if not exist "C:\mariadb-connector-c.build" (
-              echo Building MariaDB Connector/C...
-              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git C:\mariadb-connector-c-src
-              cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=C:\mariadb-connector-c.build -S C:\mariadb-connector-c-src -B C:\mariadb-connector-c-src\build
-              cmake --build C:\mariadb-connector-c-src\build --config Release
-              cmake --install C:\mariadb-connector-c-src\build --config Release
-            ) else (
-              echo Using cached MariaDB Connector/C build
-            )
-            echo === Checking what was installed ===
-            dir C:\mariadb-connector-c.build /s /b
-            echo === Looking for mysql.h ===
-            dir C:\mariadb-connector-c.build\include\*.h /s /b
+          CIBW_BEFORE_ALL_WINDOWS: >-
+            cmd /c "{project}\tools\ci\build_connector_c_windows.bat"
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
             delvewheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
