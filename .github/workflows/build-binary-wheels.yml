@@ -210,6 +210,12 @@ jobs:
       - name: Create the binary package source tree
         run: python3 ./tools/ci/copy_to_binary.py
 
+      - name: Cache MariaDB Connector/C build
+        uses: actions/cache@v4
+        with:
+          path: C:\mariadb-connector-c.build
+          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-windows-amd64-v2
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22
         with:
@@ -217,17 +223,20 @@ jobs:
         env:
           CIBW_BUILD: ${{matrix.pyver}}-${{matrix.arch}}
           CIBW_ARCHS_WINDOWS: AMD64
-          CIBW_BEFORE_ALL_WINDOWS: |
+          CIBW_BEFORE_ALL_WINDOWS: >-
             if not exist "C:\mariadb-connector-c.build" (
-              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git C:\mariadb-connector-c-src
-              cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=C:\mariadb-connector-c.build -S C:\mariadb-connector-c-src -B C:\mariadb-connector-c-src\build
-              cmake --build C:\mariadb-connector-c-src\build --config Release
+              echo "Building MariaDB Connector/C..." &&
+              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git C:\mariadb-connector-c-src &&
+              cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=C:\mariadb-connector-c.build -S C:\mariadb-connector-c-src -B C:\mariadb-connector-c-src\build &&
+              cmake --build C:\mariadb-connector-c-src\build --config Release &&
               cmake --install C:\mariadb-connector-c-src\build --config Release
-            )
-            echo "=== Checking installed files ==="
-            dir C:\mariadb-connector-c.build\include /s /b 2>nul || echo "Include directory not found!"
-            echo "=== Checking for mysql.h specifically ==="
-            where /r C:\mariadb-connector-c.build mysql.h 2>nul || echo "mysql.h not found!"
+            ) else (
+              echo "Using cached MariaDB Connector/C build"
+            ) &&
+            echo "=== Checking installed files ===" &&
+            if exist "C:\mariadb-connector-c.build\include" (dir C:\mariadb-connector-c.build\include /s /b) else (echo "Include directory not found!") &&
+            echo "=== Checking for mysql.h ===" &&
+            if exist "C:\mariadb-connector-c.build" (where /r C:\mariadb-connector-c.build mysql.h) else (echo "Build directory not found!")
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
             delvewheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
