@@ -53,6 +53,7 @@ jobs:
         run: echo "127.0.0.1 mariadb.example.com" | sudo tee -a /etc/hosts
 
       - name: Setup MariaDB Server
+        id: setup-mariadb-linux
         uses: rusher/action-setup-mariadb@v1.6
         with:
           tag: '11.4'
@@ -130,6 +131,7 @@ jobs:
           CIBW_ENVIRONMENT_PASS_LINUX: MARIADB_CONNECTOR_C_VERSION TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
           CIBW_ENVIRONMENT: >-
             MARIADB_IMPL=binary
+            LOCAL_DB=${{ steps.setup-mariadb-linux.outputs.database-type }}
             MARIADB_CONNECTOR_C_DIR=/host/tmp/mariadb-connector-c.build
             PATH="/host/tmp/mariadb-connector-c.build/bin:$PATH"
             LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib/mariadb:/host/tmp/mariadb-connector-c.build/lib64"
@@ -163,6 +165,7 @@ jobs:
         run: echo "127.0.0.1 mariadb.example.com" | sudo tee -a /etc/hosts
 
       - name: Setup MariaDB Server
+        id: setup-mariadb-macos
         uses: rusher/action-setup-mariadb@v1.6
         with:
           tag: '11.4'
@@ -218,6 +221,7 @@ jobs:
           CIBW_ENVIRONMENT_PASS_MACOS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
           CIBW_ENVIRONMENT_MACOS: >-
             MARIADB_IMPL=binary
+            LOCAL_DB=${{ steps.setup-mariadb-macos.outputs.database-type }}
             MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{matrix.arch}}.build
             PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/bin:$PATH"
             DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib:/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/mariadb"
@@ -256,6 +260,7 @@ jobs:
         run: echo "127.0.0.1 mariadb.example.com" >> /c/Windows/System32/drivers/etc/hosts
 
       - name: Setup MariaDB Server
+        id: setup-mariadb-windows
         uses: rusher/action-setup-mariadb@v1.6
         with:
           tag: '11.4'
@@ -297,6 +302,7 @@ jobs:
           CIBW_ENVIRONMENT_PASS_WINDOWS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
           CIBW_ENVIRONMENT_WINDOWS: >-
             MARIADB_IMPL=binary
+            LOCAL_DB=${{ steps.setup-mariadb-windows.outputs.database-type }}
             MARIADB_CC_INSTALL_DIR=C:\\mariadb-connector-c.build
             PATH="C:\\mariadb-connector-c.build\\bin;$PATH"
 
