@@ -95,6 +95,10 @@ with open(target / "README.md", "w") as f:
 # Update pyproject.toml - replace all mariadb_c with mariadb_binary
 if (target / "pyproject.toml").exists():
     sed_i(r'\bmariadb_c\b', 'mariadb_binary', target / "pyproject.toml")
+    # Ensure build-backend is set correctly (not using custom build.py)
+    sed_i(r'build-backend\s*=\s*["\']build["\']', 'build-backend = "setuptools.build_meta"', target / "pyproject.toml")
+    # Remove backend-path if it exists (it references the root build.py)
+    sed_i(r'backend-path\s*=\s*\[.*?\]\n?', '', target / "pyproject.toml")
 
 # Update version.py if it exists
 if (target / "mariadb_binary" / "version.py").exists():
