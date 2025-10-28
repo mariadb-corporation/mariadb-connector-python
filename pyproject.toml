@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel", "packaging"]
-build-backend = "build"
+build-backend = "_build_backend"
 backend-path = ["."]
 
 [project]

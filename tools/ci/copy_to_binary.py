@@ -40,9 +40,10 @@ for cleanup_dir in ["build", "dist", "__pycache__", ".pytest_cache"]:
     if cleanup_path.exists():
         shutil.rmtree(cleanup_path)
 
-# Remove build.py if it was accidentally copied (mariadb_c shouldn't have one)
-if (target / "build.py").exists():
-    (target / "build.py").unlink()
+# Remove build backend files if accidentally copied (mariadb_c shouldn't have them)
+for build_file in ["build.py", "_build_backend.py"]:
+    if (target / build_file).exists():
+        (target / build_file).unlink()
 
 # Remove egg-info directories (will be recreated with correct name)
 for egg_info in target.rglob("*.egg-info"):
@@ -99,9 +100,9 @@ with open(target / "README.md", "w") as f:
 # Update pyproject.toml - replace all mariadb_c with mariadb_binary
 if (target / "pyproject.toml").exists():
     sed_i(r'\bmariadb_c\b', 'mariadb_binary', target / "pyproject.toml")
-    # Ensure build-backend is set correctly (not using custom build.py)
-    sed_i(r'build-backend\s*=\s*["\']build["\']', 'build-backend = "setuptools.build_meta"', target / "pyproject.toml")
-    # Remove backend-path if it exists (it references the root build.py)
+    # Ensure build-backend is set correctly (not using custom build backends)
+    sed_i(r'build-backend\s*=\s*["\'](?:build|_build_backend)["\']', 'build-backend = "setuptools.build_meta"', target / "pyproject.toml")
+    # Remove backend-path if it exists (it references the root build backend)
     sed_i(r'backend-path\s*=\s*\[.*?\]\n?', '', target / "pyproject.toml")
 
 # Update version.py if it exists
