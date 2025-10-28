@@ -8,9 +8,17 @@ import platform
 
 from ..base_test import create_connection, conf, is_skysql, is_maxscale
 
+# Check if mariadb_pool is available
+try:
+    import mariadb_pool
+    HAS_MARIADB_POOL = True
+except ImportError:
+    HAS_MARIADB_POOL = False
 
-@unittest.skipIf(platform.python_implementation() == "PyPy",
-                 "skip pooling tests for PyPy")
+
+
+@unittest.skipIf(not HAS_MARIADB_POOL,
+                 "mariadb_pool package not installed")
 class TestPooling(unittest.TestCase):
 
     def setUp(self):
