@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Create the mariadb-binary package by renaming and patching mariadb_c
+Create the mariadb-binary package by renaming and patching mariadb-c
 
 This script creates a binary distribution package
 The binary package includes precompiled wheels with all dependencies bundled.
@@ -31,8 +31,8 @@ def sed_i(pattern: str, repl: str, filename: str | Path) -> None:
             f.write(newdata)
 
 
-# Copy mariadb_c to mariadb_binary
-shutil.copytree(pdir / "mariadb_c", target)
+# Copy mariadb-c to mariadb-binary
+shutil.copytree(pdir / "mariadb-c", target)
 
 # Clean up build artifacts and egg-info directories
 for cleanup_dir in ["build", "dist", "__pycache__", ".pytest_cache"]:
@@ -40,7 +40,7 @@ for cleanup_dir in ["build", "dist", "__pycache__", ".pytest_cache"]:
     if cleanup_path.exists():
         shutil.rmtree(cleanup_path)
 
-# Remove build backend files if accidentally copied (mariadb_c shouldn't have them)
+# Remove build backend files if accidentally copied (mariadb-c shouldn't have them)
 for build_file in ["build.py", "_build_backend.py"]:
     if (target / build_file).exists():
         (target / build_file).unlink()
@@ -100,6 +100,8 @@ with open(target / "README.md", "w") as f:
 # Update pyproject.toml - replace all mariadb_c with mariadb_binary
 if (target / "pyproject.toml").exists():
     sed_i(r'\bmariadb_c\b', 'mariadb_binary', target / "pyproject.toml")
+    # Change package name to use hyphen for PyPI compatibility
+    sed_i(r'name = "mariadb_binary"', 'name = "mariadb-binary"', target / "pyproject.toml")
     # Ensure build-backend is set correctly (not using custom build backends)
     sed_i(r'build-backend\s*=\s*["\'](?:build|_build_backend)["\']', 'build-backend = "setuptools.build_meta"', target / "pyproject.toml")
     # Remove backend-path if it exists (it references the root build backend)

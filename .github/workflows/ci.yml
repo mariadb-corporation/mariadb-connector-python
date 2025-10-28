@@ -85,7 +85,7 @@ jobs:
         run: |
           python --version
           python -m pip install .
-          cd mariadb_pool && python -m pip install . && cd ..
+          cd mariadb-pool && python -m pip install . && cd ..
           python -m pip install pytest typing_extensions
           python -m pytest tests -v -s
         env:
@@ -188,8 +188,8 @@ jobs:
         run: |
           python --version
           python -m pip install .
-          cd mariadb_c && python -m pip install . && cd ..
-          cd mariadb_pool && python -m pip install . && cd ..
+          cd mariadb-c && python -m pip install . && cd ..
+          cd mariadb-pool && python -m pip install . && cd ..
           python -m pip install pytest typing_extensions
           cd ${{ github.workspace }}/sqlalchemy
           python -m pytest --dburi=mysql+mariadbconnector://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB --backend-only
@@ -207,8 +207,8 @@ jobs:
           python --version
           python -m pip install pytest typing_extensions
           python -m pip install .
-          cd mariadb_c && python -m pip install . && cd ..
-          cd mariadb_pool && python -m pip install . && cd ..
+          cd mariadb-c && python -m pip install . && cd ..
+          cd mariadb-pool && python -m pip install . && cd ..
           python -m pytest tests -v -s
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
@@ -247,16 +247,16 @@ jobs:
         env:
           MARIADB_IMPL: pure
 
-      - name: Build mariadb_c (C extension) package
+      - name: Build mariadb-c (C extension) package
         run: |
-          cd mariadb_c
+          cd mariadb-c
           python -m build --sdist --outdir ../dist/
         env:
           MARIADB_IMPL: c
 
-      - name: Build mariadb_pool package
+      - name: Build mariadb-pool package
         run: |
-          cd mariadb_pool
+          cd mariadb-pool
           python -m build --sdist --wheel --outdir ../dist/
 
       - name: List built packages

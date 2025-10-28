@@ -9,7 +9,7 @@ on:
       - 2.0
     paths:
       - '.github/workflows/build-binary-wheels.yml'
-      - 'mariadb_c/**'
+      - 'mariadb-c/**'
       - 'tools/ci/**'
   workflow_dispatch:
   release:
