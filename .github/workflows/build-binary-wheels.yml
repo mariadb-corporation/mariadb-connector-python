@@ -40,7 +40,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
-        pyver: [cp310, cp311, cp312, cp313]
+        pyver: [cp310, cp311, cp312, cp313, cp314]
         platform: [manylinux, musllinux]
 
     steps:
@@ -76,7 +76,7 @@ jobs:
         run: python3 ./tools/ci/copy_to_binary.py
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22
+        uses: pypa/cibuildwheel@v3.2.1
         with:
           package-dir: mariadb_binary
         env:
@@ -149,7 +149,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x86_64, arm64]
-        pyver: [cp310, cp311, cp312, cp313]
+        pyver: [cp310, cp311, cp312, cp313, cp314]
 
     steps:
       - name: Checkout repos
@@ -180,7 +180,7 @@ jobs:
         run: python3 ./tools/ci/copy_to_binary.py
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22
+        uses: pypa/cibuildwheel@v3.2.1
         with:
           package-dir: mariadb_binary
         env:
@@ -243,7 +243,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [win_amd64]
-        pyver: [cp310, cp311, cp312, cp313]
+        pyver: [cp310, cp311, cp312, cp313, cp314]
 
     defaults:
       run:
@@ -277,7 +277,7 @@ jobs:
           key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-windows-amd64-v2
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.22
+        uses: pypa/cibuildwheel@v3.2.1
         with:
           package-dir: mariadb_binary
         env:

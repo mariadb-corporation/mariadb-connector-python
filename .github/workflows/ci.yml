@@ -249,7 +249,6 @@ jobs:
 
       - name: Build mariadb_c (C extension) package
         run: |
-          python ./tools/ci/copy_to_c.py
           cd mariadb_c
           python -m build --sdist --outdir ../dist/
         env:
@@ -257,7 +256,6 @@ jobs:
 
       - name: Build mariadb_pool package
         run: |
-          python ./tools/ci/copy_to_pool.py
           cd mariadb_pool
           python -m build --sdist --wheel --outdir ../dist/
 
