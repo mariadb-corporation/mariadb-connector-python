@@ -18,6 +18,12 @@ on:
 env:
   # MariaDB Connector/C version to bundle
   MARIADB_CONNECTOR_C_VERSION: "3.4.7"
+  # Test database configuration
+  MYSQL_TEST_HOST: mariadb.example.com
+  MYSQL_TEST_PORT: 3306
+  MYSQL_TEST_USER: root
+  MYSQL_TEST_PASSWD: "heyPassw-!*20oRd"
+  MYSQL_TEST_DB: testp
 
 concurrency:
   # Cancel older requests of the same workflow in the same branch
@@ -41,6 +47,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Setup MariaDB Server
+        uses: rusher/action-setup-mariadb@v1
+        with:
+          tag: '11.4'
+          root-password: ${{ env.MYSQL_TEST_PASSWD }}
+          user: ${{ env.MYSQL_TEST_USER }}
+          password: ${{ env.MYSQL_TEST_PASSWD }}
+          database: ${{ env.MYSQL_TEST_DB }}
 
       - name: Set up QEMU for multi-arch build
         uses: docker/setup-qemu-action@v3
@@ -101,7 +116,7 @@ jobs:
             LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib/mariadb:$LD_LIBRARY_PATH" auditwheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
-            pytest {project}/tests/integration -m 'not slow' --color yes -v || true
+            pytest {project}/tests/integration --color yes -v || true
           CIBW_ENVIRONMENT_PASS_LINUX: MARIADB_CONNECTOR_C_VERSION
           CIBW_ENVIRONMENT: >-
             MARIADB_IMPL=binary
@@ -132,6 +147,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Setup MariaDB Server
+        uses: rusher/action-setup-mariadb@v1
+        with:
+          tag: '11.4'
+          root-password: ${{ env.MYSQL_TEST_PASSWD }}
+          user: ${{ env.MYSQL_TEST_USER }}
+          password: ${{ env.MYSQL_TEST_PASSWD }}
+          database: ${{ env.MYSQL_TEST_DB }}
 
       - name: Cache MariaDB Connector/C build
         uses: actions/cache@v4
@@ -171,7 +195,7 @@ jobs:
             delocate-wheel --require-archs {delocate_archs} --require-target-macos-version ${{ matrix.arch == 'arm64' && '15.0' || '13.0' }} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
-            pytest {project}/tests/integration -m 'not slow' --color yes -v || true
+            pytest {project}/tests/integration --color yes -v || true
           CIBW_ENVIRONMENT_MACOS: >-
             MARIADB_IMPL=binary
             MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{matrix.arch}}.build
@@ -207,6 +231,15 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup MariaDB Server
+        uses: rusher/action-setup-mariadb@v1
+        with:
+          tag: '11.4'
+          root-password: ${{ env.MYSQL_TEST_PASSWD }}
+          user: ${{ env.MYSQL_TEST_USER }}
+          password: ${{ env.MYSQL_TEST_PASSWD }}
+          database: ${{ env.MYSQL_TEST_DB }}
+
       - name: Create the binary package source tree
         run: python3 ./tools/ci/copy_to_binary.py
 
@@ -231,11 +264,16 @@ jobs:
             delvewheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
-            pytest {project}/tests/integration -m "not slow" --color yes -v || exit 0
+            pytest {project}/tests/integration --color yes -v || exit 0
           CIBW_ENVIRONMENT_WINDOWS: >-
             MARIADB_IMPL=binary
             MARIADB_CC_INSTALL_DIR=C:\\mariadb-connector-c.build
             PATH="C:\\mariadb-connector-c.build\\bin;$PATH"
+            MYSQL_TEST_HOST=${{ env.MYSQL_TEST_HOST }}
+            MYSQL_TEST_PORT=${{ env.MYSQL_TEST_PORT }}
+            MYSQL_TEST_USER=${{ env.MYSQL_TEST_USER }}
+            MYSQL_TEST_PASSWD=${{ env.MYSQL_TEST_PASSWD }}
+            MYSQL_TEST_DB=${{ env.MYSQL_TEST_DB }}
 
       - uses: actions/upload-artifact@v4
         with:
