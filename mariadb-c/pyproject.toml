@@ -52,10 +52,10 @@ Repository = "https://www.github.com/mariadb-corporation/mariadb-connector-pytho
 
 [tool.setuptools]
 packages = ["mariadb_c", "mariadb_shared"]
-package-dir = {
-  "mariadb_c" = "mariadb_c",
-  "mariadb_shared" = "../mariadb_shared"
-}
+
+[tool.setuptools.package-dir]
+mariadb_c = "mariadb_c"
+mariadb_shared = "../mariadb_shared"
 
 
 [tool.ruff]
