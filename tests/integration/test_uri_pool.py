@@ -312,6 +312,7 @@ class TestURIPool(unittest.TestCase):
             "test_uri_pool_traditional",
             host=config.get('host', 'localhost'),
             user=config.get('user', 'root'),
+            password=config.get('password', ''),
             database=config.get('database', 'test'),
             port=config.get('port', 3306)
         )
