@@ -84,8 +84,9 @@ mariadb-test = "mariadb.testing:main"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["mariadb"]
-include = ["*"]
+where = ["."]
+include = ["mariadb*"]
+exclude = ["mariadb_binary*", "mariadb-c*", "mariadb-pool*"]
 
 [tool.setuptools.package-data]
 mariadb = ["*.pyi", "py.typed"]

@@ -16,6 +16,7 @@ recursive-include mariadb/src/impl/client/result *.py
 recursive-include mariadb/src/impl/message *.py
 recursive-include mariadb/src/impl/message/client *.py
 recursive-include mariadb/src/impl/export *.py
+recursive-include mariadb_shared *.py
 recursive-include mariadb_c *.py *.c *.h *.toml
 exclude mariadb_c/src/constants
 recursive-include mariadb_pool *.py *.toml
