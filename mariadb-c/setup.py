@@ -25,7 +25,23 @@ c = ConfigParser()
 c.read(['site.cfg'])
 options = dict(c.items('cc_options'))
 
-cfg = get_config(options)
+# Only get config when building (not for sdist)
+# Check if we're running sdist command
+is_sdist = 'sdist' in sys.argv or 'egg_info' in sys.argv
+
+if is_sdist:
+    # For sdist, use empty config - we don't need MariaDB Connector/C
+    class EmptyConfig:
+        includes = []
+        lib_dirs = []
+        libs = []
+        extra_compile_args = []
+        extra_link_args = []
+        extra_objects = []
+    cfg = EmptyConfig()
+else:
+    # For actual build, get real config
+    cfg = get_config(options)
 
 PY_MARIADB_AUTHORS = "Georg Richter"
 
