@@ -1,0 +1,172 @@
+name: Generate and Update API Docs
+
+on:
+  workflow_dispatch:
+    branches: [1.1]
+  release:
+    types: [published]
+    branches: [1.1]
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Python project
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+
+      - name: Clone C/C
+        uses: GuillaumeFalourd/clone-github-repo-action@v2.3
+        with:
+          branch: '3.4'
+          owner: 'mariadb-corporation'
+          repository: 'mariadb-connector-c'
+
+      - name: c/c make ubuntu
+        run: |
+          cd ${{ github.workspace }}/mariadb-connector-c
+          cmake . -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB=On -DCMAKE_INSTALL_PREFIX=/usr
+          make -j4
+          sudo make install
+          echo "MARIADB_PLUGIN_DIR=`mariadb_config --plugindir`" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb" >> $GITHUB_ENV
+
+
+      - name: Install dependencies
+        run: |
+          # Install your project dependencies
+          pip install -r docs/requirements.txt
+          pip install -e .
+
+      - name: Generate Sphinx documentation
+        run: |
+          sphinx-build -b markdown docs/source docs/_build/markdown
+
+      - name: Ensure fork exists and is up to date
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.SPHINX_TOKEN }}
+          script: |
+            const owner = 'rusher';
+            const repo = 'mariadb-docs';
+            const upstream = 'mariadb-corporation';
+            const upstreamRepo = 'mariadb-docs';
+            // Check if fork exists
+            let forkExists = false;
+            try {
+              await github.rest.repos.get({ owner, repo });
+              forkExists = true;
+            } catch (e) {
+              forkExists = false;
+            }
+            // Create fork if not exists
+            if (!forkExists) {
+              await github.rest.repos.createFork({ owner: upstream, repo: upstreamRepo });
+              // Wait for fork to be ready
+              let ready = false;
+              for (let i = 0; i < 10; i++) {
+                try {
+                  await github.rest.repos.get({ owner, repo });
+                  ready = true;
+                  break;
+                } catch (e) {
+                  await new Promise(res => setTimeout(res, 5000));
+                }
+              }
+              if (!ready) throw new Error('Fork not ready after waiting.');
+            }
+
+      - name: Checkout documentation repository (fork)
+        uses: actions/checkout@v4
+        with:
+          repository: rusher/mariadb-docs
+          token: ${{ secrets.SPHINX_TOKEN }}
+          path: mariadb-docs
+          ref: main
+
+      - name: Add upstream and fetch latest main
+        run: |
+          cd mariadb-docs
+          git remote add upstream https://github.com/mariadb-corporation/mariadb-docs.git || true
+          git fetch upstream
+          git checkout main
+          git pull upstream main
+
+      - name: Update documentation subdirectory
+        run: |
+          # Remove existing documentation in target subdirectory
+          
+          rm -f mariadb-docs/connectors/mariadb-connector-python/api.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/bugs.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/connection.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/constants.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/cursor.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/faq.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/install.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/license.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/module.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/pool.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/pooling.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/index.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/usage.md
+          rm -f mariadb-docs/connectors/mariadb-connector-python/release.md
+          
+          # Copy new documentation
+          cp -r docs/_build/markdown/* mariadb-docs/connectors/mariadb-connector-python/
+          mv -f mariadb-docs/connectors/mariadb-connector-python/index.md mariadb-docs/connectors/mariadb-connector-python/README.md
+          
+          # Optional: Add any additional processing here
+          # e.g., update index files, fix relative links, etc.
+
+      - name: Commit and push changes to fork
+        run: |
+          cd mariadb-docs
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b auto-docs-update-${{ github.run_number }}
+          git add connectors/mariadb-connector-python/
+          git commit -m "Update API documentation from ${{ github.repository }}"
+          git push https://x-access-token:${{ secrets.SPHINX_TOKEN }}@github.com/rusher/mariadb-docs.git auto-docs-update-${{ github.run_number }}
+
+      - name: Create Pull Request to Upstream
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.SPHINX_TOKEN }}
+          script: |
+            const branch = `auto-docs-update-${{ github.run_number }}`;
+            const prTitle = "Auto-update: API Documentation from ${{ github.repository }}";
+            const prBody = `This PR automatically updates the documentation subdirectory with the latest Sphinx-generated markdown from [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }}).\n**Changes:**\n- Updated documentation generated from commit ${{ github.sha }}\n- Generated on: ${{ github.run_id }}`;
+            try {
+              // Check if a PR already exists for this branch
+              const { data: pulls } = await github.rest.pulls.list({
+                owner: 'mariadb-corporation',
+                repo: 'mariadb-docs',
+                head: `rusher:${branch}`,
+                base: 'main',
+                state: 'open',
+              });
+              if (pulls.length === 0) {
+                const pr = await github.rest.pulls.create({
+                  owner: 'mariadb-corporation',
+                  repo: 'mariadb-docs',
+                  title: prTitle,
+                  head: `rusher:${branch}`,
+                  base: 'main',
+                  body: prBody,
+                  maintainer_can_modify: false
+                });
+                console.log('PR created: ', pr.data.html_url);
+              } else {
+                console.log('PR already exists: ', pulls[0].html_url);
+              }
+            } catch (error) {
+              core.setFailed(`Failed to create PR: ${error.message}`);
+            }
