@@ -117,6 +117,11 @@ jobs:
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
           MARIADB_PYTHON_CONNECTOR: mariadb
 
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+            
   ci-c-extension:
     name: ${{ matrix.name }} (C Extension) ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
     needs: setup
@@ -239,6 +244,11 @@ jobs:
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
           MARIADB_PYTHON_CONNECTOR: mariadb_c
 
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   build-source-packages:
     name: Build Source Packages
     runs-on: ubuntu-latest
@@ -288,53 +298,3 @@ jobs:
         with:
           name: source-packages
           path: dist/*
-
-  publish-test-pypi:
-    name: Publish to Test PyPI
-    runs-on: ubuntu-latest
-    needs: build-source-packages
-    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.test_pypi == 'true' || github.event.inputs.test_pypi == '')
-    permissions:
-      id-token: write  # For PyPI trusted publishing
-    
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: source-packages
-          path: dist/
-
-      - name: List packages to publish
-        run: |
-          echo "Publishing to Test PyPI:"
-          ls -lh dist/
-
-      - name: Publish to Test PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          packages-dir: dist/
-          skip-existing: true
-
-  publish-pypi:
-    name: Publish to PyPI
-    runs-on: ubuntu-latest
-    needs: build-source-packages
-    if: github.event_name == 'release'
-    permissions:
-      id-token: write  # For PyPI trusted publishing
-    
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: source-packages
-          path: dist/
-
-      - name: List packages to publish
-        run: |
-          echo "Publishing to PyPI:"
-          ls -lh dist/
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/
