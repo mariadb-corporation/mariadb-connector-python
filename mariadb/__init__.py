@@ -62,6 +62,13 @@ def connect(*args, connectionclass=None, **kwargs):
     mariadb.Connection object. If not specified, the automatically selected
     implementation will be used.
 
+    Connection parameters can be provided as:
+    1. A URI string: mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=value2]
+    2. A set of keyword arguments (see below)
+    
+    When using a URI string, keyword arguments can still be provided and will take priority over
+    values in the URI.
+
     Connection parameters are provided as a set of keyword arguments:
 
     - **`host`** - The host name or IP address of the database server. If MariaDB Connector/Python was built with MariaDB Connector/C 3.3, it is also possible to provide a comma separated list of hosts for simple fail over in case of one or more hosts are not available.
@@ -98,6 +105,20 @@ def connect(*args, connectionclass=None, **kwargs):
         - Not set - Default behavior (try C extension first, then binary, fallback to pure Python)
 
     """
+    # Parse URI if provided as first positional argument
+    if args and len(args) > 0:
+        first_arg = args[0]
+        if isinstance(first_arg, str):
+            from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
+            if is_connection_uri(first_arg):
+                # Parse URI into parameters
+                uri_params = parse_connection_uri(first_arg)
+                # Merge with kwargs, giving priority to kwargs
+                uri_params.update(kwargs)
+                kwargs = uri_params
+                # Remove the URI from args
+                args = args[1:]
+    
     # Check if pool_name is specified
     pool_name = kwargs.get('pool_name')
     if pool_name:
@@ -260,15 +281,28 @@ def _get_connection_pool_class():
     class ConnectionPool(ConnectionPoolWrapper):
         """
         Wrapper around ConnectionPoolWrapper that automatically uses mariadb.connect
+        
+        Supports URI format: mariadb://[user[:password]@][host][:port][/database][?options]
         """
         
-        def __init__(self, pool_name=None, **kwargs):
+        def __init__(self, pool_name=None, uri=None, **kwargs):
             """Initialize with mariadb.connect as factory and register in _CONNECTION_POOLS
             
             Args:
                 pool_name: Name of the pool (required)
+                uri: Optional URI string for connection parameters
                 **kwargs: Connection parameters and pool configuration
             """
+            # Parse URI if provided
+            if uri is not None:
+                from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
+                if is_connection_uri(uri):
+                    # Parse URI into parameters
+                    uri_params = parse_connection_uri(uri)
+                    # Merge with kwargs, giving priority to kwargs
+                    uri_params.update(kwargs)
+                    kwargs = uri_params
+            
             if pool_name is None:
                 raise ProgrammingError("pool_name is required for mariadb.ConnectionPool")
             if pool_name in _CONNECTION_POOLS:

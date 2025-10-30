@@ -117,6 +117,13 @@ def connect(*args, connectionclass=Connection, **kwargs):
     mariadb_c.Connection object. If not specified, default will be used.
     This optional parameter was added in version 1.1.0.
 
+    Connection parameters can be provided as:
+    1. A URI string: mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=value2]
+    2. A set of keyword arguments (see below)
+    
+    When using a URI string, keyword arguments can still be provided and will take priority over
+    values in the URI.
+
     Connection parameters are provided as a set of keyword arguments:
 
     - **`host`** - The host name or IP address of the database server. If MariaDB Connector/Python was built with MariaDB Connector/C 3.3, it is also possible to provide a comma separated list of hosts for simple fail over in case of one or more hosts are not available.
@@ -148,12 +155,40 @@ def connect(*args, connectionclass=Connection, **kwargs):
     - **`converter`** - Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions
 
     """
+    # Parse URI if provided as first positional argument
+    if args and len(args) > 0:
+        first_arg = args[0]
+        if isinstance(first_arg, str):
+            from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
+            if is_connection_uri(first_arg):
+                # Parse URI into parameters
+                uri_params = parse_connection_uri(first_arg)
+                # Merge with kwargs, giving priority to kwargs
+                uri_params.update(kwargs)
+                kwargs = uri_params
+                # Remove the URI from args
+                args = args[1:]
+    
     if kwargs:
         if "pool_name" in kwargs:
-            if not kwargs["pool_name"] in mariadb_c._CONNECTION_POOLS:
-                pool = mariadb_c.ConnectionPool(**kwargs)
+            try:
+                from mariadb_pool import ConnectionPoolWrapper
+            except ImportError:
+                raise AttributeError(
+                    "ConnectionPool is not available. "
+                    "Install mariadb-pool: pip install mariadb[pool]"
+                )
+
+            if not kwargs["pool_name"] in _CONNECTION_POOLS:
+                try:
+                    from mariadb_c._mariadb import ConnectionPool
+                    pool = ConnectionPool(**kwargs)
+                except (ImportError, AttributeError):
+                    raise NotSupportedError("ConnectionPool is not available in this build of mariadb_c, ")
+
+                        
             else:
-                pool = mariadb_c._CONNECTION_POOLS[kwargs["pool_name"]]
+                pool = _CONNECTION_POOLS[kwargs["pool_name"]]
             c = pool.get_connection()
             return c
 
