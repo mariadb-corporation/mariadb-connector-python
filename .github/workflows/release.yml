@@ -1,41 +1,148 @@
-name: Build Binary Wheels
-
-# Build precompiled binary wheels for mariadb-binary package
-# Similar to psycopg-binary, these wheels include all C dependencies
+name: Release Packages
 
 on:
-  push:
-    branches:
-      - 2.0
-    paths:
-      - '.github/workflows/build-binary-wheels.yml'
-      - 'mariadb-c/**'
-      - 'tools/ci/**'
-  workflow_dispatch:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      publish_to:
+        description: 'Publish to'
+        required: true
+        default: 'testpypi'
+        type: choice
+        options:
+          - testpypi
+          - pypi
+          - none
+      release_mariadb:
+        description: 'Release mariadb (Pure Python)'
+        required: false
+        default: true
+        type: boolean
+      release_mariadb_c:
+        description: 'Release mariadb-c (C Extension)'
+        required: false
+        default: true
+        type: boolean
+      release_mariadb_pool:
+        description: 'Release mariadb-pool'
+        required: false
+        default: true
+        type: boolean
+      release_mariadb_binary:
+        description: 'Release mariadb-binary (Binary Wheels)'
+        required: false
+        default: true
+        type: boolean
 
 env:
-  # MariaDB Connector/C version to bundle
-  MARIADB_CONNECTOR_C_VERSION: "3.4.7"
-  # Test database configuration
   MYSQL_TEST_HOST: mariadb.example.com
   MYSQL_TEST_PORT: 3306
-  MYSQL_TEST_USER: myTestUser
+  MYSQL_TEST_USER: root
   MYSQL_TEST_PASSWD: "heyPassw-!*20oRd"
   MYSQL_TEST_DB: testp
 
-concurrency:
-  # Cancel older requests of the same workflow in the same branch
-  group: ${{ github.workflow }}-${{ github.ref_name }}
-  cancel-in-progress: true
-
 jobs:
-
-  linux:  # {{{
+  # Build mariadb (pure Python) package
+  build-mariadb:
+    name: Build mariadb (Pure Python)
     runs-on: ubuntu-latest
-    if: true
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb == 'true')
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build setuptools wheel
+
+      - name: Build mariadb package
+        run: |
+          python -m build --sdist --wheel --outdir dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mariadb-dist
+          path: dist/
+
+  # Build mariadb-c (C extension) package
+  build-mariadb-c:
+    name: Build mariadb-c (C Extension)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb_c == 'true')
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build setuptools wheel
+
+      - name: Build mariadb-c package
+        run: |
+          cd mariadb-c
+          python -m build --sdist --outdir ../dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mariadb-c-dist
+          path: dist/
+
+  # Build mariadb-pool package
+  build-mariadb-pool:
+    name: Build mariadb-pool
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb_pool == 'true')
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build setuptools wheel
+
+      - name: Build mariadb-pool package
+        run: |
+          cd mariadb-pool
+          python -m build --sdist --wheel --outdir ../dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mariadb-pool-dist
+          path: dist/
+
+  # Build mariadb-binary (binary wheels) - Linux
+  build-mariadb-binary-linux:
+    name: Build mariadb-binary (Linux ${{ matrix.platform }} ${{ matrix.arch }} ${{ matrix.pyver }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb_binary == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -71,7 +178,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/mariadb-connector-c.build
-          key: mariadb-connector-c-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.MARIADB_CONNECTOR_C_VERSION }}
+          key: mariadb-connector-c-${{ matrix.platform }}-${{ matrix.arch }}-3.4.7
 
       - name: Create the binary package source tree
         run: python3 ./tools/ci/copy_to_binary.py
@@ -112,7 +219,7 @@ jobs:
               fi
               
               cd /tmp
-              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git
+              git clone --depth 1 --branch v3.4.7 https://github.com/mariadb-corporation/mariadb-connector-c.git
               cd mariadb-connector-c
               
               # Disable parsec plugin - requires OpenSSL 1.1.1+ (manylinux2014 has 1.0.2k)
@@ -128,7 +235,7 @@ jobs:
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
-          CIBW_ENVIRONMENT_PASS_LINUX: MARIADB_CONNECTOR_C_VERSION TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
+          CIBW_ENVIRONMENT_PASS_LINUX: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
           CIBW_ENVIRONMENT: >-
             MARIADB_IMPL=binary
             LOCAL_DB=${{ steps.setup-mariadb-linux.outputs.database-type }}
@@ -142,12 +249,11 @@ jobs:
           name: linux-${{matrix.pyver}}-${{matrix.platform}}_${{matrix.arch}}
           path: ./wheelhouse/*.whl
 
-  # }}}
-
-  macos:  # {{{
+  # Build mariadb-binary (binary wheels) - macOS
+  build-mariadb-binary-macos:
+    name: Build mariadb-binary (macOS ${{ matrix.arch }} ${{ matrix.pyver }})
     runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-latest' }}
-    if: true
-
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb_binary == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -178,7 +284,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/mariadb-connector-c-${{ matrix.arch }}.build
-          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-${{ matrix.arch }}
+          key: mariadb-connector-c-3.4.7-macos-${{ matrix.arch }}
 
       - name: Create the binary package source tree
         run: python3 ./tools/ci/copy_to_binary.py
@@ -201,7 +307,7 @@ jobs:
             if [ ! -d "/tmp/mariadb-connector-c-${{matrix.arch}}.build" ]; then
               brew install cmake openssl@3
               cd /tmp
-              git clone --depth 1 --branch v${{ env.MARIADB_CONNECTOR_C_VERSION }} https://github.com/mariadb-corporation/mariadb-connector-c.git mariadb-connector-c-${{matrix.arch}}
+              git clone --depth 1 --branch v3.4.7 https://github.com/mariadb-corporation/mariadb-connector-c.git mariadb-connector-c-${{matrix.arch}}
               cd mariadb-connector-c-${{matrix.arch}}
               cmake -DCMAKE_BUILD_TYPE=Release \
                     -DCMAKE_INSTALL_PREFIX=/tmp/mariadb-connector-c-${{matrix.arch}}.build \
@@ -234,12 +340,11 @@ jobs:
           name: macos-${{matrix.pyver}}-${{matrix.arch}}
           path: ./wheelhouse/*.whl
 
-  # }}}
-
-  windows:  # {{{
+  # Build mariadb-binary (binary wheels) - Windows
+  build-mariadb-binary-windows:
+    name: Build mariadb-binary (Windows ${{ matrix.pyver }})
     runs-on: windows-latest
-    if: true
-
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb_binary == 'true')
     strategy:
       fail-fast: false
       matrix:
@@ -276,7 +381,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:\mariadb-connector-c.build
-          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-windows-amd64-v2
+          key: mariadb-connector-c-3.4.7-windows-amd64-v2
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.2.1
@@ -311,61 +416,129 @@ jobs:
           name: windows-${{matrix.pyver}}-${{matrix.arch}}
           path: ./wheelhouse/*.whl
 
-  # }}}
-
-  merge:  # {{{
+  # Merge all mariadb-binary wheels into one artifact
+  merge-binary-wheels:
+    name: Merge mariadb-binary wheels
     runs-on: ubuntu-latest
-    needs:
-      - linux
-      - macos
-      - windows
-    steps:
-      - name: Merge Artifacts
-        uses: actions/upload-artifact/merge@v4
-        with:
-          name: mariadb-binary-wheels
-          delete-merged: true
-
-  # }}}
-
-  publish-test:  # {{{
-    runs-on: ubuntu-latest
-    needs: merge
-    if: github.event_name == 'workflow_dispatch'  # Only on manual trigger
-    permissions:
-      id-token: write  # For PyPI trusted publishing
+    needs: [build-mariadb-binary-linux, build-mariadb-binary-macos, build-mariadb-binary-windows]
+    if: |
+      !cancelled() && 
+      (github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb_binary == 'true'))
     
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Merge artifacts
+        uses: actions/upload-artifact/merge@v4
         with:
-          name: mariadb-binary-wheels
+          name: mariadb-binary-dist
+          pattern: "{linux,macos,windows}-*"
+          delete-merged: true
+
+  # Publish to TestPyPI (manual trigger or when specified)
+  publish-testpypi:
+    name: Publish ${{ matrix.package }} to TestPyPI
+    runs-on: ubuntu-latest
+    needs: [build-mariadb, build-mariadb-c, build-mariadb-pool, merge-binary-wheels]
+    if: |
+      !cancelled() &&
+      ((github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to == 'testpypi') ||
+       (github.event_name == 'release' && contains(github.event.release.tag_name, 'rc')))
+    permissions:
+      id-token: write
+    
+    strategy:
+      matrix:
+        include:
+          - package: mariadb
+            artifact: mariadb-dist
+            condition: release_mariadb
+          - package: mariadb-c
+            artifact: mariadb-c-dist
+            condition: release_mariadb_c
+          - package: mariadb-pool
+            artifact: mariadb-pool-dist
+            condition: release_mariadb_pool
+          - package: mariadb-binary
+            artifact: mariadb-binary-dist
+            condition: release_mariadb_binary
+    
+    steps:
+      - name: Check if package should be published
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs[matrix.condition] }}" == "true" ]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download artifacts
+        if: steps.check.outputs.should_publish == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
           path: dist/
-  
-      - name: Publish to Test PyPI
+        continue-on-error: true
+
+      - name: Publish ${{ matrix.package }} to TestPyPI
+        if: steps.check.outputs.should_publish == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
           verbose: true
-  
-  # }}}
 
-  publish:  # {{{
+  # Publish to PyPI (release only or manual trigger)
+  publish-pypi:
+    name: Publish ${{ matrix.package }} to PyPI
     runs-on: ubuntu-latest
-    needs: merge
-    if: github.event_name == 'release'
+    needs: [build-mariadb, build-mariadb-c, build-mariadb-pool, merge-binary-wheels]
+    if: |
+      !cancelled() &&
+      ((github.event_name == 'workflow_dispatch' && github.event.inputs.publish_to == 'pypi') ||
+       (github.event_name == 'release' && !contains(github.event.release.tag_name, 'rc')))
     permissions:
-      id-token: write  # For PyPI trusted publishing
+      id-token: write
+    
+    strategy:
+      matrix:
+        include:
+          - package: mariadb
+            artifact: mariadb-dist
+            condition: release_mariadb
+          - package: mariadb-c
+            artifact: mariadb-c-dist
+            condition: release_mariadb_c
+          - package: mariadb-pool
+            artifact: mariadb-pool-dist
+            condition: release_mariadb_pool
+          - package: mariadb-binary
+            artifact: mariadb-binary-dist
+            condition: release_mariadb_binary
     
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Check if package should be published
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs[matrix.condition] }}" == "true" ]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download artifacts
+        if: steps.check.outputs.should_publish == 'true'
+        uses: actions/download-artifact@v4
         with:
-          name: mariadb-binary-wheels
+          name: ${{ matrix.artifact }}
           path: dist/
-  
-      - name: Publish to PyPI
+        continue-on-error: true
+
+      - name: Publish ${{ matrix.package }} to PyPI
+        if: steps.check.outputs.should_publish == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-  
-  # }}}
