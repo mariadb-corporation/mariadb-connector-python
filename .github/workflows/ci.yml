@@ -105,7 +105,7 @@ jobs:
           python --version
           python -m pip install .
           cd mariadb-pool && python -m pip install . && cd ..
-          python -m pip install pytest pytest-cov pytest-covtyping_extensions
+          python -m pip install pytest pytest-cov typing_extensions
           python -m pytest tests -v -s --cov --cov-branch --cov-report=xml
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
@@ -229,7 +229,7 @@ jobs:
         shell: bash
         run: |
           python --version
-          python -m pip install pytest pytest-cov pytest-covtyping_extensions
+          python -m pip install pytest pytest-cov typing_extensions
           python -m pip install .
           cd mariadb-c && python -m pip install . && cd ..
           cd mariadb-pool && python -m pip install . && cd ..
