@@ -230,16 +230,102 @@ class TestURIPool(unittest.TestCase):
         
         conn1.close()
     
-    def test_pool_missing_pool_name_error(self):
-        """Test that ConnectionPool requires pool_name"""
+    def test_pool_without_pool_name(self):
+        """Test pool can be created without pool_name for direct usage"""
         config = get_test_config()
         uri = build_uri(config)
         
-        # Try to create pool without pool_name
-        with self.assertRaises(mariadb.ProgrammingError) as cm:
-            mariadb.ConnectionPool(uri=uri)
+        # Create pool without pool_name - should work for direct usage
+        pool = mariadb.ConnectionPool(uri)
+        self.assertIsNotNone(pool)
         
-        self.assertIn("pool_name is required", str(cm.exception))
+        # Pool should not be registered in _CONNECTION_POOLS
+        # (only named pools are registered)
+        
+        # Get connection from pool
+        conn = pool.get_connection()
+        self.assertIsNotNone(conn)
+        
+        # Verify connection works
+        cursor = conn.cursor()
+        cursor.execute("SELECT 13")
+        result = cursor.fetchone()
+        self.assertEqual(result[0], 13)
+        
+        cursor.close()
+        conn.close()
+        pool.close()
+    
+    def test_pool_uri_with_pool_name_in_query(self):
+        """Test URI as first positional arg with pool_name in query params"""
+        config = get_test_config()
+        uri = build_uri(config, query_params="pool_name=test_uri_pool_single")
+        
+        # Create pool with URI containing pool_name
+        pool = mariadb.ConnectionPool(uri)
+        self.assertIsNotNone(pool)
+        
+        # Get connection from pool
+        conn = pool.get_connection()
+        self.assertIsNotNone(conn)
+        
+        # Verify connection works
+        cursor = conn.cursor()
+        cursor.execute("SELECT 10")
+        result = cursor.fetchone()
+        self.assertEqual(result[0], 10)
+        
+        cursor.close()
+        conn.close()
+        pool.close()
+    
+    def test_pool_uri_first_arg_with_kwarg_pool_name(self):
+        """Test URI as first arg with pool_name as kwarg (kwarg takes precedence)"""
+        config = get_test_config()
+        uri = build_uri(config, query_params="pool_name=wrong_name")
+        
+        # Create pool with URI but override pool_name with kwarg
+        pool = mariadb.ConnectionPool(uri, pool_name="test_uri_pool_override")
+        self.assertIsNotNone(pool)
+        
+        # Verify correct pool_name was used
+        self.assertEqual(pool.pool_name, "test_uri_pool_override")
+        self.assertIn("test_uri_pool_override", mariadb._CONNECTION_POOLS)
+        self.assertNotIn("wrong_name", mariadb._CONNECTION_POOLS)
+        
+        conn = pool.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 11")
+        result = cursor.fetchone()
+        self.assertEqual(result[0], 11)
+        
+        cursor.close()
+        conn.close()
+        pool.close()
+    
+    def test_pool_traditional_first_arg_pool_name(self):
+        """Test traditional style with pool_name as first positional arg"""
+        config = get_test_config()
+        
+        # Create pool with pool_name as first arg, connection params as kwargs
+        pool = mariadb.ConnectionPool(
+            "test_uri_pool_traditional",
+            host=config.get('host', 'localhost'),
+            user=config.get('user', 'root'),
+            database=config.get('database', 'test'),
+            port=config.get('port', 3306)
+        )
+        self.assertIsNotNone(pool)
+        
+        conn = pool.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 12")
+        result = cursor.fetchone()
+        self.assertEqual(result[0], 12)
+        
+        cursor.close()
+        conn.close()
+        pool.close()
 
 
 if __name__ == '__main__':

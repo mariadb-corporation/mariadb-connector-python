@@ -28,7 +28,12 @@ class TestPooling(unittest.TestCase):
     #         self.connection.autocommit = False
 
     def tearDown(self):
-        pass
+        # Clean up any remaining pools
+        for pool_name in list(mariadb._CONNECTION_POOLS.keys()):
+            try:
+                mariadb._CONNECTION_POOLS[pool_name].close()
+            except:
+                pass
 
     #         del self.connection
 
@@ -206,7 +211,7 @@ class TestPooling(unittest.TestCase):
         pool.close()
 
     def test_connection_pool_conf(self):
-        pool = mariadb.ConnectionPool(pool_name="test_conf")
+        pool = mariadb.ConnectionPool(pool_name="test_conf", min_size=0, max_size=20)
         default_conf = conf()
         conn = create_connection()
         try:
@@ -239,7 +244,7 @@ class TestPooling(unittest.TestCase):
 
     def test_connection_pool_add(self):
         default_conf = conf()
-        pool = mariadb.ConnectionPool(pool_name="test_connection_pool_add", acquire_timeout=1)
+        pool = mariadb.ConnectionPool(pool_name="test_connection_pool_add", min_size=0, max_size=20, acquire_timeout=1)
         try:
             pool.set_config(**default_conf)
         except mariadb.Error:
@@ -267,7 +272,7 @@ class TestPooling(unittest.TestCase):
         cursor1.execute("COMMIT")
         default_conf = conf()
         default_conf["database"] = "中文考试"
-        pool = mariadb.ConnectionPool(pool_name="test_conpy69", acquire_timeout=1)
+        pool = mariadb.ConnectionPool(pool_name="test_conpy69", min_size=0, max_size=20, acquire_timeout=1)
         try:
             pool.set_config(**default_conf)
         except mariadb.Error:
@@ -350,7 +355,7 @@ class TestPooling(unittest.TestCase):
 
     def test_conpy40(self):
         default_conf = conf()
-        pool = mariadb.ConnectionPool(pool_name='test_conpy40', acquire_timeout=1)
+        pool = mariadb.ConnectionPool(pool_name='test_conpy40', min_size=0, max_size=20, acquire_timeout=1)
 
         try:
             pool.set_config(pool_size=3)

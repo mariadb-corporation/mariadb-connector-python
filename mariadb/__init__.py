@@ -285,30 +285,68 @@ def _get_connection_pool_class():
         Supports URI format: mariadb://[user[:password]@][host][:port][/database][?options]
         """
         
-        def __init__(self, pool_name=None, uri=None, **kwargs):
+        def __init__(self, uri_or_pool_name=None, uri=None, pool_name=None, **kwargs):
             """Initialize with mariadb.connect as factory and register in _CONNECTION_POOLS
             
             Args:
-                pool_name: Name of the pool (required)
-                uri: Optional URI string for connection parameters
+                uri_or_pool_name: Either a URI string or pool_name (first positional argument)
+                uri: Optional URI string for connection parameters (deprecated, use first arg)
+                pool_name: Name of the pool (can be in URI query params or as kwarg)
                 **kwargs: Connection parameters and pool configuration
+                
+            Examples:
+                # URI with pool_name in query params
+                pool = ConnectionPool("mariadb://user:pass@host/db?pool_name=mypool")
+                
+                # Traditional style
+                pool = ConnectionPool(pool_name="mypool", uri="mariadb://user:pass@host/db")
+                
+                # pool_name as first arg, connection params as kwargs
+                pool = ConnectionPool("mypool", host="localhost", user="root", database="test")
             """
-            # Parse URI if provided
+            # Handle first positional argument
+            if uri_or_pool_name is not None:
+                from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
+                if is_connection_uri(uri_or_pool_name):
+                    # First arg is a URI
+                    uri_params = parse_connection_uri(uri_or_pool_name)
+                    # Extract pool_name from URI params if present
+                    if 'pool_name' in uri_params and pool_name is None:
+                        pool_name = uri_params.pop('pool_name')
+                    # Merge with kwargs, giving priority to kwargs
+                    uri_params.update(kwargs)
+                    kwargs = uri_params
+                else:
+                    # First arg is pool_name
+                    if pool_name is None:
+                        pool_name = uri_or_pool_name
+            
+            # Parse URI parameter if provided (backward compatibility)
             if uri is not None:
                 from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
                 if is_connection_uri(uri):
-                    # Parse URI into parameters
                     uri_params = parse_connection_uri(uri)
+                    # Extract pool_name from URI params if present
+                    if 'pool_name' in uri_params and pool_name is None:
+                        pool_name = uri_params.pop('pool_name')
                     # Merge with kwargs, giving priority to kwargs
                     uri_params.update(kwargs)
                     kwargs = uri_params
             
-            if pool_name is None:
-                raise ProgrammingError("pool_name is required for mariadb.ConnectionPool")
-            if pool_name in _CONNECTION_POOLS:
-                raise PoolError(f"Pool '{pool_name}' already exists")   
+            # pool_name is optional - if not provided, pool can be used directly
+            # but won't be registered in _CONNECTION_POOLS
+            if pool_name is not None:
+                if pool_name in _CONNECTION_POOLS:
+                    raise PoolError(f"Pool '{pool_name}' already exists")
+            
+            # Remove pool_name from kwargs if present (to avoid duplicate argument)
+            kwargs.pop('pool_name', None)
+            
             super().__init__(connection_factory=connect, pool_name=pool_name, **kwargs)
-            _CONNECTION_POOLS[pool_name] = self
+            
+            # Only register named pools
+            if pool_name is not None:
+                _CONNECTION_POOLS[pool_name] = self
         
         def close(self):
             """Close and unregister from _CONNECTION_POOLS"""

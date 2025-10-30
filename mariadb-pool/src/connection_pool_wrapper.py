@@ -52,11 +52,11 @@ class ConnectionPoolWrapper:
             pool_name: Name of the pool (for registry)
             **kwargs: Connection parameters and pool configuration
         """
-        if not pool_name:
-            raise PoolError("pool_name is required")
-        
-        if pool_name in self._registry:
-            raise PoolError(f"Pool '{pool_name}' already exists")
+        # pool_name is optional - if not provided, pool can be used directly
+        # but won't be registered in the class registry
+        if pool_name is not None:
+            if pool_name in self._registry:
+                raise PoolError(f"Pool '{pool_name}' already exists")
         
         self.pool_name = pool_name
         self.connection_factory = connection_factory
@@ -77,15 +77,28 @@ class ConnectionPoolWrapper:
         
         # Create pool configuration
         config = PoolConfig()
-        if 'pool_size' in pool_kwargs:
+        
+        # Track which size parameters were explicitly set
+        has_pool_size = 'pool_size' in pool_kwargs
+        has_min_size = 'min_size' in pool_kwargs
+        has_max_size = 'max_size' in pool_kwargs
+        
+        if has_pool_size:
             config.max_size = pool_kwargs['pool_size']
             config.min_size = pool_kwargs['pool_size']
-        if 'min_size' in pool_kwargs:
+        if has_min_size:
             config.min_size = pool_kwargs['min_size']
+        if has_max_size:
+            config.max_size = pool_kwargs['max_size']
+            
+        # If only min_size or max_size is set (but not both), make them equal
+        if has_min_size and not has_max_size and not has_pool_size:
+            config.max_size = config.min_size
+        elif has_max_size and not has_min_size and not has_pool_size:
+            config.min_size = config.max_size
+            
         if 'acquire_timeout' in pool_kwargs:
             config.acquire_timeout = pool_kwargs['acquire_timeout']
-        if 'max_size' in pool_kwargs:
-            config.max_size = pool_kwargs['max_size']
         if 'pool_validation_interval' in pool_kwargs:
             config.validation_interval = pool_kwargs['pool_validation_interval']
 
@@ -103,8 +116,9 @@ class ConnectionPoolWrapper:
             **conn_kwargs
         )
         
-        # Register in class-level registry
-        self._registry[pool_name] = self
+        # Register in class-level registry only if pool has a name
+        if pool_name is not None:
+            self._registry[pool_name] = self
     
     def get_connection(self):
         """Get a connection from the pool"""

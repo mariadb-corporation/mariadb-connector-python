@@ -34,8 +34,8 @@ class PoolConfig:
         acquire_timeout: Timeout (seconds) when acquiring a connection
         enable_health_check: Enable periodic health checks on idle connections
     """
-    min_size: int = 5
-    max_size: int = 20
+    min_size: int = 10
+    max_size: int = 10
     max_idle_time: float = 600.0  # 10 minutes
     max_lifetime: float = 3600.0  # 1 hour
     validation_interval: float = 30.0  # 30 seconds
@@ -143,8 +143,14 @@ class ConnectionPool:
             **kwargs: Connection parameters to update
         """
         # Update connection parameters
-        self.connection_params.update(kwargs)        
-        if (len(self.connection_params) > 0):
+        self.connection_params.update(kwargs)
+        
+        # Only initialize connections if we have connection parameters
+        # Check for essential connection parameters (at least one of: host, user, database)
+        has_connection_params = any(key in self.connection_params 
+                                   for key in ['host', 'user', 'database', 'unix_socket'])
+        
+        if has_connection_params:
             self._ensure_min_connections()
             # Start background maintenance thread
             if self.config.enable_health_check and not self._maintenance_thread:
