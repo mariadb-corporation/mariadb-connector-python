@@ -38,7 +38,7 @@ on:
 env:
   MYSQL_TEST_HOST: mariadb.example.com
   MYSQL_TEST_PORT: 3306
-  MYSQL_TEST_USER: myUser
+  MYSQL_TEST_USER: root
   MYSQL_TEST_PASSWD: "heyPassw-!*20oRd"
   MYSQL_TEST_DB: testp
 
@@ -165,7 +165,7 @@ jobs:
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
-          user: ${{ env.MYSQL_TEST_USER }}
+          user: 'myUser'
           password: ${{ env.MYSQL_TEST_PASSWD }}
           database: ${{ env.MYSQL_TEST_DB }}
 
