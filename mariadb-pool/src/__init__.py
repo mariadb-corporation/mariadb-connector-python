@@ -24,7 +24,7 @@ except ImportError:
             __version__ = version('mariadb-pool')
         except ImportError:
             # Final fallback - use hardcoded version that matches root project
-            __version__ = "2.0.0-dev"
+            __version__ = "2.0.0.dev1"
 
 # Parse version info
 try:

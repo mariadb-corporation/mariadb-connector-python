@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mariadb-pool"
-dynamic = ["version"]
+version = "2.0.0.dev1"
 description = "Advanced connection pooling for MariaDB Connector/Python"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.8"
@@ -42,6 +42,3 @@ Repository = "https://www.github.com/mariadb-corporation/mariadb-connector-pytho
 [tool.setuptools]
 packages = ["mariadb_pool"]
 package-dir = {"mariadb_pool" = "src"}
-
-[tool.setuptools.dynamic]
-version = {attr = "mariadb_pool.__version__"}
