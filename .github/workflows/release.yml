@@ -38,7 +38,7 @@ on:
 env:
   MYSQL_TEST_HOST: mariadb.example.com
   MYSQL_TEST_PORT: 3306
-  MYSQL_TEST_USER: root
+  MYSQL_TEST_USER: myUser
   MYSQL_TEST_PASSWD: "heyPassw-!*20oRd"
   MYSQL_TEST_DB: testp
 
@@ -232,6 +232,8 @@ jobs:
             fi
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >-
             LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib/mariadb:$LD_LIBRARY_PATH" auditwheel repair -w {dest_dir} {wheel}
+          CIBW_BEFORE_TEST_LINUX: >-
+            pip install {project}/mariadb-pool
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
@@ -279,7 +281,6 @@ jobs:
           user: ${{ env.MYSQL_TEST_USER }}
           password: ${{ env.MYSQL_TEST_PASSWD }}
           database: ${{ env.MYSQL_TEST_DB }}
-          local: '1'
 
       - name: Cache MariaDB Connector/C build
         uses: actions/cache@v4
@@ -322,6 +323,8 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
             DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib:/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/mariadb:$DYLD_LIBRARY_PATH"
             delocate-wheel --require-archs {delocate_archs} --require-target-macos-version ${{ matrix.arch == 'arm64' && '15.0' || '13.0' }} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
+          CIBW_BEFORE_TEST_MACOS: >-
+            pip install {project}/mariadb-pool
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
@@ -402,6 +405,8 @@ jobs:
             pip install delvewheel
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
             delvewheel repair -w {dest_dir} {wheel}
+          CIBW_BEFORE_TEST_WINDOWS: >-
+            pip install {project}/mariadb-pool
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
