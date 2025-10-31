@@ -3,6 +3,7 @@ echo Starting MariaDB Connector/C build script...
 
 if not exist "C:\mariadb-connector-c.build" (
     echo Building MariaDB Connector/C from source...
+    echo Using MariaDB Connector/C version: %MARIADB_CONNECTOR_C_VERSION%
     git clone --depth 1 --branch v%MARIADB_CONNECTOR_C_VERSION% https://github.com/mariadb-corporation/mariadb-connector-c.git C:\mariadb-connector-c-src
     if errorlevel 1 (
         echo ERROR: Git clone failed
