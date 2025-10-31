@@ -94,7 +94,7 @@ class PooledConnection:
 
     def closeSilently(self):
         try:
-            self.connection.set_pooled_connection(None)
+            self.connection._set_pooled_connection(None)
             self.connection.close()
         except Exception:
             pass

@@ -78,12 +78,12 @@ class TestPooling(unittest.TestCase):
     def test_conpy250(self):
         default_conf = conf()
         pool = mariadb.ConnectionPool(pool_name="CONPY250",
-                                        pool_size=16,
+                                        pool_size=8,
                                         pool_reset_connection=False,
                                         pool_validation_interval=0,
                                         acquire_timeout=1,
                                         **default_conf)
-        self.assertEqual(pool.connection_count, 16)
+        self.assertEqual(pool.connection_count, 8)
         pool.close()
         self.assertEqual(pool.connection_count, 0)
 
