@@ -44,16 +44,18 @@ class CompressStream:
     MIN_COMPRESSION_SIZE = 1536  # TCP-IP single packet size
     MAX_PACKET_SIZE = 0x00ffffff  # Maximum MySQL packet size
     
-    def __init__(self, socket: socket.socket, debug: bool = False):
+    def __init__(self, socket: socket.socket, debug: bool = False, connection_id: int = -1):
         """
         Initialize compression stream
         
         Args:
             socket_obj: Socket to wrap
             debug: Enable debug output
+            connection_id: Connection ID for debug output
         """
         self.socket = socket
         self.debug = debug
+        self.connection_id = connection_id
         
         # Compression sequences (separate for read/write)        
         self.sequence: MutableInt = MutableInt(1)
@@ -168,14 +170,14 @@ class CompressStream:
                     raise IOError(f"Invalid decompression length: got {len(decompressed_data)}, expected {uncompressed_length}")
 
                 if self.debug:
-                    log_socket_data(header + decompressed_data, "READ COMPRESS")
+                    log_socket_data(header + decompressed_data, "READ COMPRESS", connection_id=self.connection_id)
 
                 self.read_buffer = decompressed_data
             except zlib.error as e:
                 raise IOError(f"Decompression failed: {e}")
         else:
             if self.debug:
-                log_socket_data(header + compressed_data, "READ COMPRESS")
+                log_socket_data(header + compressed_data, "READ COMPRESS", connection_id=self.connection_id)
             # Data is not compressed, use as-is
             self.read_buffer = compressed_data
         
@@ -230,7 +232,7 @@ class CompressStream:
         
         # Write header and uncompressed data
         if self.debug:
-            log_socket_data(packet, "SEND UNCOMPRESS")
+            log_socket_data(packet, "SEND UNCOMPRESS", connection_id=self.connection_id)
         self._write_to_socket(packet)
     
     def _write_compressed(self, data: bytes) -> None:
@@ -271,7 +273,7 @@ class CompressStream:
         
         # Write header and compressed data
         if self.debug:
-            log_socket_data(packet, "SEND COMPRESS")
+            log_socket_data(packet, "SEND COMPRESS", connection_id=self.connection_id)
         self._write_to_socket(packet)
 
     

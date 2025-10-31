@@ -46,7 +46,7 @@ class PacketWriter:
     Equivalent to the Java StandardPacketWriter.
     """
     
-    def __init__(self, stream: Stream, debug: bool = False):
+    def __init__(self, stream: Stream, debug: bool = False, connection_id: int = -1):
         """
         Initialize writer
         
@@ -54,12 +54,14 @@ class PacketWriter:
             stream: stream to write to (may be wrapped with CompressStream)
             buffer_size: Initial buffer size
             debug: Enable debug logging
+            connection_id: Connection ID for debug output
         """
         self.stream: Stream = stream
         self.buffer: bytearray = bytearray(8192)
         self.position: int = 0
         self.max_packet_size: int = 16777215  # 16MB - 1 (0xffffff)
         self.debug: bool = debug
+        self.connection_id: int = connection_id
         
     def pos(self) -> int:
         """Get current buffer position"""
@@ -292,7 +294,7 @@ class PacketWriter:
         
         # Log and send
         if self.debug:
-            log_socket_data(packet, "SEND", packet_type)
+            log_socket_data(packet, "SEND", packet_type, self.connection_id)
         self.stream.sendall(packet)
 
     def close(self) -> None:

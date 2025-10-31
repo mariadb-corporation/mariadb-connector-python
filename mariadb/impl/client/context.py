@@ -58,7 +58,7 @@ class Context:
     def __init__(
         self,
         server_version: str = "",
-        connection_id: int = 0,
+        connection_id: int = -1,
         protocol_version: int = 10,
         server_capabilities: int = 0,
         server_status: int = 0,

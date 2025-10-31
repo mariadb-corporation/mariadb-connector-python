@@ -355,7 +355,7 @@ class TestPooling(unittest.TestCase):
 
     def test_conpy40(self):
         default_conf = conf()
-        pool = mariadb.ConnectionPool(pool_name='test_conpy40', min_size=0, max_size=20, acquire_timeout=1)
+        pool = mariadb.ConnectionPool(pool_name='test_conpy40', min_size=0, max_size=3, acquire_timeout=1)
 
         try:
             pool.set_config(pool_size=3)

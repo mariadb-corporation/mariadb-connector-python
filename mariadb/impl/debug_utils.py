@@ -89,7 +89,7 @@ def hex_dump(data: Union[bytes, bytearray], direction: str = "SEND", packet_type
     print()  # Empty line for readability
 
 
-def log_socket_data(data: Union[bytes, bytearray], direction: str, packet_type: str = "") -> None:
+def log_socket_data(data: Union[bytes, bytearray], direction: str, packet_type: str = "", connection_id: int = -1) -> None:
     """
     Log socket data if debug is enabled
     
@@ -97,6 +97,8 @@ def log_socket_data(data: Union[bytes, bytearray], direction: str, packet_type: 
         data: Binary data to log
         direction: Direction indicator ("SEND" or "RECV") 
         packet_type: Packet type (e.g. "SSL_REQUEST", "SSL_RESPONSE")
+        connection_id: Connection ID for identifying the connection (-1 if not available)
     """
-    print(f"Socket {direction}: {packet_type}", file=sys.stderr)
+    conn_id_str = f"[conn_id={connection_id}] " if connection_id >= 0 else ""
+    print(f"Socket {direction}: {conn_id_str}{packet_type}", file=sys.stderr)
     hex_dump(data, direction, packet_type)

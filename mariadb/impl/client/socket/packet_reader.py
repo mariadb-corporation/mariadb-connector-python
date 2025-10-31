@@ -39,7 +39,7 @@ class PacketReader:
     Equivalent to the Java StandardPacketReader.
     """
     
-    def __init__(self, stream: Stream, debug: bool = False):
+    def __init__(self, stream: Stream, debug: bool = False, connection_id: int = -1):
         """
         Initialize reader
         
@@ -47,9 +47,11 @@ class PacketReader:
             stream: stream to read from (may be wrapped with CompressStream)
             sequence: Shared sequence number tracker (optional, will create new if None)
             debug: Enable debug logging
+            connection_id: Connection ID for debug output
         """
         self.stream: Stream = stream
         self.debug: bool = debug
+        self.connection_id: int = connection_id
         
     def read_packet(self) -> bytes:
         """
@@ -78,7 +80,7 @@ class PacketReader:
         # Log complete packet (header + payload) if debug is enabled
         complete_packet = header + payload
         if self.debug:
-            log_socket_data(complete_packet, "RECV")
+            log_socket_data(complete_packet, "RECV", connection_id=self.connection_id)
         
         # Handle multi-packet messages (packets of exactly 16MB)
         if packet_length == 0xFFFFFF:
