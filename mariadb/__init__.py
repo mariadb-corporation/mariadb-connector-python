@@ -332,7 +332,7 @@ def _get_connection_pool_class():
                     # Merge with kwargs, giving priority to kwargs
                     uri_params.update(kwargs)
                     kwargs = uri_params
-            
+                
             # pool_name is optional - if not provided, pool can be used directly
             # but won't be registered in _CONNECTION_POOLS
             if pool_name is not None:

@@ -77,7 +77,7 @@ class NativePasswordPlugin(AuthenticationPlugin):
         Returns:
             Scrambled password bytes
         """
-        if password is None:
+        if password is None or password == "":
             return b''
         
         # Convert password to bytes

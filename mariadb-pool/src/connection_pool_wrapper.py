@@ -206,3 +206,12 @@ class ConnectionPoolWrapper:
     def clear_registry(cls):
         """Clear the pool registry (for testing)"""
         cls._registry.clear()
+    
+    def __enter__(self):
+        """Enter context manager"""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit context manager and close pool"""
+        self.close()
+        return False
