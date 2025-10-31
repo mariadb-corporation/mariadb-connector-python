@@ -45,6 +45,7 @@ from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
 from ..message.client.query_packet import QueryPacket
 from ..message.client.ping_packet import PingPacket
+from ..message.client.quit_packet import QuitPacket
 from ..message.client.prepare_packet import PreparePacket
 from ..message.client.execute_packet import ExecutePacket
 from ..message.client.change_user_packet import ChangeUserPacket
@@ -128,7 +129,6 @@ class Client:
                     
                     self._create_socket()
                     self._perform_handshake()
-                    self.connected = True
                     return  # Success!
                     
                 except Exception as e:
@@ -206,6 +206,13 @@ class Client:
             
             # Parse handshake packet and create context
             self.context = self._parse_handshake(handshake_packet)
+            
+            # Update connection_id in reader and writer for debug output
+            if self.reader:
+                self.reader.connection_id = self.context.connection_id
+            if self.writer:
+                self.writer.connection_id = self.context.connection_id
+            
             client_capabilities = self._calculate_client_capabilities()
 
             # Handle SSL if enabled
@@ -226,10 +233,10 @@ class Client:
             
             # Enable compression if negotiated
             self._enable_compression_if_negotiated()
+            self.connected = True
             
             # Ensure autocommit and charset are correctly set
             self._ensure_default()
-            
             # Execute init command if specified
             if self.configuration.init_command:
                 self._execute_init_command()
@@ -743,7 +750,7 @@ class Client:
             from .socket.stream.compress_stream import CompressStream
             
             # Create compression stream wrapper around the raw socket
-            compress_stream = CompressStream(self.socket, self.configuration.debug)
+            compress_stream = CompressStream(self.socket, self.configuration.debug, self.context.connection_id)
             
             # Replace stream with compression stream in reader and writer
             self.reader.stream = compress_stream
@@ -823,6 +830,15 @@ class Client:
         with self.lock:
             if self.closed:
                 return
+            
+            # Send COM_QUIT packet to gracefully close the connection
+            if self.connected and self.writer and self.socket:
+                try:
+                    quit_packet = QuitPacket()
+                    quit_packet.encode(self.writer, self.context)
+                except Exception:
+                    # Ignore errors when sending quit - connection may already be broken
+                    pass
             
             self.closed = True
             self.connected = False
