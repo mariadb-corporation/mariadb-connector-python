@@ -24,10 +24,13 @@ Equivalent to the Java HandshakeResponse class.
 """
 
 import hashlib
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from ...client.socket.stream.stream import Stream
 
 from ...client.context import Context
-from ...client.socket.packet_writer import PacketWriter
+from ...client.socket.payload_writer import PayloadWriter
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from ..client_message import ClientMessage
 from ...configuration import Configuration
@@ -55,19 +58,19 @@ class HandshakeResponse(ClientMessage):
         self.context = context
         
 
-    def encode(self, writer: PacketWriter, context: Context) -> None:
+    def encode(self, stream: 'Stream', context: Context) -> None:
         """
         Encode handshake response packet using payload-based approach
         
         Args:
-            writer: Packet writer
+            stream: Stream to send payload through
             context: Connection context
             
         Raises:
             IOError: If encoding fails
         """
-        # Start payload mode (don't reset sequence - continue from handshake)
-        writer.start_payload(reset_sequence=False)
+        # Build payload
+        writer = PayloadWriter()
         
         # Client capabilities (4 bytes)
         writer.write_int(context.client_capabilities & 0xFFFFFFFF)
@@ -97,7 +100,8 @@ class HandshakeResponse(ClientMessage):
                 writer.write_byte(len(auth_response))
                 writer.write_bytes(auth_response)
             else:
-                writer.write_null_terminated_string(auth_response)        
+                writer.write_bytes(auth_response)
+                writer.write_byte(0x00)
         else:
             writer.write_byte(0)
         
@@ -125,8 +129,8 @@ class HandshakeResponse(ClientMessage):
             writer.write_length_encoded_int(len(attr_data))
             writer.write_bytes(attr_data)
 
-        # Send packet with automatic header and chunking
-        writer.send_payload("COM_HANDSHAKE_RESPONSE")
+        # Send payload through stream (don't reset sequence - continue from handshake)
+        stream.send_payload(writer.get_payload(), "COM_HANDSHAKE_RESPONSE", reset_sequence=False)
     
     def _calculate_auth_response(self, context: Context) -> bytes:
         """

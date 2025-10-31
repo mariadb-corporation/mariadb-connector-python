@@ -24,8 +24,14 @@ Equivalent to the Java ChangeDbPacket class.
 See https://mariadb.com/kb/en/com_init_db/ protocol
 """
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...client.socket.stream.stream import Stream
+    from ...client.context import Context
+
 from ..client_message import ClientMessage
+from ...client.socket.payload_writer import PayloadWriter
 
 
 class ChangeDbPacket(ClientMessage):
@@ -45,16 +51,15 @@ class ChangeDbPacket(ClientMessage):
         """
         self.database = database
     
-    def encode(self, writer: Any, context: Any) -> None:
+    def encode(self, stream: 'Stream', context: 'Context') -> None:
         """
         Encode COM_INIT_DB packet using new payload-based approach
         
         Args:
-            writer: Packet writer
+            stream: Stream to send payload through
             context: Connection context
         """
-        # Start payload mode
-        writer.start_payload()
+        writer = PayloadWriter()
         
         # COM_INIT_DB command byte is 0x02
         writer.write_byte(0x02)

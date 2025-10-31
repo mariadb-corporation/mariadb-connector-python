@@ -25,8 +25,13 @@ See https://mariadb.com/kb/en/connection/#sslrequest-packet
 """
 
 
-from mariadb.impl.client.context import Context
-from mariadb.impl.client.socket.packet_writer import PacketWriter
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...client.socket.stream.stream import Stream
+    from mariadb.impl.client.context import Context
+
+from ...client.socket.payload_writer import PayloadWriter
 from ..client_message import ClientMessage
 from mariadb_shared import constants
 
@@ -48,16 +53,16 @@ class SslRequestPacket(ClientMessage):
         """
         self.client_capabilities: int = client_capabilities
     
-    def encode(self, writer: PacketWriter, context: Context) -> None:
+    def encode(self, stream: 'Stream', context: 'Context') -> None:
         """
         Encode SSL request packet using payload-based approach
         
         Args:
-            writer: Packet writer
+            stream: Stream to send payload through
             context: Connection context
         """
-        # Start payload mode (don't reset sequence - continue from handshake)
-        writer.start_payload(reset_sequence=False)
+        # Build payload
+        writer = PayloadWriter()
         
         # Write SSL request packet content
         writer.write_int(self.client_capabilities & 0xFFFFFFFF)  # Client capabilities (4 bytes)
@@ -66,8 +71,8 @@ class SslRequestPacket(ClientMessage):
         writer.write_bytes(b'\x00' * 19)  # Reserved bytes (19 bytes)
         writer.write_int((self.client_capabilities >> 32) & 0xFFFFFFFF)  # MariaDB extended capabilities (4 bytes)
         
-        # Send packet with automatic header and chunking
-        writer.send_payload("SSL_REQUEST")
+        # Send payload through stream (don't reset sequence - continue from handshake)
+        stream.send_payload(writer.get_payload(), "SSL_REQUEST", reset_sequence=False)
 
     def is_binary(self) -> bool:
         return False

@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from mariadb_shared.constants import STATUS
 
 if TYPE_CHECKING:
-    from .client.socket.packet_reader import PacketReader
+    from .client.socket.stream.stream import Stream
     from .client.context import Context
     from .configuration import Configuration
 
@@ -236,7 +236,7 @@ class StreamingResult(Result):
     
     def __init__(
         self,
-        reader: 'PacketReader',
+        stream: 'Stream',
         context: 'Context',
         columns: List[dict],
         column_count: int,
@@ -248,7 +248,7 @@ class StreamingResult(Result):
         Initialize streaming result
         
         Args:
-            reader: Packet reader
+            stream: Stream for reading packets
             context: Connection context
             columns: Column metadata
             column_count: Number of columns
@@ -257,7 +257,7 @@ class StreamingResult(Result):
             row_parser: Function to parse row packets (from Client)
         """
         super().__init__(columns, column_count, config, is_binary)
-        self.reader = reader
+        self.stream = stream
         self.context = context
         self.row_parser = row_parser
         self.loaded = False
@@ -278,7 +278,7 @@ class StreamingResult(Result):
             return None
             
         try:
-            row_packet = self.reader.read_packet()
+            row_packet: bytearray = self.stream.read_payload()
             
             if len(row_packet) == 0:
                 self.loaded = True
@@ -290,21 +290,23 @@ class StreamingResult(Result):
                  (not self.context.isEofDeprecated() and len(row_packet) < 8))):
                 
                 # This is an EOF or OK packet - end of result set
-                pos = 1  # Skip packet type byte
+                from .client.socket.payload_parser import PayloadParser
+                parser = PayloadParser(row_packet)
+                parser.skip(1)  # Skip packet type byte (0xFE)
                 
                 if not self.context.isEofDeprecated():
                     # Traditional EOF packet
-                    self.warning_count = struct.unpack('<H', row_packet[pos:pos + 2])[0]
-                    server_status = struct.unpack('<H', row_packet[pos + 2:pos + 4])[0]
+                    self.warning_count = parser.read_int16()
+                    server_status = parser.read_int16()
                     self.context.server_status = server_status
                     self.is_output_parameters = (server_status & STATUS.PS_OUT_PARAMS) != 0
                 else:
                     # OK packet with 0xFE header (DEPRECATE_EOF enabled)
                     # Parse OK packet structure
-                    affected_rows, pos = self.reader.read_length_encoded_int(row_packet, pos)
-                    insert_id, pos = self.reader.read_length_encoded_int(row_packet, pos)
-                    server_status = struct.unpack('<H', row_packet[pos:pos + 2])[0]
-                    self.warning_count = struct.unpack('<H', row_packet[pos + 2:pos + 4])[0]
+                    affected_rows = parser.read_length_encoded_int()
+                    insert_id = parser.read_length_encoded_int()
+                    server_status = parser.read_int16()
+                    self.warning_count = parser.read_int16()
                     self.context.server_status = server_status
                     self.is_output_parameters = (self.context.server_status & STATUS.PS_OUT_PARAMS) != 0
                 

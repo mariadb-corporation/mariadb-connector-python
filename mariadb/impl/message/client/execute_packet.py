@@ -27,15 +27,19 @@ import array
 import datetime
 import decimal
 import struct
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 try:
     import numpy
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
+
+if TYPE_CHECKING:
+    from ...client.socket.stream.stream import Stream
+
 from ...client.context import Context
-from ...client.socket.packet_writer import PacketWriter
+from ...client.socket.payload_writer import PayloadWriter
 from ...string_utils import StringEscaper
 from mariadb_shared.constants import FIELD_TYPE
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
@@ -64,16 +68,16 @@ class ExecutePacket(ClientMessage):
         self.parameters = parameters or []
         self.sql = sql
         
-    def encode(self, writer: PacketWriter, context: Context) -> None:
+    def encode(self, stream: 'Stream', context: Context) -> None:
         """
         Encode execute packet
         
         Args:
-            writer: Packet writer
+            stream: Stream to send payload through
             context: Connection context
         """
-        # Start payload
-        writer.start_payload()
+        # Build payload
+        writer = PayloadWriter()
         
         # Write COM_STMT_EXECUTE command
         writer.write_byte(self.COM_STMT_EXECUTE)
@@ -116,8 +120,8 @@ class ExecutePacket(ClientMessage):
                 if param is not None:
                     self._write_parameter_value(writer, param)
         
-        # Send packet
-        writer.send_payload("COM_STMT_EXECUTE")
+        # Send payload through stream
+        stream.send_payload(writer.get_payload(), "COM_STMT_EXECUTE")
     
     def _get_parameter_type(self, param: Any) -> tuple[int, int]:
         """
@@ -173,7 +177,7 @@ class ExecutePacket(ClientMessage):
             # Default to string
             return FIELD_TYPE.VAR_STRING, 0
     
-    def _write_parameter_value(self, writer: PacketWriter, param: Any) -> None:
+    def _write_parameter_value(self, writer: PayloadWriter, param: Any) -> None:
         """
         Write parameter value in binary format
         
@@ -243,7 +247,7 @@ class ExecutePacket(ClientMessage):
             # Convert to string
             writer.write_length_encoded_string(str(param))
     
-    def _write_datetime(self, writer: PacketWriter, dt: datetime.datetime) -> None:
+    def _write_datetime(self, writer: PayloadWriter, dt: datetime.datetime) -> None:
         """Write datetime in MySQL binary format"""
         if dt.microsecond:
             # 11 bytes: year(2) + month(1) + day(1) + hour(1) + minute(1) + second(1) + microsecond(4)
@@ -265,7 +269,7 @@ class ExecutePacket(ClientMessage):
             writer.write_byte(dt.minute)
             writer.write_byte(dt.second)
     
-    def _write_date(self, writer: PacketWriter, date: datetime.date) -> None:
+    def _write_date(self, writer: PayloadWriter, date: datetime.date) -> None:
         """Write date in MySQL binary format"""
         # 4 bytes: year(2) + month(1) + day(1)
         writer.write_byte(4)
@@ -273,7 +277,7 @@ class ExecutePacket(ClientMessage):
         writer.write_byte(date.month)
         writer.write_byte(date.day)
     
-    def _write_time(self, writer: PacketWriter, time: datetime.time) -> None:
+    def _write_time(self, writer: PayloadWriter, time: datetime.time) -> None:
         """Write time in MySQL binary format"""
         if time.microsecond:
             # 12 bytes: negative(1) + days(4) + hour(1) + minute(1) + second(1) + microsecond(4)
@@ -293,7 +297,7 @@ class ExecutePacket(ClientMessage):
             writer.write_byte(time.minute)
             writer.write_byte(time.second)
     
-    def _write_time_from_timedelta(self, writer: PacketWriter, td: datetime.timedelta) -> None:
+    def _write_time_from_timedelta(self, writer: PayloadWriter, td: datetime.timedelta) -> None:
         """Write timedelta as time in MySQL binary format"""
         total_seconds = int(td.total_seconds())
         negative = total_seconds < 0

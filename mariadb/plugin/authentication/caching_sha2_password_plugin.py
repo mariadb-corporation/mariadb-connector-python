@@ -32,8 +32,8 @@ from typing import Optional, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...impl.client.context import Context
-    from ...impl.client.socket.packet_writer import PacketWriter
-    from ...impl.client.socket.packet_reader import PacketReader
+    from ...impl.client.socket.payload_writer import PayloadWriter
+    from ...impl.client.socket.stream.stream import Stream
 
 from ..authentication_plugin import AuthenticationPlugin, Credential
 from ...exceptions import OperationalError
@@ -106,7 +106,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         result = bytes(a ^ b for a, b in zip(stage1, stage3))
         return result
     
-    def process(self, writer: PacketWriter, reader: PacketReader, context: Context) -> bytes:
+    def process(self, writer: PayloadWriter, stream: Stream, context: Context) -> bytes:
         """
         Process caching SHA2 password plugin authentication
         
@@ -138,7 +138,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
             writer.send_payload("CACHING_SHA2_PWD SEND PASSWORD")
         
         # Read response packet
-        response = reader.read_packet()
+        response: bytearray = stream.read_payload()
         
         # Check if server requests more authentication data
         if len(response) > 0 and response[0] == 0x01:
@@ -150,13 +150,13 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     return response
                 elif auth_method == 0x04:
                     # Perform full authentication
-                    return self._perform_full_authentication(writer, reader, context)
+                    return self._perform_full_authentication(writer, stream, context)
                 else:
                     raise OperationalError(f"Unknown authentication method: {auth_method}")
         
         return response
     
-    def _perform_full_authentication(self, writer: PacketWriter, reader: PacketReader, context: Context) -> bytes:
+    def _perform_full_authentication(self, writer: PayloadWriter, stream: Stream, context: Context) -> bytes:
         """
         Perform full authentication when fast authentication fails
         
@@ -189,16 +189,16 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         else:
             # SSL not available - try RSA public key encryption
             if HAS_CRYPTOGRAPHY:
-                return self._perform_rsa_authentication(writer, reader, context)
+                return self._perform_rsa_authentication(writer, stream, context)
             else:
                 raise OperationalError(
                     "Authentication plugin 'caching_sha2_password' requires SSL connection "
                     "or cryptography library for RSA encryption when not cached"
                 )
         
-        return reader.read_packet()
+        return stream.read_payload()
     
-    def _perform_rsa_authentication(self, writer: PacketWriter, reader: PacketReader, context: Context) -> bytes:
+    def _perform_rsa_authentication(self, writer: PayloadWriter, stream: Stream, context: Context) -> bytes:
         """
         Perform RSA public key authentication
         
@@ -219,7 +219,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         writer.send_payload("CACHING_SHA2_PWD REQUEST PUBLIC KEY")
         
         # Read public key response
-        key_response = reader.read_packet()
+        key_response: bytearray = stream.read_payload()
         
         if len(key_response) == 0 or key_response[0] == 0xFF:
             raise OperationalError("Failed to get RSA public key from server")
@@ -261,7 +261,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                 writer.write_byte(0)  # Empty password
                 writer.send_payload("CACHING_SHA2_PWD RSA ENCRYTED PWD")
             
-            return reader.read_packet()
+            return stream.read_payload()
             
         except Exception as e:
             raise OperationalError(f"RSA authentication failed: {e}")

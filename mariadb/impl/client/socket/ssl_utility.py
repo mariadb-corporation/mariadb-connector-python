@@ -18,9 +18,9 @@
 #
 
 """
-SSL Socket wrapper for MariaDB connections
+SSL Utility for MariaDB connections
 
-Provides SSL/TLS encryption for database connections.
+Provides SSL/TLS socket creation utilities for database connections.
 """
 
 import ssl
@@ -30,27 +30,51 @@ from ...configuration import Configuration
 from ....exceptions import OperationalError
 
 
-class SSLSocketWrapper:
+class SSLUtility:
     """
-    SSL socket wrapper for MariaDB connections
+    SSL utility for MariaDB connections
     
-    Wraps a regular socket with SSL/TLS encryption.
+    Provides static methods for creating SSL-wrapped sockets.
     """
     
-    def __init__(self, raw_socket: socket.socket, configuration: Configuration):
+    @staticmethod
+    def create_ssl_socket(raw_socket: socket.socket, configuration: Configuration, server_hostname: Optional[str] = None) -> ssl.SSLSocket:
         """
-        Initialize SSL socket wrapper
+        Create an SSL-wrapped socket from a raw socket
         
         Args:
             raw_socket: The underlying socket to wrap
             configuration: Connection configuration with SSL settings
+            server_hostname: Server hostname for SNI
+            
+        Returns:
+            SSL-wrapped socket
+            
+        Raises:
+            OperationalError: If SSL socket creation fails
         """
-        self.raw_socket = raw_socket
-        self.configuration = configuration
-        self.ssl_socket: Optional[ssl.SSLSocket] = None
-        self._create_ssl_context()
+        try:
+            # Create SSL context
+            context = SSLUtility._create_ssl_context(configuration)
+            
+            # Wrap the socket with SSL
+            ssl_socket = context.wrap_socket(
+                raw_socket,
+                server_side=False,
+                do_handshake_on_connect=False,
+                server_hostname=server_hostname
+            )
+            
+            # Perform SSL handshake
+            ssl_socket.do_handshake()
+            
+            return ssl_socket
+            
+        except Exception as e:
+            raise OperationalError(f"SSL handshake failed: {e}")
     
-    def _create_ssl_context(self) -> ssl.SSLContext:
+    @staticmethod
+    def _create_ssl_context(configuration: Configuration) -> ssl.SSLContext:
         """
         Create SSL context based on configuration
         
@@ -65,50 +89,51 @@ class SSLSocketWrapper:
             context = ssl.create_default_context()
             
             # Configure SSL context based on configuration
-            if self.configuration.ssl_ca:
-                context.load_verify_locations(cafile=self.configuration.ssl_ca)
+            if configuration.ssl_ca:
+                context.load_verify_locations(cafile=configuration.ssl_ca)
             
-            if self.configuration.ssl_capath:
-                context.load_verify_locations(capath=self.configuration.ssl_capath)
+            if configuration.ssl_capath:
+                context.load_verify_locations(capath=configuration.ssl_capath)
             
-            if self.configuration.ssl_cert and self.configuration.ssl_key:
+            if configuration.ssl_cert and configuration.ssl_key:
                 context.load_cert_chain(
-                    certfile=self.configuration.ssl_cert,
-                    keyfile=self.configuration.ssl_key
+                    certfile=configuration.ssl_cert,
+                    keyfile=configuration.ssl_key
                 )
             
-            if self.configuration.ssl_crl:
+            if configuration.ssl_crl:
                 # Load CRL if specified
-                context.load_verify_locations(crlfile=self.configuration.ssl_crl)
+                context.load_verify_locations(crlfile=configuration.ssl_crl)
                 context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
             
-            if self.configuration.ssl_cipher:
-                context.set_ciphers(self.configuration.ssl_cipher)
+            if configuration.ssl_cipher:
+                context.set_ciphers(configuration.ssl_cipher)
             
             # Configure TLS version if specified
-            if self.configuration.tls_version:
-                self._configure_tls_versions(context)
+            if configuration.tls_version:
+                SSLUtility._configure_tls_versions(context, configuration)
             
             # Configure certificate verification
-            if not self.configuration.ssl_verify_cert:
+            if not configuration.ssl_verify_cert:
                 context.check_hostname = False
                 context.verify_mode = ssl.CERT_NONE
             else:
                 context.check_hostname = True
                 context.verify_mode = ssl.CERT_REQUIRED
             
-            self.ssl_context = context
             return context
             
         except Exception as e:
             raise OperationalError(f"Failed to create SSL context: {e}")
     
-    def _configure_tls_versions(self, context: ssl.SSLContext) -> None:
+    @staticmethod
+    def _configure_tls_versions(context: ssl.SSLContext, configuration: Configuration) -> None:
         """
         Configure TLS versions from comma-separated string
         
         Args:
             context: SSL context to configure
+            configuration: Connection configuration with TLS version settings
         """
         # Map TLS version strings to SSL constants
         tls_version_map = {
@@ -130,7 +155,7 @@ class SSLSocketWrapper:
         }
         
         # Parse comma-separated TLS versions
-        tls_versions_str = self.configuration.tls_version.strip()
+        tls_versions_str = configuration.tls_version.strip()
         if ',' in tls_versions_str:
             # Multiple versions specified - find min and max
             version_list = [v.strip().upper().replace('.', '_') for v in tls_versions_str.split(',')]
@@ -160,94 +185,4 @@ class SSLSocketWrapper:
                 context.maximum_version = ssl_version  # Force exact version
             else:
                 import warnings
-                warnings.warn(f"Unsupported TLS version '{self.configuration.tls_version}', using default")
-    
-    def wrap_socket(self, server_hostname: Optional[str] = None) -> ssl.SSLSocket:
-        """
-        Wrap the raw socket with SSL
-        
-        Args:
-            server_hostname: Server hostname for SNI
-            
-        Returns:
-            SSL wrapped socket
-            
-        Raises:
-            OperationalError: If SSL wrapping fails
-        """
-        try:
-            # Wrap the socket with SSL
-            self.ssl_socket = self.ssl_context.wrap_socket(
-                self.raw_socket,
-                server_side=False,
-                do_handshake_on_connect=False,
-                server_hostname=server_hostname
-            )
-            
-            # Perform SSL handshake
-            self.ssl_socket.do_handshake()
-            
-            return self.ssl_socket
-            
-        except Exception as e:
-            raise OperationalError(f"SSL handshake failed: {e}")
-    
-    def get_ssl_socket(self) -> Optional[ssl.SSLSocket]:
-        """
-        Get the SSL socket if available
-        
-        Returns:
-            SSL socket or None if not wrapped
-        """
-        return self.ssl_socket
-    
-    def get_peer_certificate(self) -> Optional[dict]:
-        """
-        Get peer certificate information
-        
-        Returns:
-            Certificate information or None
-        """
-        if self.ssl_socket:
-            try:
-                return self.ssl_socket.getpeercert()
-            except:
-                return None
-        return None
-    
-    def get_cipher(self) -> Optional[tuple]:
-        """
-        Get current cipher information
-        
-        Returns:
-            Cipher information or None
-        """
-        if self.ssl_socket:
-            try:
-                return self.ssl_socket.cipher()
-            except:
-                return None
-        return None
-    
-    def get_tls_version(self) -> Optional[str]:
-        """
-        Get current TLS version
-        
-        Returns:
-            TLS version string or None if not available
-        """
-        if self.ssl_socket:
-            try:
-                return self.ssl_socket.version()
-            except:
-                return None
-        return None
-    
-    def close(self):
-        """Close the SSL socket"""
-        if self.ssl_socket:
-            try:
-                self.ssl_socket.close()
-            except:
-                pass
-            self.ssl_socket = None
+                warnings.warn(f"Unsupported TLS version '{configuration.tls_version}', using default")

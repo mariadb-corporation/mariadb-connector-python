@@ -26,7 +26,7 @@ Equivalent to the Java QueryPacket class.
 import array
 import datetime
 import decimal
-from typing import Any, List, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 
 try:
     import numpy
@@ -34,8 +34,11 @@ try:
 except ImportError:
     HAS_NUMPY = False
 
+if TYPE_CHECKING:
+    from ...client.socket.stream.stream import Stream
+
 from ...client.context import Context
-from ...client.socket.packet_writer import PacketWriter
+from ...client.socket.payload_writer import PayloadWriter
 from ...string_utils import StringEscaper
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
@@ -66,19 +69,19 @@ class QueryPacket(ClientMessage):
         self.sql = sql
         self.parameters = parameters or []
         
-    def encode(self, writer: PacketWriter, context: Context) -> None:
+    def encode(self, stream: 'Stream', context: Context) -> None:
         """
         Encode query packet with optional parameter binding
         
         Args:
-            writer: Packet writer
+            stream: Stream to send payload through
             context: Connection context
             
         Raises:
             IOError: If encoding fails
         """
         # Start payload mode
-        writer.start_payload()
+        writer = PayloadWriter()
         
         # Command type
         writer.write_byte(COM_QUERY)
@@ -91,9 +94,9 @@ class QueryPacket(ClientMessage):
             writer.write_string(self.sql, 'utf-8')
         
         # Send packet with automatic header and chunking
-        writer.send_payload("COM_QUERY")
+        stream.send_payload(writer.get_payload(), "COM_QUERY")
     
-    def _encode_parameterized_query(self, writer: PacketWriter, context: Context) -> None:
+    def _encode_parameterized_query(self, writer: PayloadWriter, context: Context) -> None:
         """
         Encode parameterized query by interleaving SQL fragments with parameters
         
@@ -119,7 +122,7 @@ class QueryPacket(ClientMessage):
                 writer.write_string('NULL', 'ascii')
                     
     
-    def _write_parameter_value(self, writer: PacketWriter, param: Any, no_backslash_escapes: bool) -> None:
+    def _write_parameter_value(self, writer: PayloadWriter, param: Any, no_backslash_escapes: bool) -> None:
         """
         Write parameter value directly as its string representation
         (for COM_QUERY, parameters are converted to strings)

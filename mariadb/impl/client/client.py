@@ -36,8 +36,8 @@ import uuid
 from typing import List, Optional, Any, Dict, Union, Tuple
 
 from .context import Context
-from .socket.packet_reader import PacketReader
-from .socket.packet_writer import PacketWriter
+from .socket.payload_parser import PayloadParser
+from .socket.payload_writer import PayloadWriter
 from .socket.mutable_int import MutableInt
 from ..configuration import Configuration
 from ..host_address import HostAddress
@@ -91,9 +91,8 @@ class Client:
         
         
         self.socket: Optional[socket.socket] = None
-        self.reader: Optional[PacketReader] = None
-        self.writer: Optional[PacketWriter] = None
-        self.ssl_wrapper = None
+        self.stream = None  # Stream for reading/writing packets
+        self.writer: Optional[PayloadWriter] = None
         self.sequence = MutableInt(0)  # Shared sequence number
         self.context: Optional[Context] = None
         self.exception_factory = ExceptionFactory()
@@ -174,11 +173,10 @@ class Client:
             
             # Wrap socket with SocketStream for protocol handling
             from .socket.stream.socket_stream import SocketStream
-            stream = SocketStream(self.socket)
+            self.stream = SocketStream(self.socket)
             
-            # Create reader and writer with shared sequence number
-            self.reader = PacketReader(stream=stream, debug=self.configuration.debug)
-            self.writer = PacketWriter(stream=stream, debug=self.configuration.debug)
+            # Create writer with stream
+            self.writer = PayloadWriter(stream=self.stream, debug=self.configuration.debug)
             
         except Exception as e:
             try:
@@ -202,14 +200,12 @@ class Client:
         """
         try:
             # Read initial handshake packet from server
-            handshake_packet = self.reader.read_packet()
+            handshake_packet: bytearray = self.stream.read_payload()
             
             # Parse handshake packet and create context
             self.context = self._parse_handshake(handshake_packet)
             
-            # Update connection_id in reader and writer for debug output
-            if self.reader:
-                self.reader.connection_id = self.context.connection_id
+            # Update connection_id in writer for debug output
             if self.writer:
                 self.writer.connection_id = self.context.connection_id
             
@@ -506,7 +502,7 @@ class Client:
         
         # Send SSL request packet
         ssl_request = SslRequestPacket(client_capabilities)
-        ssl_request.encode(self.writer, self.context)
+        ssl_request.encode(self.stream, self.context)
         
         # Upgrade socket to SSL
         self._upgrade_to_ssl_socket()
@@ -519,22 +515,20 @@ class Client:
             OperationalError: If SSL upgrade fails
         """
         try:
-            # Import SSL socket wrapper
-            from .socket.ssl_socket import SSLSocketWrapper
+            # Import SSL utility
+            from .socket.ssl_utility import SSLUtility
             
-            # Create SSL wrapper
-            ssl_wrapper = SSLSocketWrapper(self.socket, self.configuration)
+            # Create SSL socket using utility
+            ssl_socket = SSLUtility.create_ssl_socket(
+                self.socket, 
+                self.configuration, 
+                server_hostname=self.configuration.host
+            )
             
-            # Wrap socket with SSL
-            ssl_socket = ssl_wrapper.wrap_socket(server_hostname=self.configuration.host)
-            
-            # Replace the socket in reader and writer streams
+            # Replace the socket in stream and writer
             self.socket = ssl_socket
-            self.reader.stream.socket = ssl_socket
+            self.stream.socket = ssl_socket
             self.writer.stream.socket = ssl_socket
-            
-            # Store SSL wrapper for later use
-            self.ssl_wrapper = ssl_wrapper
             
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
@@ -612,7 +606,7 @@ class Client:
         register_builtin_plugins()
         
         # Read initial authentication result
-        auth_result = self.reader.read_packet()
+        auth_result: bytearray = self.stream.read_payload()
         
         # Check if server requests plugin authentication
         if len(auth_result) > 0:
@@ -752,8 +746,8 @@ class Client:
             # Create compression stream wrapper around the raw socket
             compress_stream = CompressStream(self.socket, self.configuration.debug, self.context.connection_id)
             
-            # Replace stream with compression stream in reader and writer
-            self.reader.stream = compress_stream
+            # Replace stream with compression stream
+            self.stream = compress_stream
             self.writer.stream = compress_stream
     
     def _send_message(self, message: ClientMessage) -> None:
@@ -767,7 +761,7 @@ class Client:
             OperationalError: If send fails
         """
         try:
-            message.encode(self.writer, self.context)
+            message.encode(self.stream, self.context)
         except NotSupportedError as e:
             raise e    
         except Exception as e:
@@ -805,7 +799,7 @@ class Client:
                 
                 # Continue reading results while MORE_RESULTS_EXIST is set
                 while True:
-                    result_packet = self.reader.read_packet()
+                    result_packet: bytearray = self.stream.read_payload()
                     completion = self._parse_result_packet(result_packet, config, is_binary, buffered)
                     results.append(completion)
                     
@@ -835,7 +829,7 @@ class Client:
             if self.connected and self.writer and self.socket:
                 try:
                     quit_packet = QuitPacket()
-                    quit_packet.encode(self.writer, self.context)
+                    quit_packet.encode(self.stream, self.context)
                 except Exception:
                     # Ignore errors when sending quit - connection may already be broken
                     pass
@@ -875,6 +869,48 @@ class Client:
     def get_exception_factory(self) -> ExceptionFactory:
         """Get exception factory"""
         return self.exception_factory
+    
+    def get_ssl_cipher(self) -> Optional[tuple]:
+        """
+        Get current SSL cipher information
+        
+        Returns:
+            Cipher tuple (name, version, bits) or None if not using SSL
+        """
+        if self.socket and hasattr(self.socket, 'cipher'):
+            try:
+                return self.socket.cipher()
+            except:
+                return None
+        return None
+    
+    def get_ssl_version(self) -> Optional[str]:
+        """
+        Get current TLS/SSL version
+        
+        Returns:
+            TLS version string (e.g., 'TLSv1.3') or None if not using SSL
+        """
+        if self.socket and hasattr(self.socket, 'version'):
+            try:
+                return self.socket.version()
+            except:
+                return None
+        return None
+    
+    def get_peer_certificate(self) -> Optional[dict]:
+        """
+        Get peer SSL certificate information
+        
+        Returns:
+            Certificate dict or None if not using SSL
+        """
+        if self.socket and hasattr(self.socket, 'getpeercert'):
+            try:
+                return self.socket.getpeercert()
+            except:
+                return None
+        return None
     
     def get_host_address(self) -> HostAddress:
         """Get host address"""
@@ -930,30 +966,30 @@ class Client:
         Returns:
             Completion object
         """
-        pos = 1  # Skip OK marker (0x00)
+        # Parse OK packet using PayloadParser
+        parser = PayloadParser(packet)
+        parser.skip(1)  # Skip OK marker (0x00)
         
         # Affected rows (length-encoded)
-        affected_rows, pos = self.reader.read_length_encoded_int(packet, pos)
+        affected_rows = parser.read_length_encoded_int()
         
         # Last insert ID (length-encoded)
-        last_insert_id, pos = self.reader.read_length_encoded_int(packet, pos)
+        last_insert_id = parser.read_length_encoded_int()
         
         # Server status (2 bytes)
-        self.context.server_status = struct.unpack('<H', packet[pos:pos + 2])[0]
-        pos += 2
+        self.context.server_status = parser.read_int16()
         
         # Warning count (2 bytes)
-        warning_count = struct.unpack('<H', packet[pos:pos + 2])[0]
+        warning_count = parser.read_int16()
         self.context.warning_count = warning_count
-        pos += 2
 
         
         # Process additional information if present
-        if pos < len(packet):
+        if parser.has_remaining():
             # Skip info string (length-encoded)
             try:
-                info_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                pos += info_length  # Skip info string content
+                info_length = parser.read_length_encoded_int()
+                parser.skip(info_length)  # Skip info string content
             except:
                 # If we can't read info length, skip remaining processing
                 pass
@@ -961,87 +997,70 @@ class Client:
             # Process session tracking if CLIENT_SESSION_TRACK capability is enabled
             if (self.context and 
                 self.context.has_capability(constants.CAPABILITY.SESSION_TRACKING) and 
-                pos < len(packet)):
+                parser.has_remaining()):
                 
                 try:
-                    self._process_session_tracking(packet, pos)
+                    self._process_session_tracking(parser)
                 except Exception as e:
-                    # Log error but don't fail the packet parsing
+                    # Log but don't fail on session tracking errors
                     pass
         
         
         return Completion(affected_rows=affected_rows, insert_id=last_insert_id, warning_count=warning_count)
     
-    def _process_session_tracking(self, packet: bytes, pos: int) -> None:
+    def _process_session_tracking(self, parser: PayloadParser) -> None:
         """
         Process session tracking information from OK packet
         
         Args:
-            packet: Packet data
-            pos: Current position in packet
+            parser: PayloadParser with remaining session tracking data
         """
-        while pos < len(packet):
+        while parser.has_remaining():
             try:
                 # Read session state buffer length
-                session_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                session_end = pos + session_length
-
-                if session_end > len(packet):
-                    break
+                session_length = parser.read_length_encoded_int()
+                session_start_pos = parser.pos
+                session_end_pos = session_start_pos + session_length
                 
                 # Process session state data
-                while pos < session_end:
-                    if pos >= len(packet):
-                        break
-                    
+                while parser.pos < session_end_pos and parser.has_remaining():
                     # Read session tracking type
-                    tracking_type = packet[pos]
-                    pos += 1
+                    tracking_type = parser.read_byte()
+                    
                     if tracking_type == self.SESSION_TRACK_SYSTEM_VARIABLES:
-                        pos = self._process_system_variables(packet, pos, session_end)
-
+                        self._process_system_variables(parser, session_end_pos)
                     elif tracking_type == self.SESSION_TRACK_SCHEMA:
-                        pos = self._process_schema_change(packet, pos, session_end)
+                        self._process_schema_change(parser, session_end_pos)
                     else:
                         # Skip unknown tracking types
                         try:
-                            skip_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                            pos += skip_length
+                            skip_length = parser.read_length_encoded_int()
+                            parser.skip(skip_length)
                         except:
                             break
                 
-                pos = session_end
+                # Ensure we're at session end
+                parser.seek(session_end_pos)
                 
             except Exception as e:
                 break
     
-    def _process_system_variables(self, packet: bytes, pos: int, end_pos: int) -> int:
+    def _process_system_variables(self, parser: PayloadParser, end_pos: int) -> None:
         """Process system variable changes"""
         try:
-
             # Read variable data length
-            var_length, pos = self.reader.read_length_encoded_int(packet, pos)
-            var_end = pos + var_length
+            var_length = parser.read_length_encoded_int()
+            var_end = parser.pos + var_length
             
             if var_end > end_pos:
                 return
             
             # Read variable name
-            name_length, pos = self.reader.read_length_encoded_int(packet, pos)
-            if pos + name_length > var_end:
-                return
-            
-            var_name = packet[pos:pos + name_length].decode('utf-8', errors='replace')
-            pos += name_length
+            var_name = parser.read_length_encoded_string()
             
             # Read variable value (can be null)
-            if pos < var_end:
-                value_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                if value_length > 0 and pos + value_length <= var_end:
-                    var_value = packet[pos:pos + value_length].decode('utf-8', errors='replace')
-                    pos += value_length
-                else:
-                    var_value = None
+            if parser.pos < var_end:
+                var_value = parser.read_length_encoded_string()
             else:
                 var_value = None
             
@@ -1054,35 +1073,25 @@ class Client:
                 
         except Exception as e:
             pass
-        
-        return pos
     
-    def _process_schema_change(self, packet: bytes, pos: int, end_pos: int) -> int:
+    def _process_schema_change(self, parser: PayloadParser, end_pos: int) -> None:
         """Process schema (database) change"""
         try:
             # Read schema data length
-            schema_length, pos = self.reader.read_length_encoded_int(packet, pos)
+            schema_length = parser.read_length_encoded_int()
+            schema_end = parser.pos + schema_length
             
-            if pos + schema_length > end_pos:
-                return end_pos
+            if schema_end > end_pos:
+                return
             
             # Read database name (can be null for no database)
-            db_length, pos = self.reader.read_length_encoded_int(packet, pos)
-            
-            if db_length > 0 and pos + db_length <= end_pos:
-                database = packet[pos:pos + db_length].decode('utf-8', errors='replace')
-                pos += db_length
-            else:
-                database = None
+            database = parser.read_length_encoded_string() if parser.pos < schema_end else None
             
             # Update context
             self.context.database = database
-            
                 
         except Exception as e:
             pass
-        
-        return pos
     
     def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> 'Completion':
         """
@@ -1101,13 +1110,14 @@ class Client:
         
         try:
             # Step 1: Parse column count from first packet
-            column_count, _ = self.reader.read_length_encoded_int(packet, 0)
+            parser = PayloadParser(packet)
+            column_count = parser.read_length_encoded_int()
             
             
             # Step 2: Read column definition packets
             columns = []
             for i in range(column_count):
-                col_packet = self.reader.read_packet()
+                col_packet: bytearray = self.stream.read_payload()
                 column_info = self._parse_column_definition(col_packet)
                 columns.append(column_info)
             
@@ -1116,13 +1126,13 @@ class Client:
             
             if not self.context.isEofDeprecated():
                 # skip intermediate EOF packet
-                self.reader.read_packet()
+                self.stream.read_payload()
             
             # Step 4: If unbuffered, create streaming result
             if not buffered:
                 from ..result import StreamingResult
                 streaming_result = StreamingResult(
-                    reader=self.reader,
+                    stream=self.stream,
                     context=self.context,
                     columns=columns,
                     column_count=column_count,
@@ -1145,7 +1155,7 @@ class Client:
             # Step 5: Read row data packets until EOF (buffered mode)
             rows = []
             while True:
-                row_packet = self.reader.read_packet()
+                row_packet: bytearray = self.stream.read_payload()
                 
                 if len(row_packet) == 0:
                     break
@@ -1221,62 +1231,55 @@ class Client:
         Returns:
             Dictionary with column information
         """
-        pos = 0
+        parser = PayloadParser(packet)
         
         # Read the 6 identifiers as per Java implementation
-        catalog, pos = self.reader.read_length_encoded_string(packet, pos)
-        schema, pos = self.reader.read_length_encoded_string(packet, pos)  
-        table, pos = self.reader.read_length_encoded_string(packet, pos)
-        org_table, pos = self.reader.read_length_encoded_string(packet, pos)
-        name, pos = self.reader.read_length_encoded_string(packet, pos)
-        org_name, pos = self.reader.read_length_encoded_string(packet, pos)
+        catalog = parser.read_length_encoded_string()
+        schema = parser.read_length_encoded_string()
+        table = parser.read_length_encoded_string()
+        org_table = parser.read_length_encoded_string()
+        name = parser.read_length_encoded_string()
+        org_name = parser.read_length_encoded_string()
         
         # Handle extended info only if EXTENDED_METADATA capability is enabled
         ext_type_name = None
         ext_type_format = None
         
         # Check if we have the length field (0x0C) or extended metadata
-        if self.context.hasExtendedMetadata() and pos < len(packet) and packet[pos] != 0x0C:
-            if packet[pos] != 0:
+        if self.context.hasExtendedMetadata() and parser.has_remaining():
+            next_byte = parser.packet[parser.pos]
+            if next_byte != 0x0C and next_byte != 0:
                 # Has extended info - read length-encoded buffer
-                ext_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                ext_end = pos + ext_length
+                ext_length = parser.read_length_encoded_int()
+                ext_end = parser.pos + ext_length
                 
-                while pos < ext_end and pos < len(packet):
-                    if pos >= len(packet):
-                        break
-                    ext_type = packet[pos]
-                    pos += 1
+                while parser.pos < ext_end and parser.has_remaining():
+                    ext_type = parser.read_byte()
                     
                     if ext_type == 0:
                         # Extended type name
-                        name_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                        if pos + name_length <= len(packet):
-                            ext_type_name = packet[pos:pos + name_length].decode('ascii', errors='ignore')
-                            pos += name_length
+                        ext_type_name = parser.read_length_encoded_string()
                     elif ext_type == 1:
                         # Extended type format
-                        format_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                        if pos + format_length <= len(packet):
-                            ext_type_format = packet[pos:pos + format_length].decode('ascii', errors='ignore')
-                            pos += format_length
+                        ext_type_format = parser.read_length_encoded_string()
                     else:
                         # Skip unknown extended data
-                        skip_length, pos = self.reader.read_length_encoded_int(packet, pos)
-                        pos += skip_length
-            else:
+                        skip_length = parser.read_length_encoded_int()
+                        parser.skip(skip_length)
+            elif next_byte == 0:
                 # Skip the 0 byte
-                pos += 1
+                parser.skip(1)
         
         # Skip length field (always 0x0c)
-        pos += 1
+        parser.skip(1)
         
         # Read fixed-length fields (12 bytes total) in one operation
-        if pos + 10 <= len(packet):
+        if parser.remaining_bytes() >= 10:
             # Unpack all fixed fields: charset(2), column_length(4), column_type(1), flags(2), decimals(1)
-            charset, column_length, column_type, flags, decimals = struct.unpack('<HIBHB', packet[pos:pos + 10])
+            fixed_data = parser.read_bytes(10)
+            charset, column_length, column_type, flags, decimals = struct.unpack('<HIBHB', fixed_data)
         else:
-            raise OperationalError(f"Column definition packet too short: expected {pos + 10} bytes, got {len(packet)} bytes")
+            raise OperationalError(f"Column definition packet too short")
         
         column_info = {
             'catalog': catalog,

@@ -21,8 +21,8 @@
 Socket package for MariaDB client communication
 """
 
-from .packet_reader import PacketReader
-from .packet_writer import PacketWriter
+from .payload_parser import PayloadParser
+from .payload_writer import PayloadWriter
 from .mutable_int import MutableInt
 
-__all__ = ['PacketReader', 'PacketWriter', 'MutableInt']
+__all__ = ['PayloadParser', 'PayloadWriter', 'MutableInt']

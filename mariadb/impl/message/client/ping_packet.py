@@ -23,8 +23,14 @@ Ping packet for MariaDB connection testing
 Equivalent to the Java PingPacket class.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...client.socket.stream.stream import Stream
+    from ...client.context import Context
+
 from ..client_message import ClientMessage
+from ...client.socket.payload_writer import PayloadWriter
 
 
 class PingPacket(ClientMessage):
@@ -40,25 +46,23 @@ class PingPacket(ClientMessage):
         """Initialize ping packet"""
         pass
         
-    def encode(self, writer: Any, context: Any) -> None:
+    def encode(self, stream: 'Stream', context: 'Context') -> None:
         """
         Encode ping packet using payload-based approach
         
         Args:
-            writer: Packet writer
+            stream: Stream to send payload through
             context: Connection context
             
         Raises:
             IOError: If encoding fails
         """
-        # Start payload mode
-        writer.start_payload()
-        
-        # Command type (only byte in ping packet)
+        # Build payload
+        writer = PayloadWriter()
         writer.write_byte(self.COM_PING)
         
-        # Send packet with automatic header and chunking
-        writer.send_payload("COM_PING")
+        # Send payload through stream with automatic header and chunking
+        stream.send_payload(writer.get_payload(), "COM_PING")
     
     def is_binary(self) -> bool:
         return False

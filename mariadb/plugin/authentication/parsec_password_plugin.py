@@ -33,8 +33,8 @@ from typing import Optional, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...impl.client.context import Context
-    from ...impl.client.socket.packet_writer import PacketWriter
-    from ...impl.client.socket.packet_reader import PacketReader
+    from ...impl.client.socket.payload_writer import PayloadWriter
+    from ...impl.client.socket.stream.stream import Stream
 
 from ..authentication_plugin import AuthenticationPlugin, Credential
 from ...exceptions import OperationalError
@@ -73,7 +73,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         self.seed = seed
         self._hash = None
     
-    def process(self, writer: PacketWriter, reader: PacketReader, context: Context) -> bytes:
+    def process(self, writer: PayloadWriter, stream: Stream, context: Context) -> bytes:
         """
         Process Parsec password plugin authentication
         

@@ -31,8 +31,8 @@ from typing import Optional, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...impl.client.context import Context
-    from ...impl.client.socket.packet_writer import PacketWriter
-    from ...impl.client.socket.packet_reader import PacketReader
+    from ...impl.client.socket.payload_writer import PayloadWriter
+    from ...impl.client.socket.stream.stream import Stream
 
 from ..authentication_plugin import AuthenticationPlugin, Credential
 
@@ -99,7 +99,7 @@ class NativePasswordPlugin(AuthenticationPlugin):
         result = bytes(a ^ b for a, b in zip(stage1, stage3))
         return result
     
-    def process(self, writer: PacketWriter, reader: PacketReader, context: Context) -> bytes:
+    def process(self, writer: PayloadWriter, stream: Stream, context: Context) -> bytes:
         """
         Process native password plugin authentication
         

@@ -23,8 +23,14 @@ COM_CHANGE_USER packet implementation
 Changes the user and optionally the database for the current connection.
 """
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from ...client.socket.stream.stream import Stream
+    from ...client.context import Context
+
 from ..client_message import ClientMessage
+from ...client.socket.payload_writer import PayloadWriter
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from ....plugin.authentication.native_password_plugin import NativePasswordPlugin
 from mariadb_shared.constants import CAPABILITY
@@ -62,9 +68,13 @@ class ChangeUserPacket(ClientMessage):
         self.charset_collation = charset_collation
         self.connect_attrs = connect_attrs or {}
     
-    def encode(self, writer, context) -> bytes:
+    def encode(self, stream: 'Stream', context: 'Context') -> None:
         """
         Encode COM_CHANGE_USER packet
+        
+        Args:
+            stream: Stream to send payload through
+            context: Connection context
         
         Packet format:
         - int<1>: 0x11 (COM_CHANGE_USER)
@@ -82,7 +92,8 @@ class ChangeUserPacket(ClientMessage):
             - int: size of connection attributes
             - Loop: key-value pairs (length-encoded strings)
         """
-        writer.start_payload()
+        # Build payload
+        writer = PayloadWriter()
         
         # Command byte
         writer.write_byte(0x11)  # COM_CHANGE_USER
@@ -98,7 +109,8 @@ class ChangeUserPacket(ClientMessage):
                 writer.write_byte(len(auth_response))
                 writer.write_bytes(auth_response)
             else:
-                writer.write_null_terminated_string(self.auth_response)        
+                writer.write_bytes(auth_response)
+                writer.write_byte(0x00)
         else:
             writer.write_byte(0)
         
@@ -130,7 +142,7 @@ class ChangeUserPacket(ClientMessage):
             attr_data = encode_connection_attributes(default_attrs)
             writer.write_length_encoded_int(len(attr_data))
             writer.write_bytes(attr_data)
-        writer.send_payload("COM_CHANGE_USER")
+        stream.send_payload(writer.get_payload(), "COM_CHANGE_USER")
         
     def is_binary(self) -> bool:
         return False

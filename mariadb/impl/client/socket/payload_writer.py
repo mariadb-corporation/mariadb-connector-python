@@ -18,7 +18,7 @@
 #
 
 """
-Packet Writer for MariaDB protocol
+Payload Writer for MariaDB protocol
 
 Equivalent to the Java StandardPacketWriter.
 """
@@ -28,12 +28,8 @@ from typing import Optional, Union
 
 from mariadb_shared.constants import CAPABILITY
 
-from .stream.stream import Stream
-from ...debug_utils import log_socket_data
-from .mutable_int import MutableInt
 
-
-class PacketWriter:
+class PayloadWriter:
     
     SLASH_BYTE: int = b"\\"[0]
     QUOTE_BYTE: int = b"'"[0]
@@ -41,27 +37,21 @@ class PacketWriter:
     NULL_BYTE: int = b"\0"[0]
 
     """
-    Packet writer for MariaDB protocol
+    Payload writer for MariaDB protocol
     
     Equivalent to the Java StandardPacketWriter.
     """
     
-    def __init__(self, stream: Stream, debug: bool = False, connection_id: int = -1):
+    def __init__(self, buffer_size: int = 8192):
         """
-        Initialize writer
+        Initialize payload writer
         
         Args:
-            stream: stream to write to (may be wrapped with CompressStream)
             buffer_size: Initial buffer size
-            debug: Enable debug logging
-            connection_id: Connection ID for debug output
         """
-        self.stream: Stream = stream
-        self.buffer: bytearray = bytearray(8192)
+        self.buffer: bytearray = bytearray(buffer_size)
         self.position: int = 0
         self.max_packet_size: int = 16777215  # 16MB - 1 (0xffffff)
-        self.debug: bool = debug
-        self.connection_id: int = connection_id
         
     def pos(self) -> int:
         """Get current buffer position"""
@@ -152,18 +142,20 @@ class PacketWriter:
             self.write_string(value, encoding)
         self.write_byte(0)
     
-    def start_payload(self, reset_sequence: bool = True) -> None:
+    def start_payload(self) -> None:
         """
-        Start payload mode - all subsequent writes go to payload buffer
-        
-        Args:
-            reset_sequence: If True, reset sequence to 0 for command packets.
-                           If False, continue with current sequence (for handshake, SSL request)
+        Start building a new payload
         """
-        self.buffer = bytearray()
         self.position = 0
-        if reset_sequence:
-            self.stream.reset()
+    
+    def get_payload(self) -> bytearray:
+        """
+        Get the current payload as bytearray
+        
+        Returns:
+            Payload bytes from position 0 to current position
+        """
+        return self.buffer[0:self.position]
     
     def write_byte(self, value: int) -> None:
         """Write single byte to buffer or payload"""
@@ -240,66 +232,6 @@ class PacketWriter:
             self.write_byte(0xFE)
             self.write_bytes(struct.pack('<Q', value))
     
-    def send_payload(self, packet_type: str) -> None:
-        """
-        Send payload with automatic packet chunking.
-        
-        Handles packets larger than 0xffffff by splitting into multiple packets.
-        If a packet is exactly 0xffffff bytes, sends an additional empty packet.
-        """
-        payload_length = self.position
-        offset = 0
-        
-        while offset < payload_length:
-            # Calculate chunk size (max 0xffffff bytes)
-            chunk_size = min(self.max_packet_size, payload_length - offset)
-            chunk_data = self.buffer[offset:offset + chunk_size]
-            
-            # Send packet with header
-            self._send_packet_chunk(chunk_data, packet_type)
-            
-            offset += chunk_size
-            
-            # If this chunk was exactly max size and there's no more data,
-            # send an empty packet to indicate end
-            if chunk_size == self.max_packet_size and offset == payload_length:
-                self._send_packet_chunk(b'', packet_type)
-        
-        # If payload was empty, still send one packet
-        if payload_length == 0:
-            self._send_packet_chunk(b'', packet_type)
-    
-    def _send_packet_chunk(self, chunk_data: bytes, packet_type: str) -> None:
-        """
-        Send a single packet chunk with header
-        
-        Args:
-            chunk_data: Data to send (max 0xffffff bytes)
-        """
-        chunk_length = len(chunk_data)
-        
-        # Prepare packet with header
-        packet = bytearray()
-        
-        # Write 3-byte length (little-endian)
-        packet.append(chunk_length & 0xFF)
-        packet.append((chunk_length >> 8) & 0xFF)
-        packet.append((chunk_length >> 16) & 0xFF)
-        
-        # Write sequence ID
-        packet.append(self.stream.sequence.get_and_increment() & 0xFF)
-        
-        # Write chunk data
-        packet.extend(chunk_data)
-        
-        # Log and send
-        if self.debug:
-            log_socket_data(packet, "SEND", packet_type, self.connection_id)
-        self.stream.sendall(packet)
-
-    def close(self) -> None:
-        """Close writer and stream"""
-        self.stream.close()
 
     def _ensure_capacity(self, additional_bytes: int) -> None:
         """
