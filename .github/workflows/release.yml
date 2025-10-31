@@ -498,6 +498,7 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
           verbose: true
+          skip-existing: true
 
   # Publish to PyPI (release only or manual trigger)
   publish-pypi:
