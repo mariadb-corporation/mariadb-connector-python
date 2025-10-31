@@ -47,11 +47,11 @@ dependencies = [
 [project.optional-dependencies]
 # C extension for better performance
 c = [
-    "mariadb-c @ file://./mariadb-c",
+    "mariadb-c>=2.0.0.dev0",
 ]
 # Connection pooling
 pool = [
-    "mariadb-pool @ file://./mariadb-pool",
+    "mariadb-pool>=2.0.0.dev0",
 ]
 
 # Development dependencies
