@@ -410,7 +410,7 @@ jobs:
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
-          CIBW_ENVIRONMENT_PASS_WINDOWS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
+          CIBW_ENVIRONMENT_PASS_WINDOWS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CC_INSTALL_DIR
           CIBW_ENVIRONMENT_WINDOWS: >-
             MARIADB_IMPL=binary
             LOCAL_DB=${{ steps.setup-mariadb-windows.outputs.database-type }}
