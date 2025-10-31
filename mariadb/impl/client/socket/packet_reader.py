@@ -214,7 +214,9 @@ class PacketReader:
         try:
             value = string_data.decode(encoding)
         except UnicodeDecodeError as e:
-            raise IOError(f"Failed to decode string: {e}")
+            # If decoding fails, use 'replace' error handling to avoid crashes
+            # This can happen with binary data or invalid UTF-8 sequences
+            value = string_data.decode(encoding, errors='replace')
         
         return value, new_pos + length
     

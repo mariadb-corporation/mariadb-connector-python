@@ -1419,7 +1419,7 @@ class TestCursor(unittest.TestCase):
         with create_connection() as conn:
             cursor = conn.cursor()
             x = os.urandom(32)
-            cursor.execute("SELECT cast(? as binary)", (x,))
+            cursor.execute("SELECT cast(? as binary) as a", (x,))
             row = cursor.fetchone()
             self.assertEqual(row[0], x)
             del cursor
