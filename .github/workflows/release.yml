@@ -279,6 +279,7 @@ jobs:
           user: ${{ env.MYSQL_TEST_USER }}
           password: ${{ env.MYSQL_TEST_PASSWD }}
           database: ${{ env.MYSQL_TEST_DB }}
+          local: '1'
 
       - name: Cache MariaDB Connector/C build
         uses: actions/cache@v4

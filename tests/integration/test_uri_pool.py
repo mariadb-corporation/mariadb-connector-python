@@ -6,7 +6,15 @@ import unittest
 import mariadb
 from tests.conftest import get_test_config
 
+# Check if mariadb_pool is available and functional
+try:
+    from mariadb_pool import ConnectionPoolWrapper
+    HAS_MARIADB_POOL = True
+except (ImportError, AttributeError):
+    HAS_MARIADB_POOL = False
 
+@unittest.skipIf(not HAS_MARIADB_POOL,
+                 "mariadb_pool package not installed")
 def build_uri(config, scheme='mariadb', database=None, query_params=None):
     """Helper function to build URI from config with optional password"""
     user = config.get('user', 'root')
