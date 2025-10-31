@@ -193,13 +193,11 @@ class Connection:
                 sql_state='08003'
             )
             
-    def ping(self) -> bool:
+    def ping(self) -> None:
         """Check if the connection to the server is alive"""
         self._check_closed()
         try:
-            ping_packet = PingPacket()
-            results = self._client.execute(ping_packet, self._configuration)
-            return True  # If no exception, ping succeeded
+            self._client.execute(PingPacket(), self._configuration)
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"Ping failed: {e}",

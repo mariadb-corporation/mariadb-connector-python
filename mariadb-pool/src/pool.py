@@ -126,7 +126,7 @@ class ConnectionPool:
         self.connection_params = {}
         self.config = config or PoolConfig()
         
-        self._pool: queue.Queue = queue.Queue(maxsize=self.config.max_size)
+        self._pool: queue.Queue[PooledConnection] = queue.Queue(maxsize=self.config.max_size)
         self._all_connections: list[PooledConnection] = []
         self._lock = threading.RLock()
         self._closed = False
@@ -229,12 +229,22 @@ class ConnectionPool:
             pooled_conn = self._pool.get(timeout=get_timeout)
             # Validate connection health
             if not pooled_conn.is_healthy():
-                # Connection is unhealthy, create a new one
+                # Connection is unhealthy, remove it and create a new one atomically
                 with self._lock:
                     pooled_conn.closeSilently()
                     if pooled_conn in self._all_connections:
                         self._all_connections.remove(pooled_conn)
-                pooled_conn = self._create_connection()
+                    # Create new connection while still holding the lock
+                    # to ensure atomic remove+create operation
+                    if len(self._all_connections) >= self.config.max_size:
+                        raise PoolError(f"Pool has reached maximum size of {self.config.max_size}")
+                    try:
+                        conn = self.connection_factory(**self.connection_params)
+                        pooled_conn = PooledConnection(conn, self)
+                        conn._set_pooled_connection(pooled_conn)
+                        self._all_connections.append(pooled_conn)
+                    except Exception as e:
+                        raise PoolError(f"Failed to create connection: {e}") from e
                 
         except queue.Empty:
             # No idle connections, try to create a new one
