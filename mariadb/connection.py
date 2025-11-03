@@ -761,10 +761,7 @@ class Connection:
             False if not using SSL connection
         """
         self._check_closed()
-        if (hasattr(self._client, 'ssl_wrapper') and 
-            self._client.ssl_wrapper):
-            return self._client.ssl_wrapper.get_tls_version() != None
-        return False
+        return self._client.get_tls_version() != None
 
     @property
     def _tls_version(self) -> Optional[str]:
@@ -776,11 +773,7 @@ class Connection:
             None if not using SSL connection
         """
         self._check_closed()
-        if (self._client and 
-            hasattr(self._client, 'ssl_wrapper') and 
-            self._client.ssl_wrapper):
-            return self._client.ssl_wrapper.get_tls_version()
-        return None
+        return self._client.get_tls_version()
 
     @property
     def tls_peer_cert_info(self) -> Optional[dict]:
@@ -792,9 +785,7 @@ class Connection:
             None if not using TLS connection
         """
         self._check_closed()
-        if getattr(self._client, 'ssl_wrapper', None) is not None:
-            return self._client.ssl_wrapper.get_peer_certificate()
-        return None
+        return self._client.get_peer_certificate()
 
     @property
     def _tls_verify_status(self) -> Optional[int]:
@@ -807,19 +798,9 @@ class Connection:
             0 if SSL is enabled but verification is disabled
         """
         self._check_closed()
-        if getattr(self._client, 'ssl_wrapper', None) is not None:
-            # SSL is enabled, check verification settings
-            ssl_wrapper = self._client.ssl_wrapper
-            if hasattr(ssl_wrapper, 'ssl_context'):
-                context = ssl_wrapper.ssl_context
-                # Check if both hostname verification and certificate verification are enabled
-                if (getattr(context, 'check_hostname', False) and 
-                    getattr(context, 'verify_mode', None) == ssl.CERT_REQUIRED):
-                    return 1
-                else:
-                    return 0
-            return 0
-        return None
+        if not self._tls:
+            return None
+        return 1 if self._configuration.ssl_verify_cert else 0
 
     def __del__(self) -> None:
         """Destructor - close connection if still open"""

@@ -26,13 +26,15 @@ Equivalent to the Java CompressInputStream/CompressOutputStream classes.
 """
 
 import socket
+import struct
 import zlib
 from typing import Optional
 from ..mutable_int import MutableInt
 from ....debug_utils import log_socket_data
+from .stream import Stream
 
 
-class CompressStream:
+class CompressStream(Stream):
     """
     Compression stream that wraps a socket for transparent compression/decompression.
     
@@ -277,10 +279,6 @@ class CompressStream:
         self._write_to_socket(packet)
 
     
-    def close(self) -> None:
-        """Close the underlying socket"""
-        self.socket.close()
-    
     def _read_exactly(self, length: int) -> bytes:
         """
         Read exactly the specified number of bytes from socket
@@ -328,4 +326,109 @@ class CompressStream:
                 total_sent += sent
             except socket.error as e:
                 raise IOError(f"Socket error while writing data: {e}")
+    
+    def send_payload(self, payload: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
+        """
+        Send a payload with packet framing and compression
+        
+        Args:
+            payload: Payload data to send
+            packet_type: Packet type for debugging (e.g., "COM_QUERY")
+            reset_sequence: Whether to reset sequence number before sending (default True)
+        """
+        if reset_sequence:
+            self.sequence.set(0)
+            self.sequence_comp.set(0)
+        
+        # Frame the payload into MySQL packets (with 4-byte headers)
+        offset = 0
+        payload_len = len(payload)
+        
+        while offset < payload_len:
+            # Determine chunk size (max 0xFFFFFF per packet)
+            chunk_size = min(payload_len - offset, self.MAX_PACKET_SIZE)
+            chunk = payload[offset:offset + chunk_size]
+            
+            # Build MySQL packet with 4-byte header
+            mysql_packet = bytearray()
+            mysql_packet.extend(struct.pack('<I', chunk_size)[:3])  # 3-byte length
+            mysql_packet.append(self.sequence.get() % 256)  # 1-byte sequence
+            mysql_packet.extend(chunk)  # Payload
+            
+            # Increment MySQL sequence for next packet
+            self.sequence.increment()
+            
+            # Compress and send the MySQL packet
+            self._send_compressed_mysql_packet(mysql_packet)
+            
+            offset += chunk_size
+            
+            # If this was exactly MAX_PACKET_SIZE, send empty packet
+            if chunk_size == self.MAX_PACKET_SIZE and offset >= payload_len:
+                empty_packet = bytearray()
+                empty_packet.extend(struct.pack('<I', 0)[:3])  # 0-byte length
+                empty_packet.append(self.sequence.get() % 256)
+                self.sequence.increment()
+                self._send_compressed_mysql_packet(empty_packet)
+    
+    def read_payload(self) -> bytearray:
+        """
+        Read a complete MySQL packet and return payload only
+        
+        Handles decompression of compressed packets and reassembly of multi-packet messages.
+        
+        Returns:
+            Packet payload as bytearray (without 4-byte header)
+        """
+        # Accumulator for multi-packet payloads
+        complete_payload = bytearray()
+        
+        # Keep reading MySQL packets until we get one with length < 0xFFFFFF
+        while True:
+            # Ensure we have data in the read buffer
+            if self.read_buffer is None or self.read_pos >= self.read_end:
+                self._read_compressed_packet()
+            
+            # Read 4-byte MySQL packet header from decompressed buffer
+            if self.read_end - self.read_pos < 4:
+                raise IOError("Incomplete MySQL packet header in decompressed data")
+            
+            packet_length = struct.unpack('<I', self.read_buffer[self.read_pos:self.read_pos+3] + b'\x00')[0]
+            packet_sequence = self.read_buffer[self.read_pos + 3]
+            self.read_pos += 4
+            
+            # Read MySQL packet payload from decompressed buffer
+            if self.read_end - self.read_pos < packet_length:
+                raise IOError("Incomplete MySQL packet payload in decompressed data")
+            
+            payload = self.read_buffer[self.read_pos:self.read_pos + packet_length]
+            self.read_pos += packet_length
+            
+            # Update MySQL sequence for next packet
+            self.sequence.set((packet_sequence + 1) % 256)
+            
+            # Add this payload to the complete payload
+            complete_payload.extend(payload)
+            
+            # If packet length < 0xFFFFFF, this is the last packet
+            if packet_length < self.MAX_PACKET_SIZE:
+                break
+        
+        return complete_payload
+    
+    def _send_compressed_mysql_packet(self, mysql_packet: bytearray) -> None:
+        """
+        Send a MySQL packet with compression
+        
+        Args:
+            mysql_packet: Complete MySQL packet (with 4-byte header + payload)
+        """
+        packet_len = len(mysql_packet)
+        
+        if packet_len < self.MIN_COMPRESSION_SIZE:
+            # Small packet - send uncompressed
+            self._write_uncompressed(mysql_packet)
+        else:
+            # Large packet - compress
+            self._write_compressed(mysql_packet)
     

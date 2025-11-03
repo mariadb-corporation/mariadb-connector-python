@@ -24,7 +24,10 @@ Equivalent to the Java AuthenticationPlugin interface.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Any
+from typing import Optional, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..impl.client.socket.stream import Stream
 
 
 class Credential:
@@ -60,13 +63,12 @@ class AuthenticationPlugin(ABC):
     """
     
     @abstractmethod
-    def process(self, writer: Any, reader: Any, context: Any) -> bytes:
+    def process(self, stream: 'Stream', context: Any) -> bytearray:
         """
         Process plugin authentication
         
         Args:
-            writer: Output stream writer
-            reader: Input stream reader
+            stream: Stream for sending/reading data
             context: Connection context
             
         Returns:

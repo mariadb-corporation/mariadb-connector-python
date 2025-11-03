@@ -26,7 +26,7 @@ Resets the connection state without re-authenticating.
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...client.socket.stream.stream import Stream
+    from ...client.socket.stream import Stream
     from ...client.context import Context
 
 from ..client_message import ClientMessage

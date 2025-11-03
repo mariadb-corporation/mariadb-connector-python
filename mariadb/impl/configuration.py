@@ -64,7 +64,7 @@ class Configuration:
     read_only: bool = False
     
     # Protocol parameters
-    use_compression: bool = False  # Also accessible as 'compress'
+    compress: bool = False
     
     # Timeouts
     query_timeout: int = 0  # No timeout
@@ -200,8 +200,8 @@ class Configuration:
             config.read_only = bool(params['read_only'])
         
         # Protocol parameters
-        if 'use_compression' in params or 'compress' in params:
-            config.use_compression = bool(params.get('use_compression', params.get('compress', False)))
+        if 'compress' in params:
+            config.compress = bool(params['compress'])
         
         # Timeouts
         if 'query_timeout' in params:
@@ -240,7 +240,7 @@ class Configuration:
             'ssl', 'use_ssl', 'ssl_key', 'ssl_ca', 'ssl_cert', 'ssl_crl',
             'ssl_cipher', 'ssl_capath', 'ssl_crlpath', 'ssl_verify_cert', 'tls_version',
             'autocommit', 'read_only',
-            'use_compression', 'compress',
+            'compress',
             'query_timeout', 'max_allowed_packet',
             'character_encoding', 'charset', 'debug', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object'
         }
@@ -279,7 +279,7 @@ class Configuration:
             'tls_version': self.tls_version,
             'autocommit': self.autocommit,
             'read_only': self.read_only,
-            'use_compression': self.use_compression,
+            'compress': self.compress,
             'query_timeout': self.query_timeout,
             'max_allowed_packet': self.max_allowed_packet,
             'character_encoding': self.character_encoding,

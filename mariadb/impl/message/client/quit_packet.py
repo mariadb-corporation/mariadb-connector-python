@@ -26,7 +26,7 @@ Sends COM_QUIT command to the server before closing the connection.
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...client.socket.stream.stream import Stream
+    from ...client.socket.stream import Stream
     from ...client.context import Context
 
 from ..client_message import ClientMessage

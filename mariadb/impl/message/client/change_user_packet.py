@@ -26,13 +26,12 @@ Changes the user and optionally the database for the current connection.
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from ...client.socket.stream.stream import Stream
+    from ...client.socket.stream import Stream
     from ...client.context import Context
 
 from ..client_message import ClientMessage
 from ...client.socket.payload_writer import PayloadWriter
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
-from ....plugin.authentication.native_password_plugin import NativePasswordPlugin
 from mariadb_shared.constants import CAPABILITY
 
 
@@ -102,6 +101,7 @@ class ChangeUserPacket(ClientMessage):
         writer.write_null_terminated_string(self.username)
         
         # Authentication response
+        from ....plugin.authentication.native_password_plugin import NativePasswordPlugin
         auth_response = NativePasswordPlugin.encrypt_password(self.password, context.auth_data)        
         if auth_response:
             if context.client_capabilities & CAPABILITY.SECURE_CONNECTION:

@@ -27,7 +27,7 @@ See https://mariadb.com/kb/en/com_init_db/ protocol
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...client.socket.stream.stream import Stream
+    from ...client.socket.stream import Stream
     from ...client.context import Context
 
 from ..client_message import ClientMessage
@@ -67,8 +67,8 @@ class ChangeDbPacket(ClientMessage):
         # Write database name as string (null-terminated)
         writer.write_string(self.database)
         
-        # Send packet with automatic header and chunking
-        writer.send_payload("COM_INIT_DB")
+        # Send payload through stream (reset sequence for new command)
+        stream.send_payload(writer.get_payload(), "COM_INIT_DB", reset_sequence=True)
     
     def is_binary(self) -> bool:
         return False

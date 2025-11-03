@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from mariadb_shared.constants import STATUS
 
 if TYPE_CHECKING:
-    from .client.socket.stream.stream import Stream
+    from .client.socket.stream.socket_stream import SocketStream
     from .client.context import Context
     from .configuration import Configuration
 
@@ -236,7 +236,7 @@ class StreamingResult(Result):
     
     def __init__(
         self,
-        stream: 'Stream',
+        stream: 'SocketStream',
         context: 'Context',
         columns: List[dict],
         column_count: int,

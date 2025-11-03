@@ -6,7 +6,7 @@ Does NOT perform any I/O - only parses bytes.
 """
 
 import struct
-from typing import Tuple
+from typing import Optional
 
 
 class PayloadParser:
@@ -17,15 +17,16 @@ class PayloadParser:
     to parse various data types from it. It does NOT perform any I/O.
     """
     
-    def __init__(self, packet: bytearray):
+    def __init__(self, packet: bytearray, pos: int = 0):
         """
         Initialize parser with a packet payload
         
         Args:
             packet: Packet payload as bytearray (without 4-byte header)
+            pos: Starting position (default: 0)
         """
         self.packet: bytearray = packet
-        self.pos: int = 0  # Current read position
+        self.pos: int = pos  # Current read position
     
     def read_byte(self) -> int:
         """
@@ -112,7 +113,7 @@ class PayloadParser:
         self.pos += 8
         return value
     
-    def read_length_encoded_int(self) -> int:
+    def read_length_encoded_int(self) -> Optional[int]:
         """
         Read length-encoded integer
         
@@ -136,6 +137,8 @@ class PayloadParser:
         
         if first_byte < 251:
             return first_byte
+        elif first_byte == 251:    
+            return None
         elif first_byte == 252:
             return self.read_int16()
         elif first_byte == 253:
@@ -145,7 +148,7 @@ class PayloadParser:
         else:
             raise IOError(f"Invalid length-encoded int first byte: {first_byte}")
     
-    def read_length_encoded_string(self, encoding: str = 'utf-8') -> str:
+    def read_length_encoded_string(self, encoding: str = 'utf-8') -> Optional[str]:
         """
         Read length-encoded string
         
@@ -162,7 +165,11 @@ class PayloadParser:
         Raises:
             IOError: If not enough data or decoding fails
         """
+        
         length = self.read_length_encoded_int()
+        
+        if length is None:
+            return None
         
         if self.pos + length > len(self.packet):
             raise IOError(f"Not enough data in packet to read string of length {length}")
@@ -178,7 +185,7 @@ class PayloadParser:
         
         return value
     
-    def read_length_encoded_bytes(self) -> bytes:
+    def read_length_encoded_bytes(self) -> Optional[bytes]:
         """
         Read length-encoded bytes
         
@@ -194,6 +201,9 @@ class PayloadParser:
         """
         length = self.read_length_encoded_int()
         
+        if length is None:
+            return None
+
         if self.pos + length > len(self.packet):
             raise IOError(f"Not enough data in packet to read {length} bytes")
         
@@ -284,7 +294,7 @@ class PayloadParser:
         Returns:
             Remaining bytes
         """
-        data = self.packet[self.pos:]
+        data = bytes(self.packet[self.pos:])
         self.pos = len(self.packet)
         return data
     
@@ -339,3 +349,36 @@ class PayloadParser:
             raise IOError(f"Invalid position: {position}")
         
         self.pos = position
+    
+    @staticmethod
+    def read_length_encoded_string_at(packet: bytearray, pos: int, encoding: str = 'utf-8') -> tuple:
+        """
+        Read length-encoded string starting at position
+        
+        Args:
+            packet: Packet data
+            pos: Starting position
+            encoding: Character encoding (default: utf-8)
+            
+        Returns:
+            Tuple of (value, new_position)
+        """
+        parser = PayloadParser(packet, pos)
+        value = parser.read_length_encoded_string(encoding)
+        return value, parser.pos
+    
+    @staticmethod
+    def read_length_encoded_bytes_at(packet: bytearray, pos: int) -> tuple:
+        """
+        Read length-encoded bytes starting at position
+        
+        Args:
+            packet: Packet data
+            pos: Starting position
+            
+        Returns:
+            Tuple of (value, new_position)
+        """
+        parser = PayloadParser(packet, pos)
+        value = parser.read_length_encoded_bytes()
+        return value, parser.pos

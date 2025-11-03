@@ -27,13 +27,13 @@ Equivalent to the Java NativePasswordPlugin class.
 from __future__ import annotations
 
 import hashlib
-from typing import Optional, Any, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...impl.client.context import Context
-    from ...impl.client.socket.payload_writer import PayloadWriter
-    from ...impl.client.socket.stream.stream import Stream
+    from ...impl.client.socket.stream import Stream
 
+from ...impl.client.socket.payload_writer import PayloadWriter
 from ..authentication_plugin import AuthenticationPlugin, Credential
 
 
@@ -99,13 +99,12 @@ class NativePasswordPlugin(AuthenticationPlugin):
         result = bytes(a ^ b for a, b in zip(stage1, stage3))
         return result
     
-    def process(self, writer: PayloadWriter, stream: Stream, context: Context) -> bytes:
+    def process(self, stream: Stream, context: Context) -> bytearray:
         """
         Process native password plugin authentication
         
         Args:
-            writer: Output stream writer
-            reader: Input stream reader
+            stream: Stream for sending data
             context: Connection context
             
         Returns:
@@ -114,22 +113,25 @@ class NativePasswordPlugin(AuthenticationPlugin):
         Raises:
             IOError: If socket error occurs
         """
+        # Build payload
+        writer = PayloadWriter()
+        
         if self.authentication_data is None:
-            # Send empty packet for no password
-            writer.start_payload(reset_sequence=False)
-            writer.send_payload("NATIVE EMPTY PWD")
+            # Empty payload for no password
+            pass
         else:
             # Truncate seed to 20 bytes (remove null terminator if present)
             truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
             
-            # Encrypt password and send
+            # Encrypt password and write to payload
             encrypted = self.encrypt_password(self.authentication_data, truncated_seed)
-            writer.start_payload(reset_sequence=False)
             writer.write_bytes(encrypted)
-            writer.send_payload("NATIVE SEND PWD")            
+        
+        # Send payload through stream (don't reset sequence - continue from handshake)
+        stream.send_payload(writer.get_payload(), "NATIVE_PASSWORD", reset_sequence=False)
         
         # Read response packet
-        return reader.read_packet()
+        return stream.read_payload()
     
     def is_mitm_proof(self) -> bool:
         """

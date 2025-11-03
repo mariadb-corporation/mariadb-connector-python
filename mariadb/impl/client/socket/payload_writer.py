@@ -26,9 +26,6 @@ Equivalent to the Java StandardPacketWriter.
 import struct
 from typing import Optional, Union
 
-from mariadb_shared.constants import CAPABILITY
-
-
 class PayloadWriter:
     
     SLASH_BYTE: int = b"\\"[0]

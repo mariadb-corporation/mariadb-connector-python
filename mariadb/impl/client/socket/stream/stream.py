@@ -1,80 +1,46 @@
 """
-Stream Interface
+Stream Interface for MariaDB Protocol
 
-Defines the common interface for different stream implementations
-(socket streams, compressed streams, etc.) used in MariaDB protocol communication.
+Defines the interface for sending and receiving MySQL/MariaDB packets.
 """
 
-from typing import Protocol, runtime_checkable
-
-from ..mutable_int import MutableInt
+from abc import ABC, abstractmethod
 
 
-class Stream(Protocol):
+class Stream(ABC):
     """
-    Protocol defining the interface for stream implementations
+    Abstract interface for MariaDB protocol streams
     
-    This protocol defines the common methods that all stream implementations
-    must provide for MariaDB protocol communication.
+    This interface defines the contract for sending and receiving
+    MySQL/MariaDB packets with proper framing and sequence management.
     """
     
-    def close(self) -> None:
-        """
-        Close the stream connection
-        
-        Closes the underlying connection and cleans up resources.
-        """
-        ...
-    
-    def sendall(self, data: bytes) -> None:
-        """
-        Send all data through the stream
-        
-        Args:
-            data: Bytes to send
-            
-        Raises:
-            OSError: If stream error occurs during send
-        """
-        ...
-    
-    def reset(self) -> None:
-        """
-        Reset the packet sequence counter
-        
-        This should be called at the start of a new command or
-        when the protocol requires sequence reset.
-        """
-        ...
-    
-    def sequence(self) -> MutableInt:
-        ...
-
+    @abstractmethod
     def read_payload(self) -> bytearray:
         """
         Read a complete MySQL packet and return payload only
         
-        This method reads from the socket, buffers incomplete data,
-        parses the 4-byte header, and returns only the payload.
+        This method reads from the underlying transport, handles packet framing,
+        and returns only the payload (without the 4-byte header).
+        
+        For multi-packet messages (packets with length 0xFFFFFF), it continues
+        reading subsequent packets until a packet with length < 0xFFFFFF.
         
         Returns:
             Packet payload as bytearray (without 4-byte header)
             
         Raises:
-            OSError: If stream error occurs or connection closed
+            OSError: If transport error occurs or connection closed
         """
-        ...
+        pass
     
+    @abstractmethod
     def send_payload(self, payload: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
         Send payload with automatic packet framing and chunking
         
-        This method:
-        1. Optionally resets sequence number to 0
-        2. Splits payload into chunks if larger than 0xFFFFFF bytes
-        3. Adds 4-byte header (3-byte length + 1-byte sequence) to each chunk
-        4. Sends all chunks through the stream
-        5. Handles sequence number incrementing
+        Handles packets larger than 0xFFFFFF by splitting into multiple packets.
+        If a packet is exactly 0xFFFFFF bytes, sends an additional empty packet.
         
         Args:
             payload: Payload bytes to send
@@ -82,6 +48,6 @@ class Stream(Protocol):
             reset_sequence: Whether to reset sequence number before sending (default True)
             
         Raises:
-            OSError: If stream error occurs during send
+            OSError: If transport error occurs during send
         """
-        ...
+        pass

@@ -28,7 +28,7 @@ See https://mariadb.com/kb/en/connection/#sslrequest-packet
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...client.socket.stream.stream import Stream
+    from ...client.socket.stream import Stream
     from mariadb.impl.client.context import Context
 
 from ...client.socket.payload_writer import PayloadWriter

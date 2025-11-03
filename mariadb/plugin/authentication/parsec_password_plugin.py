@@ -33,9 +33,10 @@ from typing import Optional, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...impl.client.context import Context
-    from ...impl.client.socket.payload_writer import PayloadWriter
-    from ...impl.client.socket.stream.stream import Stream
+    from ...impl.client.socket.stream import Stream
 
+from ...impl.client.socket.payload_writer import PayloadWriter
+from ...impl.client.socket.payload_parser import PayloadParser
 from ..authentication_plugin import AuthenticationPlugin, Credential
 from ...exceptions import OperationalError
 
@@ -73,13 +74,12 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         self.seed = seed
         self._hash = None
     
-    def process(self, writer: PayloadWriter, stream: Stream, context: Context) -> bytes:
+    def process(self, stream: Stream, context: Context) -> bytearray:
         """
         Process Parsec password plugin authentication
         
         Args:
-            writer: Output stream writer
-            reader: Input stream reader
+            stream: Stream for sending/reading data
             context: Connection context
             
         Returns:
@@ -95,19 +95,21 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         try:
-            # Step 1: Request extended salt from server
-            writer.start_payload(reset_sequence=False)
-            writer.send_payload("PARSEC REQUEST EXT-ALT")                
+            # Step 1: Request extended salt from server (empty payload)
+            writer = PayloadWriter()
+            stream.send_payload(writer.get_payload(), "PARSEC_REQUEST_SALT", reset_sequence=False)
+            
             # Step 2: Read server response with salt and parameters
-            response = reader.read_packet()
+            response = stream.read_payload()
             
             if len(response) < 3:
                 raise OperationalError("Invalid parsec authentication response")
             
             # Parse response
-            first_byte = response[0]
-            iterations_exp = response[1]
-            salt = response[2:]
+            parser = PayloadParser(response)
+            first_byte = parser.read_byte()
+            iterations_exp = parser.read_byte()
+            salt = parser.read_remaining()
             
             # Validate format
             if first_byte != 0x50:  # 'P' for PBKDF2
@@ -155,13 +157,13 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             signature = private_key.sign(message_to_sign)
             
             # Step 8: Send client scramble + signature to server
-            writer.start_payload(reset_sequence=False)
+            writer = PayloadWriter()
             writer.write_bytes(client_scramble)
             writer.write_bytes(signature)
-            writer.send_payload("PARSEC REQUEST")                
+            stream.send_payload(writer.get_payload(), "PARSEC_AUTH", reset_sequence=False)
             
             # Step 9: Read final response
-            return reader.read_packet()
+            return stream.read_payload()
             
         except Exception as e:
             if isinstance(e, OperationalError):

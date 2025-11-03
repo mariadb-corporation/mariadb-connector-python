@@ -9,9 +9,10 @@ import socket
 import struct
 from typing import Optional
 from ..mutable_int import MutableInt
+from .stream import Stream
+from ....debug_utils import log_socket_data
 
-
-class SocketStream:
+class SocketStream(Stream):
     """
     Socket stream wrapper with sequence tracking for MariaDB protocol
     
@@ -19,51 +20,21 @@ class SocketStream:
     while maintaining packet sequence numbers as required by the MariaDB protocol.
     """
     
-    def __init__(self, socket: socket.socket):
+    def __init__(self, socket: socket.socket, debug: bool = False, connection_id: int = -1):
         """
         Initialize socket stream
         
         Args:
             sock: Socket instance to wrap
+            debug: Enable debug output
+            connection_id: Connection ID for debug output
         """
         self.socket: socket.socket = socket
         self.sequence: MutableInt = MutableInt(1)
         self._buffer: bytearray = bytearray()
-    
-    def close(self) -> None:
-        """
-        Close the socket connection
-        
-        Closes the underlying socket and cleans up resources.
-        """
-        self.socket = None
-    
-    def sendall(self, data: bytes) -> None:
-        """
-        Send all data through the socket
-        
-        Args:
-            data: Bytes to send
-            
-        Raises:
-            OSError: If socket error occurs during send
-        """
-        if not self.socket:
-            raise OSError("Socket is closed")
-        
-        try:
-            self.socket.sendall(data)
-        except socket.error as e:
-            raise OSError(f"Failed to send data: {e}")
-    
-    def reset(self) -> None:
-        """
-        Reset the packet sequence counter
-        
-        This should be called at the start of a new command or
-        when the protocol requires sequence reset.
-        """
-        self.sequence.set(0)
+        self.debug: bool = debug
+        self.connection_id: int = connection_id
+
     
     def read_payload(self) -> bytearray:
         """
@@ -102,6 +73,11 @@ class SocketStream:
                     
                     # Check if we have the complete packet
                     if len(self._buffer) >= total_packet_size:
+                        # Log before extracting (if debug enabled)
+                        if self.debug:
+                            full_packet = self._buffer[0:total_packet_size]
+                            log_socket_data(full_packet, "READ", connection_id=self.connection_id)
+                        
                         # Extract payload only (skip 4-byte header)
                         payload = self._buffer[4:total_packet_size]
                         
@@ -151,7 +127,7 @@ class SocketStream:
         """
         # Reset sequence if requested
         if reset_sequence:
-            self.reset()
+            self.sequence.set(0)
         
         max_packet_size = 0xFFFFFF  # 16MB - 1
         payload_length = len(payload)
@@ -202,6 +178,12 @@ class SocketStream:
         # Write chunk data
         packet.extend(chunk_data)
         
-        # Send through socket
-        self.sendall(packet)
-    
+        # Log if debug enabled
+        if self.debug:
+            log_socket_data(packet, "SEND", connection_id=self.connection_id)
+        
+        # Send to socket
+        try:
+            self.socket.sendall(bytes(packet))
+        except socket.error as e:
+            raise OSError(f"Failed to send data: {e}")

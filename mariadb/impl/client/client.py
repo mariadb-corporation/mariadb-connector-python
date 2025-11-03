@@ -26,19 +26,18 @@ Equivalent to the Java StandardClient class.
 import decimal
 import datetime
 import socket
-import ssl
-import sys
 import threading
-import time
 import struct
 import ipaddress
 import uuid
-from typing import List, Optional, Any, Dict, Union, Tuple
+import ssl
+from typing import List, Optional, Any, Dict
 
 from .context import Context
 from .socket.payload_parser import PayloadParser
 from .socket.payload_writer import PayloadWriter
 from .socket.mutable_int import MutableInt
+from .socket.stream import Stream
 from ..configuration import Configuration
 from ..host_address import HostAddress
 from ..message.client_message import ClientMessage
@@ -50,11 +49,9 @@ from ..message.client.prepare_packet import PreparePacket
 from ..message.client.execute_packet import ExecutePacket
 from ..message.client.change_user_packet import ChangeUserPacket
 from ...plugin.authentication_plugin_loader import AuthenticationPluginLoader
-from ...plugin.authentication.plugin_registry import register_builtin_plugins
 from ..prepared_statement import PreparedStatement
 from ..completion import Completion
 from .exception_factory import ExceptionFactory
-from ..string_utils import StringEscaper
 from ...exceptions import OperationalError, DatabaseError, NotSupportedError
 from mariadb_shared.constants import STATUS, FIELD_TYPE, FIELD_FLAG
 from mariadb_shared import constants
@@ -91,8 +88,7 @@ class Client:
         
         
         self.socket: Optional[socket.socket] = None
-        self.stream = None  # Stream for reading/writing packets
-        self.writer: Optional[PayloadWriter] = None
+        self.stream: Optional[Stream] = None  # Stream for reading/writing packets
         self.sequence = MutableInt(0)  # Shared sequence number
         self.context: Optional[Context] = None
         self.exception_factory = ExceptionFactory()
@@ -173,10 +169,8 @@ class Client:
             
             # Wrap socket with SocketStream for protocol handling
             from .socket.stream.socket_stream import SocketStream
-            self.stream = SocketStream(self.socket)
-            
-            # Create writer with stream
-            self.writer = PayloadWriter(stream=self.stream, debug=self.configuration.debug)
+            connection_id = self.context.connection_id if self.context else -1
+            self.stream = SocketStream(self.socket, self.configuration.debug, connection_id)
             
         except Exception as e:
             try:
@@ -204,10 +198,6 @@ class Client:
             
             # Parse handshake packet and create context
             self.context = self._parse_handshake(handshake_packet)
-            
-            # Update connection_id in writer for debug output
-            if self.writer:
-                self.writer.connection_id = self.context.connection_id
             
             client_capabilities = self._calculate_client_capabilities()
 
@@ -475,7 +465,7 @@ class Client:
             capabilities |= constants.CAPABILITY.SSL
         
         # Add compression capability if enabled and server supports it
-        if self.configuration.use_compression:
+        if self.configuration.compress:
             capabilities |= constants.CAPABILITY.COMPRESS
         
         # Only use capabilities that the server supports
@@ -525,10 +515,9 @@ class Client:
                 server_hostname=self.configuration.host
             )
             
-            # Replace the socket in stream and writer
+            # Replace the socket in stream
             self.socket = ssl_socket
             self.stream.socket = ssl_socket
-            self.writer.stream.socket = ssl_socket
             
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
@@ -601,6 +590,7 @@ class Client:
             OperationalError: If authentication fails
         """
         # Import plugin system
+        from ...plugin.authentication.plugin_registry import register_builtin_plugins
         
         # Ensure plugins are registered
         register_builtin_plugins()
@@ -631,7 +621,7 @@ class Client:
         
         raise OperationalError("Empty authentication result packet")
     
-    def _handle_auth_switch(self, packet: bytes) -> None:
+    def _handle_auth_switch(self, packet: bytearray) -> None:
         """
         Handle authentication switch request
         
@@ -661,7 +651,7 @@ class Client:
             plugin = plugin_factory.initialize(self.configuration.password, plugin_data, self.configuration, self.host_address)
             
             # Process authentication - plugin will send response and read server's reply
-            response = plugin.process(self.writer, self.reader, self.context)
+            response = plugin.process(self.stream, self.context)
             
             # Handle final response
             self._handle_auth_final_response(response)
@@ -736,7 +726,7 @@ class Client:
         """
         Enable compression if it was negotiated during handshake
         """
-        if (self.configuration.use_compression and 
+        if (self.configuration.compress and 
             self.context and 
             self.context.has_capability(constants.CAPABILITY.COMPRESS)):
             
@@ -748,7 +738,6 @@ class Client:
             
             # Replace stream with compression stream
             self.stream = compress_stream
-            self.writer.stream = compress_stream
     
     def _send_message(self, message: ClientMessage) -> None:
         """
@@ -826,7 +815,7 @@ class Client:
                 return
             
             # Send COM_QUIT packet to gracefully close the connection
-            if self.connected and self.writer and self.socket:
+            if self.connected and self.stream and self.socket:
                 try:
                     quit_packet = QuitPacket()
                     quit_packet.encode(self.stream, self.context)
@@ -1221,7 +1210,7 @@ class Client:
         except Exception as e:
             raise OperationalError(f"Failed to parse result set: {e}")
     
-    def _parse_column_definition(self, packet: bytes) -> dict:
+    def _parse_column_definition(self, packet: bytearray) -> dict:
         """
         Parse column definition packet according to MySQL/MariaDB protocol
         
@@ -1300,6 +1289,34 @@ class Client:
         
         return column_info
     
+    def _apply_converters(self, row_values: list, columns: List[Dict[str, Any]], config: 'Configuration') -> tuple:
+        """
+        Apply converters to row values
+        
+        Args:
+            row_values: List of parsed row values
+            columns: Column definitions
+            config: Configuration with converter settings
+            
+        Returns:
+            Tuple of converted values
+        """
+        if not config.converter:
+            return tuple(row_values)
+        
+        converted_values = []
+        for i, value in enumerate(row_values):
+            column_type = columns[i]['column_type']
+            if column_type in config.converter:
+                converter_func = config.converter[column_type]
+                try:
+                    value = converter_func(value)
+                except Exception:
+                    # If conversion fails, keep original value
+                    pass
+            converted_values.append(value)
+        return tuple(converted_values)
+    
     def _parse_row_data(self, packet: bytes, columns: List[Dict[str, Any]], config: 'Configuration', is_binary: bool = False) -> tuple:
         """
         Parse row data packet
@@ -1323,18 +1340,18 @@ class Client:
                     case (FIELD_TYPE.TINY | FIELD_TYPE.SHORT | FIELD_TYPE.LONG | 
                           FIELD_TYPE.LONGLONG | FIELD_TYPE.INT24 | FIELD_TYPE.YEAR):
                         # Read as string and convert to integer (simpler and more reliable)
-                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                         try:
                             value = int(val) if val is not None else None
                         except (ValueError, TypeError):
                             value = None
                     case FIELD_TYPE.FLOAT | FIELD_TYPE.DOUBLE:
                         # Read as string and convert to float
-                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                         value = float(val) if val is not None else None
                     case FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE:
                         # Parse DATE as datetime.date
-                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                         if val is not None:
                             try:
                                 year, month, day = map(int, val.split('-'))
@@ -1345,7 +1362,7 @@ class Client:
                             value = None
                     case FIELD_TYPE.TIME:
                         # Parse TIME as datetime.time
-                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                         if val is not None:
                             try:
                                 # Handle TIME format: HH:MM:SS or HHH:MM:SS (can be > 24 hours)
@@ -1365,7 +1382,7 @@ class Client:
                             value = None
                     case (FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP):
                         # Parse DATETIME as datetime.datetime
-                        val, pos = self.reader.read_length_encoded_string(packet, pos)
+                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                         if val is not None:
                             try:
                                 # Handle DATETIME format: YYYY-MM-DD HH:MM:SS[.ffffff]
@@ -1391,21 +1408,24 @@ class Client:
                             value = None
                     case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
                         # DECIMAL types must return decimal.Decimal
-                        val, pos = self.reader.read_length_encoded_string(packet, pos, encoding='ascii')
+                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos, encoding='ascii')
                         value = decimal.Decimal(val) if val is not None else None
                     case FIELD_TYPE.JSON:
-                        value, pos = self.reader.read_length_encoded_string(packet, pos)
+                        value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                    case FIELD_TYPE.NULL:
+                        # NULL type - read length-encoded value (will be None)
+                        value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                     case _:
                         if (column['ext_type_format'] == 'json'):
-                            value, pos = self.reader.read_length_encoded_string(packet, pos)
+                            value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                         else:
                             match column['ext_type_name']:
                                 case ('inet6' | 'inet4'):
-                                    value, pos = self.reader.read_length_encoded_string(packet, pos)
+                                    value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                                     if config.native_object:
                                         value = ipaddress.ip_address(value)
                                 case 'uuid':
-                                    value, pos = self.reader.read_length_encoded_string(packet, pos)
+                                    value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                                     if config.native_object:
                                         value = uuid.UUID(value)
                                 case _:
@@ -1413,30 +1433,16 @@ class Client:
                                     # Check if BINARY flag is set to determine if we should read as bytes or string
                                     if ((column['flags'] & FIELD_FLAG.BINARY) > 0) or (column['character_set'] == 63):
                                         # Binary data - read as bytes
-                                        value, pos = self.reader.read_length_encoded_bytes(packet, pos)
+                                        value, pos = PayloadParser.read_length_encoded_bytes_at(packet, pos)
                                     else:
                                         # Text data - read as string
-                                        value, pos = self.reader.read_length_encoded_string(packet, pos)
+                                        value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
 
 
                 row_values.append(value)
             
             # Apply converters if configured (after parsing all values)
-            if self.configuration.converter:
-                converted_values = []
-                for i, value in enumerate(row_values):
-                    column_type = columns[i]['column_type']
-                    if column_type in self.configuration.converter:
-                        converter_func = self.configuration.converter[column_type]
-                        try:
-                            value = converter_func(value)
-                        except Exception:
-                            # If conversion fails, keep original value
-                            pass
-                    converted_values.append(value)
-                return tuple(converted_values)
-            
-            return tuple(row_values)
+            return self._apply_converters(row_values, columns, config)
             
         except Exception as e:
             # Return tuple with None values if parsing fails
@@ -1485,21 +1491,7 @@ class Client:
             row_values.append(value)
         
         # Apply converters if configured (after parsing all values)
-        if self.configuration.converter:
-            converted_values = []
-            for i, value in enumerate(row_values):
-                column_type = columns[i]['column_type']
-                if column_type in self.configuration.converter:
-                    converter_func = self.configuration.converter[column_type]
-                    try:
-                        value = converter_func(value)
-                    except Exception:
-                        # If conversion fails, keep original value
-                        pass
-                converted_values.append(value)
-            return tuple(converted_values)
-        
-        return tuple(row_values)
+        return self._apply_converters(row_values, columns, config)
     
     def _is_null_bitmap(self, index: int, null_bitmap: bytes) -> bool:
         """
@@ -1676,26 +1668,26 @@ class Client:
                 
             case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
                 # DECIMAL types must return decimal.Decimal
-                val, pos = self.reader.read_length_encoded_string(packet, pos)
+                val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                 value = decimal.Decimal(val) if val is not None else None
                 return value, pos
             case FIELD_TYPE.JSON:
-                return self.reader.read_length_encoded_string(packet, pos)
+                return PayloadParser.read_length_encoded_string_at(packet, pos)
             case (FIELD_TYPE.BLOB | FIELD_TYPE.TINY_BLOB | FIELD_TYPE.MEDIUM_BLOB | FIELD_TYPE.LONG_BLOB):
                 if (column['ext_type_format'] == 'json'):
-                    return self.reader.read_length_encoded_string(packet, pos)
+                    return PayloadParser.read_length_encoded_string_at(packet, pos)
                 # BLOB types must return bytes
-                return self.reader.read_length_encoded_bytes(packet, pos)
+                return PayloadParser.read_length_encoded_bytes_at(packet, pos)
                 
             case (FIELD_TYPE.VAR_STRING | FIELD_TYPE.STRING | FIELD_TYPE.VARCHAR):
                 match (column['ext_type_name']):
                     case ("inet6" | "inet4"):
-                        value, pos = self.reader.read_length_encoded_bytes(packet, pos)
+                        value, pos = PayloadParser.read_length_encoded_bytes_at(packet, pos)
                         if config.native_object:
                             value = ipaddress.ip_address(value)
                         return value, pos
                     case "uuid":
-                        value, pos = self.reader.read_length_encoded_bytes(packet, pos)
+                        value, pos = PayloadParser.read_length_encoded_bytes_at(packet, pos)
                         if config.native_object:
                             value = uuid.UUID(value)
                         return value, pos
@@ -1704,14 +1696,14 @@ class Client:
                         # MySQL uses charset 63 for OUT parameters instead of BINARY flag
                         if (column['flags'] & FIELD_FLAG.BINARY) or (column['character_set'] == 63):
                             # Binary string - return bytes
-                            return self.reader.read_length_encoded_bytes(packet, pos)
+                            return PayloadParser.read_length_encoded_bytes_at(packet, pos)
                         else:
                             # Text string - return string
-                            return self.reader.read_length_encoded_string(packet, pos)
+                            return PayloadParser.read_length_encoded_string_at(packet, pos)
                 
             case _:
                 # Default to length-encoded string
-                return self.reader.read_length_encoded_string(packet, pos)
+                return PayloadParser.read_length_encoded_string_at(packet, pos)
 
 
     def _parse_error_packet(self, packet: bytes, sql: Optional[str] = None) -> None:
@@ -1734,29 +1726,7 @@ class Client:
         
     
     def _cleanup_connection(self) -> None:
-        """Clean up connection resources"""
-        if self.writer:
-            try:
-                self.writer.close()
-            except:
-                pass
-            self.writer = None
-        
-        if self.reader:
-            try:
-                self.reader.close()
-            except:
-                pass
-            self.reader = None
-        
-        # Close SSL wrapper if present
-        if self.ssl_wrapper:
-            try:
-                self.ssl_wrapper.close()
-            except:
-                pass
-            self.ssl_wrapper = None
-        
+        """Clean up connection resources"""       
         if self.socket:
             try:
                 self.socket.close()
@@ -1787,15 +1757,14 @@ class Client:
                 self._send_message(prepare_packet)
                 
                 # Read prepare response - this has special handling
-                response_packet = self.reader.read_packet()
-                return self._parse_prepare_response(response_packet, sql)
+                return self._parse_prepare_response(self.stream.read_payload(), sql)
                 
             except DatabaseError as e:
                 raise e
             except Exception as e:
                 raise OperationalError(f"Statement preparation failed: {e}")
     
-    def _parse_prepare_response(self, packet: bytes, sql: str) -> PreparedStatement:
+    def _parse_prepare_response(self, packet: bytearray, sql: str) -> PreparedStatement:
         """
         Parse prepare response packet
         
@@ -1848,24 +1817,22 @@ class Client:
             # Read parameter metadata if present
             if parameter_count > 0:
                 for _ in range(parameter_count):
-                    param_packet = self.reader.read_packet()
-                    param_metadata = self._parse_column_definition(param_packet)
+                    param_metadata = self._parse_column_definition(self.stream.read_payload())
                     stmt.add_parameter_metadata(param_metadata)
                 
                 # Read EOF packet after parameters (if not deprecated)
                 if not self.context.isEofDeprecated():
-                    self.reader.read_packet()
+                    self.stream.read_payload()
             
             # Read column metadata if present
             if column_count > 0:
                 for _ in range(column_count):
-                    col_packet = self.reader.read_packet()
-                    col_metadata = self._parse_column_definition(col_packet)
+                    col_metadata = self._parse_column_definition(self.stream.read_payload())
                     stmt.add_column_metadata(col_metadata)
                 
                 # Read EOF packet after columns (if not deprecated)
                 if not self.context.isEofDeprecated():
-                    self.reader.read_packet()
+                    self.stream.read_payload()
             
             return stmt
         else:
@@ -1895,4 +1862,57 @@ class Client:
             pass
         finally:
             stmt.close()
+
+    def get_ssl_socket(self) -> Optional[ssl.SSLSocket]:
+        """
+        Get the SSL socket if available
+        
+        Returns:
+            SSL socket or None if not wrapped
+        """
+        if (self.context.client_capabilities & constants.CAPABILITY.SSL) == 0:
+            return None
+        return self.socket
+    
+    def get_peer_certificate(self) -> Optional[dict]:
+        """
+        Get peer certificate information
+        
+        Returns:
+            Certificate information or None
+        """
+        if (self.context.client_capabilities & constants.CAPABILITY.SSL) == 0:
+            return None
+        try:
+            return self.socket.getpeercert()
+        except:
+            return None
+    
+    def get_cipher(self) -> Optional[tuple]:
+        """
+        Get current cipher information
+        
+        Returns:
+            Cipher information or None
+        """
+        if (self.context.client_capabilities & constants.CAPABILITY.SSL) == 0:
+            return None
+        try:
+            return self.socket.cipher()
+        except:
+            return None
+    
+    def get_tls_version(self) -> Optional[str]:
+        """
+        Get current TLS version
+        
+        Returns:
+            TLS version string or None if not available
+        """
+        if (self.context.client_capabilities & constants.CAPABILITY.SSL) == 0:
+            return None
+        try:
+            return self.socket.version()
+        except:
+            return None
     

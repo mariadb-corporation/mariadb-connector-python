@@ -27,7 +27,7 @@ import hashlib
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from ...client.socket.stream.stream import Stream
+    from ...client.socket.stream import Stream
 
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
@@ -35,7 +35,6 @@ from ...connection_attributes import get_default_connection_attributes, encode_c
 from ..client_message import ClientMessage
 from ...configuration import Configuration
 from mariadb_shared.constants import CAPABILITY
-from ....plugin.authentication.native_password_plugin import NativePasswordPlugin
 
 
 class HandshakeResponse(ClientMessage):
@@ -93,6 +92,7 @@ class HandshakeResponse(ClientMessage):
             writer.write_byte(0)  # Empty username
 
         # Authentication response
+        from ....plugin.authentication.native_password_plugin import NativePasswordPlugin
         auth_response = NativePasswordPlugin.encrypt_password(self.configuration.password, context.auth_data)
         if auth_response:
             if context.server_capabilities & CAPABILITY.SECURE_CONNECTION:
