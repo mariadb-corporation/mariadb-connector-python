@@ -26,7 +26,7 @@ Permits loading authentication plugins with support for custom plugins.
 
 from typing import Dict, Type, Optional, Any
 from .authentication_plugin_factory import AuthenticationPluginFactory
-from ..exceptions import OperationalError
+from ...exceptions import OperationalError
 
 
 class AuthenticationPluginLoader:

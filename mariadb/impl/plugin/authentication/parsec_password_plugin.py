@@ -32,13 +32,13 @@ import secrets
 from typing import Optional, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...impl.client.context import Context
-    from ...impl.client.socket.stream import Stream
+    from ...client.context import Context
+    from ...client.socket.stream import Stream
 
-from ...impl.client.socket.payload_writer import PayloadWriter
-from ...impl.client.socket.payload_parser import PayloadParser
+from ...client.socket.payload_writer import PayloadWriter
+from ...client.socket.payload_parser import PayloadParser
 from ..authentication_plugin import AuthenticationPlugin, Credential
-from ...exceptions import OperationalError
+from ....exceptions import OperationalError
 
 try:
     from cryptography.hazmat.primitives import hashes, serialization

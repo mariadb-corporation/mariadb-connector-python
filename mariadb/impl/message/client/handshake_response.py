@@ -92,7 +92,7 @@ class HandshakeResponse(ClientMessage):
             writer.write_byte(0)  # Empty username
 
         # Authentication response
-        from ....plugin.authentication.native_password_plugin import NativePasswordPlugin
+        from ...plugin.authentication.native_password_plugin import NativePasswordPlugin
         auth_response = NativePasswordPlugin.encrypt_password(self.configuration.password, context.auth_data)
         if auth_response:
             if context.server_capabilities & CAPABILITY.SECURE_CONNECTION:

@@ -30,10 +30,9 @@ import hashlib
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...impl.client.context import Context
-    from ...impl.client.socket.stream import Stream
+    from ...client.context import Context
+    from ...client.socket.stream import Stream
 
-from ...impl.client.socket.payload_writer import PayloadWriter
 from ..authentication_plugin import AuthenticationPlugin, Credential
 
 
@@ -114,7 +113,7 @@ class NativePasswordPlugin(AuthenticationPlugin):
             IOError: If socket error occurs
         """
         # Build payload
-        writer = PayloadWriter()
+        encrypted = bytearray()
         
         if self.authentication_data is None:
             # Empty payload for no password
@@ -124,11 +123,10 @@ class NativePasswordPlugin(AuthenticationPlugin):
             truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
             
             # Encrypt password and write to payload
-            encrypted = self.encrypt_password(self.authentication_data, truncated_seed)
-            writer.write_bytes(encrypted)
+            encrypted = bytearray(self.encrypt_password(self.authentication_data, truncated_seed))
         
         # Send payload through stream (don't reset sequence - continue from handshake)
-        stream.send_payload(writer.get_payload(), "NATIVE_PASSWORD", reset_sequence=False)
+        stream.send_payload(encrypted, "NATIVE_PASSWORD", reset_sequence=False)
         
         # Read response packet
         return stream.read_payload()

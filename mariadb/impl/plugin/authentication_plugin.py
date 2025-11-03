@@ -27,7 +27,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..impl.client.socket.stream import Stream
+    from ..client.socket.stream import Stream
 
 
 class Credential:

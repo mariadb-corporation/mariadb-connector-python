@@ -48,7 +48,7 @@ from ..message.client.quit_packet import QuitPacket
 from ..message.client.prepare_packet import PreparePacket
 from ..message.client.execute_packet import ExecutePacket
 from ..message.client.change_user_packet import ChangeUserPacket
-from ...plugin.authentication_plugin_loader import AuthenticationPluginLoader
+from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..prepared_statement import PreparedStatement
 from ..completion import Completion
 from .exception_factory import ExceptionFactory
@@ -590,7 +590,7 @@ class Client:
             OperationalError: If authentication fails
         """
         # Import plugin system
-        from ...plugin.authentication.plugin_registry import register_builtin_plugins
+        from ..plugin.authentication.plugin_registry import register_builtin_plugins
         
         # Ensure plugins are registered
         register_builtin_plugins()

@@ -101,7 +101,7 @@ class ChangeUserPacket(ClientMessage):
         writer.write_null_terminated_string(self.username)
         
         # Authentication response
-        from ....plugin.authentication.native_password_plugin import NativePasswordPlugin
+        from ...plugin.authentication.native_password_plugin import NativePasswordPlugin
         auth_response = NativePasswordPlugin.encrypt_password(self.password, context.auth_data)        
         if auth_response:
             if context.client_capabilities & CAPABILITY.SECURE_CONNECTION:

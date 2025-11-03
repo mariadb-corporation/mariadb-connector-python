@@ -331,7 +331,7 @@ class TestAuthenticationPluginFactory(unittest.TestCase):
         if not has_cryptography and is_native():
             self.skipTest("cryptography library not available")
         
-        from mariadb.plugin.authentication.parsec_password_plugin_factory import ParsecPasswordPluginFactory
+        from mariadb.impl.plugin.authentication.parsec_password_plugin_factory import ParsecPasswordPluginFactory
         
         factory = ParsecPasswordPluginFactory()
         self.assertEqual(factory.type(), "parsec")
@@ -348,7 +348,7 @@ class TestAuthenticationPluginFactory(unittest.TestCase):
         if not has_cryptography and is_native():
             self.skipTest("cryptography library not available")
         
-        from mariadb.plugin.authentication.parsec_password_plugin_factory import ParsecPasswordPluginFactory
+        from mariadb.impl.plugin.authentication.parsec_password_plugin_factory import ParsecPasswordPluginFactory
         
         factory = ParsecPasswordPluginFactory()
         authentication_data = "test_password"
