@@ -40,11 +40,25 @@ class AsyncConnection(BaseConnection):
     
     Provides a native async API using the async Client directly.
     All I/O operations are async and use await.
+    
+    Example:
+        async def main():
+            conn = await mariadb.asyncConnect(user='root', database='test')
+            cursor = conn.cursor()
+            await cursor.execute("SELECT * FROM users")
+            results = await cursor.fetchall()
+            await conn.close()
     """
+    
+    # =========================================================================
+    # Initialization and Context Managers
+    # =========================================================================
     
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
-        Initialize asynchronous connection
+        Initialize asynchronous connection (does not connect)
+        
+        Use AsyncConnection.create() or asyncConnect() to create and connect.
         
         Args:
             **kwargs: Connection parameters (host, user, password, database, etc.)
@@ -53,15 +67,35 @@ class AsyncConnection(BaseConnection):
         # Create async client
         self._client = AsyncClient(self._configuration, self._host_address)
     
-    async def __aenter__(self):
+    async def __aenter__(self) -> 'AsyncConnection':
+        """Async context manager entry"""
         return self
     
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+        """
+        Async context manager exit
+        
+        Automatically closes the connection.
+        """
         await self.close()
+        return False
 
     @classmethod
-    async def create(cls, *args: Any, **kwargs: Any):
-        """Create and initialize connection"""
+    async def create(cls, *args: Any, **kwargs: Any) -> 'AsyncConnection':
+        """
+        Create and connect an async connection
+        
+        This is the recommended way to create async connections.
+        
+        Args:
+            **kwargs: Connection parameters
+            
+        Returns:
+            Connected AsyncConnection instance
+            
+        Raises:
+            OperationalError: If connection fails
+        """
         instance = cls(*args, **kwargs)
         try:
             await instance._client.connect()
@@ -74,17 +108,27 @@ class AsyncConnection(BaseConnection):
         if instance._configuration.autocommit:
             await instance.set_autocommit(True)
         return instance
+
+    # =========================================================================
+    # Core Connection Methods
+    # =========================================================================
     
-    def cursor(self, cursor_class=None, **kwargs):
+    def cursor(self, cursor_class=None, **kwargs) -> 'AsyncCursor':
         """
-        Returns a new async cursor object for the current connection
+        Create a new async cursor for executing queries
         
         Args:
             cursor_class: Optional custom cursor class
-            **kwargs: Additional cursor parameters (named_tuple, dictionary, etc.)
+            **kwargs: Additional cursor parameters:
+                - named_tuple: Return rows as named tuples
+                - dictionary: Return rows as dictionaries
+                - buffered: Buffer all results immediately
             
         Returns:
             AsyncCursor object
+            
+        Raises:
+            ProgrammingError: If connection is closed
         """
         self._check_closed()
         
@@ -114,24 +158,16 @@ class AsyncConnection(BaseConnection):
             else:
                 return cursor_class(self, **kwargs)
     
-    async def commit(self) -> None:
-        """Commit the current transaction asynchronously"""
-        self._check_closed()
-        if self._xid is not None:
-            raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
-        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            await self._client.execute(QueryPacket("COMMIT"), self._configuration, True)
-    
-    async def rollback(self) -> None:
-        """Rollback the current transaction asynchronously"""
-        self._check_closed()
-        if self._xid is not None:
-            raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
-        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            await self._client.execute(QueryPacket("ROLLBACK"), self._configuration, True)
-    
     async def close(self) -> None:
-        """Close the connection asynchronously"""
+        """
+        Close the database connection asynchronously
+        
+        If this is a pooled connection, returns it to the pool.
+        Otherwise, closes the underlying socket connection.
+        
+        Raises:
+            OperationalError: If close fails
+        """
         if self._pooled_connection:
             self._pooled_connection.return_to_pool()
             return
@@ -150,7 +186,14 @@ class AsyncConnection(BaseConnection):
                 self._closed = True
     
     async def ping(self) -> None:
-        """Check if the connection to the server is alive asynchronously"""
+        """
+        Check if the connection to the server is alive
+        
+        Sends a ping command to verify the connection is active.
+        
+        Raises:
+            OperationalError: If ping fails or connection is dead
+        """
         self._check_closed()
         try:
             await self._client.execute(PingPacket(), self._configuration)
@@ -161,25 +204,16 @@ class AsyncConnection(BaseConnection):
                 sql_state='HY000'
             )
     
-    async def begin(self) -> None:
-        """Start a new transaction asynchronously"""
-        self._check_closed()
-        await self._client.execute(QueryPacket("BEGIN"), self._configuration)
-    
-    async def kill(self, id: int) -> None:
-        """Kill a database connection specified by the process id parameter"""
-        self._check_closed()
-        try:
-            await self._client.execute(QueryPacket(f"KILL {id}"), self._configuration)
-        except Exception as e:
-            raise self._exception_factory.create_exception(
-                f"Failed to kill connection {id}: {e}",
-                errno=2013,
-                sql_state='HY000'
-            )
-    
     async def reconnect(self) -> None:
-        """Reconnect to the database server asynchronously"""
+        """
+        Reconnect to the database server
+        
+        Closes the current connection and establishes a new one
+        with the same parameters.
+        
+        Raises:
+            OperationalError: If reconnection fails
+        """
         try:
             if not self._closed:
                 await self.close()
@@ -188,7 +222,7 @@ class AsyncConnection(BaseConnection):
         
         self._closed = False
         try:
-            self._client = Client(self._configuration, self._host_address)
+            self._client = AsyncClient(self._configuration, self._host_address)
             await self._client.connect()
         except Exception as e:
             self._closed = True
@@ -199,7 +233,15 @@ class AsyncConnection(BaseConnection):
             )
     
     async def reset(self) -> None:
-        """Reset the connection asynchronously"""
+        """
+        Reset the connection state
+        
+        Clears session variables, temporary tables, and prepared statements
+        without reconnecting.
+        
+        Raises:
+            OperationalError: If reset fails
+        """
         self._check_closed()
         try:
             from .impl.message.client.reset_connection_packet import ResetConnectionPacket
@@ -211,12 +253,23 @@ class AsyncConnection(BaseConnection):
                 sql_state='HY000'
             )
     
-    async def change_user(self, user: str, password: str, database: Optional[str] = None) -> None:
-        """Change the user and database of the current connection asynchronously"""
+    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
+        """
+        Change the user and database of the current connection
+        
+        Args:
+            user: New username (None = keep current)
+            password: New password (None = keep current)
+            database: New database (None = keep current)
+            
+        Raises:
+            OperationalError: If change user fails
+        """
         self._check_closed()
         try:
             await self._client.change_user(user, password, database)
-            self._user = user
+            if user is not None:
+                self._user = user
             if database is not None:
                 self._database = database
         except Exception as e:
@@ -228,74 +281,73 @@ class AsyncConnection(BaseConnection):
                 sql_state='HY000'
             )
     
-    async def set_database(self, database: str) -> None:
-        """Set database name asynchronously"""
+    async def kill(self, connection_id: int) -> None:
+        """
+        Kill a database connection
+        
+        Args:
+            connection_id: Connection ID to kill
+            
+        Raises:
+            OperationalError: If kill fails
+        """
         self._check_closed()
-        context_db = self._client.context.database
-        if context_db != value:
-            from .impl.message.client.change_db_packet import ChangeDbPacket
-            await self._client.execute(ChangeDbPacket(value), self._configuration)
-        self._database = value
-    
-    @property
-    def database(self) -> Optional[str]:
-        """Get current database name"""
-        if self._client:
-            context_db = self._client.context.database
-            if context_db is not None:
-                return context_db
-        return self._database
-    
-    @database.setter
-    def database(self, value: Optional[str]) -> None:
-        """Set database name - note: this is sync, use set_database() for async"""
-        raise NotImplementedError("Use await connection.set_database(database) for async connections")
-    
-    @property
-    def autocommit(self) -> bool:
-        """Get current autocommit status"""
-        if self._client:
-            return (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
-        return False
-    
-    @autocommit.setter
-    def autocommit(self, value: bool) -> None:
-        """Set autocommit status - note: this is sync, use set_autocommit() for async"""
-        raise NotImplementedError("Use await connection.set_autocommit(value) for async connections")
-    
-    async def set_autocommit(self, value: bool) -> None:
-        """Set autocommit status asynchronously"""
-        self._check_closed()
-        current = (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
-        if current != bool(value):
-            await self._client.execute(QueryPacket(f"SET autocommit={1 if bool(value) else 0}"), self._configuration)
-    
-    async def show_warnings(self) -> Optional[List[tuple]]:
-        """Shows error, warning and note messages from last executed command"""
-        self._check_closed()
-        from .async_cursor import AsyncCursor
-        cursor = AsyncCursor(self)
         try:
-            await cursor.execute("SHOW WARNINGS")
-            return await cursor.fetchall()
-        finally:
-            await cursor.close()
-    
-    # Async context manager
-    async def __aenter__(self) -> 'AsyncConnection':
-        """Async context manager entry"""
-        return self
-    
-    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> bool:
-        """Async context manager exit"""
-        if exc_type:
-            await self.rollback()
-        else:
-            await self.commit()
-        await self.close()
-        return False
+            await self._client.execute(QueryPacket(f"KILL {connection_id}"), self._configuration)
+        except Exception as e:
+            raise self._exception_factory.create_exception(
+                f"Failed to kill connection {connection_id}: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
 
+    # =========================================================================
+    # Transaction Methods
+    # =========================================================================
+    
+    async def commit(self) -> None:
+        """
+        Commit the current transaction
+        
+        Makes all changes since the last commit/rollback permanent.
+        
+        Raises:
+            ProgrammingError: If called during XA transaction
+        """
+        self._check_closed()
+        if self._xid is not None:
+            raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
+        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
+            await self._client.execute(QueryPacket("COMMIT"), self._configuration, True)
+    
+    async def rollback(self) -> None:
+        """
+        Rollback the current transaction
+        
+        Discards all changes since the last commit/rollback.
+        
+        Raises:
+            ProgrammingError: If called during XA transaction
+        """
+        self._check_closed()
+        if self._xid is not None:
+            raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
+        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
+            await self._client.execute(QueryPacket("ROLLBACK"), self._configuration, True)
+    
+    async def begin(self) -> None:
+        """
+        Start a new transaction explicitly
+        
+        Note: Transactions usually start implicitly when autocommit is off.
+        """
+        self._check_closed()
+        await self._client.execute(QueryPacket("BEGIN"), self._configuration)
 
+    # =========================================================================
+    # TPC/XA Transaction Methods
+    # =========================================================================
+    
 
     async def tpc_begin(self, xid: Xid) -> None:
         """
@@ -470,3 +522,132 @@ class AsyncConnection(BaseConnection):
         result = await cursor.fetchall()
         del cursor
         return result
+
+
+    
+    # =========================================================================
+    # Properties and Setters
+    # =========================================================================
+    
+    @property
+    def database(self) -> Optional[str]:
+        """
+        Get current database name
+        
+        Returns:
+            Current database name, or None if no database selected
+        """
+        if self._client:
+            context_db = self._client.context.database
+            if context_db is not None:
+                return context_db
+        return self._database
+    
+    @database.setter
+    def database(self, value: Optional[str]) -> None:
+        """
+        Set database name - not supported for async connections
+        
+        Use await connection.select_db(database) instead.
+        
+        Raises:
+            NotImplementedError: Always (use select_db() instead)
+        """
+        raise NotImplementedError("Use await connection.select_db(database) for async connections")
+
+    @property
+    def autocommit(self) -> bool:
+        """
+        Get current autocommit status
+        
+        Returns:
+            True if autocommit is enabled, False otherwise
+        """
+        if self._client:
+            return (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
+        return False
+    
+    @autocommit.setter
+    def autocommit(self, value: bool) -> None:
+        """
+        Set autocommit status - not supported for async connections
+        
+        Use await connection.set_autocommit(value) instead.
+        
+        Raises:
+            NotImplementedError: Always (use set_autocommit() instead)
+        """
+        raise NotImplementedError("Use await connection.set_autocommit(value) for async connections")
+
+    # =========================================================================
+    # Utility Methods
+    # =========================================================================
+    
+    async def select_db(self, database: str) -> None:
+        """
+        Change the default database
+        
+        Args:
+            database: Database name to select
+        """
+        self._check_closed()
+        context_db = self._client.context.database
+        if context_db != database:
+            from .impl.message.client.change_db_packet import ChangeDbPacket
+            await self._client.execute(ChangeDbPacket(database), self._configuration)
+        self._database = database
+    
+    async def set_autocommit(self, value: bool) -> None:
+        """
+        Set autocommit status
+        
+        Args:
+            value: True to enable autocommit, False to disable
+        """
+        self._check_closed()
+        current = (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
+        if current != bool(value):
+            await self._client.execute(QueryPacket(f"SET autocommit={1 if bool(value) else 0}"), self._configuration)
+    
+    async def show_warnings(self) -> Optional[List[tuple]]:
+        """Shows error, warning and note messages from last executed command"""
+        self._check_closed()
+        from .async_cursor import AsyncCursor
+        cursor = AsyncCursor(self)
+        try:
+            await cursor.execute("SHOW WARNINGS")
+            return await cursor.fetchall()
+        finally:
+            await cursor.close()
+    
+    # Async context manager
+    async def __aenter__(self) -> 'AsyncConnection':
+        """Async context manager entry"""
+        return self
+    
+    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> bool:
+        """Async context manager exit"""
+        if exc_type:
+            await self.rollback()
+        else:
+            await self.commit()
+        await self.close()
+        return False
+
+
+
+    async def show_warnings(self) -> Optional[List[tuple]]:
+        """
+        Get warnings from the last executed command
+        
+        Returns:
+            List of warning tuples (level, code, message), or None if no warnings
+        """
+        self._check_closed()
+        from .async_cursor import AsyncCursor
+        cursor = AsyncCursor(self)
+        try:
+            await cursor.execute("SHOW WARNINGS")
+            return await cursor.fetchall()
+        finally:
+            await cursor.close()

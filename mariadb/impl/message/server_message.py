@@ -36,13 +36,5 @@ class ServerMessage(ABC):
     
     @abstractmethod
     def decode(self, data: bytearray, context: Context) -> bytearray:
-        """
-        Encode message to writer asynchronously
-        
-        Args:
-            context: Connection context
-            
-        Raises:
-            IOError: If encoding fails
-        """
+        """Decode message from reader asynchronously"""
         pass

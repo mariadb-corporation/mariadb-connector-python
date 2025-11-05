@@ -29,16 +29,7 @@ from typing import Dict, Optional
 
 
 def get_default_connection_attributes(host: Optional[str] = None, version: Optional[str] = None) -> Dict[str, str]:
-    """
-    Get default connection attributes
-    
-    Args:
-        host: Server host address (optional)
-        version: Connector version (optional, will try to get from mariadb module)
-        
-    Returns:
-        Dictionary of connection attributes
-    """
+    """Get default connection attributes"""
     attrs = {}
     
     # Client name
@@ -81,15 +72,7 @@ def get_default_connection_attributes(host: Optional[str] = None, version: Optio
 
 
 def encode_connection_attributes(attrs: Dict[str, str]) -> bytes:
-    """
-    Encode connection attributes to bytes
-    
-    Args:
-        attrs: Dictionary of connection attributes
-        
-    Returns:
-        Encoded attributes as bytes (length-encoded key-value pairs)
-    """
+    """Encode connection attributes to bytes"""
     import io
     
     attr_buffer = io.BytesIO()

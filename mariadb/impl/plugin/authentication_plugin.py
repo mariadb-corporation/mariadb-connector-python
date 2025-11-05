@@ -19,8 +19,6 @@
 
 """
 Authentication Plugin Interface
-
-Equivalent to the Java AuthenticationPlugin interface.
 """
 
 from abc import ABC, abstractmethod
@@ -38,13 +36,7 @@ class Credential:
     """
     
     def __init__(self, password: Optional[str] = None, token: Optional[bytes] = None):
-        """
-        Initialize credential
-        
-        Args:
-            password: Password string
-            token: Authentication token bytes
-        """
+        """Initialize credential"""
         self._password = password
         self._token = token
     
@@ -60,65 +52,24 @@ class Credential:
 class AuthenticationPlugin(ABC):
     """
     Authentication plugin interface
-    
-    Equivalent to the Java AuthenticationPlugin interface.
     """
     
     @abstractmethod
     async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
-        """
-        Process plugin authentication
-        
-        Args:
-            stream: Stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            IOError: If socket error occurs
-            Exception: If plugin exception occurs
-        """
+        """Process plugin authentication"""
         pass
 
     @abstractmethod
     def processSync(self, stream: SyncStream, context: Context) -> bytearray:
-        """
-        Process plugin authentication
-        
-        Args:
-            stream: Stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            IOError: If socket error occurs
-            Exception: If plugin exception occurs
-        """
+        """Process plugin authentication"""
         pass
     
     
     def is_mitm_proof(self) -> bool:
-        """
-        Check if plugin is MitM-proof, permitting returning HASH
-        
-        Returns:
-            True if permitted
-        """
+        """Check if plugin is MitM-proof, permitting returning HASH"""
         return False
     
     def hash(self, credential: Credential) -> Optional[bytes]:
-        """
-        Return hash for credential
-        
-        Args:
-            credential: Credential to hash
-            
-        Returns:
-            Hash bytes or None
-        """
+        """Return hash for credential"""
         return None
 

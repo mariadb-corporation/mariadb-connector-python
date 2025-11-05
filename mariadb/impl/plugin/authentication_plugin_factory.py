@@ -17,12 +17,6 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-"""
-Authentication Plugin Factory Interface
-
-Equivalent to the Java AuthenticationPluginFactory interface.
-"""
-
 from abc import ABC, abstractmethod
 from typing import Optional, Any
 from .authentication_plugin import AuthenticationPlugin
@@ -31,42 +25,19 @@ from .authentication_plugin import AuthenticationPlugin
 class AuthenticationPluginFactory(ABC):
     """
     Authentication plugin factory interface
-    
-    Equivalent to the Java AuthenticationPluginFactory interface.
     """
     
     @abstractmethod
     def type(self) -> str:
-        """
-        Authentication plugin type
-        
-        Returns:
-            Authentication plugin type (e.g., 'mysql_native_password')
-        """
+        """Authentication plugin type"""
         pass
     
     @abstractmethod
     def initialize(self, authentication_data: Optional[str], seed: bytes, 
                   conf: Any, host_address: Any) -> AuthenticationPlugin:
-        """
-        Plugin initialization
-        
-        Args:
-            authentication_data: Authentication data (password/token)
-            seed: Server provided seed
-            conf: Connection configuration
-            host_address: Host address
-            
-        Returns:
-            Initialized authentication plugin
-        """
+        """Plugin initialization"""
         pass
     
     def require_ssl(self) -> bool:
-        """
-        Check if authentication plugin requires SSL to be used
-        
-        Returns:
-            True if SSL is required
-        """
+        """Check if authentication plugin requires SSL to be used"""
         return False

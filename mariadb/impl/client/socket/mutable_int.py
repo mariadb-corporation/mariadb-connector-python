@@ -33,72 +33,34 @@ class MutableInt:
     """
     
     def __init__(self, initial_value: int = 0):
-        """
-        Initialize mutable integer
-        
-        Args:
-            initial_value: Initial value for the integer
-        """
+        """Initialize mutable integer with initial value"""
         self._value = initial_value
     
     def get(self) -> int:
-        """
-        Get current value
-        
-        Returns:
-            Current integer value
-        """
+        """Get current value"""
         return self._value
     
     def set(self, value: int) -> None:
-        """
-        Set new value
-        
-        Args:
-            value: New integer value
-        """
+        """Set new value"""
         self._value = value
     
     def increment(self) -> int:
-        """
-        Increment value by 1 and return new value
-        
-        Returns:
-            New value after increment
-        """
+        """Increment value by 1 and return new value"""
         self._value += 1
         return self._value
     
     def increment_and_get(self) -> int:
-        """
-        Increment value by 1 and return new value
-        
-        Returns:
-            New value after increment
-        """
+        """Increment value by 1 and return new value"""
         return self.increment()
     
     def get_and_increment(self) -> int:
-        """
-        Get current value and then increment by 1
-        
-        Returns:
-            Value before increment
-        """
+        """Get current value then increment by 1"""
         old_value = self._value
         self._value += 1
         return old_value
     
     def add(self, delta: int) -> int:
-        """
-        Add delta to current value and return new value
-        
-        Args:
-            delta: Value to add
-            
-        Returns:
-            New value after addition
-        """
+        """Add delta to current value and return new value"""
         self._value += delta
         return self._value
     

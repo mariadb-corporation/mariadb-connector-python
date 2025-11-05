@@ -53,8 +53,18 @@ class BaseClient(ABC):
     """
     Abstract base client for MariaDB connections
     
-    Contains all common logic shared between async and sync implementations.
+    Contains all common logic shared between async and sync implementations.    
     """
+    
+    # =========================================================================
+    # Constants
+    # =========================================================================
+    
+    # Packet type constants
+    OK_PACKET = 0x00
+    ERROR_PACKET = 0xFF
+    EOF_PACKET = 0xFE
+    LOCAL_INFILE_PACKET = 0xFB
     
     # MariaDB replication hack prefix
     MARIADB_RPL_HACK_PREFIX = "5.5.5-"
@@ -89,7 +99,10 @@ class BaseClient(ABC):
         self.connected = False
         self.read_only = configuration.read_only
     
-    # Abstract methods that must be implemented by subclasses
+    # =========================================================================
+    # Abstract Methods
+    # =========================================================================
+    
     @abstractmethod
     def connect(self) -> None:
         """Establish connection to MariaDB server"""
@@ -186,7 +199,9 @@ class BaseClient(ABC):
         """Get socket IP address"""
         pass
     
-    # Common synchronous methods (no I/O)
+    # =========================================================================
+    # Protocol Parsing
+    # =========================================================================
     
     def _parse_handshake(self, packet: bytes) -> Context:
         """
@@ -409,6 +424,10 @@ class BaseClient(ABC):
         
         # Only use capabilities that the server supports
         return capabilities & self.context.server_capabilities
+    
+    # =========================================================================
+    # Result Set Parsing
+    # =========================================================================
     
     def _parse_column_definition(self, packet: bytes) -> dict:
         """

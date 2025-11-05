@@ -52,26 +52,13 @@ class ExecutePacket(ClientMessage):
     COM_STMT_EXECUTE = 0x17
     
     def __init__(self, statement_id: int, parameters: Optional[List[Any]] = None, sql: str = ""):
-        """
-        Initialize execute packet
-        
-        Args:
-            statement_id: Prepared statement ID
-            parameters: Optional list of parameters to bind
-            sql: Original SQL for debugging
-        """
+        """Initialize COM_STMT_EXECUTE packet with statement ID and parameters"""
         self.statement_id = statement_id
         self.parameters = parameters or []
         self.sql = sql
         
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode execute packet
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-        """
+        """Encode COM_STMT_EXECUTE packet with statement ID, flags, and bound parameters"""
         # Build payload
         writer = PayloadWriter()
         

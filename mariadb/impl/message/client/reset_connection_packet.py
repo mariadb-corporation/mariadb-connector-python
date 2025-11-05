@@ -40,22 +40,12 @@ class ResetConnectionPacket(ClientMessage):
     COM_RESET_CONNECTION = 0x1F
     
     def __init__(self):
-        """Initialize reset connection packet"""
+        """Initialize COM_RESET_CONNECTION packet"""
         pass
         
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode reset connection packet
-        
-        Args:
-            context: Connection context
-            
-        Raises:
-            IOError: If encoding fails
-        """
-        # Build payload
+        """Encode COM_RESET_CONNECTION packet"""
         return bytearray([self.COM_RESET_CONNECTION])
-    
 
     def is_binary(self) -> bool:
         return False

@@ -68,24 +68,7 @@ class ColumnDefinitionPacket:
         ext_type_name: Optional[str] = None,
         ext_type_format: Optional[str] = None
     ):
-        """
-        Initialize Column Definition
-        
-        Args:
-            catalog: Catalog name (usually "def")
-            schema: Schema/database name
-            table: Table alias
-            org_table: Original table name
-            name: Column alias
-            org_name: Original column name
-            character_set: Character set number
-            column_length: Maximum column length
-            column_type: Field type (from FIELD_TYPE constants)
-            flags: Column flags (from FIELD_FLAG constants)
-            decimals: Number of decimals
-            ext_type_name: Extended type name (optional, if EXTENDED_METADATA enabled)
-            ext_type_format: Extended type format (optional, if EXTENDED_METADATA enabled)
-        """
+        """Initialize column definition with metadata fields"""
         self.catalog = catalog
         self.schema = schema
         self.table = table
@@ -102,19 +85,7 @@ class ColumnDefinitionPacket:
     
     @staticmethod
     def decode(data: bytearray, context: 'Context') -> 'ColumnDefinitionPacket':
-        """
-        Decode Column Definition packet from bytearray
-        
-        Args:
-            data: Packet data
-            context: Connection context
-            
-        Returns:
-            ColumnDefinitionPacket instance
-            
-        Raises:
-            IOError: If packet parsing fails
-        """
+        """Decode column definition packet from bytearray with context"""
         parser = PayloadParser(data)
         
         # Read the 6 identifiers as per Java implementation

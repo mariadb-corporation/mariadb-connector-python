@@ -54,16 +54,7 @@ class OkPacket(Completion):
         warning_count: int = 0,
         info: Optional[str] = None
     ):
-        """
-        Initialize OK packet
-        
-        Args:
-            affected_rows: Number of affected rows
-            insert_id: insert ID
-            server_status: Server status flags
-            warning_count: Number of warnings
-            info: Optional info string
-        """
+        """Initialize OK packet with affected rows, insert ID, status, and warnings"""
         # Initialize parent Completion with common fields
         super().__init__(
             affected_rows=affected_rows,
@@ -82,19 +73,7 @@ class OkPacket(Completion):
     
     @staticmethod
     def decode(data: bytearray, context: 'Context') -> 'OkPacket':
-        """
-        Decode OK packet from bytearray
-        
-        Args:
-            data: Packet data (including OK marker)
-            context: Connection context
-            
-        Returns:
-            OkPacket instance
-            
-        Raises:
-            IOError: If packet parsing fails
-        """
+        """Decode OK packet from bytearray with context"""
         parser = PayloadParser(data)
         
         parser.read_byte() # Skip OK marker (0x00 or 0xFE)

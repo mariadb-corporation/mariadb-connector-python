@@ -39,32 +39,14 @@ class PreparePacket(ClientMessage):
     COM_STMT_PREPARE = 0x16
     
     def __init__(self, sql: str):
-        """
-        Initialize prepare packet
-        
-        Args:
-            sql: SQL statement to prepare
-        """
+        """Initialize COM_STMT_PREPARE packet with SQL statement"""
         self.sql = sql
         
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode prepare packet
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-        """
-        # Start payload
+        """Encode COM_STMT_PREPARE packet with SQL statement"""
         writer = PayloadWriter()
-        
-        # Write COM_STMT_PREPARE command
         writer.write_byte(self.COM_STMT_PREPARE)
-        
-        # Write SQL statement
         writer.write_string(self.sql, 'utf-8')
-        
-        # Send packet
         return writer.get_payload()
 
     def is_binary(self) -> bool:

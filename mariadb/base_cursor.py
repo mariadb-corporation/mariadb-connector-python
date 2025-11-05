@@ -206,15 +206,95 @@ class BaseCursor(ABC):
         """Call a stored procedure"""
         pass
 
-    @abstractmethod
     def nextset(self) -> Optional[bool]:
-        """Move to the next result set"""
-        pass
+        """
+        Move to the next available result set
+        
+        Useful when executing multiple statements or stored procedures
+        that return multiple result sets.
+        
+        Returns:
+            True if there is another result set, None if no more result sets
+            
+        Raises:
+            ProgrammingError: If cursor is closed
+        """
+        self._check_closed()
+        
+        # Move to next completion
+        self._completion_index += 1
+        
+        # Check if there are more completions
+        if self._completion_index >= len(self._completions):
+            return None
+        
+        # Process the next completion
+        self._process_current_completion()
+        return True
 
-    @abstractmethod
-    def scroll(self, value: int, mode: str = "relative"):
-        """Scroll the cursor in the result set"""
-        pass
+    def scroll(self, value: int, mode: str = "relative") -> None:
+        """
+        Scroll the cursor in the result set to a new position according to mode.
+
+        If mode is "relative" (default), value is taken as offset to the
+        current position in the result set, if set to absolute, value states
+        an absolute target position.
+        
+        Args:
+            value: Position value
+            mode: "relative" or "absolute"
+            
+        Raises:
+            ProgrammingError: If cursor has no result set or invalid parameters
+        """
+        # Allow scrolling in buffered results even if connection is closed
+        if self._closed:
+            raise ProgrammingError("Cursor is closed")
+        if self.connection._closed and (self._result is None or self._result.streaming()):
+            raise ProgrammingError("Cursor is closed")
+        
+        # Check if we have a result set
+        if self._result is None:
+            raise ProgrammingError("Cursor doesn't have a result set")
+        
+        if self._result.streaming():
+            raise ProgrammingError("Scroll not supported for unbuffered cursors")
+        
+        # Validate mode
+        if mode not in ("absolute", "relative"):
+            raise ProgrammingError("Invalid or unknown scroll mode specified.")
+        
+        # Delegate to Result object's scroll method
+        try:
+            self._result.scroll(value, mode)
+        except ValueError as e:
+            raise ProgrammingError(str(e))
+    
+    def _seek(self, offset: int) -> None:
+        """
+        Move the cursor to the specified row position
+        
+        Internal helper method for absolute positioning.
+        
+        Args:
+            offset: Absolute row position
+            
+        Raises:
+            ProgrammingError: If cursor is closed
+            ValueError: If no result set or unbuffered cursor
+        """
+        # Allow seeking in buffered results even if connection is closed
+        if self._closed:
+            raise ProgrammingError("Cursor is closed")
+        if self.connection._closed and (self._result is None or self._result.streaming()):
+            raise ProgrammingError("Cursor is closed")
+        
+        if self._result is None:
+            raise ValueError("No result set")
+        if self._result.streaming():
+            raise ValueError("Seek not supported for unbuffered cursors")
+        # For CompleteResult, use scroll with absolute mode
+        self._result.scroll(offset, mode='absolute')
 
     @abstractmethod
     def __iter__(self):

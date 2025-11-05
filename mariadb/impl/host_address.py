@@ -17,12 +17,6 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-"""
-Host Address class for MariaDB connections
-
-Equivalent to the Java HostAddress class.
-"""
-
 from typing import Optional
 from dataclasses import dataclass
 
@@ -31,8 +25,6 @@ from dataclasses import dataclass
 class HostAddress:
     """
     Host address information for MariaDB connections
-    
-    Equivalent to the Java HostAddress class.
     """
     
     host: str = 'localhost'
@@ -49,16 +41,7 @@ class HostAddress:
     
     @classmethod
     def from_string(cls, address_string: str, default_port: int = 3306) -> 'HostAddress':
-        """
-        Create HostAddress from string representation
-        
-        Args:
-            address_string: Address in format "host:port" or "host"
-            default_port: Default port if not specified
-            
-        Returns:
-            HostAddress instance
-        """
+        """Create HostAddress from string representation"""
         if ':' in address_string:
             host, port_str = address_string.rsplit(':', 1)
             try:
@@ -72,21 +55,11 @@ class HostAddress:
         return cls(host=host, port=port)
     
     def to_string(self) -> str:
-        """
-        Convert to string representation
-        
-        Returns:
-            String in format "host:port"
-        """
+        """Convert to string representation"""
         return f"{self.host}:{self.port}"
     
     def is_local(self) -> bool:
-        """
-        Check if this is a local address
-        
-        Returns:
-            True if local address
-        """
+        """Check if this is a local address"""
         return self.host in ('localhost', '127.0.0.1', '::1')
     
     def __str__(self) -> str:

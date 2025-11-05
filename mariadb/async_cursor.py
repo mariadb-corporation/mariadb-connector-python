@@ -43,20 +43,36 @@ if TYPE_CHECKING:
 class AsyncCursor(BaseCursor):
     """
     Asynchronous MariaDB Cursor Object
+    
+    Provides async methods for executing SQL queries and retrieving results.
+    Supports both regular queries and prepared statements.
+
     """
+    
+    # =========================================================================
+    # Initialization and Lifecycle
+    # =========================================================================
 
     def __init__(self, connection: 'BaseConnection', **kwargs):
         """
         Initialize asynchronous cursor with a connection
         
         Args:
-            connection: Database connection
-            **kwargs: Cursor options (buffered, named_tuple, dictionary, etc.)
+            connection: Database connection object
+            **kwargs: Cursor options:
+                - buffered: Buffer all results immediately
+                - named_tuple: Return rows as named tuples
+                - dictionary: Return rows as dictionaries
         """
         super().__init__(connection, **kwargs)
 
     async def close(self) -> None:
-        """Close the cursor asynchronously"""
+        """
+        Close the cursor and free resources
+        
+        Consumes any remaining streaming results before closing.
+        After closing, the cursor cannot be used anymore.
+        """
         if not self._closed:
             # Consume any remaining streaming results
             if self._result is not None and self._result.streaming():
@@ -74,9 +90,36 @@ class AsyncCursor(BaseCursor):
             self._completions = []
             self._completion_index = 0
             self._cursor_config = None
-            self._result = None 
+            self._result = None
+    
+    # =========================================================================
+    # Query Execution Methods
+    # =========================================================================
         
     async def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None) -> None:
+        """
+        Execute a SQL query or command asynchronously
+        
+        Supports parameterized queries using ? placeholders or named placeholders.
+        
+        Args:
+            sql: SQL statement to execute
+            data: Optional parameters:
+                - Sequence (list/tuple) for positional parameters (?)
+                - Dict for named parameters (:name)
+            buffered: Override cursor's buffered setting:
+                - True: Fetch all results immediately
+                - False: Stream results (default for large result sets)
+                - None: Use cursor's default setting
+                
+        Raises:
+            ProgrammingError: If cursor is closed or SQL is invalid
+            DatabaseError: If execution fails
+            
+        Example:
+            >>> await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
+            >>> await cursor.execute("INSERT INTO users VALUES (?, ?)", (1, 'John'))
+        """
         """
         Execute a database query or command
         
@@ -124,6 +167,27 @@ class AsyncCursor(BaseCursor):
             )
         
     async def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None) -> None:
+        """
+        Execute a SQL statement multiple times with different parameter sets
+        
+        More efficient than calling execute() multiple times as it can
+        batch operations and reduce round trips.
+        
+        Args:
+            sql: SQL statement to execute (typically INSERT, UPDATE, DELETE)
+            data: Sequence of parameter sequences, one for each execution
+            buffered: Override cursor's buffered setting
+                
+        Raises:
+            ProgrammingError: If cursor is closed
+            DatabaseError: If execution fails
+            
+        Example:
+            >>> await cursor.executemany(
+            ...     "INSERT INTO users VALUES (?, ?)",
+            ...     [(1, 'Alice'), (2, 'Bob'), (3, 'Charlie')]
+            ... )
+        """
         """
         Execute a statement multiple times with different parameter sets
         
@@ -186,8 +250,27 @@ class AsyncCursor(BaseCursor):
                 errno=2013,
                 sql_state='HY000'
             )
+    
+    # =========================================================================
+    # Result Fetching Methods
+    # =========================================================================
         
     async def fetchone(self) -> Optional[Any]:
+        """
+        Fetch the next row from the result set
+        
+        Returns:
+            Next row as tuple, named tuple, or dict (depending on cursor options),
+            or None if no more rows available
+            
+        Raises:
+            ProgrammingError: If cursor is closed or no result set available
+            
+        Example:
+            >>> await cursor.execute("SELECT id, name FROM users")
+            >>> row = await cursor.fetchone()
+            >>> print(row)  # (1, 'Alice')
+        """
         """Fetch the next row of a query result set"""
         # Allow fetching from buffered results even if connection is closed
         if self._closed:
@@ -209,23 +292,24 @@ class AsyncCursor(BaseCursor):
             return row
         
         return None
-
-    def _seek(self, offset: int) -> None:
-        """Move the cursor to the specified row"""
-        # Allow seeking in buffered results even if connection is closed
-        if self._closed:
-            raise ProgrammingError("Cursor is closed")
-        if self.connection._closed and (self._result is None or self._result.streaming()):
-            raise ProgrammingError("Cursor is closed")
-        
-        if self._result is None:
-            raise ValueError("No result set")
-        if self._result.streaming():
-            raise ValueError("Seek not supported for unbuffered cursors")
-        # For CompleteResult, use scroll with absolute mode
-        self._result.scroll(offset, mode='absolute')
         
     async def fetchmany(self, size: Optional[int] = None) -> List[Any]:
+        """
+        Fetch the next set of rows from the result set
+        
+        Args:
+            size: Number of rows to fetch (default: cursor.arraysize)
+            
+        Returns:
+            List of rows (may be empty if no more rows)
+            
+        Raises:
+            ProgrammingError: If cursor is closed or no result set available
+            
+        Example:
+            >>> await cursor.execute("SELECT * FROM users")
+            >>> rows = await cursor.fetchmany(10)  # Fetch 10 rows
+        """
         """Fetch the next set of rows of a query result"""
         # Allow fetching from buffered results even if connection is closed
         if self._closed:
@@ -248,6 +332,22 @@ class AsyncCursor(BaseCursor):
         return result
         
     async def fetchall(self) -> List[Any]:
+        """
+        Fetch all remaining rows from the result set
+        
+        Warning: For large result sets, this may consume significant memory.
+        Consider using fetchmany() or iterating over the cursor instead.
+        
+        Returns:
+            List of all remaining rows (may be empty)
+            
+        Raises:
+            ProgrammingError: If cursor is closed or no result set available
+            
+        Example:
+            >>> await cursor.execute("SELECT * FROM users")
+            >>> all_rows = await cursor.fetchall()
+        """
         """Fetch all remaining rows of a query result"""
         # Allow fetching from buffered results even if connection is closed
         if self._closed:
@@ -266,90 +366,32 @@ class AsyncCursor(BaseCursor):
             return self._apply_row_formatting(rows)
         
         return []
-        
-    def nextset(self) -> Optional[bool]:
-        """Skip to the next available result set"""
-        self._check_closed()
-        
-        # Move to next completion
-        self._completion_index += 1
-        
-        # Check if there are more completions
-        if self._completion_index >= len(self._completions):
-            return None
-        
-        # Process the next completion
-        self._process_current_completion()
-        return True
-
-    def scroll(self, value: int, mode: str = "relative") -> None:
-        """
-        Scroll the cursor in the result set to a new position according to mode.
-
-        If mode is "relative" (default), value is taken as offset to the
-        current position in the result set, if set to absolute, value states
-        an absolute target position.
-        
-        Args:
-            value: Position value
-            mode: "relative" or "absolute"
-            
-        Raises:
-            ProgrammingError: If cursor has no result set or invalid parameters
-        """
-        # Allow scrolling in buffered results even if connection is closed
-        if self._closed:
-            raise ProgrammingError("Cursor is closed")
-        if self.connection._closed and (self._result is None or self._result.streaming()):
-            raise ProgrammingError("Cursor is closed")
-        
-        # Check if we have a result set
-        if self._result is None:
-            raise ProgrammingError("Cursor doesn't have a result set")
-        
-        if self._result.streaming():
-            raise ProgrammingError("Scroll not supported for unbuffered cursors")
-        
-        # Validate mode
-        if mode not in ("absolute", "relative"):
-            raise ProgrammingError("Invalid or unknown scroll mode specified.")
-        
-        # Delegate to Result object's scroll method
-        try:
-            self._result.scroll(value, mode)
-        except ValueError as e:
-            raise ProgrammingError(str(e))
-        
-    def __aiter__(self) -> 'AsyncCursor':
-        """Return async iterator for cursor"""
-        return self
-        
-    async def __anext__(self) -> Any:
-        """Return next row"""
-        row = await self.fetchone()
-        if row is None:
-            raise StopAsyncIteration
-        return row
     
-    # Sync iterator methods raise error
-    def __iter__(self):
-        """Sync iteration not supported for async cursor"""
-        raise TypeError("Use 'async for' with AsyncCursor")
-        
-    def __next__(self):
-        """Sync iteration not supported for async cursor"""
-        raise TypeError("Use 'async for' with AsyncCursor")
+       
+    # =========================================================================
+    # Stored Procedures
+    # =========================================================================
     
     async def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:
         """
-        Call a stored procedure with the given name and arguments
+        Call a stored procedure asynchronously
+        
+        Executes a stored procedure and processes all result sets.
         
         Args:
-            procname: Name of the stored procedure
-            args: Sequence of arguments for the procedure
+            procname: Name of the stored procedure to call
+            args: Sequence of arguments to pass to the procedure
             
         Returns:
-            Sequence of arguments (modified for output parameters)
+            None (matches C extension behavior)
+            
+        Raises:
+            ProgrammingError: If cursor is closed
+            DatabaseError: If procedure execution fails
+            
+        Example:
+            >>> await cursor.callproc('get_user', (1,))
+            >>> result = await cursor.fetchone()
         """
         self._check_closed()
         
@@ -359,13 +401,13 @@ class AsyncCursor(BaseCursor):
             call_sql = f"CALL {procname}({placeholders})"
             
             # Prepare the statement
-            stmt: PrepareStmtPacket = await self.connection._client.prepare_statement(call_sql)
+            stmt: PrepareStmtPacket = await self._client.prepare_statement(call_sql)
             
             try:
                 # Execute with parameters using ExecutePacket
                 from .impl.message.client.execute_packet import ExecutePacket
                 execute_packet = ExecutePacket(stmt.statement_id, list(args), call_sql)
-                completions = await self.connection._client.execute(execute_packet, config=self._get_config(), can_redo=False)
+                completions = await self._client.execute(execute_packet, self._get_config(), can_redo=False)
                 
                 # Process all completions
                 self._process_callproc_completions(completions)
@@ -373,10 +415,9 @@ class AsyncCursor(BaseCursor):
                 return None  # Match C extension behavior
                 
             finally:
-                # Always close the prepared statement
-                await self.connection._client.close_prepared_statement(stmt)
+                await self._client.close_prepared_statement(stmt)
         except DatabaseError as e:
-            raise e                            
+            raise e
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"CallProc failed: {e}",
@@ -384,27 +425,56 @@ class AsyncCursor(BaseCursor):
                 sql_state='HY000'
             )
     
-    def nextset(self) -> Optional[bool]:
+    # =========================================================================
+    # Iterator Protocol
+    # =========================================================================
+    
+    def __aiter__(self) -> 'AsyncCursor':
         """
-        Move to the next result set
+        Return the cursor itself for async iteration
         
-        Returns:
-            True if there are more result sets, False if no more, None if not supported
+        Allows using the cursor in async for loops:
+            async for row in cursor:
+                process(row)
         """
-        self._check_closed()
+        """Return async iterator for cursor"""
+        return self
         
-        if not hasattr(self, '_completions') or not self._completions:
-            return None
+    async def __anext__(self) -> Any:
+        """
+        Return the next row from the result set
         
-        # Move to next completion
-        self._completion_index += 1
+        Raises:
+            StopAsyncIteration: When no more rows are available
+        """
+        row = await self.fetchone()
+        if row is None:
+            raise StopAsyncIteration
+        return row
+    
+    # Sync iterator methods raise error
+    def __iter__(self):
+        """
+        Sync iteration not supported for async cursor
         
-        if self._completion_index >= len(self._completions):
-            return False
+        Raises:
+            TypeError: Always (use 'async for' instead)
+        """
+        raise TypeError("Use 'async for' with AsyncCursor")
         
-        # Process the next completion
-        self._process_current_completion()
-        return True
+    def __next__(self):
+        """
+        Sync iteration not supported for async cursor
+        
+        Raises:
+            TypeError: Always (use 'async for' instead)
+        """
+        raise TypeError("Use 'async for' with AsyncCursor")
+    
+    # =========================================================================
+    # Context Manager
+    # =========================================================================
+
     
     async def __aenter__(self) -> 'AsyncCursor':
         """Async context manager entry"""

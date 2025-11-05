@@ -40,33 +40,31 @@ from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
 from ..message.client.reset_connection_packet import ResetConnectionPacket
 from ..message.client.query_packet import QueryPacket
-from ..message.client.ping_packet import PingPacket
 from ..message.client.quit_packet import QuitPacket
 from ..message.client.prepare_packet import PreparePacket
-from ..message.client.execute_packet import ExecutePacket
 from ..message.client.change_user_packet import ChangeUserPacket
 from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..completion import Completion
 from ...exceptions import OperationalError, DatabaseError, NotSupportedError
-from mariadb_shared.constants import STATUS, FIELD_TYPE, FIELD_FLAG
+from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
 
 
 class AsyncClient(BaseClient):
     """
-    Async client implementation for MariaDB connections
+    Asynchronous client implementation for MariaDB connections
     
-    Uses asyncio for non-blocking I/O operations.
+    Handles all low-level protocol communication with the MariaDB server
+    using non-blocking I/O operations with asyncio.
+ 
     """
     
+    # =========================================================================
+    # Initialization
+    # =========================================================================
+    
     def __init__(self, configuration: Configuration, host_address: HostAddress) -> None:
-        """
-        Initialize async client
-        
-        Args:
-            configuration: Connection configuration
-            host_address: Host address to connect to
-        """
+        """Initialize asynchronous client with configuration and host address"""
         super().__init__(configuration, host_address)
         
         # Async-specific attributes
@@ -75,12 +73,7 @@ class AsyncClient(BaseClient):
         self.stream: Optional[AsyncStream] = None
         
     async def connect(self) -> None:
-        """
-        Establish connection to MariaDB server with host failover support
-        
-        Raises:
-            OperationalError: If connection fails to all hosts
-        """
+        """Establish async connection to MariaDB server with host failover support"""
         if self.connected:
             return
         
@@ -117,12 +110,7 @@ class AsyncClient(BaseClient):
             raise self.exception_factory.create_connection_exception("Connection failed: No hosts to try")
     
     async def _create_socket(self) -> None:
-        """
-        Create and configure socket connection asynchronously
-        
-        Raises:
-            OperationalError: If socket creation fails
-        """
+        """Create and configure async TCP or Unix socket connection"""
         try:
             if self.configuration.socket_path:
                 # Unix socket connection
@@ -167,12 +155,7 @@ class AsyncClient(BaseClient):
             )
     
     async def _perform_handshake(self) -> None:
-        """
-        Perform MySQL handshake protocol asynchronously
-        
-        Raises:
-            OperationalError: If handshake fails
-        """
+        """Perform initial handshake and authentication with server asynchronously"""
         try:
             # Read initial handshake packet from server
             handshake_packet: bytes = await self.stream.read_payload()
@@ -206,10 +189,7 @@ class AsyncClient(BaseClient):
             raise e
     
     async def _ensure_default(self) -> None:
-        """
-        Ensure the connection charset is set to utf8mb4.
-        If not already set, execute SET NAMES utf8mb4 command.
-        """
+        """Ensure autocommit and charset are correctly set"""
         sql_commands = []
         if ((self.context.server_status & constants.STATUS.AUTOCOMMIT) > 0) != self.configuration.autocommit:
             sql_commands.append('autocommit = ' + str(int(self.configuration.autocommit)))
@@ -225,12 +205,7 @@ class AsyncClient(BaseClient):
     # _parse_handshake() and _calculate_client_capabilities() are inherited from BaseClient
     
     async def _handle_ssl_connection(self, client_capabilities: int) -> None:
-        """
-        Handle SSL connection setup
-        
-        Raises:
-            OperationalError: If SSL setup fails
-        """
+        """Setup SSL/TLS connection if configured"""
         # Check if server supports SSL
         if not self.context.has_capability(constants.CAPABILITY.SSL):
             raise OperationalError("Trying to connect with SSL, but SSL not enabled in the server")
@@ -280,17 +255,7 @@ class AsyncClient(BaseClient):
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
 
     async def change_user(self, user: str, password: str, database: Optional[str] = None) -> None:
-        """
-        Change the user for the current connection
-        
-        Args:
-            user: New username
-            password: New password
-            database: Optional database to select
-            
-        Raises:
-            OperationalError: If change user fails
-        """
+        """Change current user and database asynchronously"""
         try:           
             # Get charset collation from configuration
             charset_collation = self.configuration.collation_id if hasattr(self.configuration, 'collation_id') else 45
@@ -334,12 +299,7 @@ class AsyncClient(BaseClient):
             )
 
     async def _handle_authentication(self) -> None:
-        """
-        Handle authentication process using plugin system
-        
-        Raises:
-            OperationalError: If authentication fails
-        """
+        """Process authentication response from server using plugin system"""
         # Import plugin system
         from ..plugin.authentication.plugin_registry import register_builtin_plugins
         
@@ -353,14 +313,14 @@ class AsyncClient(BaseClient):
         if len(auth_result) > 0:
             packet_type = auth_result[0]
             
-            if packet_type == 0x00:
+            if packet_type == self.OK_PACKET:
                 # OK packet - authentication successful with handshake response
                 OkPacket.decode(auth_result, self.context)
                 return
-            elif packet_type == 0xFF:
+            elif packet_type == self.ERROR_PACKET:
                 # Error packet - authentication failed
                 raise ErrorPacket.decode(auth_result, self.context).toError(self.exception_factory)
-            elif packet_type == 0xFE:
+            elif packet_type == self.EOF_PACKET:
                 # Auth switch request - server wants different plugin
                 await self._handle_auth_switch(auth_result)
                 return
@@ -372,15 +332,7 @@ class AsyncClient(BaseClient):
         raise OperationalError("Empty authentication result packet")
     
     async def _handle_auth_switch(self, packet: bytearray) -> None:
-        """
-        Handle authentication switch request
-        
-        Args:
-            packet: Auth switch packet
-            
-        Raises:
-            OperationalError: If authentication fails
-        """
+        """Handle authentication plugin switch request"""
         if len(packet) < 2:
             raise OperationalError("Invalid auth switch packet")
         
@@ -415,12 +367,7 @@ class AsyncClient(BaseClient):
     # _handle_plugin_auth_continue() and _handle_auth_final_response() inherited from BaseClient
     
     async def _execute_init_command(self) -> None:
-        """
-        Execute initialization command if specified in configuration
-        
-        Raises:
-            OperationalError: If init command execution fails
-        """
+        """Execute initialization command if specified in configuration"""
         if self.configuration.init_command:
             try:
                 init_command = self.configuration.init_command.strip()
@@ -437,9 +384,7 @@ class AsyncClient(BaseClient):
                 raise OperationalError(f"Failed to execute init command '{self.configuration.init_command}': {e}")
     
     def _enable_compression_if_negotiated(self) -> None:
-        """
-        Enable compression if it was negotiated during handshake
-        """
+        """Enable compression if negotiated during handshake"""
         if (self.context.has_client_capability(constants.CAPABILITY.COMPRESS)):
             
             # Wrap the asyncio reader/writer with async compression stream
@@ -450,38 +395,16 @@ class AsyncClient(BaseClient):
             self.stream.writer = new_writer
     
     async def _send_message(self, message: ClientMessage) -> None:
-        """
-        Send client message to server
-        
-        Args:
-            message: Message to send
-            
-        Raises:
-            OperationalError: If send fails
-        """
+        """Send client message to server"""
         try:
-            await self.stream.send_payload(message.encode(self.context), message.type(), reset_sequence=true)
+            await self.stream.send_payload(message.encode(self.context), message.type(), reset_sequence=True)
         except NotSupportedError as e:
             raise e    
         except Exception as e:
             raise OperationalError(f"Failed to send message: {e}")
     
     async def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False, buffered: bool = True) -> List[Completion]:
-        """
-        Send client message and read result
-        
-        Args:
-            message: Client message to send
-            can_redo: Whether the message can be redone in case of failover
-            config: Configuration to use for parsing (defaults to client config if None)
-            buffered: If True, read all rows immediately. If False, return streaming result.
-            
-        Returns:
-            List of completion results
-            
-        Raises:
-            SQLException: If execution fails
-        """
+        """Execute command asynchronously and return list of completion results"""
         with self.lock:
             if self.closed:
                 raise OperationalError("Connection is closed")
@@ -512,13 +435,21 @@ class AsyncClient(BaseClient):
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")
     
+    # =========================================================================
+    # Connection Control
+    # =========================================================================
+    
+    async def ping(self) -> None:
+        """Send ping command to server asynchronously"""
+        from ..message.client.ping_packet import PingPacket
+        await self.execute(PingPacket(), self.configuration)
     
     async def abort(self, executor: Any) -> None:
         """Abort connection"""
         await self.close()
     
     async def close(self) -> None:
-        """Close client connection"""
+        """Close connection and cleanup resources asynchronously"""
         with self.lock:
             if self.closed:
                 return
@@ -538,70 +469,60 @@ class AsyncClient(BaseClient):
     
     
     def set_socket_timeout(self, seconds: float) -> None:
-        """Set socket timeout"""
+        """Set socket timeout in seconds"""
         self.socket_timeout = seconds
         # Note: asyncio doesn't support setting timeout on individual sockets
         # Timeouts should be handled at the operation level using asyncio.wait_for()
     
     async def reset(self) -> None:
-        """Reset connection"""
-        # Simplified implementation
+        """Reset connection state without reconnecting asynchronously"""
         await self.execute(ResetConnectionPacket())
     
+    # =========================================================================
+    # SSL/TLS Information
+    # =========================================================================
+    
     def get_ssl_cipher(self) -> Optional[tuple]:
-        """
-        Get current SSL cipher information
-        
-        Returns:
-            Cipher tuple (name, version, bits) or None if not using SSL
-        """
-        if not self.writer:
-            return None
-        try:
-            ssl_object = self.writer.transport.get_extra_info('ssl_object')
-            if ssl_object:
-                return ssl_object.cipher()
-        except:
-            pass
+        """Get current SSL cipher information"""
+        if self.writer and hasattr(self.writer, '_transport'):
+            transport = self.writer._transport
+            if hasattr(transport, 'get_extra_info'):
+                ssl_object = transport.get_extra_info('ssl_object')
+                if ssl_object and hasattr(ssl_object, 'cipher'):
+                    try:
+                        return ssl_object.cipher()
+                    except:
+                        return None
         return None
     
     def get_ssl_version(self) -> Optional[str]:
-        """
-        Get current TLS/SSL version
-        
-        Returns:
-            TLS version string (e.g., 'TLSv1.3') or None if not using SSL
-        """
-        if not self.writer:
-            return None
-        try:
-            ssl_object = self.writer.transport.get_extra_info('ssl_object')
-            if ssl_object:
-                return ssl_object.version()
-        except:
-            pass
+        """Get current TLS/SSL version string"""
+        if self.writer and hasattr(self.writer, '_transport'):
+            transport = self.writer._transport
+            if hasattr(transport, 'get_extra_info'):
+                ssl_object = transport.get_extra_info('ssl_object')
+                if ssl_object and hasattr(ssl_object, 'version'):
+                    try:
+                        return ssl_object.version()
+                    except:
+                        return None
         return None
     
     def get_peer_certificate(self) -> Optional[dict]:
-        """
-        Get peer SSL certificate information
-        
-        Returns:
-            Certificate dict or None if not using SSL
-        """
-        if not self.writer:
-            return None
-        try:
-            ssl_object = self.writer.transport.get_extra_info('ssl_object')
-            if ssl_object:
-                return ssl_object.getpeercert()
-        except:
-            pass
+        """Get peer SSL certificate information"""
+        if self.writer and hasattr(self.writer, '_transport'):
+            transport = self.writer._transport
+            if hasattr(transport, 'get_extra_info'):
+                ssl_object = transport.get_extra_info('ssl_object')
+                if ssl_object and hasattr(ssl_object, 'getpeercert'):
+                    try:
+                        return ssl_object.getpeercert()
+                    except:
+                        return None
         return None
     
-    
     def get_socket_ip(self) -> Optional[str]:
-        """Get socket IP"""
+        """Get socket IP address"""
         if not self.writer:
             return None
         try:
@@ -613,29 +534,15 @@ class AsyncClient(BaseClient):
         return None
     
     async def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> Completion:
-        """
-        Parse result packet into completion
-        
-        Args:
-            packet: Result packet data
-            config: Configuration for parsing
-            is_binary: Whether result uses binary protocol
-            buffered: If True, read all rows. If False, create streaming result.
-            
-        Returns:
-            Completion object
-            
-        Raises:
-            OperationalError: If packet is invalid
-        """
+        """Parse result packet into completion object asynchronously"""
         if len(packet) == 0:
             raise OperationalError("Empty result packet")
         
         packet_type = packet[0]
-        if packet_type == 0x00:
+        if packet_type == self.OK_PACKET:
             # OK packet
-            return OkPacket.decode(auth_result, self.context)
-        elif packet_type == 0xFF:
+            return OkPacket.decode(packet, self.context)
+        elif packet_type == self.ERROR_PACKET:
             # Error packet
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
@@ -646,18 +553,7 @@ class AsyncClient(BaseClient):
     # and _process_schema_change() are inherited from BaseClient
     
     async def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> 'Completion':
-        """
-        Parse result set according to MySQL/MariaDB protocol
-        
-        Args:
-            packet: First packet containing column count
-            config: Configuration for parsing
-            is_binary: Whether result uses binary protocol
-            buffered: If True, read all rows. If False, create streaming result.
-            
-        Returns:
-            Completion object with result set data or streaming result
-        """
+        """Parse result set with column definitions and row data asynchronously"""
         from ..completion import Completion
         
         try:
@@ -704,7 +600,7 @@ class AsyncClient(BaseClient):
                 
                 # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
                 # EOF/OK packets start with 0xFE and have specific length constraints
-                if (row_packet[0] == 0xFE and 
+                if (row_packet[0] == self.EOF_PACKET and 
                     ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
                      (not self.context.isEofDeprecated() and len(row_packet) < 8))):
                     
@@ -740,7 +636,7 @@ class AsyncClient(BaseClient):
             raise OperationalError(f"Failed to parse result set: {e}")
     
     async def _cleanup_connection(self) -> None:
-        """Clean up connection resources"""       
+        """Cleanup socket and stream resources asynchronously"""       
         if hasattr(self, 'writer') and self.writer:
             try:
                 self.writer.close()
@@ -753,29 +649,19 @@ class AsyncClient(BaseClient):
         if hasattr(self, 'stream'):
             self.stream = None
     
+    # =========================================================================
+    # Prepared Statements
+    # =========================================================================
+    
     async def prepare_statement(self, sql: str) -> PrepareStmtPacket:
-        """
-        Prepare a SQL statement
-        
-        Args:
-            sql: SQL statement to prepare
-            
-        Returns:
-            PrepareStmtPacket object
-            
-        Raises:
-            OperationalError: If preparation fails
-        """
+        """Prepare SQL statement and return statement info asynchronously"""
         with self.lock:
             if self.closed:
                 raise OperationalError("Connection is closed")
             
             try:
-                # Send prepare packet
                 prepare_packet = PreparePacket(sql)
                 await self._send_message(prepare_packet)
-                
-                # Read prepare response - this has special handling
                 return self._parse_prepare_response(await self.stream.read_payload(), sql)
                 
             except DatabaseError as e:
@@ -784,28 +670,16 @@ class AsyncClient(BaseClient):
                 raise OperationalError(f"Statement preparation failed: {e}")
     
     async def _parse_prepare_response(self, packet: bytearray, sql: str) -> PrepareStmtPacket:
-        """
-        Parse prepare response packet
-        
-        Args:
-            packet: Response packet data
-            sql: Original SQL statement
-            
-        Returns:
-            PrepareStmtPacket object
-            
-        Raises:
-            OperationalError: If response is invalid
-        """
+        """Parse COM_STMT_PREPARE response packet asynchronously"""
         if len(packet) == 0:
             raise OperationalError("Empty prepare response packet")
         
         packet_type = packet[0]
         
-        if packet_type == 0xFF:
+        if packet_type == self.ERROR_PACKET:
             # Error packet
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
-        elif packet_type == 0x00:
+        elif packet_type == self.OK_PACKET:
             prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context)
             # Read parameter metadata if present
             if prepare_stmt_packet.parameter_count > 0:
@@ -833,12 +707,7 @@ class AsyncClient(BaseClient):
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
     
     async def close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
-        """
-        Close a prepared statement
-        
-        Args:
-            stmt: Prepared statement to close
-        """
+        """Close prepared statement and free resources asynchronously"""
         if stmt.is_closed():
             return
         
@@ -852,59 +721,3 @@ class AsyncClient(BaseClient):
             pass
         finally:
             stmt.close()
-
-
-    def get_ssl_cipher(self) -> Optional[tuple]:
-        """
-        Get current SSL cipher information
-        
-        Returns:
-            Cipher tuple (name, version, bits) or None if not using SSL
-        """
-        if self.writer and hasattr(self.writer, '_transport'):
-            transport = self.writer._transport
-            if hasattr(transport, 'get_extra_info'):
-                ssl_object = transport.get_extra_info('ssl_object')
-                if ssl_object and hasattr(ssl_object, 'cipher'):
-                    try:
-                        return ssl_object.cipher()
-                    except:
-                        return None
-        return None
-    
-    def get_ssl_version(self) -> Optional[str]:
-        """
-        Get current TLS/SSL version
-        
-        Returns:
-            TLS version string (e.g., 'TLSv1.3') or None if not using SSL
-        """
-        if self.writer and hasattr(self.writer, '_transport'):
-            transport = self.writer._transport
-            if hasattr(transport, 'get_extra_info'):
-                ssl_object = transport.get_extra_info('ssl_object')
-                if ssl_object and hasattr(ssl_object, 'version'):
-                    try:
-                        return ssl_object.version()
-                    except:
-                        return None
-        return None
-    
-    def get_peer_certificate(self) -> Optional[dict]:
-        """
-        Get peer SSL certificate information
-        
-        Returns:
-            Certificate dict or None if not using SSL
-        """
-        if self.writer and hasattr(self.writer, '_transport'):
-            transport = self.writer._transport
-            if hasattr(transport, 'get_extra_info'):
-                ssl_object = transport.get_extra_info('ssl_object')
-                if ssl_object and hasattr(ssl_object, 'getpeercert'):
-                    try:
-                        return ssl_object.getpeercert()
-                    except:
-                        return None
-        return None
-    

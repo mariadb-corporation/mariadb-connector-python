@@ -44,6 +44,11 @@ class Result(ABC):
     Abstract base class for result sets
     
     Based on Java Result.java
+    
+    Organization:
+    1. Initialization
+    2. Abstract Methods
+    3. Utility Methods
     """
     
     def __init__(
@@ -70,6 +75,10 @@ class Result(ABC):
         self.warning_count: int = 0
         self.is_output_parameters: bool = False
         self.row_pointer: int = -1  # Current row position (-1 = before first)
+    
+    # =========================================================================
+    # Abstract Methods
+    # =========================================================================
         
     @abstractmethod
     def streaming(self) -> bool:
@@ -101,6 +110,10 @@ class Result(ABC):
         """Get total row count (-1 if unknown)"""
         pass
     
+    # =========================================================================
+    # Utility Methods
+    # =========================================================================
+    
     def row_number(self) -> Optional[int]:
         """
         Get current row number (1-based, DB-API style)
@@ -118,6 +131,8 @@ class CompleteResult(Result):
     Complete (buffered) result set - all rows read immediately
     
     Based on Java CompleteResult.java
+    
+    All rows are loaded into memory at once, allowing random access.
     """
     
     def __init__(
@@ -237,6 +252,8 @@ class BaseStreamingResult(Result):
     Base class for streaming (unbuffered) result sets
     
     Based on Java StreamingResult.java
+    
+    Rows are fetched one at a time from the network as needed.
     """
     
     def __init__(
@@ -336,6 +353,8 @@ class BaseStreamingResult(Result):
 class SyncStreamingResult(BaseStreamingResult):
     """
     Synchronous streaming (unbuffered) result set
+    
+    Uses blocking I/O to fetch rows from the network.
     """
     
     def _read_next_row_packet(self) -> Optional[bytes]:
@@ -387,6 +406,8 @@ class SyncStreamingResult(BaseStreamingResult):
 class AsyncStreamingResult(BaseStreamingResult):
     """
     Asynchronous streaming (unbuffered) result set
+    
+    Uses non-blocking I/O to fetch rows from the network.
     """
     
     async def _read_next_row_packet(self) -> Optional[bytes]:

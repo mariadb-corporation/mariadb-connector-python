@@ -36,28 +36,16 @@ class ClientMessage(ABC):
     
     @abstractmethod
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode message to writer asynchronously
-        
-        Args:
-            context: Connection context
-            
-        Raises:
-            IOError: If encoding fails
-        """
+        """Encode message to writer asynchronously"""
         pass
 
 
     @abstractmethod
     def is_binary(self) -> bool:
-        """
-        indicate if message is binary
-        """
+        """indicate if message is binary"""
         return False
 
     @abstractmethod
     def type(self) -> str:
-        """
-        indicate message type
-        """
+        """indicate message type"""
         return ""

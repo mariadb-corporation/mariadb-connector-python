@@ -89,16 +89,7 @@ class Configuration:
     
     @staticmethod
     def parse_hosts(host_string: str, default_port: int = 3306) -> List[Tuple[str, int]]:
-        """
-        Parse host string into list of (host, port) tuples
-        
-        Args:
-            host_string: Host string like 'host1:3306,host2:3308' or 'localhost'
-            default_port: Default port to use if not specified in host
-            
-        Returns:
-            List of (host, port) tuples
-        """
+        """Parse host string into list of (host, port) tuples for failover"""
         hosts = []
         
         # Split by comma for multiple hosts
@@ -124,25 +115,12 @@ class Configuration:
         return hosts
     
     def get_hosts(self) -> List[Tuple[str, int]]:
-        """
-        Get list of (host, port) tuples for connection attempts
-        
-        Returns:
-            List of (host, port) tuples to try in order
-        """
+        """Get list of (host, port) tuples for connection attempts"""
         return self.parse_hosts(self.host, self.port)
     
     @classmethod
     def from_dict(cls, params: Dict[str, Any]) -> 'Configuration':
-        """
-        Create Configuration from dictionary
-        
-        Args:
-            params: Connection parameters dictionary
-            
-        Returns:
-            Configuration instance
-        """
+        """Create Configuration instance from dictionary of parameters"""
         config = cls()
         
         # Map common parameters
@@ -252,12 +230,7 @@ class Configuration:
         return config
     
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert Configuration to dictionary
-        
-        Returns:
-            Dictionary representation
-        """
+        """Convert Configuration to dictionary of parameters"""
         result = {
             'host': self.host,
             'port': self.port,

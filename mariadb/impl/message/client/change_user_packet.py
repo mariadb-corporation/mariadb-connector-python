@@ -46,18 +46,7 @@ class ChangeUserPacket(ClientMessage):
                  database: Optional[str] = None,
                  charset_collation: int = 33,  # utf8mb4_general_ci
                  connect_attrs: Optional[dict] = None):
-        """
-        Initialize COM_CHANGE_USER packet
-        
-        Args:
-            username: New username
-            password: New password (optional)
-            database: New default database (optional)
-            charset_collation: Character set collation ID
-            auth_plugin: Authentication plugin name
-            auth_response: Pre-computed authentication response
-            connect_attrs: Connection attributes
-        """
+        """Initialize COM_CHANGE_USER packet with username, password, database, and charset"""
         self.username = username or ""
         self.password = password
         self.database = database or ""
@@ -65,28 +54,7 @@ class ChangeUserPacket(ClientMessage):
         self.connect_attrs = connect_attrs or {}
     
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode COM_CHANGE_USER packet
-        
-        Args:
-            context: Connection context
-        
-        Packet format:
-        - int<1>: 0x11 (COM_CHANGE_USER)
-        - string: username (null-terminated)
-        - If CLIENT_SECURE_CONNECTION:
-            - int<1>: length of auth response
-            - string: auth response (not null-terminated)
-        - Else:
-            - string: auth response (null-terminated)
-        - string: database name (null-terminated)
-        - int<2>: charset collation
-        - If CLIENT_PLUGIN_AUTH:
-            - string: auth plugin name (null-terminated)
-        - If CLIENT_CONNECT_ATTRS:
-            - int: size of connection attributes
-            - Loop: key-value pairs (length-encoded strings)
-        """
+        """Encode COM_CHANGE_USER packet with username, auth response, database, charset, and attributes"""
         # Build payload
         writer = PayloadWriter()
         

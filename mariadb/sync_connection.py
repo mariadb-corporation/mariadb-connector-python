@@ -42,12 +42,19 @@ class SyncConnection(BaseConnection):
     All I/O operations are synchronous and blocking.
     """
     
+    # =========================================================================
+    # Initialization and Context Managers
+    # =========================================================================
+    
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
-        Initialize synchronous connection
+        Initialize synchronous connection and connect immediately
         
         Args:
             **kwargs: Connection parameters (host, user, password, database, etc.)
+            
+        Raises:
+            OperationalError: If connection fails
         """
         super().__init__(*args, **kwargs)
         # Create sync client
@@ -64,10 +71,17 @@ class SyncConnection(BaseConnection):
         if self._configuration.autocommit:
             self.set_autocommit(True)
     
-    def __enter__(self):
+    def __enter__(self) -> 'SyncConnection':
+        """Context manager entry"""
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        """
+        Context manager exit
+        
+        Automatically commits on success, rolls back on exception,
+        and closes the connection.
+        """
         if exc_type:
             self.rollback()
         else:
@@ -75,16 +89,26 @@ class SyncConnection(BaseConnection):
         self.close()
         return False
 
-    def cursor(self, cursor_class=None, **kwargs):
+    # =========================================================================
+    # Core Connection Methods
+    # =========================================================================
+
+    def cursor(self, cursor_class=None, **kwargs) -> 'SyncCursor':
         """
-        Returns a new sync cursor object for the current connection
+        Create a new cursor for executing queries
         
         Args:
             cursor_class: Optional custom cursor class
-            **kwargs: Additional cursor parameters (named_tuple, dictionary, etc.)
+            **kwargs: Additional cursor parameters:
+                - named_tuple: Return rows as named tuples
+                - dictionary: Return rows as dictionaries
+                - buffered: Buffer all results immediately
             
         Returns:
             SyncCursor object
+            
+        Raises:
+            ProgrammingError: If connection is closed
         """
         self._check_closed()
         
@@ -114,24 +138,16 @@ class SyncConnection(BaseConnection):
             else:
                 return cursor_class(self, **kwargs)
     
-    def commit(self) -> None:
-        """Commit the current transaction"""
-        self._check_closed()
-        if self._xid is not None:
-            raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
-        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            self._client.execute(QueryPacket("COMMIT"), self._configuration, True)
-    
-    def rollback(self) -> None:
-        """Rollback the current transaction"""
-        self._check_closed()
-        if self._xid is not None:
-            raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
-        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            self._client.execute(QueryPacket("ROLLBACK"), self._configuration, True)
-    
     def close(self) -> None:
-        """Close the connection"""
+        """
+        Close the database connection
+        
+        If this is a pooled connection, returns it to the pool.
+        Otherwise, closes the underlying socket connection.
+        
+        Raises:
+            OperationalError: If close fails
+        """
         if self._pooled_connection:
             self._pooled_connection.return_to_pool()
             return
@@ -150,7 +166,14 @@ class SyncConnection(BaseConnection):
                 self._closed = True
     
     def ping(self) -> None:
-        """Check if the connection to the server is alive"""
+        """
+        Check if the connection to the server is alive
+        
+        Sends a ping command to verify the connection is active.
+        
+        Raises:
+            OperationalError: If ping fails or connection is dead
+        """
         self._check_closed()
         try:
             self._client.execute(PingPacket(), self._configuration)
@@ -161,25 +184,16 @@ class SyncConnection(BaseConnection):
                 sql_state='HY000'
             )
     
-    def begin(self) -> None:
-        """Start a new transaction"""
-        self._check_closed()
-        self._client.execute(QueryPacket("BEGIN", self._configuration))
-    
-    def kill(self, id: int) -> None:
-        """Kill a database connection specified by the process id parameter"""
-        self._check_closed()
-        try:
-            self._client.execute(QueryPacket(f"KILL {id}"), self._configuration, True)
-        except Exception as e:
-            raise self._exception_factory.create_exception(
-                f"Failed to kill connection {id}: {e}",
-                errno=2013,
-                sql_state='HY000'
-            )
-    
     def reconnect(self) -> None:
-        """Reconnect to the database server"""
+        """
+        Reconnect to the database server
+        
+        Closes the current connection and establishes a new one
+        with the same parameters.
+        
+        Raises:
+            OperationalError: If reconnection fails
+        """
         try:
             if not self._closed:
                 self.close()
@@ -199,7 +213,15 @@ class SyncConnection(BaseConnection):
             )
     
     def reset(self) -> None:
-        """Reset the connection"""
+        """
+        Reset the connection state
+        
+        Clears session variables, temporary tables, and prepared statements
+        without reconnecting.
+        
+        Raises:
+            OperationalError: If reset fails
+        """
         self._check_closed()
         try:
             from .impl.message.client.reset_connection_packet import ResetConnectionPacket
@@ -211,12 +233,23 @@ class SyncConnection(BaseConnection):
                 sql_state='HY000'
             )
     
-    def change_user(self, user: str, password: str, database: Optional[str] = None) -> None:
-        """Change the user and database of the current connection"""
+    def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
+        """
+        Change the user and database of the current connection
+        
+        Args:
+            user: New username (None = keep current)
+            password: New password (None = keep current)
+            database: New database (None = keep current)
+            
+        Raises:
+            OperationalError: If change user fails
+        """
         self._check_closed()
         try:
             self._client.change_user(user, password, database)
-            self._user = user
+            if user is not None:
+                self._user = user
             if database is not None:
                 self._database = database
         except Exception as e:
@@ -228,55 +261,74 @@ class SyncConnection(BaseConnection):
                 sql_state='HY000'
             )
     
-    @property
-    def database(self) -> Optional[str]:
-        """Get current database name"""
-        if self._client:
-            context_db = self._client.context.database
-            if context_db is not None:
-                return context_db
-        return self._database
-    
-    @database.setter
-    def database(self, value: Optional[str]) -> None:
-        """Set database name"""
+    def kill(self, connection_id: int) -> None:
+        """
+        Kill a database connection
+        
+        Args:
+            connection_id: Connection ID to kill
+            
+        Raises:
+            OperationalError: If kill fails
+        """
         self._check_closed()
-        context_db = self._client.context.database
-        if context_db != value:
-            from .impl.message.client.change_db_packet import ChangeDbPacket
-            self._client.execute(ChangeDbPacket(value), self._configuration)
-        self._database = value
-    
-    @property
-    def autocommit(self) -> bool:
-        """Get current autocommit status"""
-        if self._client:
-            return (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
-        return False
-    
-    @autocommit.setter
-    def autocommit(self, value: bool) -> None:
-        """Set autocommit status"""
-        self.set_autocommit(value)
-    
-    def set_autocommit(self, value: bool) -> None:
-        """Set autocommit status"""
-        self._check_closed()
-        current = (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
-        if current != bool(value):
-            self._client.execute(QueryPacket(f"SET autocommit={1 if bool(value) else 0}"), self._configuration)
-    
-    def show_warnings(self) -> Optional[List[tuple]]:
-        """Shows error, warning and note messages from last executed command"""
-        self._check_closed()
-        from .sync_cursor import SyncCursor
-        cursor = SyncCursor(self)
         try:
-            cursor.execute(QueryPacket("SHOW WARNINGS"), self._configuration)
-            return cursor.fetchall()
-        finally:
-            cursor.close()
+            self._client.execute(QueryPacket(f"KILL {connection_id}"), self._configuration, True)
+        except Exception as e:
+            raise self._exception_factory.create_exception(
+                f"Failed to kill connection {connection_id}: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
 
+    # =========================================================================
+    # Transaction Methods
+    # =========================================================================
+    
+    def commit(self) -> None:
+        """
+        Commit the current transaction
+        
+        Makes all changes since the last commit/rollback permanent.
+        
+        Raises:
+            ProgrammingError: If called during XA transaction
+        """
+        self._check_closed()
+        if self._xid is not None:
+            raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
+        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
+            self._client.execute(QueryPacket("COMMIT"), self._configuration, True)
+    
+    def rollback(self) -> None:
+        """
+        Rollback the current transaction
+        
+        Discards all changes since the last commit/rollback.
+        
+        Raises:
+            ProgrammingError: If called during XA transaction
+        """
+        self._check_closed()
+        if self._xid is not None:
+            raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
+        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
+            self._client.execute(QueryPacket("ROLLBACK"), self._configuration, True)
+    
+    
+    def begin(self) -> None:
+        """
+        Start a new transaction explicitly
+        
+        Note: Transactions usually start implicitly when autocommit is off.
+        """
+        self._check_closed()
+        self._client.execute(QueryPacket("BEGIN"), self._configuration)
+
+    # =========================================================================
+    # TPC/XA Transaction Methods
+    # =========================================================================
+    
     def tpc_begin(self, xid: Xid) -> None:
         """
         Parameter:
@@ -438,15 +490,112 @@ class SyncConnection(BaseConnection):
 
         self.tpc_state = TPC_STATE.PREPARE
 
-    def tpc_recover(self) -> list:
+    def tpc_recover(self) -> List[tuple]:
         """
         Returns a list of pending transaction IDs suitable for use with
         tpc_commit(xid) or .tpc_rollback(xid).
         """
-
         self._check_closed()
         cursor = self.cursor()
         cursor.execute("XA RECOVER")
         result = cursor.fetchall()
         del cursor
         return result
+        
+    # =========================================================================
+    # Properties and Setters
+    # =========================================================================
+    
+    @property
+    def database(self) -> Optional[str]:
+        """
+        Get current database name
+        
+        Returns:
+            Current database name, or None if no database selected
+        """
+        if self._client:
+            context_db = self._client.context.database
+            if context_db is not None:
+                return context_db
+        return self._database
+    
+    @database.setter
+    def database(self, value: Optional[str]) -> None:
+        """
+        Set database name
+        
+        Args:
+            value: Database name to select
+        """
+        self._check_closed()
+        context_db = self._client.context.database
+        if context_db != value:
+            from .impl.message.client.change_db_packet import ChangeDbPacket
+            self._client.execute(ChangeDbPacket(value), self._configuration)
+        self._database = value
+
+    @property
+    def autocommit(self) -> bool:
+        """
+        Get current autocommit status
+        
+        Returns:
+            True if autocommit is enabled, False otherwise
+        """
+        if self._client:
+            return (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
+        return False
+    
+    @autocommit.setter
+    def autocommit(self, value: bool) -> None:
+        """
+        Set autocommit status
+        
+        Args:
+            value: True to enable autocommit, False to disable
+        """
+        self.set_autocommit(value)
+
+    # =========================================================================
+    # Utility Methods
+    # =========================================================================
+    
+    def select_db(self, new_db: str) -> None:
+        """
+        Change the default database
+        
+        This is a convenience method that sets the database property.
+        
+        Args:
+            new_db: Database name to select
+        """
+        self.database = new_db
+    
+    def set_autocommit(self, value: bool) -> None:
+        """
+        Set autocommit status
+        
+        Args:
+            value: True to enable autocommit, False to disable
+        """
+        self._check_closed()
+        current = (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
+        if current != bool(value):
+            self._client.execute(QueryPacket(f"SET autocommit={1 if bool(value) else 0}"), self._configuration)
+    
+    def show_warnings(self) -> Optional[List[tuple]]:
+        """
+        Get warnings from the last executed command
+        
+        Returns:
+            List of warning tuples (level, code, message), or None if no warnings
+        """
+        self._check_closed()
+        from .sync_cursor import SyncCursor
+        cursor = SyncCursor(self)
+        try:
+            cursor.execute("SHOW WARNINGS")
+            return cursor.fetchall()
+        finally:
+            cursor.close()

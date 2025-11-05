@@ -17,13 +17,6 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-"""
-Native Password Authentication Plugin
-
-Implementation of mysql_native_password authentication plugin.
-Equivalent to the Java NativePasswordPlugin class.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -37,72 +30,32 @@ from ..authentication_plugin import AuthenticationPlugin, Credential
 class NativePasswordPlugin(AuthenticationPlugin):
     """
     Native password authentication plugin implementation
-    
-    Equivalent to the Java NativePasswordPlugin class.
     See https://mariadb.com/kb/en/library/authentication-plugin-mysql_native_password/
     """
         
     def __init__(self, authentication_data: Optional[str], seed: bytes):
-        """
-        Initialize plugin with authentication data and seed
-        
-        Args:
-            authentication_data: Password string
-            seed: Server provided seed
-        """
+        """Initialize plugin with authentication data and seed"""
         self.authentication_data = authentication_data
         self.seed = seed
 
     @staticmethod
     def encrypt_password(password: Optional[str], seed: bytes) -> bytes:
-        """
-        Encrypts a password using MySQL native password algorithm
-        
-        Protocol for authentication:
-        1. Server sends a random array of bytes (the seed)
-        2. Client makes a SHA1 digest of the password
-        3. Client hashes the output of step 2
-        4. Client digests the seed
-        5. Client updates the digest with the output from step 3
-        6. XOR of the output of step 5 and step 2 is sent to server
-        7. Server does the same thing and verifies that the scrambled passwords match
-        
-        Args:
-            password: The password to encrypt
-            seed: The seed to use
-            
-        Returns:
-            Scrambled password bytes
-        """
+        """Encrypts a password using MySQL native password algorithm"""
         if password is None or password == "":
             return b''
         
-        # Convert password to bytes
         password_bytes = password.encode('utf-8')
-        
-        # Step 2: SHA1 digest of the password
         stage1 = hashlib.sha1(password_bytes).digest()
-        
-        # Step 3: Hash the output of step 2
         stage2 = hashlib.sha1(stage1).digest()
-        
-        # Step 4-5: Digest the seed and update with stage2
         digest = hashlib.sha1()
         digest.update(seed)
         digest.update(stage2)
         stage3 = digest.digest()
-        
-        # Step 6: XOR stage1 and stage3
         result = bytes(a ^ b for a, b in zip(stage1, stage3))
         return result
     
     def _build_auth_payload(self) -> bytes:
-        """
-        Build authentication payload (shared logic)
-        
-        Returns:
-            Encrypted password bytes
-        """
+        """Build authentication payload"""
         if self.authentication_data is None:
             return bytes()
         
@@ -113,76 +66,27 @@ class NativePasswordPlugin(AuthenticationPlugin):
         return self.encrypt_password(self.authentication_data, truncated_seed)
     
     async def processAsync(self, stream: AsyncStream, context: Context) -> bytes:
-        """
-        Process native password plugin authentication (async)
-        
-        Args:
-            stream: Async stream for sending data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            IOError: If socket error occurs
-        """
-        # Build and send payload
+        """Process native password plugin authentication (async)"""
         encrypted = self._build_auth_payload()
         await stream.send_payload(encrypted, "NATIVE_PASSWORD", reset_sequence=False)
-        
-        # Read response packet
         return await stream.read_payload()
     
     def processSync(self, stream: SyncStream, context: Context) -> bytes:
-        """
-        Process native password plugin authentication (sync)
-        
-        Args:
-            stream: Sync stream for sending data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            IOError: If socket error occurs
-        """
-        # Build and send payload
+        """Process native password plugin authentication (sync)"""
         encrypted = self._build_auth_payload()
         stream.send_payload(encrypted, "NATIVE_PASSWORD", reset_sequence=False)
-        
-        # Read response packet
         return stream.read_payload()
     
     def is_mitm_proof(self) -> bool:
-        """
-        Native password plugin is MitM-proof
-        
-        Returns:
-            True
-        """
+        """Native password plugin is MitM-proof"""
         return True
     
     def hash(self, credential: Credential) -> Optional[bytes]:
-        """
-        Return hash for credential (double SHA1)
-        
-        Args:
-            credential: Credential to hash
-            
-        Returns:
-            Hash bytes (SHA1(SHA1(password)))
-        """
+        """Return hash for credential (double SHA1)"""
         password = credential.get_password()
         if password is None:
             return None
-        
         password_bytes = password.encode('utf-8')
-        
-        # SHA1(password)
         stage1 = hashlib.sha1(password_bytes).digest()
-        
-        # SHA1(SHA1(password))
-        stage2 = hashlib.sha1(stage1).digest()
-        
+        stage2 = hashlib.sha1(stage1).digest()       
         return stage2

@@ -36,13 +36,8 @@ def register_builtin_plugins():
     This function should be called during module initialization to ensure
     all standard authentication plugins are available.
     """
-    # Register native password plugin (most common)
     AuthenticationPluginLoader.register_plugin(NativePasswordPluginFactory)
-    
-    # Register caching SHA2 password plugin (MySQL 8.0 default)
     AuthenticationPluginLoader.register_plugin(CachingSha2PasswordPluginFactory)
-       
-    # Register Parsec password plugin (MariaDB Enterprise)
     AuthenticationPluginLoader.register_plugin(ParsecPasswordPluginFactory)
 
 

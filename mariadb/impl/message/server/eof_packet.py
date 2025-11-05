@@ -51,14 +51,7 @@ class EofPacket(Completion):
         server_status: int = 0,
         is_output_parameters: bool = False
     ):
-        """
-        Initialize EOF packet
-        
-        Args:
-            warning_count: Number of warnings
-            server_status: Server status flags
-            is_output_parameters: Whether this marks output parameters
-        """
+        """Initialize EOF packet with warning count and server status"""
         # Initialize parent Completion
         super().__init__(
             affected_rows=0,
@@ -76,24 +69,7 @@ class EofPacket(Completion):
 
     @staticmethod
     def decode(data: bytearray, context: 'Context') -> 'EofPacket':
-        """
-        Decode EOF packet from bytearray
-        
-        Args:
-            data: Packet data (including EOF marker)
-            context: Connection context
-            
-        Returns:
-            EofPacket instance
-            
-        Raises:
-            IOError: If packet parsing fails
-            
-        Note:
-            This method should only be used for traditional EOF packets
-            (when DEPRECATE_EOF is not enabled). When DEPRECATE_EOF is
-            enabled, the server sends OK packets with 0xFE header instead.
-        """
+        """Decode EOF packet from bytearray with context"""
         parser = PayloadParser(data)
         parser.read_byte() # Skip ERR marker
         warning_count = parser.read_int16()

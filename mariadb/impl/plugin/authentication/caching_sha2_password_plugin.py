@@ -17,17 +17,9 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-"""
-Caching SHA2 Password Authentication Plugin
-
-Implementation of caching_sha2_password authentication plugin.
-Equivalent to the Java CachingSha2PasswordPlugin class.
-"""
-
 from __future__ import annotations
 
 import hashlib
-import os
 from typing import Optional
 
 from ...configuration import Configuration
@@ -58,15 +50,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     TYPE = "caching_sha2_password"
     
     def __init__(self, authentication_data: Optional[str], seed: bytes, conf: Configuration, host_address: HostAddress):
-        """
-        Initialize plugin with authentication data and seed
-        
-        Args:
-            authentication_data: Password string
-            seed: Server provided seed
-            conf: Connection configuration
-            host_address: Host address
-        """
+        """Initialize plugin with authentication data and seed"""
         self.authentication_data: Optional[str] = authentication_data
         self.seed: bytes = seed
         self.conf: Configuration = conf
@@ -74,18 +58,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     
     @staticmethod
     def encrypt_password(password: Optional[str], seed: bytes) -> bytes:
-        """
-        Send an SHA-2 encrypted password
-        
-        Encryption: XOR(SHA256(password), SHA256(seed, SHA256(SHA256(password))))
-        
-        Args:
-            password: The password to encrypt
-            seed: The seed to use
-            
-        Returns:
-            Scrambled password bytes
-        """
+        """Send an SHA-2 encrypted password: XOR(SHA256(password), SHA256(seed, SHA256(SHA256(password))))"""
         if password is None:
             return b''
         
@@ -108,13 +81,8 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         result = bytes(a ^ b for a, b in zip(stage1, stage3))
         return result
     
-    def _build_initial_payload(self) -> bytes:
-        """
-        Build initial authentication payload (shared logic)
-        
-        Returns:
-            Payload bytes
-        """
+    def _build_initial_payload(self) -> bytearray:
+        """Build initial authentication payload"""
         writer = PayloadWriter()
         
         if self.authentication_data is None:
@@ -130,13 +98,8 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         
         return writer.get_payload()
     
-    def _build_cleartext_password_payload(self) -> bytes:
-        """
-        Build cleartext password payload for SSL connections (shared logic)
-        
-        Returns:
-            Payload bytes
-        """
+    def _build_cleartext_password_payload(self) -> bytearray:
+        """Build cleartext password payload for SSL connections"""
         writer = PayloadWriter()
         if self.authentication_data:
             password_bytes = self.authentication_data.encode('utf-8')
@@ -148,19 +111,8 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         return writer.get_payload()
     
     
-    def _encrypt_password_with_rsa(self, public_key_pem: str) -> bytes:
-        """
-        Encrypt password using RSA public key (shared logic)
-        
-        Args:
-            public_key_pem: PEM-encoded public key
-            
-        Returns:
-            Encrypted password bytes
-            
-        Raises:
-            OperationalError: If encryption fails
-        """
+    def _encrypt_password_with_rsa(self, public_key_pem: str) -> bytearray:
+        """Encrypt password using RSA public key """
         try:
             # Load the public key
             public_key = serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
@@ -199,20 +151,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
             raise OperationalError(f"RSA authentication failed: {e}")
     
     async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
-        """
-        Process caching SHA2 password plugin authentication (async)
-        
-        Args:
-            stream: Async stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            IOError: If socket error occurs
-            OperationalError: If authentication fails
-        """
+        """Process caching SHA2 password plugin authentication (async)"""
         # Build and send initial payload
         payload = self._build_initial_payload()
         await stream.send_payload(payload, "CACHING_SHA2_PASSWORD", reset_sequence=False)
@@ -268,20 +207,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         return response
     
     def processSync(self, stream: SyncStream, context: Context) -> bytearray:
-        """
-        Process caching SHA2 password plugin authentication (sync)
-        
-        Args:
-            stream: Sync stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            IOError: If socket error occurs
-            OperationalError: If authentication fails
-        """
+        """Process caching SHA2 password plugin authentication (sync)"""
         # Build and send initial payload
         payload = self._build_initial_payload()
         stream.send_payload(payload, "CACHING_SHA2_PASSWORD", reset_sequence=False)
@@ -337,24 +263,11 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         return response
     
     def is_mitm_proof(self) -> bool:
-        """
-        Caching SHA2 password plugin is MitM-proof
-        
-        Returns:
-            True
-        """
+        """Caching SHA2 password plugin is MitM-proof"""
         return True
     
     def hash(self, credential: Credential) -> Optional[bytes]:
-        """
-        Return hash for credential (double SHA256)
-        
-        Args:
-            credential: Credential to hash
-            
-        Returns:
-            Hash bytes (SHA256(SHA256(password)))
-        """
+        """Return hash for credential"""
         password = credential.get_password()
         if password is None:
             return None

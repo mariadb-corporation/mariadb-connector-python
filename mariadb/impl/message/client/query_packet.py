@@ -50,46 +50,24 @@ class QueryPacket(ClientMessage):
 
     """
     Query packet for SQL execution with optional parameter binding
-    
-    Supports both simple queries and parameterized queries for better performance.
     """
     
     
     def __init__(self, sql: str, parameters: Optional[List[Any]] = None):
-        """
-        Initialize query packet
-        
-        Args:
-            sql: SQL query string (may contain ? placeholders)
-            parameters: Optional list of parameters to bind
-        """
+        """Initialize COM_QUERY packet with SQL and optional parameters"""
         self.sql = sql
         self.parameters = parameters or []
         
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode query packet with optional parameter binding
-        
-        Args:
-            context: Connection context
-            
-        Raises:
-            IOError: If encoding fails
-        """
-        # Start payload mode
+        """Encode COM_QUERY packet with SQL and bound parameters"""
         writer = PayloadWriter()
-        
-        # Command type
         writer.write_byte(COM_QUERY)
-        
         if self.parameters:
             # Use parameter binding - write SQL with placeholders and parameters
             self._encode_parameterized_query(writer, context)
         else:
             # Simple query - write SQL directly
             writer.write_string(self.sql, 'utf-8')
-        
-        # Send packet with automatic header and chunking
         return writer.get_payload()
     
     def _encode_parameterized_query(self, writer: PayloadWriter, context: Context) -> None:

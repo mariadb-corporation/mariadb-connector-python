@@ -41,20 +41,36 @@ if TYPE_CHECKING:
 class SyncCursor(BaseCursor):
     """
     Synchronous MariaDB Cursor Object
+    
+    Provides methods for executing SQL queries and retrieving results.
+    Supports both regular queries and prepared statements.
+    
     """
+    
+    # =========================================================================
+    # Initialization and Lifecycle
+    # =========================================================================
 
     def __init__(self, connection: 'BaseConnection', **kwargs):
         """
         Initialize synchronous cursor with a connection
         
         Args:
-            connection: Database connection
-            **kwargs: Cursor options (buffered, named_tuple, dictionary, etc.)
+            connection: Database connection object
+            **kwargs: Cursor options:
+                - buffered: Buffer all results immediately
+                - named_tuple: Return rows as named tuples
+                - dictionary: Return rows as dictionaries
         """
         super().__init__(connection, **kwargs)
 
     def close(self) -> None:
-        """Close the cursor asynchronously"""
+        """
+        Close the cursor and free resources
+        
+        Consumes any remaining streaming results before closing.
+        After closing, the cursor cannot be used anymore.
+        """
         if not self._closed:
             # Consume any remaining streaming results
             if self._result is not None and self._result.streaming():
@@ -72,16 +88,35 @@ class SyncCursor(BaseCursor):
             self._completions = []
             self._completion_index = 0
             self._cursor_config = None
-            self._result = None 
+            self._result = None
+    
+    # =========================================================================
+    # Query Execution Methods
+    # =========================================================================
         
     def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None) -> None:
         """
-        Execute a database query or command
+        Execute a SQL query or command
+        
+        Supports parameterized queries using ? placeholders or named placeholders.
         
         Args:
             sql: SQL statement to execute
-            data: Optional parameters for the statement
-            buffered: Override cursor's buffered setting for this execution
+            data: Optional parameters:
+                - Sequence (list/tuple) for positional parameters (?)
+                - Dict for named parameters (:name)
+            buffered: Override cursor's buffered setting:
+                - True: Fetch all results immediately
+                - False: Stream results (default for large result sets)
+                - None: Use cursor's default setting
+                
+        Raises:
+            ProgrammingError: If cursor is closed or SQL is invalid
+            DatabaseError: If execution fails
+            
+        Example:
+            >>> cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
+            >>> cursor.execute("INSERT INTO users VALUES (?, ?)", (1, 'John'))
         """
         self._check_closed()
         
@@ -189,8 +224,19 @@ class SyncCursor(BaseCursor):
                 sql_state='HY000'
             )
         
+    # =========================================================================
+    # Result Fetching Methods
+    # =========================================================================
+        
     def fetchone(self) -> Optional[Any]:
-        """Fetch the next row of a query result set"""
+        """Fetch the next row of a query result set
+        
+        Returns:
+            The next row of the result set, or None if no more rows are available.
+        
+        Raises:
+            ProgrammingError: If cursor is closed or no result set is available.
+        """
         # Allow fetching from buffered results even if connection is closed
         if self._closed:
             raise ProgrammingError("Cursor is closed")
@@ -211,22 +257,7 @@ class SyncCursor(BaseCursor):
             return row
         
         return None
-
-    def _seek(self, offset: int) -> None:
-        """Move the cursor to the specified row"""
-        # Allow seeking in buffered results even if connection is closed
-        if self._closed:
-            raise ProgrammingError("Cursor is closed")
-        if self.connection._closed and (self._result is None or self._result.streaming()):
-            raise ProgrammingError("Cursor is closed")
-        
-        if self._result is None:
-            raise ValueError("No result set")
-        if self._result.streaming():
-            raise ValueError("Seek not supported for unbuffered cursors")
-        # For CompleteResult, use scroll with absolute mode
-        self._result.scroll(offset, mode='absolute')
-        
+            
     def fetchmany(self, size: Optional[int] = None) -> List[Any]:
         """Fetch the next set of rows of a query result"""
         # Allow fetching from buffered results even if connection is closed
@@ -268,82 +299,32 @@ class SyncCursor(BaseCursor):
             return self._apply_row_formatting(rows)
         
         return []
-        
-    def nextset(self) -> Optional[bool]:
-        """Skip to the next available result set"""
-        self._check_closed()
-        
-        # Move to next completion
-        self._completion_index += 1
-        
-        # Check if there are more completions
-        if self._completion_index >= len(self._completions):
-            return None
-        
-        # Process the next completion
-        self._process_current_completion()
-        return True
+    
 
-    def scroll(self, value: int, mode: str = "relative") -> None:
-        """
-        Scroll the cursor in the result set to a new position according to mode.
-
-        If mode is "relative" (default), value is taken as offset to the
-        current position in the result set, if set to absolute, value states
-        an absolute target position.
-        
-        Args:
-            value: Position value
-            mode: "relative" or "absolute"
-            
-        Raises:
-            ProgrammingError: If cursor has no result set or invalid parameters
-        """
-        # Allow scrolling in buffered results even if connection is closed
-        if self._closed:
-            raise ProgrammingError("Cursor is closed")
-        if self.connection._closed and (self._result is None or self._result.streaming()):
-            raise ProgrammingError("Cursor is closed")
-        
-        # Check if we have a result set
-        if self._result is None:
-            raise ProgrammingError("Cursor doesn't have a result set")
-        
-        if self._result.streaming():
-            raise ProgrammingError("Scroll not supported for unbuffered cursors")
-        
-        # Validate mode
-        if mode not in ("absolute", "relative"):
-            raise ProgrammingError("Invalid or unknown scroll mode specified.")
-        
-        # Delegate to Result object's scroll method
-        try:
-            self._result.scroll(value, mode)
-        except ValueError as e:
-            raise ProgrammingError(str(e))
-        
-    # Sync iterator
-    def __iter__(self) -> 'SyncCursor':
-        """Return iterator for cursor"""
-        return self
-        
-    def __next__(self) -> Any:
-        """Return next row"""
-        row = self.fetchone()
-        if row is None:
-            raise StopIteration
-        return row
+    # =========================================================================
+    # Stored Procedures
+    # =========================================================================
     
     def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:
         """
-        Call a stored procedure with the given name and arguments
+        Call a stored procedure
+        
+        Executes a stored procedure and processes all result sets.
         
         Args:
-            procname: Name of the stored procedure
-            args: Sequence of arguments for the procedure
+            procname: Name of the stored procedure to call
+            args: Sequence of arguments to pass to the procedure
             
         Returns:
-            Sequence of arguments (modified for output parameters)
+            None (matches C extension behavior)
+            
+        Raises:
+            ProgrammingError: If cursor is closed
+            DatabaseError: If procedure execution fails
+            
+        Example:
+            >>> cursor.callproc('get_user', (1,))
+            >>> result = cursor.fetchone()
         """
         self._check_closed()
         
@@ -367,10 +348,9 @@ class SyncCursor(BaseCursor):
                 return None  # Match C extension behavior
                 
             finally:
-                # Always close the prepared statement
                 self._client.close_prepared_statement(stmt)
         except DatabaseError as e:
-            raise e                            
+            raise e
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"CallProc failed: {e}",
@@ -378,29 +358,36 @@ class SyncCursor(BaseCursor):
                 sql_state='HY000'
             )
     
-    def nextset(self) -> Optional[bool]:
-        """
-        Move to the next result set
-        
-        Returns:
-            True if there are more result sets, False if no more, None if not supported
-        """
-        self._check_closed()
-        
-        if not hasattr(self, '_completions') or not self._completions:
-            return None
-        
-        # Move to next completion
-        self._completion_index += 1
-        
-        if self._completion_index >= len(self._completions):
-            return False
-        
-        # Process the next completion
-        self._process_current_completion()
-        return True
+    # =========================================================================
+    # Iterator Protocol
+    # =========================================================================
     
-    # Sync context manager
+    def __iter__(self) -> 'SyncCursor':
+        """
+        Return the cursor itself for iteration
+        
+        Allows using the cursor in for loops:
+            for row in cursor:
+                process(row)
+        """
+        return self
+    
+    def __next__(self) -> Any:
+        """
+        Return the next row from the result set
+        
+        Raises:
+            StopIteration: When no more rows are available
+        """
+        row = self.fetchone()
+        if row is None:
+            raise StopIteration
+        return row
+    
+    # =========================================================================
+    # Context Manager
+    # =========================================================================
+    
     def __enter__(self) -> 'SyncCursor':
         """Context manager entry"""
         return self

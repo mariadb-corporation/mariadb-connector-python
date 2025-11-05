@@ -17,12 +17,6 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-"""
-Native Password Authentication Plugin Factory
-
-Factory for creating NativePasswordPlugin instances.
-Equivalent to the Java NativePasswordPluginFactory class.
-"""
 
 from typing import Optional, Any
 from ..authentication_plugin_factory import AuthenticationPluginFactory
@@ -33,24 +27,13 @@ from .native_password_plugin import NativePasswordPlugin
 class NativePasswordPluginFactory(AuthenticationPluginFactory):
     """
     Native password authentication plugin factory
-    
-    Equivalent to the Java NativePasswordPluginFactory class.
     """
     
     def type(self) -> str:
-        """
-        Get authentication plugin type
-        
-        Returns:
-            Plugin type string
-        """
+        """Get authentication plugin type."""
         return "mysql_native_password"
     
     def initialize(self, authentication_data: Optional[str], seed: bytes, 
                   conf: Any, host_address: Any) -> AuthenticationPlugin:
-        """
-        Initialize native password plugin
-        Returns:
-            Initialized NativePasswordPlugin
-        """
+        """Initialize native password plugin with authentication data and seed."""
         return NativePasswordPlugin(authentication_data, seed)

@@ -38,26 +38,11 @@ class StmtClosePacket(ClientMessage):
     COM_STMT_CLOSE = 0x19
     
     def __init__(self, statement_id: int):
-        """
-        Initialize statement close packet
-        
-        Args:
-            statement_id: ID of the prepared statement to close
-        """
+        """Initialize COM_STMT_CLOSE packet with statement ID"""
         self.statement_id = statement_id
         
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode statement close packet
-        
-        Format: COM_STMT_CLOSE (1 byte) + statement_id (4 bytes)
-        
-        Args:
-            context: Connection context
-            
-        Returns:
-            Encoded packet data
-        """
+        """Encode COM_STMT_CLOSE packet with statement ID"""
         # COM_STMT_CLOSE (0x19) + statement_id (4 bytes, little-endian)
         return bytearray(struct.pack('<BI', self.COM_STMT_CLOSE, self.statement_id))
     

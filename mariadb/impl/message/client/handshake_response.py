@@ -41,28 +41,13 @@ class HandshakeResponse(ClientMessage):
     
     
     def __init__(self, configuration: Configuration, context: Context):
-        """
-        Initialize handshake response
-        
-        Args:
-            configuration: Connection configuration
-            context: Connection context
-        """
+        """Initialize handshake response with configuration and context"""
         self.configuration = configuration
         self.context = context
         
 
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode handshake response packet using payload-based approach
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-            
-        Raises:
-            IOError: If encoding fails
-        """
+        """Encode handshake response packet with capabilities, auth, and connection attributes"""
         # Build payload
         writer = PayloadWriter()
         
@@ -128,14 +113,7 @@ class HandshakeResponse(ClientMessage):
         return writer.get_payload()
     
     def _calculate_auth_response(self, context: Context) -> bytes:
-        """
-        Calculate authentication response using mysql_native_password
-        Args:
-            context: Connection context
-            
-        Returns:
-            Authentication response bytes
-        """
+        """Calculate authentication response"""
         if not self.configuration.password:
             return b''
         

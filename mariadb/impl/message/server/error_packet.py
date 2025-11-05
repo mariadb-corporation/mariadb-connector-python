@@ -52,14 +52,7 @@ class ErrorPacket:
         sql_state: str = "HY000",
         error_message: str = "",
     ):
-        """
-        Initialize Error packet
-        
-        Args:
-            error_code: MySQL/MariaDB error code
-            sql_state: SQL state (5 characters, default "HY000")
-            error_message: Error message text
-        """
+        """Initialize error packet with error code, SQL state, and message"""
         self.error_code = error_code
         self.sql_state = sql_state
         self.error_message = error_message
@@ -70,19 +63,7 @@ class ErrorPacket:
 
     @staticmethod
     def decode(data: bytearray, context: Optional['Context'] = None) -> 'ErrorPacket':
-        """
-        Decode Error packet from bytearray
-        
-        Args:
-            data: Packet data (including error marker)
-            context: Connection context (optional, not used but kept for consistency)
-            
-        Returns:
-            ErrorPacket instance
-            
-        Raises:
-            IOError: If packet parsing fails
-        """
+        """Decode error packet from bytearray with optional context"""
         parser = PayloadParser(data)
         parser.read_byte()
         error_code = parser.read_int16()

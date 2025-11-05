@@ -55,15 +55,7 @@ class PrepareStmtPacket:
         parameter_count: int,
         warning_count: int = 0
     ):
-        """
-        Initialize Prepare Response packet
-        
-        Args:
-            statement_id: Server-assigned statement ID
-            column_count: Number of columns in result set
-            parameter_count: Number of parameters in prepared statement
-            warning_count: Number of warnings
-        """
+        """Initialize prepare statement packet with statement ID, column count, and parameter count"""
         self.statement_id = statement_id
         self.column_count = column_count
         self.parameter_count = parameter_count
@@ -74,19 +66,7 @@ class PrepareStmtPacket:
     
     @staticmethod
     def decode(data: bytearray, context: Optional['Context'] = None) -> 'PrepareStmtPacket':
-        """
-        Decode COM_STMT_PREPARE response packet from bytearray
-        
-        Args:
-            data: Packet data (including OK marker)
-            context: Connection context (optional)
-            
-        Returns:
-            PrepareStmtPacket instance
-            
-        Raises:
-            IOError: If packet parsing fails
-        """
+        """Decode COM_STMT_PREPARE response packet from bytearray with optional context"""
         parser = PayloadParser(data)
         
         parser.read_byte()  # Skip OK marker (0x00)

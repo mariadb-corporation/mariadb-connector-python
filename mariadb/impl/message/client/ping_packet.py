@@ -39,20 +39,11 @@ class PingPacket(ClientMessage):
     COM_PING = 0x0E
     
     def __init__(self):
-        """Initialize ping packet"""
+        """Initialize COM_PING packet"""
         pass
         
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode ping packet using payload-based approach
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-            
-        Raises:
-            IOError: If encoding fails
-        """
+        """Encode COM_PING packet"""
         return bytearray([PingPacket.COM_PING])
     
     def is_binary(self) -> bool:

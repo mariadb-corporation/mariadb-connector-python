@@ -17,13 +17,6 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-"""
-Parsec Password Authentication Plugin Factory
-
-Factory for creating ParsecPasswordPlugin instances.
-Equivalent to the Java ParsecPasswordPluginFactory class.
-"""
-
 from typing import Optional, Any
 from ..authentication_plugin_factory import AuthenticationPluginFactory
 from ..authentication_plugin import AuthenticationPlugin
@@ -33,31 +26,13 @@ from .parsec_password_plugin import ParsecPasswordPlugin
 class ParsecPasswordPluginFactory(AuthenticationPluginFactory):
     """
     Parsec password authentication plugin factory
-    
-    Equivalent to the Java ParsecPasswordPluginFactory class.
     """
     
     def type(self) -> str:
-        """
-        Get authentication plugin type
-        
-        Returns:
-            Plugin type string
-        """
+        """Get authentication plugin type"""
         return "parsec"
     
     def initialize(self, authentication_data: Optional[str], seed: bytes, 
                   conf: Any, host_address: Any) -> AuthenticationPlugin:
-        """
-        Initialize Parsec password plugin
-        
-        Args:
-            authentication_data: Password string
-            seed: Server provided seed
-            conf: Connection configuration (unused)
-            host_address: Host address (unused)
-            
-        Returns:
-            Initialized ParsecPasswordPlugin
-        """
+        """Initialize PARSEC password plugin with authentication data and seed"""
         return ParsecPasswordPlugin(authentication_data, seed)

@@ -40,12 +40,7 @@ class PayloadWriter:
     """
     
     def __init__(self, buffer_size: int = 8192):
-        """
-        Initialize payload writer
-        
-        Args:
-            buffer_size: Initial buffer size
-        """
+        """Initialize payload writer with initial buffer size"""
         self.buffer: bytearray = bytearray(buffer_size)
         self.position: int = 0
         self.max_packet_size: int = 16777215  # 16MB - 1 (0xffffff)
@@ -85,12 +80,7 @@ class PayloadWriter:
     
     
     def write_length_encoded_int(self, value: int) -> None:
-        """
-        Write MySQL length-encoded integer
-        
-        Args:
-            value: Integer value to encode
-        """
+        """Write MySQL length-encoded integer"""
         if value < 251:
             self.write_byte(value)
         elif value < 65536:
@@ -112,13 +102,7 @@ class PayloadWriter:
         self.position += 3
     
     def write_length_encoded_string(self, value: Optional[str], encoding: str = 'utf-8') -> None:
-        """
-        Write MySQL length-encoded string
-        
-        Args:
-            value: String to write (None for NULL)
-            encoding: Character encoding
-        """
+        """Write MySQL length-encoded string with optional encoding"""
         if value is None:
             self.write_byte(0xFB)  # NULL marker
             return
@@ -128,30 +112,17 @@ class PayloadWriter:
         self.write_bytes(data)
     
     def write_null_terminated_string(self, value: str, encoding: str = 'utf-8') -> None:
-        """
-        Write null-terminated string
-        
-        Args:
-            value: String to write
-            encoding: Character encoding
-        """
+        """Write null-terminated string with optional encoding"""
         if value:
             self.write_string(value, encoding)
         self.write_byte(0)
     
     def start_payload(self) -> None:
-        """
-        Start building a new payload
-        """
+        """Start building a new payload by resetting position"""
         self.position = 0
     
     def get_payload(self) -> bytearray:
-        """
-        Get the current payload as bytearray
-        
-        Returns:
-            Payload bytes from position 0 to current position
-        """
+        """Get current payload as bytearray from position 0 to current position"""
         return self.buffer[0:self.position]
     
     def write_byte(self, value: int) -> None:
@@ -231,23 +202,13 @@ class PayloadWriter:
     
 
     def _ensure_capacity(self, additional_bytes: int) -> None:
-        """
-        Ensure buffer has capacity for additional bytes
-        
-        Args:
-            additional_bytes: Number of additional bytes needed
-        """
+        """Ensure buffer has capacity for additional bytes"""
         required_size = self.position + additional_bytes
         if required_size > len(self.buffer):
             self._grow_buffer(required_size)
     
     def _grow_buffer(self, min_size: int) -> None:
-        """
-        Grow buffer to accommodate minimum size
-        
-        Args:
-            min_size: Minimum required size
-        """
+        """Grow buffer to accommodate minimum size"""
         current_size = len(self.buffer)
         new_size = max(int(current_size * 1.5), min_size)
         

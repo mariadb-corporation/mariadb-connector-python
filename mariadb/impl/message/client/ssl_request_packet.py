@@ -40,34 +40,17 @@ class SslRequestPacket(ClientMessage):
     """
     
     def __init__(self, client_capabilities: int):
-        """
-        Initialize SSL request packet
-        
-        Args:
-            client_capabilities: Client capabilities flags
-            exchange_charset: Connection charset to set
-        """
+        """Initialize SSL request packet with client capabilities"""
         self.client_capabilities: int = client_capabilities
     
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode SSL request packet using payload-based approach
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-        """
-        # Build payload
+        """Encode SSL request packet with capabilities and charset"""
         writer = PayloadWriter()
-        
-        # Write SSL request packet content
         writer.write_int(self.client_capabilities & 0xFFFFFFFF)  # Client capabilities (4 bytes)
         writer.write_int(1024 * 1024 * 1024)  # Max packet size (4 bytes)
         writer.write_byte(45)  # Charset (1 byte)
         writer.write_bytes(b'\x00' * 19)  # Reserved bytes (19 bytes)
         writer.write_int((self.client_capabilities >> 32) & 0xFFFFFFFF)  # MariaDB extended capabilities (4 bytes)
-        
-        # Send payload through stream (don't reset sequence - continue from handshake)
         return writer.get_payload()
 
     def is_binary(self) -> bool:

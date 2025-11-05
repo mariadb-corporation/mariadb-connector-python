@@ -17,13 +17,6 @@
 # 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
 #
 
-"""
-Parsec Password Authentication Plugin
-
-Implementation of parsec authentication plugin.
-Equivalent to the Java ParsecPasswordPlugin class.
-See https://mariadb.com/kb/en/connection/#parsec-plugin
-"""
 
 from __future__ import annotations
 
@@ -52,7 +45,6 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
     """
     Parsec password authentication plugin implementation
     
-    Equivalent to the Java ParsecPasswordPlugin class.
     Uses PBKDF2 key derivation and Ed25519 signing for authentication.
     """
     
@@ -62,28 +54,13 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
     ])
     
     def __init__(self, authentication_data: Optional[str], seed: bytes):
-        """
-        Initialize plugin with authentication data and seed
-        
-        Args:
-            authentication_data: Password string
-            seed: Server provided seed
-        """
+        """Initialize plugin with authentication data and seed"""
         self.authentication_data = authentication_data
         self.seed = seed
         self._hash = None
     
     def _derive_key_and_sign(self, salt: bytes, iterations_exp: int) -> tuple[bytes, bytes, bytes]:
-        """
-        Derive key using PBKDF2 and create signature (shared logic)
-        
-        Args:
-            salt: Salt from server
-            iterations_exp: Iteration exponent
-            
-        Returns:
-            Tuple of (client_scramble, signature, raw_public_key)
-        """
+        """Derive key using PBKDF2 and create signature"""
         # Derive key using PBKDF2
         password = self.authentication_data or ""
         password_bytes = password.encode('utf-8')
@@ -125,19 +102,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         return client_scramble, signature, raw_public_key
     
     async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
-        """
-        Process Parsec password plugin authentication (async)
-        
-        Args:
-            stream: Async stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            OperationalError: If authentication fails or cryptography is not available
-        """
+        """Process Parsec password plugin authentication (async)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
                 "Parsec authentication requires cryptography library. "
@@ -185,19 +150,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             raise OperationalError(f"Error during parsec authentication: {e}")
     
     def processSync(self, stream: SyncStream, context: Context) -> bytearray:
-        """
-        Process Parsec password plugin authentication (sync)
-        
-        Args:
-            stream: Sync stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            OperationalError: If authentication fails or cryptography is not available
-        """
+        """Process Parsec password plugin authentication (sync)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
                 "Parsec authentication requires cryptography library. "
@@ -245,36 +198,15 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             raise OperationalError(f"Error during parsec authentication: {e}")
     
     def is_mitm_proof(self) -> bool:
-        """
-        Parsec password plugin is MitM-proof
-        
-        Returns:
-            True
-        """
+        """Parsec password plugin is MitM-proof"""
         return True
     
     def hash(self, credential: Credential) -> Optional[bytes]:
-        """
-        Return hash for credential
-        
-        Args:
-            credential: Credential to hash
-            
-        Returns:
-            Hash bytes containing salt, iterations, and public key
-        """
+        """Return hash for credential"""
         return self._hash
     
     def _combine_arrays(self, arrays: list) -> bytes:
-        """
-        Combine multiple byte arrays into one
-        
-        Args:
-            arrays: List of byte arrays to combine
-            
-        Returns:
-            Combined byte array
-        """
+        """Combine multiple byte arrays into one"""
         result = b''
         for arr in arrays:
             result += arr

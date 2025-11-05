@@ -38,20 +38,11 @@ class QuitPacket(ClientMessage):
     COM_QUIT = 0x01
     
     def __init__(self):
-        """Initialize quit packet"""
+        """Initialize COM_QUIT packet"""
         pass
         
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode quit packet using payload-based approach
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-            
-        Raises:
-            IOError: If encoding fails
-        """
+        """Encode COM_QUIT packet"""
         return bytearray([self.COM_QUIT])
     
     def is_binary(self) -> bool:

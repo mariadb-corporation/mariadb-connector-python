@@ -44,13 +44,7 @@ class AsyncCompressStreamReader:
     MAX_PACKET_SIZE = 0x00ffffff  # Maximum MySQL packet size
     
     def __init__(self, reader: asyncio.StreamReader, connection_id: int = -1):
-        """
-        Initialize async compression stream reader
-        
-        Args:
-            reader: Asyncio stream reader to wrap
-            connection_id: Connection ID for debug output
-        """
+        """Initialize async compression stream reader with asyncio reader"""
         self.reader = reader
         self.connection_id = connection_id
         
@@ -63,14 +57,7 @@ class AsyncCompressStreamReader:
         self.read_end = 0
     
     async def read_payload(self) -> bytes:
-        """
-        Read a complete MySQL packet payload (decompressed)
-        
-        Handles decompression and reassembly of multi-packet messages.
-        
-        Returns:
-            Packet payload as bytes (without 4-byte MySQL header)
-        """
+        """Read complete MySQL packet payload with decompression and reassembly"""
         # Accumulator for multi-packet payloads
         complete_payload = bytearray()
         
@@ -105,12 +92,7 @@ class AsyncCompressStreamReader:
         return bytes(complete_payload)
     
     async def _read_compressed_packet(self) -> None:
-        """
-        Read and decompress a single packet from the stream
-        
-        Raises:
-            IOError: If stream error occurs
-        """
+        """Read and decompress a single packet from the stream"""
         # Read 7-byte compression header
         header = await self.reader.readexactly(7)
         
@@ -152,23 +134,13 @@ class AsyncCompressStreamReader:
 
 
 class AsyncCompressStreamWriter:
-    """
-    Async compression stream writer that wraps an asyncio.StreamWriter
-    
-    Handles compression of MySQL/MariaDB packets with 7-byte compression headers.
-    """
+    """Async compression stream writer that wraps an asyncio.StreamWriter"""
     
     MIN_COMPRESSION_SIZE = 1536  # TCP-IP single packet size
     MAX_PACKET_SIZE = 0x00ffffff  # Maximum MySQL packet size
     
     def __init__(self, writer: asyncio.StreamWriter, connection_id: int = -1):
-        """
-        Initialize async compression stream writer
-        
-        Args:
-            writer: Asyncio stream writer to wrap
-            connection_id: Connection ID for debug output
-        """
+        """Initialize async compression stream writer"""
         self.writer = writer
         self.connection_id = connection_id
         
@@ -176,13 +148,7 @@ class AsyncCompressStreamWriter:
         self.sequence_comp = 0
     
     async def write_payload(self, data: bytes, packet_type: str = "") -> None:
-        """
-        Write a payload with compression
-        
-        Args:
-            data: Payload data to send (MySQL packet with 4-byte header)
-            packet_type: Packet type for debugging (e.g., "COM_QUERY")
-        """
+        """Write a payload with compression"""
         if logger.isEnabledFor(logging.DEBUG):
             conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
             packet_type_str = f" {packet_type}" if packet_type else ""
@@ -197,12 +163,7 @@ class AsyncCompressStreamWriter:
             await self._write_compressed(data)
     
     async def _write_uncompressed(self, data: bytes) -> None:
-        """
-        Write uncompressed packet with 7-byte compression header
-        
-        Args:
-            data: Packet data to write
-        """
+        """Write uncompressed packet with 7-byte compression header"""
         # Create 7-byte header for uncompressed packet
         length = len(data)
         header = bytearray(7)
@@ -226,12 +187,7 @@ class AsyncCompressStreamWriter:
         await self.writer.drain()
     
     async def _write_compressed(self, data: bytes) -> None:
-        """
-        Write compressed packet with 7-byte compression header
-        
-        Args:
-            data: Packet data to write
-        """
+        """Write compressed packet with 7-byte compression header"""
         # Compress the data
         try:
             compressed_data = zlib.compress(data)
@@ -279,13 +235,7 @@ class SyncCompressSocket:
     MIN_COMPRESSION_SIZE = 1536  # TCP-IP single packet size
     
     def __init__(self, sock: socket.socket, connection_id: int = -1):
-        """
-        Initialize sync compression socket
-        
-        Args:
-            sock: Socket to wrap
-            connection_id: Connection ID for debug output
-        """
+        """Initialize sync compression socket"""
         self._socket = sock
         self.connection_id = connection_id
         
@@ -297,17 +247,7 @@ class SyncCompressSocket:
         self.read_end = 0
     
     def recv(self, bufsize: int) -> bytes:
-        """
-        Receive data from socket (decompressed)
-        
-        Acts like socket.recv() but handles decompression transparently.
-        
-        Args:
-            bufsize: Maximum number of bytes to receive
-            
-        Returns:
-            Decompressed data bytes
-        """
+        """Receive data from socket (decompressed)"""
         # Ensure we have data in the read buffer
         if self.read_buffer is None or self.read_pos >= self.read_end:
             self._read_compressed_packet()
@@ -322,14 +262,7 @@ class SyncCompressSocket:
         return data
     
     def sendall(self, data: bytes) -> None:
-        """
-        Send data to socket (compressed)
-        
-        Acts like socket.sendall() but handles compression transparently.
-        
-        Args:
-            data: Data to send (will be compressed if large enough)
-        """
+        """Send data to socket (compressed)"""
         if logger.isEnabledFor(logging.DEBUG):
             conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
             logger.debug(f"Compress SEND:{conn_id_str} length={len(data)}")
@@ -347,12 +280,7 @@ class SyncCompressSocket:
         self._socket.close()
     
     def _read_compressed_packet(self) -> None:
-        """
-        Read and decompress a single packet from the stream
-        
-        Raises:
-            IOError: If stream error occurs
-        """
+        """Read and decompress a single packet from the stream"""
         # Read 7-byte compression header
         header = self._recv_exactly(7)
         
@@ -393,18 +321,7 @@ class SyncCompressSocket:
         self.read_end = len(self.read_buffer)
     
     def _recv_exactly(self, n: int) -> bytes:
-        """
-        Receive exactly n bytes from underlying socket
-        
-        Args:
-            n: Number of bytes to receive
-            
-        Returns:
-            Received bytes
-            
-        Raises:
-            IOError: If connection closed or error occurs
-        """
+        """Receive exactly n bytes from underlying socket"""
         data = bytearray()
         while len(data) < n:
             chunk = self._socket.recv(n - len(data))
@@ -414,12 +331,7 @@ class SyncCompressSocket:
         return bytes(data)
     
     def _write_uncompressed(self, data: bytes) -> None:
-        """
-        Write uncompressed packet with 7-byte compression header
-        
-        Args:
-            data: Packet data to write
-        """
+        """Write uncompressed packet with 7-byte compression header"""
         # Create 7-byte header for uncompressed packet
         length = len(data)
         header = bytearray(7)
@@ -442,12 +354,7 @@ class SyncCompressSocket:
         self._socket.sendall(header + data)
     
     def _write_compressed(self, data: bytes) -> None:
-        """
-        Write compressed packet with 7-byte compression header
-        
-        Args:
-            data: Packet data to write
-        """
+        """Write compressed packet with 7-byte compression header"""
         # Compress the data
         try:
             compressed_data = zlib.compress(data)

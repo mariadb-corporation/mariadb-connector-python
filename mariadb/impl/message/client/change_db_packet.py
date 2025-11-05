@@ -31,33 +31,21 @@ from ...client.socket.payload_writer import PayloadWriter
 
 
 class ChangeDbPacket(ClientMessage):
-
-    COM_INIT_DB = 0x02
-
     """
     Change database packet implementation
     
     Sends COM_INIT_DB command to change the current database.
     Equivalent to the Java ChangeDbPacket class.
     """
+
+    COM_INIT_DB = 0x02
     
     def __init__(self, database: str):
-        """
-        Constructor to encode COM_INIT_DB packet
-        
-        Args:
-            database: Database name to change to
-        """
+        """Initialize COM_INIT_DB packet with database name"""
         self.database = database
     
     def encode(self, context: Context) -> bytearray:
-        """
-        Encode COM_INIT_DB packet using new payload-based approach
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-        """
+        """Encode COM_INIT_DB packet with database name"""
         writer = PayloadWriter()
         writer.write_byte(self.COM_INIT_DB)
         writer.write_string(self.database)
