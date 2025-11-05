@@ -27,12 +27,10 @@ Equivalent to the Java NativePasswordPlugin class.
 from __future__ import annotations
 
 import hashlib
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from ...client.context import Context
-    from ...client.socket.stream import Stream
-
+from ...client.socket.stream import AsyncStream, SyncStream
+from ...client.context import Context
 from ..authentication_plugin import AuthenticationPlugin, Credential
 
 
@@ -98,12 +96,28 @@ class NativePasswordPlugin(AuthenticationPlugin):
         result = bytes(a ^ b for a, b in zip(stage1, stage3))
         return result
     
-    def process(self, stream: Stream, context: Context) -> bytearray:
+    def _build_auth_payload(self) -> bytes:
         """
-        Process native password plugin authentication
+        Build authentication payload (shared logic)
+        
+        Returns:
+            Encrypted password bytes
+        """
+        if self.authentication_data is None:
+            return bytes()
+        
+        # Truncate seed to 20 bytes (remove null terminator if present)
+        truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
+        
+        # Encrypt password
+        return self.encrypt_password(self.authentication_data, truncated_seed)
+    
+    async def processAsync(self, stream: AsyncStream, context: Context) -> bytes:
+        """
+        Process native password plugin authentication (async)
         
         Args:
-            stream: Stream for sending data
+            stream: Async stream for sending data
             context: Connection context
             
         Returns:
@@ -112,20 +126,29 @@ class NativePasswordPlugin(AuthenticationPlugin):
         Raises:
             IOError: If socket error occurs
         """
-        # Build payload
-        encrypted = bytearray()
+        # Build and send payload
+        encrypted = self._build_auth_payload()
+        await stream.send_payload(encrypted, "NATIVE_PASSWORD", reset_sequence=False)
         
-        if self.authentication_data is None:
-            # Empty payload for no password
-            pass
-        else:
-            # Truncate seed to 20 bytes (remove null terminator if present)
-            truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
+        # Read response packet
+        return await stream.read_payload()
+    
+    def processSync(self, stream: SyncStream, context: Context) -> bytes:
+        """
+        Process native password plugin authentication (sync)
+        
+        Args:
+            stream: Sync stream for sending data
+            context: Connection context
             
-            # Encrypt password and write to payload
-            encrypted = bytearray(self.encrypt_password(self.authentication_data, truncated_seed))
-        
-        # Send payload through stream (don't reset sequence - continue from handshake)
+        Returns:
+            Response packet bytes
+            
+        Raises:
+            IOError: If socket error occurs
+        """
+        # Build and send payload
+        encrypted = self._build_auth_payload()
         stream.send_payload(encrypted, "NATIVE_PASSWORD", reset_sequence=False)
         
         # Read response packet

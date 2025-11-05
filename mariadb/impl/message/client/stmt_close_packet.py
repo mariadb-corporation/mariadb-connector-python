@@ -18,53 +18,51 @@
 #
 
 """
-Change Database Packet (COM_INIT_DB)
+Statement Close packet for closing prepared statements
 
-Equivalent to the Java ChangeDbPacket class.
-See https://mariadb.com/kb/en/com_init_db/ protocol
+Sends COM_STMT_CLOSE command to the server to deallocate a prepared statement.
 """
 
+import struct
 from ...client.context import Context
-
 from ..client_message import ClientMessage
-from ...client.socket.payload_writer import PayloadWriter
 
 
-class ChangeDbPacket(ClientMessage):
-
-    COM_INIT_DB = 0x02
-
+class StmtClosePacket(ClientMessage):
     """
-    Change database packet implementation
+    Statement Close packet for closing prepared statements
     
-    Sends COM_INIT_DB command to change the current database.
-    Equivalent to the Java ChangeDbPacket class.
+    Sends COM_STMT_CLOSE command to deallocate a prepared statement on the server.
     """
     
-    def __init__(self, database: str):
+    COM_STMT_CLOSE = 0x19
+    
+    def __init__(self, statement_id: int):
         """
-        Constructor to encode COM_INIT_DB packet
+        Initialize statement close packet
         
         Args:
-            database: Database name to change to
+            statement_id: ID of the prepared statement to close
         """
-        self.database = database
-    
+        self.statement_id = statement_id
+        
     def encode(self, context: Context) -> bytearray:
         """
-        Encode COM_INIT_DB packet using new payload-based approach
+        Encode statement close packet
+        
+        Format: COM_STMT_CLOSE (1 byte) + statement_id (4 bytes)
         
         Args:
-            stream: Stream to send payload through
             context: Connection context
+            
+        Returns:
+            Encoded packet data
         """
-        writer = PayloadWriter()
-        writer.write_byte(self.COM_INIT_DB)
-        writer.write_string(self.database)
-        return writer.get_payload()
+        # COM_STMT_CLOSE (0x19) + statement_id (4 bytes, little-endian)
+        return bytearray(struct.pack('<BI', self.COM_STMT_CLOSE, self.statement_id))
     
     def is_binary(self) -> bool:
-        return False
-
+        return True
+    
     def type(self) -> str:
-        return "COM_INIT_DB"
+        return "COM_STMT_CLOSE"

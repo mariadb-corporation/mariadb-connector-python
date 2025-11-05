@@ -24,12 +24,17 @@ Based on Java Result.java, CompleteResult.java, and StreamingResult.java
 """
 
 import struct
-from typing import List, Optional, Any, TYPE_CHECKING
+from typing import List, Optional, Any, TYPE_CHECKING, Callable, Tuple
 from abc import ABC, abstractmethod
+from mariadb.impl.client.exception_factory import ExceptionFactory
+from mariadb.impl.message.server.error_packet import ErrorPacket
+from mariadb.impl.message.server.eof_packet import EofPacket
+from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb_shared.constants import STATUS
+from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
 
 if TYPE_CHECKING:
-    from .client.socket.stream.socket_stream import SocketStream
+    from .client.socket.async_stream import AsyncStream
     from .client.context import Context
     from .configuration import Configuration
 
@@ -43,7 +48,7 @@ class Result(ABC):
     
     def __init__(
         self,
-        columns: List[dict],
+        columns: List[ColumnDefinitionPacket],
         column_count: int,
         config: 'Configuration',
         is_binary: bool = False
@@ -57,14 +62,14 @@ class Result(ABC):
             config: Configuration for parsing
             is_binary: Whether result uses binary protocol
         """
-        self.columns = columns
-        self.column_count = column_count
-        self.config = config
-        self.is_binary = is_binary
-        self.loaded = False  # All rows loaded flag
-        self.warning_count = 0
-        self.is_output_parameters = False
-        self.row_pointer = -1  # Current row position (-1 = before first)
+        self.columns: List[ColumnDefinitionPacket] = columns
+        self.column_count: int = column_count
+        self.config: 'Configuration' = config
+        self.is_binary: bool = is_binary
+        self.loaded: bool = False  # All rows loaded flag
+        self.warning_count: int = 0
+        self.is_output_parameters: bool = False
+        self.row_pointer: int = -1  # Current row position (-1 = before first)
         
     @abstractmethod
     def streaming(self) -> bool:
@@ -117,10 +122,10 @@ class CompleteResult(Result):
     
     def __init__(
         self,
-        columns: List[dict],
+        columns: List[ColumnDefinitionPacket],
         column_count: int,
         config: 'Configuration',
-        rows: List[Any],
+        rows: List[tuple],
         is_binary: bool = False
     ):
         """
@@ -134,10 +139,10 @@ class CompleteResult(Result):
             is_binary: Whether result uses binary protocol
         """
         super().__init__(columns, column_count, config, is_binary)
-        self.rows = rows
-        self.data_size = len(rows)
-        self.loaded = True
-        self.row_pointer = -1  # Before first row
+        self.rows: List[tuple] = rows
+        self.data_size: int = len(rows)
+        self.loaded: bool = True
+        self.row_pointer: int = -1  # Before first row
     
     def scroll(self, value: int, mode: str = "relative") -> None:
         """
@@ -227,28 +232,28 @@ class CompleteResult(Result):
         return self.data_size
 
 
-class StreamingResult(Result):
+class BaseStreamingResult(Result):
     """
-    Streaming (unbuffered) result set - rows read on demand
+    Base class for streaming (unbuffered) result sets
     
     Based on Java StreamingResult.java
     """
     
     def __init__(
         self,
-        stream: 'SocketStream',
+        stream: Any,
         context: 'Context',
-        columns: List[dict],
+        columns: List[ColumnDefinitionPacket],
         column_count: int,
         config: 'Configuration',
         is_binary: bool = False,
-        row_parser: Any = None
+        row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = None
     ):
         """
         Initialize streaming result
         
         Args:
-            stream: Stream for reading packets
+            stream: Stream for reading packets (AsyncStream or SyncStream)
             context: Connection context
             columns: Column metadata
             column_count: Number of columns
@@ -257,76 +262,23 @@ class StreamingResult(Result):
             row_parser: Function to parse row packets (from Client)
         """
         super().__init__(columns, column_count, config, is_binary)
-        self.stream = stream
-        self.context = context
-        self.row_parser = row_parser
-        self.loaded = False
-        self._row_count = 0  # Track number of rows fetched
+        self.stream: Any = stream
+        self.context: Context = context
+        self.row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = row_parser
+        self.loaded: bool = False
+        self._row_count: int = 0  # Track number of rows fetched
         
     def streaming(self) -> bool:
         """Check if this is a streaming result"""
         return True
+   
     
+    @abstractmethod
     def _read_next_row_packet(self) -> Optional[bytes]:
-        """
-        Read next row packet from network
-        
-        Returns:
-            Row packet bytes, or None if no more rows
-        """
-        if self.loaded:
-            return None
-            
-        try:
-            row_packet: bytearray = self.stream.read_payload()
-            
-            if len(row_packet) == 0:
-                self.loaded = True
-                return None
-            
-            # Check for EOF/OK packet
-            if (row_packet[0] == 0xFE and 
-                ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
-                 (not self.context.isEofDeprecated() and len(row_packet) < 8))):
-                
-                # This is an EOF or OK packet - end of result set
-                from .client.socket.payload_parser import PayloadParser
-                parser = PayloadParser(row_packet)
-                parser.skip(1)  # Skip packet type byte (0xFE)
-                
-                if not self.context.isEofDeprecated():
-                    # Traditional EOF packet
-                    self.warning_count = parser.read_int16()
-                    server_status = parser.read_int16()
-                    self.context.server_status = server_status
-                    self.is_output_parameters = (server_status & STATUS.PS_OUT_PARAMS) != 0
-                else:
-                    # OK packet with 0xFE header (DEPRECATE_EOF enabled)
-                    # Parse OK packet structure
-                    affected_rows = parser.read_length_encoded_int()
-                    insert_id = parser.read_length_encoded_int()
-                    server_status = parser.read_int16()
-                    self.warning_count = parser.read_int16()
-                    self.context.server_status = server_status
-                    self.is_output_parameters = (self.context.server_status & STATUS.PS_OUT_PARAMS) != 0
-                
-                self.loaded = True
-                return None
-            
-            # Check for error packet
-            if row_packet[0] == 0xFF:
-                self.loaded = True
-                # Error packet - will be handled by caller
-                raise Exception("Error packet received during streaming")
-            
-            # Regular row data packet
-            return row_packet
-            
-        except Exception as e:
-            self.loaded = True
-            raise
+        """Read next row packet from network (sync or async)"""
+        pass
     
-    def fetch_one(self) -> Optional[Any]:
+    def fetch_one(self) -> Optional[tuple]:
         """Fetch next row"""
         if self.loaded:
             return None
@@ -345,7 +297,7 @@ class StreamingResult(Result):
             # Fallback - return raw packet (should not happen)
             return row_packet
     
-    def fetch_many(self, size: int) -> List[Any]:
+    def fetch_many(self, size: int) -> List[tuple]:
         """Fetch multiple rows"""
         result = []
         for _ in range(size):
@@ -355,7 +307,7 @@ class StreamingResult(Result):
             result.append(row)
         return result
     
-    def fetch_all(self) -> List[Any]:
+    def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
         result = []
         while not self.loaded:
@@ -379,3 +331,154 @@ class StreamingResult(Result):
     def get_row_count(self) -> int:
         """Get total row count"""
         return self._row_count
+
+
+class SyncStreamingResult(BaseStreamingResult):
+    """
+    Synchronous streaming (unbuffered) result set
+    """
+    
+    def _read_next_row_packet(self) -> Optional[bytes]:
+        """
+        Read next row packet from network (synchronous)
+        
+        Returns:
+            Row packet bytes, or None if no more rows
+        """
+        if self.loaded:
+            return None
+            
+        try:
+            row_packet: bytes = self.stream.read_payload()
+            
+            if len(row_packet) == 0:
+                self.loaded = True
+                return None
+            
+            # Check for EOF/OK packet
+            if (row_packet[0] == 0xFE and 
+                ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
+                    (not self.context.isEofDeprecated() and len(row_packet) < 8))):
+                
+                if not self.context.isEofDeprecated():
+                    # Traditional EOF packet
+                    EofPacket.decode(row_packet, self.context)
+                else:
+                    # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
+                    OkPacket.decode(row_packet, self.context)
+                
+                self.loaded = True
+                return None
+
+            # Check for error packet
+            if row_packet[0] == 0xFF:
+                self.loaded = True
+                # Error packet - will be handled by caller
+                raise Exception("Error packet received during streaming")
+            
+            # Regular row data packet
+            return row_packet
+            
+        except Exception as e:
+            self.loaded = True
+            raise
+
+
+class AsyncStreamingResult(BaseStreamingResult):
+    """
+    Asynchronous streaming (unbuffered) result set
+    """
+    
+    async def _read_next_row_packet(self) -> Optional[bytes]:
+        """
+        Read next row packet from network (asynchronous)
+        
+        Returns:
+            Row packet bytes, or None if no more rows
+        """
+        if self.loaded:
+            return None
+            
+        try:
+            row_packet: bytes = await self.stream.read_payload()
+            
+            if len(row_packet) == 0:
+                self.loaded = True
+                return None
+            
+            # Check for EOF/OK packet
+            if (row_packet[0] == 0xFE and 
+                ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
+                 (not self.context.isEofDeprecated() and len(row_packet) < 8))):
+                
+                if not self.context.isEofDeprecated():
+                    # Traditional EOF packet
+                    EofPacket.decode(row_packet, self.context)
+                else:
+                    # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
+                    OkPacket.decode(row_packet, self.context)
+
+                self.loaded = True
+                return None
+            
+            # Check for error packet
+            if row_packet[0] == 0xFF:
+                self.loaded = True
+                raise Exception("Error packet received during streaming")
+            
+            # Regular row data packet
+            return row_packet
+            
+        except Exception as e:
+            self.loaded = True
+            raise
+    
+    async def fetch_one(self) -> Optional[tuple]:
+        """Fetch next row (async)"""
+        if self.loaded:
+            return None
+        
+        row_packet = await self._read_next_row_packet()
+        if row_packet is None:
+            return None
+        
+        # Increment row count
+        self._row_count += 1
+        
+        # Parse row using the provided parser
+        if self.row_parser:
+            return self.row_parser(row_packet, self.columns, self.config, self.is_binary)
+        else:
+            # Fallback - return raw packet (should not happen)
+            return row_packet
+    
+    async def fetch_many(self, size: int) -> List[tuple]:
+        """Fetch multiple rows (async)"""
+        result = []
+        for _ in range(size):
+            row = await self.fetch_one()
+            if row is None:
+                break
+            result.append(row)
+        return result
+    
+    async def fetch_all(self) -> List[tuple]:
+        """Fetch all remaining rows (async)"""
+        result = []
+        while not self.loaded:
+            row = await self.fetch_one()
+            if row is None:
+                break
+            result.append(row)
+        return result
+    
+    async def fetch_remaining(self) -> None:
+        """
+        Consume all remaining rows without processing them (async).
+        Called when a new query needs to be executed.
+        """
+        if not self.loaded:
+            while not self.loaded:
+                row_packet = await self._read_next_row_packet()
+                if row_packet is not None:
+                    self._row_count += 1

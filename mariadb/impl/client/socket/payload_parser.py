@@ -13,7 +13,7 @@ class PayloadParser:
     """
     Parser for MariaDB protocol payloads
     
-    This class takes a packet payload (bytearray) and provides methods
+    This class takes a packet payload (bytes) and provides methods
     to parse various data types from it. It does NOT perform any I/O.
     """
     
@@ -22,12 +22,27 @@ class PayloadParser:
         Initialize parser with a packet payload
         
         Args:
-            packet: Packet payload as bytearray (without 4-byte header)
+            packet: Packet payload as bytes (without 4-byte header)
             pos: Starting position (default: 0)
         """
         self.packet: bytearray = packet
         self.pos: int = pos  # Current read position
-    
+
+    def get_byte(self) -> int:
+        """
+        Read single byte from packet
+        
+        Returns:
+            Byte value (0-255)
+            
+        Raises:
+            IOError: If not enough data in packet
+        """
+        if self.pos >= len(self.packet):
+            raise IOError("Not enough data in packet to read byte")
+        
+        return self.packet[self.pos]
+
     def read_byte(self) -> int:
         """
         Read single byte from packet
@@ -351,7 +366,7 @@ class PayloadParser:
         self.pos = position
     
     @staticmethod
-    def read_length_encoded_string_at(packet: bytearray, pos: int, encoding: str = 'utf-8') -> tuple:
+    def read_length_encoded_string_at(packet: bytes, pos: int, encoding: str = 'utf-8') -> tuple:
         """
         Read length-encoded string starting at position
         
@@ -368,7 +383,7 @@ class PayloadParser:
         return value, parser.pos
     
     @staticmethod
-    def read_length_encoded_bytes_at(packet: bytearray, pos: int) -> tuple:
+    def read_length_encoded_bytes_at(packet: bytes, pos: int) -> tuple:
         """
         Read length-encoded bytes starting at position
         

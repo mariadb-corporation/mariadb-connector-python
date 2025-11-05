@@ -14,6 +14,7 @@ from . import CAPABILITY
 from . import INFO
 from . import TPC_STATE
 from . import EXT_FIELD_TYPE
+from . import SESSION_TRACK
 
 __all__ = [
     "CURSOR", 
@@ -25,5 +26,6 @@ __all__ = [
     "CAPABILITY",
     "INFO",
     "TPC_STATE", 
-    "EXT_FIELD_TYPE"
+    "EXT_FIELD_TYPE",
+    "SESSION_TRACK"
 ]

@@ -24,8 +24,8 @@ Equivalent to the Java ClientMessage interface.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
 
+from ..client.context import Context
 
 class ClientMessage(ABC):
     """
@@ -35,12 +35,11 @@ class ClientMessage(ABC):
     """
     
     @abstractmethod
-    def encode(self, writer: Any, context: Any) -> None:
+    def encode(self, context: Context) -> bytearray:
         """
-        Encode message to writer
+        Encode message to writer asynchronously
         
         Args:
-            writer: Packet writer
             context: Connection context
             
         Raises:
@@ -55,3 +54,10 @@ class ClientMessage(ABC):
         indicate if message is binary
         """
         return False
+
+    @abstractmethod
+    def type(self) -> str:
+        """
+        indicate message type
+        """
+        return ""

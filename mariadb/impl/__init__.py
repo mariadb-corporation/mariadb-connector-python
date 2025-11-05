@@ -24,8 +24,10 @@ This package contains the pure Python implementation of the MariaDB connector,
 equivalent to the Java connector functionality.
 """
 
-from .client.client import Client
+from .client.base_client import BaseClient
+from .client.async_client import AsyncClient
+from .client.sync_client import SyncClient
 from .client.context import Context
 from .configuration import Configuration
 
-__all__ = ['Client', 'Context', 'Configuration']
+__all__ = ['BaseClient', 'AsyncClient', 'SyncClient', 'Context', 'Configuration']

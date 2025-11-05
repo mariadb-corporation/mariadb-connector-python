@@ -24,11 +24,6 @@ Equivalent to the Java HandshakeResponse class.
 """
 
 import hashlib
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
-
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
@@ -57,7 +52,7 @@ class HandshakeResponse(ClientMessage):
         self.context = context
         
 
-    def encode(self, stream: 'Stream', context: Context) -> None:
+    def encode(self, context: Context) -> bytearray:
         """
         Encode handshake response packet using payload-based approach
         
@@ -130,7 +125,7 @@ class HandshakeResponse(ClientMessage):
             writer.write_bytes(attr_data)
 
         # Send payload through stream (don't reset sequence - continue from handshake)
-        stream.send_payload(writer.get_payload(), "COM_HANDSHAKE_RESPONSE", reset_sequence=False)
+        return writer.get_payload()
     
     def _calculate_auth_response(self, context: Context) -> bytes:
         """
@@ -170,3 +165,7 @@ class HandshakeResponse(ClientMessage):
     
     def is_binary(self) -> bool:
         return False
+
+
+    def type(self) -> str:
+        return "HANDSHAKE_RESPONSE"                   

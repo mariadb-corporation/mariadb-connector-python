@@ -23,14 +23,9 @@ Quit packet for graceful connection closure
 Sends COM_QUIT command to the server before closing the connection.
 """
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
-    from ...client.context import Context
+from ...client.context import Context
 
 from ..client_message import ClientMessage
-from ...client.socket.payload_writer import PayloadWriter
 
 
 class QuitPacket(ClientMessage):
@@ -46,7 +41,7 @@ class QuitPacket(ClientMessage):
         """Initialize quit packet"""
         pass
         
-    def encode(self, stream: 'Stream', context: 'Context') -> None:
+    def encode(self, context: Context) -> bytearray:
         """
         Encode quit packet using payload-based approach
         
@@ -57,12 +52,10 @@ class QuitPacket(ClientMessage):
         Raises:
             IOError: If encoding fails
         """
-        # Build payload
-        writer = PayloadWriter()
-        writer.write_byte(self.COM_QUIT)
-        
-        # Send payload through stream with automatic header and chunking
-        stream.send_payload(writer.get_payload(), "COM_QUIT")
+        return bytearray([self.COM_QUIT])
     
     def is_binary(self) -> bool:
         return False
+    
+    def type(self) -> str:
+        return "COM_QUIT"

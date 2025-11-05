@@ -29,11 +29,10 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from typing import Optional, Any, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from ...client.context import Context
-    from ...client.socket.stream import Stream
+from ...client.socket.stream import AsyncStream, SyncStream
+from ...client.context import Context
 
 from ...client.socket.payload_writer import PayloadWriter
 from ...client.socket.payload_parser import PayloadParser
@@ -74,12 +73,63 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         self.seed = seed
         self._hash = None
     
-    def process(self, stream: Stream, context: Context) -> bytearray:
+    def _derive_key_and_sign(self, salt: bytes, iterations_exp: int) -> tuple[bytes, bytes, bytes]:
         """
-        Process Parsec password plugin authentication
+        Derive key using PBKDF2 and create signature (shared logic)
         
         Args:
-            stream: Stream for sending/reading data
+            salt: Salt from server
+            iterations_exp: Iteration exponent
+            
+        Returns:
+            Tuple of (client_scramble, signature, raw_public_key)
+        """
+        # Derive key using PBKDF2
+        password = self.authentication_data or ""
+        password_bytes = password.encode('utf-8')
+        
+        iterations = 1024 << iterations_exp  # 1024 * 2^iterations_exp
+        
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA512(),
+            length=32,  # 256 bits
+            salt=salt,
+            iterations=iterations,
+        )
+        derived_key = kdf.derive(password_bytes)
+        
+        # Create Ed25519 private key from derived key
+        private_key = Ed25519PrivateKey.from_private_bytes(derived_key)
+        public_key = private_key.public_key()
+        
+        # Get raw public key bytes
+        raw_public_key = public_key.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw
+        )
+        
+        # Create hash for credential storage
+        self._hash = self._combine_arrays([
+            bytes([0x50, iterations_exp]),  # 'P' + iterations
+            salt,
+            raw_public_key
+        ])
+        
+        # Generate client nonce (scramble)
+        client_scramble = secrets.token_bytes(32)
+        
+        # Sign concatenation of server nonce + client nonce
+        message_to_sign = self.seed + client_scramble
+        signature = private_key.sign(message_to_sign)
+        
+        return client_scramble, signature, raw_public_key
+    
+    async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
+        """
+        Process Parsec password plugin authentication (async)
+        
+        Args:
+            stream: Async stream for sending/reading data
             context: Connection context
             
         Returns:
@@ -96,8 +146,67 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         
         try:
             # Step 1: Request extended salt from server (empty payload)
+            await stream.send_payload(bytearray(), "PARSEC_REQUEST_SALT", reset_sequence=False)
+            
+            # Step 2: Read server response with salt and parameters
+            response = await stream.read_payload()
+            
+            if len(response) < 3:
+                raise OperationalError("Invalid parsec authentication response")
+            
+            # Parse response
+            parser = PayloadParser(response)
+            first_byte = parser.read_byte()
+            iterations_exp = parser.read_byte()
+            salt = parser.read_remaining()
+            
+            # Validate format
+            if first_byte != 0x50:  # 'P' for PBKDF2
+                raise OperationalError("Wrong parsec authentication format: expected 'P' for KDF algorithm")
+            
+            if iterations_exp > 3:  # Maximum iteration of 8192 (2^13 = 1024 << 3)
+                raise OperationalError("Wrong parsec authentication format: iteration count too high")
+            
+            # Derive key and create signature
+            client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
+            
+            # Send client scramble + signature to server
             writer = PayloadWriter()
-            stream.send_payload(writer.get_payload(), "PARSEC_REQUEST_SALT", reset_sequence=False)
+            writer.write_bytes(client_scramble)
+            writer.write_bytes(signature)
+            await stream.send_payload(writer.get_payload(), "PARSEC_AUTH", reset_sequence=False)
+            
+            # Read final response
+            return await stream.read_payload()
+            
+        except Exception as e:
+            if isinstance(e, OperationalError):
+                raise
+            raise OperationalError(f"Error during parsec authentication: {e}")
+    
+    def processSync(self, stream: SyncStream, context: Context) -> bytearray:
+        """
+        Process Parsec password plugin authentication (sync)
+        
+        Args:
+            stream: Sync stream for sending/reading data
+            context: Connection context
+            
+        Returns:
+            Response packet bytes
+            
+        Raises:
+            OperationalError: If authentication fails or cryptography is not available
+        """
+        if not HAS_CRYPTOGRAPHY:
+            raise OperationalError(
+                "Parsec authentication requires cryptography library. "
+                "Install with: pip install cryptography"
+            )
+        
+        try:
+            # Step 1: Request extended salt from server (empty payload)
+            stream.send_payload(bytearray(), "PARSEC_REQUEST_SALT", reset_sequence=False)
             
             # Step 2: Read server response with salt and parameters
             response = stream.read_payload()
@@ -118,51 +227,16 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             if iterations_exp > 3:  # Maximum iteration of 8192 (2^13 = 1024 << 3)
                 raise OperationalError("Wrong parsec authentication format: iteration count too high")
             
-            # Step 3: Derive key using PBKDF2
-            password = self.authentication_data or ""
-            password_bytes = password.encode('utf-8')
+            # Derive key and create signature
+            client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
             
-            iterations = 1024 << iterations_exp  # 1024 * 2^iterations_exp
-            
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA512(),
-                length=32,  # 256 bits
-                salt=salt,
-                iterations=iterations,
-            )
-            derived_key = kdf.derive(password_bytes)
-            
-            # Step 4: Create Ed25519 private key from derived key
-            private_key = Ed25519PrivateKey.from_private_bytes(derived_key)
-            public_key = private_key.public_key()
-            
-            # Get raw public key bytes
-            raw_public_key = public_key.public_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PublicFormat.Raw
-            )
-            
-            # Step 5: Create hash for credential storage
-            self._hash = self._combine_arrays([
-                bytes([0x50, iterations_exp]),  # 'P' + iterations
-                salt,
-                raw_public_key
-            ])
-            
-            # Step 6: Generate client nonce (scramble)
-            client_scramble = secrets.token_bytes(32)
-            
-            # Step 7: Sign concatenation of server nonce + client nonce
-            message_to_sign = self.seed + client_scramble
-            signature = private_key.sign(message_to_sign)
-            
-            # Step 8: Send client scramble + signature to server
+            # Send client scramble + signature to server
             writer = PayloadWriter()
             writer.write_bytes(client_scramble)
             writer.write_bytes(signature)
             stream.send_payload(writer.get_payload(), "PARSEC_AUTH", reset_sequence=False)
             
-            # Step 9: Read final response
+            # Read final response
             return stream.read_payload()
             
         except Exception as e:

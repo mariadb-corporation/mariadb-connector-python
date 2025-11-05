@@ -23,12 +23,16 @@ Completion class for MariaDB query results
 Equivalent to the Java Completion interface.
 """
 
-from typing import Optional, Any, List, Dict
+from abc import ABC, abstractmethod
+from typing import Optional, Any, List, Dict, TYPE_CHECKING
 from dataclasses import dataclass
+
+if TYPE_CHECKING:
+    from .result import Result
 
 
 @dataclass
-class Completion:
+class Completion(ABC):
     """
     Query completion result
     
@@ -38,18 +42,21 @@ class Completion:
     affected_rows: int = 0
     insert_id: int = 0
     warning_count: int = 0
-    result_set: Optional[Any] = None
-    is_result_set: bool = False
-    is_output_parameters: bool = False
+    result_set: Optional['Result'] = None
     
     def has_result_set(self) -> bool:
         """Check if completion has result set"""
-        return self.is_result_set and self.result_set is not None
+        return self.result_set is not None
     
     def get_result_set(self) -> Optional[Any]:
         """Get result set"""
         return self.result_set
     
+    @abstractmethod
+    def is_output_parameters(self) -> bool:
+        """Check if completion has output parameters"""
+        pass
+
     def __str__(self) -> str:
         return (f"Completion(affected_rows={self.affected_rows}, "
                 f"insert_id={self.insert_id}, "

@@ -18,15 +18,31 @@
 #
 
 """
-MariaDB Client Package
+Client Message interface for MariaDB protocol
 
-Contains client implementation classes for database connectivity.
+Equivalent to the Java ClientMessage interface.
 """
 
-from .base_client import BaseClient
-from .async_client import AsyncClient
-from .sync_client import SyncClient
-from .context import Context
-from .exception_factory import ExceptionFactory
+from abc import ABC, abstractmethod
 
-__all__ = ['BaseClient', 'AsyncClient', 'SyncClient', 'Context', 'ExceptionFactory']
+from ..client.context import Context
+
+class ServerMessage(ABC):
+    """
+    Server message interface for MariaDB protocol
+    
+    Equivalent to the Java ClientMessage interface.
+    """
+    
+    @abstractmethod
+    def decode(self, data: bytearray, context: Context) -> bytearray:
+        """
+        Encode message to writer asynchronously
+        
+        Args:
+            context: Connection context
+            
+        Raises:
+            IOError: If encoding fails
+        """
+        pass

@@ -25,11 +25,7 @@ See https://mariadb.com/kb/en/connection/#sslrequest-packet
 """
 
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
-    from mariadb.impl.client.context import Context
+from mariadb.impl.client.context import Context
 
 from ...client.socket.payload_writer import PayloadWriter
 from ..client_message import ClientMessage
@@ -53,7 +49,7 @@ class SslRequestPacket(ClientMessage):
         """
         self.client_capabilities: int = client_capabilities
     
-    def encode(self, stream: 'Stream', context: 'Context') -> None:
+    def encode(self, context: Context) -> bytearray:
         """
         Encode SSL request packet using payload-based approach
         
@@ -72,7 +68,11 @@ class SslRequestPacket(ClientMessage):
         writer.write_int((self.client_capabilities >> 32) & 0xFFFFFFFF)  # MariaDB extended capabilities (4 bytes)
         
         # Send payload through stream (don't reset sequence - continue from handshake)
-        stream.send_payload(writer.get_payload(), "SSL_REQUEST", reset_sequence=False)
+        return writer.get_payload()
 
     def is_binary(self) -> bool:
         return False
+    
+    def type(self) -> str:
+        return "SSL_REQUEST"
+        

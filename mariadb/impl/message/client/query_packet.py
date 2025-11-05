@@ -26,16 +26,13 @@ Equivalent to the Java QueryPacket class.
 import array
 import datetime
 import decimal
-from typing import TYPE_CHECKING, Any, List, Optional, Union
+from typing import Any, List, Optional, Union
 
 try:
     import numpy
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
-
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
 
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
@@ -69,12 +66,11 @@ class QueryPacket(ClientMessage):
         self.sql = sql
         self.parameters = parameters or []
         
-    def encode(self, stream: 'Stream', context: Context) -> None:
+    def encode(self, context: Context) -> bytearray:
         """
         Encode query packet with optional parameter binding
         
         Args:
-            stream: Stream to send payload through
             context: Connection context
             
         Raises:
@@ -94,7 +90,7 @@ class QueryPacket(ClientMessage):
             writer.write_string(self.sql, 'utf-8')
         
         # Send packet with automatic header and chunking
-        stream.send_payload(writer.get_payload(), "COM_QUERY")
+        return writer.get_payload()
     
     def _encode_parameterized_query(self, writer: PayloadWriter, context: Context) -> None:
         """
@@ -222,3 +218,7 @@ class QueryPacket(ClientMessage):
 
     def is_binary(self) -> bool:
         return False
+
+    def type(self) -> str:
+        return "COM_QUERY"
+        

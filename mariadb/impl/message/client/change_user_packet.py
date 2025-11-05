@@ -23,11 +23,8 @@ COM_CHANGE_USER packet implementation
 Changes the user and optionally the database for the current connection.
 """
 
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
-    from ...client.context import Context
+from typing import Optional
+from ...client.context import Context
 
 from ..client_message import ClientMessage
 from ...client.socket.payload_writer import PayloadWriter
@@ -67,12 +64,11 @@ class ChangeUserPacket(ClientMessage):
         self.charset_collation = charset_collation
         self.connect_attrs = connect_attrs or {}
     
-    def encode(self, stream: 'Stream', context: 'Context') -> None:
+    def encode(self, context: Context) -> bytearray:
         """
         Encode COM_CHANGE_USER packet
         
         Args:
-            stream: Stream to send payload through
             context: Connection context
         
         Packet format:
@@ -142,7 +138,10 @@ class ChangeUserPacket(ClientMessage):
             attr_data = encode_connection_attributes(default_attrs)
             writer.write_length_encoded_int(len(attr_data))
             writer.write_bytes(attr_data)
-        stream.send_payload(writer.get_payload(), "COM_CHANGE_USER")
+        return writer.get_payload()
         
     def is_binary(self) -> bool:
         return False
+
+    def type(self) -> str:
+        return "COM_CHANGE_USER"        

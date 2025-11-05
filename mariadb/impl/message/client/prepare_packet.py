@@ -23,9 +23,6 @@ Prepare packet for MariaDB prepared statement preparation
 Equivalent to the Java PreparePacket class.
 """
 
-from typing import TYPE_CHECKING, Any
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
 
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
@@ -50,7 +47,7 @@ class PreparePacket(ClientMessage):
         """
         self.sql = sql
         
-    def encode(self, stream: 'Stream', context: Context) -> None:
+    def encode(self, context: Context) -> bytearray:
         """
         Encode prepare packet
         
@@ -68,7 +65,10 @@ class PreparePacket(ClientMessage):
         writer.write_string(self.sql, 'utf-8')
         
         # Send packet
-        stream.send_payload(writer.get_payload(), "COM_STMT_PREPARE")
+        return writer.get_payload()
 
     def is_binary(self) -> bool:
         return True
+
+    def type(self) -> str:
+        return "COM_STMT_PREPARE"                   

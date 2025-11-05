@@ -77,10 +77,14 @@ class ExceptionFactory:
             elif sql_state.startswith('HY'):
                 # General error
                 exception_class = DatabaseError
-        elif errno:
+        
+        if errno:
             if errno in (1044, 1045, 1046, 1049, 1142, 1143, 1227, 1370):
                 # Access denied errors and database errors
                 exception_class = ProgrammingError if errno == 1049 else OperationalError
+            elif errno in (2002, 2003, 2006, 2013):
+                # Connection errors (can't connect, lost connection, etc.)
+                exception_class = OperationalError
             elif errno in (1062, 1169, 1216, 1217, 1451, 1452):
                 # Integrity constraint violations
                 exception_class = IntegrityError

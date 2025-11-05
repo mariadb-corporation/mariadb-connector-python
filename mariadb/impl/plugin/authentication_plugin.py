@@ -24,10 +24,12 @@ Equivalent to the Java AuthenticationPlugin interface.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Any, TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from ..client.socket.stream import Stream
+
+from ..client.socket.stream import AsyncStream
+from ..client.socket.stream import SyncStream
+from ..client.context import Context
 
 
 class Credential:
@@ -63,7 +65,7 @@ class AuthenticationPlugin(ABC):
     """
     
     @abstractmethod
-    def process(self, stream: 'Stream', context: Any) -> bytearray:
+    async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
         """
         Process plugin authentication
         
@@ -79,6 +81,25 @@ class AuthenticationPlugin(ABC):
             Exception: If plugin exception occurs
         """
         pass
+
+    @abstractmethod
+    def processSync(self, stream: SyncStream, context: Context) -> bytearray:
+        """
+        Process plugin authentication
+        
+        Args:
+            stream: Stream for sending/reading data
+            context: Connection context
+            
+        Returns:
+            Response packet bytes
+            
+        Raises:
+            IOError: If socket error occurs
+            Exception: If plugin exception occurs
+        """
+        pass
+    
     
     def is_mitm_proof(self) -> bool:
         """
@@ -100,3 +121,4 @@ class AuthenticationPlugin(ABC):
             Hash bytes or None
         """
         return None
+

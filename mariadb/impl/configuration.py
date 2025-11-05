@@ -44,8 +44,8 @@ class Configuration:
     
     # Socket parameters
     socket_path: Optional[str] = None
-    socket_timeout: int = 30000  # 30 seconds
-    connect_timeout: int = 10000  # 10 seconds
+    socket_timeout: float = 30  # 30 seconds
+    connect_timeout: float = 10  # 10 seconds
     
     # SSL parameters
     ssl: bool = False
@@ -72,9 +72,6 @@ class Configuration:
     
     # Character encoding
     character_encoding: str = 'utf8mb4'
-    
-    # Debug options
-    debug: bool = False
     
     # Initialization command
     init_command: Optional[str] = None
@@ -165,6 +162,11 @@ class Configuration:
             config.socket_path = params['socket_path']
         if 'socket_timeout' in params:
             config.socket_timeout = int(params['socket_timeout'])
+        # read_timeout and write_timeout are aliases for socket_timeout
+        if 'read_timeout' in params:
+            config.socket_timeout = int(params['read_timeout'])
+        if 'write_timeout' in params:
+            config.socket_timeout = int(params['write_timeout'])
         if 'connect_timeout' in params:
             config.connect_timeout = int(params['connect_timeout'])
         
@@ -213,9 +215,6 @@ class Configuration:
         if 'character_encoding' in params or 'charset' in params:
             config.character_encoding = params.get('character_encoding') or params.get('charset', 'utf8mb4')
         
-        # Debug options
-        if 'debug' in params:
-            config.debug = bool(params['debug'])
         # Initialization command
         if 'init_command' in params:
             config.init_command = params['init_command']
@@ -237,12 +236,13 @@ class Configuration:
             'host', 'hostname', 'server', 'user', 'username', 'password', 'passwd',
             'database', 'db', 'schema', 'port',
             'unix_socket', 'socket', 'named_pipe', 'pipe_name',
+            'socket_timeout', 'read_timeout', 'write_timeout', 'connect_timeout',
             'ssl', 'use_ssl', 'ssl_key', 'ssl_ca', 'ssl_cert', 'ssl_crl',
             'ssl_cipher', 'ssl_capath', 'ssl_crlpath', 'ssl_verify_cert', 'tls_version',
             'autocommit', 'read_only',
             'compress',
             'query_timeout', 'max_allowed_packet',
-            'character_encoding', 'charset', 'debug', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object'
+            'character_encoding', 'charset', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object'
         }
         
         for key, value in params.items():
@@ -283,7 +283,6 @@ class Configuration:
             'query_timeout': self.query_timeout,
             'max_allowed_packet': self.max_allowed_packet,
             'character_encoding': self.character_encoding,
-            'debug': self.debug,
             'init_command': self.init_command
         }
         

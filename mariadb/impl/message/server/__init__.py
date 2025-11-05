@@ -18,15 +18,13 @@
 #
 
 """
-MariaDB Client Package
-
-Contains client implementation classes for database connectivity.
+Server message packets for MariaDB protocol
 """
 
-from .base_client import BaseClient
-from .async_client import AsyncClient
-from .sync_client import SyncClient
-from .context import Context
-from .exception_factory import ExceptionFactory
+from .ok_packet import OkPacket
+from .error_packet import ErrorPacket
+from .eof_packet import EofPacket
+from .column_definition_packet import ColumnDefinitionPacket    
+from .prepare_stmt_packet import PrepareStmtPacket
 
-__all__ = ['BaseClient', 'AsyncClient', 'SyncClient', 'Context', 'ExceptionFactory']
+__all__ = ['OkPacket', 'ErrorPacket', 'EofPacket', 'ColumnDefinitionPacket', 'PrepareStmtPacket']

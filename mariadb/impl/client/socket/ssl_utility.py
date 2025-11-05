@@ -24,8 +24,6 @@ Provides SSL/TLS socket creation utilities for database connections.
 """
 
 import ssl
-import socket
-from typing import Optional
 from ...configuration import Configuration
 from ....exceptions import OperationalError
 
@@ -38,43 +36,8 @@ class SSLUtility:
     """
     
     @staticmethod
-    def create_ssl_socket(raw_socket: socket.socket, configuration: Configuration, server_hostname: Optional[str] = None) -> ssl.SSLSocket:
-        """
-        Create an SSL-wrapped socket from a raw socket
-        
-        Args:
-            raw_socket: The underlying socket to wrap
-            configuration: Connection configuration with SSL settings
-            server_hostname: Server hostname for SNI
-            
-        Returns:
-            SSL-wrapped socket
-            
-        Raises:
-            OperationalError: If SSL socket creation fails
-        """
-        try:
-            # Create SSL context
-            context = SSLUtility._create_ssl_context(configuration)
-            
-            # Wrap the socket with SSL
-            ssl_socket = context.wrap_socket(
-                raw_socket,
-                server_side=False,
-                do_handshake_on_connect=False,
-                server_hostname=server_hostname
-            )
-            
-            # Perform SSL handshake
-            ssl_socket.do_handshake()
-            
-            return ssl_socket
-            
-        except Exception as e:
-            raise OperationalError(f"SSL handshake failed: {e}")
-    
-    @staticmethod
-    def _create_ssl_context(configuration: Configuration) -> ssl.SSLContext:
+    def create_ssl_context(configuration: Configuration) -> ssl.SSLContext:
+
         """
         Create SSL context based on configuration
         

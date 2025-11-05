@@ -27,7 +27,7 @@ import array
 import datetime
 import decimal
 import struct
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import Any, List, Optional
 
 try:
     import numpy
@@ -35,12 +35,8 @@ try:
 except ImportError:
     HAS_NUMPY = False
 
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
-
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
-from ...string_utils import StringEscaper
 from mariadb_shared.constants import FIELD_TYPE
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
@@ -68,7 +64,7 @@ class ExecutePacket(ClientMessage):
         self.parameters = parameters or []
         self.sql = sql
         
-    def encode(self, stream: 'Stream', context: Context) -> None:
+    def encode(self, context: Context) -> bytearray:
         """
         Encode execute packet
         
@@ -121,7 +117,7 @@ class ExecutePacket(ClientMessage):
                     self._write_parameter_value(writer, param)
         
         # Send payload through stream
-        stream.send_payload(writer.get_payload(), "COM_STMT_EXECUTE")
+        return writer.get_payload()
     
     def _get_parameter_type(self, param: Any) -> tuple[int, int]:
         """
@@ -330,3 +326,6 @@ class ExecutePacket(ClientMessage):
 
     def is_binary(self) -> bool:
         return True
+
+    def type(self) -> str:
+        return "COM_STMT_EXECUTE"           
