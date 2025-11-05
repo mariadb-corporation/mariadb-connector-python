@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
+
 # Session tracking types for OK packet session state information
 # See: https://mariadb.com/kb/en/ok_packet/#session-tracking
 
