@@ -367,7 +367,8 @@ class Cursor(CCursor):
         self.check_closed()
         self._reset()
 
-        if not parameters or not len(parameters):
+        # Check if parameters is None or not an array-like type
+        if parameters is None or not hasattr(parameters, '__iter__') or isinstance(parameters, (str, bytes)):
             raise ProgrammingError("No data provided")
 
         self.connection._last_executed_statement = statement
@@ -376,10 +377,17 @@ class Cursor(CCursor):
         if self.field_count:
             self._clear_result()
 
+        # If parameters is an empty list/tuple, return early with rowcount=0
+        if not len(parameters):
+            self.buffered = True
+            self._rowcount = 0
+            return
+
         # If the server doesn't support bulk operations, we need to emulate
         # by looping
         # TODO: insert/replace statements are not optimized yet
         #       rowcount updating
+
         if not (self.connection.extended_server_capabilities &
                 (CAPABILITY.BULK_OPERATIONS >> 32)):
             count = 0

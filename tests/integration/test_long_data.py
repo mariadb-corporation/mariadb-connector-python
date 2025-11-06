@@ -16,6 +16,10 @@ class LongDataTest(unittest.TestCase):
     """Test handling of long data packets"""
 
     def setUp(self):
+        # Skip all tests if RUN_LONG_TEST is not set to "1"
+        if os.environ.get('RUN_LONG_TEST') != '1':
+            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")
+
         """Set up test connection and check max_allowed_packet"""
         self.connection = create_connection()
         self.cursor = self.connection.cursor()

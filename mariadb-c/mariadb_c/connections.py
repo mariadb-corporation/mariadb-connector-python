@@ -118,7 +118,6 @@ class Connection(CConnection):
         self._pooled_connection = pooled_connection
     
     def close(self):
-        self._check_closed()
         if self._pooled_connection:
             self._pooled_connection.return_to_pool()
         else:
@@ -131,9 +130,7 @@ class Connection(CConnection):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._check_closed()
         "Closes connection."
-
         self.close()
 
     def commit(self):

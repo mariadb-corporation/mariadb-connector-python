@@ -11,13 +11,13 @@ import pytest
 
 import logging
 
-#logging.getLogger('mariadb').setLevel(logging.DEBUG)
+logging.getLogger('mariadb').setLevel(logging.DEBUG)
 
 def get_test_config():
     """Get test configuration from environment variables"""
     config = {
         "user": os.environ.get('TEST_DB_USER', 'root'),
-        "host": os.environ.get('TEST_DB_HOST', 'localhost'),
+        "host": os.environ.get('TEST_DB_HOST', '127.0.0.1'),
         "database": os.environ.get('TEST_DB_DATABASE', 'testp'),
         "port": int(os.environ.get('TEST_DB_PORT', '3306'))
     }

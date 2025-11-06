@@ -606,10 +606,11 @@ MrdbConnection_executecommand(MrdbConnection *self,
 
 PyObject *MrdbConnection_close(MrdbConnection *self)
 {
-    MARIADB_CHECK_CONNECTION(self, NULL);
-
-    ma_connection_close(self);
-    self->closed= 1;
+    if (!self->closed)
+    {
+        ma_connection_close(self);
+        self->closed= 1;
+    }
     Py_RETURN_NONE;
 }
 

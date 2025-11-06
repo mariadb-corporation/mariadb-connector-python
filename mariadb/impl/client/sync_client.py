@@ -326,23 +326,20 @@ class SyncClient(BaseClient):
     def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str]) -> None:
         """Change current user and database"""
         try:
-            actual_user = user if user is not None else self.configuration.user
-            actual_password = password if password is not None else self.configuration.password
-            actual_database = database if database is not None else self.context.database
+            old_conf = self.configuration
 
-            change_user_packet = ChangeUserPacket(actual_user, actual_password, actual_database)
+            new_conf = Configuration(self.configuration.to_dict())
+            new_conf.user = user if user is not None else self.configuration.user
+            new_conf.password = password if password is not None else self.configuration.password
+            new_conf.database = database if database is not None else self.context.database
+            self.configuration = new_conf
+
+            change_user_packet = ChangeUserPacket(new_conf.user, new_conf.password, new_conf.database)
             self._send_message(change_user_packet)
             self._handle_authentication(self.stream.read_payload())
-            
-            # Update connection state
-            if user is not None:
-                self.configuration.user = user
-            if password is not None:
-                self.configuration.password = password
-            if database is not None:
-                self.context.database = database
                 
         except Exception as e:
+            self.configuration = old_conf
             if isinstance(e, DatabaseError):
                 raise
             raise OperationalError(f"Change user failed: {e}")

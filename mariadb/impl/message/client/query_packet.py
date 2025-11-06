@@ -15,6 +15,7 @@ except ImportError:
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
 from ...string_utils import StringEscaper
+from ...sql_parser import split_sql_parts
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
@@ -24,54 +25,91 @@ QUOTE_BYTE: int = b"'"[0]
 COM_QUERY = 0x03
 
 class QueryPacket(ClientMessage):
-
-
     """
-    Query packet for SQL execution with optional parameter binding
+    Simple query packet for SQL execution without parameters
     """
     
-    
-    def __init__(self, sql: str, parameters: Optional[List[Any]] = None):
-        """Initialize COM_QUERY packet with SQL and optional parameters"""
+    def __init__(self, sql: str):
+        """Initialize COM_QUERY packet with SQL"""
         self.sql = sql
-        self.parameters = parameters or []
+        
+    def encode(self, context: Context) -> bytearray:
+        """Encode COM_QUERY packet with SQL"""
+        writer = PayloadWriter()
+        writer.write_byte(COM_QUERY)
+        writer.write_string(self.sql, 'utf-8')
+        return writer.get_payload()
+
+    def is_binary(self) -> bool:
+        return False
+
+    def type(self) -> str:
+        return "COM_QUERY"
+
+
+class QueryWithParamPacket(ClientMessage):
+    """
+    Parameterized query packet for SQL execution with parameter binding
+    """
+    
+    def __init__(self, sql_bytes: bytes, param_positions: List[int], parameters: List[Any]):
+        """
+        Initialize COM_QUERY packet with pre-parsed SQL bytes and parameters
+        
+        Args:
+            sql_bytes: SQL encoded as UTF-8 bytes
+            param_positions: Byte positions (start, end) pairs where placeholders are
+            parameters: Parameter values to bind
+        """
+        self.sql_bytes = sql_bytes
+        self.param_positions = param_positions
+        self.parameters = parameters
         
     def encode(self, context: Context) -> bytearray:
         """Encode COM_QUERY packet with SQL and bound parameters"""
         writer = PayloadWriter()
         writer.write_byte(COM_QUERY)
-        if self.parameters:
-            # Use parameter binding - write SQL with placeholders and parameters
-            self._encode_parameterized_query(writer, context)
-        else:
-            # Simple query - write SQL directly
-            writer.write_string(self.sql, 'utf-8')
+        self._encode_parameterized_query(writer, context)
         return writer.get_payload()
     
     def _encode_parameterized_query(self, writer: PayloadWriter, context: Context) -> None:
         """
         Encode parameterized query by interleaving SQL fragments with parameters
         
+        SQL is pre-parsed and encoded as bytes with byte positions marking placeholders.
+        This avoids repeated encoding and parsing for executemany.
+        
         Args:
             writer: Packet writer
+            context: Connection context
         """
-        # Parse SQL into fragments separated by '?' placeholders
-        sql_parts = self.sql.split('?')
-
-        #if len(sql_parts) - 1 != len(self.parameters):
-        #    raise ValueError(f"Parameter count mismatch: SQL has {len(sql_parts) - 1} placeholders, got {len(self.parameters)} parameters")
         no_backslash_escapes = context.server_status & NO_BACKSLASH_ESCAPES > 0
+        
         # Write SQL fragments interleaved with parameters
-        for i, sql_part in enumerate(sql_parts):
-            # Write SQL fragment
-            if sql_part:  # Don't write empty strings
-                writer.write_string(sql_part, 'utf-8')
+        last_pos = 0
+        param_idx = 0
+        
+        # Iterate through placeholder positions (they come in pairs: start, end)
+        for i in range(0, len(self.param_positions), 2):
+            start_pos = self.param_positions[i]
+            end_pos = self.param_positions[i + 1]
             
-            # Write parameter (except after the last SQL fragment)
-            if i < len(self.parameters):
-                self._write_parameter_value(writer, self.parameters[i], no_backslash_escapes)
-            elif i < len(sql_parts) - 1:
+            # Write SQL fragment before this placeholder
+            if start_pos > last_pos:
+                writer.write_bytes(self.sql_bytes[last_pos:start_pos])
+            
+            # Write parameter value
+            if param_idx < len(self.parameters):
+                self._write_parameter_value(writer, self.parameters[param_idx], no_backslash_escapes)
+                param_idx += 1
+            else:
                 writer.write_string('NULL', 'ascii')
+            
+            last_pos = end_pos
+        
+        # Write remaining SQL after last placeholder
+        if last_pos < len(self.sql_bytes):
+            writer.write_bytes(self.sql_bytes[last_pos:])
                     
     
     def _write_parameter_value(self, writer: PayloadWriter, param: Any, no_backslash_escapes: bool) -> None:

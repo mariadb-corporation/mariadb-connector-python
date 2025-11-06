@@ -1,23 +1,18 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-import datetime
-import decimal
-from numbers import Number
+
 from collections import namedtuple
 from typing import Sequence, Optional, List, Any, Union, TYPE_CHECKING
 
 from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 from .impl.client.sync_client import SyncClient
 
-from .base_cursor import BaseCursor, ROWS_ALL, RESULT_TUPLE, RESULT_NAMEDTUPLE, RESULT_DICTIONARY
-from .exceptions import DatabaseError, ProgrammingError, NotSupportedError, OperationalError
-from .impl.message.client.query_packet import QueryPacket
-from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
-from mariadb_shared.constants.FIELD_TYPE import (
-    INT24, TIMESTAMP, YEAR, NEWDECIMAL, DECIMAL, JSON
-)
-from mariadb_shared.constants.FIELD_FLAG import NUMERIC as NUM_FLAG
+from .base_cursor import BaseCursor
+from .exceptions import DatabaseError, ProgrammingError
+from .impl.message.client.query_packet import QueryPacket, QueryWithParamPacket
+from .impl.sql_parser import parse_named_placeholders, split_sql_parts
+
 
 if TYPE_CHECKING:
     from .base_connection import BaseConnection
@@ -104,27 +99,53 @@ class SyncCursor(BaseCursor):
         """
         self._check_closed()
         
+        # Validate SQL type
+        if not isinstance(sql, str):
+            raise TypeError("SQL statement must be a string")
+        
         # Consume any pending streaming results before executing new query
         if self._result is not None and self._result.streaming():
             self._result.fetch_remaining()
         
         if (not sql):
-            self._process_completions(None)
-            return
+            raise ProgrammingError("Empty SQL statement")
         try:
             
             # Convert data to list format for parameter binding
             parameters = None
+            sql_bytes = None
+            param_positions = None
+            
             if data:
                 if isinstance(data, (list, tuple)):
+                    # Positional parameters
                     parameters = list(data)
+                    sql_bytes, param_positions = split_sql_parts(sql)
                 elif isinstance(data, dict):
-                    # For named parameters, we'd need to convert SQL from :name to ? format
-                    # For now, raise an error to indicate this needs implementation
-                    raise NotSupportedError("Named parameters not yet implemented with enhanced parameter binding")
+                    # Named parameters - parse and build parameter list
+                    sql_bytes, param_positions, param_names = parse_named_placeholders(sql)
+                    # Build parameters list from dict using param_names order
+                    parameters = []
+                    for name in param_names:
+                        if name not in data:
+                            raise ProgrammingError(f"Named parameter ':{name}' is not provided")
+                        parameters.append(data[name])
             
-            # Create query packet with direct parameter binding (no string substitution!)
-            query_packet = QueryPacket(sql, parameters)
+            if parameters:
+                # Validate parameter count
+                placeholder_count = len(param_positions) // 2  # Positions come in pairs
+                if len(parameters) < placeholder_count:
+                    raise ProgrammingError(
+                        f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
+                        f"but only {len(parameters)} parameters provided"
+                    )
+                # Use parameterized query packet with bytes
+                query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
+
+            else:
+                # Use simple query packet
+                query_packet = QueryPacket(sql)
+            
             # Use provided buffered parameter or fall back to cursor default
             effective_buffered = buffered if buffered is not None else self._buffered
             completions = self._client.execute(query_packet, self._get_config(), False, effective_buffered)
@@ -155,8 +176,13 @@ class SyncCursor(BaseCursor):
         """
         self._check_closed()
         
-        if not data:
-            return
+        # Validate SQL type
+        if not isinstance(sql, str):
+            raise TypeError("SQL statement must be a string")
+        
+        # Check if data is None or not an array-like type
+        if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):
+            raise ProgrammingError("No data provided")
         
         # Reset result state
         self.description = None
@@ -166,19 +192,51 @@ class SyncCursor(BaseCursor):
         
         try:
             completions = list()
+            # Determine if using named parameters and prepare SQL
+            use_named_params = data and len(data) > 0 and isinstance(data[0], dict)
+            
+            # Pre-parse SQL once for optimization (avoid re-parsing for each row)
+            sql_bytes = None
+            param_positions = None
+            param_names = None
+            placeholder_count = 0
+            
+            if use_named_params:
+                # For named parameters, parse SQL once to get structure
+                sql_bytes, param_positions, param_names = parse_named_placeholders(sql)
+                placeholder_count = len(param_positions) // 2
+            else:
+                # For positional parameters, parse SQL once
+                sql_bytes, param_positions = split_sql_parts(sql)
+                placeholder_count = len(param_positions) // 2
+            
             # Execute the statement for each parameter set
             for params in data:
                 # Execute with current parameter set
                 # Convert data to list format for parameter binding
                 parameters = None
                 if params:
-                    if isinstance(params, (list, tuple)):
+                    if not use_named_params:
+                        # Positional parameters
                         parameters = list(params)
-                    elif isinstance(params, dict):
-                        raise NotSupportedError("Named parameters not yet implemented")
+                    else:
+                        # Named parameters - build parameter list from dict using param_names
+                        parameters = []
+                        for name in param_names:
+                            if name not in params:
+                                raise ProgrammingError(f"Named parameter ':{name}' is not provided")
+                            parameters.append(params[name])
                 
-                # Create query packet and execute
-                query_packet = QueryPacket(sql, parameters)
+                # Validate parameter count matches placeholders
+                if parameters:
+                    if len(parameters) < placeholder_count:
+                        raise ProgrammingError(
+                            f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
+                            f"but only {len(parameters)} parameters provided"
+                        )
+                
+                # Create query packet and execute with bytes
+                query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
                 # Use provided buffered parameter or fall back to cursor default
                 effective_buffered = buffered if buffered is not None else self._buffered
                 compl_list = self._client.execute(query_packet, self._get_config(), False, effective_buffered)

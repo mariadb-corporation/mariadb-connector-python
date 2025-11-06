@@ -2,6 +2,7 @@
 
 # -*- coding: utf-8 -*-
 
+import os
 import unittest
 import mariadb
 
@@ -57,6 +58,7 @@ class CursorTest(unittest.TestCase):
 
         default_conf = conf()
         cursor = self.connection.cursor()
+        #        os.environ["LOCAL_DB"] = "local"
         cursor.execute("drop user if exists foo")
         if is_mysql() and self.connection.server_version < 80000:
             cursor.execute("create user foo"+get_host_suffix())

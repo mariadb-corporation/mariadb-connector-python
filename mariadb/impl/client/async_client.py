@@ -238,49 +238,27 @@ class AsyncClient(BaseClient):
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
 
-    async def change_user(self, user: str, password: str, database: Optional[str] = None) -> None:
-        """Change current user and database asynchronously"""
-        try:           
-            # Get charset collation from configuration
-            charset_collation = self.configuration.collation_id if hasattr(self.configuration, 'collation_id') else 45
-            
-            # Create COM_CHANGE_USER packet
-            change_user_packet = ChangeUserPacket(user, password, database)
-            
-            # Send packet directly (don't use execute as it expects result sets)
-            await self._send_message(change_user_packet)
-            
-            old_config = self.configuration
 
-            self.configuration = self.configuration.from_dict(self.configuration.to_dict())
-            self.configuration.user = user
-            self.configuration.password = password
-            self.configuration.database = database
-            
-            # Handle authentication response (may be OK, Error, or Auth Switch)
-            try:
-                await self._handle_authentication()
-            except Exception as e:
-                self.configuration = old_config
-                raise OperationalError(f"Authentication failed: {e}")
-            
-            # Update connection state
-            self.user = user
-            self.configuration.user = user
-            self.configuration.password = password
-            if database is not None:
-                self.context.database = database
-            
+    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str]) -> None:
+        """Change current user and database"""
+        try:
+            old_conf = self.configuration
+
+            new_conf = Configuration(self.configuration.to_dict())
+            new_conf.user = user if user is not None else self.configuration.user
+            new_conf.password = password if password is not None else self.configuration.password
+            new_conf.database = database if database is not None else self.context.database
+            self.configuration = new_conf
+
+            change_user_packet = ChangeUserPacket(new_conf.user, new_conf.password, new_conf.database)
+            await self._send_message(change_user_packet)
+            await self._handle_authentication()
+                
         except Exception as e:
-            # Re-raise if it's already a proper exception with errno/sqlstate
-            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
+            self.configuration = old_conf
+            if isinstance(e, DatabaseError):
                 raise
-            # Otherwise wrap it
-            raise self.exception_factory.create_exception(
-                f"Change user failed: {e}",
-                errno=2013,
-                sql_state='HY000'
-            )
+            raise OperationalError(f"Change user failed: {e}")
 
     async def _handle_authentication(self) -> None:
         """Process authentication response from server using plugin system"""

@@ -522,7 +522,7 @@ class BaseConnection(ABC):
             Character set name (e.g., "utf8mb4")
         """
         if self._client and self._client.context:
-            return self._client.context.character_set or _DEFAULT_CHARSET
+            return self._client.context.get_charset() or _DEFAULT_CHARSET
         return _DEFAULT_CHARSET
 
     @property
@@ -534,7 +534,7 @@ class BaseConnection(ABC):
             Collation name (e.g., "utf8mb4_general_ci")
         """
         if self._client and self._client.context:
-            return self._client.context.collation or _DEFAULT_COLLATION
+            return self._client.context.get_collation() or _DEFAULT_COLLATION
         return _DEFAULT_COLLATION
 
     # =========================================================================

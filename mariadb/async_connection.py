@@ -156,7 +156,6 @@ class AsyncConnection(BaseConnection):
             self._pooled_connection.return_to_pool()
             return
         
-        self._check_closed()
         if not self._closed:
             try:
                 await self._client.close()

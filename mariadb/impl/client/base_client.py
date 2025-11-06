@@ -814,39 +814,37 @@ class BaseClient(ABC):
             case FIELD_TYPE.TINY:
                 if pos + 1 > len(packet):
                     return None, pos
-                value = struct.unpack('<b', packet[pos:pos + 1])[0]
+                if column.flags & FIELD_FLAG.UNSIGNED:
+                    value = struct.unpack('<B', packet[pos:pos + 1])[0]
+                else:
+                    value = struct.unpack('<b', packet[pos:pos + 1])[0]
                 return value, pos + 1
                 
-            case FIELD_TYPE.SHORT:
+            case (FIELD_TYPE.SHORT | FIELD_TYPE.YEAR):
                 if pos + 2 > len(packet):
                     return None, pos
-                value = struct.unpack('<h', packet[pos:pos + 2])[0]
-                return value, pos + 2
-                
-            case FIELD_TYPE.YEAR:
-                # YEAR is returned as int
-                if pos + 2 > len(packet):
-                    return None, pos
-                value = struct.unpack('<H', packet[pos:pos + 2])[0]  # Unsigned for YEAR
-
-                if (column.column_length == 2):
-                    # YEAR(2) - deprecated
-                    if value <= 69:
-                        value += 2000
-                    else:
-                        value += 1900
+                if column.flags & FIELD_FLAG.UNSIGNED:
+                    value = struct.unpack('<H', packet[pos:pos + 2])[0]
+                else:
+                    value = struct.unpack('<h', packet[pos:pos + 2])[0]
                 return value, pos + 2
                 
             case FIELD_TYPE.LONG | FIELD_TYPE.INT24:
                 if pos + 4 > len(packet):
                     return None, pos
-                value = struct.unpack('<i', packet[pos:pos + 4])[0]
+                if column.flags & FIELD_FLAG.UNSIGNED:
+                    value = struct.unpack('<I', packet[pos:pos + 4])[0]
+                else:
+                    value = struct.unpack('<i', packet[pos:pos + 4])[0]
                 return value, pos + 4
                 
             case FIELD_TYPE.LONGLONG:
                 if pos + 8 > len(packet):
                     return None, pos
-                value = struct.unpack('<q', packet[pos:pos + 8])[0]
+                if column.flags & FIELD_FLAG.UNSIGNED:
+                    value = struct.unpack('<Q', packet[pos:pos + 8])[0]
+                else:
+                    value = struct.unpack('<q', packet[pos:pos + 8])[0]
                 return value, pos + 8
                 
             case FIELD_TYPE.FLOAT:
