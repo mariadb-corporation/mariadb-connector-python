@@ -425,7 +425,6 @@ class BaseClient(ABC):
         """
         parser = PayloadParser(packet)
         
-        # Read the 6 identifiers as per Java implementation
         catalog = parser.read_length_encoded_string()
         schema = parser.read_length_encoded_string()
         table = parser.read_length_encoded_string()

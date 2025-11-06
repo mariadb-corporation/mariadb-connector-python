@@ -1,19 +1,9 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-Mutable Integer for MariaDB packet sequence tracking
-
-Equivalent to the Java AtomicInteger or mutable integer wrapper.
-"""
-
-
 class MutableInt:
     """
     Mutable integer wrapper for packet sequence tracking
-    
-    This class provides a thread-safe way to track and increment
-    packet sequence numbers in the MariaDB protocol.
     """
     
     def __init__(self, initial_value: int = 0):

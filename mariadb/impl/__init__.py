@@ -5,7 +5,6 @@
 MariaDB Connector/Python Implementation Package
 
 This package contains the pure Python implementation of the MariaDB connector,
-equivalent to the Java connector functionality.
 """
 
 from .client.base_client import BaseClient

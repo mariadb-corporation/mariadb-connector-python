@@ -1,26 +1,18 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-Payload Writer for MariaDB protocol
-
-Equivalent to the Java StandardPacketWriter.
-"""
-
 import struct
-from typing import Optional, Union
+from typing import Union
+
+SLASH_BYTE: int = b"\\"[0]
+QUOTE_BYTE: int = b"'"[0]
+DQUOTE_BYTE: int = b"\""[0]
+NULL_BYTE: int = b"\0"[0]
 
 class PayloadWriter:
     
-    SLASH_BYTE: int = b"\\"[0]
-    QUOTE_BYTE: int = b"'"[0]
-    DQUOTE_BYTE: int = b"\""[0]
-    NULL_BYTE: int = b"\0"[0]
-
     """
-    Payload writer for MariaDB protocol
-    
-    Equivalent to the Java StandardPacketWriter.
+    Writer utility for MariaDB protocol
     """
     
     def __init__(self, buffer_size: int = 8192):
@@ -28,6 +20,7 @@ class PayloadWriter:
         self.buffer: bytearray = bytearray(buffer_size)
         self.position: int = 0
         self.max_packet_size: int = 16777215  # 16MB - 1 (0xffffff)
+        self._buffer_len: int = buffer_size
         
     def pos(self) -> int:
         """Get current buffer position"""
@@ -84,17 +77,7 @@ class PayloadWriter:
         self.buffer[self.position + 1] = (value >> 8) & 0xFF
         self.buffer[self.position + 2] = (value >> 16) & 0xFF
         self.position += 3
-    
-    def write_length_encoded_string(self, value: Optional[str], encoding: str = 'utf-8') -> None:
-        """Write MySQL length-encoded string with optional encoding"""
-        if value is None:
-            self.write_byte(0xFB)  # NULL marker
-            return
-        
-        data = value.encode(encoding)
-        self.write_length_encoded_int(len(data))
-        self.write_bytes(data)
-    
+
     def write_null_terminated_string(self, value: str, encoding: str = 'utf-8') -> None:
         """Write null-terminated string with optional encoding"""
         if value:
@@ -121,7 +104,11 @@ class PayloadWriter:
             return
             
         data_len = len(data)
-        self._ensure_capacity(data_len)
+        pos = self.position
+        new_pos = pos + data_len
+        
+        if new_pos > self._buffer_len:
+            self._ensure_capacity(data_len)
         self.buffer[self.position:self.position + data_len] = data
         self.position += data_len
     
@@ -131,71 +118,46 @@ class PayloadWriter:
             return
 
         self._ensure_capacity(len(data) * 2)
-
+        
         if no_backslash_escapes:
             for byte in data:
-                if byte == self.QUOTE_BYTE:
-                    self.write_byte(self.QUOTE_BYTE)
+                if byte == QUOTE_BYTE:
+                    self.write_byte(QUOTE_BYTE)
                 self.write_byte(byte)
-        else:    
+        else:
             for byte in data:
-                if byte == self.QUOTE_BYTE or byte == self.DQUOTE_BYTE or byte == self.NULL_BYTE or byte == self.SLASH_BYTE:
-                    self.write_byte(self.SLASH_BYTE)
+                if byte == QUOTE_BYTE or byte == QUOTE_BYTE or byte == NULL_BYTE or byte == SLASH_BYTE:
+                    self.write_byte(SLASH_BYTE)
                 self.write_byte(byte)
 
     def write_string(self, value: str, encoding: str = 'utf-8') -> None:
         """Write string to buffer or payload"""
-        if value is None:
-            return
-            
         data = value.encode(encoding)
         self.write_bytes(data)
     
     def write_length_encoded_string(self, value: str, encoding: str = 'utf-8') -> None:
         """Write length-encoded string"""
-        if value is None:
-            self.write_byte(0xFB)  # NULL marker
-            return
-        
         data = value.encode(encoding)
         self.write_length_encoded_int(len(data))
         self.write_bytes(data)
     
     def write_length_encoded_bytes(self, data: bytes) -> None:
         """Write length-encoded bytes"""
-        if data is None:
-            self.write_byte(0xFB)  # NULL marker
-            return
-        
         self.write_length_encoded_int(len(data))
         self.write_bytes(data)
-    
-    def write_length_encoded_int(self, value: int) -> None:
-        """Write length-encoded integer"""
-        if value < 251:
-            self.write_byte(value)
-        elif value < 65536:
-            self.write_byte(0xFC)
-            self.write_bytes(struct.pack('<H', value))
-        elif value < 16777216:
-            self.write_byte(0xFD)
-            self.write_bytes(struct.pack('<I', value)[:3])
-        else:
-            self.write_byte(0xFE)
-            self.write_bytes(struct.pack('<Q', value))
-    
 
     def _ensure_capacity(self, additional_bytes: int) -> None:
         """Ensure buffer has capacity for additional bytes"""
         required_size = self.position + additional_bytes
-        if required_size > len(self.buffer):
+        if required_size > self._buffer_len:
             self._grow_buffer(required_size)
     
     def _grow_buffer(self, min_size: int) -> None:
         """Grow buffer to accommodate minimum size"""
-        current_size = len(self.buffer)
+        current_size = self._buffer_len
         new_size = max(int(current_size * 1.5), min_size)
         
         new_buffer = bytearray(new_size)
         new_buffer[:current_size] = self.buffer
         self.buffer = new_buffer
+        self._buffer_len = new_size

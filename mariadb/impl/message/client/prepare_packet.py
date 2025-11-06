@@ -1,13 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-Prepare packet for MariaDB prepared statement preparation
-
-Equivalent to the Java PreparePacket class.
-"""
-
-
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
 from ..client_message import ClientMessage

@@ -72,7 +72,6 @@ class ColumnDefinitionPacket:
         """Decode column definition packet from bytearray with context"""
         parser = PayloadParser(data)
         
-        # Read the 6 identifiers as per Java implementation
         catalog = parser.read_length_encoded_string()
         schema = parser.read_length_encoded_string()
         table = parser.read_length_encoded_string()

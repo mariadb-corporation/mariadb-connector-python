@@ -3,18 +3,12 @@
 
 """
 Result set classes for MariaDB query results
-
-Based on Java Result.java, CompleteResult.java, and StreamingResult.java
 """
 
-import struct
 from typing import List, Optional, Any, TYPE_CHECKING, Callable, Tuple
 from abc import ABC, abstractmethod
-from mariadb.impl.client.exception_factory import ExceptionFactory
-from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.ok_packet import OkPacket
-from mariadb_shared.constants import STATUS
 from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
 
 if TYPE_CHECKING:
@@ -26,13 +20,6 @@ if TYPE_CHECKING:
 class Result(ABC):
     """
     Abstract base class for result sets
-    
-    Based on Java Result.java
-    
-    Organization:
-    1. Initialization
-    2. Abstract Methods
-    3. Utility Methods
     """
     
     def __init__(
@@ -113,8 +100,6 @@ class Result(ABC):
 class CompleteResult(Result):
     """
     Complete (buffered) result set - all rows read immediately
-    
-    Based on Java CompleteResult.java
     
     All rows are loaded into memory at once, allowing random access.
     """
@@ -234,8 +219,6 @@ class CompleteResult(Result):
 class BaseStreamingResult(Result):
     """
     Base class for streaming (unbuffered) result sets
-    
-    Based on Java StreamingResult.java
     
     Rows are fetched one at a time from the network as needed.
     """

@@ -1,13 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-Change Database Packet (COM_INIT_DB)
-
-Equivalent to the Java ChangeDbPacket class.
-See https://mariadb.com/kb/en/com_init_db/ protocol
-"""
-
 from ...client.context import Context
 
 from ..client_message import ClientMessage
@@ -19,7 +12,7 @@ class ChangeDbPacket(ClientMessage):
     Change database packet implementation
     
     Sends COM_INIT_DB command to change the current database.
-    Equivalent to the Java ChangeDbPacket class.
+    See https://mariadb.com/kb/en/com_init_db/ protocol
     """
 
     COM_INIT_DB = 0x02

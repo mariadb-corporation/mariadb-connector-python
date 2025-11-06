@@ -1,12 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-Execute packet for MariaDB prepared statement execution
-
-Equivalent to the Java ExecutePacket class.
-"""
-
 import array
 import datetime
 import decimal

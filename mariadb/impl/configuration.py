@@ -1,12 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-Configuration class for MariaDB connections
-
-Equivalent to the Java Configuration class.
-"""
-
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
 
@@ -15,8 +9,6 @@ from dataclasses import dataclass, field
 class Configuration:
     """
     Configuration holder for MariaDB connection parameters
-    
-    Equivalent to the Java Configuration class.
     """
     
     # Connection parameters

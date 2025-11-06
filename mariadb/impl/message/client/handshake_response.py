@@ -1,12 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-Handshake Response packet for MariaDB authentication
-
-Equivalent to the Java HandshakeResponse class.
-"""
-
 import hashlib
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
@@ -19,8 +13,6 @@ from mariadb_shared.constants import CAPABILITY
 class HandshakeResponse(ClientMessage):
     """
     Handshake response packet for MySQL authentication
-    
-    Equivalent to the Java HandshakeResponse class.
     """
     
     

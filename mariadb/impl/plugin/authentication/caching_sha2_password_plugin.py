@@ -27,8 +27,6 @@ except ImportError:
 class CachingSha2PasswordPlugin(AuthenticationPlugin):
     """
     Caching SHA2 password authentication plugin implementation
-    
-    Equivalent to the Java CachingSha2PasswordPlugin class.
     """
     
     TYPE = "caching_sha2_password"

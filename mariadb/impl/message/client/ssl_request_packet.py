@@ -1,26 +1,17 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-SSL Request packet for MariaDB SSL handshake
-
-Equivalent to the Java SslRequestPacket class.
-See https://mariadb.com/kb/en/connection/#sslrequest-packet
-"""
-
-
 from mariadb.impl.client.context import Context
 
 from ...client.socket.payload_writer import PayloadWriter
 from ..client_message import ClientMessage
-from mariadb_shared import constants
 
 
 class SslRequestPacket(ClientMessage):
     """
     SSL request packet for MySQL/MariaDB SSL handshake
     
-    Equivalent to the Java SslRequestPacket class.
+    See https://mariadb.com/kb/en/connection/#sslrequest-packet
     """
     
     def __init__(self, client_capabilities: int):

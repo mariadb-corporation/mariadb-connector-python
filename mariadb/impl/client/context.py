@@ -1,12 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-Connection Context for MariaDB connections
-
-Equivalent to the Java Context class.
-"""
-
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
@@ -35,15 +29,6 @@ class ServerVersion:
 class Context:
     """
     Connection context holding server state and capabilities
-    
-    Equivalent to the Java Context class.
-    
-    Organization:
-    1. Initialization
-    2. Version Methods
-    3. Capability Methods
-    4. Database/Charset Methods
-    5. Properties
     """
     
     def __init__(

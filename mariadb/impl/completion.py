@@ -1,12 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-"""
-Completion class for MariaDB query results
-
-Equivalent to the Java Completion interface.
-"""
-
 from abc import ABC, abstractmethod
 from typing import Optional, Any, List, Dict, TYPE_CHECKING
 from dataclasses import dataclass
@@ -19,8 +13,6 @@ if TYPE_CHECKING:
 class Completion(ABC):
     """
     Query completion result
-    
-    Equivalent to the Java Completion interface.
     """
     
     affected_rows: int = 0
