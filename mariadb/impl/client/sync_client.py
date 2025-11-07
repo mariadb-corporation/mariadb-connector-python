@@ -50,9 +50,9 @@ class SyncClient(BaseClient):
     # Initialization
     # =========================================================================
     
-    def __init__(self, configuration: Configuration, host_address: HostAddress) -> None:
+    def __init__(self, configuration: Configuration) -> None:
         """Initialize synchronous client with configuration and host address"""
-        super().__init__(configuration, host_address)
+        super().__init__(configuration)
         
         # Sync-specific attributes
         self.socket: Optional[socket.socket] = None
@@ -71,11 +71,9 @@ class SyncClient(BaseClient):
         hosts = self.configuration.get_hosts()
         last_exception = None
         
-        for host, port in hosts:
+        for host_address in hosts:
             try:
-                # Update host address for this attempt
-                self.host_address.host = host
-                self.host_address.port = port
+                self.host_address = host_address
                 
                 self._create_socket()
                 self._perform_handshake()

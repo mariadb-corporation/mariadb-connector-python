@@ -48,9 +48,9 @@ class AsyncClient(BaseClient):
     # Initialization
     # =========================================================================
     
-    def __init__(self, configuration: Configuration, host_address: HostAddress) -> None:
+    def __init__(self, configuration: Configuration) -> None:
         """Initialize asynchronous client with configuration and host address"""
-        super().__init__(configuration, host_address)
+        super().__init__(configuration)
         
         # Async-specific attributes
         self.reader: Optional[asyncio.StreamReader] = None
@@ -66,11 +66,10 @@ class AsyncClient(BaseClient):
         hosts = self.configuration.get_hosts()
         last_exception = None
         
-        for host, port in hosts:
+        for hostAddress in hosts:
             try:
                 # Update host address for this attempt
-                self.host_address.host = host
-                self.host_address.port = port
+                self.host_address = hostAddress
                 
                 await self._create_socket()
                 await self._perform_handshake()

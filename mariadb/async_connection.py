@@ -13,10 +13,7 @@ from mariadb_shared.xid import Xid
 
 from .base_connection import BaseConnection
 
-if TYPE_CHECKING:
-    from .impl.client.async_client import AsyncClient
-else:
-    from .impl.client.async_client import AsyncClient
+from .impl.client.async_client import AsyncClient
 from .exceptions import ProgrammingError, Error
 
 
@@ -54,7 +51,7 @@ class AsyncConnection(BaseConnection['AsyncClient']):
         """
         super().__init__(*args, **kwargs)
         # Create async client
-        self._client = AsyncClient(self._configuration, self._host_address)
+        self._client = AsyncClient(self._configuration)
     
     async def __aenter__(self) -> 'AsyncConnection':
         """Async context manager entry"""
@@ -88,11 +85,9 @@ class AsyncConnection(BaseConnection['AsyncClient']):
         instance = cls(*args, **kwargs)
         try:
             await instance._client.connect()
-        except Exception as e:
+        except Error as e:
             instance._closed = True
-            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
-                raise
-            raise instance._exception_factory.create_connection_exception(f"Connection failed: {e}", cause=e)
+            raise
         # Set autocommit if configured
         if instance._configuration.autocommit:
             await instance.set_autocommit(True)

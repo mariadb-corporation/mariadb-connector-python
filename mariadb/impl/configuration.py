@@ -3,6 +3,7 @@
 
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
+from .host_address import HostAddress
 
 
 @dataclass
@@ -64,9 +65,9 @@ class Configuration:
     non_mapped_options: Dict[str, Any] = field(default_factory=dict)
     
     @staticmethod
-    def parse_hosts(host_string: str, default_port: int = 3306) -> List[Tuple[str, int]]:
+    def parse_hosts(host_string: str, default_port: int = 3306) -> List[HostAddress]:
         """Parse host string into list of (host, port) tuples for failover"""
-        hosts = []
+        hosts: List[HostAddress] = []
         
         # Split by comma for multiple hosts
         host_parts = [h.strip() for h in host_string.split(',') if h.strip()]
@@ -86,11 +87,11 @@ class Configuration:
                 host = host_part
                 port = default_port
             
-            hosts.append((host.strip(), port))
+            hosts.append(HostAddress(host.strip(), port))
         
         return hosts
     
-    def get_hosts(self) -> List[Tuple[str, int]]:
+    def get_hosts(self) -> List[HostAddress]:
         """Get list of (host, port) tuples for connection attempts"""
         return self.parse_hosts(self.host, self.port)
     

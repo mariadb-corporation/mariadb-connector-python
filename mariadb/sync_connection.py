@@ -13,10 +13,7 @@ from mariadb_shared.xid import Xid
 
 from .base_connection import BaseConnection
 
-if TYPE_CHECKING:
-    from .impl.client.sync_client import SyncClient
-else:
-    from .impl.client.sync_client import SyncClient
+from .impl.client.sync_client import SyncClient
 
 from .exceptions import ProgrammingError, Error
 
@@ -48,7 +45,7 @@ class SyncConnection(BaseConnection['SyncClient']):
         """
         super().__init__(*args, **kwargs)
         # Create sync client
-        self._client = SyncClient(self._configuration, self._host_address)
+        self._client = SyncClient(self._configuration)
         # Connect immediately for sync connections
         try:
             self._client.connect()

@@ -61,7 +61,7 @@ class BaseClient(ABC):
     SESSION_TRACK_TRANSACTION_CHARACTERISTICS = 4
     SESSION_TRACK_TRANSACTION_STATE = 5
     
-    def __init__(self, configuration: Configuration, host_address: HostAddress) -> None:
+    def __init__(self, configuration: Configuration) -> None:
         """
         Initialize base client
         
@@ -70,7 +70,7 @@ class BaseClient(ABC):
             host_address: Host address to connect to
         """
         self.configuration = configuration
-        self.host_address = host_address
+        self.host_address: Optional[HostAddress] = None
         self.sequence = MutableInt(0)  # Shared sequence number
         self.context: Optional[Context] = None
         self.exception_factory = ExceptionFactory()
