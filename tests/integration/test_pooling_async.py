@@ -8,6 +8,9 @@ import platform
 
 from ..base_test import conf, is_skysql, is_maxscale
 
+# Check if AsyncConnection is available
+HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
+
 # Helper to create async connection
 async def create_async_connection(additional_conf=None):
     """Helper to create async connection with optional additional config"""
@@ -27,9 +30,8 @@ except (ImportError, AttributeError):
     HAS_MARIADB_POOL = False
 
 
-
-@unittest.skipIf(not HAS_MARIADB_POOL,
-                 "mariadb_pool package not installed")
+@unittest.skipIf(not HAS_MARIADB_POOL or not HAS_ASYNC_CONNECTION,
+                 "AsyncConnection or mariadb_pool package not installed")
 class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):

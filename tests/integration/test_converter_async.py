@@ -34,7 +34,10 @@ conversions = {
     **{FIELD_TYPE.LONGLONG: long_minus},
 }
 
+# Check if AsyncConnection is available
+HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
 
+@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
 class AsyncTestConversion(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):

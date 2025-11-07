@@ -11,7 +11,10 @@ import mariadb
 from ..base_test import is_native
 from ..conftest import get_test_config
 
+# Check if AsyncConnection is available
+HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
 
+@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
 class AsyncErrorHandlingTest(unittest.IsolatedAsyncioTestCase):
     """Test async error handling and edge cases"""
 

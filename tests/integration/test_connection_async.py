@@ -21,7 +21,10 @@ from packaging import version
 from ..base_test import is_skysql, is_maxscale, is_native, get_host_suffix
 from ..conftest import get_test_config as conf
 
+# Check if AsyncConnection is available
+HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
 
+@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
 class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):

@@ -9,7 +9,10 @@ import unittest
 import mariadb
 from ..conftest import get_test_config
 
+# Check if AsyncConnection is available
+HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
 
+@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
 class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
     """Async test connection options and configuration"""
 

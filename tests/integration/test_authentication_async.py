@@ -21,7 +21,10 @@ import mariadb
 from tests.base_test import is_native, get_host_suffix
 from tests.conftest import get_test_config
 
+# Check if AsyncConnection is available
+HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
 
+@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
 class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
     """Async test cases for PARSEC password authentication plugin"""
     

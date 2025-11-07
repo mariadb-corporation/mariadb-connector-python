@@ -9,6 +9,8 @@ import traceback
 
 from ..conftest import get_test_config as conf
 
+# Check if AsyncConnection is available
+HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
 
 async def create_async_connection(additional_conf=None):
     """Helper to create async connection with optional additional config"""
@@ -20,7 +22,7 @@ async def create_async_connection(additional_conf=None):
             additional_conf.items()))}
     return await mariadb.AsyncConnection.connect(**c)
 
-
+@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
 class AsyncTestException(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
