@@ -8,6 +8,7 @@ Uses asyncio for non-blocking I/O operations.
 """
 
 import asyncio
+import ssl
 from typing import List, Optional, Any
 
 from mariadb.impl.message.server.ok_packet import OkPacket
@@ -79,7 +80,9 @@ class AsyncClient(BaseClient):
                 # Execute init command if specified
                 if self.configuration.init_command:
                     await self._execute_init_command()
-                
+
+                return  # Success!
+
             except Exception as e:
                 last_exception = e
                 await self._cleanup_connection()
@@ -88,10 +91,8 @@ class AsyncClient(BaseClient):
         
         # All hosts failed
         if last_exception:
-            last_exception_msg = last_exception.msg
-            raise self.exception_factory.create_connection_exception(f"Connection failed to all hosts: {last_exception_msg}", cause=last_exception)
-        else:
-            raise self.exception_factory.create_connection_exception("Connection failed: No hosts to try")
+            raise last_exception
+        raise OperationalError("Connection failed to all hosts")
     
     async def _create_socket(self) -> None:
         """Create and configure async TCP or Unix socket connection"""
@@ -164,12 +165,15 @@ class AsyncClient(BaseClient):
             # Handle authentication (may involve multiple rounds)
             await self._handle_authentication()
             
-            # Enable compression if negotiated
-            self._enable_compression_if_negotiated()
             self.connected = True
                 
         except Exception as e:
-            await self.close()
+            # Cleanup without calling close() to avoid masking the original exception
+            try:
+                await self._cleanup_connection()
+            except:
+                # Ignore cleanup errors to avoid masking the original exception
+                pass
             raise e
     
     async def _ensure_default(self) -> None:
@@ -203,7 +207,8 @@ class AsyncClient(BaseClient):
         
         # Send SSL request packet
         ssl_request = SslRequestPacket(client_capabilities)
-        await ssl_request.encode(self.stream, self.context)
+        encoded = ssl_request.encode(self.context)
+        await self.stream.send_payload(encoded, ssl_request.type(), False)
         
         try:
             # Upgrade socket to SSL
@@ -221,7 +226,7 @@ class AsyncClient(BaseClient):
             loop = asyncio.get_event_loop()
             
             # Perform TLS upgrade using loop.start_tls()
-            # The protocol will automatically use the new SSL transport
+            # This returns a new SSL transport
             new_transport = await loop.start_tls(
                 transport,
                 protocol,
@@ -229,12 +234,22 @@ class AsyncClient(BaseClient):
                 server_side=False,
                 server_hostname=self.configuration.host
             )
-            # Create new AsyncStream with the upgraded connection
-            # The reader and writer now use the SSL transport internally
-            connection_id = self.context.connection_id if self.context else -1
-            self.stream = AsyncStream(self.reader, self.writer, connection_id)
-            self.stream.sequence = 2
             
+            # After start_tls, the protocol's transport is updated automatically
+            # The existing reader and writer now use the SSL transport
+            # Update the stream's writer transport reference
+            self.writer._transport = new_transport
+            
+            # Update the stream sequence for the next packet
+            self.stream.sequence.set(1)
+            
+        except ssl.SSLError as e:
+            # SSL-specific error - close transport immediately to avoid cleanup issues
+            try:
+                transport.close()
+            except:
+                pass
+            raise OperationalError(f"SSL handshake failed: {e}")
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
 
@@ -344,18 +359,7 @@ class AsyncClient(BaseClient):
                     
             except Exception as e:
                 raise OperationalError(f"Failed to execute init command '{self.configuration.init_command}': {e}")
-    
-    def _enable_compression_if_negotiated(self) -> None:
-        """Enable compression if negotiated during handshake"""
-        if (self.context.has_client_capability(constants.CAPABILITY.COMPRESS)):
-            
-            # Wrap the asyncio reader/writer with async compression stream
-            from .socket.compress_stream import AsyncCompressStreamReader, AsyncCompressStreamWriter
-            new_reader = AsyncCompressStreamReader(self.reader, self.context.connection_id)
-            new_writer = AsyncCompressStreamWriter(self.writer, self.context.connection_id)
-            self.stream.reader = new_reader
-            self.stream.writer = new_writer
-    
+
     async def _send_message(self, message: ClientMessage) -> None:
         """Send client message to server"""
         try:
@@ -573,9 +577,9 @@ class AsyncClient(BaseClient):
                         # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
                         completion = OkPacket.decode(row_packet, self.context)
                     
-                    # Create CompleteResult with all rows
-                    from ..result import CompleteResult
-                    complete_result = CompleteResult(
+                    # Create AsyncCompleteResult with all rows
+                    from ..result import AsyncCompleteResult
+                    complete_result = AsyncCompleteResult(
                         columns=columns,
                         column_count=column_count,
                         config=config,
@@ -602,8 +606,8 @@ class AsyncClient(BaseClient):
         if hasattr(self, 'writer') and self.writer:
             try:
                 self.writer.close()
-                await self.writer.wait_closed()
-            except:
+                await asyncio.wait_for(self.writer.wait_closed(), timeout=1.0)
+            except (asyncio.TimeoutError, ssl.SSLError, Exception):
                 pass
             self.writer = None
         if hasattr(self, 'reader'):
@@ -624,7 +628,7 @@ class AsyncClient(BaseClient):
             try:
                 prepare_packet = PreparePacket(sql)
                 await self._send_message(prepare_packet)
-                return self._parse_prepare_response(await self.stream.read_payload(), sql)
+                return await self._parse_prepare_response(await self.stream.read_payload(), sql)
                 
             except DatabaseError as e:
                 raise e

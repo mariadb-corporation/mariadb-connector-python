@@ -6,11 +6,12 @@ Advanced Connection Pool Implementation
 """
 
 import threading
+import asyncio
 import time
 import queue
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Dict
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
 
 # Import PoolError from shared exceptions
 try:
@@ -47,14 +48,14 @@ class PoolConfig:
     reset_connection: bool = False
 
 
-class PooledConnection:
+class BasePooledConnection:
     """
-    Wrapper for a pooled connection
+    Base wrapper for a pooled connection
     
     Tracks connection metadata and lifecycle
     """
     
-    def __init__(self, connection: Any, pool: 'ConnectionPool'):
+    def __init__(self, connection: Any, pool: Any):
         self.connection = connection
         self.pool = pool
         self.created_at = time.time()
@@ -80,7 +81,11 @@ class PooledConnection:
         idle_time = now - self.last_used
         
         return age > max_lifetime or (not self.in_use and idle_time > max_idle_time)
-        
+
+
+class PooledConnection(BasePooledConnection):
+    """Sync pooled connection wrapper"""
+    
     def is_healthy(self) -> bool:
         """
         Check if connection is healthy
@@ -99,6 +104,31 @@ class PooledConnection:
         try:
             self.connection._set_pooled_connection(None)
             self.connection.close()
+        except Exception:
+            pass
+
+
+class AsyncPooledConnection(BasePooledConnection):
+    """Async pooled connection wrapper"""
+    
+    async def is_healthy(self) -> bool:
+        """
+        Check if connection is healthy
+        """
+        try:
+            await self.connection.ping()
+            return True
+        except Exception:
+            return False
+    
+    def return_to_pool(self):
+        """Return this connection to the pool"""
+        asyncio.create_task(self.pool.release(self))
+
+    async def closeSilently(self):
+        try:
+            self.connection._set_pooled_connection(None)
+            await self.connection.close()
         except Exception:
             pass
     
@@ -354,4 +384,272 @@ class ConnectionPool:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit"""
         self.close()
+        return False
+
+
+class AsyncConnectionPool:
+    """
+    Advanced async connection pool for MariaDB
+    
+    Provides dynamic pool sizing, health checking, and connection lifecycle management.
+    
+    Usage:
+        pool = AsyncConnectionPool(host="localhost", user="root", database="test")
+        await pool.open()
+        
+        # Use the pool
+        async with pool.connection() as conn:
+            ...
+        
+        await pool.close()
+    """
+    
+    def __init__(
+        self,
+        connection_factory: Callable = None,
+        config: Optional[PoolConfig] = None,
+        **connection_params
+    ):
+        """
+        Initialize async connection pool (call open() to establish connections)
+        
+        Args:
+            connection_factory: Async callable that creates new connections
+            config: Pool configuration
+            **connection_params: Parameters to pass to connection factory
+        """
+        self.connection_factory = connection_factory
+        self.connection_params = connection_params
+        self.config = config or PoolConfig()
+        
+        self._pool: asyncio.Queue[AsyncPooledConnection] = asyncio.Queue(maxsize=self.config.max_size)
+        self._all_connections: list[AsyncPooledConnection] = []
+        self._lock = asyncio.Lock()
+        self._closed = False
+        self._maintenance_task = None
+        self._opened = False
+
+    async def open(self):
+        """
+        Open the pool and establish initial connections.
+        
+        This method must be called before using the pool.
+        """
+        if self._opened:
+            return
+        
+        # Only initialize connections if we have connection parameters
+        has_connection_params = any(key in self.connection_params 
+                                   for key in ['host', 'user', 'database', 'unix_socket'])
+        
+        if has_connection_params:
+            await self._ensure_min_connections()
+            # Start background maintenance task
+            if self.config.enable_health_check and not self._maintenance_task:
+                self._maintenance_task = asyncio.create_task(self._maintenance_loop())
+        
+        self._opened = True
+
+    async def _create_connection_unlocked(self) -> AsyncPooledConnection:
+        """Create a new pooled connection (must be called with lock held)"""
+        if len(self._all_connections) >= self.config.max_size:
+            raise PoolError(f"Pool has reached maximum size of {self.config.max_size}")
+            
+        try:
+            conn = await self.connection_factory(**self.connection_params)
+            pooled_conn = AsyncPooledConnection(conn, self)
+            conn._set_pooled_connection(pooled_conn)
+
+            self._all_connections.append(pooled_conn)
+            return pooled_conn
+        except Exception as e:
+            raise PoolError(f"Failed to create connection: {e}") from e
+
+    async def _create_connection(self) -> AsyncPooledConnection:
+        """Create a new pooled connection"""
+        async with self._lock:
+            return await self._create_connection_unlocked()
+                
+    async def _ensure_min_connections(self):
+        """Ensure minimum number of connections exist"""
+        async with self._lock:
+            current_count = len(self._all_connections)
+            for _ in range(self.config.min_size - current_count):
+                try:
+                    pooled_conn = await self._create_connection_unlocked()
+                    pooled_conn.mark_idle()
+                    await self._pool.put(pooled_conn)
+                except Exception:
+                    break
+                    
+    async def _maintenance_loop(self):
+        """Background task for pool maintenance"""
+        while not self._closed:
+            await asyncio.sleep(self.config.validation_interval)
+            await self._cleanup_expired_connections()
+            await self._ensure_min_connections()
+            
+    async def _cleanup_expired_connections(self):
+        """Remove expired connections from pool"""
+        async with self._lock:
+            for pool_conn in list(self._all_connections):
+                if not pool_conn.in_use and pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
+                    await pool_conn.closeSilently()
+                    self._all_connections.remove(pool_conn)
+
+    async def acquire(self, timeout: Optional[float] = None) -> AsyncPooledConnection:
+        """
+        Acquire a connection from the pool
+        
+        Args:
+            timeout: Timeout in seconds (uses config default if None)
+            
+        Returns:
+            Database connection object
+        """
+        if self._closed:
+            raise PoolError("Pool is closed")
+            
+        timeout = timeout if timeout is not None else self.config.acquire_timeout
+
+        # Check if we can create a new connection before blocking
+        can_create_new = len(self._all_connections) < self.config.max_size
+        
+        # Use a short timeout if we can create new connections
+        get_timeout = 0.1 if can_create_new else timeout
+        
+        try:
+            # Try to get an existing connection
+            pooled_conn = await asyncio.wait_for(self._pool.get(), timeout=get_timeout)
+            # Validate connection health
+            if not await pooled_conn.is_healthy():
+                # Connection is unhealthy, remove it and create a new one atomically
+                async with self._lock:
+                    await pooled_conn.closeSilently()
+                    if pooled_conn in self._all_connections:
+                        self._all_connections.remove(pooled_conn)
+                    # Create new connection while still holding the lock
+                    if len(self._all_connections) >= self.config.max_size:
+                        raise PoolError(f"Pool has reached maximum size of {self.config.max_size}")
+                    try:
+                        conn = await self.connection_factory(**self.connection_params)
+                        pooled_conn = AsyncPooledConnection(conn, self)
+                        conn._set_pooled_connection(pooled_conn)
+                        self._all_connections.append(pooled_conn)
+                    except Exception as e:
+                        raise PoolError(f"Failed to create connection: {e}") from e
+                
+        except asyncio.TimeoutError:
+            # No idle connections, try to create a new one
+            try:
+                pooled_conn = await self._create_connection()
+            except PoolError:
+                # Can't create new connection, wait longer for an existing one
+                if timeout and timeout > get_timeout:
+                    try:
+                        pooled_conn = await asyncio.wait_for(self._pool.get(), timeout=timeout - get_timeout)
+                    except asyncio.TimeoutError:
+                        raise PoolError("No connections available and pool is at maximum size")
+                else:
+                    raise PoolError("No connections available and pool is at maximum size")
+                
+        pooled_conn.mark_in_use()
+        return pooled_conn
+        
+    async def release(self, pool_conn: AsyncPooledConnection):
+        """
+        Release a connection back to the pool
+        
+        Args:
+            connection: Connection to release
+        """
+        if self._closed:
+            return
+            
+        async with self._lock:
+                
+            pool_conn.mark_idle()
+            
+            # Reset or rollback connection before returning to pool
+            try:
+                conn = pool_conn.connection
+                
+                # Reset connection if reset_connection is enabled
+                if self.config.reset_connection:
+                    await conn.reset()
+                # Or rollback if in transaction
+                elif (conn.server_status & IN_TRANS) > 0:
+                    await conn.rollback()
+
+            except Exception:
+                # If reset/rollback fails, close the connection
+                await pool_conn.closeSilently()
+                if pool_conn in self._all_connections:
+                    self._all_connections.remove(pool_conn)
+                return
+            
+            # Check if connection should be kept
+            if pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
+                await pool_conn.closeSilently()
+                if pool_conn in self._all_connections:
+                    self._all_connections.remove(pool_conn)
+            else:
+                try:
+                    self._pool.put_nowait(pool_conn)
+                except asyncio.QueueFull:
+                    # Pool is full, close the connection
+                    await pool_conn.closeSilently()
+                    if pool_conn in self._all_connections:
+                        self._all_connections.remove(pool_conn)
+                        
+    @asynccontextmanager
+    async def connection(self, timeout: Optional[float] = None):
+        """
+        Async context manager for acquiring and releasing connections
+        
+        Args:
+            timeout: Timeout in seconds
+            
+        Example:
+            async with pool.connection() as conn:
+                cursor = conn.cursor()
+                await cursor.execute("SELECT 1")
+        """
+        pool_conn = await self.acquire(timeout=timeout)
+        try:
+            yield pool_conn.connection
+        finally:
+            await self.release(pool_conn)
+            
+    async def close(self):
+        """Close the pool and all connections"""
+        self._closed = True
+        
+        # Cancel maintenance task
+        if self._maintenance_task:
+            self._maintenance_task.cancel()
+            try:
+                await self._maintenance_task
+            except asyncio.CancelledError:
+                pass
+        
+        async with self._lock:
+            for pooled_conn in self._all_connections:
+                await pooled_conn.closeSilently()
+            self._all_connections.clear()
+            
+            # Clear the queue
+            while not self._pool.empty():
+                try:
+                    self._pool.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                    
+    async def __aenter__(self):
+        """Async context manager entry"""
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit"""
+        await self.close()
         return False

@@ -9,7 +9,7 @@ synchronous and asynchronous connection implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Any, Union
+from typing import Optional, Any, Union, TypeVar, Generic, TYPE_CHECKING
 
 from mariadb_shared.constants import STATUS, TPC_STATE
 from mariadb_shared.xid import Xid
@@ -28,13 +28,21 @@ _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
 _MAX_TPC_XID_SIZE = 64
 
+if TYPE_CHECKING:
+    from .impl.client.base_client import BaseClient
 
-class BaseConnection(ABC):
+TClient = TypeVar('TClient', bound='BaseClient')
+
+
+class BaseConnection(ABC, Generic[TClient]):
     """
     Abstract base class for MariaDB Connector/Python Connection Objects
 
     Provides common functionality for both sync and async connections.
     Subclasses must implement abstract methods for sync or async behavior.
+    
+    Type Parameters:
+        TClient: The client type (SyncClient or AsyncClient)
     
     Organization:
     1. Class attributes (DB-API 2.0 exceptions)
@@ -92,7 +100,7 @@ class BaseConnection(ABC):
         self._host_address = HostAddress(host=self._host, port=self._port)
         
         # Client will be set by subclass (SyncClient or AsyncClient)
-        self._client: Union['SyncClient', 'AsyncClient'] = None
+        self._client: Optional[TClient] = None
 
     def _check_closed(self) -> None:
         """

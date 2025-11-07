@@ -56,6 +56,45 @@ class Result(ABC):
         """Check if this is a streaming result"""
         pass
     
+    
+    @abstractmethod
+    def get_row_count(self) -> int:
+        """Get total row count (-1 if unknown)"""
+        pass
+
+    # =========================================================================
+    # Utility Methods
+    # =========================================================================
+    
+    def row_number(self) -> Optional[int]:
+        """
+        Get current row number (1-based, DB-API style)
+        
+        Returns row_pointer + 1:
+        - row_pointer = -1 (before first) → rownumber = 0
+        - row_pointer = 0 (at first) → rownumber = 1
+        - etc.
+        """
+        return self.row_pointer + 1
+
+class SyncResult(Result):
+    """
+    Abstract base class for result sets
+    """
+    
+    def __init__(
+        self,
+        columns: List[ColumnDefinitionPacket],
+        column_count: int,
+        config: 'Configuration',
+        is_binary: bool = False
+    ):
+        super().__init__(columns, column_count, config, is_binary)
+    
+    # =========================================================================
+    # Abstract Methods
+    # =========================================================================
+    
     @abstractmethod
     def fetch_one(self) -> Optional[Any]:
         """Fetch next row"""
@@ -77,29 +116,55 @@ class Result(ABC):
         pass
     
     @abstractmethod
-    def get_row_count(self) -> int:
-        """Get total row count (-1 if unknown)"""
+    def scroll(self, value: int, mode: str = "relative") -> None:
+        pass
+
+
+class AsyncResult(Result):
+    """
+    Abstract base class for result sets
+    """
+    
+    def __init__(
+        self,
+        columns: List[ColumnDefinitionPacket],
+        column_count: int,
+        config: 'Configuration',
+        is_binary: bool = False
+    ):
+        super().__init__(columns, column_count, config, is_binary)
+    
+    # =========================================================================
+    # Abstract Methods
+    # =========================================================================
+        
+    @abstractmethod
+    async def fetch_one(self) -> Optional[Any]:
+        """Fetch next row"""
         pass
     
-    # =========================================================================
-    # Utility Methods
-    # =========================================================================
+    @abstractmethod
+    async def fetch_many(self, size: int) -> List[Any]:
+        """Fetch multiple rows"""
+        pass
     
-    def row_number(self) -> Optional[int]:
-        """
-        Get current row number (1-based, DB-API style)
-        
-        Returns row_pointer + 1:
-        - row_pointer = -1 (before first) → rownumber = 0
-        - row_pointer = 0 (at first) → rownumber = 1
-        - etc.
-        """
-        return self.row_pointer + 1
+    @abstractmethod
+    async def fetch_all(self) -> List[Any]:
+        """Fetch all remaining rows"""
+        pass
+    
+    @abstractmethod
+    async def fetch_remaining(self) -> None:
+        """Consume all remaining rows without processing"""
+        pass
+    
+    @abstractmethod
+    async def scroll(self, value: int, mode: str = "relative") -> None:
+        pass
 
-
-class CompleteResult(Result):
+class BaseCompleteResult(Result):
     """
-    Complete (buffered) result set - all rows read immediately
+    Base class for complete (buffered) result sets
     
     All rows are loaded into memory at once, allowing random access.
     """
@@ -163,6 +228,19 @@ class CompleteResult(Result):
         """Check if this is a streaming result"""
         return False
     
+    def get_row_count(self) -> int:
+        """Get total row count"""
+        return self.data_size
+
+
+class SyncCompleteResult(BaseCompleteResult, SyncResult):
+    """
+    Synchronous complete (buffered) result set
+    
+    All rows are loaded into memory at once, allowing random access.
+    Uses synchronous (non-async) methods.
+    """
+    
     def fetch_one(self) -> Optional[Any]:
         """
         Fetch next row
@@ -210,11 +288,66 @@ class CompleteResult(Result):
     def fetch_remaining(self) -> None:
         """Consume all remaining rows without processing"""
         self.row_pointer = self.data_size
-    
-    def get_row_count(self) -> int:
-        """Get total row count"""
-        return self.data_size
 
+
+class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
+    """
+    Asynchronous complete (buffered) result set
+    
+    All rows are loaded into memory at once, allowing random access.
+    Uses async methods for consistency with async API.
+    """
+    
+    async def fetch_one(self) -> Optional[Any]:
+        """
+        Fetch next row (async)
+        
+        row_pointer semantics:
+        -1 = before first row
+        0 to data_size-1 = index of last fetched row
+        
+        rownumber = row_pointer + 1 (1-based, 0 = before first)
+        """
+        # Check if we can fetch more rows
+        if self.row_pointer >= self.data_size - 1:
+            # Already at or past last row
+            return None
+        
+        # Move to next row position and return it
+        self.row_pointer += 1
+        return self.rows[self.row_pointer]
+    
+    async def fetch_many(self, size: int) -> List[Any]:
+        """Fetch multiple rows (async)"""
+        result = []
+        for _ in range(size):
+            row = await self.fetch_one()
+            if row is None:
+                break
+            result.append(row)
+        return result
+    
+    async def fetch_all(self) -> List[Any]:
+        """Fetch all remaining rows (async)"""
+        if self.row_pointer < 0:
+            # Before first - return all rows
+            self.row_pointer = self.data_size
+            return self.rows[:]
+        elif self.row_pointer < self.data_size:
+            # In middle - return remaining rows
+            remaining = self.rows[self.row_pointer + 1:]
+            self.row_pointer = self.data_size
+            return remaining
+        else:
+            # After last - return empty
+            return []
+    
+    async def fetch_remaining(self) -> None:
+        """Consume all remaining rows without processing (async)"""
+        self.row_pointer = self.data_size
+
+    async def scroll(self, value: int, mode: str = "relative") -> None:
+        super().scroll(value, mode)
 
 class BaseStreamingResult(Result):
     """
@@ -261,6 +394,19 @@ class BaseStreamingResult(Result):
     def _read_next_row_packet(self) -> Optional[bytes]:
         """Read next row packet from network (sync or async)"""
         pass
+    
+    def get_row_count(self) -> int:
+        """Get total row count"""
+        return self._row_count
+    
+
+
+class SyncStreamingResult(BaseStreamingResult, SyncResult):
+    """
+    Synchronous streaming (unbuffered) result set
+    
+    Uses blocking I/O to fetch rows from the network.
+    """
     
     def fetch_one(self) -> Optional[tuple]:
         """Fetch next row"""
@@ -312,18 +458,6 @@ class BaseStreamingResult(Result):
                 if row_packet is not None:
                     self._row_count += 1
     
-    def get_row_count(self) -> int:
-        """Get total row count"""
-        return self._row_count
-
-
-class SyncStreamingResult(BaseStreamingResult):
-    """
-    Synchronous streaming (unbuffered) result set
-    
-    Uses blocking I/O to fetch rows from the network.
-    """
-    
     def _read_next_row_packet(self) -> Optional[bytes]:
         """
         Read next row packet from network (synchronous)
@@ -369,8 +503,41 @@ class SyncStreamingResult(BaseStreamingResult):
             self.loaded = True
             raise
 
+    def scroll(self, value: int, mode: str = "relative") -> None:
+        """
+        Scroll forward in streaming result (limited support)
+        
+        Args:
+            value: Number of rows to skip (must be positive)
+            mode: Must be "relative" (absolute not supported for streaming)
+            
+        Raises:
+            ValueError: If mode is not "relative" or value is negative
+            
+        Note:
+            Streaming results only support forward relative scrolling.
+            This consumes and discards rows from the stream.
+        """
+        if mode != "relative":
+            raise ValueError("Streaming results only support relative scroll mode")
+        
+        if value < 0:
+            raise ValueError("Streaming results only support forward scrolling (positive values)")
+        
+        if value == 0:
+            return  # No movement needed
+        
+        # Skip 'value' rows by fetching and discarding them
+        for _ in range(value):
+            if self.loaded:
+                raise ValueError("Cannot scroll past end of result set")
+            row_packet = self._read_next_row_packet()
+            if row_packet is None:
+                raise ValueError("Cannot scroll past end of result set")
+            self._row_count += 1
+            self.row_pointer += 1
 
-class AsyncStreamingResult(BaseStreamingResult):
+class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
     """
     Asynchronous streaming (unbuffered) result set
     
@@ -470,3 +637,37 @@ class AsyncStreamingResult(BaseStreamingResult):
                 row_packet = await self._read_next_row_packet()
                 if row_packet is not None:
                     self._row_count += 1
+    
+    async def scroll(self, value: int, mode: str = "relative") -> None:
+        """
+        Scroll forward in streaming result (limited support, async)
+        
+        Args:
+            value: Number of rows to skip (must be positive)
+            mode: Must be "relative" (absolute not supported for streaming)
+            
+        Raises:
+            ValueError: If mode is not "relative" or value is negative
+            
+        Note:
+            Streaming results only support forward relative scrolling.
+            This consumes and discards rows from the stream.
+        """
+        if mode != "relative":
+            raise ValueError("Streaming results only support relative scroll mode")
+        
+        if value < 0:
+            raise ValueError("Streaming results only support forward scrolling (positive values)")
+        
+        if value == 0:
+            return  # No movement needed
+        
+        # Skip 'value' rows by fetching and discarding them
+        for _ in range(value):
+            if self.loaded:
+                raise ValueError("Cannot scroll past end of result set")
+            row_packet = await self._read_next_row_packet()
+            if row_packet is None:
+                raise ValueError("Cannot scroll past end of result set")
+            self._row_count += 1
+            self.row_pointer += 1

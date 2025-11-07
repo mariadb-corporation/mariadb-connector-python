@@ -167,14 +167,17 @@ class TestPooling(unittest.TestCase):
 
             new_ids = []
 
+            conns = []
             for i in range(0, 10):
                 pconn = pool.get_connection()
+                conns.append(pconn)
                 new_ids.append(pconn.connection_id)
                 self.assertEqual(pconn.connection_id in ids, False)
-                cursor = pconn.cursor()
-                cursor.callproc("p1")
-                cursor.close()
-                pconn.close()
+            for conn1 in conns:    
+                pcursor = conn1.cursor()
+                pcursor.callproc("p1")
+                pcursor.close()
+                conn1.close()
 
             for i in range(0, 10):
                 pconn = pool.get_connection()
@@ -334,9 +337,27 @@ class TestPooling(unittest.TestCase):
                              default_conf["pool_reset_connection"])
         else:
             self.assertEqual(p.pool_reset_connection, True)
+        self.assertEqual(p.max_size, 4)
+        mariadb._CONNECTION_POOLS["getter_test"].close()
+        self.assertEqual(mariadb._CONNECTION_POOLS, {})
+
+
+    def test_pool_getter_max_size(self):
+        default_conf = conf()
+        mariadb.connect(pool_name="getter_test",
+                          pool_size=124, **default_conf)
+        p = mariadb._CONNECTION_POOLS["getter_test"]
+        self.assertEqual(p.pool_name, "getter_test")
+        self.assertEqual(p.pool_size, 64)
+        if "pool_reset_connection" in default_conf:
+            self.assertEqual(p.pool_reset_connection,
+                             default_conf["pool_reset_connection"])
+        else:
+            self.assertEqual(p.pool_reset_connection, True)
         self.assertEqual(p.max_size, 64)
         mariadb._CONNECTION_POOLS["getter_test"].close()
         self.assertEqual(mariadb._CONNECTION_POOLS, {})
+
 
     def test_pool_connection_reset(self):
         default_conf = conf()

@@ -7,6 +7,8 @@ import socket
 import struct
 import logging
 
+from .mutable_int import MutableInt
+
 from ...debug_utils import hex_dump
 
 logger = logging.getLogger(__name__)
@@ -25,11 +27,11 @@ class AsyncStream():
             writer: Asyncio stream writer
             connection_id: Connection ID for logging
         """
-        self.reader = reader
-        self.writer = writer
-        self._closed = False
-        self.sequence = 0
-        self.connection_id = connection_id
+        self.reader: asyncio.StreamReader = reader
+        self.writer: asyncio.StreamWriter = writer
+        self._closed: bool = False
+        self.sequence: MutableInt = MutableInt(-1)
+        self.connection_id: int = connection_id
     
     async def read_payload(self) -> bytearray:
         """
@@ -49,7 +51,7 @@ class AsyncStream():
             
             # Parse header
             payload_length = struct.unpack('<I', header[:3] + b'\x00')[0]
-            sequence = header[3]
+            self.sequence.set(header[3])
             
             # Read payload chunk
             payload = await self.reader.readexactly(payload_length)
@@ -62,9 +64,6 @@ class AsyncStream():
                 logger.debug(hex_dump(full_packet, f"RECV async: {conn_id_str}"))
             
             result.extend(payload)
-            
-            # Update sequence number
-            self.sequence = (sequence + 1) % 256
             packet_count += 1
             
             # If chunk is less than max size, this is the last chunk
@@ -84,9 +83,7 @@ class AsyncStream():
         """
         # Reset sequence if requested
         if reset_sequence:
-            self.sequence = 0
-            if hasattr(self.writer, 'sequence_comp'):
-                self.writer.sequence_comp = 0
+            self.sequence.set(-1)
         
         # Split into chunks if needed (max packet size is 16MB - 1)
         MAX_PACKET_SIZE = 0xFFFFFF
@@ -102,7 +99,7 @@ class AsyncStream():
             chunk = data[offset:offset + chunk_size]
             
             # Build packet header
-            header = struct.pack('<I', chunk_size)[:3] + bytes([self.sequence])
+            header = struct.pack('<I', chunk_size)[:3] + bytes([self.sequence.increment_and_get()])
             
             # Log if debug enabled
             if logger.isEnabledFor(logging.DEBUG):
@@ -115,7 +112,6 @@ class AsyncStream():
             await self.writer.drain()
             
             # Update sequence and offset
-            self.sequence = (self.sequence + 1) % 256
             offset += chunk_size
             chunk_count += 1
             if (chunk_size == MAX_PACKET_SIZE and offset == len(data)):
@@ -124,14 +120,13 @@ class AsyncStream():
                 break
 
     def _send_empty_packet(self, packet_type: str = ""):
-        header = struct.pack('<I', 0)[:3] + bytes([self.sequence])
+        header = struct.pack('<I', 0)[:3] + bytes([self.sequence.increment_and_get()])
         # Log if debug enabled
         if logger.isEnabledFor(logging.DEBUG):
             conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
             packet_type_str = f" {packet_type}" if packet_type else ""
             logger.debug(hex_dump(header, f"SEND async: {conn_id_str}{packet_type_str}"))
         self.writer.write(header)
-        self.sequence = (self.sequence + 1) % 256
 
     async def close(self) -> None:
         """Close the stream asynchronously"""
@@ -146,7 +141,7 @@ class AsyncStream():
     
     def reset_sequence(self) -> None:
         """Reset packet sequence number"""
-        self.sequence = 0
+        self.sequence.set(0)
 
 
 class SyncStream():
@@ -162,10 +157,10 @@ class SyncStream():
             sock: Blocking socket
             connection_id: Connection ID for logging
         """
-        self.socket = sock
-        self._closed = False
-        self.sequence = 0
-        self.connection_id = connection_id
+        self.socket: socket.socket = sock
+        self._closed: bool = False
+        self.sequence: MutableInt = MutableInt(-1)
+        self.connection_id: int = connection_id
     
     def read_payload(self) -> bytearray:
         """
@@ -185,7 +180,7 @@ class SyncStream():
             
             # Parse header
             payload_length = struct.unpack('<I', header[:3] + b'\x00')[0]
-            sequence = header[3]
+            self.sequence.set(header[3])
             
             # Read payload chunk
             payload = self._recv_exact(payload_length)
@@ -198,9 +193,6 @@ class SyncStream():
                 logger.debug(hex_dump(full_packet, f"RECV sync: {conn_id_str}"))
             
             result.extend(payload)
-            
-            # Update sequence number
-            self.sequence = (sequence + 1) % 256
             packet_count += 1
             
             # If chunk is less than max size, this is the last chunk
@@ -221,9 +213,7 @@ class SyncStream():
         """
         # Reset sequence if requested
         if reset_sequence:
-            self.sequence = 0
-            if hasattr(self.socket, 'sequence_comp'):
-                self.socket.sequence_comp = 0
+            self.sequence.set(-1)
         
         # Split into chunks if needed (max packet size is 16MB - 1)
         MAX_PACKET_SIZE = 0xFFFFFF
@@ -239,7 +229,7 @@ class SyncStream():
             chunk = data[offset:offset + chunk_size]
             
             # Build packet header
-            header = struct.pack('<I', chunk_size)[:3] + bytes([self.sequence])
+            header = struct.pack('<I', chunk_size)[:3] + bytes([self.sequence.increment_and_get()])
             
             # Log if debug enabled
             if logger.isEnabledFor(logging.DEBUG):
@@ -250,9 +240,6 @@ class SyncStream():
             
             # Write header and chunk
             self.socket.sendall(header + chunk)
-            
-            # Update sequence and offset
-            self.sequence = (self.sequence + 1) % 256
             offset += chunk_size
             chunk_count += 1
 
@@ -262,14 +249,13 @@ class SyncStream():
                 break
 
     def _send_empty_packet(self, packet_type: str = ""):
-        header = struct.pack('<I', 0)[:3] + bytes([self.sequence])
+        header = struct.pack('<I', 0)[:3] + bytes([self.sequence.increment_and_get()])
         # Log if debug enabled
         if logger.isEnabledFor(logging.DEBUG):
             conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
             packet_type_str = f" {packet_type}" if packet_type else ""
             logger.debug(hex_dump(header, f"SEND sync: {conn_id_str}{packet_type_str}"))
         self.socket.sendall(header)
-        self.sequence = (self.sequence + 1) % 256
 
 
     def close(self) -> None:
@@ -287,7 +273,7 @@ class SyncStream():
     
     def reset_sequence(self) -> None:
         """Reset packet sequence number"""
-        self.sequence = 0
+        self.sequence.set(-1)
     
     def _recv_exact(self, n: int) -> bytes:
         """

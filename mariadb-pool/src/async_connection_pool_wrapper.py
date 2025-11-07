@@ -2,12 +2,12 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 """
-Compatibility wrapper for mariadb_pool.ConnectionPool
-Matches the C extension API for connection pooling.
+Async compatibility wrapper for mariadb_pool.AsyncConnectionPool
+Matches the 1.1 C extension API for connection pooling (async version).
 """
 
 from typing import Callable, Any, Dict, Optional
-from .pool import ConnectionPool as _PoolImpl, PoolConfig
+from .pool import AsyncConnectionPool as _AsyncPoolImpl, PoolConfig
 
 # Import PoolError from shared exceptions
 try:
@@ -18,21 +18,33 @@ except ImportError:
 
 MAX_POOL_SIZE = 64
 
-class ConnectionPoolWrapper:
+class AsyncConnectionPoolWrapper:
     """
-    Compatibility wrapper for mariadb_pool.ConnectionPool
-    Matches the 1.1 C extension API for connection pooling.
+    Async compatibility wrapper for mariadb_pool.AsyncConnectionPool
+    Matches the 1.1 C extension API for connection pooling (async version).
+    
+    Usage:
+        pool = AsyncConnectionPoolWrapper(
+            connection_factory=mariadb.asyncConnect,
+            pool_name="mypool",
+            host="localhost",
+            user="root"
+        )
+        await pool.open()
+        conn = await pool.get_connection()
+        await conn.close()
+        await pool.close()
     """
     
     # Class-level registry for pools
-    _registry: Dict[str, 'ConnectionPoolWrapper'] = {}
+    _registry: Dict[str, 'AsyncConnectionPoolWrapper'] = {}
     
     def __init__(self, connection_factory: Callable, pool_name: str = None, **kwargs):
         """
-        Initialize connection pool
+        Initialize async connection pool
         
         Args:
-            connection_factory: Function to create new connections (e.g., mariadb.connect)
+            connection_factory: Async function to create new connections (e.g., mariadb.asyncConnect)
             pool_name: Name of the pool (for registry)
             **kwargs: Connection parameters and pool configuration
         """
@@ -93,8 +105,8 @@ class ConnectionPoolWrapper:
             
         config.reset_connection = bool(pool_kwargs.get('pool_reset_connection', True))
         
-        # Create the actual pool
-        self._pool = _PoolImpl(
+        # Create the actual async pool
+        self._pool = _AsyncPoolImpl(
             connection_factory=connection_factory,
             config=config,
             **conn_kwargs
@@ -104,12 +116,16 @@ class ConnectionPoolWrapper:
         if pool_name is not None:
             self._registry[pool_name] = self
     
-    def get_connection(self):
-        """Get a connection from the pool"""
-        pool_conn = self._pool.acquire()
-        return pool_conn.connection
+    async def open(self):
+        """Open the pool and establish initial connections"""
+        await self._pool.open()
     
-    def add_connection(self, connection: Optional[Any] = None):
+    async def get_connection(self):
+        """Get a connection from the pool"""
+        pooled_conn = await self._pool.acquire()
+        return pooled_conn.connection
+    
+    async def add_connection(self, connection: Optional[Any] = None):
         """Add a connection to the pool
         
         Args:
@@ -117,26 +133,26 @@ class ConnectionPoolWrapper:
                        If provided, adds the existing connection.
                        If None, creates a new connection.
         """
-        from .pool import PooledConnection
+        from .pool import AsyncPooledConnection
         
-        with self._pool._lock:
+        async with self._pool._lock:
             # Check if pool is at max size
             if len(self._pool._all_connections) >= self._pool.config.max_size:
                 raise PoolError(f"Pool has reached maximum size of {self._pool.config.max_size}")
             
             if connection is not None:
                 # Add existing connection to pool
-                pooled_conn = PooledConnection(connection, self._pool)
+                pooled_conn = AsyncPooledConnection(connection, self._pool)
                 connection._set_pooled_connection(pooled_conn)
             else:
                 # Create and add a new connection
-                conn = self.connection_factory(**self._pool.connection_params)
-                pooled_conn = PooledConnection(conn, self._pool)
+                conn = await self.connection_factory(**self._pool.connection_params)
+                pooled_conn = AsyncPooledConnection(conn, self._pool)
                 conn._set_pooled_connection(pooled_conn)
 
             self._pool._all_connections.append(pooled_conn)
             pooled_conn.mark_idle()
-            self._pool._pool.put_nowait(pooled_conn)
+            await self._pool._pool.put(pooled_conn)
     
     def set_config(self, **kwargs):
         """
@@ -146,11 +162,11 @@ class ConnectionPoolWrapper:
             **kwargs: Connection parameters to update
         """
         # Update connection parameters
-        self._pool._set_config(**kwargs)        
+        self._pool.connection_params.update(kwargs)
 
-    def close(self):
+    async def close(self):
         """Close the pool and all connections"""
-        self._pool.close()
+        await self._pool.close()
         # Unregister from class-level registry
         if self.pool_name in self._registry:
             del self._registry[self.pool_name]
@@ -165,7 +181,6 @@ class ConnectionPoolWrapper:
         """Get reset_connection value"""
         return self._pool.config.reset_connection
 
-
     @property
     def pool_size(self):
         """Get maximum pool size"""
@@ -177,12 +192,12 @@ class ConnectionPoolWrapper:
         return self._pool.config.max_size
     
     @classmethod
-    def get_pool(cls, pool_name: str) -> 'ConnectionPoolWrapper':
+    def get_pool(cls, pool_name: str) -> 'AsyncConnectionPoolWrapper':
         """Get a pool by name from the registry"""
         return cls._registry.get(pool_name)
     
     @classmethod
-    def get_all_pools(cls) -> Dict[str, 'ConnectionPoolWrapper']:
+    def get_all_pools(cls) -> Dict[str, 'AsyncConnectionPoolWrapper']:
         """Get all registered pools"""
         return cls._registry.copy()
     
@@ -191,11 +206,12 @@ class ConnectionPoolWrapper:
         """Clear the pool registry (for testing)"""
         cls._registry.clear()
     
-    def __enter__(self):
-        """Enter context manager"""
+    async def __aenter__(self):
+        """Enter async context manager"""
+        await self.open()
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Exit context manager and close pool"""
-        self.close()
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit async context manager and close pool"""
+        await self.close()
         return False

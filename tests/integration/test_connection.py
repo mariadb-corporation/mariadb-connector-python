@@ -120,7 +120,7 @@ class TestConnection(unittest.TestCase):
         cursor = new_conn.cursor()
         cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
         row = cursor.fetchone()
-        if is_maxscale():
+        if is_maxscale() or is_native():
             self.assertEqual(row[1], "OFF")
         else:
             self.assertEqual(row[1], "ON")

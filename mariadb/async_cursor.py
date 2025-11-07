@@ -4,6 +4,8 @@
 from collections import namedtuple
 from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING
 
+from .impl.result import AsyncResult
+
 from .base_cursor import BaseCursor, ROWS_ALL, RESULT_TUPLE, RESULT_NAMEDTUPLE, RESULT_DICTIONARY
 from .exceptions import DatabaseError, ProgrammingError, NotSupportedError, OperationalError
 from .impl.message.client.query_packet import QueryPacket, QueryWithParamPacket
@@ -12,8 +14,9 @@ from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 
 if TYPE_CHECKING:
     from .base_connection import BaseConnection
+    from .async_connection import AsyncConnection
 
-class AsyncCursor(BaseCursor):
+class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
     """
     Asynchronous MariaDB Cursor Object
     
@@ -202,11 +205,11 @@ class AsyncCursor(BaseCursor):
         
         # Check if data is None or not an array-like type
         if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):
-            raise mariadb.ProgrammingError("No data provided")
+            raise ProgrammingError("No data provided")
         
         # If data is an empty list/tuple, return early with rowcount=0
         if not data:
-            self.rowcount = 0
+            self._rowcount = 0
             return
         
         # Reset result state
@@ -407,6 +410,55 @@ class AsyncCursor(BaseCursor):
         
         return []
     
+    async def scroll(self, value: int, mode: str = "relative") -> None:
+        """
+        Scroll the cursor in the result set to a new position according to mode (async).
+
+        If mode is "relative" (default), value is taken as offset to the
+        current position in the result set, if set to absolute, value states
+        an absolute target position.
+        
+        For streaming (unbuffered) cursors, only forward relative scrolling is supported.
+        
+        Args:
+            value: Position value
+            mode: "relative" or "absolute"
+            
+        Raises:
+            ProgrammingError: If cursor has no result set or invalid parameters
+        """
+        # Allow scrolling in buffered results even if connection is closed
+        if self._closed:
+            raise ProgrammingError("Cursor is closed")
+        if self.connection._closed and (self._result is None or self._result.streaming()):
+            raise ProgrammingError("Cursor is closed")
+        
+        # Check if we have a result set
+        if self._result is None:
+            raise ProgrammingError("Cursor doesn't have a result set")
+        
+        # Validate mode
+        if mode not in ("absolute", "relative"):
+            raise ProgrammingError("Invalid or unknown scroll mode specified.")
+        
+        # For streaming results, only forward relative scrolling is allowed
+        if self._result.streaming():
+            if mode != "relative":
+                raise ProgrammingError("Streaming cursors only support relative scroll mode")
+            if value < 0:
+                raise ProgrammingError("Streaming cursors only support forward scrolling")
+            # Call async scroll for streaming results
+            try:
+                await self._result.scroll(value, mode)
+            except ValueError as e:
+                raise ProgrammingError(str(e))
+        else:
+            # Call sync scroll for buffered results
+            try:
+                await self._result.scroll(value, mode)
+            except ValueError as e:
+                raise ProgrammingError(str(e))
+    
        
     # =========================================================================
     # Stored Procedures
@@ -441,13 +493,13 @@ class AsyncCursor(BaseCursor):
             call_sql = f"CALL {procname}({placeholders})"
             
             # Prepare the statement
-            stmt: PrepareStmtPacket = await self._client.prepare_statement(call_sql)
+            stmt: PrepareStmtPacket = await self.connection._client.prepare_statement(call_sql)
             
             try:
                 # Execute with parameters using ExecutePacket
                 from .impl.message.client.execute_packet import ExecutePacket
                 execute_packet = ExecutePacket(stmt.statement_id, list(args), call_sql)
-                completions = await self._client.execute(execute_packet, self._get_config(), can_redo=False)
+                completions = await self.connection._client.execute(execute_packet, self._get_config(), can_redo=False)
                 
                 # Process all completions
                 self._process_callproc_completions(completions)
@@ -455,7 +507,7 @@ class AsyncCursor(BaseCursor):
                 return None  # Match C extension behavior
                 
             finally:
-                await self._client.close_prepared_statement(stmt)
+                await self.connection._client.close_prepared_statement(stmt)
         except DatabaseError as e:
             raise e
         except Exception as e:
@@ -533,3 +585,19 @@ class AsyncCursor(BaseCursor):
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Sync context manager not supported for async cursor"""
         raise TypeError("Use 'async with' with AsyncCursor")
+    
+    # =========================================================================
+    # Result Creation
+    # =========================================================================
+    
+    def _create_complete_result(self, columns: List[Any], column_count: int, 
+                               rows: List[tuple], is_binary: bool = False):
+        """Create an asynchronous complete result"""
+        from .impl.result import AsyncCompleteResult
+        return AsyncCompleteResult(
+            columns=columns,
+            column_count=column_count,
+            config=self._get_config(),
+            rows=rows,
+            is_binary=is_binary
+        )

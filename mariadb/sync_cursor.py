@@ -5,6 +5,8 @@
 from collections import namedtuple
 from typing import Sequence, Optional, List, Any, Union, TYPE_CHECKING
 
+from .impl.result import SyncResult
+
 from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 from .impl.client.sync_client import SyncClient
 
@@ -16,8 +18,9 @@ from .impl.sql_parser import parse_named_placeholders, split_sql_parts
 
 if TYPE_CHECKING:
     from .base_connection import BaseConnection
+    from .sync_connection import SyncConnection
 
-class SyncCursor(BaseCursor):
+class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
     """
     Synchronous MariaDB Cursor Object
     
@@ -342,6 +345,48 @@ class SyncCursor(BaseCursor):
         
         return []
     
+    def scroll(self, value: int, mode: str = "relative") -> None:
+        """
+        Scroll the cursor in the result set to a new position according to mode.
+
+        If mode is "relative" (default), value is taken as offset to the
+        current position in the result set, if set to absolute, value states
+        an absolute target position.
+        
+        Args:
+            value: Position value
+            mode: "relative" or "absolute"
+            
+        Raises:
+            ProgrammingError: If cursor has no result set or invalid parameters
+        """
+        # Allow scrolling in buffered results even if connection is closed
+        if self._closed:
+            raise ProgrammingError("Cursor is closed")
+        if self.connection._closed and (self._result is None or self._result.streaming()):
+            raise ProgrammingError("Cursor is closed")
+        
+        # Check if we have a result set
+        if self._result is None:
+            raise ProgrammingError("Cursor doesn't have a result set")
+        
+        # Validate mode
+        if mode not in ("absolute", "relative"):
+            raise ProgrammingError("Invalid or unknown scroll mode specified.")
+        
+        # For streaming results, only forward relative scrolling is allowed
+        if self._result.streaming():
+            if mode != "relative":
+                raise ProgrammingError("Streaming cursors only support relative scroll mode")
+            if value < 0:
+                raise ProgrammingError("Streaming cursors only support forward scrolling")
+        
+        # Delegate to Result object's scroll method
+        try:
+            self._result.scroll(value, mode)
+        except ValueError as e:
+            raise ProgrammingError(str(e))
+    
 
     # =========================================================================
     # Stored Procedures
@@ -438,3 +483,19 @@ class SyncCursor(BaseCursor):
         """Context manager exit"""
         self.close()
         return False
+    
+    # =========================================================================
+    # Result Creation
+    # =========================================================================
+    
+    def _create_complete_result(self, columns: List[Any], column_count: int, 
+                               rows: List[tuple], is_binary: bool = False):
+        """Create a synchronous complete result"""
+        from .impl.result import SyncCompleteResult
+        return SyncCompleteResult(
+            columns=columns,
+            column_count=column_count,
+            config=self._get_config(),
+            rows=rows,
+            is_binary=is_binary
+        )

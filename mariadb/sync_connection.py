@@ -7,23 +7,29 @@ Synchronous connection implementation
 Provides a blocking API using the sync Client.
 """
 
-from typing import Optional, Any, Type, List
+from typing import Optional, Any, Type, List, TYPE_CHECKING
 from mariadb_shared.constants import STATUS, TPC_STATE
 from mariadb_shared.xid import Xid
 
 from .base_connection import BaseConnection
-from .impl.client.sync_client import SyncClient
-from .impl.message.client.query_packet import QueryPacket
-from .impl.message.client.ping_packet import PingPacket
+
+if TYPE_CHECKING:
+    from .impl.client.sync_client import SyncClient
+else:
+    from .impl.client.sync_client import SyncClient
+
 from .exceptions import ProgrammingError, Error
 
 
-class SyncConnection(BaseConnection):
+class SyncConnection(BaseConnection['SyncClient']):
     """
     Synchronous MariaDB connection
     
     Provides a blocking API using the sync Client directly.
     All I/O operations are synchronous and blocking.
+    
+    Type Parameters:
+        _client: SyncClient
     """
     
     # =========================================================================
@@ -159,7 +165,7 @@ class SyncConnection(BaseConnection):
         """
         self._check_closed()
         try:
-            self._client.execute(PingPacket(), self._configuration)
+            self._client.ping()
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"Ping failed: {e}",
@@ -256,7 +262,8 @@ class SyncConnection(BaseConnection):
         """
         self._check_closed()
         try:
-            self._client.execute(QueryPacket(f"KILL {connection_id}"), self._configuration, True)
+            with self.cursor() as cursor:
+                cursor.execute(f"KILL {connection_id}")
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"Failed to kill connection {connection_id}: {e}",
@@ -281,7 +288,8 @@ class SyncConnection(BaseConnection):
         if self._xid is not None:
             raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
         if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            self._client.execute(QueryPacket("COMMIT"), self._configuration, True)
+            with self.cursor() as cursor:
+                cursor.execute("COMMIT")
     
     def rollback(self) -> None:
         """
@@ -296,7 +304,8 @@ class SyncConnection(BaseConnection):
         if self._xid is not None:
             raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
         if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            self._client.execute(QueryPacket("ROLLBACK"), self._configuration, True)
+            with self.cursor() as cursor:
+                cursor.execute("ROLLBACK")
     
     
     def begin(self) -> None:
@@ -306,7 +315,8 @@ class SyncConnection(BaseConnection):
         Note: Transactions usually start implicitly when autocommit is off.
         """
         self._check_closed()
-        self._client.execute(QueryPacket("BEGIN"), self._configuration)
+        with self.cursor() as cursor:
+            cursor.execute("BEGIN")
 
     # =========================================================================
     # TPC/XA Transaction Methods
@@ -332,8 +342,8 @@ class SyncConnection(BaseConnection):
         if not isinstance(xid, Xid):
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s", type(xid).__name__)
-        xa_command = "XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0])
-        self._client.execute(QueryPacket(xa_command), self._configuration)
+        with self.cursor() as cursor:
+            cursor.execute("XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0]))
         self.tpc_state = TPC_STATE.XID
         self._xid = xid
     
@@ -355,17 +365,17 @@ class SyncConnection(BaseConnection):
                                            "prepared state.")
 
         xid = self._xid
-        xa_command = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
-            self._client.execute(QueryPacket(xa_command), self._configuration)
+            with self.cursor() as cursor:
+                cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
         except Error:
             self._xid = None
             self.tpc_state = TPC_STATE.NONE
             raise
 
-        xa_command = "XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
-            self._client.execute(QueryPacket(xa_command), self._configuration)
+            with self.cursor() as cursor:
+                cursor.execute("XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0]))
         except Error:
             self._xid = None
             self.tpc_state = TPC_STATE.NONE
@@ -407,9 +417,9 @@ class SyncConnection(BaseConnection):
                                            "not %s" % type(xid).__name__)
 
         if self.tpc_state < TPC_STATE.PREPARE:
-            xa_command = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
             try:
-                self._client.execute(QueryPacket(xa_command), self._configuration)
+                with self.cursor() as cursor:
+                    cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
                 self._xid = None
                 self.tpc_state = TPC_STATE.NONE
@@ -419,7 +429,8 @@ class SyncConnection(BaseConnection):
         if self.tpc_state < TPC_STATE.PREPARE:
             xa_command = xa_command + " ONE PHASE"
         try:
-            self._client.execute(QueryPacket(xa_command), self._configuration)
+            with self.cursor() as cursor:
+                cursor.execute(xa_command)
         except Error:
             self._xid = None
             self.tpc_state = TPC_STATE.NONE
@@ -455,17 +466,17 @@ class SyncConnection(BaseConnection):
             xid = self._xid
 
         if self.tpc_state < TPC_STATE.PREPARE:
-            xa_command = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
             try:
-                self._client.execute(QueryPacket(xa_command), self._configuration)
+                with self.cursor() as cursor:
+                    cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
                 self._xid = None
                 self.tpc_state = TPC_STATE.NONE
                 raise
 
-        xa_command = "XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
-            self._client.execute(QueryPacket(xa_command), self._configuration)
+            with self.cursor() as cursor:
+                cursor.execute("XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0]))
         except Error:
             self._xid = None
             self.tpc_state = TPC_STATE.NONE
@@ -479,11 +490,9 @@ class SyncConnection(BaseConnection):
         tpc_commit(xid) or .tpc_rollback(xid).
         """
         self._check_closed()
-        cursor = self.cursor()
-        cursor.execute("XA RECOVER")
-        result = cursor.fetchall()
-        del cursor
-        return result
+        with self.cursor() as cursor:
+            cursor.execute("XA RECOVER")
+            return cursor.fetchall()
         
     # =========================================================================
     # Properties and Setters
@@ -565,7 +574,8 @@ class SyncConnection(BaseConnection):
         self._check_closed()
         current = (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
         if current != bool(value):
-            self._client.execute(QueryPacket(f"SET autocommit={1 if bool(value) else 0}"), self._configuration)
+            with self.cursor() as cursor:
+                cursor.execute(f"SET autocommit={1 if bool(value) else 0}")
     
     def show_warnings(self) -> Optional[List[tuple]]:
         """
@@ -575,10 +585,6 @@ class SyncConnection(BaseConnection):
             List of warning tuples (level, code, message), or None if no warnings
         """
         self._check_closed()
-        from .sync_cursor import SyncCursor
-        cursor = SyncCursor(self)
-        try:
+        with self.cursor() as cursor:
             cursor.execute("SHOW WARNINGS")
             return cursor.fetchall()
-        finally:
-            cursor.close()

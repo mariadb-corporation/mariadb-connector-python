@@ -9,14 +9,14 @@ import datetime
 import decimal
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING
+from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING, TypeVar, Generic
 
 from .impl.completion import Completion
 from .impl.message.server.column_definition_packet import ColumnDefinitionPacket
 
 from .exceptions import ProgrammingError
 from .impl.client.exception_factory import ExceptionFactory
-from .impl.result import CompleteResult, Result
+from .impl.result import Result
 from .impl.string_utils import StringEscaper
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 from mariadb_shared.constants import EXT_FIELD_TYPE
@@ -34,16 +34,22 @@ RESULT_TUPLE = 0
 RESULT_NAMEDTUPLE = 1
 RESULT_DICTIONARY = 2
 
+TResult = TypeVar('TResult', bound=Result)
+TConnection = TypeVar('TConnection', bound='BaseConnection')
 
-class BaseCursor(ABC):
+class BaseCursor(ABC, Generic[TResult, TConnection]):
     """
     Base class for MariaDB Cursor Objects
     
     Provides common functionality for both synchronous and asynchronous cursors.
     Subclasses must implement abstract methods for sync or async behavior.
+    
+    Type Parameters:
+        TResult: The result type (SyncResult or AsyncResult)
+        TConnection: The connection type (SyncConnection or AsyncConnection)
     """
 
-    def __init__(self, connection: 'BaseConnection', **kwargs):
+    def __init__(self, connection: TConnection, **kwargs):
         """
         Initialize cursor with a connection
         
@@ -51,7 +57,7 @@ class BaseCursor(ABC):
             connection: Database connection
             **kwargs: Cursor options (buffered, named_tuple, dictionary, etc.)
         """
-        self.connection: 'BaseConnection' = connection
+        self.connection: TConnection = connection
         self._closed: bool = False
         self.arraysize: int = 1
         self._affected_rows: int = -1
@@ -63,7 +69,7 @@ class BaseCursor(ABC):
         self._cursor_config = None
         self._exception_factory = ExceptionFactory()
         self._buffered: bool = bool(kwargs.pop('buffered', True))
-        self._result: Optional[Result] = None
+        self._result: Optional[TResult] = None
         
         if kwargs:
             self._cursor_config = self.connection._configuration.from_dict(
@@ -216,70 +222,6 @@ class BaseCursor(ABC):
         self._process_current_completion()
         return True
 
-    def scroll(self, value: int, mode: str = "relative") -> None:
-        """
-        Scroll the cursor in the result set to a new position according to mode.
-
-        If mode is "relative" (default), value is taken as offset to the
-        current position in the result set, if set to absolute, value states
-        an absolute target position.
-        
-        Args:
-            value: Position value
-            mode: "relative" or "absolute"
-            
-        Raises:
-            ProgrammingError: If cursor has no result set or invalid parameters
-        """
-        # Allow scrolling in buffered results even if connection is closed
-        if self._closed:
-            raise ProgrammingError("Cursor is closed")
-        if self.connection._closed and (self._result is None or self._result.streaming()):
-            raise ProgrammingError("Cursor is closed")
-        
-        # Check if we have a result set
-        if self._result is None:
-            raise ProgrammingError("Cursor doesn't have a result set")
-        
-        if self._result.streaming():
-            raise ProgrammingError("Scroll not supported for unbuffered cursors")
-        
-        # Validate mode
-        if mode not in ("absolute", "relative"):
-            raise ProgrammingError("Invalid or unknown scroll mode specified.")
-        
-        # Delegate to Result object's scroll method
-        try:
-            self._result.scroll(value, mode)
-        except ValueError as e:
-            raise ProgrammingError(str(e))
-    
-    def _seek(self, offset: int) -> None:
-        """
-        Move the cursor to the specified row position
-        
-        Internal helper method for absolute positioning.
-        
-        Args:
-            offset: Absolute row position
-            
-        Raises:
-            ProgrammingError: If cursor is closed
-            ValueError: If no result set or unbuffered cursor
-        """
-        # Allow seeking in buffered results even if connection is closed
-        if self._closed:
-            raise ProgrammingError("Cursor is closed")
-        if self.connection._closed and (self._result is None or self._result.streaming()):
-            raise ProgrammingError("Cursor is closed")
-        
-        if self._result is None:
-            raise ValueError("No result set")
-        if self._result.streaming():
-            raise ValueError("Seek not supported for unbuffered cursors")
-        # For CompleteResult, use scroll with absolute mode
-        self._result.scroll(offset, mode='absolute')
-
     @abstractmethod
     def __iter__(self):
         """Return iterator for cursor"""
@@ -289,7 +231,7 @@ class BaseCursor(ABC):
     def __next__(self) -> Any:
         """Return next row"""
         pass
-
+    
     # Common helper methods (non-async, pure data transformation)
     
     def _escape_parameter(self, param: Any) -> str:
@@ -516,10 +458,9 @@ class BaseCursor(ABC):
                 aggregated_rows.extend(rows)
             
             self.description = self._build_description(first_columns)
-            self._result = CompleteResult(
+            self._result = self._create_complete_result(
                 columns=first_columns,
                 column_count=len(first_columns),
-                config=self._get_config(),
                 rows=aggregated_rows,
                 is_binary=False
             )
@@ -531,10 +472,9 @@ class BaseCursor(ABC):
             first_rows = first_rs.rows if hasattr(first_rs, 'rows') else first_rs.get('rows', [])
             
             self.description = self._build_description(first_columns)
-            self._result = CompleteResult(
+            self._result = self._create_complete_result(
                 columns=first_columns,
                 column_count=len(first_columns),
-                config=self._get_config(),
                 rows=first_rows,
                 is_binary=False
             )

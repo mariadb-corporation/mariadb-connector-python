@@ -35,6 +35,9 @@ class SSLUtility:
             # Create SSL context
             context = ssl.create_default_context()
             
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.maximum_version = ssl.TLSVersion.TLSv1_3
+            
             # Configure SSL context based on configuration
             if configuration.ssl_ca:
                 context.load_verify_locations(cafile=configuration.ssl_ca)

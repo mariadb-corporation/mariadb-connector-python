@@ -7,23 +7,28 @@ Asynchronous connection implementation
 Provides a native async API directly using the async Client.
 """
 
-from typing import Optional, Any, Type, List
+from typing import Optional, Any, Type, List, TYPE_CHECKING
 from mariadb_shared.constants import STATUS, TPC_STATE
 from mariadb_shared.xid import Xid
 
 from .base_connection import BaseConnection
-from .impl.client.async_client import AsyncClient
-from .impl.message.client.query_packet import QueryPacket
-from .impl.message.client.ping_packet import PingPacket
+
+if TYPE_CHECKING:
+    from .impl.client.async_client import AsyncClient
+else:
+    from .impl.client.async_client import AsyncClient
 from .exceptions import ProgrammingError, Error
 
 
-class AsyncConnection(BaseConnection):
+class AsyncConnection(BaseConnection['AsyncClient']):
     """
     Asynchronous MariaDB connection
     
     Provides a native async API using the async Client directly.
     All I/O operations are async and use await.
+    
+    Type Parameters:
+        _client: AsyncClient
     
     Example:
         async def main():
@@ -42,7 +47,7 @@ class AsyncConnection(BaseConnection):
         """
         Initialize asynchronous connection (does not connect)
         
-        Use AsyncConnection.create() or asyncConnect() to create and connect.
+        Use AsyncConnection.connect() or asyncConnect() to connect.
         
         Args:
             **kwargs: Connection parameters (host, user, password, database, etc.)
@@ -65,7 +70,7 @@ class AsyncConnection(BaseConnection):
         return False
 
     @classmethod
-    async def create(cls, *args: Any, **kwargs: Any) -> 'AsyncConnection':
+    async def connect(cls, *args: Any, **kwargs: Any) -> 'AsyncConnection':
         """
         Create and connect an async connection
         
@@ -179,7 +184,7 @@ class AsyncConnection(BaseConnection):
         """
         self._check_closed()
         try:
-            await self._client.execute(PingPacket(), self._configuration)
+            await self._client.ping()
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"Ping failed: {e}",
@@ -276,7 +281,8 @@ class AsyncConnection(BaseConnection):
         """
         self._check_closed()
         try:
-            await self._client.execute(QueryPacket(f"KILL {connection_id}"), self._configuration)
+            async with self.cursor() as cursor:
+                await cursor.execute(f"KILL {connection_id}")
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"Failed to kill connection {connection_id}: {e}",
@@ -301,7 +307,8 @@ class AsyncConnection(BaseConnection):
         if self._xid is not None:
             raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
         if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            await self._client.execute(QueryPacket("COMMIT"), self._configuration, True)
+            async with self.cursor() as cursor:
+                await cursor.execute("COMMIT")
     
     async def rollback(self) -> None:
         """
@@ -316,7 +323,8 @@ class AsyncConnection(BaseConnection):
         if self._xid is not None:
             raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
         if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            await self._client.execute(QueryPacket("ROLLBACK"), self._configuration, True)
+            async with self.cursor() as cursor:
+                await cursor.execute("ROLLBACK")
     
     async def begin(self) -> None:
         """
@@ -325,7 +333,8 @@ class AsyncConnection(BaseConnection):
         Note: Transactions usually start implicitly when autocommit is off.
         """
         self._check_closed()
-        await self._client.execute(QueryPacket("BEGIN"), self._configuration)
+        async with self.cursor() as cursor:
+            await cursor.execute("BEGIN")
 
     # =========================================================================
     # TPC/XA Transaction Methods
@@ -352,8 +361,8 @@ class AsyncConnection(BaseConnection):
         if not isinstance(xid, Xid):
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s", type(xid).__name__)
-        xa_command = "XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0])
-        await self._client.execute(QueryPacket(xa_command), self._configuration)
+        async with self.cursor() as cursor:
+            await cursor.execute("XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0]))
         self.tpc_state = TPC_STATE.XID
         self._xid = xid
     
@@ -375,17 +384,17 @@ class AsyncConnection(BaseConnection):
                                            "prepared state.")
 
         xid = self._xid
-        xa_command = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
-            await self._client.execute(QueryPacket(xa_command), self._configuration)
+            async with self.cursor() as cursor:
+                await cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
         except Error:
             self._xid = None
             self.tpc_state = TPC_STATE.NONE
             raise
 
-        xa_command = "XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
-            await self._client.execute(QueryPacket(xa_command), self._configuration)
+            async with self.cursor() as cursor:
+                await cursor.execute("XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0]))
         except Error:
             self._xid = None
             self.tpc_state = TPC_STATE.NONE
@@ -427,9 +436,9 @@ class AsyncConnection(BaseConnection):
                                            "not %s" % type(xid).__name__)
 
         if self.tpc_state < TPC_STATE.PREPARE:
-            xa_command = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
             try:
-                await self._client.execute(QueryPacket(xa_command), self._configuration)
+                async with self.cursor() as cursor:
+                    await cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
                 self._xid = None
                 self.tpc_state = TPC_STATE.NONE
@@ -439,7 +448,8 @@ class AsyncConnection(BaseConnection):
         if self.tpc_state < TPC_STATE.PREPARE:
             xa_command = xa_command + " ONE PHASE"
         try:
-            await self._client.execute(QueryPacket(xa_command), self._configuration)
+            async with self.cursor() as cursor:
+                await cursor.execute(xa_command)
         except Error:
             self._xid = None
             self.tpc_state = TPC_STATE.NONE
@@ -475,17 +485,17 @@ class AsyncConnection(BaseConnection):
             xid = self._xid
 
         if self.tpc_state < TPC_STATE.PREPARE:
-            xa_command = "XA END '%s','%s',%s" % (xid[1], xid[2], xid[0])
             try:
-                await self._client.execute(QueryPacket(xa_command), self._configuration)
+                async with self.cursor() as cursor:
+                    await cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
                 self._xid = None
                 self.tpc_state = TPC_STATE.NONE
                 raise
 
-        xa_command = "XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0])
         try:
-            await self._client.execute(QueryPacket(xa_command), self._configuration)
+            async with self.cursor() as cursor:
+                await cursor.execute("XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0]))
         except Error:
             self._xid = None
             self.tpc_state = TPC_STATE.NONE
@@ -500,12 +510,9 @@ class AsyncConnection(BaseConnection):
         """
 
         self._check_closed()
-        cursor = self.cursor()
-        await cursor.execute("XA RECOVER")
-        result = await cursor.fetchall()
-        del cursor
-        return result
-
+        async with self.cursor() as cursor:
+            await cursor.execute("XA RECOVER")
+            return await cursor.fetchall()
 
     
     # =========================================================================
@@ -590,18 +597,15 @@ class AsyncConnection(BaseConnection):
         self._check_closed()
         current = (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
         if current != bool(value):
-            await self._client.execute(QueryPacket(f"SET autocommit={1 if bool(value) else 0}"), self._configuration)
+            async with self.cursor() as cursor:
+                await cursor.execute(f"SET autocommit={1 if bool(value) else 0}")
     
     async def show_warnings(self) -> Optional[List[tuple]]:
         """Shows error, warning and note messages from last executed command"""
         self._check_closed()
-        from .async_cursor import AsyncCursor
-        cursor = AsyncCursor(self)
-        try:
+        async with self.cursor() as cursor:
             await cursor.execute("SHOW WARNINGS")
             return await cursor.fetchall()
-        finally:
-            await cursor.close()
     
     # Async context manager
     async def __aenter__(self) -> 'AsyncConnection':

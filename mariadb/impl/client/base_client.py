@@ -402,10 +402,6 @@ class BaseClient(ABC):
         if self.configuration.ssl:
             capabilities |= constants.CAPABILITY.SSL
         
-        # Add compression capability if enabled and server supports it
-        if self.configuration.compress:
-            capabilities |= constants.CAPABILITY.COMPRESS
-        
         # Only use capabilities that the server supports
         return capabilities & self.context.server_capabilities
     

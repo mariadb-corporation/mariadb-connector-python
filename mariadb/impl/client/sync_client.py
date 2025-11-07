@@ -152,7 +152,6 @@ class SyncClient(BaseClient):
 
             self._handle_authentication(self.stream.read_payload())
             
-            self._enable_compression_if_negotiated()
             self.connected = True
                 
         except Exception as e:
@@ -160,21 +159,6 @@ class SyncClient(BaseClient):
             if isinstance(e, (OperationalError, DatabaseError)):
                 raise
             raise OperationalError(f"Handshake failed: {e}")
-
-    def _enable_compression_if_negotiated(self) -> None:
-        """Enable compression if negotiated with server"""
-        if self.context.has_client_capability(constants.CAPABILITY.COMPRESS):
-            # Import here to avoid circular dependency
-            from .socket.compress_stream import SyncCompressSocket
-            
-            # Wrap the socket with compression socket
-            compress_socket = SyncCompressSocket(
-                self.socket, 
-                self.context.connection_id
-            )
-            
-            # Replace socket in stream with compression socket
-            self.stream.socket = compress_socket
 
     def _execute_init_command(self) -> None:
         """
@@ -230,7 +214,7 @@ class SyncClient(BaseClient):
             # Create new SyncStream with the upgraded connection
             connection_id = self.context.connection_id if self.context else -1
             self.stream = SyncStream(self.socket, connection_id)
-            self.stream.sequence = 2
+            self.stream.sequence.set(1)
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
     
@@ -321,7 +305,7 @@ class SyncClient(BaseClient):
     def ping(self) -> None:
         """Send ping command to server"""
         ping_packet = PingPacket()
-        self.execute(ping_packet)
+        self.execute(ping_packet, self.configuration)
 
     def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str]) -> None:
         """Change current user and database"""
@@ -481,8 +465,8 @@ class SyncClient(BaseClient):
                     else:
                         completion = OkPacket.decode(row_packet, self.context)
 
-                    from ..result import CompleteResult
-                    complete_result = CompleteResult(
+                    from ..result import SyncCompleteResult
+                    complete_result = SyncCompleteResult(
                         columns=columns,
                         column_count=column_count,
                         config=config,

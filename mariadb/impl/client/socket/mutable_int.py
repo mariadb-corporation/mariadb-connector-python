@@ -18,24 +18,20 @@ class MutableInt:
         """Set new value"""
         self._value = value
     
-    def increment(self) -> int:
-        """Increment value by 1 and return new value"""
-        self._value += 1
-        return self._value
-    
     def increment_and_get(self) -> int:
         """Increment value by 1 and return new value"""
-        return self.increment()
+        self._value = (self._value + 1) % 256
+        return self._value
     
     def get_and_increment(self) -> int:
-        """Get current value then increment by 1"""
+        """Increment value by 1 and return new value"""
         old_value = self._value
-        self._value += 1
+        self._value = (self._value + 1) % 256
         return old_value
-    
+
     def add(self, delta: int) -> int:
         """Add delta to current value and return new value"""
-        self._value += delta
+        self._value = (self._value + delta) % 256
         return self._value
     
     def reset(self) -> None:
