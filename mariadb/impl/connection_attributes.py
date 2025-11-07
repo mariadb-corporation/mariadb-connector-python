@@ -1,21 +1,5 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 """
 Connection attributes utility
@@ -29,16 +13,7 @@ from typing import Dict, Optional
 
 
 def get_default_connection_attributes(host: Optional[str] = None, version: Optional[str] = None) -> Dict[str, str]:
-    """
-    Get default connection attributes
-    
-    Args:
-        host: Server host address (optional)
-        version: Connector version (optional, will try to get from mariadb module)
-        
-    Returns:
-        Dictionary of connection attributes
-    """
+    """Get default connection attributes"""
     attrs = {}
     
     # Client name
@@ -81,15 +56,7 @@ def get_default_connection_attributes(host: Optional[str] = None, version: Optio
 
 
 def encode_connection_attributes(attrs: Dict[str, str]) -> bytes:
-    """
-    Encode connection attributes to bytes
-    
-    Args:
-        attrs: Dictionary of connection attributes
-        
-    Returns:
-        Encoded attributes as bytes (length-encoded key-value pairs)
-    """
+    """Encode connection attributes to bytes"""
     import io
     
     attr_buffer = io.BytesIO()

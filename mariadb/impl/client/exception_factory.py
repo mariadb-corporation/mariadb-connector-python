@@ -1,27 +1,5 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
-
-"""
-Exception Factory for MariaDB connector
-
-Equivalent to the Java ExceptionFactory class.
-"""
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from typing import Optional, Any
 from ...exceptions import (
@@ -29,10 +7,8 @@ from ...exceptions import (
     OperationalError, 
     IntegrityError, 
     ProgrammingError,
-    InterfaceError,
     DataError,
     NotSupportedError,
-    InternalError
 )
 
 
@@ -77,10 +53,14 @@ class ExceptionFactory:
             elif sql_state.startswith('HY'):
                 # General error
                 exception_class = DatabaseError
-        elif errno:
+        
+        if errno:
             if errno in (1044, 1045, 1046, 1049, 1142, 1143, 1227, 1370):
                 # Access denied errors and database errors
                 exception_class = ProgrammingError if errno == 1049 else OperationalError
+            elif errno in (2002, 2003, 2006, 2013):
+                # Connection errors (can't connect, lost connection, etc.)
+                exception_class = OperationalError
             elif errno in (1062, 1169, 1216, 1217, 1451, 1452):
                 # Integrity constraint violations
                 exception_class = IntegrityError

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
+
 """MariaDB FIELD_FLAG Constants
 
 These constants represent the various field flags. As an addition

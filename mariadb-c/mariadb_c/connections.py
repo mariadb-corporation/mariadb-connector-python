@@ -1,21 +1,5 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 import socket
 
@@ -29,6 +13,8 @@ from mariadb_shared.exceptions import (
 # Import mariadbapi_version from C extension
 from mariadb_c._mariadb import mariadbapi_version
 from packaging import version
+
+from mariadb_shared.xid import Xid
 
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
@@ -132,7 +118,6 @@ class Connection(CConnection):
         self._pooled_connection = pooled_connection
     
     def close(self):
-        self._check_closed()
         if self._pooled_connection:
             self._pooled_connection.return_to_pool()
         else:
@@ -145,9 +130,7 @@ class Connection(CConnection):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._check_closed()
         "Closes connection."
-
         self.close()
 
     def commit(self):
@@ -238,52 +221,10 @@ class Connection(CConnection):
         del cursor
         return ret
 
-    class xid(tuple):
-        """
-        xid(format_id: int, global_transaction_id: str, branch_qualifier: str)
+    def xid(self, format_id: int, transaction_id: str, branch_qualifier: str) -> Xid:
+        return Xid(format_id, transaction_id, branch_qualifier)
 
-        Creates a transaction ID object suitable for passing to the .tpc_*()
-        methods of this connection.
-
-        Parameters:
-
-        - format_id: Format id. Default to value `0`.
-
-        - global_transaction_id: Global transaction qualifier, which must be
-          unique. The maximum length of the global transaction id is
-          limited to 64 characters.
-
-        - branch_qualifier: Branch qualifier which represents a local
-          transaction identifier. The maximum length of the branch qualifier
-          is limited to 64 characters.
-
-        """
-        def __new__(self, format_id, transaction_id, branch_qualifier):
-            if not isinstance(format_id, int):
-                raise ProgrammingError("argument 1 must be int, "
-                                               "not %s",
-                                               type(format_id).__name__)
-            if not isinstance(transaction_id, str):
-                raise ProgrammingError("argument 2 must be str, "
-                                               "not %s",
-                                               type(transaction_id).__mane__)
-            if not isinstance(branch_qualifier, str):
-                raise ProgrammingError("argument 3 must be str, "
-                                               "not %s",
-                                               type(transaction_id).__name__)
-            if len(transaction_id) > _MAX_TPC_XID_SIZE:
-                raise ProgrammingError("Maximum length of "
-                                               "transaction_id exceeded.")
-            if len(branch_qualifier) > _MAX_TPC_XID_SIZE:
-                raise ProgrammingError("Maximum length of "
-                                               "branch_qualifier exceeded.")
-            if format_id == 0:
-                format_id = 1
-            return super().__new__(self, (format_id,
-                                          transaction_id,
-                                          branch_qualifier))
-
-    def tpc_begin(self, xid):
+    def tpc_begin(self, xid: Xid) -> None:
         """
         Parameter:
           xid: xid object which was created by .xid() method of connection
@@ -300,7 +241,7 @@ class Connection(CConnection):
         """
 
         self._check_closed()
-        if type(xid).__name__ != "xid":
+        if not isinstance(xid, Xid):
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s", type(xid).__name__)
         stmt = "XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0])
@@ -312,7 +253,7 @@ class Connection(CConnection):
         self.tpc_state = TPC_STATE.XID
         self._xid = xid
 
-    def tpc_commit(self, xid=None):
+    def tpc_commit(self, xid: Xid=None) -> None:
         """
         Optional parameter:
 
@@ -340,7 +281,7 @@ class Connection(CConnection):
             raise ProgrammingError("Transaction not started.")
         if xid is None and self.tpc_state != TPC_STATE.PREPARE:
             raise ProgrammingError("Transaction is not prepared.")
-        if xid and type(xid).__name__ != "xid":
+        if xid and not isinstance(xid, Xid):
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s" % type(xid).__name__)
 
@@ -369,7 +310,7 @@ class Connection(CConnection):
         self._xid = None
         self.tpc_state = TPC_STATE.NONE
 
-    def tpc_prepare(self):
+    def tpc_prepare(self) -> None:
         """
         Performs the first phase of a transaction started with .tpc_begin().
         A ProgrammingError will be raised if this method was called outside
@@ -407,7 +348,7 @@ class Connection(CConnection):
 
         self.tpc_state = TPC_STATE.PREPARE
 
-    def tpc_rollback(self, xid=None):
+    def tpc_rollback(self, xid: Xid=None) -> None:
         """
         Parameter:
            xid: xid object which was created by .xid() method of connection
@@ -424,7 +365,7 @@ class Connection(CConnection):
         self._check_closed()
         if self.tpc_state == TPC_STATE.NONE:
             raise ProgrammingError("Transaction not started.")
-        if xid and type(xid).__name__ != "xid":
+        if xid and not isinstance(xid, Xid):
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s" % type(xid).__name__)
 

@@ -1,27 +1,5 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
-
-"""
-Configuration class for MariaDB connections
-
-Equivalent to the Java Configuration class.
-"""
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
@@ -31,8 +9,6 @@ from dataclasses import dataclass, field
 class Configuration:
     """
     Configuration holder for MariaDB connection parameters
-    
-    Equivalent to the Java Configuration class.
     """
     
     # Connection parameters
@@ -44,8 +20,8 @@ class Configuration:
     
     # Socket parameters
     socket_path: Optional[str] = None
-    socket_timeout: int = 30000  # 30 seconds
-    connect_timeout: int = 10000  # 10 seconds
+    socket_timeout: float = 30  # 30 seconds
+    connect_timeout: float = 10  # 10 seconds
     
     # SSL parameters
     ssl: bool = False
@@ -73,9 +49,6 @@ class Configuration:
     # Character encoding
     character_encoding: str = 'utf8mb4'
     
-    # Debug options
-    debug: bool = False
-    
     # Initialization command
     init_command: Optional[str] = None
     
@@ -92,16 +65,7 @@ class Configuration:
     
     @staticmethod
     def parse_hosts(host_string: str, default_port: int = 3306) -> List[Tuple[str, int]]:
-        """
-        Parse host string into list of (host, port) tuples
-        
-        Args:
-            host_string: Host string like 'host1:3306,host2:3308' or 'localhost'
-            default_port: Default port to use if not specified in host
-            
-        Returns:
-            List of (host, port) tuples
-        """
+        """Parse host string into list of (host, port) tuples for failover"""
         hosts = []
         
         # Split by comma for multiple hosts
@@ -127,25 +91,12 @@ class Configuration:
         return hosts
     
     def get_hosts(self) -> List[Tuple[str, int]]:
-        """
-        Get list of (host, port) tuples for connection attempts
-        
-        Returns:
-            List of (host, port) tuples to try in order
-        """
+        """Get list of (host, port) tuples for connection attempts"""
         return self.parse_hosts(self.host, self.port)
     
     @classmethod
     def from_dict(cls, params: Dict[str, Any]) -> 'Configuration':
-        """
-        Create Configuration from dictionary
-        
-        Args:
-            params: Connection parameters dictionary
-            
-        Returns:
-            Configuration instance
-        """
+        """Create Configuration instance from dictionary of parameters"""
         config = cls()
         
         # Map common parameters
@@ -165,6 +116,11 @@ class Configuration:
             config.socket_path = params['socket_path']
         if 'socket_timeout' in params:
             config.socket_timeout = int(params['socket_timeout'])
+        # read_timeout and write_timeout are aliases for socket_timeout
+        if 'read_timeout' in params:
+            config.socket_timeout = int(params['read_timeout'])
+        if 'write_timeout' in params:
+            config.socket_timeout = int(params['write_timeout'])
         if 'connect_timeout' in params:
             config.connect_timeout = int(params['connect_timeout'])
         
@@ -213,9 +169,6 @@ class Configuration:
         if 'character_encoding' in params or 'charset' in params:
             config.character_encoding = params.get('character_encoding') or params.get('charset', 'utf8mb4')
         
-        # Debug options
-        if 'debug' in params:
-            config.debug = bool(params['debug'])
         # Initialization command
         if 'init_command' in params:
             config.init_command = params['init_command']
@@ -237,12 +190,13 @@ class Configuration:
             'host', 'hostname', 'server', 'user', 'username', 'password', 'passwd',
             'database', 'db', 'schema', 'port',
             'unix_socket', 'socket', 'named_pipe', 'pipe_name',
+            'socket_timeout', 'read_timeout', 'write_timeout', 'connect_timeout',
             'ssl', 'use_ssl', 'ssl_key', 'ssl_ca', 'ssl_cert', 'ssl_crl',
             'ssl_cipher', 'ssl_capath', 'ssl_crlpath', 'ssl_verify_cert', 'tls_version',
             'autocommit', 'read_only',
             'compress',
             'query_timeout', 'max_allowed_packet',
-            'character_encoding', 'charset', 'debug', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object'
+            'character_encoding', 'charset', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object'
         }
         
         for key, value in params.items():
@@ -252,12 +206,7 @@ class Configuration:
         return config
     
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert Configuration to dictionary
-        
-        Returns:
-            Dictionary representation
-        """
+        """Convert Configuration to dictionary of parameters"""
         result = {
             'host': self.host,
             'port': self.port,
@@ -283,7 +232,6 @@ class Configuration:
             'query_timeout': self.query_timeout,
             'max_allowed_packet': self.max_allowed_packet,
             'character_encoding': self.character_encoding,
-            'debug': self.debug,
             'init_command': self.init_command
         }
         

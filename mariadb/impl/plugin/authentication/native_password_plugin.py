@@ -1,165 +1,76 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
-
-"""
-Native Password Authentication Plugin
-
-Implementation of mysql_native_password authentication plugin.
-Equivalent to the Java NativePasswordPlugin class.
-"""
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from __future__ import annotations
 
 import hashlib
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from ...client.context import Context
-    from ...client.socket.stream import Stream
-
+from ...client.socket.stream import AsyncStream, SyncStream
+from ...client.context import Context
 from ..authentication_plugin import AuthenticationPlugin, Credential
 
 
 class NativePasswordPlugin(AuthenticationPlugin):
     """
     Native password authentication plugin implementation
-    
-    Equivalent to the Java NativePasswordPlugin class.
     See https://mariadb.com/kb/en/library/authentication-plugin-mysql_native_password/
     """
         
     def __init__(self, authentication_data: Optional[str], seed: bytes):
-        """
-        Initialize plugin with authentication data and seed
-        
-        Args:
-            authentication_data: Password string
-            seed: Server provided seed
-        """
+        """Initialize plugin with authentication data and seed"""
         self.authentication_data = authentication_data
         self.seed = seed
 
     @staticmethod
     def encrypt_password(password: Optional[str], seed: bytes) -> bytes:
-        """
-        Encrypts a password using MySQL native password algorithm
-        
-        Protocol for authentication:
-        1. Server sends a random array of bytes (the seed)
-        2. Client makes a SHA1 digest of the password
-        3. Client hashes the output of step 2
-        4. Client digests the seed
-        5. Client updates the digest with the output from step 3
-        6. XOR of the output of step 5 and step 2 is sent to server
-        7. Server does the same thing and verifies that the scrambled passwords match
-        
-        Args:
-            password: The password to encrypt
-            seed: The seed to use
-            
-        Returns:
-            Scrambled password bytes
-        """
+        """Encrypts a password using MySQL native password algorithm"""
         if password is None or password == "":
             return b''
         
-        # Convert password to bytes
         password_bytes = password.encode('utf-8')
-        
-        # Step 2: SHA1 digest of the password
         stage1 = hashlib.sha1(password_bytes).digest()
-        
-        # Step 3: Hash the output of step 2
         stage2 = hashlib.sha1(stage1).digest()
-        
-        # Step 4-5: Digest the seed and update with stage2
         digest = hashlib.sha1()
         digest.update(seed)
         digest.update(stage2)
         stage3 = digest.digest()
-        
-        # Step 6: XOR stage1 and stage3
         result = bytes(a ^ b for a, b in zip(stage1, stage3))
         return result
     
-    def process(self, stream: Stream, context: Context) -> bytearray:
-        """
-        Process native password plugin authentication
-        
-        Args:
-            stream: Stream for sending data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            IOError: If socket error occurs
-        """
-        # Build payload
-        encrypted = bytearray()
-        
+    def _build_auth_payload(self) -> bytes:
+        """Build authentication payload"""
         if self.authentication_data is None:
-            # Empty payload for no password
-            pass
-        else:
-            # Truncate seed to 20 bytes (remove null terminator if present)
-            truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
-            
-            # Encrypt password and write to payload
-            encrypted = bytearray(self.encrypt_password(self.authentication_data, truncated_seed))
+            return bytes()
         
-        # Send payload through stream (don't reset sequence - continue from handshake)
+        # Truncate seed to 20 bytes (remove null terminator if present)
+        truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
+        
+        # Encrypt password
+        return self.encrypt_password(self.authentication_data, truncated_seed)
+    
+    async def processAsync(self, stream: AsyncStream, context: Context) -> bytes:
+        """Process native password plugin authentication (async)"""
+        encrypted = self._build_auth_payload()
+        await stream.send_payload(encrypted, "NATIVE_PASSWORD", reset_sequence=False)
+        return await stream.read_payload()
+    
+    def processSync(self, stream: SyncStream, context: Context) -> bytes:
+        """Process native password plugin authentication (sync)"""
+        encrypted = self._build_auth_payload()
         stream.send_payload(encrypted, "NATIVE_PASSWORD", reset_sequence=False)
-        
-        # Read response packet
         return stream.read_payload()
     
     def is_mitm_proof(self) -> bool:
-        """
-        Native password plugin is MitM-proof
-        
-        Returns:
-            True
-        """
+        """Native password plugin is MitM-proof"""
         return True
     
     def hash(self, credential: Credential) -> Optional[bytes]:
-        """
-        Return hash for credential (double SHA1)
-        
-        Args:
-            credential: Credential to hash
-            
-        Returns:
-            Hash bytes (SHA1(SHA1(password)))
-        """
+        """Return hash for credential (double SHA1)"""
         password = credential.get_password()
         if password is None:
             return None
-        
         password_bytes = password.encode('utf-8')
-        
-        # SHA1(password)
         stage1 = hashlib.sha1(password_bytes).digest()
-        
-        # SHA1(SHA1(password))
-        stage2 = hashlib.sha1(stage1).digest()
-        
+        stage2 = hashlib.sha1(stage1).digest()       
         return stage2

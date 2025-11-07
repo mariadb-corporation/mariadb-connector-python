@@ -1,33 +1,17 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 """
 Authentication Plugin Interface
-
-Equivalent to the Java AuthenticationPlugin interface.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Any, TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from ..client.socket.stream import Stream
+
+from ..client.socket.stream import AsyncStream
+from ..client.socket.stream import SyncStream
+from ..client.context import Context
 
 
 class Credential:
@@ -36,13 +20,7 @@ class Credential:
     """
     
     def __init__(self, password: Optional[str] = None, token: Optional[bytes] = None):
-        """
-        Initialize credential
-        
-        Args:
-            password: Password string
-            token: Authentication token bytes
-        """
+        """Initialize credential"""
         self._password = password
         self._token = token
     
@@ -58,45 +36,24 @@ class Credential:
 class AuthenticationPlugin(ABC):
     """
     Authentication plugin interface
-    
-    Equivalent to the Java AuthenticationPlugin interface.
     """
     
     @abstractmethod
-    def process(self, stream: 'Stream', context: Any) -> bytearray:
-        """
-        Process plugin authentication
-        
-        Args:
-            stream: Stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            IOError: If socket error occurs
-            Exception: If plugin exception occurs
-        """
+    async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
+        """Process plugin authentication"""
+        pass
+
+    @abstractmethod
+    def processSync(self, stream: SyncStream, context: Context) -> bytearray:
+        """Process plugin authentication"""
         pass
     
+    
     def is_mitm_proof(self) -> bool:
-        """
-        Check if plugin is MitM-proof, permitting returning HASH
-        
-        Returns:
-            True if permitted
-        """
+        """Check if plugin is MitM-proof, permitting returning HASH"""
         return False
     
     def hash(self, credential: Credential) -> Optional[bytes]:
-        """
-        Return hash for credential
-        
-        Args:
-            credential: Credential to hash
-            
-        Returns:
-            Hash bytes or None
-        """
+        """Return hash for credential"""
         return None
+

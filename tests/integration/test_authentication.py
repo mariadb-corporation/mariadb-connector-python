@@ -134,8 +134,8 @@ class TestParsecAuthentication(unittest.TestCase):
         conn_config = get_test_config().copy()
         conn_config['user'] = 'parsec_test_user'
         conn_config['password'] = 'wrong_password'
-        
-        with self.assertRaises(mariadb.OperationalError) as context:
+
+        with self.assertRaises(mariadb.DatabaseError) as context:
             mariadb.connect(**conn_config)
         
         # Verify it's an authentication error

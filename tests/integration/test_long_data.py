@@ -1,0 +1,342 @@
+#!/usr/bin/env python -O
+# -*- coding: utf-8 -*-
+
+"""
+Integration tests for handling long data (>16MB)
+
+Tests sending and receiving data larger than the default max_allowed_packet size.
+"""
+
+import os
+import unittest
+from ..base_test import create_connection
+
+
+class LongDataTest(unittest.TestCase):
+    """Test handling of long data packets"""
+
+    def setUp(self):
+        # Skip all tests if RUN_LONG_TEST is not set to "1"
+        if os.environ.get('RUN_LONG_TEST') != '1':
+            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")
+
+        """Set up test connection and check max_allowed_packet"""
+        self.connection = create_connection()
+        self.cursor = self.connection.cursor()
+        
+        # Check current max_allowed_packet setting
+        self.cursor.execute("SELECT @@max_allowed_packet")
+        self.max_allowed_packet = self.cursor.fetchone()[0]
+        
+        # Minimum required: 32MB for our tests
+        self.min_required = 32 * 1024 * 1024
+        
+        if self.max_allowed_packet < self.min_required:
+            self.skipTest(
+                f"max_allowed_packet ({self.max_allowed_packet} bytes) is less than "
+                f"required {self.min_required} bytes. "
+                f"Set max_allowed_packet={self.min_required} in server config."
+            )
+
+    def tearDown(self):
+        """Clean up test resources"""
+        if hasattr(self, 'cursor') and self.cursor:
+            self.cursor.close()
+        if hasattr(self, 'connection') and self.connection:
+            self.connection.close()
+
+    def test_insert_long_varchar(self):
+        """Test inserting and retrieving VARCHAR data >16MB"""
+        # Create test table
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_long_varchar (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                data LONGTEXT
+            )
+        """)
+        
+        # Create data slightly larger than 16MB
+        data_size = 17 * 1024 * 1024  # 17MB
+        test_data = 'x' * data_size
+        
+        # Insert long data
+        self.cursor.execute(
+            "INSERT INTO test_long_varchar (data) VALUES (?)",
+            (test_data,)
+        )
+        self.connection.commit()
+        
+        # Retrieve and verify
+        self.cursor.execute("SELECT data FROM test_long_varchar WHERE id = 1")
+        result = self.cursor.fetchone()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result[0]), data_size)
+        self.assertEqual(result[0], test_data)
+
+    def test_insert_long_blob(self):
+        """Test inserting and retrieving BLOB data >16MB"""
+        # Create test table
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_long_blob (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                data LONGBLOB
+            )
+        """)
+        
+        # Create binary data slightly larger than 16MB
+        data_size = 18 * 1024 * 1024  # 18MB
+        test_data = bytes(range(256)) * (data_size // 256)
+        test_data = test_data[:data_size]  # Ensure exact size
+        
+        # Insert long data
+        self.cursor.execute(
+            "INSERT INTO test_long_blob (data) VALUES (?)",
+            (test_data,)
+        )
+        self.connection.commit()
+        
+        # Retrieve and verify
+        self.cursor.execute("SELECT data FROM test_long_blob WHERE id = 1")
+        result = self.cursor.fetchone()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result[0]), data_size)
+        self.assertEqual(result[0], test_data)
+
+    def test_insert_multiple_long_columns(self):
+        """Test inserting multiple long columns in single row"""
+        # Create test table with multiple LONGTEXT columns
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_multiple_long (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                data1 LONGTEXT,
+                data2 LONGTEXT,
+                data3 LONGBLOB
+            )
+        """)
+        
+        # Create test data (smaller to fit multiple columns)
+        data_size = 6 * 1024 * 1024  # 6MB each
+        test_data1 = 'a' * data_size
+        test_data2 = 'b' * data_size
+        test_data3 = bytes([0xAA]) * data_size
+        
+        # Insert long data
+        self.cursor.execute(
+            "INSERT INTO test_multiple_long (data1, data2, data3) VALUES (?, ?, ?)",
+            (test_data1, test_data2, test_data3)
+        )
+        self.connection.commit()
+        
+        # Retrieve and verify
+        self.cursor.execute("SELECT data1, data2, data3 FROM test_multiple_long WHERE id = 1")
+        result = self.cursor.fetchone()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result[0]), data_size)
+        self.assertEqual(len(result[1]), data_size)
+        self.assertEqual(len(result[2]), data_size)
+        self.assertEqual(result[0], test_data1)
+        self.assertEqual(result[1], test_data2)
+        self.assertEqual(result[2], test_data3)
+
+    def test_executemany_with_long_data(self):
+        """Test executemany with long data parameters"""
+        # Create test table
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_executemany_long (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                name VARCHAR(50),
+                data LONGTEXT
+            )
+        """)
+        
+        # Create test data (smaller for multiple rows)
+        data_size = 5 * 1024 * 1024  # 5MB per row
+        
+        rows = [
+            ('row1', 'x' * data_size),
+            ('row2', 'y' * data_size),
+            ('row3', 'z' * data_size),
+        ]
+        
+        # Insert multiple rows with long data
+        self.cursor.executemany(
+            "INSERT INTO test_executemany_long (name, data) VALUES (?, ?)",
+            rows
+        )
+        self.connection.commit()
+        
+        # Verify all rows
+        self.cursor.execute("SELECT name, data FROM test_executemany_long ORDER BY id")
+        results = self.cursor.fetchall()
+        
+        self.assertEqual(len(results), len(rows))
+        for i, (name, data) in enumerate(results):
+            self.assertEqual(name, rows[i][0])
+            self.assertEqual(len(data), data_size)
+            self.assertEqual(data, rows[i][1])
+
+    def test_prepared_statement_with_long_data(self):
+        """Test prepared statements with long data"""
+        # Create test table
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_prepared_long (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                data LONGTEXT
+            )
+        """)
+        
+        # Create test data
+        data_size = 17 * 1024 * 1024  # 17MB
+        test_data = 'p' * data_size
+        
+        # Use prepared statement
+        self.cursor.execute(
+            "INSERT INTO test_prepared_long (data) VALUES (?)",
+            (test_data,)
+        )
+        self.connection.commit()
+        
+        # Retrieve using prepared statement
+        self.cursor.execute("SELECT data FROM test_prepared_long WHERE id = ?", (1,))
+        result = self.cursor.fetchone()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result[0]), data_size)
+        self.assertEqual(result[0], test_data)
+
+    def test_long_data_with_unicode(self):
+        """Test long data with Unicode characters"""
+        # Create test table
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_long_unicode (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                data LONGTEXT CHARACTER SET utf8mb4
+            )
+        """)
+        
+        # Create Unicode test data (emoji and multi-byte characters)
+        # Each emoji is typically 4 bytes in UTF-8
+        base_string = '🔥🌟💻🚀🎉' * 1000  # ~20KB of emoji
+        repetitions = (17 * 1024 * 1024) // len(base_string.encode('utf-8'))
+        test_data = base_string * repetitions
+        
+        actual_size = len(test_data.encode('utf-8'))
+        
+        # Insert long Unicode data
+        self.cursor.execute(
+            "INSERT INTO test_long_unicode (data) VALUES (?)",
+            (test_data,)
+        )
+        self.connection.commit()
+        
+        # Retrieve and verify
+        self.cursor.execute("SELECT data FROM test_long_unicode WHERE id = 1")
+        result = self.cursor.fetchone()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], test_data)
+
+    def test_update_with_long_data(self):
+        """Test updating existing row with long data"""
+        # Create test table
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_update_long (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                data LONGTEXT
+            )
+        """)
+        
+        # Insert initial small data
+        self.cursor.execute("INSERT INTO test_update_long (data) VALUES (?)", ('initial',))
+        self.connection.commit()
+        
+        # Update with long data
+        data_size = 17 * 1024 * 1024  # 17MB
+        test_data = 'u' * data_size
+        
+        self.cursor.execute(
+            "UPDATE test_update_long SET data = ? WHERE id = 1",
+            (test_data,)
+        )
+        self.connection.commit()
+        
+        # Verify update
+        self.cursor.execute("SELECT data FROM test_update_long WHERE id = 1")
+        result = self.cursor.fetchone()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result[0]), data_size)
+        self.assertEqual(result[0], test_data)
+
+    def test_select_where_long_data(self):
+        """Test SELECT with long data in WHERE clause"""
+        # Create test table
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_where_long (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                data LONGTEXT,
+                name VARCHAR(50)
+            )
+        """)
+        
+        # Create test data (smaller for WHERE clause)
+        data_size = 1 * 1024 * 1024  # 1MB
+        test_data = 'w' * data_size
+        
+        # Insert test rows
+        self.cursor.execute(
+            "INSERT INTO test_where_long (data, name) VALUES (?, ?)",
+            (test_data, 'found')
+        )
+        self.cursor.execute(
+            "INSERT INTO test_where_long (data, name) VALUES (?, ?)",
+            ('different', 'not_found')
+        )
+        self.connection.commit()
+        
+        # Query with long data in WHERE clause
+        self.cursor.execute(
+            "SELECT name FROM test_where_long WHERE data = ?",
+            (test_data,)
+        )
+        result = self.cursor.fetchone()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], 'found')
+
+    def test_max_packet_size_boundary(self):
+        """Test data size approaching max_allowed_packet boundary"""
+        # Create test table
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_boundary (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                data LONGBLOB
+            )
+        """)
+        
+        # Use 90% of max_allowed_packet to leave room for protocol overhead
+        data_size = int(self.max_allowed_packet * 0.9)
+        test_data = bytes([i % 256 for i in range(min(1000, data_size))]) * (data_size // 1000)
+        test_data = test_data[:data_size]
+        
+        # Insert data near boundary
+        self.cursor.execute(
+            "INSERT INTO test_boundary (data) VALUES (?)",
+            (test_data,)
+        )
+        self.connection.commit()
+        
+        # Retrieve and verify
+        self.cursor.execute("SELECT data FROM test_boundary WHERE id = 1")
+        result = self.cursor.fetchone()
+        
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result[0]), len(test_data))
+        self.assertEqual(result[0], test_data)
+
+
+if __name__ == '__main__':
+    unittest.main()

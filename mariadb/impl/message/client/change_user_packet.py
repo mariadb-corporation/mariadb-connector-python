@@ -1,21 +1,5 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 """
 COM_CHANGE_USER packet implementation
@@ -23,11 +7,8 @@ COM_CHANGE_USER packet implementation
 Changes the user and optionally the database for the current connection.
 """
 
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
-    from ...client.context import Context
+from typing import Optional
+from ...client.context import Context
 
 from ..client_message import ClientMessage
 from ...client.socket.payload_writer import PayloadWriter
@@ -49,48 +30,15 @@ class ChangeUserPacket(ClientMessage):
                  database: Optional[str] = None,
                  charset_collation: int = 33,  # utf8mb4_general_ci
                  connect_attrs: Optional[dict] = None):
-        """
-        Initialize COM_CHANGE_USER packet
-        
-        Args:
-            username: New username
-            password: New password (optional)
-            database: New default database (optional)
-            charset_collation: Character set collation ID
-            auth_plugin: Authentication plugin name
-            auth_response: Pre-computed authentication response
-            connect_attrs: Connection attributes
-        """
+        """Initialize COM_CHANGE_USER packet with username, password, database, and charset"""
         self.username = username or ""
         self.password = password
         self.database = database or ""
         self.charset_collation = charset_collation
         self.connect_attrs = connect_attrs or {}
     
-    def encode(self, stream: 'Stream', context: 'Context') -> None:
-        """
-        Encode COM_CHANGE_USER packet
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-        
-        Packet format:
-        - int<1>: 0x11 (COM_CHANGE_USER)
-        - string: username (null-terminated)
-        - If CLIENT_SECURE_CONNECTION:
-            - int<1>: length of auth response
-            - string: auth response (not null-terminated)
-        - Else:
-            - string: auth response (null-terminated)
-        - string: database name (null-terminated)
-        - int<2>: charset collation
-        - If CLIENT_PLUGIN_AUTH:
-            - string: auth plugin name (null-terminated)
-        - If CLIENT_CONNECT_ATTRS:
-            - int: size of connection attributes
-            - Loop: key-value pairs (length-encoded strings)
-        """
+    def encode(self, context: Context) -> bytearray:
+        """Encode COM_CHANGE_USER packet with username, auth response, database, charset, and attributes"""
         # Build payload
         writer = PayloadWriter()
         
@@ -142,7 +90,10 @@ class ChangeUserPacket(ClientMessage):
             attr_data = encode_connection_attributes(default_attrs)
             writer.write_length_encoded_int(len(attr_data))
             writer.write_bytes(attr_data)
-        stream.send_payload(writer.get_payload(), "COM_CHANGE_USER")
+        return writer.get_payload()
         
     def is_binary(self) -> bool:
         return False
+
+    def type(self) -> str:
+        return "COM_CHANGE_USER"        

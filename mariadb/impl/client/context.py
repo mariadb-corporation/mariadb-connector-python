@@ -1,27 +1,5 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
-
-"""
-Connection Context for MariaDB connections
-
-Equivalent to the Java Context class.
-"""
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
@@ -51,8 +29,6 @@ class ServerVersion:
 class Context:
     """
     Connection context holding server state and capabilities
-    
-    Equivalent to the Java Context class.
     """
     
     def __init__(
@@ -109,13 +85,12 @@ class Context:
         
         self.parse_server_version(server_version, is_mariadb)
     
+    # =========================================================================
+    # Version Methods
+    # =========================================================================
+    
     def parse_server_version(self, version_string: str, is_mariadb: bool) -> None:
-        """
-        Parse server version string
-        
-        Args:
-            version_string: Raw server version string
-        """
+        """Parse server version string into major.minor.patch components"""
         self.server_version = version_string
         self.version.raw = version_string
         self.version.is_mariadb = is_mariadb
@@ -136,47 +111,29 @@ class Context:
         """Check if connected to MariaDB server"""
         return self.version.is_mariadb
     
+    # =========================================================================
+    # Capability Methods
+    # =========================================================================
+    
     def has_capability(self, capability: int) -> bool:
-        """
-        Check if server has specific capability
-        
-        Args:
-            capability: Capability flag to check
-            
-        Returns:
-            True if server has capability
-        """
+        """Check if server has specific capability flag"""
         return (self.server_capabilities & capability) != 0
     
     def has_client_capability(self, capability: int) -> bool:
-        """
-        Check if client has specific capability
-        
-        Args:
-            capability: Capability flag to check
-            
-        Returns:
-            True if client has capability
-        """
+        """Check if client has specific capability flag"""
         return (self.client_capabilities & capability) != 0
     
     def isEofDeprecated(self) -> bool:
-        """
-        Check if EOF packets are deprecated (DEPRECATE_EOF capability enabled)
-        
-        Returns:
-            True if EOF packets are deprecated
-        """
+        """Check if EOF packets are deprecated (DEPRECATE_EOF capability)"""
         return self.eof_deprecated
     
     def hasExtendedMetadata(self) -> bool:
-        """
-        Check if extended metadata is enabled (EXTENDED_METADATA capability enabled)
-        
-        Returns:
-            True if extended metadata is enabled
-        """
+        """Check if extended metadata is enabled (EXTENDED_METADATA capability)"""
         return self.extended_metadata
+    
+    # =========================================================================
+    # Database/Charset Methods
+    # =========================================================================
     
     def set_database(self, database: str) -> None:
         """Set current database"""
@@ -187,13 +144,7 @@ class Context:
         return self.database
     
     def set_charset(self, charset: str, collation: Optional[str] = None) -> None:
-        """
-        Set character set and collation
-        
-        Args:
-            charset: Character set name
-            collation: Collation name (optional)
-        """
+        """Set character set and optional collation"""
         self.charset = charset
         if collation:
             self.collation = collation
@@ -210,6 +161,9 @@ class Context:
         """Get connection ID"""
         return self.connection_id
     
+    # =========================================================================
+    # Properties
+    # =========================================================================
 
     @property
     def server_status(self) -> int:
@@ -221,26 +175,11 @@ class Context:
         self._server_status = value
    
     def get_property(self, key: str, default: Any = None) -> Any:
-        """
-        Get context property
-        
-        Args:
-            key: Property key
-            default: Default value if key not found
-            
-        Returns:
-            Property value or default
-        """
+        """Get context property by key with optional default"""
         return self.properties.get(key, default)
     
     def set_property(self, key: str, value: Any) -> None:
-        """
-        Set context property
-        
-        Args:
-            key: Property key
-            value: Property value
-        """
+        """Set context property by key"""
         self.properties[key] = value
     
     def __str__(self) -> str:

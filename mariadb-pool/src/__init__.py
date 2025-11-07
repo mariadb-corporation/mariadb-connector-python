@@ -37,21 +37,26 @@ try:
 except Exception:
     __version_info__ = (2, 0, 0)
 
-__author__ = "Georg Richter"
+"""
+mariadb_pool - Connection pooling for MariaDB Connector/Python
+"""
 
-from mariadb_pool.pool import (
+from .pool import (
     ConnectionPool,
+    AsyncConnectionPool,
     PoolConfig,
     PoolError,
 )
-from mariadb_pool.connection_pool_wrapper import ConnectionPoolWrapper
+from .connection_pool_wrapper import ConnectionPoolWrapper
+from .async_connection_pool_wrapper import AsyncConnectionPoolWrapper
 
 __all__ = [
-    "ConnectionPool",
-    "ConnectionPoolWrapper",
-    "PoolConfig",
-    "PoolError",
-    "__version__",
-    "__version_info__",
-    "__author__",
+    'ConnectionPool',
+    'AsyncConnectionPool',
+    'ConnectionPoolWrapper',
+    'AsyncConnectionPoolWrapper',
+    'PoolConfig',
+    'PoolError'
 ]
+
+__version__ = '2.0.0.dev1'

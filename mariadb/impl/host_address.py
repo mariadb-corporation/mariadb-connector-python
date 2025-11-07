@@ -1,27 +1,5 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
-
-"""
-Host Address class for MariaDB connections
-
-Equivalent to the Java HostAddress class.
-"""
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from typing import Optional
 from dataclasses import dataclass
@@ -31,8 +9,6 @@ from dataclasses import dataclass
 class HostAddress:
     """
     Host address information for MariaDB connections
-    
-    Equivalent to the Java HostAddress class.
     """
     
     host: str = 'localhost'
@@ -49,16 +25,7 @@ class HostAddress:
     
     @classmethod
     def from_string(cls, address_string: str, default_port: int = 3306) -> 'HostAddress':
-        """
-        Create HostAddress from string representation
-        
-        Args:
-            address_string: Address in format "host:port" or "host"
-            default_port: Default port if not specified
-            
-        Returns:
-            HostAddress instance
-        """
+        """Create HostAddress from string representation"""
         if ':' in address_string:
             host, port_str = address_string.rsplit(':', 1)
             try:
@@ -72,21 +39,11 @@ class HostAddress:
         return cls(host=host, port=port)
     
     def to_string(self) -> str:
-        """
-        Convert to string representation
-        
-        Returns:
-            String in format "host:port"
-        """
+        """Convert to string representation"""
         return f"{self.host}:{self.port}"
     
     def is_local(self) -> bool:
-        """
-        Check if this is a local address
-        
-        Returns:
-            True if local address
-        """
+        """Check if this is a local address"""
         return self.host in ('localhost', '127.0.0.1', '::1')
     
     def __str__(self) -> str:

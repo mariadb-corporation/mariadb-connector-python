@@ -1,26 +1,9 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 """
 Authentication Plugin Loader
 
-Equivalent to the Java AuthenticationPluginLoader class.
 Permits loading authentication plugins with support for custom plugins.
 """
 
@@ -32,8 +15,6 @@ from ...exceptions import OperationalError
 class AuthenticationPluginLoader:
     """
     Authentication plugin loader for discovering and loading authentication plugins
-    
-    Equivalent to the Java AuthenticationPluginLoader class.
     """
     
     # Registry of built-in authentication plugin factories
@@ -41,12 +22,7 @@ class AuthenticationPluginLoader:
     
     @classmethod
     def register_plugin(cls, plugin_factory_class: Type[AuthenticationPluginFactory]) -> None:
-        """
-        Register an authentication plugin factory
-        
-        Args:
-            plugin_factory_class: Plugin factory class to register
-        """
+        """Register an authentication plugin factory"""
         # Create temporary instance to get the type
         temp_instance = plugin_factory_class()
         plugin_type = temp_instance.type()
@@ -54,22 +30,7 @@ class AuthenticationPluginLoader:
     
     @classmethod
     def get(cls, plugin_type: str, conf: Any) -> AuthenticationPluginFactory:
-        """
-        Get authentication plugin factory from type string
-        
-        Custom authentication plugins can be added by registering new types
-        using register_plugin().
-        
-        Args:
-            plugin_type: Authentication plugin type (e.g., 'mysql_native_password')
-            conf: Current configuration
-            
-        Returns:
-            Authentication plugin factory corresponding to type
-            
-        Raises:
-            OperationalError: If no authentication plugin found for the type
-        """
+        """Get authentication plugin factory from type string"""
         # Check for restricted authentication list
         restricted_auth = getattr(conf, 'restricted_auth', None)
         if restricted_auth:
@@ -96,23 +57,10 @@ class AuthenticationPluginLoader:
     
     @classmethod
     def get_available_plugins(cls) -> Dict[str, Type[AuthenticationPluginFactory]]:
-        """
-        Get all available authentication plugins
-        
-        Returns:
-            Dictionary mapping plugin types to factory classes
-        """
+        """Get all available authentication plugins"""
         return cls._plugin_factories.copy()
     
     @classmethod
     def is_plugin_available(cls, plugin_type: str) -> bool:
-        """
-        Check if a plugin type is available
-        
-        Args:
-            plugin_type: Plugin type to check
-            
-        Returns:
-            True if plugin is available
-        """
+        """Check if a plugin type is available"""
         return plugin_type in cls._plugin_factories

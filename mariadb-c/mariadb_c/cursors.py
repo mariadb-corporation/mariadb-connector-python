@@ -1,21 +1,5 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 import datetime
 from numbers import Number
@@ -383,7 +367,8 @@ class Cursor(CCursor):
         self.check_closed()
         self._reset()
 
-        if not parameters or not len(parameters):
+        # Check if parameters is None or not an array-like type
+        if parameters is None or not hasattr(parameters, '__iter__') or isinstance(parameters, (str, bytes)):
             raise ProgrammingError("No data provided")
 
         self.connection._last_executed_statement = statement
@@ -392,10 +377,17 @@ class Cursor(CCursor):
         if self.field_count:
             self._clear_result()
 
+        # If parameters is an empty list/tuple, return early with rowcount=0
+        if not len(parameters):
+            self.buffered = True
+            self._rowcount = 0
+            return
+
         # If the server doesn't support bulk operations, we need to emulate
         # by looping
         # TODO: insert/replace statements are not optimized yet
         #       rowcount updating
+
         if not (self.connection.extended_server_capabilities &
                 (CAPABILITY.BULK_OPERATIONS >> 32)):
             count = 0

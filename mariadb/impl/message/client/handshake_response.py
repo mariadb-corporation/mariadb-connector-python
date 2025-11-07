@@ -1,34 +1,7 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
-
-"""
-Handshake Response packet for MariaDB authentication
-
-Equivalent to the Java HandshakeResponse class.
-"""
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 import hashlib
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
-
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
@@ -40,34 +13,17 @@ from mariadb_shared.constants import CAPABILITY
 class HandshakeResponse(ClientMessage):
     """
     Handshake response packet for MySQL authentication
-    
-    Equivalent to the Java HandshakeResponse class.
     """
     
     
     def __init__(self, configuration: Configuration, context: Context):
-        """
-        Initialize handshake response
-        
-        Args:
-            configuration: Connection configuration
-            context: Connection context
-        """
+        """Initialize handshake response with configuration and context"""
         self.configuration = configuration
         self.context = context
         
 
-    def encode(self, stream: 'Stream', context: Context) -> None:
-        """
-        Encode handshake response packet using payload-based approach
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-            
-        Raises:
-            IOError: If encoding fails
-        """
+    def encode(self, context: Context) -> bytearray:
+        """Encode handshake response packet with capabilities, auth, and connection attributes"""
         # Build payload
         writer = PayloadWriter()
         
@@ -130,17 +86,10 @@ class HandshakeResponse(ClientMessage):
             writer.write_bytes(attr_data)
 
         # Send payload through stream (don't reset sequence - continue from handshake)
-        stream.send_payload(writer.get_payload(), "COM_HANDSHAKE_RESPONSE", reset_sequence=False)
+        return writer.get_payload()
     
     def _calculate_auth_response(self, context: Context) -> bytes:
-        """
-        Calculate authentication response using mysql_native_password
-        Args:
-            context: Connection context
-            
-        Returns:
-            Authentication response bytes
-        """
+        """Calculate authentication response"""
         if not self.configuration.password:
             return b''
         
@@ -170,3 +119,7 @@ class HandshakeResponse(ClientMessage):
     
     def is_binary(self) -> bool:
         return False
+
+
+    def type(self) -> str:
+        return "HANDSHAKE_RESPONSE"                   

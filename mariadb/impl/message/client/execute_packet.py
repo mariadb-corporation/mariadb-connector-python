@@ -1,33 +1,11 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
-
-"""
-Execute packet for MariaDB prepared statement execution
-
-Equivalent to the Java ExecutePacket class.
-"""
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 import array
 import datetime
 import decimal
 import struct
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import Any, List, Optional
 
 try:
     import numpy
@@ -35,12 +13,8 @@ try:
 except ImportError:
     HAS_NUMPY = False
 
-if TYPE_CHECKING:
-    from ...client.socket.stream import Stream
-
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
-from ...string_utils import StringEscaper
 from mariadb_shared.constants import FIELD_TYPE
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
@@ -56,26 +30,13 @@ class ExecutePacket(ClientMessage):
     COM_STMT_EXECUTE = 0x17
     
     def __init__(self, statement_id: int, parameters: Optional[List[Any]] = None, sql: str = ""):
-        """
-        Initialize execute packet
-        
-        Args:
-            statement_id: Prepared statement ID
-            parameters: Optional list of parameters to bind
-            sql: Original SQL for debugging
-        """
+        """Initialize COM_STMT_EXECUTE packet with statement ID and parameters"""
         self.statement_id = statement_id
         self.parameters = parameters or []
         self.sql = sql
         
-    def encode(self, stream: 'Stream', context: Context) -> None:
-        """
-        Encode execute packet
-        
-        Args:
-            stream: Stream to send payload through
-            context: Connection context
-        """
+    def encode(self, context: Context) -> bytearray:
+        """Encode COM_STMT_EXECUTE packet with statement ID, flags, and bound parameters"""
         # Build payload
         writer = PayloadWriter()
         
@@ -121,7 +82,7 @@ class ExecutePacket(ClientMessage):
                     self._write_parameter_value(writer, param)
         
         # Send payload through stream
-        stream.send_payload(writer.get_payload(), "COM_STMT_EXECUTE")
+        return writer.get_payload()
     
     def _get_parameter_type(self, param: Any) -> tuple[int, int]:
         """
@@ -330,3 +291,6 @@ class ExecutePacket(ClientMessage):
 
     def is_binary(self) -> bool:
         return True
+
+    def type(self) -> str:
+        return "COM_STMT_EXECUTE"           

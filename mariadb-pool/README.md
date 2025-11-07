@@ -28,35 +28,32 @@ pip install mariadb-pool
 
 ## Quick Start
 
-### Using Connection URI (Recommended)
+### Synchronous Connection Pool
+
+#### Using Connection URI
 
 The simplest way to create a connection pool:
 
 ```python
 import mariadb
 
-# Create pool with URI - pool can be used directly without a name
+# Create pool with URI
 pool = mariadb.ConnectionPool(
-    "mariadb://user:password@localhost:3306/mydb"
+    "mariadb://user:password@localhost:3306/mydb?pool_name=mypool&max_size=10"
 )
 
-# Get connection from pool
-conn = pool.get_connection()
-cursor = conn.cursor()
-cursor.execute("SELECT * FROM users")
-results = cursor.fetchall()
-
-# Always close connections to return them to the pool
-cursor.close()
-conn.close()
+# Use context manager to ensure connection is returned to pool
+with pool.connection() as conn:
+    with conn.cursor() as 
+    cursor.execute("SELECT * FROM users")
+    results = cursor.fetchall()
+    cursor.close()
 
 # Close pool when done
 pool.close()
 ```
 
-**Note:** Pools without a `pool_name` can be used directly but won't be registered in `mariadb._CONNECTION_POOLS`. To create a named pool that can be accessed via `mariadb.connect(pool_name="...")`, include `pool_name` in the URI query parameters or as a keyword argument.
-
-### Using Connection Parameters
+#### Using Connection Parameters
 
 Create a pool with traditional connection parameters:
 
@@ -65,22 +62,106 @@ import mariadb
 
 # Create pool with connection parameters
 pool = mariadb.ConnectionPool(
+    pool_name="mypool",
     host="localhost",
+    port=3306,
     user="root",
     password="password",
     database="mydb",
-    pool_size=10  # Optional: set pool size
+    max_size=10,
+    pool_reset_connection=True
 )
 
-conn = pool.get_connection()
-# Use connection...
-conn.close()
+# Use context manager to ensure connection is returned to pool
+with pool.connection() as conn:
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users")
+    results = cursor.fetchall()
+    cursor.close()
+
 pool.close()
 ```
 
+### Asynchronous Connection Pool
+
+#### Using Connection URI
+
+Create an async pool with URI:
+
+```python
+import mariadb
+import asyncio
+
+async def main():
+    # Create async pool with URI
+    pool = mariadb.AsyncConnectionPool(
+        "mariadb://user:password@localhost:3306/mydb?pool_name=async_pool&max_size=10"
+    )
+    
+    # Must call open() to establish connections
+    await pool.open()
+    
+    # Get connection from pool
+    conn = await pool.get_connection()
+    cursor = conn.cursor()
+    await cursor.execute("SELECT * FROM users")
+    results = await cursor.fetchall()
+    
+    # Close connection and cursor
+    await cursor.close()
+    await conn.close()
+    
+    # Close pool when done
+    await pool.close()
+
+asyncio.run(main())
+```
+
+#### Using Connection Parameters
+
+Create an async pool with traditional parameters:
+
+```python
+import mariadb
+import asyncio
+
+async def main():
+    # Create async pool with connection parameters
+    pool = mariadb.AsyncConnectionPool(
+        pool_name="async_pool",
+        host="localhost",
+        port=3306,
+        user="root",
+        password="password",
+        database="mydb",
+        max_size=10,
+        pool_reset_connection=True
+    )
+    
+    # Must call open() to establish connections
+    await pool.open()
+    
+    conn = await pool.get_connection()
+    cursor = conn.cursor()
+    await cursor.execute("SELECT * FROM users")
+    results = await cursor.fetchall()
+    await cursor.close()
+    await conn.close()
+    
+    await pool.close()
+
+asyncio.run(main())
+```
+
+**Note:** 
+- Async pools require calling `await pool.open()` after creation to establish connections (PostgreSQL asyncpg pattern)
+- Pools with `pool_name` are registered in `mariadb._CONNECTION_POOLS` and can be accessed via `mariadb.connect(pool_name="...")` or `mariadb.asyncConnect(pool_name="...")`
+
 ## Usage Patterns
 
-### Via mariadb.connect() with pool_name
+### Synchronous Patterns
+
+#### Via mariadb.connect() with pool_name
 
 Create a pool automatically when connecting:
 
@@ -88,24 +169,28 @@ Create a pool automatically when connecting:
 import mariadb
 
 # First connection creates the pool
-conn1 = mariadb.connect(
+with mariadb.connect(
     "mariadb://user:password@localhost:3306/mydb",
-    pool_name="mypool"
-)
-
-# Use the connection
-cursor = conn1.cursor()
-cursor.execute("SELECT * FROM users")
-results = cursor.fetchall()
-cursor.close()
-conn1.close()
+    pool_name="mypool",
+    max_size=10
+) as conn1:
+    # Use the connection
+    cursor = conn1.cursor()
+    cursor.execute("SELECT * FROM users")
+    results = cursor.fetchall()
+    cursor.close()
 
 # Subsequent connections reuse the existing pool
-conn2 = mariadb.connect(pool_name="mypool")
-conn2.close()
+with mariadb.connect(pool_name="mypool") as conn2:
+    cursor = conn2.cursor()
+    cursor.execute("SELECT 1")
+    cursor.close()
+
+# Clean up pool
+mariadb._CONNECTION_POOLS["mypool"].close()
 ```
 
-### With Context Managers
+#### With Context Managers
 
 Use context managers for automatic connection cleanup:
 
@@ -113,7 +198,7 @@ Use context managers for automatic connection cleanup:
 import mariadb
 
 pool = mariadb.ConnectionPool(
-    "mariadb://user:password@localhost/mydb?pool_name=mypool&pool_size=10"
+    "mariadb://user:password@localhost/mydb?pool_name=mypool&max_size=10"
 )
 
 # Context manager automatically closes connection
@@ -124,6 +209,67 @@ with pool.connection() as conn:
     cursor.close()
 
 pool.close()
+```
+
+### Asynchronous Patterns
+
+#### Via mariadb.asyncConnect() with pool_name
+
+Create an async pool automatically when connecting:
+
+```python
+import mariadb
+import asyncio
+
+async def main():
+    # First connection creates the pool
+    async with await mariadb.asyncConnect(
+        "mariadb://user:password@localhost:3306/mydb",
+        pool_name="async_pool",
+        max_size=10
+    ) as conn1:
+        # Use the connection
+        cursor = conn1.cursor()
+        await cursor.execute("SELECT * FROM users")
+        results = await cursor.fetchall()
+        await cursor.close()
+    
+    # Subsequent connections reuse the existing pool
+    async with await mariadb.asyncConnect(pool_name="async_pool") as conn2:
+        cursor = conn2.cursor()
+        await cursor.execute("SELECT 1")
+        await cursor.close()
+    
+    # Clean up pool
+    await mariadb._CONNECTION_POOLS["async_pool"].close()
+
+asyncio.run(main())
+```
+
+#### With Async Context Managers
+
+Use async context managers for automatic connection cleanup:
+
+```python
+import mariadb
+import asyncio
+
+async def main():
+    pool = mariadb.AsyncConnectionPool(
+        "mariadb://user:password@localhost/mydb?pool_name=async_pool&max_size=10"
+    )
+    await pool.open()
+    
+    # Async context manager automatically closes connection
+    async with pool.connection() as conn:
+        cursor = conn.cursor()
+        await cursor.execute("SELECT * FROM users")
+        results = await cursor.fetchall()
+        await cursor.close()
+    
+    await pool.close()
+
+asyncio.run(main())
 ```
 
 ### URI Format and Options
@@ -139,7 +285,7 @@ mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=val
 
 **Common Query Parameters:**
 - `pool_name` - Name of the pool (required for ConnectionPool)
-- `pool_size` - Number of connections in pool (default: 5)
+- `max_size` - Maximum number of connections in pool (default: 10)
 - `autocommit` - Enable autocommit mode (default: false)
 - `ssl` - Enable SSL/TLS connection
 - `local_infile` - Enable LOAD DATA LOCAL INFILE
@@ -147,16 +293,16 @@ mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=val
 **Example with Multiple Options:**
 ```python
 pool = mariadb.ConnectionPool(
-    "mariadb://user:pass@localhost/db?pool_name=mypool&pool_size=20&autocommit=true&ssl=true"
+    "mariadb://user:pass@localhost/db?pool_name=mypool&max_size=20&autocommit=true&ssl=true"
 )
 ```
 
 **Note:** Keyword arguments override URI parameters:
 ```python
-# pool_size in URI is 5, but kwarg overrides to 10
+# max_size in URI is 5, but kwarg overrides to 10
 pool = mariadb.ConnectionPool(
-    "mariadb://user:pass@localhost/db?pool_name=mypool&pool_size=5",
-    pool_size=10  # This takes precedence
+    "mariadb://user:pass@localhost/db?pool_name=mypool&max_size=5",
+    max_size=10  # This takes precedence
 )
 ```
 
@@ -176,7 +322,7 @@ pool = mariadb.ConnectionPool(
     password="password",
     database="mydb",
     # Pool configuration
-    pool_size=10,                    # Number of connections
+    max_size=10,                     # Maximum number of connections
     pool_reset_connection=True,      # Reset connection state on return
 )
 ```
@@ -234,7 +380,6 @@ Additional parameters supported by `mariadb.ConnectionPool`:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `pool_name` | str | Required | Unique name for the pool |
-| `pool_size` | int | - | Convenience parameter that sets both min_size and max_size |
 | `pool_reset_connection` | bool | True | Alias for reset_connection (mapped by wrapper) |
 | `pool_validation_interval` | float | - | Alias for validation_interval (mapped by wrapper) |
 
@@ -257,7 +402,7 @@ pool = mariadb.ConnectionPool(
     user="root",
     password="password",
     database="mydb",
-    pool_size=10  # Creates pool with min=10, max=10
+    max_size=10  # Creates pool with max=10
 )
 ```
 
@@ -278,47 +423,288 @@ pool = mariadb.ConnectionPool(
 **URI with pool options:**
 ```python
 pool = mariadb.ConnectionPool(
-    "mariadb://user:pass@localhost/db?pool_name=mypool&pool_size=15&max_idle_time=600"
+    "mariadb://user:pass@localhost/db?pool_name=mypool&max_size=15&max_idle_time=600"
 )
 ```
 
 
-## Best Practices
+## Sync vs Async Comparison
 
-### 1. Always Close Connections
+| Feature | Synchronous Pool | Asynchronous Pool |
+|---------|------------------|-------------------|
+| **Import** | `mariadb.ConnectionPool` | `mariadb.AsyncConnectionPool` |
+| **Initialization** | Immediate | Requires `await pool.open()` |
+| **Get Connection** | `pool.get_connection()` | `await pool.get_connection()` |
+| **Add Connection** | `pool.add_connection()` | `await pool.add_connection()` |
+| **Close Pool** | `pool.close()` | `await pool.close()` |
+| **Context Manager** | `with pool.connection()` | `async with pool.connection()` |
+| **Via connect()** | `mariadb.connect(pool_name=...)` | `await mariadb.asyncConnect(pool_name=...)` |
+| **Connection Close** | `conn.close()` | `await conn.close()` |
+| **Cursor Execute** | `cursor.execute(...)` | `await cursor.execute(...)` |
+| **Fetch Results** | `cursor.fetchall()` | `await cursor.fetchall()` |
 
-Return connections to the pool by closing them:
+## Complete Examples
+
+### Synchronous Web Application (Flask)
 
 ```python
-conn = pool.get_connection()
-try:
-    # Use connection
-    pass
-finally:
-    conn.close()  # Returns to pool
+from flask import Flask, jsonify
+import mariadb
+
+app = Flask(__name__)
+
+# Initialize pool at startup
+db_pool = mariadb.ConnectionPool(
+    "mariadb://webapp:secret@localhost/myapp?pool_name=webapp&max_size=20"
+)
+
+@app.route('/users')
+def get_users():
+    with db_pool.connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, email FROM users")
+        users = cursor.fetchall()
+        cursor.close()
+        return jsonify(users)
+
+@app.teardown_appcontext
+def close_pool(error):
+    if db_pool:
+        db_pool.close()
+
+if __name__ == '__main__':
+    app.run()
 ```
 
-### 2. Use Context Managers
+### Asynchronous Web Application (aiohttp)
 
-Prefer context managers for automatic cleanup:
+```python
+from aiohttp import web
+import mariadb
 
+async def init_app():
+    app = web.Application()
+    
+    # Initialize async pool
+    app['db_pool'] = mariadb.AsyncConnectionPool(
+        "mariadb://webapp:secret@localhost/myapp?pool_name=async_webapp&max_size=20"
+    )
+    await app['db_pool'].open()
+    
+    app.router.add_get('/users', get_users)
+    app.on_cleanup.append(cleanup)
+    return app
+
+async def get_users(request):
+    pool = request.app['db_pool']
+    async with pool.connection() as conn:
+        cursor = conn.cursor()
+        await cursor.execute("SELECT id, name, email FROM users")
+        users = await cursor.fetchall()
+        await cursor.close()
+        return web.json_response(users)
+
+async def cleanup(app):
+    await app['db_pool'].close()
+
+if __name__ == '__main__':
+    app = init_app()
+    web.run_app(app)
+```
+
+### Connection URL Examples
+
+#### Basic Connection
+```python
+# Sync
+pool = mariadb.ConnectionPool(
+    "mariadb://user:password@localhost/mydb?pool_name=basic&max_size=10"
+)
+
+# Async
+pool = mariadb.AsyncConnectionPool(
+    "mariadb://user:password@localhost/mydb?pool_name=async_basic&max_size=10"
+)
+await pool.open()
+```
+
+#### With SSL/TLS
+```python
+# Sync
+pool = mariadb.ConnectionPool(
+    "mariadb://user:pass@localhost/db?pool_name=secure&max_size=10&ssl=true&ssl_verify_cert=true"
+)
+
+# Async
+pool = mariadb.AsyncConnectionPool(
+    "mariadb://user:pass@localhost/db?pool_name=async_secure&max_size=10&ssl=true"
+)
+await pool.open()
+```
+
+#### With Custom Port
+```python
+# Sync
+pool = mariadb.ConnectionPool(
+    "mariadb://user:pass@localhost:3307/db?pool_name=custom_port&max_size=5"
+)
+
+# Async
+pool = mariadb.AsyncConnectionPool(
+    "mariadb://user:pass@localhost:3307/db?pool_name=async_custom&max_size=5"
+)
+await pool.open()
+```
+
+#### With Multiple Options
+```python
+# Sync
+pool = mariadb.ConnectionPool(
+    "mariadb://user:pass@host/db?pool_name=advanced&max_size=20&autocommit=true&charset=utf8mb4&max_idle_time=300"
+)
+
+# Async
+pool = mariadb.AsyncConnectionPool(
+    "mariadb://user:pass@host/db?pool_name=async_advanced&max_size=20&autocommit=true&charset=utf8mb4"
+)
+await pool.open()
+```
+
+### Connection Parameters Examples
+
+#### Basic Configuration
+```python
+# Sync
+pool = mariadb.ConnectionPool(
+    pool_name="basic_params",
+    host="localhost",
+    port=3306,
+    user="myuser",
+    password="mypassword",
+    database="mydb",
+    max_size=10
+)
+
+# Async
+pool = mariadb.AsyncConnectionPool(
+    pool_name="async_basic_params",
+    host="localhost",
+    port=3306,
+    user="myuser",
+    password="mypassword",
+    database="mydb",
+    max_size=10
+)
+await pool.open()
+```
+
+#### Advanced Configuration
+```python
+# Sync
+pool = mariadb.ConnectionPool(
+    pool_name="advanced_params",
+    host="db.example.com",
+    port=3306,
+    user="webapp",
+    password="secret",
+    database="production",
+    # Pool settings
+    max_size=20,
+    pool_reset_connection=True,
+    pool_validation_interval=30,
+    # Connection settings
+    autocommit=False,
+    ssl=True,
+    ssl_verify_cert=True,
+    connect_timeout=10,
+    charset="utf8mb4"
+)
+
+# Async
+pool = mariadb.AsyncConnectionPool(
+    pool_name="async_advanced_params",
+    host="db.example.com",
+    port=3306,
+    user="webapp",
+    password="secret",
+    database="production",
+    # Pool settings
+    max_size=20,
+    pool_reset_connection=True,
+    pool_validation_interval=30,
+    # Connection settings
+    autocommit=False,
+    ssl=True,
+    connect_timeout=10,
+    charset="utf8mb4"
+)
+await pool.open()
+```
+
+## Best Practices
+
+### 1. Always Use Context Managers
+
+Use context managers to ensure connections are properly returned to the pool:
+
+**Sync:**
 ```python
 with pool.connection() as conn:
     cursor = conn.cursor()
-    # Use connection
+    cursor.execute("SELECT * FROM users")
+    results = cursor.fetchall()
     cursor.close()
 # Connection automatically returned to pool
 ```
 
-### 3. Configure Pool Size Appropriately
+**Async:**
+```python
+async with pool.connection() as conn:
+    cursor = conn.cursor()
+    await cursor.execute("SELECT * FROM users")
+    results = await cursor.fetchall()
+    await cursor.close()
+# Connection automatically returned to pool
+```
+
+### 2. Configure Pool Size Appropriately
 
 Set pool size based on your application's concurrency:
 
+**Sync:**
 ```python
 # For web applications with 10-20 concurrent requests
 pool = mariadb.ConnectionPool(
-    "mariadb://user:pass@host/db?pool_size=15"
+    "mariadb://user:pass@host/db?pool_name=webapp&max_size=15"
 )
+```
+
+**Async:**
+```python
+# For async applications with 50-100 concurrent requests
+pool = mariadb.AsyncConnectionPool(
+    "mariadb://user:pass@host/db?pool_name=async_webapp&max_size=50"
+)
+await pool.open()
+```
+
+### 3. Initialize Async Pools Properly
+
+Always call `open()` on async pools:
+
+```python
+# ❌ Wrong - pool not opened
+pool = mariadb.AsyncConnectionPool(...)
+async with pool.connection() as conn:  # Will hang!
+    pass
+
+# ✅ Correct - pool opened first
+pool = mariadb.AsyncConnectionPool(...)
+await pool.open()
+async with pool.connection() as conn:
+    cursor = conn.cursor()
+    await cursor.execute("SELECT 1")
+    await cursor.close()
 ```
 
 ## License

@@ -1,38 +1,16 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
-
-"""
-Caching SHA2 Password Authentication Plugin
-
-Implementation of caching_sha2_password authentication plugin.
-Equivalent to the Java CachingSha2PasswordPlugin class.
-"""
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from __future__ import annotations
 
 import hashlib
-import os
-from typing import Optional, Any, TYPE_CHECKING
+from typing import Optional
 
-if TYPE_CHECKING:
-    from ...client.context import Context
-    from ...client.socket.stream import Stream
+from ...configuration import Configuration
+from ...host_address import HostAddress
+
+from ...client.socket.stream import AsyncStream, SyncStream
+from ...client.context import Context
 
 from ...client.socket.payload_writer import PayloadWriter
 from ..authentication_plugin import AuthenticationPlugin, Credential
@@ -49,41 +27,20 @@ except ImportError:
 class CachingSha2PasswordPlugin(AuthenticationPlugin):
     """
     Caching SHA2 password authentication plugin implementation
-    
-    Equivalent to the Java CachingSha2PasswordPlugin class.
     """
     
     TYPE = "caching_sha2_password"
     
-    def __init__(self, authentication_data: Optional[str], seed: bytes, conf: Any, host_address: Any):
-        """
-        Initialize plugin with authentication data and seed
-        
-        Args:
-            authentication_data: Password string
-            seed: Server provided seed
-            conf: Connection configuration
-            host_address: Host address
-        """
-        self.authentication_data = authentication_data
-        self.seed = seed
-        self.conf = conf
-        self.host_address = host_address
+    def __init__(self, authentication_data: Optional[str], seed: bytes, conf: Configuration, host_address: HostAddress):
+        """Initialize plugin with authentication data and seed"""
+        self.authentication_data: Optional[str] = authentication_data
+        self.seed: bytes = seed
+        self.conf: Configuration = conf
+        self.host_address: HostAddress = host_address
     
     @staticmethod
     def encrypt_password(password: Optional[str], seed: bytes) -> bytes:
-        """
-        Send an SHA-2 encrypted password
-        
-        Encryption: XOR(SHA256(password), SHA256(seed, SHA256(SHA256(password))))
-        
-        Args:
-            password: The password to encrypt
-            seed: The seed to use
-            
-        Returns:
-            Scrambled password bytes
-        """
+        """Send an SHA-2 encrypted password: XOR(SHA256(password), SHA256(seed, SHA256(SHA256(password))))"""
         if password is None:
             return b''
         
@@ -106,22 +63,8 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         result = bytes(a ^ b for a, b in zip(stage1, stage3))
         return result
     
-    def process(self, stream: Stream, context: Context) -> bytearray:
-        """
-        Process caching SHA2 password plugin authentication
-        
-        Args:
-            stream: Stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            IOError: If socket error occurs
-            OperationalError: If authentication fails
-        """
-        # Build payload
+    def _build_initial_payload(self) -> bytearray:
+        """Build initial authentication payload"""
         writer = PayloadWriter()
         
         if self.authentication_data is None:
@@ -135,96 +78,24 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
             encrypted = self.encrypt_password(self.authentication_data, truncated_seed)
             writer.write_bytes(encrypted)
         
-        # Send payload through stream (don't reset sequence)
-        stream.send_payload(writer.get_payload(), "CACHING_SHA2_PASSWORD", reset_sequence=False)
-        
-        # Read response packet
-        response: bytearray = stream.read_payload()
-        
-        # Check if server requests more authentication data
-        if len(response) > 0 and response[0] == 0x01:
-            # Server requests more authentication data
-            if len(response) > 1:
-                auth_method = response[1]
-                if auth_method == 0x03:
-                    # Fast authentication successful
-                    return response
-                elif auth_method == 0x04:
-                    # Perform full authentication
-                    return self._perform_full_authentication(stream, context)
-                else:
-                    raise OperationalError(f"Unknown authentication method: {auth_method}")
-        
-        return response
+        return writer.get_payload()
     
-    def _perform_full_authentication(self, stream: Stream, context: Context) -> bytearray:
-        """
-        Perform full authentication when fast authentication fails
-        
-        Args:
-            stream: Stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            OperationalError: If authentication fails
-        """
-        # Check if SSL is available
-        if getattr(self.conf, 'ssl', False):
-            # Send password in clear text over SSL
-            writer = PayloadWriter()
-            if self.authentication_data:
-                password_bytes = self.authentication_data.encode('utf-8')
-                writer.write_bytes(password_bytes)
-                writer.write_byte(0)  # Null terminator
-            else:
-                writer.write_byte(0)  # Null terminator
-            
-            stream.send_payload(writer.get_payload(), "CACHING_SHA2_CLEAR_PWD", reset_sequence=False)
-            
-        else:
-            # SSL not available - try RSA public key encryption
-            if HAS_CRYPTOGRAPHY:
-                return self._perform_rsa_authentication(stream, context)
-            else:
-                raise OperationalError(
-                    "Authentication plugin 'caching_sha2_password' requires SSL connection "
-                    "or cryptography library for RSA encryption when not cached"
-                )
-        
-        return stream.read_payload()
-    
-    def _perform_rsa_authentication(self, stream: Stream, context: Context) -> bytearray:
-        """
-        Perform RSA public key authentication
-        
-        Args:
-            stream: Stream for sending/reading data
-            context: Connection context
-            
-        Returns:
-            Response packet bytes
-            
-        Raises:
-            OperationalError: If RSA authentication fails
-        """
-        # Request RSA public key from server
+    def _build_cleartext_password_payload(self) -> bytearray:
+        """Build cleartext password payload for SSL connections"""
         writer = PayloadWriter()
-        writer.write_byte(0x02)  # Request public key
-        stream.send_payload(writer.get_payload(), "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
+        if self.authentication_data:
+            password_bytes = self.authentication_data.encode('utf-8')
+            writer.write_bytes(password_bytes)
+            writer.write_byte(0)  # Null terminator
+        else:
+            writer.write_byte(0)  # Null terminator
         
-        # Read public key response
-        key_response: bytearray = stream.read_payload()
-        
-        if len(key_response) == 0 or key_response[0] == 0xFF:
-            raise OperationalError("Failed to get RSA public key from server")
-        
+        return writer.get_payload()
+    
+    
+    def _encrypt_password_with_rsa(self, public_key_pem: str) -> bytearray:
+        """Encrypt password using RSA public key """
         try:
-            # Parse public key (skip first byte which is packet type)
-            public_key_pem = key_response[1:].decode('utf-8')
-            
             # Load the public key
             public_key = serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
             
@@ -252,36 +123,133 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                 )
                 writer = PayloadWriter()
                 writer.write_bytes(encrypted)
-                stream.send_payload(writer.get_payload(), "CACHING_SHA2_RSA_PWD", reset_sequence=False)
+                return writer.get_payload()
             else:
                 writer = PayloadWriter()
                 writer.write_byte(0)  # Empty password
-                stream.send_payload(writer.get_payload(), "CACHING_SHA2_RSA_PWD", reset_sequence=False)
-            
-            return stream.read_payload()
-            
+                return writer.get_payload()
+                
         except Exception as e:
             raise OperationalError(f"RSA authentication failed: {e}")
     
-    def is_mitm_proof(self) -> bool:
-        """
-        Caching SHA2 password plugin is MitM-proof
+    async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
+        """Process caching SHA2 password plugin authentication (async)"""
+        # Build and send initial payload
+        payload = self._build_initial_payload()
+        await stream.send_payload(payload, "CACHING_SHA2_PASSWORD", reset_sequence=False)
         
-        Returns:
-            True
-        """
+        # Read response packet
+        response: bytes = await stream.read_payload()
+        
+        # Check if server requests more authentication data
+        if len(response) > 0 and response[0] == 0x01:
+            # Server requests more authentication data
+            if len(response) > 1:
+                auth_method = response[1]
+                if auth_method == 0x03:
+                    # Fast authentication successful
+                    return response
+                elif auth_method == 0x04:
+                    # Perform full authentication
+                    if self.conf.ssl:
+                        # Send password in clear text over SSL
+                        payload = self._build_cleartext_password_payload()
+                        await stream.send_payload(payload, "CACHING_SHA2_CLEAR_PWD", reset_sequence=False)
+                        return await stream.read_payload()
+                    else:
+                        # SSL not available - try RSA public key encryption
+                        if not HAS_CRYPTOGRAPHY:
+                            raise OperationalError(
+                                "Authentication plugin 'caching_sha2_password' requires SSL connection "
+                                "or cryptography library for RSA encryption when not cached"
+                            )
+                        
+                        # Request RSA public key from server
+                        await stream.send_payload(bytearray([0x02]), "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
+                        
+                        # Read public key response
+                        key_response: bytes = await stream.read_payload()
+                        
+                        if len(key_response) == 0 or key_response[0] == 0xFF:
+                            raise OperationalError("Failed to get RSA public key from server")
+                        
+                        # Parse public key (skip first byte which is packet type)
+                        public_key_pem = key_response[1:].decode('utf-8')
+                        
+                        # Encrypt password using shared logic
+                        encrypted_payload = self._encrypt_password_with_rsa(public_key_pem)
+                        
+                        # Send encrypted password
+                        await stream.send_payload(encrypted_payload, "CACHING_SHA2_RSA_PWD", reset_sequence=False)
+                        
+                        return await stream.read_payload()
+                else:
+                    raise OperationalError(f"Unknown authentication method: {auth_method}")
+        
+        return response
+    
+    def processSync(self, stream: SyncStream, context: Context) -> bytearray:
+        """Process caching SHA2 password plugin authentication (sync)"""
+        # Build and send initial payload
+        payload = self._build_initial_payload()
+        stream.send_payload(payload, "CACHING_SHA2_PASSWORD", reset_sequence=False)
+        
+        # Read response packet
+        response: bytes = stream.read_payload()
+        
+        # Check if server requests more authentication data
+        if len(response) > 0 and response[0] == 0x01:
+            # Server requests more authentication data
+            if len(response) > 1:
+                auth_method = response[1]
+                if auth_method == 0x03:
+                    # Fast authentication successful
+                    return response
+                elif auth_method == 0x04:
+                    # Perform full authentication
+                    if self.conf.ssl:
+                        # Send password in clear text over SSL
+                        payload = self._build_cleartext_password_payload()
+                        stream.send_payload(payload, "CACHING_SHA2_CLEAR_PWD", reset_sequence=False)
+                        return stream.read_payload()
+                    else:
+                        # SSL not available - try RSA public key encryption
+                        if not HAS_CRYPTOGRAPHY:
+                            raise OperationalError(
+                                "Authentication plugin 'caching_sha2_password' requires SSL connection "
+                                "or cryptography library for RSA encryption when not cached"
+                            )
+                        
+                        # Request RSA public key from server
+                        stream.send_payload(bytearray([0x02]), "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
+                        
+                        # Read public key response
+                        key_response: bytes = stream.read_payload()
+                        
+                        if len(key_response) == 0 or key_response[0] == 0xFF:
+                            raise OperationalError("Failed to get RSA public key from server")
+                        
+                        # Parse public key (skip first byte which is packet type)
+                        public_key_pem = key_response[1:].decode('utf-8')
+                        
+                        # Encrypt password using shared logic
+                        encrypted_payload = self._encrypt_password_with_rsa(public_key_pem)
+                        
+                        # Send encrypted password
+                        stream.send_payload(encrypted_payload, "CACHING_SHA2_RSA_PWD", reset_sequence=False)
+                        
+                        return stream.read_payload()
+                else:
+                    raise OperationalError(f"Unknown authentication method: {auth_method}")
+        
+        return response
+    
+    def is_mitm_proof(self) -> bool:
+        """Caching SHA2 password plugin is MitM-proof"""
         return True
     
     def hash(self, credential: Credential) -> Optional[bytes]:
-        """
-        Return hash for credential (double SHA256)
-        
-        Args:
-            credential: Credential to hash
-            
-        Returns:
-            Hash bytes (SHA256(SHA256(password)))
-        """
+        """Return hash for credential"""
         password = credential.get_password()
         if password is None:
             return None

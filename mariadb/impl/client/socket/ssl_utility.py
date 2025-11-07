@@ -1,21 +1,5 @@
-#
-# Copyright (C) 2020-2021 Georg Richter and MariaDB Corporation AB
-
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Library General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
-
-# You should have received a copy of the GNU Library General Public
-# License along with this library; if not see <http://www.gnu.org/licenses>
-# or write to the Free Software Foundation, Inc.,
-# 51 Franklin St., Fifth Floor, Boston, MA 02110, USA
-#
+# SPDX-License-Identifier: LGPL-2.1-or-later
+# Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 """
 SSL Utility for MariaDB connections
@@ -24,8 +8,6 @@ Provides SSL/TLS socket creation utilities for database connections.
 """
 
 import ssl
-import socket
-from typing import Optional
 from ...configuration import Configuration
 from ....exceptions import OperationalError
 
@@ -38,43 +20,8 @@ class SSLUtility:
     """
     
     @staticmethod
-    def create_ssl_socket(raw_socket: socket.socket, configuration: Configuration, server_hostname: Optional[str] = None) -> ssl.SSLSocket:
-        """
-        Create an SSL-wrapped socket from a raw socket
-        
-        Args:
-            raw_socket: The underlying socket to wrap
-            configuration: Connection configuration with SSL settings
-            server_hostname: Server hostname for SNI
-            
-        Returns:
-            SSL-wrapped socket
-            
-        Raises:
-            OperationalError: If SSL socket creation fails
-        """
-        try:
-            # Create SSL context
-            context = SSLUtility._create_ssl_context(configuration)
-            
-            # Wrap the socket with SSL
-            ssl_socket = context.wrap_socket(
-                raw_socket,
-                server_side=False,
-                do_handshake_on_connect=False,
-                server_hostname=server_hostname
-            )
-            
-            # Perform SSL handshake
-            ssl_socket.do_handshake()
-            
-            return ssl_socket
-            
-        except Exception as e:
-            raise OperationalError(f"SSL handshake failed: {e}")
-    
-    @staticmethod
-    def _create_ssl_context(configuration: Configuration) -> ssl.SSLContext:
+    def create_ssl_context(configuration: Configuration) -> ssl.SSLContext:
+
         """
         Create SSL context based on configuration
         
@@ -87,6 +34,9 @@ class SSLUtility:
         try:
             # Create SSL context
             context = ssl.create_default_context()
+            
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.maximum_version = ssl.TLSVersion.TLSv1_3
             
             # Configure SSL context based on configuration
             if configuration.ssl_ca:

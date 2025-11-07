@@ -472,7 +472,7 @@ class TestCursor(unittest.TestCase):
 
     def test_pyformat(self):
         if is_native():
-            self.skipTest("Native doesn't support named parameters")
+            self.skipTest("Native doesn't support pyformat")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
@@ -960,7 +960,12 @@ class TestCursor(unittest.TestCase):
             cursor.execute("SELECT ?", (1,))
             row = cursor.fetchone()
             self.assertEqual(row[0], 1)
-            cursor.execute("SELECT ?, ?, ?", ('foo',))
+            
+            if is_native():
+                # would have thrown Parameter count mismatch is not passing other
+                cursor.execute("SELECT ?, ?, ?", ('foo', 'bar', 'baz'))
+            else:
+                cursor.execute("SELECT ?, ?, ?", ('foo',))
             row = cursor.fetchone()
             self.assertEqual(row[0], 'foo')
             del cursor
@@ -1824,7 +1829,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 1)
         rows= cursor.fetchall()
         self.assertEqual(rows, [(2,),(3,),(4,)])
-        cursor._seek(0)
+        cursor.scroll(0, "absolute")
         row= cursor.fetchone()
         self.assertEqual(row[0], 1)
         self.assertEqual(cursor.rowcount, 4)

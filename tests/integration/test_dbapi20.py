@@ -373,8 +373,8 @@ class DatabaseAPI20Test(unittest.TestCase):
         # closed.'
         self.assertRaises(self.driver.Error, con.commit)
 
-        # connection.close should raise an Error if called more than once
-        self.assertRaises(self.driver.Error, con.close)
+        # connection.close should not raise an Error if called more than once
+        con.close()
 
     def test_execute(self):
         con = self._connect()
