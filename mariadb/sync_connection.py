@@ -188,7 +188,7 @@ class SyncConnection(BaseConnection['SyncClient']):
         
         self._closed = False
         try:
-            self._client = SyncClient(self._configuration, self._host_address)
+            self._client = SyncClient(self._configuration)
             self._client.connect()
         except Exception as e:
             self._closed = True

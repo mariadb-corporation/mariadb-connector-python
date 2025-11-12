@@ -205,7 +205,7 @@ class AsyncConnection(BaseConnection['AsyncClient']):
         
         self._closed = False
         try:
-            self._client = AsyncClient(self._configuration, self._host_address)
+            self._client = AsyncClient(self._configuration)
             await self._client.connect()
         except Exception as e:
             self._closed = True
