@@ -2018,21 +2018,21 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cursor
 
     async def test_conpy276(self):
-        connection = await mariadb.AsyncConnection.connect(**conf())
-        cursor = connection.cursor()
 
-        await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4")
-        await connection.close()
+        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+            cursor = conn.cursor()
 
-        row= await cursor.fetchone()
-        self.assertEqual(row[0], 1)
-        rows= await cursor.fetchall()
-        self.assertEqual(rows, [(2,),(3,),(4,)])
-        await cursor.scroll(0, "absolute")
-        row= await cursor.fetchone()
-        self.assertEqual(row[0], 1)
-        self.assertEqual(cursor.rowcount, 4)
-        del cursor, connection
+            await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4")
+
+            row= await cursor.fetchone()
+            self.assertEqual(row[0], 1)
+            rows= await cursor.fetchall()
+            self.assertEqual(rows, [(2,),(3,),(4,)])
+            await cursor.scroll(0, "absolute")
+            row= await cursor.fetchone()
+            self.assertEqual(row[0], 1)
+            self.assertEqual(cursor.rowcount, 4)
+            del cursor
 
     async def test_conpy289(self):
         if is_mysql:
@@ -2056,6 +2056,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
     async def test_conpy91(self):
         if is_native():
             self.skipTest("Native only support QMARK")
+
         async with await mariadb.AsyncConnection.connect(**conf()) as connection:
             with connection.cursor() as cursor:
                 for parameter_type in (int, decimal.Decimal):

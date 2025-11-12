@@ -53,19 +53,6 @@ class AsyncConnection(BaseConnection['AsyncClient']):
         # Create async client
         self._client = AsyncClient(self._configuration)
     
-    async def __aenter__(self) -> 'AsyncConnection':
-        """Async context manager entry"""
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
-        """
-        Async context manager exit
-        
-        Automatically closes the connection.
-        """
-        await self.close()
-        return False
-
     @classmethod
     async def connect(cls, *args: Any, **kwargs: Any) -> 'AsyncConnection':
         """
@@ -160,11 +147,7 @@ class AsyncConnection(BaseConnection['AsyncClient']):
             try:
                 await self._client.close()
             except Exception as e:
-                raise self._exception_factory.create_exception(
-                    f"Failed to close connection: {e}",
-                    errno=2013,
-                    sql_state='08003'
-                )
+                pass
             finally:
                 self._closed = True
     
@@ -609,27 +592,5 @@ class AsyncConnection(BaseConnection['AsyncClient']):
     
     async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> bool:
         """Async context manager exit"""
-        if exc_type:
-            await self.rollback()
-        else:
-            await self.commit()
         await self.close()
         return False
-
-
-
-    async def show_warnings(self) -> Optional[List[tuple]]:
-        """
-        Get warnings from the last executed command
-        
-        Returns:
-            List of warning tuples (level, code, message), or None if no warnings
-        """
-        self._check_closed()
-        from .async_cursor import AsyncCursor
-        cursor = AsyncCursor(self)
-        try:
-            await cursor.execute("SHOW WARNINGS")
-            return await cursor.fetchall()
-        finally:
-            await cursor.close()
