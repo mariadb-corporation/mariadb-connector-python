@@ -374,7 +374,11 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
         cursor = conn.cursor()
         
         # Get current isolation level
-        await cursor.execute("SELECT @@transaction_isolation")
+        # Use @@tx_isolation for MariaDB < 11.1.1, @@transaction_isolation for >= 11.1.1
+        if conn.server_version >= 110101:
+            await cursor.execute("SELECT @@transaction_isolation")
+        else:
+            await cursor.execute("SELECT @@tx_isolation")
         isolation = (await cursor.fetchone())[0]
         self.assertIsInstance(isolation, str)
         
