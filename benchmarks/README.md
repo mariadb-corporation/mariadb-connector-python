@@ -1,24 +1,46 @@
-# Benchmark
+# MariaDB Python Connector Benchmarks
 
-```
-pip install mysql-connector-python pyperf
-python bench_mariadb.py -o mariadb_bench.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
-python bench_mysql.py -o mysql_bench.json --inherit-environ=TEST_USER,TEST_HOST,TEST_PORT
+Comprehensive benchmark suite comparing **mariadb** (pure Python), **mariadb_c** (C extension), and **pymysql**.
+
+## Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements-bench.txt
+
+# Set database connection (optional, defaults to localhost)
+export TEST_DB_HOST=localhost
+export TEST_DB_PORT=3306
+export TEST_DB_USER=root
+export TEST_DB_PASSWORD=yourpassword
+export TEST_DB_DATABASE=testp
+
+# Run all benchmarks
+make bench-all
+
+# Or run individually
+python run_benchmarks.py --driver mariadb --json benchmark_mariadb.json
+python run_benchmarks.py --driver mariadb_c --json benchmark_mariadb_c.json
+python run_benchmarks.py --driver pymysql --json benchmark_pymysql.json
+
+# Generate comparison report
+python run_benchmarks.py --compare
 ```
 
-Results are available to pyperf json format
+## Benchmark Tests
 
-An example of  
-```
->python -m pyperf compare_to mysql_bench.json mariadb_bench.json --table
-+----------------------------------------------------+-------------+------------------------------+
-| Benchmark                                          | mysql_bench | mariadb_bench                |
-+====================================================+=============+==============================+
-| do 1                                               | 114 us      | 45.4 us: 2.50x faster (-60%) |
-+----------------------------------------------------+-------------+------------------------------+
-| select 1                                           | 209 us      | 57.3 us: 3.65x faster (-73%) |
-+----------------------------------------------------+-------------+------------------------------+
-| select 1 mysql user                                | 1.04 ms     | 122 us: 8.52x faster (-88%)  |
-+----------------------------------------------------+-------------+------------------------------+
-| Select <10 cols of 100 chars> from_seq_1_to_100000 | 323 ms      | 35.0 ms: 9.22x faster (-89%) |
-+----------------------------------------------------+-------------+------------------------------+```
+- **DO 1** - Simple command execution overhead
+- **SELECT 1** - Simple query execution
+- **SELECT 1000 Rows** - Bulk data retrieval (text & binary protocol)
+- **SELECT 100 Columns** - Wide result set parsing
+- **DO 1000 Parameters** - Parameter binding overhead
+- **Batch INSERT** - Batch insert performance (100 rows)
+
+## Documentation
+
+See [BENCHMARKS.md](BENCHMARKS.md) for complete documentation including:
+- Detailed benchmark descriptions
+- Setup instructions
+- Usage examples
+- Performance interpretation
+- Troubleshooting guide

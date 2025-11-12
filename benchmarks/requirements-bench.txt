@@ -1,0 +1,4 @@
+# Requirements for running benchmarks
+pytest>=7.0.0
+pytest-benchmark>=4.0.0
+pymysql>=1.0.0

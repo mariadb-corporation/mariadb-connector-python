@@ -1,0 +1,25 @@
+# Benchmark results
+results_*/
+benchmark_*.json
+*.json
+
+# pytest-benchmark
+.benchmarks/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
