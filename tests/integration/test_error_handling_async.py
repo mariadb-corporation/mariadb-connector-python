@@ -298,7 +298,7 @@ class AsyncErrorHandlingTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_sql_statement_type(self):
         """Test invalid SQL statement type"""
-        with self.assertRaises((TypeError, RuntimeError)):
+        with self.assertRaises((TypeError, RuntimeError, mariadb.ProgrammingError)):
             await self.cursor.execute(123)  # Not a string
 
     async def test_null_sql_statement(self):

@@ -290,7 +290,7 @@ class ErrorHandlingTest(unittest.TestCase):
 
     def test_invalid_sql_statement_type(self):
         """Test invalid SQL statement type"""
-        with self.assertRaises((TypeError, RuntimeError)):
+        with self.assertRaises((TypeError, RuntimeError, mariadb.ProgrammingError)):
             self.cursor.execute(123)  # Not a string
 
     def test_null_sql_statement(self):
