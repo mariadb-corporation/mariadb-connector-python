@@ -161,6 +161,7 @@ class SyncStream():
         self._closed: bool = False
         self.sequence: MutableInt = MutableInt(-1)
         self.connection_id: int = connection_id
+        self.header: bytearray = bytearray(4)
     
     def read_payload(self) -> bytearray:
         """
@@ -176,20 +177,21 @@ class SyncStream():
         
         while True:
             # Read packet header (4 bytes: 3 bytes length + 1 byte sequence)
-            header = self._recv_exact(4)
+            self._recv_exact(self.header)
             
             # Parse header
-            payload_length = struct.unpack('<I', header[:3] + b'\x00')[0]
-            self.sequence.set(header[3])
+            payload_length = struct.unpack('<I', self.header[:3] + b'\x00')[0]
+            self.sequence.set(self.header[3])
             
             # Read payload chunk
-            payload = self._recv_exact(payload_length)
+            payload = bytearray(payload_length)
+            self._recv_exact(payload)
             
             # Log individual packet with header if debug enabled
             if logger.isEnabledFor(logging.DEBUG):
                 conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
                 # Combine header and payload for logging
-                full_packet = header + payload
+                full_packet = self.header + payload
                 logger.debug(hex_dump(full_packet, f"RECV sync: {conn_id_str}"))
             
             result.extend(payload)
@@ -275,23 +277,20 @@ class SyncStream():
         """Reset packet sequence number"""
         self.sequence.set(-1)
     
-    def _recv_exact(self, n: int) -> bytes:
+    def _recv_exact(self, data: bytearray) -> None:
         """
-        Receive exactly n bytes from socket
+        Receive exactly n bytes from socket into the provided buffer
         
         Args:
-            n: Number of bytes to receive
-            
-        Returns:
-            Received bytes
+            data: Buffer to receive data into
             
         Raises:
             IOError: If connection is closed or error occurs
         """
-        data = bytearray()
-        while len(data) < n:
-            chunk = self.socket.recv(n - len(data))
-            if not chunk:
+        view = memoryview(data)
+        received = 0
+        while received < len(data):
+            n = self.socket.recv_into(view[received:])
+            if n == 0:
                 raise IOError("Connection closed while reading")
-            data.extend(chunk)
-        return bytes(data)
+            received += n
