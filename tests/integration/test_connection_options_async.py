@@ -375,7 +375,7 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
         
         # Get current isolation level
         # Use @@tx_isolation for MariaDB < 11.1.1, @@transaction_isolation for >= 11.1.1
-        if not conn.server_mariadb or conn.server_version >= 110101:
+        if not conn.server_mariadb or (conn.server_mariadb and conn.server_version >= 110101):
             await cursor.execute("SELECT @@transaction_isolation")
         else:
             await cursor.execute("SELECT @@tx_isolation")
