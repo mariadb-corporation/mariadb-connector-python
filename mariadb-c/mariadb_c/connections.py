@@ -501,7 +501,7 @@ class Connection(CConnection):
         """
         self._check_closed()
         # MARIADB_CONNECTION_SREVER_TYPE returns 1 for MariaDB, 0 for MySQL
-        return self._mariadb_get_info(INFO.SERVER_TYPE) == 1
+        return self._mariadb_get_info(INFO.SERVER_TYPE) == "MariaDB"
 
     @property
     def unix_socket(self):

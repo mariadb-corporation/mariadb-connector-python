@@ -806,6 +806,7 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval)
       case PYMARIADB_CONNECTION_SSL_CIPHER:
       case PYMARIADB_CONNECTION_TLS_VERSION:
       case PYMARIADB_CONNECTION_SERVER_VERSION:
+      case PYMARIADB_CONNECTION_SERVER_TYPE:
         return PyUnicode_FromString(val.str ? val.str : "");
         break;
 
@@ -815,7 +816,6 @@ MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval)
       case PYMARIADB_CONNECTION_ASYNC_TIMEOUT_MS:
       case PYMARIADB_CONNECTION_PORT:
       case PYMARIADB_CONNECTION_PROTOCOL_VERSION_ID:
-      case PYMARIADB_CONNECTION_SERVER_TYPE:
       case PYMARIADB_CONNECTION_SERVER_VERSION_ID:
       case PYMARIADB_CONNECTION_TLS_VERSION_ID:
       case PYMARIADB_MAX_ALLOWED_PACKET:
