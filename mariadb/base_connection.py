@@ -468,6 +468,18 @@ class BaseConnection(ABC, Generic[TClient]):
         return 0 if self._client.configuration.socket_path else self._client.get_host_address().port
 
     @property
+    def server_mariadb(self) -> bool:
+        """
+        Get server type
+        
+        Returns:
+            true if server is MariaDB, false otherwise
+        """
+        self._check_closed()
+        return self._client.context.is_mariadb_server()
+
+
+    @property
     def server_version(self) -> int:
         """
         Get server version as integer
@@ -479,6 +491,7 @@ class BaseConnection(ABC, Generic[TClient]):
         self._check_closed()
         version = self._client.context.version
         return version.major * 10000 + version.minor * 100 + version.patch
+
 
     @property
     def server_version_info(self) -> tuple:

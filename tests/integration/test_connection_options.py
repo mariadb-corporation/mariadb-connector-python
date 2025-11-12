@@ -357,7 +357,7 @@ class ConnectionOptionsTest(unittest.TestCase):
         
         # Get current isolation level
         # Use @@tx_isolation for MariaDB < 11.1.1, @@transaction_isolation for >= 11.1.1
-        if conn.server_version >= 110101:
+        if not conn.server_mariadb or conn.server_version >= 110101:
             cursor.execute("SELECT @@transaction_isolation")
         else:
             cursor.execute("SELECT @@tx_isolation")

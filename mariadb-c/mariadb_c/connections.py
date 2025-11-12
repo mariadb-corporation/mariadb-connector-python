@@ -492,6 +492,18 @@ class Connection(CConnection):
         return self._mariadb_get_info(INFO.PORT)
 
     @property
+    def server_mariadb(self) -> bool:
+        """
+        Check if server is MariaDB
+        
+        Returns:
+            True if server is MariaDB, False if MySQL
+        """
+        self._check_closed()
+        # MARIADB_CONNECTION_SREVER_TYPE returns 1 for MariaDB, 0 for MySQL
+        return self._mariadb_get_info(INFO.SERVER_TYPE) == 1
+
+    @property
     def unix_socket(self):
         """Unix socket name."""
 
