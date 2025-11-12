@@ -105,6 +105,11 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             
             # Parse response
             parser = PayloadParser(response)
+            
+            if parser.get_byte() == 0x01:
+                # skip authentication data header
+                parser.read_byte()
+
             first_byte = parser.read_byte()
             iterations_exp = parser.read_byte()
             salt = parser.read_remaining()
