@@ -416,20 +416,66 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         if x < (10, 10, 0) or is_mysql():
             self.skipTest("Skip (MySQL and MariaDB < 10.10)")
         cursor = self.connection.cursor()
-        await cursor.execute("CREATE TEMPORARY TABLE t1 (a json, b uuid, c inet4, d inet6,"\
-                       "e point)")
-        await cursor.execute("SELECT a,b,c,d,e FROM t1")
-        metadata= cursor.metadata
+        
+        # Test all extended field types including all geometry types
+        await cursor.execute("CREATE TEMPORARY TABLE t1 ("
+                       "a json, "
+                       "b uuid, "
+                       "c inet4, "
+                       "d inet6, "
+                       "e point, "
+                       "f multipoint, "
+                       "g linestring, "
+                       "h multilinestring, "
+                       "i polygon, "
+                       "j multipolygon, "
+                       "k geometrycollection)")
+        await cursor.execute("SELECT a,b,c,d,e,f,g,h,i,j,k FROM t1")
+        metadata = cursor.metadata
+        
+        # JSON
         self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
         self.assertEqual(metadata["type"][0], FIELD_TYPE.BLOB)
+        
+        # UUID
         self.assertEqual(metadata["ext_type_or_format"][1], EXT_FIELD_TYPE.UUID)
         self.assertEqual(metadata["type"][1], FIELD_TYPE.STRING)
+        
+        # INET4
         self.assertEqual(metadata["ext_type_or_format"][2], EXT_FIELD_TYPE.INET4)
         self.assertEqual(metadata["type"][2], FIELD_TYPE.STRING)
+        
+        # INET6
         self.assertEqual(metadata["ext_type_or_format"][3], EXT_FIELD_TYPE.INET6)
         self.assertEqual(metadata["type"][3], FIELD_TYPE.STRING)
+        
+        # POINT
         self.assertEqual(metadata["ext_type_or_format"][4], EXT_FIELD_TYPE.POINT)
         self.assertEqual(metadata["type"][4], FIELD_TYPE.GEOMETRY)
+        
+        # MULTIPOINT
+        self.assertEqual(metadata["ext_type_or_format"][5], EXT_FIELD_TYPE.MULTIPOINT)
+        self.assertEqual(metadata["type"][5], FIELD_TYPE.GEOMETRY)
+        
+        # LINESTRING
+        self.assertEqual(metadata["ext_type_or_format"][6], EXT_FIELD_TYPE.LINESTRING)
+        self.assertEqual(metadata["type"][6], FIELD_TYPE.GEOMETRY)
+        
+        # MULTILINESTRING
+        self.assertEqual(metadata["ext_type_or_format"][7], EXT_FIELD_TYPE.MULTILINESTRING)
+        self.assertEqual(metadata["type"][7], FIELD_TYPE.GEOMETRY)
+        
+        # POLYGON
+        self.assertEqual(metadata["ext_type_or_format"][8], EXT_FIELD_TYPE.POLYGON)
+        self.assertEqual(metadata["type"][8], FIELD_TYPE.GEOMETRY)
+        
+        # MULTIPOLYGON
+        self.assertEqual(metadata["ext_type_or_format"][9], EXT_FIELD_TYPE.MULTIPOLYGON)
+        self.assertEqual(metadata["type"][9], FIELD_TYPE.GEOMETRY)
+        
+        # GEOMETRYCOLLECTION
+        self.assertEqual(metadata["ext_type_or_format"][10], EXT_FIELD_TYPE.GEOMETRYCOLLECTION)
+        self.assertEqual(metadata["type"][10], FIELD_TYPE.GEOMETRY)
 
         await cursor.close()
 
@@ -2048,6 +2094,44 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                                 [[value, _]] = await cursor.fetchall()
                                 self.assertEqual(value, 1)
 
+    async def test_fetchone_states(self):
+        """Test fetchone behavior in different cursor states"""
+        cursor = self.connection.cursor()
+        
+        with self.assertRaises((mariadb.ProgrammingError, RuntimeError)):
+            await cursor.fetchone()
+        
+        # Test 2: fetchone after closing cursor should raise an error
+        await cursor.execute("SELECT 1")
+        await cursor.fetchone()  # Consume the result
+        await cursor.close()
+        
+        with self.assertRaises((mariadb.ProgrammingError, RuntimeError)):
+            await cursor.fetchone()
+        
+        # Test 3: fetchone after closing connection should raise an error
+        cursor2 = self.connection.cursor()
+        await cursor2.execute("SELECT 1")
+        await cursor2.fetchone()  # Consume the result
+        
+        # Create a new connection to close
+        conn = await mariadb.AsyncConnection.connect(**conf())
+        cursor3 = conn.cursor()
+        await cursor3.execute("SELECT 1")
+        await cursor3.fetchone()  # Consume the result
+        
+        await cursor3.close()
+        
+        cursor4 = conn.cursor()
+        await cursor4.execute("SELECT 1")
+        cursor5 = conn.cursor(buffered=False)
+        await cursor5.execute("SELECT 1")
+
+        await conn.close()
+
+        await cursor4.fetchone()
+        with self.assertRaises((mariadb.ProgrammingError, RuntimeError)):
+            await cursor5.fetchone()
 
 if __name__ == '__main__':
     unittest.main()

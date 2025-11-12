@@ -84,31 +84,26 @@ class ColumnDefinitionPacket:
         ext_type_format = None
         
         # Check if we have the length field (0x0C) or extended metadata
-        if context.hasExtendedMetadata() and parser.has_remaining():
-            next_byte = parser.packet[parser.pos]
-            if next_byte != 0x0C and next_byte != 0:
+        if context.hasExtendedMetadata():
                 # Has extended info - read length-encoded buffer
-                ext_length = parser.read_length_encoded_int()
-                ext_end = parser.pos + ext_length
+            ext_length = parser.read_length_encoded_int()
+            ext_end = parser.pos + ext_length
+            
+            while parser.pos < ext_end and parser.has_remaining():
+                ext_type = parser.read_byte()
                 
-                while parser.pos < ext_end and parser.has_remaining():
-                    ext_type = parser.read_byte()
-                    
-                    if ext_type == 0:
-                        # Extended type name
-                        ext_type_name = parser.read_length_encoded_string()
-                    elif ext_type == 1:
-                        # Extended type format
-                        ext_type_format = parser.read_length_encoded_string()
-                    else:
-                        # Skip unknown extended data
-                        skip_length = parser.read_length_encoded_int()
-                        parser.skip(skip_length)
-            elif next_byte == 0:
-                # Skip the 0 byte
-                parser.skip(1)
+                if ext_type == 0:
+                    # Extended type name
+                    ext_type_name = parser.read_length_encoded_string()
+                elif ext_type == 1:
+                    # Extended type format
+                    ext_type_format = parser.read_length_encoded_string()
+                else:
+                    # Skip unknown extended data
+                    skip_length = parser.read_length_encoded_int()
+                    parser.skip(skip_length)
         
-        # Skip length field (always 0x0C = 12)
+        # Skip length field (always 0x0C = 12 for fixed fields)
         parser.skip(1)
         
         # Read fixed-length fields (10 bytes total)

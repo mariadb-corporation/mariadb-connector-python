@@ -65,7 +65,6 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
             self.arraysize = 1
             self._rowcount = -1
             self._affected_rows = -1
-            self.description = None
             self.lastrowid = None
             self._completions = []
             self._completion_index = 0
@@ -188,7 +187,6 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
             raise ProgrammingError("No data provided")
         
         # Reset result state
-        self.description = None
         self._result = None
         total_affected = 0
         lastrowid = None
@@ -288,8 +286,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
         if self.connection._closed and (self._result is None or self._result.streaming()):
             raise ProgrammingError("Cursor is closed")
         
-        # DB-API 2.0: Raise error if no result set (description is None)
-        if self.description is None:
+        # DB-API 2.0: Raise error if no result set
+        if self._result is None:
             raise ProgrammingError("No result set to fetch from")
         
         # Delegate to Result object
@@ -311,8 +309,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
         if self.connection._closed and (self._result is None or self._result.streaming()):
             raise ProgrammingError("Cursor is closed")
         
-        # DB-API 2.0: Raise error if no result set (description is None)
-        if self.description is None:
+        # DB-API 2.0: Raise error if no result set
+        if self._result is None:
             raise ProgrammingError("No result set to fetch from")
         
         if size is None:
@@ -333,8 +331,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
         if self.connection._closed and (self._result is None or self._result.streaming()):
             raise ProgrammingError("Cursor is closed")
         
-        # DB-API 2.0: Raise error if no result set (description is None)
-        if self.description is None:
+        # DB-API 2.0: Raise error if no result set
+        if self._result is None:
             raise ProgrammingError("No result set to fetch from")
         
         # Delegate to Result object

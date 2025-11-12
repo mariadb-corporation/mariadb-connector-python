@@ -62,7 +62,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self.arraysize: int = 1
         self._affected_rows: int = -1
         self._rowcount: int = -1
-        self.description: Optional[List[Any]] = None
         self.lastrowid: Optional[int] = None
         self._completions: List[Completion] = []
         self._completion_index: int = 0
@@ -92,6 +91,13 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     def rowcount(self) -> int:
         """Get the number of rows (read-only property)"""
         return self._rowcount
+    
+    @property
+    def description(self) -> Optional[tuple]:
+        """Get cursor description (computed on-demand from result set columns)"""
+        if not self._result or not hasattr(self._result, 'columns'):
+            return None
+        return self._build_description(self._result.columns)
     
     def _get_config(self):
         """Get the effective configuration (cursor-specific or connection default)"""
@@ -266,23 +272,13 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._completions = completions
         self._completion_index = 0
         
-        if not completions:
-            self._rowcount = 0
-            self._affected_rows = 0
-            self.description = None
-            self._result = None
-            return
-        
         # Process the first completion
         self._process_current_completion()
     
     def _process_current_completion(self) -> None:
         """
         Process the current completion (at _completion_index)
-        """
-        if (self._completion_index >= len(self._completions)):
-            return
-            
+        """           
         completion = self._completions[self._completion_index]
         # Check if it's a result set or update count
         if completion.has_result_set():
@@ -297,7 +293,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             self._process_rows_set_completion(completion.result_set)
         else:
             # It's an update count (INSERT/UPDATE/DELETE)
-            self.description = None
             self._affected_rows = completion.affected_rows
             self._rowcount = completion.affected_rows
             self._result = None
@@ -311,53 +306,13 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             result_set: Result set completion object
         """
         self._result = result_set
-        columns = result_set.columns
-        
-        # Extract column information for description
-        description = []
-        
-        for col in columns:
-            # Determine column type (override for JSON)
-            col_type = JSON if col.ext_type_format == 'json' else col.column_type
-            
-            # Add NUM_FLAG for numeric types
-            col_flags = col.flags
-            if (col_type <= INT24 and (col_type != TIMESTAMP or col.column_length in (14, 8)) or 
-                col_type in (YEAR, NEWDECIMAL, DECIMAL)):
-                col_flags |= NUM_FLAG
-            
-            # Calculate display_length and packed_len
-            max_char_len = self._get_charset_max_length(col.character_set)
-            if max_char_len and max_char_len > 1:
-                packed_len = col.column_length
-                display_length = col.column_length // max_char_len
-            else:
-                packed_len = -1
-                display_length = col.column_length
-            
-            # Handle decimal fields special case
-            if col.decimals and col.decimals < 31:
-                precision = col.column_length
-                decimals = col.decimals
-                display_length = precision + 1
-            else:
-                precision = 0
-                decimals = col.decimals
-            
-            description.append((
-                col.name, col_type, display_length, packed_len,
-                precision, decimals, not (col_flags & 1), col_flags,
-                col.table, col.org_name, col.org_table
-            ))
-        
-        self.description = tuple(description) if description else None
     
     def _process_executemany_completions(self, completions: List[Any]) -> None:
         """
-        Process completions from executemany - aggregate result sets with compatible metadata
+        Process completions from executemany - aggregate all result sets.
+        Since executemany runs the same query multiple times, all completions have identical metadata.
         """
         if not completions:
-            self.description = None
             self._result = None
             return
         
@@ -365,67 +320,34 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         result_set_completions = [c for c in completions if c.has_result_set()]
         
         if not result_set_completions:
+            # No result sets - just update counts (e.g., INSERT/UPDATE/DELETE)
             first_completion = completions[0]
             affected = getattr(first_completion, 'affected_rows', 0)
             self._affected_rows = affected
             self._rowcount = affected
-            self.description = None
             self._result = None
             return
         
-        # Check if all result sets have compatible metadata
+        # All completions have identical metadata - use the first one
         first_rs = result_set_completions[0].get_result_set()
         first_columns = first_rs.columns
-    
-        compatible_completions = []
+        
+        # Aggregate all rows from all result sets
+        aggregated_rows = []
         for completion in result_set_completions:
             rs = completion.get_result_set()
-            columns = rs.columns if hasattr(rs, 'columns') else rs.get('columns', [])
-            if self._are_columns_compatible(first_columns, columns):
-                compatible_completions.append(completion)
+            rows = rs.rows if hasattr(rs, 'rows') else rs.get('rows', [])
+            aggregated_rows.extend(rows)
         
-        if compatible_completions:
-            aggregated_rows = []
-            for completion in compatible_completions:
-                rs = completion.get_result_set()
-                rows = rs.rows if hasattr(rs, 'rows') else rs.get('rows', [])
-                aggregated_rows.extend(rows)
-            
-            self.description = self._build_description(first_columns)
-            self._result = self._create_complete_result(
-                columns=first_columns,
-                column_count=len(first_columns),
-                rows=aggregated_rows,
-                is_binary=False
-            )
-            self._rowcount = len(aggregated_rows)
-            self._affected_rows = sum(c.affected_rows for c in result_set_completions if hasattr(c, 'affected_rows'))
-        else:
-            first_rs = result_set_completions[0].get_result_set()
-            first_columns = first_rs.columns if hasattr(first_rs, 'columns') else first_rs.get('columns', [])
-            first_rows = first_rs.rows if hasattr(first_rs, 'rows') else first_rs.get('rows', [])
-            
-            self.description = self._build_description(first_columns)
-            self._result = self._create_complete_result(
-                columns=first_columns,
-                column_count=len(first_columns),
-                rows=first_rows,
-                is_binary=False
-            )
-            self._rowcount = len(first_rows)
-            self._affected_rows = first_rs.affected_rows if hasattr(first_rs, 'affected_rows') else 0
-    
-    def _are_columns_compatible(self, columns1: List[ColumnDefinitionPacket], columns2: List[ColumnDefinitionPacket]) -> bool:
-        """Check if two column definitions are compatible for aggregation"""
-        if len(columns1) != len(columns2):
-            return False
-        
-        for col1, col2 in zip(columns1, columns2):
-            if (col1.name != col2.name or 
-                col1.column_type != col2.column_type):
-                return False
-        
-        return True
+        # Build result from aggregated data (description will be computed on-demand)
+        self._result = self._create_complete_result(
+            columns=first_columns,
+            column_count=len(first_columns),
+            rows=aggregated_rows,
+            is_binary=False
+        )
+        self._rowcount = len(aggregated_rows)
+        self._affected_rows = sum(c.affected_rows for c in result_set_completions if hasattr(c, 'affected_rows'))
     
     def _build_description(self, columns: List[ColumnDefinitionPacket]) -> Optional[tuple]:
         """Build cursor description tuple from column definitions"""
@@ -471,8 +393,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     
     def _create_named_tuple_class(self, columns: List[ColumnDefinitionPacket]) -> type:
         """Create a namedtuple class from column definitions"""
-        if not columns:
-            return namedtuple('Row', [])
         
         field_names = []
         for column in columns:
@@ -490,17 +410,11 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     
     def _convert_rows_to_named_tuples(self, rows: List[tuple], columns: List[ColumnDefinitionPacket]) -> List[Any]:
         """Convert regular tuples to named tuples"""
-        if not rows or not columns:
-            return rows
-        
         RowClass = self._create_named_tuple_class(columns)
         return [RowClass(*row) for row in rows]
     
     def _convert_rows_to_dictionaries(self, rows: List[tuple], columns: List[ColumnDefinitionPacket]) -> List[Dict]:
         """Convert regular tuples to dictionaries"""
-        if not rows or not columns:
-            return rows
-        
         field_names = []
         for column in columns:
             name = column.name or column.org_name
@@ -512,9 +426,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     
     def _apply_row_formatting(self, rows: List[Any]) -> List[Any]:
         """Apply row formatting (named_tuple or dictionary) based on configuration"""
-        if not rows:
-            return rows
-        
         config = self._get_config()
         columns = self._result.columns if self._result else []
         
@@ -540,14 +451,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         """Process completions from callproc execution"""
         self._completions = completions
         self._completion_index = 0
-        
-        if not completions:
-            self.description = None
-            self._result = None
-            self._rowcount = 0
-            self._affected_rows = 0
-            return
-        
         self._process_current_completion()
     
     @property
@@ -555,17 +458,14 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         """Get metadata information for result set columns"""
         self._check_closed()
         
-        if not self.description:
-            return None
-        
-        if not hasattr(self, '_completions') or not self._completions:
+        if not self._completions:
             return None
         
         completion = self._completions[self._completion_index]
-        if not hasattr(completion, 'result_set') or not completion.result_set:
+        if not completion.has_result_set():
             return None
         
-        result_set = completion.result_set
+        result_set = completion.get_result_set()
         columns: List[ColumnDefinitionPacket] = result_set.columns if hasattr(result_set, 'columns') else []
         
         if not columns:

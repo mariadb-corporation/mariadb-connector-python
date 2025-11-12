@@ -155,6 +155,10 @@ exclude_lines = [
     "raise AssertionError",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
+    # Exclude abstract methods
+    "@abstractmethod",
+    "@abc.abstractmethod",
+    "\\.\\.\\.",  # Ellipsis in abstract methods
 ]
 
 [tool.ruff]

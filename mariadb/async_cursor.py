@@ -61,7 +61,6 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
             self.arraysize = 1
             self._rowcount = -1
             self._affected_rows = -1
-            self.description = None
             self.lastrowid = None
             self._completions = []
             self._completion_index = 0
@@ -213,7 +212,6 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
             return
         
         # Reset result state
-        self.description = None
         self._result = None
         total_affected = 0
         lastrowid = None
@@ -315,14 +313,15 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
             >>> print(row)  # (1, 'Alice')
         """
         """Fetch the next row of a query result set"""
-        # Allow fetching from buffered results even if connection is closed
         if self._closed:
             raise ProgrammingError("Cursor is closed")
+
+        # Allow fetching from buffered results even if connection is closed
         if self.connection._closed and (self._result is None or self._result.streaming()):
-            raise ProgrammingError("Cursor is closed")
+            raise ProgrammingError("Connection is closed")
         
-        # DB-API 2.0: Raise error if no result set (description is None)
-        if self.description is None:
+        # DB-API 2.0: Raise error if no result set
+        if self._result is None:
             raise ProgrammingError("No result set to fetch from")
         
         # Delegate to Result object
@@ -354,11 +353,12 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
             >>> rows = await cursor.fetchmany(10)  # Fetch 10 rows
         """
         """Fetch the next set of rows of a query result"""
-        # Allow fetching from buffered results even if connection is closed
         if self._closed:
             raise ProgrammingError("Cursor is closed")
+
+        # Allow fetching from buffered results even if connection is closed
         if self.connection._closed and (self._result is None or self._result.streaming()):
-            raise ProgrammingError("Cursor is closed")
+            raise ProgrammingError("Connection is closed")
         
         # DB-API 2.0: Raise error if no result set (description is None)
         if self.description is None:
@@ -392,12 +392,13 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
             >>> all_rows = await cursor.fetchall()
         """
         """Fetch all remaining rows of a query result"""
-        # Allow fetching from buffered results even if connection is closed
         if self._closed:
             raise ProgrammingError("Cursor is closed")
+
+        # Allow fetching from buffered results even if connection is closed
         if self.connection._closed and (self._result is None or self._result.streaming()):
-            raise ProgrammingError("Cursor is closed")
-        
+            raise ProgrammingError("Connection is closed")
+
         # DB-API 2.0: Raise error if no result set (description is None)
         if self.description is None:
             raise ProgrammingError("No result set to fetch from")
