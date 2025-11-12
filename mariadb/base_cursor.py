@@ -114,8 +114,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     @property
     def warnings(self) -> int:
         """Get the number of warnings from the last executed statement"""
-        if (hasattr(self, '_completions') and self._completions and 
-            self._completion_index < len(self._completions)):
+        if self._completion_index < len(self._completions):
             completion = self._completions[self._completion_index]
             return getattr(completion, 'warning_count', 0)
         return 0
@@ -164,37 +163,37 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     @abstractmethod
     def close(self):
         """Close the cursor"""
-        pass
+        ...
 
     @abstractmethod
     def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None):
         """Execute a database query or command"""
-        pass
+        ...
 
     @abstractmethod
     def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None):
         """Execute a statement multiple times"""
-        pass
+        ...
 
     @abstractmethod
     def fetchone(self) -> Optional[Any]:
         """Fetch the next row"""
-        pass
+        ...
 
     @abstractmethod
     def fetchmany(self, size: Optional[int] = None) -> List[Any]:
         """Fetch the next set of rows"""
-        pass
+        ...
 
     @abstractmethod
     def fetchall(self) -> List[Any]:
         """Fetch all remaining rows"""
-        pass
+        ...
 
     @abstractmethod
     def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:
         """Call a stored procedure"""
-        pass
+        ...
 
     def nextset(self) -> Optional[bool]:
         """
@@ -225,76 +224,14 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     @abstractmethod
     def __iter__(self):
         """Return iterator for cursor"""
-        pass
+        ...
 
     @abstractmethod
     def __next__(self) -> Any:
         """Return next row"""
-        pass
+        ...
     
     # Common helper methods (non-async, pure data transformation)
-    
-    def _escape_parameter(self, param: Any) -> str:
-        """
-        Escape parameter value based on server status flags and parameter type.
-        
-        Args:
-            param: Parameter value to escape
-            
-        Returns:
-            str: Properly escaped parameter string
-        """
-        if param is None:
-            return 'NULL'
-        
-        # Check server status for escaping mode
-        server_status = self.connection._client.context.server_status
-        no_backslash_escapes = bool(server_status & NO_BACKSLASH_ESCAPES)
-        
-        # Handle different parameter types using match (Python 3.10+)
-        match param:
-            case str():
-                return StringEscaper.escape_string_with_quotes(param, no_backslash_escapes)
-            case bytes():
-                return self._escape_bytes(param, no_backslash_escapes)
-            case bool():
-                # Handle boolean before int/float since bool is a subclass of int in Python
-                return '1' if param else '0'
-            case int() | float():
-                return str(param)
-            case datetime.datetime():
-                # DATETIME: 'YYYY-MM-DD HH:MM:SS.ffffff'
-                if param.microsecond:
-                    return f"'{param.strftime('%Y-%m-%d %H:%M:%S')}.{param.microsecond:06d}'"
-                else:
-                    return f"'{param.strftime('%Y-%m-%d %H:%M:%S')}'"
-            case datetime.date():
-                # DATE: 'YYYY-MM-DD'
-                return f"'{param.strftime('%Y-%m-%d')}'"
-            case datetime.time():
-                # TIME: 'HH:MM:SS.ffffff'
-                if param.microsecond:
-                    return f"'{param.strftime('%H:%M:%S')}.{param.microsecond:06d}'"
-                else:
-                    return f"'{param.strftime('%H:%M:%S')}'"
-            case datetime.timedelta():
-                # Convert timedelta to TIME format (can be negative)
-                total_seconds = int(param.total_seconds())
-                hours, remainder = divmod(abs(total_seconds), 3600)
-                minutes, seconds = divmod(remainder, 60)
-                microseconds = param.microseconds
-                
-                sign = '-' if total_seconds < 0 else ''
-                if microseconds:
-                    return f"'{sign}{hours:02d}:{minutes:02d}:{seconds:02d}.{microseconds:06d}'"
-                else:
-                    return f"'{sign}{hours:02d}:{minutes:02d}:{seconds:02d}'"
-            case decimal.Decimal():
-                # DECIMAL/NUMERIC: no quotes needed, just string representation
-                return str(param)
-            case _:
-                # For other types, convert to string and escape
-                return "'" + StringEscaper.escape_string_with_quotes(str(param), no_backslash_escapes) + "'"
     
     def _escape_bytes(self, value: bytes, no_backslash_escapes: bool) -> str:
         """
@@ -438,11 +375,8 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         # Check if all result sets have compatible metadata
         first_rs = result_set_completions[0].get_result_set()
-        if hasattr(first_rs, 'columns'):
-            first_columns = first_rs.columns
-        else:
-            first_columns = first_rs.get('columns', [])
-        
+        first_columns = first_rs.columns
+    
         compatible_completions = []
         for completion in result_set_completions:
             rs = completion.get_result_set()

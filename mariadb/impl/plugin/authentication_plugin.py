@@ -41,12 +41,12 @@ class AuthenticationPlugin(ABC):
     @abstractmethod
     async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
         """Process plugin authentication"""
-        pass
+        ...
 
     @abstractmethod
     def processSync(self, stream: SyncStream, context: Context) -> bytearray:
         """Process plugin authentication"""
-        pass
+        ...
     
     
     def is_mitm_proof(self) -> bool:

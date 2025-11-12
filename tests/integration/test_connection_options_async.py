@@ -139,6 +139,11 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
         """Test warnings property"""
         config = get_test_config()
         conn = await mariadb.AsyncConnection.connect(**config)
+
+        warnings = conn.warnings
+        self.assertIsInstance(warnings, int)
+        self.assertGreaterEqual(warnings, 0)
+
         cursor = conn.cursor()
         
         # Generate a warning

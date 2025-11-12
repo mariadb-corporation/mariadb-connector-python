@@ -22,10 +22,6 @@ class ResetConnectionPacket(ClientMessage):
     """
     
     COM_RESET_CONNECTION = 0x1F
-    
-    def __init__(self):
-        """Initialize COM_RESET_CONNECTION packet"""
-        pass
         
     def encode(self, context: Context) -> bytearray:
         """Encode COM_RESET_CONNECTION packet"""

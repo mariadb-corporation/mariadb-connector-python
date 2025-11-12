@@ -21,9 +21,6 @@ class QuitPacket(ClientMessage):
     
     COM_QUIT = 0x01
     
-    def __init__(self):
-        """Initialize COM_QUIT packet"""
-        pass
         
     def encode(self, context: Context) -> bytearray:
         """Encode COM_QUIT packet"""

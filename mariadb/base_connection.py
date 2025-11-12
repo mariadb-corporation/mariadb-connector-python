@@ -130,7 +130,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Returns:
             Cursor object
         """
-        pass
+        ...
 
     @abstractmethod
     def close(self):
@@ -139,7 +139,7 @@ class BaseConnection(ABC, Generic[TClient]):
         
         After calling this method, the connection object should not be used anymore.
         """
-        pass
+        ...
 
     @abstractmethod
     def ping(self):
@@ -151,7 +151,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Raises:
             OperationalError: If connection is not alive
         """
-        pass
+        ...
 
     @abstractmethod
     def reconnect(self):
@@ -160,7 +160,7 @@ class BaseConnection(ABC, Generic[TClient]):
         
         Closes the current connection and establishes a new one with the same parameters.
         """
-        pass
+        ...
 
     @abstractmethod
     def reset(self):
@@ -169,7 +169,7 @@ class BaseConnection(ABC, Generic[TClient]):
         
         Clears session variables, temporary tables, and prepared statements.
         """
-        pass
+        ...
 
     @abstractmethod
     def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None):
@@ -184,7 +184,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Raises:
             OperationalError: If change user fails
         """
-        pass
+        ...
 
     def select_db(self, database: str) -> None:
         """
@@ -208,7 +208,7 @@ class BaseConnection(ABC, Generic[TClient]):
         
         Makes all changes made since the last commit/rollback permanent.
         """
-        pass
+        ...
 
     @abstractmethod
     def rollback(self):
@@ -217,7 +217,7 @@ class BaseConnection(ABC, Generic[TClient]):
         
         Discards all changes made since the last commit/rollback.
         """
-        pass
+        ...
 
     @abstractmethod
     def begin(self):
@@ -226,7 +226,7 @@ class BaseConnection(ABC, Generic[TClient]):
         
         Note: Most operations start a transaction implicitly if autocommit is off.
         """
-        pass
+        ...
 
     # =========================================================================
     # TPC/XA Transaction Methods (Abstract - for distributed transactions)
@@ -262,7 +262,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Raises:
             ProgrammingError: If called within an active transaction
         """
-        pass
+        ...
     
     @abstractmethod
     def tpc_prepare(self) -> None:
@@ -275,7 +275,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Raises:
             ProgrammingError: If called outside a TPC transaction
         """
-        pass
+        ...
 
     @abstractmethod
     def tpc_commit(self, xid: Optional[Xid] = None) -> None:
@@ -296,7 +296,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Raises:
             ProgrammingError: If transaction state is invalid
         """
-        pass
+        ...
     
     @abstractmethod
     def tpc_rollback(self, xid: Optional[Xid] = None) -> None:
@@ -309,7 +309,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Raises:
             ProgrammingError: If called outside a TPC transaction
         """
-        pass
+        ...
 
     @abstractmethod
     def tpc_recover(self) -> list:
@@ -319,7 +319,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Returns:
             List of transaction IDs suitable for tpc_commit() or tpc_rollback()
         """
-        pass
+        ...
 
     # =========================================================================
     # Administrative Methods (Abstract)
@@ -336,7 +336,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Raises:
             OperationalError: If kill fails
         """
-        pass
+        ...
 
     # =========================================================================
     # Utility Methods

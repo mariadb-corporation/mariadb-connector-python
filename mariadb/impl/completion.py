@@ -31,7 +31,7 @@ class Completion(ABC):
     @abstractmethod
     def is_output_parameters(self) -> bool:
         """Check if completion has output parameters"""
-        pass
+        ...
 
     def __str__(self) -> str:
         return (f"Completion(affected_rows={self.affected_rows}, "

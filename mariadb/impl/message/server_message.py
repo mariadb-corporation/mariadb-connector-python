@@ -13,4 +13,4 @@ class ServerMessage(ABC):
     @abstractmethod
     def decode(self, data: bytearray, context: Context) -> bytearray:
         """Decode message from reader asynchronously"""
-        pass
+        ...

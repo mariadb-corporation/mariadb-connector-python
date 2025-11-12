@@ -90,63 +90,62 @@ class BaseClient(ABC):
     @abstractmethod
     def connect(self) -> None:
         """Establish connection to MariaDB server"""
-        pass
+        ...
     
     @abstractmethod
     def _create_socket(self) -> None:
         """Create and configure socket connection"""
-        pass
+        ...
     
     @abstractmethod
     def _perform_handshake(self) -> None:
         """Perform MySQL handshake protocol"""
-        pass
+        ...
     
     @abstractmethod
     def _handle_ssl_connection(self, client_capabilities: int) -> None:
         """Handle SSL connection setup"""
-        pass
-    
+        ...
     
     @abstractmethod
     def _handle_authentication(self) -> None:
         """Handle authentication process using plugin system"""
-        pass
+        ...
     
     @abstractmethod
     def _send_message(self, message: ClientMessage) -> None:
         """Send client message to server"""
-        pass
+        ...
     
     @abstractmethod
     def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False, buffered: bool = True) -> List['Completion']:
         """Send client message and read result"""
-        pass
+        ...
     
     @abstractmethod
     def close(self) -> None:
         """Close client connection"""
-        pass
+        ...
     
     @abstractmethod
     def _cleanup_connection(self) -> None:
         """Clean up connection resources"""
-        pass
+        ...
 
     @abstractmethod
     def close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
         """Close a prepared statement"""
-        pass
+        ...
     
     @abstractmethod
     def set_socket_timeout(self, milliseconds: int) -> None:
         """Set socket timeout"""
-        pass
+        ...
     
     @abstractmethod
     def reset(self) -> None:
         """Reset connection"""
-        pass
+        ...
     
     @abstractmethod
     def get_ssl_cipher(self) -> Optional[tuple]:
@@ -156,7 +155,7 @@ class BaseClient(ABC):
         Returns:
             Cipher tuple (name, version, bits) or None if not using SSL
         """
-        pass
+        ...
     
     @abstractmethod
     def get_ssl_version(self) -> Optional[str]:
@@ -166,7 +165,7 @@ class BaseClient(ABC):
         Returns:
             TLS version string (e.g., 'TLSv1.3') or None if not using SSL
         """
-        pass
+        ...
     
     @abstractmethod
     def get_peer_certificate(self) -> Optional[dict]:
@@ -176,12 +175,12 @@ class BaseClient(ABC):
         Returns:
             Certificate dict or None if not using SSL
         """
-        pass
+        ...
     
     @abstractmethod
     def get_socket_ip(self) -> Optional[str]:
         """Get socket IP address"""
-        pass
+        ...
     
     # =========================================================================
     # Protocol Parsing

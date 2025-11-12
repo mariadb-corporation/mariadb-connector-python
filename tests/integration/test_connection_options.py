@@ -128,6 +128,11 @@ class ConnectionOptionsTest(unittest.TestCase):
     def test_warnings_property(self):
         """Test warnings property"""
         conn = create_connection()
+
+        warnings = conn.warnings
+        self.assertIsInstance(warnings, int)
+        self.assertGreaterEqual(warnings, 0)
+                
         cursor = conn.cursor()
         
         # Generate a warning

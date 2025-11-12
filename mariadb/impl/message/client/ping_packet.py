@@ -13,10 +13,6 @@ class PingPacket(ClientMessage):
     """
     
     COM_PING = 0x0E
-    
-    def __init__(self):
-        """Initialize COM_PING packet"""
-        pass
         
     def encode(self, context: Context) -> bytearray:
         """Encode COM_PING packet"""

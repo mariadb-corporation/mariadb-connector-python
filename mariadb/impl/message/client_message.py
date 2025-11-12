@@ -13,7 +13,7 @@ class ClientMessage(ABC):
     @abstractmethod
     def encode(self, context: Context) -> bytearray:
         """Encode message to writer asynchronously"""
-        pass
+        ...
 
 
     @abstractmethod

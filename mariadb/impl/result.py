@@ -54,13 +54,13 @@ class Result(ABC):
     @abstractmethod
     def streaming(self) -> bool:
         """Check if this is a streaming result"""
-        pass
+        ...
     
     
     @abstractmethod
     def get_row_count(self) -> int:
         """Get total row count (-1 if unknown)"""
-        pass
+        ...
 
     # =========================================================================
     # Utility Methods
@@ -98,26 +98,26 @@ class SyncResult(Result):
     @abstractmethod
     def fetch_one(self) -> Optional[Any]:
         """Fetch next row"""
-        pass
+        ...
     
     @abstractmethod
     def fetch_many(self, size: int) -> List[Any]:
         """Fetch multiple rows"""
-        pass
+        ...
     
     @abstractmethod
     def fetch_all(self) -> List[Any]:
         """Fetch all remaining rows"""
-        pass
+        ...
     
     @abstractmethod
     def fetch_remaining(self) -> None:
         """Consume all remaining rows without processing"""
-        pass
+        ...
     
     @abstractmethod
     def scroll(self, value: int, mode: str = "relative") -> None:
-        pass
+        ...
 
 
 class AsyncResult(Result):
@@ -141,26 +141,26 @@ class AsyncResult(Result):
     @abstractmethod
     async def fetch_one(self) -> Optional[Any]:
         """Fetch next row"""
-        pass
+        ...
     
     @abstractmethod
     async def fetch_many(self, size: int) -> List[Any]:
         """Fetch multiple rows"""
-        pass
+        ...
     
     @abstractmethod
     async def fetch_all(self) -> List[Any]:
         """Fetch all remaining rows"""
-        pass
+        ...
     
     @abstractmethod
     async def fetch_remaining(self) -> None:
         """Consume all remaining rows without processing"""
-        pass
+        ...
     
     @abstractmethod
     async def scroll(self, value: int, mode: str = "relative") -> None:
-        pass
+        ...
 
 class BaseCompleteResult(Result):
     """

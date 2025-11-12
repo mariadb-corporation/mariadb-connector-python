@@ -14,13 +14,13 @@ class AuthenticationPluginFactory(ABC):
     @abstractmethod
     def type(self) -> str:
         """Authentication plugin type"""
-        pass
+        ...
     
     @abstractmethod
     def initialize(self, authentication_data: Optional[str], seed: bytes, 
                   conf: Any, host_address: Any) -> AuthenticationPlugin:
         """Plugin initialization"""
-        pass
+        ...
     
     def require_ssl(self) -> bool:
         """Check if authentication plugin requires SSL to be used"""

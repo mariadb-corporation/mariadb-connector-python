@@ -12,6 +12,7 @@ import time
 
 import mariadb
 from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CAPABILITY as CLIENT
+from tests.integration.test_pooling_async import create_async_connection
 
 from ..base_test import is_maxscale, is_mysql, is_native
 from ..conftest import get_test_config as conf
@@ -138,6 +139,15 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy283(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+
+            cursor= conn.cursor(named_tuple=True)
+            self.assertEqual(cursor._resulttype, 1)
+            await cursor.close()
+            
+            cursor= conn.cursor()
+            self.assertEqual(cursor._resulttype, 0)
+            await cursor.close()
+
             cursor= conn.cursor(dictionary=True)
             self.assertEqual(cursor._resulttype, 2)
             await cursor.execute("select 1 as A union SELECT 2 as A")
@@ -742,6 +752,140 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("DROP TABLE t1")
         await cursor.close()
 
+    async def test_native_object(self):
+        if not is_native():
+            self.skipTest("Skip for non-native")
+
+        """Test native_object option for UUID, INET6, and INET4 types"""
+        import uuid, ipaddress
+
+        x = self.connection.server_version_info
+        if x < (10, 10, 0) or is_mysql():
+            self.skipTest("Skip (MySQL and MariaDB < 10.10)")
+
+        # Test with native_object=False (default) - should return strings
+        cursor_default = self.connection.cursor()
+        await cursor_default.execute("DROP TABLE IF EXISTS t1")
+        await cursor_default.execute("CREATE TABLE t1 (a inet6, b inet4, c uuid)")
+
+        test_ipv6 = ipaddress.ip_address('2001:db8::1')
+        test_ipv4 = ipaddress.ip_address('192.168.1.100')
+        test_uuid = uuid.uuid4()
+
+        await cursor_default.execute("INSERT INTO t1 VALUES (?, ?, ?)", 
+                              (test_ipv6, test_ipv4, test_uuid))
+        
+        # Test text protocol (default behavior - returns strings)
+        await cursor_default.execute("SELECT a, b, c FROM t1")
+        row = await cursor_default.fetchone()
+        
+        self.assertIsInstance(row[0], str, "INET6 should be string by default")
+        self.assertIsInstance(row[1], str, "INET4 should be string by default")
+        self.assertIsInstance(row[2], str, "UUID should be string by default")
+        self.assertEqual(row[0], str(test_ipv6))
+        self.assertEqual(row[1], str(test_ipv4))
+        self.assertEqual(row[2], str(test_uuid))
+
+        # Test binary protocol (default behavior - returns bytes/strings)
+        await cursor_default.close()
+        cursor_default = self.connection.cursor(binary=True)
+        await cursor_default.execute("SELECT a, b, c FROM t1")
+        row = await cursor_default.fetchone()
+        
+        # Binary protocol returns bytes for these types by default
+        self.assertIsInstance(row[0], (str, bytes), "INET6 should be string or bytes by default")
+        self.assertIsInstance(row[1], (str, bytes), "INET4 should be string or bytes by default")
+        self.assertIsInstance(row[2], (str, bytes), "UUID should be string or bytes by default")
+
+        await cursor_default.close()
+
+        # Test with native_object=True - should return native Python objects
+        cursor_native = self.connection.cursor(native_object=True)
+        
+        # Test text protocol with native_object
+        await cursor_native.execute("SELECT a, b, c FROM t1")
+        row = await cursor_native.fetchone()
+        
+        self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+                            "INET6 should be ipaddress object with native_object=True")
+        self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+                            "INET4 should be ipaddress object with native_object=True")
+        self.assertIsInstance(row[2], uuid.UUID, 
+                            "UUID should be uuid.UUID object with native_object=True")
+        self.assertEqual(row[0], test_ipv6)
+        self.assertEqual(row[1], test_ipv4)
+        self.assertEqual(row[2], test_uuid)
+
+        # Test binary protocol with native_object
+        await cursor_native.close()
+        cursor_native = self.connection.cursor(native_object=True, binary=True)
+        await cursor_native.execute("SELECT a, b, c FROM t1")
+        row = await cursor_native.fetchone()
+        
+        self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+                            "INET6 should be ipaddress object with native_object=True (binary)")
+        self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+                            "INET4 should be ipaddress object with native_object=True (binary)")
+        self.assertIsInstance(row[2], uuid.UUID, 
+                            "UUID should be uuid.UUID object with native_object=True (binary)")
+        self.assertEqual(row[0], test_ipv6)
+        self.assertEqual(row[1], test_ipv4)
+        self.assertEqual(row[2], test_uuid)
+
+        # Test with NULL values
+        await cursor_native.execute("INSERT INTO t1 VALUES (NULL, NULL, NULL)")
+        await cursor_native.execute("SELECT a, b, c FROM t1 WHERE a IS NULL")
+        row = await cursor_native.fetchone()
+        
+        self.assertIsNone(row[0], "NULL INET6 should be None")
+        self.assertIsNone(row[1], "NULL INET4 should be None")
+        self.assertIsNone(row[2], "NULL UUID should be None")
+
+        # Cleanup
+        await cursor_native.execute("DROP TABLE t1")
+        await cursor_native.close()
+        
+        # Test native_object at connection level
+        from ..base_test import create_connection
+        
+        async with await mariadb.AsyncConnection.connect(**{**conf(), **{"native_object": True}}) as conn_native:
+            cursor_conn = conn_native.cursor()
+            
+            await cursor_conn.execute("DROP TABLE IF EXISTS t1")
+            await cursor_conn.execute("CREATE TABLE t1 (a inet6, b inet4, c uuid)")
+            await cursor_conn.execute("INSERT INTO t1 VALUES (?, ?, ?)", 
+                            (test_ipv6, test_ipv4, test_uuid))
+            
+            # Connection-level native_object should apply to all cursors
+            await cursor_conn.execute("SELECT a, b, c FROM t1")
+            row = await cursor_conn.fetchone()
+            
+            self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+                                "INET6 should be ipaddress object with connection-level native_object=True")
+            self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+                                "INET4 should be ipaddress object with connection-level native_object=True")
+            self.assertIsInstance(row[2], uuid.UUID, 
+                                "UUID should be uuid.UUID object with connection-level native_object=True")
+            self.assertEqual(row[0], test_ipv6)
+            self.assertEqual(row[1], test_ipv4)
+            self.assertEqual(row[2], test_uuid)
+            
+            # Cursor-level setting should override connection-level setting
+            cursor_override = conn_native.cursor(native_object=False)
+            await cursor_override.execute("SELECT a, b, c FROM t1")
+            row = await cursor_override.fetchone()
+            
+            self.assertIsInstance(row[0], str, 
+                                "INET6 should be string when cursor overrides connection-level native_object")
+            self.assertIsInstance(row[1], str, 
+                                "INET4 should be string when cursor overrides connection-level native_object")
+            self.assertIsInstance(row[2], str, 
+                                "UUID should be string when cursor overrides connection-level native_object")
+            
+            await cursor_override.close()
+            await cursor_conn.execute("DROP TABLE t1")
+            await cursor_conn.close()
+
     async def test_conpy298_text(self):
         import uuid, ipaddress
 
@@ -1067,6 +1211,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             if con.server_version < 100301:
                 self.skipTest("Not supported in versions < 10.3")
             cursor = con.cursor()
+            self.assertEqual(cursor.sp_outparams, False)
             await cursor.execute("DROP PROCEDURE IF EXISTS p3")
             await cursor.execute("CREATE PROCEDURE p3(IN s1 VARCHAR(20),"
                            "IN s2 VARCHAR(20), OUT o1 VARCHAR(40) )\n"
