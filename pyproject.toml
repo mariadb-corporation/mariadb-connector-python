@@ -141,7 +141,7 @@ warn_unreachable = true
 strict_equality = true
 
 [tool.coverage.run]
-source = ["mariadb", "mariadb-c/mariadb", "mariadb-pool"]
+source = ["mariadb", "mariadb_c", "mariadb_pool", "mariadb_shared"]
 omit = [
     "*/tests/*",
     "*/test_*",

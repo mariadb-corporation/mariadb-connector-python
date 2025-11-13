@@ -40,5 +40,5 @@ Repository = "https://www.github.com/mariadb-corporation/mariadb-connector-pytho
 "Source Code" = "https://www.github.com/mariadb-corporation/mariadb-connector-python"
 
 [tool.setuptools]
-packages = ["mariadb_pool"]
-package-dir = {"mariadb_pool" = "src"}
+packages = ["mariadb_pool", "mariadb_shared"]
+package-dir = {"mariadb_pool" = "src", "mariadb_shared" = "../mariadb_shared"}
