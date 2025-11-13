@@ -388,7 +388,7 @@ class Cursor(CCursor):
         # TODO: insert/replace statements are not optimized yet
         #       rowcount updating
 
-        if not (self.connection.extended_server_capabilities &
+        if not self._force_binary or not (self.connection.extended_server_capabilities &
                 (CAPABILITY.BULK_OPERATIONS >> 32)):
             count = 0
             for row in parameters:

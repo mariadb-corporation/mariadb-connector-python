@@ -1006,7 +1006,7 @@ class TestCursor(unittest.TestCase):
             pass
 
 
-        cursor2 = self.connection.cursor(buffered=False)
+        cursor2 = self.connection.cursor(buffered=False, binary=False)
         cursor2.execute(stmt)
         cursor2.execute("SELECT 2")
         cursor2.execute(stmt)
