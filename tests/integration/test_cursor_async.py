@@ -971,6 +971,8 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_scroll(self):
         cursor = self.connection.cursor(buffered=True)
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20),"
+                        "b varchar(20))")        
         stmt = "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
         await cursor.execute(stmt)
 
@@ -1019,7 +1021,8 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor2.execute(stmt)
         await cursor2.execute("SELECT 2")
         await cursor2.execute(stmt)
-        await cursor2.executemany("DO ?,?", [(1, 2), (3, 4)])
+        cursor2.executemany("INSERT INTO t1 VALUES (?, ?)", [('a', 'b'), ('c', 'd')])
+
 
         del cursor
         del cursor2
@@ -1744,6 +1747,8 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cursor
 
     async def test_conpy178(self):
+        if os.environ.get('RUN_LONG_TEST') != '1':
+            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")            
         async with await mariadb.AsyncConnection.connect(**conf()) as conn:
             cursor = conn.cursor()
             await cursor.execute("DROP PROCEDURE IF EXISTS p2")

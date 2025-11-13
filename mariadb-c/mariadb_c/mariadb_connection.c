@@ -304,7 +304,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     uint8_t reset_session= 1;
     unsigned int client_flags= 0, port= 0;
     unsigned int local_infile= 0xFF;
-    unsigned int connect_timeout=0, read_timeout=0, write_timeout=0,
+    unsigned int connect_timeout=10, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
     PyObject *status_callback= NULL;
 
