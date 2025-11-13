@@ -43,7 +43,7 @@ class AsyncTestCA(unittest.IsolatedAsyncioTestCase):
 
     async def test_tpc_begin(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
-            xid = con.xid(0, "1234567890", "2345")
+            xid = con.xid(0, "2234567890", "2345")
             try:
                 await con.tpc_begin(xid)
             except mariadb.NotSupportedError:
@@ -51,7 +51,7 @@ class AsyncTestCA(unittest.IsolatedAsyncioTestCase):
 
     async def test_tpc_commit(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
-            xid = con.xid(0, "1234567891", "2345")
+            xid = con.xid(0, "2234567891", "2345")
             cursor = con.cursor()
             await cursor.execute("DROP TABLE IF EXISTS t1")
             await cursor.execute("CREATE TABLE t1 (a int)")
@@ -62,7 +62,7 @@ class AsyncTestCA(unittest.IsolatedAsyncioTestCase):
 
     async def test_tpc_rollback_without_prepare(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
-            xid = con.xid(0, "1234567892", "2345")
+            xid = con.xid(0, "2234567892", "2345")
             await con.tpc_begin(xid)
             cursor = con.cursor()
             await cursor.execute("SELECT 1")
@@ -71,7 +71,7 @@ class AsyncTestCA(unittest.IsolatedAsyncioTestCase):
 
     async def test_tpc_commit_with_prepare(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
-            xid = con.xid(0, "1234567893", "2345")
+            xid = con.xid(0, "2234567893", "2345")
             await con.tpc_begin(xid)
             cursor = con.cursor()
             await cursor.execute("SELECT 1")
@@ -81,7 +81,7 @@ class AsyncTestCA(unittest.IsolatedAsyncioTestCase):
 
     async def test_tpc_rollback_with_prepare(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
-            xid = con.xid(0, "1234567894", "2345")
+            xid = con.xid(0, "2234567894", "2345")
             await con.tpc_begin(xid)
             cursor = con.cursor()
             await cursor.execute("SELECT 1")
@@ -91,7 +91,7 @@ class AsyncTestCA(unittest.IsolatedAsyncioTestCase):
 
     async def test_tpc_begin_in_transaction_fails(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
-            xid = con.xid(0, "1234567895", "2345")
+            xid = con.xid(0, "2234567895", "2345")
 
             cursor = con.cursor()
             await cursor.execute("BEGIN")
@@ -102,7 +102,7 @@ class AsyncTestCA(unittest.IsolatedAsyncioTestCase):
 
     async def test_commit_in_tpc_fails(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
-            xid = con.xid(0, "1234567897", "2345")
+            xid = con.xid(0, "2234567897", "2345")
             await con.tpc_begin(xid)
 
             with self.assertRaises(mariadb.ProgrammingError):
@@ -112,7 +112,7 @@ class AsyncTestCA(unittest.IsolatedAsyncioTestCase):
         # calling rollback() within a TPC transaction fails with
         # ProgrammingError.
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
-            xid = con.xid(0, "1234567898", "2345")
+            xid = con.xid(0, "2234567898", "2345")
             await con.tpc_begin(xid)
 
             with self.assertRaises(mariadb.ProgrammingError):
