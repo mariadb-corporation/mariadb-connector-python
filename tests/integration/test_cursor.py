@@ -965,7 +965,7 @@ class TestCursor(unittest.TestCase):
     def test_scroll(self):
 
         cursor = self.connection.cursor(buffered=True)
-        cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20),"
+        cursor.execute("CREATE TEMPORARY TABLE test_scroll_sync (a varchar(20),"
                         "b varchar(20))")
 
         stmt = "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
@@ -1014,7 +1014,7 @@ class TestCursor(unittest.TestCase):
         cursor2.execute(stmt)
         cursor2.execute("SELECT 2")
         cursor2.execute(stmt)
-        cursor2.executemany("INSERT INTO t1 VALUES (?, ?)", [('a', 'b'), ('c', 'd')])
+        cursor2.executemany("INSERT INTO test_scroll_sync VALUES (?, ?)", [('a', 'b'), ('c', 'd')])
 
         del cursor
         del cursor2

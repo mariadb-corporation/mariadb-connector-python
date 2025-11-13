@@ -971,7 +971,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_scroll(self):
         cursor = self.connection.cursor(buffered=True)
-        cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20),"
+        await cursor.execute("CREATE TEMPORARY TABLE test_scroll (a varchar(20),"
                         "b varchar(20))")        
         stmt = "SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4"
         await cursor.execute(stmt)
@@ -1021,7 +1021,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor2.execute(stmt)
         await cursor2.execute("SELECT 2")
         await cursor2.execute(stmt)
-        await cursor2.executemany("INSERT INTO t1 VALUES (?, ?)", [('a', 'b'), ('c', 'd')])
+        await cursor2.executemany("INSERT INTO test_scroll VALUES (?, ?)", [('a', 'b'), ('c', 'd')])
 
 
         del cursor

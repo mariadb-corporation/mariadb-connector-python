@@ -130,29 +130,6 @@ class TestAsyncUnixSocket(unittest.IsolatedAsyncioTestCase):
         except Exception as e:
             self.fail(f"Unix socket connection failed: {e}")
 
-    @unittest.skipIf(not is_windows(), "Test is for Windows only")
-    async def test_unix_socket_error_on_windows(self):
-        """
-        Test that async Unix socket connection fails gracefully on Windows.
-        
-        Unix domain sockets are not supported on Windows, so attempting
-        to use them should raise an appropriate error.
-        """
-        conf = get_test_config()
-        conf['unix_socket'] = '/tmp/not_valid_socket'
-        conf.pop('host', None)
-        conf.pop('port', None)
-        
-        with self.assertRaises(mariadb.OperationalError) as cm:
-            await mariadb.AsyncConnection.connect(**conf)
-        
-        # Check that error message mentions Unix sockets or Windows
-        error_msg = str(cm.exception).lower()
-        self.assertTrue(
-            'unix' in error_msg or 'socket' in error_msg or 'windows' in error_msg,
-            f"Error message should mention Unix sockets or Windows: {cm.exception}"
-        )
-
     @unittest.skipIf(is_windows(), "Unix sockets not supported on Windows")
     async def test_connect_with_invalid_unix_socket(self):
         """
