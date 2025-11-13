@@ -99,12 +99,7 @@ class SyncResult(Result):
     def fetch_one(self) -> Optional[Any]:
         """Fetch next row"""
         ...
-    
-    @abstractmethod
-    def fetch_many(self, size: int) -> List[Any]:
-        """Fetch multiple rows"""
-        ...
-    
+        
     @abstractmethod
     def fetch_all(self) -> List[Any]:
         """Fetch all remaining rows"""
@@ -141,11 +136,6 @@ class AsyncResult(Result):
     @abstractmethod
     async def fetch_one(self) -> Optional[Any]:
         """Fetch next row"""
-        ...
-    
-    @abstractmethod
-    async def fetch_many(self, size: int) -> List[Any]:
-        """Fetch multiple rows"""
         ...
     
     @abstractmethod
@@ -260,16 +250,6 @@ class SyncCompleteResult(BaseCompleteResult, SyncResult):
         self.row_pointer += 1
         return self.rows[self.row_pointer]
     
-    def fetch_many(self, size: int) -> List[Any]:
-        """Fetch multiple rows"""
-        result = []
-        for _ in range(size):
-            row = self.fetch_one()
-            if row is None:
-                break
-            result.append(row)
-        return result
-    
     def fetch_all(self) -> List[Any]:
         """Fetch all remaining rows"""
         if self.row_pointer < 0:
@@ -316,16 +296,6 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
         # Move to next row position and return it
         self.row_pointer += 1
         return self.rows[self.row_pointer]
-    
-    async def fetch_many(self, size: int) -> List[Any]:
-        """Fetch multiple rows (async)"""
-        result = []
-        for _ in range(size):
-            row = await self.fetch_one()
-            if row is None:
-                break
-            result.append(row)
-        return result
     
     async def fetch_all(self) -> List[Any]:
         """Fetch all remaining rows (async)"""

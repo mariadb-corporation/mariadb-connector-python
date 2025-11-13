@@ -518,8 +518,8 @@ class Cursor(CCursor):
             raise ProgrammingError("Invalid or unknown scroll "
                                            "mode specified.")
 
-        if value == 0 and mode != "absolute":
-            raise ProgrammingError("Invalid position value 0.")
+        if value == 0 and mode == "relative":
+            return
 
         if mode == "relative":
             if self.rownumber + value < 0 or \
