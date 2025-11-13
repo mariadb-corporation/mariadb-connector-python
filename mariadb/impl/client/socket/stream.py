@@ -148,8 +148,10 @@ class SyncStream():
     """
     Sync stream implementation using blocking socket operations
     """
-    
-    def __init__(self, sock: socket.socket, connection_id: int = -1):
+    MAX_PACKET_SIZE = 0xFFFFFF  # 16 MB - 1
+    SLICE_SIZE = 16384
+ 
+    def __init__(self, sock: socket.socket, connection_id: int = -1, max_allowed_packet: int = 0xFFFFFF * 0xFE):
         """
         Initialize sync socket stream
         
@@ -161,48 +163,80 @@ class SyncStream():
         self._closed: bool = False
         self.sequence: MutableInt = MutableInt(-1)
         self.connection_id: int = connection_id
-        self.header: bytearray = bytearray(4)
-    
+
+        self.max_allowed_packet = max_allowed_packet
+        self._recv_buf: bytearray = bytearray(65536)  # Read chunks up to 64 KB
+        self._recv_pos: int = 0   # Current read position
+        self._recv_len: int = 0   # Total valid bytes in buffer
+
+        self._payload_accum: bytearray = bytearray(self.SLICE_SIZE)  # Accumulate multi-packet payloads
+        self._payload_len = 0
+
     def read_payload(self) -> bytearray:
         """
-        Read a complete MariaDB packet synchronously
-        Handles packets split across multiple 16MB chunks
-        
-        Returns:
-            Packet payload as bytes
+        Read a complete MySQL packet and return payload only, using a preallocated buffer.
+        Returns a bytearray object for parsing.
         """
-        MAX_PACKET_SIZE = 0xFFFFFF
-        result = bytearray()
-        packet_count = 0
-        
+        # Reset accumulation buffer
+        self._payload_accum.clear()
+
         while True:
-            # Read packet header (4 bytes: 3 bytes length + 1 byte sequence)
-            self._recv_exact(self.header)
-            
-            # Parse header
-            payload_length = struct.unpack('<I', self.header[:3] + b'\x00')[0]
-            self.sequence.set(self.header[3])
-            
-            # Read payload chunk
-            payload = bytearray(payload_length)
-            self._recv_exact(payload)
-            
-            # Log individual packet with header if debug enabled
-            if logger.isEnabledFor(logging.DEBUG):
-                conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
-                # Combine header and payload for logging
-                full_packet = self.header + payload
-                logger.debug(hex_dump(full_packet, f"RECV sync: {conn_id_str}"))
-            
-            result.extend(payload)
-            packet_count += 1
-            
-            # If chunk is less than max size, this is the last chunk
-            if payload_length < MAX_PACKET_SIZE:
-                break
-        
-        
-        return result
+            # Ensure we have at least 4 bytes for the header
+            while self._recv_len - self._recv_pos < 4:
+                self._fill_recv_buf()
+
+            packet_len = (
+                self._recv_buf[self._recv_pos]
+                | (self._recv_buf[self._recv_pos + 1] << 8)
+                | (self._recv_buf[self._recv_pos + 2] << 16)
+            )
+            self.sequence.set(self._recv_buf[self._recv_pos + 3])
+
+            total_size = 4 + packet_len
+            while self._recv_len - self._recv_pos < total_size:
+                self._fill_recv_buf()
+
+            # Extract payload
+            start = self._recv_pos + 4
+            end = self._recv_pos + total_size
+            self._payload_accum.extend(self._recv_buf[start:end])
+
+            self._recv_pos += total_size
+
+            # Reset buffer if fully consumed
+            if self._recv_pos == self._recv_len:
+                self._recv_pos = 0
+                self._recv_len = 0
+
+            # Multi-packet check
+            if packet_len < self.MAX_PACKET_SIZE:
+                return self._payload_accum
+
+    def _fill_recv_buf(self) -> None:
+        """
+        Read data from socket into preallocated buffer.
+        """
+        if self._recv_len == len(self._recv_buf):
+            # Shift unconsumed data to the start
+            if self._recv_pos > 0:
+                remaining = self._recv_len - self._recv_pos
+                self._recv_buf[:remaining] = self._recv_buf[self._recv_pos:self._recv_len]
+                self._recv_len = remaining
+                self._recv_pos = 0
+            else:
+                # Expand buffer if needed
+                new_size = min(len(self._recv_buf) * 2, self.MAX_PACKET_SIZE + 4)
+                self._recv_buf.extend(bytearray(new_size - len(self._recv_buf)))
+
+        try:
+            # recv_into requires a writable buffer slice
+            view = memoryview(self._recv_buf)[self._recv_len:]
+            n = self.socket.recv_into(view)
+            if n == 0:
+                raise OSError("Connection closed by remote host")
+            self._recv_len += n
+        except socket.error as e:
+            raise OSError(f"Failed to receive data: {e}")
     
     def send_payload(self, data: bytes, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
@@ -241,7 +275,7 @@ class SyncStream():
 
             
             # Write header and chunk
-            self.socket.sendall(header + chunk)
+            self.socket.sendmsg([header,chunk])
             offset += chunk_size
             chunk_count += 1
 
@@ -277,20 +311,4 @@ class SyncStream():
         """Reset packet sequence number"""
         self.sequence.set(-1)
     
-    def _recv_exact(self, data: bytearray) -> None:
-        """
-        Receive exactly n bytes from socket into the provided buffer
-        
-        Args:
-            data: Buffer to receive data into
-            
-        Raises:
-            IOError: If connection is closed or error occurs
-        """
-        view = memoryview(data)
-        received = 0
-        while received < len(data):
-            n = self.socket.recv_into(view[received:])
-            if n == 0:
-                raise IOError("Connection closed while reading")
-            received += n
+
