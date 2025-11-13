@@ -96,16 +96,16 @@ class AsyncClient(BaseClient):
     async def _create_socket(self) -> None:
         """Create and configure async TCP or Unix socket connection"""
         try:
-            if self.configuration.socket_path:
+            if self.configuration.unix_socket:
                 # Unix socket connection
                 if self.connect_timeout:
                     self.reader, self.writer = await asyncio.wait_for(
-                        asyncio.open_unix_connection(self.configuration.socket_path),
+                        asyncio.open_unix_connection(self.configuration.unix_socket),
                         timeout=self.connect_timeout
                     )
                 else:
                     self.reader, self.writer = await asyncio.open_unix_connection(
-                        self.configuration.socket_path
+                        self.configuration.unix_socket
                     )
             else:
                 # TCP connection

@@ -342,42 +342,78 @@ class TestConnection(unittest.TestCase):
         conn.close()
 
     def test_conpy278(self):
-         if is_maxscale():
-            self.skipTest("MAXSCALE bug MXS-4961")
-         if is_native():
-            self.skipTest("reconnect doesn't work with native connector")
-         with create_connection({"reconnect" : True}) as conn:
-             old_id= conn.connection_id
-             try:
-                 conn.kill(conn.connection_id)
-             except mariadb.OperationalError:
-                 conn.ping()
-             self.assertNotEqual(old_id, conn.connection_id)
-         with create_connection({"reconnect" : True}) as conn:
-             old_id= conn.connection_id
-             try:
-                 conn.kill(conn.connection_id)
-             except mariadb.OperationalError:
-                 conn.ping()
-             self.assertNotEqual(old_id, conn.connection_id)
-         with create_connection({"reconnect" : True}) as conn:
-             old_id= conn.connection_id
-             try:
-                 conn.kill(conn.connection_id)
-             except mariadb.OperationalError:
-                 pass
-             with conn.cursor() as cursor:
-                 try:
-                     cursor.execute("set @a:=1")
-                 except mariadb.InterfaceError:
-                     pass
-                 cursor.execute("set @a:=1")
-                 self.assertNotEqual(old_id, conn.connection_id)
+        if is_maxscale():
+           self.skipTest("MAXSCALE bug MXS-4961")
+        if is_native():
+           self.skipTest("reconnect doesn't work with native connector")
+        with create_connection({"reconnect" : True}) as conn:
+            old_id= conn.connection_id
+            try:
+                conn.kill(conn.connection_id)
+            except mariadb.OperationalError:
+                conn.ping()
+            self.assertNotEqual(old_id, conn.connection_id)
+        with create_connection({"reconnect" : True}) as conn:
+            old_id= conn.connection_id
+            try:
+                conn.kill(conn.connection_id)
+            except mariadb.OperationalError:
+                conn.ping()
+            self.assertNotEqual(old_id, conn.connection_id)
+        with create_connection({"reconnect" : True}) as conn:
+            old_id= conn.connection_id
+            try:
+                conn.kill(conn.connection_id)
+            except mariadb.OperationalError:
+                pass
+            with conn.cursor() as cursor:
+                try:
+                    cursor.execute("set @a:=1")
+                except mariadb.InterfaceError:
+                    pass
+                cursor.execute("set @a:=1")
+                self.assertNotEqual(old_id, conn.connection_id)
+            old_id= conn.connection_id
+            conn.reconnect()
+            self.assertNotEqual(old_id, conn.connection_id)
 
-                 old_id= conn.connection_id
-                 conn.reconnect()
-                 self.assertNotEqual(old_id, conn.connection_id)
+    def test_tls_properties_non_ssl(self):
+        """Test that all TLS properties return correct default values when SSL is not enabled"""
+        default_conf = conf()
+        default_conf["ssl"] = False
+        conn = mariadb.connect(**default_conf)
+        
+        try:
+            # Test _tls property - should be False for non-SSL connection
+            self.assertFalse(conn._tls)
+            
+            # Test _tls_verify_status - should be None for non-SSL connection
+            self.assertIsNone(conn._tls_verify_status)
+            
+            # Test tls_version - should be None for non-SSL connection
+            self.assertIsNone(conn.tls_version)
+            
+            # Test tls_cipher - should be None for non-SSL connection
+            self.assertIsNone(conn.tls_cipher)
+            
+            # Test tls_peer_cert_info - should be None for non-SSL connection
+            self.assertIsNone(conn.tls_peer_cert_info)
+        finally:
+            conn.close()
 
+    def test_connection_host_port_properties(self):
+        """Test that connection.host and connection.port return expected values"""
+        default_conf = conf()
+        
+        # Test with default connection
+        conn = create_connection()
+        try:
+            self.assertEqual(conn.server_name, default_conf["host"])
+            self.assertEqual(conn.server_port, default_conf["port"])
+        finally:
+            conn.close()
+        with self.assertRaises((mariadb.InterfaceError)):
+            conn.connection_id
 
 if __name__ == '__main__':
     unittest.main()

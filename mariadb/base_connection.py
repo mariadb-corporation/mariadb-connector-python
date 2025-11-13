@@ -186,16 +186,10 @@ class BaseConnection(ABC, Generic[TClient]):
         """
         ...
 
+    @abstractmethod
     def select_db(self, database: str) -> None:
-        """
-        Change the default database for the current connection
-        
-        This is a convenience method that sets the database property.
-        
-        Args:
-            database: Database name to select
-        """
-        self.database = database
+        """Change the default database for the current connection"""
+        ...
 
     # =========================================================================
     # Transaction Methods (Abstract - must be implemented by subclasses)
@@ -388,15 +382,15 @@ class BaseConnection(ABC, Generic[TClient]):
         """
         if not self._closed and self._client:
             return self._client.context.connection_id
-        return -1
+        raise InterfaceError("Invalid connection or not connected")
     
     @property
-    def host(self) -> str:
+    def server_name(self) -> str:
         """Get connection host"""
         return self._host
     
     @property
-    def port(self) -> int:
+    def server_port(self) -> int:
         """Get connection port"""
         return self._port
     
@@ -428,7 +422,7 @@ class BaseConnection(ABC, Generic[TClient]):
             Unix socket path, or None if using TCP/IP
         """
         self._check_closed()
-        return self._client.configuration.socket_path
+        return self._client.configuration.unix_socket
 
     # =========================================================================
     # Server Information Properties
@@ -454,7 +448,7 @@ class BaseConnection(ABC, Generic[TClient]):
             Server hostname/IP, or None if using Unix socket
         """
         self._check_closed()
-        return None if self._client.configuration.socket_path else self._client.get_host_address().host
+        return None if self._client.configuration.unix_socket else self._client.get_host_address().host
 
     @property
     def server_port(self) -> int:
@@ -465,7 +459,7 @@ class BaseConnection(ABC, Generic[TClient]):
             Port number, or 0 if using Unix socket
         """
         self._check_closed()
-        return 0 if self._client.configuration.socket_path else self._client.get_host_address().port
+        return 0 if self._client.configuration.unix_socket else self._client.get_host_address().port
 
     @property
     def server_mariadb(self) -> bool:
@@ -513,9 +507,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Returns:
             Server status flags as integer
         """
-        if self._client:
-            return int(self._client.context.server_status)
-        return 0
+        return int(self._client.context.server_status)
 
     @property
     def warnings(self) -> int:
@@ -525,9 +517,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Returns:
             Warning count
         """
-        if self._client:
-            return self._client.context.warning_count
-        return 0
+        return self._client.context.warning_count
 
     # =========================================================================
     # Character Set and Collation Properties
@@ -541,9 +531,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Returns:
             Character set name (e.g., "utf8mb4")
         """
-        if self._client and self._client.context:
-            return self._client.context.get_charset() or _DEFAULT_CHARSET
-        return _DEFAULT_CHARSET
+        return self._client.context.get_charset() or _DEFAULT_CHARSET
 
     @property
     def collation(self) -> str:
@@ -553,9 +541,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Returns:
             Collation name (e.g., "utf8mb4_general_ci")
         """
-        if self._client and self._client.context:
-            return self._client.context.get_collation() or _DEFAULT_COLLATION
-        return _DEFAULT_COLLATION
+        return self._client.context.get_collation() or _DEFAULT_COLLATION
 
     # =========================================================================
     # Transaction State Properties
@@ -569,9 +555,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Returns:
             True if autocommit is enabled, False otherwise
         """
-        if self._client:
-            return (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
-        return False
+        return (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
 
     # =========================================================================
     # TLS/SSL Properties
@@ -608,9 +592,9 @@ class BaseConnection(ABC, Generic[TClient]):
             Cipher suite name, or None if not using TLS
         """
         self._check_closed()
-        if self._client:
-            return self._client.get_ssl_cipher()
-        return None
+        if not self._tls:
+            return None
+        return self._client.get_ssl_cipher()
 
     @property
     def _tls_verify_status(self) -> Optional[int]:
@@ -636,4 +620,6 @@ class BaseConnection(ABC, Generic[TClient]):
             Dictionary with certificate info, or None if not using TLS
         """
         self._check_closed()
+        if not self._tls:
+            return None
         return self._client.get_peer_certificate()

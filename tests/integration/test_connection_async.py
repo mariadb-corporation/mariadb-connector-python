@@ -404,6 +404,43 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             self.assertNotEqual(old_id, conn.connection_id)
             await cursor.close()
 
+    async def test_tls_properties_non_ssl(self):
+        """Test that all TLS properties return correct default values when SSL is not enabled"""
+        default_conf = conf()
+        default_conf["ssl"] = False
+        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        
+        try:
+            # Test _tls property - should be False for non-SSL connection
+            self.assertFalse(conn._tls)
+            
+            # Test _tls_verify_status - should be None for non-SSL connection
+            self.assertIsNone(conn._tls_verify_status)
+            
+            # Test tls_version - should be None for non-SSL connection
+            self.assertIsNone(conn.tls_version)
+            
+            # Test tls_cipher - should be None for non-SSL connection
+            self.assertIsNone(conn.tls_cipher)
+            
+            # Test tls_peer_cert_info - should be None for non-SSL connection
+            self.assertIsNone(conn.tls_peer_cert_info)
+        finally:
+            await conn.close()
+
+    async def test_connection_host_port_properties(self):
+        """Test that connection.host and connection.port return expected values"""
+        default_conf = conf()
+        
+        # Test with default connection
+        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        try:
+            self.assertEqual(conn.server_name, default_conf["host"])
+            self.assertEqual(conn.server_port, default_conf["port"])
+        finally:
+            await conn.close()
+        with self.assertRaises((mariadb.InterfaceError)):
+            conn.connection_id
 
 if __name__ == '__main__':
     unittest.main()

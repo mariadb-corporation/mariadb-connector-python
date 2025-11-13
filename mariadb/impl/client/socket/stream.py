@@ -196,34 +196,28 @@ class SyncStream():
     def read_payload(self) -> bytearray:
         """
         Read one complete MariaDB logical packet (may consist of multiple sub-packets).
-        Returns a memoryview of the full payload (excluding headers).
+        Returns a bytearray of the full payload (excluding all headers).
         """
-        read_pos = 0
-        total_payload_len = 0
+        result = bytearray()
 
         while True:
             # Read 4-byte sub-packet header
-            self._recv_exact(4, read_pos)
-            pkt_len = self._readbuf[read_pos] | (self._readbuf[read_pos + 1] << 8) | (self._readbuf[read_pos + 2] << 16)
-            self.sequence.set(self._readbuf[read_pos + 3])
+            self._recv_exact(4, 0)
+            pkt_len = self._readbuf[0] | (self._readbuf[1] << 8) | (self._readbuf[2] << 16)
+            self.sequence.set(self._readbuf[3])
 
-            read_pos += 4
-            end_pos = read_pos + pkt_len
-
-            self._ensure_capacity(end_pos)
-            self._recv_exact(pkt_len, read_pos)
-            read_pos = end_pos
-            total_payload_len += pkt_len
+            # Read payload chunk
+            self._ensure_capacity(4 + pkt_len)
+            self._recv_exact(pkt_len, 4)
+            
+            # Append only the payload (not the header) to result
+            result.extend(self._view[4:4 + pkt_len])
 
             # Continuation condition
             if pkt_len < 0xFFFFFF:
                 break
-            else:
-                # Ensure room for next header + max chunk
-                self._ensure_capacity(read_pos + 4 + 0xFFFFFF)
 
-        payload = self._view[4:read_pos]
-        return bytearray(payload)
+        return result
 
     
     

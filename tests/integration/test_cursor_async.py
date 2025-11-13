@@ -1021,7 +1021,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor2.execute(stmt)
         await cursor2.execute("SELECT 2")
         await cursor2.execute(stmt)
-        cursor2.executemany("INSERT INTO t1 VALUES (?, ?)", [('a', 'b'), ('c', 'd')])
+        await cursor2.executemany("INSERT INTO t1 VALUES (?, ?)", [('a', 'b'), ('c', 'd')])
 
 
         del cursor

@@ -99,11 +99,11 @@ class SyncClient(BaseClient):
     def _create_socket(self) -> None:
         """Create and configure TCP or Unix socket connection"""
         try:
-            if self.configuration.socket_path:
+            if self.configuration.unix_socket:
                 self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 if self.connect_timeout:
                     self.socket.settimeout(self.connect_timeout)
-                self.socket.connect(self.configuration.socket_path)
+                self.socket.connect(self.configuration.unix_socket)
             else:
                 self.socket = socket.create_connection(
                     (self.host_address.host, self.host_address.port),

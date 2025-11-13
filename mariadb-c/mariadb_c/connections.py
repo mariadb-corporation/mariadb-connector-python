@@ -489,6 +489,8 @@ class Connection(CConnection):
         """
 
         self._check_closed()
+        if self.unix_socket:
+            return 0
         return self._mariadb_get_info(INFO.PORT)
 
     @property
@@ -515,6 +517,8 @@ class Connection(CConnection):
         """Name or IP address of database server."""
 
         self._check_closed()
+        if self.unix_socket:
+            return None
         return self._mariadb_get_info(INFO.HOST)
 
     @property

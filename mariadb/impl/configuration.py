@@ -20,7 +20,7 @@ class Configuration:
     database: Optional[str] = None
     
     # Socket parameters
-    socket_path: Optional[str] = None
+    unix_socket: Optional[str] = None
     socket_timeout: float = 30  # 30 seconds
     connect_timeout: float = 10  # 10 seconds
     
@@ -113,8 +113,8 @@ class Configuration:
             config.database = params.get('database') or params.get('db')
         
         # Socket parameters
-        if 'socket_path' in params:
-            config.socket_path = params['socket_path']
+        if 'unix_socket' in params:
+            config.unix_socket = params['unix_socket']
         if 'socket_timeout' in params:
             config.socket_timeout = int(params['socket_timeout'])
         # read_timeout and write_timeout are aliases for socket_timeout
@@ -214,7 +214,7 @@ class Configuration:
             'user': self.user,
             'password': self.password,
             'database': self.database,
-            'socket_path': self.socket_path,
+            'unix_socket': self.unix_socket,
             'socket_timeout': self.socket_timeout,
             'connect_timeout': self.connect_timeout,
             'ssl': self.ssl,

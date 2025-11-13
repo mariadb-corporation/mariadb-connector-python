@@ -495,21 +495,7 @@ class SyncConnection(BaseConnection['SyncClient']):
     # Properties and Setters
     # =========================================================================
     
-    @property
-    def database(self) -> Optional[str]:
-        """
-        Get current database name
-        
-        Returns:
-            Current database name, or None if no database selected
-        """
-        if self._client:
-            context_db = self._client.context.database
-            if context_db is not None:
-                return context_db
-        return self._database
-    
-    @database.setter
+    @BaseConnection.database.setter
     def database(self, value: Optional[str]) -> None:
         """
         Set database name
