@@ -148,7 +148,9 @@ class SyncStream():
     """
     Sync stream implementation using blocking socket operations
     """
-    
+    MAX_PACKET_SIZE = 0xFFFFFF  # 16 MB - 1
+    SLICE_SIZE = 16384
+ 
     def __init__(self, sock: socket.socket, connection_id: int = -1, max_allowed_packet: int = 0xFFFFFF * 0xFE):
         """
         Initialize sync socket stream
@@ -163,69 +165,78 @@ class SyncStream():
         self.connection_id: int = connection_id
 
         self.max_allowed_packet = max_allowed_packet
-        self._readbuf: bytearray = bytearray(16384)
-        self._view: memoryview = memoryview(self._readbuf)
+        self._recv_buf: bytearray = bytearray(65536)  # Read chunks up to 64 KB
+        self._recv_pos: int = 0   # Current read position
+        self._recv_len: int = 0   # Total valid bytes in buffer
 
-        self.header: bytearray = bytearray(4)
-
-    def _ensure_capacity(self, size: int) -> None:
-        """Ensure buffer is large enough, within max_allowed_packet limit."""
-        if size > self.max_allowed_packet + 4:
-            raise MemoryError(
-                f"Required buffer size {size} exceeds max_allowed_packet ({self.max_allowed_packet})"
-            )
-
-        if size > len(self._readbuf):
-            new_size = min(self.max_allowed_packet + 4, max(size, len(self._readbuf) * 2))
-            new_buf = bytearray(new_size)
-            new_buf[:len(self._readbuf)] = self._readbuf
-            self._readbuf = new_buf
-            self._view = memoryview(self._readbuf)
-
-    def _recv_exact(self, size: int, dest_offset: int) -> memoryview:
-        """Read exactly `size` bytes into buffer at offset."""
-        view = self._view[dest_offset:dest_offset + size]
-        received = 0
-        while received < size:
-            n = self.socket.recv_into(view[received:])
-            if n == 0:
-                raise ConnectionError("Connection closed by peer")
-            received += n
-        return view
+        self._payload_accum: bytearray = bytearray(self.SLICE_SIZE)  # Accumulate multi-packet payloads
+        self._payload_len = 0
 
     def read_payload(self) -> bytearray:
         """
-        Read one complete MariaDB logical packet (may consist of multiple sub-packets).
-        Returns a memoryview of the full payload (excluding headers).
+        Read a complete MySQL packet and return payload only, using a preallocated buffer.
+        Returns a bytearray object for parsing.
         """
-        read_pos = 0
-        total_payload_len = 0
+        # Reset accumulation buffer
+        self._payload_accum.clear()
 
         while True:
-            # Read 4-byte sub-packet header
-            self._recv_exact(4, read_pos)
-            pkt_len = self._readbuf[read_pos] | (self._readbuf[read_pos + 1] << 8) | (self._readbuf[read_pos + 2] << 16)
-            self.sequence.set(self._readbuf[read_pos + 3])
+            # Ensure we have at least 4 bytes for the header
+            while self._recv_len - self._recv_pos < 4:
+                self._fill_recv_buf()
 
-            read_pos += 4
-            end_pos = read_pos + pkt_len
+            packet_len = (
+                self._recv_buf[self._recv_pos]
+                | (self._recv_buf[self._recv_pos + 1] << 8)
+                | (self._recv_buf[self._recv_pos + 2] << 16)
+            )
+            self.sequence.set(self._recv_buf[self._recv_pos + 3])
 
-            self._ensure_capacity(end_pos)
-            self._recv_exact(pkt_len, read_pos)
-            read_pos = end_pos
-            total_payload_len += pkt_len
+            total_size = 4 + packet_len
+            while self._recv_len - self._recv_pos < total_size:
+                self._fill_recv_buf()
 
-            # Continuation condition
-            if pkt_len < 0xFFFFFF:
-                break
+            # Extract payload
+            start = self._recv_pos + 4
+            end = self._recv_pos + total_size
+            self._payload_accum.extend(self._recv_buf[start:end])
+
+            self._recv_pos += total_size
+
+            # Reset buffer if fully consumed
+            if self._recv_pos == self._recv_len:
+                self._recv_pos = 0
+                self._recv_len = 0
+
+            # Multi-packet check
+            if packet_len < self.MAX_PACKET_SIZE:
+                return self._payload_accum
+
+    def _fill_recv_buf(self) -> None:
+        """
+        Read data from socket into preallocated buffer.
+        """
+        if self._recv_len == len(self._recv_buf):
+            # Shift unconsumed data to the start
+            if self._recv_pos > 0:
+                remaining = self._recv_len - self._recv_pos
+                self._recv_buf[:remaining] = self._recv_buf[self._recv_pos:self._recv_len]
+                self._recv_len = remaining
+                self._recv_pos = 0
             else:
-                # Ensure room for next header + max chunk
-                self._ensure_capacity(read_pos + 4 + 0xFFFFFF)
+                # Expand buffer if needed
+                new_size = min(len(self._recv_buf) * 2, self.MAX_PACKET_SIZE + 4)
+                self._recv_buf.extend(bytearray(new_size - len(self._recv_buf)))
 
-        payload = self._view[4:read_pos]
-        return bytearray(payload)
-
-    
+        try:
+            # recv_into requires a writable buffer slice
+            view = memoryview(self._recv_buf)[self._recv_len:]
+            n = self.socket.recv_into(view)
+            if n == 0:
+                raise OSError("Connection closed by remote host")
+            self._recv_len += n
+        except socket.error as e:
+            raise OSError(f"Failed to receive data: {e}")
     
     def send_payload(self, data: bytes, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
@@ -264,7 +275,7 @@ class SyncStream():
 
             
             # Write header and chunk
-            self.socket.sendall(header + chunk)
+            self.socket.sendmsg([header,chunk])
             offset += chunk_size
             chunk_count += 1
 
