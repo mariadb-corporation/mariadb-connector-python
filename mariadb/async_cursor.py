@@ -206,6 +206,10 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
         if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):
             raise ProgrammingError("No data provided")
         
+        # Consume any pending streaming results before executing new query
+        if self._result is not None and self._result.streaming():
+            await self._result.fetch_remaining()
+
         # If data is an empty list/tuple, return early with rowcount=0
         if not data:
             self._rowcount = 0

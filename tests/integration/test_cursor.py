@@ -1000,7 +1000,20 @@ class TestCursor(unittest.TestCase):
         except mariadb.ProgrammingError:
             pass
 
+        try:
+            cursor.scroll(1, mode='Wrong')
+        except mariadb.ProgrammingError:
+            pass
+
+
+        cursor2 = self.connection.cursor(buffered=False)
+        cursor2.execute(stmt)
+        cursor2.execute("SELECT 2")
+        cursor2.execute(stmt)
+        cursor2.executemany("DO ?,?", [(1, 2), (3, 4)])
+
         del cursor
+        del cursor2
 
     def test_conpy_9(self):
         cursor = self.connection.cursor()

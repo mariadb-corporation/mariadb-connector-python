@@ -104,12 +104,7 @@ class SyncResult(Result):
     def fetch_all(self) -> List[Any]:
         """Fetch all remaining rows"""
         ...
-    
-    @abstractmethod
-    def fetch_remaining(self) -> None:
-        """Consume all remaining rows without processing"""
-        ...
-    
+        
     @abstractmethod
     def scroll(self, value: int, mode: str = "relative") -> None:
         ...
@@ -143,10 +138,6 @@ class AsyncResult(Result):
         """Fetch all remaining rows"""
         ...
     
-    @abstractmethod
-    async def fetch_remaining(self) -> None:
-        """Consume all remaining rows without processing"""
-        ...
     
     @abstractmethod
     async def scroll(self, value: int, mode: str = "relative") -> None:
@@ -264,11 +255,6 @@ class SyncCompleteResult(BaseCompleteResult, SyncResult):
         else:
             # After last - return empty
             return []
-    
-    def fetch_remaining(self) -> None:
-        """Consume all remaining rows without processing"""
-        self.row_pointer = self.data_size
-
 
 class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
     """
@@ -312,10 +298,6 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
             # After last - return empty
             return []
     
-    async def fetch_remaining(self) -> None:
-        """Consume all remaining rows without processing (async)"""
-        self.row_pointer = self.data_size
-
     async def scroll(self, value: int, mode: str = "relative") -> None:
         super().scroll(value, mode)
 

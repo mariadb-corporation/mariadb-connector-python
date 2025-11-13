@@ -1007,7 +1007,22 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         except mariadb.ProgrammingError:
             pass
 
+        try:
+            await cursor.scroll(1, mode='Wrong')
+        except mariadb.ProgrammingError:
+            pass
+
+        await cursor.execute(stmt)
+        row = await cursor.fetchone()
+
+        cursor2 = self.connection.cursor(buffered=False)
+        await cursor2.execute(stmt)
+        await cursor2.execute("SELECT 2")
+        await cursor2.execute(stmt)
+        await cursor2.executemany("DO ?,?", [(1, 2), (3, 4)])
+
         del cursor
+        del cursor2
 
     async def test_conpy_9(self):
         cursor = self.connection.cursor()

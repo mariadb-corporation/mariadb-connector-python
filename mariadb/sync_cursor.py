@@ -182,6 +182,10 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
         if not isinstance(sql, str):
             raise TypeError("SQL statement must be a string")
         
+        # Consume any pending streaming results before executing new query
+        if self._result is not None and self._result.streaming():
+            self._result.fetch_remaining()
+        
         # Check if data is None or not an array-like type
         if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):
             raise ProgrammingError("No data provided")
