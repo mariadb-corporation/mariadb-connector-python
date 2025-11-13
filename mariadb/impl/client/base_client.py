@@ -216,7 +216,7 @@ class BaseClient(ABC):
             raise OperationalError(f"Unexpected initial handshake protocol value [{protocol_version}]")
         
         # Server version (null-terminated string)
-        version_end = packet.find(0, pos)
+        version_end = bytes(packet).find(0, pos)
         if version_end == -1:
             raise OperationalError("Invalid handshake packet: missing server version")
         
