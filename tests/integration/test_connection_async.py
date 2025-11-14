@@ -442,5 +442,71 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises((mariadb.InterfaceError)):
             conn.connection_id
 
+    async def test_begin(self):
+        """Test begin() method to explicitly start a transaction"""
+        conn = await mariadb.AsyncConnection.connect(**conf())
+        try:
+            # Test 1: begin() should work and start a transaction
+            await conn.begin()
+            
+            cursor = conn.cursor()
+            await cursor.execute("CREATE TEMPORARY TABLE test_begin_async (id INT, value VARCHAR(50))")
+            await cursor.execute("INSERT INTO test_begin_async VALUES (1, 'test')")
+            
+            # Verify data is visible in same transaction
+            await cursor.execute("SELECT * FROM test_begin_async")
+            result = await cursor.fetchone()
+            self.assertEqual(result[0], 1)
+            self.assertEqual(result[1], 'test')
+            
+            # Rollback the transaction
+            await conn.rollback()
+            
+            # Verify table still exists but data is rolled back
+            await cursor.execute("SELECT COUNT(*) FROM test_begin_async")
+            count = (await cursor.fetchone())[0]
+            self.assertEqual(count, 0)
+            
+            # Test 2: Multiple begin() calls should work
+            await conn.begin()
+            await cursor.execute("INSERT INTO test_begin_async VALUES (2, 'test2')")
+            await conn.begin()  # Should not fail
+            await cursor.execute("INSERT INTO test_begin_async VALUES (3, 'test3')")
+            await conn.commit()
+            
+            # Verify both inserts are committed
+            await cursor.execute("SELECT COUNT(*) FROM test_begin_async")
+            count = (await cursor.fetchone())[0]
+            self.assertEqual(count, 2)
+            
+            await cursor.close()
+        finally:
+            await conn.close()
+
+    async def test_begin_with_autocommit(self):
+        """Test begin() behavior with autocommit enabled"""
+        default_conf = conf()
+        default_conf["autocommit"] = True
+        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        
+        try:
+            # begin() should work even with autocommit enabled
+            await conn.begin()
+            
+            cursor = conn.cursor()
+            await cursor.execute("CREATE TEMPORARY TABLE test_begin_autocommit_async (id INT)")
+            await cursor.execute("INSERT INTO test_begin_autocommit_async VALUES (1)")
+            
+            # Rollback should work after begin()
+            await conn.rollback()
+            
+            await cursor.execute("SELECT COUNT(*) FROM test_begin_autocommit_async")
+            count = (await cursor.fetchone())[0]
+            self.assertEqual(count, 0)
+            
+            await cursor.close()
+        finally:
+            await conn.close()
+
 if __name__ == '__main__':
     unittest.main()

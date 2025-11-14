@@ -180,11 +180,8 @@ class AsyncConnection(BaseConnection['AsyncClient']):
         Raises:
             OperationalError: If reconnection fails
         """
-        try:
-            if not self._closed:
-                await self.close()
-        except:
-            pass
+        if not self._closed:
+            await self.close()
         
         self._closed = False
         try:
@@ -402,13 +399,15 @@ class AsyncConnection(BaseConnection['AsyncClient']):
         """
 
         self._check_closed()
-        if not xid:
-            xid = self._xid
 
         if self.tpc_state == TPC_STATE.NONE:
             raise ProgrammingError("Transaction not started.")
         if xid is None and self.tpc_state != TPC_STATE.PREPARE:
             raise ProgrammingError("Transaction is not prepared.")
+
+        if not xid:
+            xid = self._xid
+
         if xid and not isinstance(xid, Xid):
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s" % type(xid).__name__)

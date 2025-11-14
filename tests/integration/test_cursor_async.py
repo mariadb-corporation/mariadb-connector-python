@@ -2154,5 +2154,16 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises((mariadb.ProgrammingError, RuntimeError)):
             await cursor5.fetchone()
 
+    def test_cursor_class(self):
+        """Test cursor class"""
+        if not is_native():
+            self.skipTest("test only for Native")
+        cursor = self.connection.cursor(cursor_class=mariadb.AsyncCursor)
+        self.assertIsInstance(cursor, mariadb.AsyncCursor)
+
+        cursor = self.connection.cursor(cursor_class=mariadb.AsyncCursor, buffered=False)
+        self.assertIsInstance(cursor, mariadb.AsyncCursor)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -78,12 +78,39 @@ class CursorTest(unittest.TestCase):
         del new_conn
         del cursor
 
+    def test_change_user_wrong(self):
+        if is_skysql():
+            self.skipTest("SkySQL failure")
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't get new user immediately")
+
+        default_conf = conf()
+        cursor = self.connection.cursor()
+        
+        new_conn = create_connection()
+        with self.assertRaises((mariadb.OperationalError)):
+            new_conn.change_user("unknownUser", "", "")
+        self.assertEqual(default_conf["user"], new_conn.user)
+        del new_conn
+        del cursor
+
     def test_reconnect(self):
         if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
         new_conn = create_connection()
         conn1_id = new_conn.connection_id
         self.connection.kill(conn1_id)
+        new_conn.reconnect()
+        conn2_id = new_conn.connection_id
+        self.assertFalse(conn1_id == conn2_id)
+        del new_conn
+
+
+    def test_reconnect_not_closed(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE wrong thread id")
+        new_conn = create_connection()
+        conn1_id = new_conn.connection_id
         new_conn.reconnect()
         conn2_id = new_conn.connection_id
         self.assertFalse(conn1_id == conn2_id)

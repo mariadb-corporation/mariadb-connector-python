@@ -415,5 +415,71 @@ class TestConnection(unittest.TestCase):
         with self.assertRaises((mariadb.InterfaceError)):
             conn.connection_id
 
+    def test_begin(self):
+        """Test begin() method to explicitly start a transaction"""
+        conn = create_connection()
+        try:
+            # Test 1: begin() should work and start a transaction
+            conn.begin()
+            
+            cursor = conn.cursor()
+            cursor.execute("CREATE TEMPORARY TABLE test_begin (id INT, value VARCHAR(50))")
+            cursor.execute("INSERT INTO test_begin VALUES (1, 'test')")
+            
+            # Verify data is visible in same transaction
+            cursor.execute("SELECT * FROM test_begin")
+            result = cursor.fetchone()
+            self.assertEqual(result[0], 1)
+            self.assertEqual(result[1], 'test')
+            
+            # Rollback the transaction
+            conn.rollback()
+            
+            # Verify table still exists but data is rolled back
+            cursor.execute("SELECT COUNT(*) FROM test_begin")
+            count = cursor.fetchone()[0]
+            self.assertEqual(count, 0)
+            
+            # Test 2: Multiple begin() calls should work
+            conn.begin()
+            cursor.execute("INSERT INTO test_begin VALUES (2, 'test2')")
+            conn.begin()  # Should not fail
+            cursor.execute("INSERT INTO test_begin VALUES (3, 'test3')")
+            conn.commit()
+            
+            # Verify both inserts are committed
+            cursor.execute("SELECT COUNT(*) FROM test_begin")
+            count = cursor.fetchone()[0]
+            self.assertEqual(count, 2)
+            
+            cursor.close()
+        finally:
+            conn.close()
+
+    def test_begin_with_autocommit(self):
+        """Test begin() behavior with autocommit enabled"""
+        default_conf = conf()
+        default_conf["autocommit"] = True
+        conn = mariadb.connect(**default_conf)
+        
+        try:
+            # begin() should work even with autocommit enabled
+            conn.begin()
+            
+            cursor = conn.cursor()
+            cursor.execute("CREATE TEMPORARY TABLE test_begin_autocommit (id INT)")
+            cursor.execute("INSERT INTO test_begin_autocommit VALUES (1)")
+            
+            # Rollback should work after begin()
+            conn.rollback()
+            
+            cursor.execute("SELECT COUNT(*) FROM test_begin_autocommit")
+            count = cursor.fetchone()[0]
+            self.assertEqual(count, 0)
+            
+            cursor.close()
+        finally:
+            conn.close()
+
 if __name__ == '__main__':
     unittest.main()

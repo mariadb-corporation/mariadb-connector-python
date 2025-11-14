@@ -81,12 +81,38 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
         await new_conn.close()
         await cursor.close()
 
+
+    async def test_change_user_wrong(self):
+        if is_skysql():
+            self.skipTest("SkySQL failure")
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't get new user immediately")
+
+        default_conf = conf()
+        
+        new_conn = await mariadb.AsyncConnection.connect(**conf())
+        with self.assertRaises((mariadb.OperationalError)):
+            await new_conn.change_user("unknownUser", "", "")
+        self.assertEqual(default_conf["user"], new_conn.user)
+        del new_conn
+
     async def test_reconnect(self):
         if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
         new_conn = await mariadb.AsyncConnection.connect(**conf())
         conn1_id = new_conn.connection_id
         await self.connection.kill(conn1_id)
+        await new_conn.reconnect()
+        conn2_id = new_conn.connection_id
+        self.assertFalse(conn1_id == conn2_id)
+        await new_conn.close()
+
+
+    async def test_reconnect_not_closed(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE wrong thread id")
+        new_conn = await mariadb.AsyncConnection.connect(**conf())
+        conn1_id = new_conn.connection_id
         await new_conn.reconnect()
         conn2_id = new_conn.connection_id
         self.assertFalse(conn1_id == conn2_id)

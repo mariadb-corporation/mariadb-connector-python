@@ -2143,6 +2143,15 @@ class TestCursor(unittest.TestCase):
         with self.assertRaises((mariadb.ProgrammingError, RuntimeError)):
             cursor5.fetchone()
 
+    def test_cursor_class(self):
+        """Test cursor class"""
+        if not is_native():
+            self.skipTest("test only for Native")
+        cursor = self.connection.cursor(cursor_class=mariadb.SyncCursor)
+        self.assertIsInstance(cursor, mariadb.SyncCursor)
+
+        cursor = self.connection.cursor(cursor_class=mariadb.SyncCursor, buffered=False)
+        self.assertIsInstance(cursor, mariadb.SyncCursor)
 
 if __name__ == '__main__':
     unittest.main()

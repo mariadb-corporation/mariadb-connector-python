@@ -143,11 +143,7 @@ class SyncConnection(BaseConnection['SyncClient']):
             try:
                 self._client.close()
             except Exception as e:
-                raise self._exception_factory.create_exception(
-                    f"Failed to close connection: {e}",
-                    errno=2013,
-                    sql_state='08003'
-                )
+                pass
             finally:
                 self._closed = True
     
@@ -180,11 +176,8 @@ class SyncConnection(BaseConnection['SyncClient']):
         Raises:
             OperationalError: If reconnection fails
         """
-        try:
-            if not self._closed:
-                self.close()
-        except:
-            pass
+        if not self._closed:
+            self.close()
         
         self._closed = False
         try:
@@ -402,13 +395,14 @@ class SyncConnection(BaseConnection['SyncClient']):
         """
 
         self._check_closed()
-        if not xid:
-            xid = self._xid
 
         if self.tpc_state == TPC_STATE.NONE:
             raise ProgrammingError("Transaction not started.")
         if xid is None and self.tpc_state != TPC_STATE.PREPARE:
             raise ProgrammingError("Transaction is not prepared.")
+
+        if not xid:
+            xid = self._xid
         if xid and not isinstance(xid, Xid):
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s" % type(xid).__name__)
@@ -455,12 +449,13 @@ class SyncConnection(BaseConnection['SyncClient']):
         self._check_closed()
         if self.tpc_state == TPC_STATE.NONE:
             raise ProgrammingError("Transaction not started.")
-        if xid and not isinstance(xid, Xid):
-            raise ProgrammingError("argument 1 must be xid "
-                                           "not %s" % type(xid).__name__)
 
         if not xid:
             xid = self._xid
+
+        if xid and not isinstance(xid, Xid):
+            raise ProgrammingError("argument 1 must be xid "
+                                           "not %s" % type(xid).__name__)
 
         if self.tpc_state < TPC_STATE.PREPARE:
             try:
