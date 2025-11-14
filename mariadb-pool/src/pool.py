@@ -224,9 +224,9 @@ class ConnectionPool:
     def _maintenance_loop(self):
         """Background thread for pool maintenance"""
         while not self._closed:
-            time.sleep(self.config.validation_interval)
             self._cleanup_expired_connections()
             self._ensure_min_connections()
+            time.sleep(self.config.validation_interval)
             
     def _cleanup_expired_connections(self):
         """Remove expired connections from pool"""
@@ -365,6 +365,10 @@ class ConnectionPool:
         """Close the pool and all connections"""
         self._closed = True
         
+        # Wait for maintenance thread to finish
+        if self._maintenance_thread and self._maintenance_thread.is_alive():
+            self._maintenance_thread.join(timeout=5.0)
+
         with self._lock:
             for pooled_conn in self._all_connections:
                 pooled_conn.closeSilently()
@@ -376,6 +380,7 @@ class ConnectionPool:
                     self._pool.get_nowait()
                 except queue.Empty:
                     break
+        
                     
     def __enter__(self):
         """Context manager entry"""
