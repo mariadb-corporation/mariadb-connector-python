@@ -9,6 +9,7 @@ Uses asyncio for non-blocking I/O operations.
 
 import asyncio
 import ssl
+import copy
 from typing import List, Optional, Any
 
 from mariadb.impl.message.server.ok_packet import OkPacket
@@ -261,7 +262,7 @@ class AsyncClient(BaseClient):
         try:
             old_conf = self.configuration
 
-            new_conf = Configuration(self.configuration.to_dict())
+            new_conf = copy.copy(self.configuration)
             new_conf.user = user if user is not None else self.configuration.user
             new_conf.password = password if password is not None else self.configuration.password
             new_conf.database = database if database is not None else self.context.database

@@ -97,33 +97,15 @@ class SyncConnection(BaseConnection['SyncClient']):
         Raises:
             ProgrammingError: If connection is closed
         """
-        self._check_closed()
-        
-        # Import here to avoid circular dependency
-        from .sync_cursor import SyncCursor
+        self._check_closed()       
         
         # Update configuration with cursor-specific options
-        if kwargs:
-            from .impl.configuration import Configuration
-            temp_config = Configuration.from_dict({**self._connection_params, **kwargs})
-            original_config = self._client.configuration
-            self._client.configuration = temp_config
-            
-            try:
-                if cursor_class is None:
-                    cursor = SyncCursor(self, **kwargs)
-                else:
-                    cursor = cursor_class(self, **kwargs)
-                    
-                cursor._cursor_config = temp_config
-                return cursor
-            finally:
-                self._client.configuration = original_config
+        if cursor_class is None:
+            # Import here to avoid circular dependency
+            from .sync_cursor import SyncCursor
+            return SyncCursor(self, **kwargs)
         else:
-            if cursor_class is None:
-                return SyncCursor(self)
-            else:
-                return cursor_class(self, **kwargs)
+            return cursor_class(self, **kwargs)
     
     def close(self) -> None:
         """

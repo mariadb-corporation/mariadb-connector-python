@@ -130,36 +130,3 @@ class ColumnDefinitionPacket:
             ext_type_format=ext_type_format
         )
     
-    def to_dict(self) -> dict:
-        """
-        Convert to dictionary format (for backward compatibility)
-        
-        Returns:
-            Dictionary with column information
-        """
-        return {
-            'catalog': self.catalog,
-            'schema': self.schema,
-            'table': self.table,
-            'org_table': self.org_table,
-            'name': self.name,
-            'org_name': self.org_name,
-            'character_set': self.character_set,
-            'column_length': self.column_length,
-            'column_type': self.column_type,
-            'flags': self.flags,
-            'decimals': self.decimals,
-            'ext_type_name': self.ext_type_name,
-            'ext_type_format': self.ext_type_format
-        }
-    
-    def __repr__(self) -> str:
-        return (f"ColumnDefinitionPacket(name='{self.name}', "
-                f"table='{self.table}', "
-                f"type={self.column_type}, "
-                f"length={self.column_length}, "
-                f"flags=0x{self.flags:04X})")
-    
-    def __str__(self) -> str:
-        type_name = self.ext_type_name or f"type_{self.column_type}"
-        return f"{self.table}.{self.name} ({type_name})"

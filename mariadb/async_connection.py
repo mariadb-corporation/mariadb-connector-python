@@ -103,31 +103,12 @@ class AsyncConnection(BaseConnection['AsyncClient']):
         """
         self._check_closed()
         
-        # Import here to avoid circular dependency
-        from .async_cursor import AsyncCursor
-        
-        # Update configuration with cursor-specific options
-        if kwargs:
-            from .impl.configuration import Configuration
-            temp_config = Configuration.from_dict({**self._connection_params, **kwargs})
-            original_config = self._client.configuration
-            self._client.configuration = temp_config
-            
-            try:
-                if cursor_class is None:
-                    cursor = AsyncCursor(self, **kwargs)
-                else:
-                    cursor = cursor_class(self, **kwargs)
-                    
-                cursor._cursor_config = temp_config
-                return cursor
-            finally:
-                self._client.configuration = original_config
+        if cursor_class is None:
+            # Import here to avoid circular dependency
+            from .async_cursor import AsyncCursor
+            return AsyncCursor(self, **kwargs)
         else:
-            if cursor_class is None:
-                return AsyncCursor(self)
-            else:
-                return cursor_class(self, **kwargs)
+            return cursor_class(self, **kwargs)
     
     async def close(self) -> None:
         """
