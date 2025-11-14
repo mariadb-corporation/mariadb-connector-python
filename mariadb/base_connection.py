@@ -96,7 +96,7 @@ class BaseConnection(ABC, Generic[TClient]):
         self._connection_params = kwargs
         
         # Create configuration and host address
-        self._configuration = Configuration.from_dict(kwargs)
+        self._configuration: Configuration = Configuration.from_dict(kwargs)
         
         # Client will be set by subclass (SyncClient or AsyncClient)
         self._client: Optional[TClient] = None

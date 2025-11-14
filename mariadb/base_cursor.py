@@ -5,8 +5,7 @@
 Base cursor implementation with common functionality for sync and async cursors
 """
 
-import datetime
-import decimal
+import copy
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING, TypeVar, Generic
@@ -71,9 +70,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._result: Optional[TResult] = None
         
         if kwargs:
-            self._config = self.connection._configuration.from_dict(
-                self.connection._configuration.to_dict()
-            )
+            self._config = copy.copy(self.connection._configuration)
             
             rtype = kwargs.pop("named_tuple", False)
             if rtype:
