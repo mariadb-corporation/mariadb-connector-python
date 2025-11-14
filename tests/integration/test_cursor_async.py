@@ -383,6 +383,96 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(5, cursor.rowcount)
         del cursor
 
+    async def test_fetchmany_error(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+        con = await mariadb.AsyncConnection.connect(**conf())
+        cursor = con.cursor()
+        await cursor.execute("CREATE TEMPORARY TABLE test_fetchmany2 ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
+        params = [(1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia")]
+        await cursor.executemany("INSERT INTO test_fetchmany2 VALUES (?,?,?)", params)
+
+        await cursor.execute("DO 1")
+        with self.assertRaises(mariadb.Error):
+            await cursor.fetchmany(1)
+        await cursor.execute("SELECT id, name, city FROM test_fetchmany2 ORDER BY id")
+        row = await cursor.fetchmany(1)
+        await cursor.close()
+        with self.assertRaises(mariadb.Error):
+            await cursor.fetchmany(1)
+        cursor = con.cursor(buffered=False)
+        await cursor.execute("SELECT id, name, city FROM test_fetchmany2 ORDER BY id")
+        await con.close()
+        with self.assertRaises(mariadb.Error):
+            await cursor.fetchmany(1)
+    
+    async def test_fetchall_error(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+        con = await mariadb.AsyncConnection.connect(**conf())
+        cursor = con.cursor()
+        await cursor.execute("CREATE TEMPORARY TABLE test_fetchmany22 ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
+        params = [(1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia")]
+        await cursor.executemany("INSERT INTO test_fetchmany22 VALUES (?,?,?)", params)
+        await cursor.execute("DO 1")
+        with self.assertRaises(mariadb.Error): 
+            await cursor.fetchall()
+
+        await cursor.execute("SELECT id, name, city FROM test_fetchmany22 ORDER BY id")
+        await cursor.close()
+        with self.assertRaises(mariadb.Error): 
+            await cursor.fetchall()
+
+        cursor = con.cursor(buffered=False)
+        await cursor.execute("SELECT id, name, city FROM test_fetchmany22 ORDER BY id")
+        await con.close()
+        with self.assertRaises(mariadb.Error): 
+            await cursor.fetchall()
+
+
+    async def test_scroll_error(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+        con = await mariadb.AsyncConnection.connect(**conf())
+        cursor = con.cursor()
+        await cursor.execute("CREATE TEMPORARY TABLE test_fetchmany3 ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
+        params = [(1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia")]
+        await cursor.executemany("INSERT INTO test_fetchmany3 VALUES (?,?,?)", params)
+        await cursor.execute("DO 1")
+        
+        with self.assertRaises(mariadb.Error):
+            await cursor.scroll(1)
+
+        await cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
+        await cursor.scroll(1)
+
+        await cursor.close()
+        with self.assertRaises(mariadb.Error):
+            await cursor.scroll(1)
+
+        cursor = con.cursor(buffered=False)
+        await cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
+        await con.close()
+        with self.assertRaises(mariadb.Error):
+            await cursor.scroll(1)
     async def test1_multi_result(self):
         cursor = self.connection.cursor()
         await cursor.execute("DROP PROCEDURE IF EXISTS p1")
@@ -2164,6 +2254,14 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         cursor = self.connection.cursor(cursor_class=mariadb.AsyncCursor, buffered=False)
         self.assertIsInstance(cursor, mariadb.AsyncCursor)
 
+    async def test_streaming_noconnection(self):
+        conn = await mariadb.AsyncConnection.connect(**conf())
+        cursor = conn.cursor(buffered=False)
+        await cursor.execute("SELECT 1")
+        
+        # explicitly close connection before cursor
+        await conn.close()
+        await cursor.close()
 
 if __name__ == '__main__':
     unittest.main()

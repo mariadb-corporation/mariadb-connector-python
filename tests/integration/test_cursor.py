@@ -376,6 +376,90 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(5, cursor.rowcount)
         del cursor
 
+
+    def test_fetchmany_error(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+        con = create_connection()
+        cursor = con.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE test_fetchmany2 ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
+        params = [(1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia")]
+        cursor.executemany("INSERT INTO test_fetchmany2 VALUES (?,?,?)", params)
+        cursor.execute("DO 1")
+        self.assertRaises(mariadb.Error, cursor.fetchmany)
+
+        cursor.execute("SELECT id, name, city FROM test_fetchmany2 ORDER BY id")
+        row = cursor.fetchmany(1)
+        cursor.close()
+        self.assertRaises(mariadb.Error, cursor.fetchmany)
+        cursor = con.cursor(buffered=False)
+        cursor.execute("SELECT id, name, city FROM test_fetchmany2 ORDER BY id")
+        con.close()
+        self.assertRaises(mariadb.Error, cursor.fetchmany)
+
+    def test_fetchall_error(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+        con = create_connection()
+        cursor = con.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE test_fetchmany22 ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
+        params = [(1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia")]
+        cursor.executemany("INSERT INTO test_fetchmany22 VALUES (?,?,?)", params)
+        cursor.execute("DO 1")
+        self.assertRaises(mariadb.Error, cursor.fetchall)
+
+        cursor.execute("SELECT id, name, city FROM test_fetchmany22 ORDER BY id")
+        cursor.close()
+        self.assertRaises(mariadb.Error, cursor.fetchall)
+        cursor = con.cursor(buffered=False)
+        cursor.execute("SELECT id, name, city FROM test_fetchmany22 ORDER BY id")
+        con.close()
+        self.assertRaises(mariadb.Error, cursor.fetchall)
+
+    def test_scroll_error(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't support BULK yet")
+        con = create_connection()
+        cursor = con.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE test_fetchmany3 ("
+                       "id int, name varchar(64), "
+                       "city varchar(64))")
+        params = [(1, u"Jack", u"Boston"),
+                  (2, u"Martin", u"Ohio"),
+                  (3, u"James", u"Washington"),
+                  (4, u"Rasmus", u"Helsinki"),
+                  (5, u"Andrey", u"Sofia")]
+        cursor.executemany("INSERT INTO test_fetchmany3 VALUES (?,?,?)", params)
+        cursor.execute("DO 1")
+        
+        with self.assertRaises(mariadb.Error):
+            cursor.scroll(1)
+
+        cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
+        cursor.scroll(1)
+
+        cursor.close()
+        with self.assertRaises(mariadb.Error):
+            cursor.scroll(1)
+
+        cursor = con.cursor(buffered=False)
+        cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
+        con.close()
+        with self.assertRaises(mariadb.Error):
+            cursor.scroll(1)
+
     def test1_multi_result(self):
         cursor = self.connection.cursor()
         cursor.execute("DROP PROCEDURE IF EXISTS p1")
@@ -2152,6 +2236,16 @@ class TestCursor(unittest.TestCase):
 
         cursor = self.connection.cursor(cursor_class=mariadb.SyncCursor, buffered=False)
         self.assertIsInstance(cursor, mariadb.SyncCursor)
+
+    def test_streaming_noconnection(self):
+        conn = create_connection()
+        cursor = conn.cursor(buffered=False)
+        cursor.execute("SELECT 1")
+        
+        # explicitly close connection before cursor
+        conn.close();
+        cursor.close()
+        
 
 if __name__ == '__main__':
     unittest.main()

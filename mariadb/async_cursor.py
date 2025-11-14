@@ -329,15 +329,13 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
             raise ProgrammingError("No result set to fetch from")
         
         # Delegate to Result object
-        if self._result is not None:
-            row = await self._result.fetch_one()
-            self._rowcount = self._result.get_row_count()
-            if row is not None:
-                # Apply row formatting
-                row = self._apply_row_formatting([row])[0]
-            return row
-        
-        return None
+        row = await self._result.fetch_one()
+        self._rowcount = self._result.get_row_count()
+        if row is not None:
+            # Apply row formatting
+            row = self._apply_row_formatting([row])[0]
+        return row
+
         
     async def fetchmany(self, size: Optional[int] = None) -> List[Any]:
         """
