@@ -207,11 +207,11 @@ class SyncStream():
             self.sequence.set(self._readbuf[3])
 
             # Read payload chunk
-            self._ensure_capacity(4 + pkt_len)
-            self._recv_exact(pkt_len, 4)
+            self._ensure_capacity(pkt_len)
+            self._recv_exact(pkt_len, 0)
             
             # Append only the payload (not the header) to result
-            result.extend(self._view[4:4 + pkt_len])
+            result.extend(self._view[0:pkt_len])
 
             # Continuation condition
             if pkt_len < 0xFFFFFF:
@@ -221,7 +221,7 @@ class SyncStream():
 
     
     
-    def send_payload(self, data: bytes, packet_type: str = "", reset_sequence: bool = True) -> None:
+    def send_payload(self, data: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
         Send a complete MariaDB packet synchronously
         
@@ -248,17 +248,21 @@ class SyncStream():
             chunk = data[offset:offset + chunk_size]
             
             # Build packet header
-            header = struct.pack('<I', chunk_size)[:3] + bytes([self.sequence.increment_and_get()])
+            
+            self.header[0] = chunk_size & 0xFF;
+            self.header[1] = (chunk_size >> 8) & 0xFF;
+            self.header[2] = (chunk_size >> 16) & 0xFF;
+            self.header[3] = self.sequence.increment_and_get()
             
             # Log if debug enabled
             if logger.isEnabledFor(logging.DEBUG):
                 conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
                 packet_type_str = f" {packet_type}" if packet_type else ""
-                logger.debug(hex_dump(header + chunk, f"SEND sync: {conn_id_str}{packet_type_str}"))
+                logger.debug(hex_dump(self.header + chunk, f"SEND sync: {conn_id_str}{packet_type_str}"))
 
             
             # Write header and chunk
-            self.socket.sendall(header + chunk)
+            self.socket.sendall(self.header + chunk)
             offset += chunk_size
             chunk_count += 1
 
@@ -268,13 +272,16 @@ class SyncStream():
                 break
 
     def _send_empty_packet(self, packet_type: str = ""):
-        header = struct.pack('<I', 0)[:3] + bytes([self.sequence.increment_and_get()])
+        self.header[0] = 0;
+        self.header[1] = 0;
+        self.header[2] = 0;
+        self.header[3] = self.sequence.increment_and_get()
         # Log if debug enabled
         if logger.isEnabledFor(logging.DEBUG):
             conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
             packet_type_str = f" {packet_type}" if packet_type else ""
-            logger.debug(hex_dump(header, f"SEND sync: {conn_id_str}{packet_type_str}"))
-        self.socket.sendall(header)
+            logger.debug(hex_dump(self.header, f"SEND sync: {conn_id_str}{packet_type_str}"))
+        self.socket.sendall(self.header)
 
 
     def close(self) -> None:
