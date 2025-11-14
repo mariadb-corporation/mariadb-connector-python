@@ -94,7 +94,7 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(Exception):
             await new_conn.change_user("unknownUser", "mypassword", default_conf["database"])
         self.assertEqual(default_conf["user"], new_conn.user)
-        del new_conn
+        await new_conn.close()
 
     async def test_reconnect(self):
         if is_maxscale():

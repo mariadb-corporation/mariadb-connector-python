@@ -87,7 +87,7 @@ class CursorTest(unittest.TestCase):
         with self.assertRaises(Exception):
             new_conn.change_user("unknownUser", "blabla", default_conf["database"])
         self.assertEqual(default_conf["user"], new_conn.user)
-        del new_conn
+        new_conn.close()
 
     def test_reconnect(self):
         if is_maxscale():
