@@ -41,11 +41,6 @@ PyDoc_STRVAR(
 );
 
 PyDoc_STRVAR(
-    exception_pool__doc__,
-    "Exception raised for errors related to ConnectionPool class."
-);
-
-PyDoc_STRVAR(
     exception_operational__doc__,
     "Exception raised for errors that are related to the database's "\
     "operation and not necessarily under the control of the programmer."

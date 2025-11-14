@@ -32,7 +32,6 @@ PyObject *decimal_module= NULL,
          *decimal_type= NULL,
          *socket_module= NULL,
          *indicator_module= NULL;
-extern uint16_t max_pool_size;
 
 int
 Mariadb_traverse(PyObject *self,
@@ -162,7 +161,6 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     Mariadb_IntegrityError = PyObject_GetAttrString(mariadb_module, "IntegrityError");
     Mariadb_DataError = PyObject_GetAttrString(mariadb_module, "DataError");
     Mariadb_NotSupportedError = PyObject_GetAttrString(mariadb_module, "NotSupportedError");
-    Mariadb_PoolError = PyObject_GetAttrString(mariadb_module, "PoolError");
     
     Py_DECREF(mariadb_module);
     
@@ -170,7 +168,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     if (!Mariadb_Error || !Mariadb_Warning || !Mariadb_InterfaceError || 
         !Mariadb_DatabaseError || !Mariadb_InternalError || !Mariadb_OperationalError ||
         !Mariadb_ProgrammingError || !Mariadb_IntegrityError || !Mariadb_DataError ||
-        !Mariadb_NotSupportedError || !Mariadb_PoolError) {
+        !Mariadb_NotSupportedError) {
         PyErr_SetString(PyExc_ImportError, "Failed to import exceptions from mariadb module");
         goto error;
     }

@@ -15,8 +15,7 @@ from mariadb_shared.exceptions import (
     OperationalError,
     ProgrammingError,
     IntegrityError,
-    DataError,
-    PoolError
+    DataError
 )
 from .cursors import Cursor
 from .connections import Connection
@@ -97,11 +96,9 @@ mariadbapi_version = _base_version
 client_version_info = version_tuple
 client_version = version_numeric
 
-_POOLS = _CONNECTION_POOLS = {}
-
 __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "InterfaceError", "InternalError", "NotSupportedError",
-           "OperationalError", "PoolError", "ProgrammingError",
+           "OperationalError", "ProgrammingError",
            "Warning", "Connection", "__version__", "__version_type__", "__version_info__",
            "__author__", "Cursor", "fieldinfo", "_have_asan", "connect"]
 
@@ -169,29 +166,6 @@ def connect(*args, connectionclass=Connection, **kwargs):
                 # Remove the URI from args
                 args = args[1:]
     
-    if kwargs:
-        if "pool_name" in kwargs:
-            try:
-                from mariadb_pool import ConnectionPoolWrapper
-            except ImportError:
-                raise AttributeError(
-                    "ConnectionPool is not available. "
-                    "Install mariadb-pool: pip install mariadb[pool]"
-                )
-
-            if not kwargs["pool_name"] in _CONNECTION_POOLS:
-                try:
-                    from mariadb_c._mariadb import ConnectionPool
-                    pool = ConnectionPool(**kwargs)
-                except (ImportError, AttributeError):
-                    raise NotSupportedError("ConnectionPool is not available in this build of mariadb_c, ")
-
-                        
-            else:
-                pool = _CONNECTION_POOLS[kwargs["pool_name"]]
-            c = pool.get_connection()
-            return c
-
     connection = connectionclass(*args, **kwargs)
     if not isinstance(connection, Connection):
         raise ProgrammingError("%s is not an instance of "

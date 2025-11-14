@@ -7,9 +7,8 @@ from numbers import Number
 # Import shared constants and exceptions to avoid circular dependencies
 from mariadb_shared.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
 from mariadb_shared.exceptions import (
-    Error, Warning, InterfaceError, DatabaseError,
-    InternalError, OperationalError, ProgrammingError,
-    IntegrityError, DataError, NotSupportedError, PoolError
+    ProgrammingError,
+    NotSupportedError
 )
 from typing import Sequence
 import decimal

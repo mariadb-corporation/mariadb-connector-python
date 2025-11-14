@@ -143,7 +143,6 @@ int clock_gettime(int dummy, struct timespec *ct);
         TOSTRING(PY_MARIADB_MINOR_VERSION) "." TOSTRING(PY_MARIADB_PATCH_VERSION)
 
 #define MAX_TPC_XID_SIZE 64
-#define POOL_DEFAULT_SIZE 5
 
 /* Placeholder for missing documentation */
 #define MISSING_DOC NULL
@@ -360,7 +359,6 @@ extern PyObject *Mariadb_InterfaceError;
 extern PyObject *Mariadb_Error;
 extern PyObject *Mariadb_DatabaseError;
 extern PyObject *Mariadb_DataError;
-extern PyObject *Mariadb_PoolError;
 extern PyObject *Mariadb_OperationalError;
 extern PyObject *Mariadb_IntegrityError;
 extern PyObject *Mariadb_InternalError;
@@ -372,7 +370,6 @@ extern PyObject *decimal_module,
                 *decimal_type;
 
 /* Object types */
-extern PyTypeObject MrdbPool_Type;
 extern PyTypeObject Mariadb_Fieldinfo_Type;
 extern PyTypeObject MrdbConnection_Type;
 extern PyTypeObject MrdbCursor_Type;
@@ -471,8 +468,6 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
 #define MARIADB_PY_PARAMSTYLE "qmark"
 #define MARIADB_PY_THREADSAFETY 1
 
-#define MAX_POOL_SIZE 64
-
 #define TIMEDIFF(a,b)\
   ((a).tv_sec * (uint64_t)1E09 + (a).tv_nsec) -\
   ((b).tv_sec * (uint64_t)1E09 + (b).tv_nsec)
@@ -519,18 +514,6 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
         mariadb_throw_exception(cursor->stmt, Mariadb_ProgrammingError, 1,\
       "Invalid cursor or not connected");\
     }
-
-
-
-// #define pooling_keywords "pool_name", "pool_size", "reset_session", "idle_timeout", "acquire_timeout"
-#define connection_keywords "dsn", "host", "user", "password", "database", "port", "socket",\
-  "connect_timeout", "read_timeout", "write_timeout",\
-"local_infile", "compress", "init_command",\
-"default_file", "default_group",\
-"ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",\
-"ssl_cipher", "ssl_capath", "ssl_crlpath",\
-"ssl_verify_cert", "ssl",\
-"client_flags", "charset"
 
 /* MariaDB protocol macros */
 #define int1store(T,A) *((int8_t*) (T)) = (A)

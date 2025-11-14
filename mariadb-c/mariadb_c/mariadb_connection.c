@@ -21,8 +21,7 @@ char *dsn_keys[]= {
     "ssl_key", "ssl_ca", "ssl_cert", "ssl_crl",
     "ssl_cipher", "ssl_capath", "ssl_crlpath",
     "ssl_verify_cert", "ssl",
-    "client_flag", "pool_name", "pool_size", 
-    "pool_reset_connection", "plugin_dir",
+    "client_flag", "plugin_dir",
     "username", "db", "passwd",
     "status_callback", "tls_version",
     "tls_fp", "tls_fp_list",
@@ -91,7 +90,6 @@ MrdbConnection_sets[]=
     GETTER_EXCEPTION("NotSupportedError", Mariadb_NotSupportedError, exception_notsupported__doc__),
     GETTER_EXCEPTION("InternalError", Mariadb_InternalError, exception_internal__doc__),
     GETTER_EXCEPTION("OperationalError", Mariadb_OperationalError, exception_operational__doc__),
-    GETTER_EXCEPTION("PoolError", Mariadb_PoolError, exception_pool__doc__),
     GETTER_EXCEPTION("DataError", Mariadb_DataError, exception_data__doc__),
     {NULL}
 };
@@ -298,10 +296,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
          *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
          *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
          *plugin_dir= NULL, *tls_version= NULL, *tls_fp= NULL, *tls_fp_list= NULL;
-    char *pool_name= 0;
-    uint32_t pool_size= 0;
     uint8_t ssl_enforce= 0;
-    uint8_t reset_session= 1;
     unsigned int client_flags= 0, port= 0;
     unsigned int local_infile= 0xFF;
     unsigned int connect_timeout=10, read_timeout=0, write_timeout=0,
@@ -309,7 +304,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     PyObject *status_callback= NULL;
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|zzzzziziiibbzzzzzzzzzzibizibzzzzOzzz:connect",
+                "|zzzzziziiibbzzzzzzzzzzibizzzzOzzz:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -318,8 +313,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_key, &ssl_ca, &ssl_cert, &ssl_crl,
                 &ssl_cipher, &ssl_capath, &ssl_crlpath,
                 &ssl_verify_cert, &ssl_enforce,
-                &client_flags, &pool_name, &pool_size,
-                &reset_session, &plugin_dir,
+                &client_flags, &plugin_dir,
                 &user, &schema, &password, &status_callback,
                 &tls_version, &tls_fp, &tls_fp_list))
     {

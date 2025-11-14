@@ -6,9 +6,7 @@ import socket
 # Import shared constants and exceptions to avoid circular dependencies
 from mariadb_shared.constants import STATUS, TPC_STATE, INFO
 from mariadb_shared.exceptions import (
-    Error, Warning, InterfaceError, DatabaseError,
-    InternalError, OperationalError, ProgrammingError,
-    IntegrityError, DataError, NotSupportedError, PoolError
+    Error, ProgrammingError,
 )
 # Import mariadbapi_version from C extension
 from mariadb_c._mariadb import mariadbapi_version
@@ -49,11 +47,9 @@ class Connection(CConnection):
         self._used = 0
         self._last_executed_statement = None
         self._socket = None
-        self.__pool = None
         self.__last_used = 0
         self.tpc_state = TPC_STATE.NONE
         self._xid = None
-        self._pooled_connection = None  # PooledConnection wrapper for pooled connections
 
         autocommit = kwargs.pop("autocommit", False)
         reconnect = kwargs.pop("reconnect", False)
@@ -112,16 +108,6 @@ class Connection(CConnection):
             cursorclass = Cursor
         cursor = cursorclass(self, **kwargs)
         return cursor
-    
-    def _set_pooled_connection(self, pooled_connection):
-        """Set the PooledConnection wrapper for this connection (internal use only)"""
-        self._pooled_connection = pooled_connection
-    
-    def close(self):
-        if self._pooled_connection:
-            self._pooled_connection.return_to_pool()
-        else:
-            super().close()
 
     def __enter__(self):
         self._check_closed()
