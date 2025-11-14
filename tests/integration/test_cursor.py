@@ -460,6 +460,13 @@ class TestCursor(unittest.TestCase):
         with self.assertRaises(mariadb.Error):
             cursor.scroll(1)
 
+        cursor = con.cursor(buffered=False)
+        cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
+        with self.assertRaises(mariadb.Error):
+            cursor.scroll(100)
+        with self.assertRaises(mariadb.Error):
+            cursor.scroll(1)
+
     def test1_multi_result(self):
         cursor = self.connection.cursor()
         cursor.execute("DROP PROCEDURE IF EXISTS p1")

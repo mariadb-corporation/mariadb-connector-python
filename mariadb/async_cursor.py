@@ -438,10 +438,6 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
         if self._result is None:
             raise ProgrammingError("Cursor doesn't have a result set")
         
-        # Validate mode
-        if mode not in ("absolute", "relative"):
-            raise ProgrammingError("Invalid or unknown scroll mode specified.")
-        
         # For streaming results, only forward relative scrolling is allowed
         if self._result.streaming():
             if mode != "relative":

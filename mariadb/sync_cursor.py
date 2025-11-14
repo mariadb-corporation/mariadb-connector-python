@@ -360,11 +360,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
         
         # Check if we have a result set
         if self._result is None:
-            raise ProgrammingError("Cursor doesn't have a result set")
-        
-        # Validate mode
-        if mode not in ("absolute", "relative"):
-            raise ProgrammingError("Invalid or unknown scroll mode specified.")
+            raise ProgrammingError("Cursor doesn't have a result set")       
         
         # For streaming results, only forward relative scrolling is allowed
         if self._result.streaming():

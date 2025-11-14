@@ -484,5 +484,17 @@ class TestConnection(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_multiple_hosts(self):
+        default_conf = conf()
+        default_conf["host"] = "non_existant," + default_conf["host"]
+        default_conf["connect_timeout"] = 1
+        new_conn = mariadb.connect(**default_conf)
+        cursor = new_conn.cursor()
+        cursor.execute("SELECT 1")
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        del cursor
+        del new_conn
+
 if __name__ == '__main__':
     unittest.main()

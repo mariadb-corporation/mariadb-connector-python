@@ -378,17 +378,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         else:
             # Fallback - return raw packet (should not happen)
             return row_packet
-    
-    def fetch_many(self, size: int) -> List[tuple]:
-        """Fetch multiple rows"""
-        result = []
-        for _ in range(size):
-            row = self.fetch_one()
-            if row is None:
-                break
-            result.append(row)
-        return result
-    
+        
     def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
         result = []
@@ -417,15 +407,8 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         Returns:
             Row packet bytes, or None if no more rows
         """
-        if self.loaded:
-            return None
-            
         try:
             row_packet: bytes = self.stream.read_payload()
-            
-            if len(row_packet) == 0:
-                self.loaded = True
-                return None
             
             # Check for EOF/OK packet
             if (row_packet[0] == 0xFE and 
@@ -503,16 +486,8 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         Returns:
             Row packet bytes, or None if no more rows
         """
-        if self.loaded:
-            return None
-            
         try:
-            row_packet: bytes = await self.stream.read_payload()
-            
-            if len(row_packet) == 0:
-                self.loaded = True
-                return None
-            
+            row_packet: bytes = await self.stream.read_payload()             
             # Check for EOF/OK packet
             if (row_packet[0] == 0xFE and 
                 ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
@@ -558,16 +533,6 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         else:
             # Fallback - return raw packet (should not happen)
             return row_packet
-    
-    async def fetch_many(self, size: int) -> List[tuple]:
-        """Fetch multiple rows (async)"""
-        result = []
-        for _ in range(size):
-            row = await self.fetch_one()
-            if row is None:
-                break
-            result.append(row)
-        return result
     
     async def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows (async)"""
