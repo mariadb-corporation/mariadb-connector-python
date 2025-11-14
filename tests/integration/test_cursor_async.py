@@ -2263,5 +2263,63 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await conn.close()
         await cursor.close()
 
+    async def test_async_cursor_sync_iteration_error(self):
+        """Test that sync iteration raises TypeError for AsyncCursor"""
+        cursor = self.connection.cursor()
+        await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
+        
+        # Test __iter__ raises TypeError
+        with self.assertRaises(TypeError) as cm:
+            iter(cursor)
+        self.assertIn("async for", str(cm.exception).lower())
+        
+        # Test __next__ raises TypeError
+        with self.assertRaises(TypeError) as cm:
+            next(cursor)
+        self.assertIn("async for", str(cm.exception).lower())
+        
+        await cursor.close()
+
+    async def test_async_cursor_sync_context_manager_error(self):
+        """Test that sync context manager raises TypeError for AsyncCursor"""
+        cursor = self.connection.cursor()
+        
+        # Test __enter__ raises TypeError
+        with self.assertRaises(TypeError) as cm:
+            cursor.__enter__()
+        self.assertIn("async with", str(cm.exception).lower())
+        
+        # Test __exit__ raises TypeError
+        with self.assertRaises(TypeError) as cm:
+            cursor.__exit__(None, None, None)
+        self.assertIn("async with", str(cm.exception).lower())
+        
+        await cursor.close()
+
+    async def test_async_cursor_with_statement_error(self):
+        """Test that using 'with' statement raises TypeError for AsyncCursor"""
+        cursor = self.connection.cursor()
+        
+        # Attempting to use sync 'with' should raise TypeError
+        with self.assertRaises(TypeError) as cm:
+            with cursor:
+                pass
+        self.assertIn("async with", str(cm.exception).lower())
+        
+        await cursor.close()
+
+    async def test_async_cursor_for_loop_error(self):
+        """Test that using 'for' loop raises TypeError for AsyncCursor"""
+        cursor = self.connection.cursor()
+        await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
+        
+        # Attempting to use sync 'for' should raise TypeError
+        with self.assertRaises(TypeError) as cm:
+            for row in cursor:
+                pass
+        self.assertIn("async for", str(cm.exception).lower())
+        
+        await cursor.close()
+
 if __name__ == '__main__':
     unittest.main()

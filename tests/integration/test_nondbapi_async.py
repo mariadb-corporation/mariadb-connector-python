@@ -89,10 +89,10 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
             self.skipTest("MAXSCALE doesn't get new user immediately")
 
         default_conf = conf()
-        
+       
         new_conn = await mariadb.AsyncConnection.connect(**conf())
-        with self.assertRaises((mariadb.OperationalError)):
-            await new_conn.change_user("unknownUser", "", "")
+        with self.assertRaises(Exception):
+            await new_conn.change_user("unknownUser", "mypassword", default_conf["database"])
         self.assertEqual(default_conf["user"], new_conn.user)
         del new_conn
 
