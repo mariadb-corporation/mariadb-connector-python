@@ -163,6 +163,7 @@ class ConnectionPool:
         self._all_connections: list[PooledConnection] = []
         self._lock = threading.RLock()
         self._closed = False
+        self._shutdown_event = threading.Event()  # For immediate thread shutdown
         self._maintenance_thread = None
 
         if (len(connection_params) > 0):
@@ -226,7 +227,9 @@ class ConnectionPool:
         while not self._closed:
             self._cleanup_expired_connections()
             self._ensure_min_connections()
-            time.sleep(self.config.validation_interval)
+            # Use event.wait() instead of time.sleep() for immediate shutdown
+            if self._shutdown_event.wait(timeout=self.config.validation_interval):
+                break  # Event was set, exit immediately
             
     def _cleanup_expired_connections(self):
         """Remove expired connections from pool"""
@@ -364,6 +367,9 @@ class ConnectionPool:
     def close(self):
         """Close the pool and all connections"""
         self._closed = True
+        
+        # Signal maintenance thread to stop immediately
+        self._shutdown_event.set()
         
         # Wait for maintenance thread to finish
         if self._maintenance_thread and self._maintenance_thread.is_alive():
