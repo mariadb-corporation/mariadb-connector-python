@@ -80,9 +80,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                 if rtype:
                     self._config.dictionary = rtype
             
-            native_obj = kwargs.pop("native_object", None)
-            if native_obj:
-                self._config.native_object = bool(native_obj)
+            self._config.native_object = bool(kwargs.pop("native_object", self._config.native_object))
         else:
             self._config = self.connection._configuration        
 
