@@ -16,6 +16,7 @@ import unittest
 import platform
 
 from ..conftest import get_test_config
+from ..base_test import create_connection
 
 try:
     import mariadb
@@ -45,8 +46,7 @@ class TestUnixSocket(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test table"""
-        conf = get_test_config()
-        cls.conn = mariadb.connect(**conf)
+        cls.conn = create_connection()
         cls.conn.autocommit = True
         cursor = cls.conn.cursor()
         cursor.execute(
@@ -56,22 +56,30 @@ class TestUnixSocket(unittest.TestCase):
             ") COLLATE = utf8mb3_bin"
         )
         cursor.close()
-        cls.conn.commit()
 
     @classmethod
     def tearDownClass(cls):
         """Clean up test table"""
-        cursor = cls.conn.cursor()
-        cursor.execute("DROP TABLE IF EXISTS test_unixsocket_table")
-        cursor.close()
-        cls.conn.close()
+        # Check if conn exists and is a valid connection object
+        if hasattr(cls, 'conn') and hasattr(cls.conn, 'cursor'):
+            try:
+                cursor = cls.conn.cursor()
+                cursor.execute("DROP TABLE IF EXISTS test_unixsocket_table")
+                cursor.close()
+                cls.conn.close()
+            except Exception:
+                # Connection might already be closed or invalid
+                pass
 
     def setUp(self):
         """Clear test table before each test"""
+        # Check if conn exists and is valid
+        if not hasattr(self, 'conn') or not hasattr(self.conn, 'cursor'):
+            self.skipTest("Class-level connection not available")
+        
         cursor = self.conn.cursor()
         cursor.execute("DELETE FROM test_unixsocket_table")
         cursor.close()
-        self.conn.commit()
 
     @unittest.skipIf(is_windows(), "Unix sockets not supported on Windows")
     @unittest.skipIf(not is_local_test(), "Test requires local environment")
@@ -97,9 +105,6 @@ class TestUnixSocket(unittest.TestCase):
         cursor.execute("SELECT @@version_compile_os, @@socket")
         row = cursor.fetchone()
         cursor.close()
-        
-        # Commit the data so it's visible to other connections
-        self.conn.commit()
         
         if not row or not row[1]:
             self.skipTest("Server does not provide socket path")
@@ -260,7 +265,6 @@ class TestUnixSocket(unittest.TestCase):
                     f"INSERT INTO test_unixsocket_table (int_column, mediumtext_column) VALUES ({i}, 'text_{i}')"
                 )
             
-            socket_conn.commit()
             # Test query with multiple results
             cursor.execute("SELECT * FROM test_unixsocket_table ORDER BY int_column")
             results = cursor.fetchall()

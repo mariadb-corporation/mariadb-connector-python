@@ -65,27 +65,29 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self.lastrowid: Optional[int] = None
         self._completions: List[Completion] = []
         self._completion_index: int = 0
-        self._cursor_config = None
+        self._config = None
         self._exception_factory = ExceptionFactory()
         self._buffered: bool = bool(kwargs.pop('buffered', True))
         self._result: Optional[TResult] = None
         
         if kwargs:
-            self._cursor_config = self.connection._configuration.from_dict(
+            self._config = self.connection._configuration.from_dict(
                 self.connection._configuration.to_dict()
             )
             
             rtype = kwargs.pop("named_tuple", False)
             if rtype:
-                self._cursor_config.named_tuple = rtype
+                self._config.named_tuple = rtype
             else:
                 rtype = kwargs.pop("dictionary", False)
                 if rtype:
-                    self._cursor_config.dictionary = rtype
+                    self._config.dictionary = rtype
             
             native_obj = kwargs.pop("native_object", None)
-            if native_obj is not None:
-                self._cursor_config.native_object = bool(native_obj)
+            if native_obj:
+                self._config.native_object = bool(native_obj)
+        else:
+            self._config = self.connection._configuration        
 
     @property
     def rowcount(self) -> int:
@@ -98,11 +100,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         if not self._result or not hasattr(self._result, 'columns'):
             return None
         return self._build_description(self._result.columns)
-    
-    def _get_config(self):
-        """Get the effective configuration (cursor-specific or connection default)"""
-        return getattr(self, '_cursor_config', None) or self.connection._configuration
-        
+
     def _check_closed(self) -> None:
         """Check if cursor is closed"""
         if self._closed or self.connection._closed:
@@ -149,10 +147,9 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     @property
     def _resulttype(self) -> int:
         """Current result type"""
-        config = self._get_config()
-        if (config.named_tuple):
+        if (self._config.named_tuple):
             return RESULT_NAMEDTUPLE
-        elif (config.dictionary):
+        elif (self._config.dictionary):
             return RESULT_DICTIONARY
         else:
             return RESULT_TUPLE
@@ -296,7 +293,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             self._affected_rows = completion.affected_rows
             self._rowcount = completion.affected_rows
             self._result = None
-            self.lastrowid = completion.insert_id is not None and completion.insert_id > 0 and completion.insert_id or None
+            self.lastrowid = completion.insert_id or None
     
     def _process_rows_set_completion(self, result_set: Result) -> None:
         """
@@ -426,12 +423,11 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     
     def _apply_row_formatting(self, rows: List[Any]) -> List[Any]:
         """Apply row formatting (named_tuple or dictionary) based on configuration"""
-        config = self._get_config()
         columns = self._result.columns if self._result else []
         
-        if config.named_tuple and columns:
+        if self._config.named_tuple and columns:
             return self._convert_rows_to_named_tuples(rows, columns)
-        elif config.dictionary and columns:
+        elif self._config.dictionary and columns:
             return self._convert_rows_to_dictionaries(rows, columns)
         
         return rows

@@ -64,7 +64,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
             self.lastrowid = None
             self._completions = []
             self._completion_index = 0
-            self._cursor_config = None
+            self._config = None
             self._result = None
     
     # =========================================================================
@@ -153,7 +153,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                 
             # Use provided buffered parameter or fall back to cursor default
             effective_buffered = buffered if buffered is not None else self._buffered
-            completions = await self.connection._client.execute(query_packet, config=self._get_config(), can_redo=False, buffered=effective_buffered)
+            completions = await self.connection._client.execute(query_packet, config=self._config, can_redo=False, buffered=effective_buffered)
             
             # Process the completions to extract result data
             self._process_completions(completions)
@@ -269,7 +269,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                 query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
                 # Use provided buffered parameter or fall back to cursor default
                 effective_buffered = buffered if buffered is not None else self._buffered
-                compl = await self.connection._client.execute(query_packet, config=self._get_config(), can_redo=False, buffered=effective_buffered)
+                compl = await self.connection._client.execute(query_packet, config=self._config, can_redo=False, buffered=effective_buffered)
                 completions.extend(compl)
                 for c in compl:
                     if c.affected_rows >= 0:
@@ -369,6 +369,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
         if size is None:
             size = self.arraysize
         result = []
+
         for _ in range(size):
             row = await self.fetchone()
             if row is None:
@@ -402,16 +403,13 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
             raise ProgrammingError("Connection is closed")
 
         # DB-API 2.0: Raise error if no result set (description is None)
-        if self.description is None:
+        if self._result is None:
             raise ProgrammingError("No result set to fetch from")
         
         # Delegate to Result object
-        if self._result is not None:
-            rows = await self._result.fetch_all()
-            self._rowcount = self._result.get_row_count()
-            return self._apply_row_formatting(rows)
-        
-        return []
+        rows = await self._result.fetch_all()
+        self._rowcount = self._result.get_row_count()
+        return self._apply_row_formatting(rows)
     
     async def scroll(self, value: int, mode: str = "relative") -> None:
         """
@@ -502,7 +500,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                 # Execute with parameters using ExecutePacket
                 from .impl.message.client.execute_packet import ExecutePacket
                 execute_packet = ExecutePacket(stmt.statement_id, list(args), call_sql)
-                completions = await self.connection._client.execute(execute_packet, self._get_config(), can_redo=False)
+                completions = await self.connection._client.execute(execute_packet, self._config, can_redo=False)
                 
                 # Process all completions
                 self._process_callproc_completions(completions)
@@ -600,7 +598,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
         return AsyncCompleteResult(
             columns=columns,
             column_count=column_count,
-            config=self._get_config(),
+            config=self._config,
             rows=rows,
             is_binary=is_binary
         )

@@ -280,16 +280,13 @@ class SyncClient(BaseClient):
             try:            
                 self._send_message(message)
                 results = []
-                is_binary = message.is_binary()
                 
                 while True:
                     result_packet: bytearray = self.stream.read_payload()
-                    completion = self._parse_result_packet(result_packet, config, is_binary, buffered)
+                    completion = self._parse_result_packet(result_packet, config, message.is_binary(), buffered)
                     results.append(completion)
                     
-                    # Check if there are more results to read
-                    if (self.context and 
-                        (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0):
+                    if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                         break
                 
                 return results
@@ -403,14 +400,9 @@ class SyncClient(BaseClient):
 
     def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> Completion:
         """Parse result packet into completion object"""
-        if len(packet) == 0:
-            raise OperationalError("Empty result packet")
-        
-        packet_type = packet[0]
-        
-        if packet_type == self.OK_PACKET:
+        if packet[0] == self.OK_PACKET:
             return OkPacket.decode(packet, self.context)
-        elif packet_type == self.ERROR_PACKET:
+        elif packet[0] == self.ERROR_PACKET:
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
             return self._parse_result_set(packet, config, is_binary, buffered)
