@@ -14,7 +14,7 @@ class TestCA(unittest.TestCase):
         self.connection.autocommit = False
 
     def tearDown(self):
-        del self.connection
+        self.connection.close()
 
     def test_xid(self):
         con = create_connection()

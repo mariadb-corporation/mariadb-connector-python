@@ -13,7 +13,7 @@ class CursorMySQLTest(unittest.TestCase):
         self.connection = create_connection()
 
     def tearDown(self):
-        del self.connection
+        self.connection.close()
 
     def test_parameter(self):
         if is_native():

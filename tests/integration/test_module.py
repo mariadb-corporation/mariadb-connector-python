@@ -14,7 +14,7 @@ class TestConnection(unittest.TestCase):
         self.connection = create_connection()
 
     def tearDown(self):
-        del self.connection
+        self.connection.close()
 
     def test_conpy_63(self):
         version = mariadb.__version__

@@ -41,7 +41,7 @@ class TestConversion(unittest.TestCase):
         self.connection.autocommit = False
 
     def tearDown(self):
-        del self.connection
+        self.connection.close()
 
     def test_convert_time(self):
         cursor = self.connection.cursor()

@@ -211,7 +211,7 @@ class BaseClient(ABC):
         # Protocol version (1 byte)
         protocol_version = packet[pos]
         pos += 1
-        
+
         if protocol_version != 0x0a:
             raise OperationalError(f"Unexpected initial handshake protocol value [{protocol_version}]")
         

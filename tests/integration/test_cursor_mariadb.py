@@ -17,7 +17,7 @@ class CursorMariaDBTest(unittest.TestCase):
         self.connection = create_connection()
 
     def tearDown(self):
-        del self.connection
+        self.connection.close()
 
     def test_insert_parameter(self):
         cursor = self.connection.cursor()

@@ -143,6 +143,9 @@ class AsyncClient(BaseClient):
         try:
             # Read initial handshake packet from server
             handshake_packet: bytes = await self.stream.read_payload()
+            if (handshake_packet[0] == 0xff):
+                raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
+
             self.context = self._parse_handshake(handshake_packet)
             self.stream.connection_id = self.context.connection_id
             

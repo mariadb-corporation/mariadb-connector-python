@@ -28,7 +28,7 @@ class TestConnection(unittest.TestCase):
         self.connection = create_connection()
 
     def tearDown(self):
-        del self.connection
+        self.connection.close()
 
 
     def test_conpy36(self):
@@ -260,11 +260,14 @@ class TestConnection(unittest.TestCase):
 
     def test_server_status(self):
         con = create_connection()
-        self.assertTrue(not con.server_status & STATUS.AUTOCOMMIT)
-        con.autocommit = True
-        self.assertTrue(con.server_status & STATUS.AUTOCOMMIT)
-        con.autocommit = False
-        self.assertTrue(not con.server_status & STATUS.AUTOCOMMIT)
+        try:
+            self.assertTrue(not con.server_status & STATUS.AUTOCOMMIT)
+            con.autocommit = True
+            self.assertTrue(con.server_status & STATUS.AUTOCOMMIT)
+            con.autocommit = False
+            self.assertTrue(not con.server_status & STATUS.AUTOCOMMIT)
+        finally:
+            con.close()
 
     def test_conpy175(self):
         default_conf = conf()

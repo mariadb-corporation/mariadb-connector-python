@@ -16,7 +16,7 @@ class CursorTest(unittest.TestCase):
         self.connection = create_connection()
 
     def tearDown(self):
-        del self.connection
+        self.connection.close()
 
     def test_ping(self):
         if is_maxscale():
@@ -29,7 +29,7 @@ class CursorTest(unittest.TestCase):
             new_conn.ping()
         except (mariadb.InterfaceError, mariadb.DatabaseError):
             pass
-        del new_conn
+        new_conn.close()
         # is native connector doesn't implement auto_reconnect
         if not is_native():
             new_conn = create_connection()
@@ -39,7 +39,7 @@ class CursorTest(unittest.TestCase):
             new_conn.ping()
             new_id = new_conn.connection_id
             self.assertTrue(id != new_id)
-            del new_conn
+            new_conn.close()
 
     def test_change_user(self):
         if is_skysql():
