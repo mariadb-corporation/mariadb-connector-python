@@ -474,7 +474,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.scroll(100)       
         with self.assertRaises(mariadb.Error):
             await cursor.scroll(1)      
-
+        await cursor.close()
         cursor = con.cursor(buffered=False)
         await cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
         await con.close()

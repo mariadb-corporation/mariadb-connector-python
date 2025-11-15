@@ -460,7 +460,7 @@ class TestCursor(unittest.TestCase):
             cursor.scroll(100)
         with self.assertRaises(mariadb.Error):
             cursor.scroll(1)
-
+        cursor.close()
         cursor = con.cursor(buffered=False)
         cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
         con.close()
