@@ -34,6 +34,19 @@ class TestPooling(unittest.TestCase):
                 mariadb._CONNECTION_POOLS[pool_name].close()
             except:
                 pass
+    
+    @classmethod
+    def tearDownClass(cls):
+        """Ensure all pools are closed at end of test class"""
+        # Close all remaining pools to prevent segfaults
+        for pool_name in list(mariadb._CONNECTION_POOLS.keys()):
+            try:
+                pool = mariadb._CONNECTION_POOLS[pool_name]
+                if hasattr(pool, 'close'):
+                    pool.close()
+            except:
+                pass
+        mariadb._CONNECTION_POOLS.clear()
 
     #         del self.connection
 
@@ -114,28 +127,27 @@ class TestPooling(unittest.TestCase):
 
     def test_conpy247_2(self):
         default_conf = conf()
-        pool = mariadb.ConnectionPool(pool_name="CONPY247_2",
+        with mariadb.ConnectionPool(pool_name="CONPY247_2",
                                         pool_size=1,
                                         pool_reset_connection=True,
                                         pool_validation_interval=0,
                                         acquire_timeout=1,
-                                        **default_conf)
+                                        **default_conf) as pool:
 
-        # service connection
-        conn = create_connection()
-        cursor = conn.cursor()
+            # service connection
+            conn = create_connection()
+            cursor = conn.cursor()
 
-        pconn = pool.get_connection()
-        old_id = pconn.connection_id
-        cursor.execute("KILL %s" % (old_id,))
-        cursor.close()
-        pconn.close()
+            pconn = pool.get_connection()
+            old_id = pconn.connection_id
+            cursor.execute("KILL %s" % (old_id,))
+            cursor.close()
+            pconn.close()
 
-        pconn = pool.get_connection()
-        self.assertNotEqual(old_id, pconn.connection_id)
+            pconn = pool.get_connection()
+            self.assertNotEqual(old_id, pconn.connection_id)
 
-        conn.close()
-        pool.close()
+            conn.close()
 
     def test_conpy247_3(self):
         default_conf = conf()

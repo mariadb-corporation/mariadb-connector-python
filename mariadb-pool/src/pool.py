@@ -218,7 +218,10 @@ class ConnectionPool:
                 try:
                     pooled_conn = self._create_connection()
                     pooled_conn.mark_idle()
-                    self._pool.put_nowait(pooled_conn)
+                    if self._closed:
+                        pooled_conn.closeSilently()
+                    else:
+                        self._pool.put_nowait(pooled_conn)
                 except Exception:
                     break
                     
@@ -367,14 +370,14 @@ class ConnectionPool:
     def close(self):
         """Close the pool and all connections"""
         self._closed = True
-        
         # Signal maintenance thread to stop immediately
         self._shutdown_event.set()
-        
+
         # Wait for maintenance thread to finish
         if self._maintenance_thread and self._maintenance_thread.is_alive():
             self._maintenance_thread.join(timeout=5.0)
-
+            self._maintenance_thread = None
+ 
         with self._lock:
             for pooled_conn in self._all_connections:
                 pooled_conn.closeSilently()

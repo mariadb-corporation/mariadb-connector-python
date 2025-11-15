@@ -44,6 +44,19 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
                 await mariadb._ASYNC_CONNECTION_POOLS[pool_name].close()
             except:
                 pass
+    
+    @classmethod
+    async def asyncTearDownClass(cls):
+        """Ensure all async pools are closed at end of test class"""
+        # Close all remaining pools to prevent segfaults
+        for pool_name in list(mariadb._ASYNC_CONNECTION_POOLS.keys()):
+            try:
+                pool = mariadb._ASYNC_CONNECTION_POOLS[pool_name]
+                if hasattr(pool, 'close'):
+                    await pool.close()
+            except:
+                pass
+        mariadb._ASYNC_CONNECTION_POOLS.clear()
 
     async def test_ASYNC_CONNECTION_POOLS(self):
         pool = mariadb.AsyncConnectionPool(pool_name="test_connection")

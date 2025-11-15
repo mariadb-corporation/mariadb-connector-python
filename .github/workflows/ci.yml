@@ -234,8 +234,10 @@ jobs:
           python -m pip install .
           cd mariadb-c && python -m pip install . && cd ..
           cd mariadb-pool && python -m pip install . && cd ..
+          echo "=== Checking mariadb_c installation ==="
+          python -c "import mariadb_c; print(f'mariadb_c location: {mariadb_c.__file__}')"
           python -m pytest tests -v -s --cov=mariadb --cov=mariadb_c --cov=mariadb_pool --cov=mariadb_shared --cov-branch --cov-report=xml --cov-report=term
-          echo "=== Coverage report contents ==="
+          echo "=== Coverage report for mariadb_c ==="
           python -m coverage report --include="*/mariadb_c/*" || echo "No mariadb_c coverage found"
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
