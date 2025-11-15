@@ -31,17 +31,17 @@ class AuthenticationPluginLoader:
     @classmethod
     def get(cls, plugin_type: str, conf: Any) -> AuthenticationPluginFactory:
         """Get authentication plugin factory from type string"""
-        # Check for restricted authentication list
-        restricted_auth = getattr(conf, 'restricted_auth', None)
-        if restricted_auth:
-            auth_list = restricted_auth.split(',')
-            if plugin_type not in auth_list:
-                raise OperationalError(
-                    f"Client restrict authentication plugin to a limited set of authentication "
-                    f"plugin and doesn't permit requested plugin ('{plugin_type}'). "
-                    f"Current list is `restricted_auth={restricted_auth}`",
-                    1251
-                )
+        # TODO: implement restricted_auth
+        #restricted_auth = getattr(conf, 'restricted_auth', None)
+        #if restricted_auth:
+        #    auth_list = restricted_auth.split(',')
+        #    if plugin_type not in auth_list:
+        #        raise OperationalError(
+        #            f"Client restrict authentication plugin to a limited set of authentication "
+        #            f"plugin and doesn't permit requested plugin ('{plugin_type}'). "
+        #            f"Current list is `restricted_auth={restricted_auth}`",
+        #            1251
+        #        )
         
         # Look for the plugin factory
         if plugin_type in cls._plugin_factories:
@@ -55,12 +55,3 @@ class AuthenticationPluginLoader:
             1251
         )
     
-    @classmethod
-    def get_available_plugins(cls) -> Dict[str, Type[AuthenticationPluginFactory]]:
-        """Get all available authentication plugins"""
-        return cls._plugin_factories.copy()
-    
-    @classmethod
-    def is_plugin_available(cls, plugin_type: str) -> bool:
-        """Check if a plugin type is available"""
-        return plugin_type in cls._plugin_factories

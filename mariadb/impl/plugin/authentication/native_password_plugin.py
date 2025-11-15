@@ -6,9 +6,11 @@ from __future__ import annotations
 import hashlib
 from typing import Optional
 
+from ...configuration import Configuration
+
 from ...client.socket.stream import AsyncStream, SyncStream
 from ...client.context import Context
-from ..authentication_plugin import AuthenticationPlugin, Credential
+from ..authentication_plugin import AuthenticationPlugin
 
 
 class NativePasswordPlugin(AuthenticationPlugin):
@@ -65,9 +67,9 @@ class NativePasswordPlugin(AuthenticationPlugin):
         """Native password plugin is MitM-proof"""
         return True
     
-    def hash(self, credential: Credential) -> Optional[bytes]:
+    def hash(self, conf: Configuration) -> Optional[bytes]:
         """Return hash for credential (double SHA1)"""
-        password = credential.get_password()
+        password = conf.password
         if password is None:
             return None
         password_bytes = password.encode('utf-8')

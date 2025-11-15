@@ -8,12 +8,14 @@ import hashlib
 import secrets
 from typing import Optional, TYPE_CHECKING
 
+from ...configuration import Configuration
+
 from ...client.socket.stream import AsyncStream, SyncStream
 from ...client.context import Context
 
 from ...client.socket.payload_writer import PayloadWriter
 from ...client.socket.payload_parser import PayloadParser
-from ..authentication_plugin import AuthenticationPlugin, Credential
+from ..authentication_plugin import AuthenticationPlugin
 from ....exceptions import OperationalError
 
 try:
@@ -193,7 +195,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         """Parsec password plugin is MitM-proof"""
         return True
     
-    def hash(self, credential: Credential) -> Optional[bytes]:
+    def hash(self, conf: Configuration) -> Optional[bytes]:
         """Return hash for credential"""
         return self._hash
     

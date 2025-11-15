@@ -8,30 +8,12 @@ Authentication Plugin Interface
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from ..configuration import Configuration
+
 
 from ..client.socket.stream import AsyncStream
 from ..client.socket.stream import SyncStream
 from ..client.context import Context
-
-
-class Credential:
-    """
-    Credential container for authentication data
-    """
-    
-    def __init__(self, password: Optional[str] = None, token: Optional[bytes] = None):
-        """Initialize credential"""
-        self._password = password
-        self._token = token
-    
-    def get_password(self) -> Optional[str]:
-        """Get password"""
-        return self._password
-    
-    def get_token(self) -> Optional[bytes]:
-        """Get token"""
-        return self._token
-
 
 class AuthenticationPlugin(ABC):
     """
@@ -53,7 +35,7 @@ class AuthenticationPlugin(ABC):
         """Check if plugin is MitM-proof, permitting returning HASH"""
         return False
     
-    def hash(self, credential: Credential) -> Optional[bytes]:
+    def hash(self, conf: Configuration) -> Optional[bytes]:
         """Return hash for credential"""
         return None
 

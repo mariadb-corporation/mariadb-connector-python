@@ -13,7 +13,7 @@ from ...client.socket.stream import AsyncStream, SyncStream
 from ...client.context import Context
 
 from ...client.socket.payload_writer import PayloadWriter
-from ..authentication_plugin import AuthenticationPlugin, Credential
+from ..authentication_plugin import AuthenticationPlugin
 from ....exceptions import OperationalError
 
 try:
@@ -248,9 +248,9 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         """Caching SHA2 password plugin is MitM-proof"""
         return True
     
-    def hash(self, credential: Credential) -> Optional[bytes]:
+    def hash(self, conf: Configuration) -> Optional[bytes]:
         """Return hash for credential"""
-        password = credential.get_password()
+        password = conf.password
         if password is None:
             return None
         
