@@ -86,6 +86,7 @@ class TestURIPool(unittest.TestCase):
             
             # Verify pool is registered
             self.assertIn("test_uri_pool_1", mariadb._CONNECTION_POOLS)
+        mariadb._CONNECTION_POOLS["test_uri_pool_1"].close()
     
     def test_pool_direct_instantiation_with_uri(self):
         """Test creating pool via ConnectionPool() with URI parameter"""
@@ -105,7 +106,8 @@ class TestURIPool(unittest.TestCase):
                     cursor.execute("SELECT 3")
                     result = cursor.fetchone()
                     self.assertEqual(result[0], 3)
-    
+        # Pool auto-closed by context manager
+
     def test_pool_uri_with_query_params(self):
         """Test pool creation with URI containing query parameters"""
         config = get_test_config()
@@ -123,6 +125,7 @@ class TestURIPool(unittest.TestCase):
                 cursor.execute("SELECT 4")
                 result = cursor.fetchone()
                 self.assertEqual(result[0], 4)
+        mariadb._CONNECTION_POOLS["test_uri_pool_3"].close()
     
     def test_pool_uri_kwarg_override(self):
         """Test that keyword arguments override URI parameters in pools"""
@@ -142,6 +145,7 @@ class TestURIPool(unittest.TestCase):
                 cursor.execute("SELECT 5")
                 result = cursor.fetchone()
                 self.assertEqual(result[0], 5)
+        mariadb._CONNECTION_POOLS["test_uri_pool_4"].close()
     
     def test_pool_mysql_scheme(self):
         """Test pool creation with mysql:// scheme"""
@@ -157,6 +161,7 @@ class TestURIPool(unittest.TestCase):
                 cursor.execute("SELECT 6")
                 result = cursor.fetchone()
                 self.assertEqual(result[0], 6)
+        mariadb._CONNECTION_POOLS["test_uri_pool_5"].close()
     
     def test_pool_multiple_connections(self):
         """Test getting multiple connections from URI-created pool"""
@@ -173,6 +178,7 @@ class TestURIPool(unittest.TestCase):
                             cursor.execute(f"SELECT {i}")
                             result = cursor.fetchone()
                             self.assertEqual(result[0], i)
+        mariadb._CONNECTION_POOLS["test_uri_pool_6"].close()
     
     def test_pool_uri_no_database(self):
         """Test pool creation with URI without database"""
@@ -191,6 +197,7 @@ class TestURIPool(unittest.TestCase):
                 cursor.execute("SELECT DATABASE()")
                 result = cursor.fetchone()
                 self.assertEqual(result[0], config['database'])
+        mariadb._CONNECTION_POOLS["test_uri_pool_7"].close()
     
     def test_pool_duplicate_name_error(self):
         """Test that creating pool with duplicate name raises error"""
@@ -204,6 +211,7 @@ class TestURIPool(unittest.TestCase):
                 mariadb.ConnectionPool(pool_name="test_uri_pool_dup", uri=uri)
             
             self.assertIn("already exists", str(cm.exception))
+        mariadb._CONNECTION_POOLS["test_uri_pool_dup"].close()
     
     def test_pool_without_pool_name(self):
         """Test pool can be created without pool_name for direct usage"""
@@ -245,8 +253,8 @@ class TestURIPool(unittest.TestCase):
                     cursor.execute("SELECT 10")
                     result = cursor.fetchone()
                     self.assertEqual(result[0], 10)
-    
-    def test_pool_uri_first_arg_with_kwarg_pool_name(self):
+
+    def test_pool_uri_first_arg_with_kwarg_pool_name(self): 
         """Test URI as first arg with pool_name as kwarg (kwarg takes precedence)"""
         config = get_test_config()
         uri = build_uri(config, query_params="pool_name=wrong_name")
@@ -265,7 +273,8 @@ class TestURIPool(unittest.TestCase):
                     cursor.execute("SELECT 11")
                     result = cursor.fetchone()
                     self.assertEqual(result[0], 11)
-    
+
+
     def test_pool_traditional_first_arg_pool_name(self):
         """Test traditional style with pool_name as first positional arg"""
         config = get_test_config()
@@ -288,7 +297,6 @@ class TestURIPool(unittest.TestCase):
                     cursor.execute("SELECT 12")
                     result = cursor.fetchone()
                     self.assertEqual(result[0], 12)
-
 
 if __name__ == '__main__':
     unittest.main()

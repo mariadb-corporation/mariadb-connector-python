@@ -142,6 +142,7 @@ strict_equality = true
 
 [tool.coverage.run]
 source = ["mariadb", "mariadb_c", "mariadb_pool", "mariadb_shared"]
+source_pkgs = ["mariadb", "mariadb_c", "mariadb_pool", "mariadb_shared"]
 omit = [
     "*/tests/*",
     "*/test_*",
