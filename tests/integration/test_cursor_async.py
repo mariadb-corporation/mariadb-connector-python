@@ -470,17 +470,18 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         cursor = con.cursor(buffered=False)
         await cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
-        await con.close()
-        with self.assertRaises(mariadb.Error):
-            await cursor.scroll(1)
-
-        cursor = con.cursor(buffered=False)
-        await cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
         with self.assertRaises(mariadb.Error):
             await cursor.scroll(100)       
         with self.assertRaises(mariadb.Error):
             await cursor.scroll(1)      
-            
+
+        cursor = con.cursor(buffered=False)
+        await cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
+        await con.close()
+        with self.assertRaises(mariadb.Error):
+            await cursor.scroll(1)
+
+
     async def test1_multi_result(self):
         cursor = self.connection.cursor()
         await cursor.execute("DROP PROCEDURE IF EXISTS p1")

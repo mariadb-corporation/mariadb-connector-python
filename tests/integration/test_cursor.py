@@ -456,14 +456,14 @@ class TestCursor(unittest.TestCase):
 
         cursor = con.cursor(buffered=False)
         cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
-        con.close()
+        with self.assertRaises(mariadb.Error):
+            cursor.scroll(100)
         with self.assertRaises(mariadb.Error):
             cursor.scroll(1)
 
         cursor = con.cursor(buffered=False)
         cursor.execute("SELECT id, name, city FROM test_fetchmany3 ORDER BY id")
-        with self.assertRaises(mariadb.Error):
-            cursor.scroll(100)
+        con.close()
         with self.assertRaises(mariadb.Error):
             cursor.scroll(1)
 
