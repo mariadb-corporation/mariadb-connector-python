@@ -236,6 +236,10 @@ jobs:
           cd mariadb-pool && python -m pip install . && cd ..
           echo "=== Checking mariadb_c installation ==="
           python -c "import mariadb; import mariadb_c; print(f'mariadb_c location: {mariadb_c.__file__}')"
+          echo "=== Checking which implementation is being used ==="
+          python -c "import mariadb; print(f'Implementation: {mariadb.__impl__}'); print(f'SyncConnection: {mariadb.SyncConnection}')"
+          echo "=== Environment variable check ==="
+          python -c "import os; print(f'MARIADB_PYTHON_CONNECTOR={os.environ.get(\"MARIADB_PYTHON_CONNECTOR\", \"NOT SET\")}')"
           python -m pytest tests -v -s --cov=mariadb --cov=mariadb_c --cov=mariadb_pool --cov=mariadb_shared --cov-branch --cov-report=xml --cov-report=term
           echo "=== Coverage report for mariadb_c ==="
           python -m coverage report --include="*/mariadb_c/*" || echo "No mariadb_c coverage found"

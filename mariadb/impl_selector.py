@@ -2,8 +2,7 @@
 MariaDB implementation selector
 
 This module handles the selection between pure Python and C extension
-implementations, similar to how psycopg handles implementation selection
-in its pq module.
+implementations
 """
 
 import os
@@ -100,5 +99,5 @@ def _select_implementation() -> None:
         raise ImportError(f"couldn't import any mariadb implementation:\n{sattempts}")
 
 
-# Select implementation at import time (like psycopg does)
+# Select implementation at import time
 _select_implementation()
