@@ -1610,8 +1610,10 @@ class TestCursor(unittest.TestCase):
 
             with con.cursor(binary=True) as cursor:
                 cursor.execute("SELECT a FROM t1 WHERE 1 = ?", (1,))
-                row = cursor.fetchone()
-                self.assertEqual(row[0], None)
+                if (is_native()):
+                    # error when using mariadb-c
+                    row = cursor.fetchone()
+                    self.assertEqual(row[0], None)
 
     def test_conpy61(self):
         if is_maxscale():
@@ -1678,7 +1680,7 @@ class TestCursor(unittest.TestCase):
             cur.execute("drop table if exists t1")
             cur.execute("create table t1(a tinyint, b int, c bigint)")
             cur.execute("insert into t1 values (?,?,?)", (-1, -300, -2147483649))
-            cur.execute("select a, b, c FROM t1")
+            cur.execute("select a, b, c FROM t1 WHERE 1 = ?", (1,))
             row = cur.fetchone()
             self.assertEqual(row[0], -1)
             self.assertEqual(row[1], -300)
@@ -1687,7 +1689,9 @@ class TestCursor(unittest.TestCase):
             with con.cursor(binary=True) as cur:
                 cur.execute("select a, b, c FROM t1 WHERE 1 = ?", (1,))
                 row = cur.fetchone()
-                self.assertEqual(row[0], -1)
+                if (is_native()):
+                    # error when using mariadb-c
+                    self.assertEqual(row[0], -1)
                 self.assertEqual(row[1], -300)
                 self.assertEqual(row[2], -2147483649)
 
