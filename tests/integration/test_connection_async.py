@@ -371,8 +371,14 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             self.skipTest("Requires C/C 3.4.2 or newer")
         default_conf = conf()
         default_conf["ssl"] = True
+
         conn = await mariadb.AsyncConnection.connect(**default_conf)
         self.assertEqual(conn._tls, True)
+        
+        # Verify TLS cipher and version are set
+        self.assertIsNotNone(conn.tls_cipher)
+        self.assertIsNotNone(conn.tls_version)
+
         x509_info = conn.tls_peer_cert_info
         if not x509_info:
             await conn.close()

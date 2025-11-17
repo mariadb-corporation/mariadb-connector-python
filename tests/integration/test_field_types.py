@@ -104,14 +104,17 @@ class FieldTypesTest(unittest.TestCase):
         # Retrieve and verify
         self.cursor.execute("SELECT y FROM test_year2")
         result = self.cursor.fetchone()
-        
-        # Year 75 should be stored and retrieved as 1975
         self.assertEqual(result[0], 75)
         
         # Test field type
         fi = fieldinfo()
         field_type = fi.type(self.cursor.description[0])
         self.assertIn(field_type, ['YEAR', 'SHORT'])
+
+        with self.connection.cursor(binary=True) as cursor:
+            cursor.execute("SELECT y FROM test_year2")
+            result = cursor.fetchone()
+            self.assertEqual(result[0], 75)
 
     def test_field_info_string_types(self):
         """Test string field types"""

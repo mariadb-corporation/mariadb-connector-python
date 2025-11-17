@@ -96,7 +96,7 @@ class TestCursor(unittest.TestCase):
             cursor.execute("SET session wait_timeout=1")
 
             # binary protocol should fail
-            cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
+            cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3 WHERE 1 = ?", (1,))
             time.sleep(1.5)
             try:
                  cursor.fetchone()
@@ -165,10 +165,18 @@ class TestCursor(unittest.TestCase):
         data= [(1408531143, 'Amazon', '2021-04-16', True, -1),
                (1442076847, 'Uber', '2021-04-15', True, -100000)]
         cursor.executemany("INSERT INTO items VALUES (?,?,?,?,?)", data)
+        
         cursor.execute("SELECT * FROM items")
         rows= cursor.fetchall()
         self.assertEqual(rows, data)
         cursor.close()
+
+        cursor= self.connection.cursor(binary=True)
+        cursor.execute("SELECT * FROM items WHERE 1 = ?", (1,))
+        rows= cursor.fetchall()
+        self.assertEqual(rows, data)
+        cursor.close()
+
 
     def test_conpy299(self):
         if is_mysql():
@@ -230,6 +238,16 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[3], c4)
         cursor.close()
 
+        with self.connection.cursor(binary=True) as cursor:
+            cursor.execute("SELECT c1,c2,c3,c4 FROM test_date WHERE 1 = ?", (1,))
+            row = cursor.fetchone()
+            self.assertEqual(row[0], c1)
+            self.assertEqual(row[1], datetime.timedelta(seconds=44551,
+                                                        microseconds=123456))
+            self.assertEqual(row[2], c3)
+            self.assertEqual(row[3], c4)
+
+
     def test_numbers(self):
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_numbers ("
@@ -283,6 +301,18 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[4], c5)
         self.assertEqual(row[5], c6)
         del cursor
+
+        with self.connection.cursor(binary=True) as cursor:
+            cursor.execute("SELECT * from test_string WHERE 1 = ?", (1,))
+            row = cursor.fetchone()
+            
+            self.assertEqual(row[0], c1)
+            self.assertEqual(row[1], c2)
+            self.assertEqual(row[2], c3)
+            self.assertEqual(row[3], c4)
+            self.assertEqual(row[4], c5)
+            self.assertEqual(row[5], c6)
+
 
     def test_blob(self):
         cursor = self.connection.cursor()
@@ -939,11 +969,11 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], str(test_ipv6))
         self.assertEqual(row[1], str(test_ipv4))
         self.assertEqual(row[2], str(test_uuid))
-
+        
         # Test binary protocol (default behavior - returns bytes/strings)
         cursor_default.close()
         cursor_default = self.connection.cursor(binary=True)
-        cursor_default.execute("SELECT a, b, c FROM t1")
+        cursor_default.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_default.fetchone()
         
         # Binary protocol returns bytes for these types by default
@@ -973,7 +1003,7 @@ class TestCursor(unittest.TestCase):
         # Test binary protocol with native_object
         cursor_native.close()
         cursor_native = self.connection.cursor(native_object=True, binary=True)
-        cursor_native.execute("SELECT a, b, c FROM t1")
+        cursor_native.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_native.fetchone()
         
         self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
@@ -1425,6 +1455,15 @@ class TestCursor(unittest.TestCase):
                              datetime.datetime(2020, 10, 10, 14, 12, 24, 120000))
             del cursor
 
+            with con.cursor(binary=True) as cursor:
+                cursor.execute("SELECT a,b FROM t1 WHERE 1 = ?", (1,))
+                row = cursor.fetchone()
+                self.assertEqual(row[0],
+                                datetime.timedelta(seconds=47544, microseconds=51000))
+                self.assertEqual(row[1],
+                                datetime.datetime(2020, 10, 10, 14, 12, 24, 120000))
+
+
     def test_conpy46(self):
         with create_connection() as con:
             with con.cursor() as cursor:
@@ -1506,6 +1545,11 @@ class TestCursor(unittest.TestCase):
             row = cur.fetchone()
             self.assertEqual(row[0], Decimal('10.20'))
             cur.close()
+            with con.cursor(binary=True) as cur:
+                cur.execute("select a from t1 WHERE 1 = ?", (1,))
+                row = cur.fetchone()
+                self.assertEqual(row[0], Decimal('10.20'))
+
 
     def test_conpy56(self):
         with create_connection() as con:
@@ -1515,6 +1559,11 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row["foo"], "bar")
             self.assertEqual(row["bar"], "foo")
             cur.close()
+            with con.cursor(dictionary=True, binary=True) as cur:
+                cur.execute("select 'foo' as bar, 'bar' as foo WHERE 1 = ?", (1,))
+                row = cur.fetchone()
+                self.assertEqual(row["foo"], "bar")
+                self.assertEqual(row["bar"], "foo")
 
     def test_conpy53(self):
         with create_connection() as con:
@@ -1543,6 +1592,11 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0][0], 1)
             self.assertEqual(row[1][0], 2)
             cursor.close()
+            with con.cursor(binary=True) as cursor:
+                cursor.execute("SELECT a FROM t1 WHERE 1 = ? ORDER by a", (1,))
+                row = cursor.fetchall()
+                self.assertEqual(row[0][0], 1)
+                self.assertEqual(row[1][0], 2)
 
     def test_conpy59(self):
         with create_connection() as con:
@@ -1553,6 +1607,11 @@ class TestCursor(unittest.TestCase):
             row = cursor.fetchone()
             self.assertEqual(row[0], None)
             cursor.close()
+
+            with con.cursor(binary=True) as cursor:
+                cursor.execute("SELECT a FROM t1 WHERE 1 = ?", (1,))
+                row = cursor.fetchone()
+                self.assertEqual(row[0], None)
 
     def test_conpy61(self):
         if is_maxscale():
@@ -1592,6 +1651,10 @@ class TestCursor(unittest.TestCase):
             row = cur.fetchone()
             self.assertEqual(row[0], Decimal(1.25))
             del cur
+            with con.cursor(binary=True) as cur:
+                cur.execute(query, [5])
+                row = cur.fetchone()
+                self.assertEqual(row[0], Decimal(1.25))
 
     def test_conpy67(self):
          with create_connection() as con:
@@ -1621,6 +1684,12 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[1], -300)
             self.assertEqual(row[2], -2147483649)
             del cur
+            with con.cursor(binary=True) as cur:
+                cur.execute("select a, b, c FROM t1 WHERE 1 = ?", (1,))
+                row = cur.fetchone()
+                self.assertEqual(row[0], -1)
+                self.assertEqual(row[1], -300)
+                self.assertEqual(row[2], -2147483649)
 
     def test_none_val(self):
         with create_connection() as con:
@@ -1632,6 +1701,10 @@ class TestCursor(unittest.TestCase):
             rows = cur.fetchall()
             self.assertEqual(rows[0][0], None)
             del cur
+            with con.cursor(binary=True) as cur:
+                cur.execute("select a from t1 WHERE 1 = ? order by a", (1,))
+                rows = cur.fetchall()
+                self.assertEqual(rows[0][0], None)
 
     def test_conpy81(self):
         with create_connection() as con:
@@ -1662,6 +1735,10 @@ class TestCursor(unittest.TestCase):
             row = cursor.fetchone()
             self.assertEqual(row[0], b'foo')
             del cursor
+            with con.cursor(binary=True) as cursor:
+                cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1 WHERE 1 = ?", (1,))
+                row = cursor.fetchone()
+                self.assertEqual(row[0], b'foo')
 
     def test_conpy68(self):
         with create_connection() as con:
@@ -1674,7 +1751,14 @@ class TestCursor(unittest.TestCase):
             cursor.execute("SELECT a FROM t1")
             row = cursor.fetchone()
             self.assertEqual(row[0], json.dumps(content))
+            cursor.execute("TRUNCATE t1")
             del cursor
+
+            with con.cursor(binary=True) as cursor:
+                cursor.execute("INSERT INTO t1 VALUES(?)", (json.dumps(content),))
+                cursor.execute("SELECT a FROM t1 WHERE 1 = ?", (1,))
+                row = cursor.fetchone()
+                self.assertEqual(row[0], json.dumps(content))
 
     def test_conpy123(self):
         with create_connection({"client_flag": CLIENT.MULTI_STATEMENTS}) as con:
@@ -1696,6 +1780,10 @@ class TestCursor(unittest.TestCase):
             row = cursor.fetchone()
             self.assertEqual(row[0], decimal.Decimal(1))
             del cursor
+            with con.cursor(binary=True) as cursor:
+                cursor.execute("SELECT a FROM t1 WHERE 1 = ?", (1,))
+                row = cursor.fetchone()
+                self.assertEqual(row[0], decimal.Decimal(1))
 
     def test_conpy129(self):
         with create_connection() as conn:
@@ -2097,7 +2185,7 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0], 123)
             cursor.close()
             cursor = connection.cursor(binary=True)
-            cursor.execute("SELECT a FROM t1")
+            cursor.execute("SELECT a FROM t1 WHERE 1 = ?", (1,))
             row = cursor.fetchone()
             self.assertEqual(row[0], 123)
             cursor.close()

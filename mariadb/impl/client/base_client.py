@@ -470,7 +470,7 @@ class BaseClient(ABC):
             
             pos = 0
             row_values = []
-            
+                
             for column in columns:
                 match column.column_type:
                     case (FIELD_TYPE.TINY | FIELD_TYPE.SHORT | FIELD_TYPE.LONG | 
@@ -586,7 +586,7 @@ class BaseClient(ABC):
                                 case _:
                                     # Default case for VARCHAR, STRING, etc.
                                     # Check if BINARY flag is set to determine if we should read as bytes or string
-                                    if ((column.flags & FIELD_FLAG.BINARY) > 0) or (column.character_set == 63):
+                                    if (column.character_set == 63):
                                         # Binary data - read as bytes
                                         value, pos = PayloadParser.read_length_encoded_bytes_at(packet, pos)
                                     else:
@@ -759,7 +759,7 @@ class BaseClient(ABC):
                 else:
                     return None, pos + length_byte
                     
-            case FIELD_TYPE.DATETIME | FIELD_TYPE.NEWDATE | FIELD_TYPE.TIMESTAMP:
+            case FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP:
                 # Binary DATETIME format: 1 + 4, 7, or 11 bytes
                 length_byte = packet[pos] if pos < len(packet) else 0
                 pos += 1
@@ -799,39 +799,27 @@ class BaseClient(ABC):
                 return value, pos
             case FIELD_TYPE.JSON:
                 return PayloadParser.read_length_encoded_string_at(packet, pos)
-            case (FIELD_TYPE.BLOB | FIELD_TYPE.TINY_BLOB | FIELD_TYPE.MEDIUM_BLOB | FIELD_TYPE.LONG_BLOB):
-                if (column.ext_type_format == 'json'):
-                    return PayloadParser.read_length_encoded_string_at(packet, pos)
-                # BLOB types must return bytes
-                return PayloadParser.read_length_encoded_bytes_at(packet, pos)
-                
-            case (FIELD_TYPE.VAR_STRING | FIELD_TYPE.STRING | FIELD_TYPE.VARCHAR):
+            case _:
                 match (column.ext_type_name):
                     case ("inet6" | "inet4"):
-                        value, pos = PayloadParser.read_length_encoded_bytes_at(packet, pos)
+                        value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                         if config.native_object:
                             value = ipaddress.ip_address(value)
                         return value, pos
                     case "uuid":
-                        value, pos = PayloadParser.read_length_encoded_bytes_at(packet, pos)
+                        value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
                         if config.native_object:
                             value = uuid.UUID(value)
                         return value, pos
                     case _:
                         # String types - check BINARY flag or binary charset (63)
                         # MySQL uses charset 63 for OUT parameters instead of BINARY flag
-                        if (column.flags & FIELD_FLAG.BINARY) or (column.character_set == 63):
+                        if (column.character_set == 63):
                             # Binary string - return bytes
                             return PayloadParser.read_length_encoded_bytes_at(packet, pos)
                         else:
                             # Text string - return string
                             return PayloadParser.read_length_encoded_string_at(packet, pos)
-                
-            case _:
-                # Default to length-encoded string
-                return PayloadParser.read_length_encoded_string_at(packet, pos)
-
-    # _parse_error_packet() is inherited from BaseClient (synchronous, no I/O)
     
 
     @abstractmethod
