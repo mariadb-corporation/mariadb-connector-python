@@ -63,9 +63,6 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
             
             self._closed = True
             self.arraysize = 1
-            self._rowcount = -1
-            self._affected_rows = -1
-            self.lastrowid = None
             self._completions = []
             self._completion_index = 0
             self._config = None
@@ -254,10 +251,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
             
             # Accumulate affected rows from all completions
 
-            # Set final rowcount to total affected rows
-            self._affected_rows = total_affected
-            self._rowcount = total_affected
-            self.lastrowid = lastrowid is not None and lastrowid > 0 and lastrowid or None
+            # Note: rowcount, affected_rows, and lastrowid are now properties
+            # that get their values from the current completion
 
         except DatabaseError as e:
             raise e            

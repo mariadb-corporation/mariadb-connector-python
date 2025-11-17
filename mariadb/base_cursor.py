@@ -59,15 +59,15 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self.connection: TConnection = connection
         self._closed: bool = False
         self.arraysize: int = 1
-        self._affected_rows: int = -1
-        self._rowcount: int = -1
-        self.lastrowid: Optional[int] = None
         self._completions: List[Completion] = []
         self._completion_index: int = 0
         self._config = None
         self._exception_factory = ExceptionFactory()
         self._buffered: bool = bool(kwargs.pop('buffered', True))
         self._result: Optional[TResult] = None
+        self._executemany_mode: bool = False
+        self._executemany_rowcount: int = 0
+        self._executemany_lastrowid: Optional[int] = None
         
         if kwargs:
             self._config = copy.copy(self.connection._configuration)
@@ -87,7 +87,19 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     @property
     def rowcount(self) -> int:
         """Get the number of rows (read-only property)"""
-        return self._rowcount
+        # For executemany, return the aggregated rowcount
+        if self._executemany_mode:
+            return self._executemany_rowcount
+        # Get the current completion
+        if self._completion_index < len(self._completions):
+            completion = self._completions[self._completion_index]
+            # For result sets, return the current row count from the result set
+            if completion.has_result_set() and self._result:
+                return self._result.get_row_count()
+            # For non-result operations (INSERT/UPDATE/DELETE), return affected_rows
+            return completion.affected_rows
+        # No completions yet
+        return -1
     
     @property
     def description(self) -> Optional[tuple]:
@@ -127,6 +139,17 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             return completion.is_output_parameters()
         return False
         
+    @property
+    def lastrowid(self) -> Optional[int]:
+        """Get the last insert ID from the current completion"""
+        # For executemany, return the last insert ID from all executions
+        if self._executemany_mode:
+            return self._executemany_lastrowid
+        if self._completion_index < len(self._completions):
+            completion = self._completions[self._completion_index]
+            return completion.insert_id or None
+        return None
+    
     @property
     def affected_rows(self) -> int:
         """Alias for rowcount"""
@@ -260,6 +283,11 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         Args:
             completions: List of completion objects
         """
+        # Reset executemany mode for regular execute
+        self._executemany_mode = False
+        self._executemany_rowcount = 0
+        self._executemany_lastrowid = None
+        
         # Store all completions for nextset() functionality
         self._completions = completions
         self._completion_index = 0
@@ -275,20 +303,10 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         # Check if it's a result set or update count
         if completion.has_result_set():
             # It's a result set (SELECT query)
-            # For streaming/unbuffered results, rowcount should be 0 until rows are fetched
-            # For buffered results, rowcount is the total number of rows
-            if completion.result_set.streaming():
-                self._rowcount = 0  # Unbuffered - don't know row count yet
-            else:
-                self._rowcount = completion.result_set.get_row_count()  # Buffered - we have all rows
-            self._affected_rows = completion.affected_rows
             self._process_rows_set_completion(completion.result_set)
         else:
             # It's an update count (INSERT/UPDATE/DELETE)
-            self._affected_rows = completion.affected_rows
-            self._rowcount = completion.affected_rows
             self._result = None
-            self.lastrowid = completion.insert_id or None
     
     def _process_rows_set_completion(self, result_set: Result) -> None:
         """
@@ -304,6 +322,18 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         Process completions from executemany - aggregate all result sets.
         Since executemany runs the same query multiple times, all completions have identical metadata.
         """
+        # Enable executemany mode and calculate aggregated values
+        self._executemany_mode = True
+        self._executemany_rowcount = 0
+        self._executemany_lastrowid = None
+        
+        # Calculate total affected rows and last insert ID from all completions
+        for c in completions:
+            if c.affected_rows >= 0:
+                self._executemany_rowcount += c.affected_rows
+            if c.insert_id is not None and c.insert_id > 0:
+                self._executemany_lastrowid = c.insert_id
+        
         if not completions:
             self._result = None
             return
@@ -313,10 +343,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         if not result_set_completions:
             # No result sets - just update counts (e.g., INSERT/UPDATE/DELETE)
-            first_completion = completions[0]
-            affected = getattr(first_completion, 'affected_rows', 0)
-            self._affected_rows = affected
-            self._rowcount = affected
+            # The aggregated values are already set above
             self._result = None
             return
         
@@ -338,8 +365,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             rows=aggregated_rows,
             is_binary=False
         )
-        self._rowcount = len(aggregated_rows)
-        self._affected_rows = sum(c.affected_rows for c in result_set_completions if hasattr(c, 'affected_rows'))
     
     def _build_description(self, columns: List[ColumnDefinitionPacket]) -> Optional[tuple]:
         """Build cursor description tuple from column definitions"""
