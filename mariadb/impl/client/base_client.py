@@ -48,6 +48,7 @@ class BaseClient(ABC):
     OK_PACKET = 0x00
     ERROR_PACKET = 0xFF
     EOF_PACKET = 0xFE
+    AUTH_SWITCH_REQUEST_PACKET = 0xFE
     LOCAL_INFILE_PACKET = 0xFB
     
     # MariaDB replication hack prefix
@@ -110,6 +111,11 @@ class BaseClient(ABC):
     @abstractmethod
     def _handle_authentication(self) -> None:
         """Handle authentication process using plugin system"""
+        ...
+    
+    @abstractmethod
+    def _handle_auth_switch(self) -> None:
+        """Handle authentication switch """
         ...
     
     @abstractmethod
@@ -400,28 +406,7 @@ class BaseClient(ABC):
             return False
         
         return (null_bitmap[byte_pos] & (1 << bit_pos)) > 0
-    
-    # Simple getters/setters (synchronous)
-    def set_read_only(self, read_only: bool) -> None:
-        """Set read-only mode"""
-        self.read_only = read_only
-    
-    def get_socket_timeout(self) -> int:
-        """Get socket timeout"""
-        return self.socket_timeout
-    
-    def is_closed(self) -> bool:
-        """Check if closed"""
-        return self.closed
-    
-    def is_primary(self) -> bool:
-        """Check if primary connection"""
-        return not self.read_only
-    
-    def get_exception_factory(self) -> ExceptionFactory:
-        """Get exception factory"""
-        return self.exception_factory
-    
+
     def get_host_address(self) -> HostAddress:
         """Get host address"""
         return self.host_address
@@ -440,30 +425,6 @@ class BaseClient(ABC):
         # For now, treat as successful authentication
         # This would need more sophisticated handling for multi-round auth
         OkPacket.decode(packet, self.context)
-    
-    def _handle_auth_final_response(self, packet: bytes) -> None:
-        """
-        Handle final authentication response
-        
-        Args:
-            packet: Final authentication response packet
-            
-        Raises:
-            OperationalError: If authentication fails
-        """
-        if len(packet) == 0:
-            raise OperationalError("Empty authentication response packet")
-        
-        packet_type = packet[0]
-        
-        if packet_type == 0x00:
-            # OK packet - authentication successful
-            OkPacket.decode(packet, self.context)
-        elif packet_type == 0xFF:
-            # Error packet - authentication failed
-            raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
-        else:
-            raise OperationalError(f"Unexpected authentication response: {packet_type:02x}")
     
     def _apply_converters(self, row_values: list, columns: List[Dict[str, Any]], config: 'Configuration') -> tuple:
         """
@@ -656,18 +617,10 @@ class BaseClient(ABC):
         if len(packet) == 0:
             return tuple(None for _ in columns)
         
-        pos = 0
-        
-        # Skip 0x00 header byte
-        if packet[pos] != 0x00:
-            raise ValueError(f"Expected 0x00 header for binary row, got 0x{packet[pos]:02x}")
         pos += 1
         
         # Read NULL bitmap
         null_bitmap_length = (len(columns) + 9) // 8
-        if pos + null_bitmap_length > len(packet):
-            raise ValueError("Packet too short for NULL bitmap")
-        
         null_bitmap = packet[pos:pos + null_bitmap_length]
         pos += null_bitmap_length
         

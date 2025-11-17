@@ -224,7 +224,7 @@ class SyncClient(BaseClient):
     # Authentication
     # =========================================================================
 
-    def _handle_authentication(self, packet: bytes) -> None:
+    def _handle_authentication(self, packet: bytearray) -> None:
         """Process authentication response from server"""
         if len(packet) == 0:
             raise OperationalError("Empty authentication response")
@@ -235,15 +235,11 @@ class SyncClient(BaseClient):
             OkPacket.decode(packet, self.context)
         elif packet_type == self.ERROR_PACKET:
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
-        elif packet_type == self.EOF_PACKET:
-            # Auth switch request or auth more data
-            if len(packet) == 1 or (len(packet) > 1 and packet[1] == 0x04):
-                # Auth more data
-                self._handle_plugin_auth_continue(packet)
-            else:
-                # Auth switch - server requests different auth plugin
-                self._handle_auth_switch(packet)
-        else:
+        elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
+            # Auth switch - server requests different auth plugin
+            self._handle_auth_switch(packet)
+        else: 
+            # Auth more data
             raise OperationalError(f"Unexpected packet during authentication: {packet[0]:02x}")
 
     def _handle_auth_switch(self, packet: bytearray) -> None:
@@ -257,7 +253,7 @@ class SyncClient(BaseClient):
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
             plugin = plugin_factory.initialize(self.configuration.password, auth_data, self.configuration, self.host_address)
             response = plugin.processSync(self.stream, self.context)
-            self._handle_auth_final_response(response)
+            self._handle_authentication(response)
         except DatabaseError as e:
             raise e
         except Exception as e:

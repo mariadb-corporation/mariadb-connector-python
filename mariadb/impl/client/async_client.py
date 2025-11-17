@@ -166,7 +166,8 @@ class AsyncClient(BaseClient):
             await self.stream.send_payload(response.encode(self.context), response.type(), reset_sequence=False)
 
             # Handle authentication (may involve multiple rounds)
-            await self._handle_authentication()
+            auth_result: bytearray = await self.stream.read_payload()
+            await self._handle_authentication(auth_result)
             
             self.connected = True
                 
@@ -270,7 +271,10 @@ class AsyncClient(BaseClient):
 
             change_user_packet = ChangeUserPacket(new_conf.user, new_conf.password, new_conf.database)
             await self._send_message(change_user_packet)
-            await self._handle_authentication()
+
+            # Read initial authentication result
+            auth_result: bytearray = await self.stream.read_payload()
+            await self._handle_authentication(auth_result)
                 
         except Exception as e:
             self.configuration = old_conf
@@ -278,16 +282,13 @@ class AsyncClient(BaseClient):
                 raise
             raise OperationalError(f"Change user failed: {e}")
 
-    async def _handle_authentication(self) -> None:
+    async def _handle_authentication(self, auth_result: bytearray) -> None:
         """Process authentication response from server using plugin system"""
         # Import plugin system
         from ..plugin.authentication.plugin_registry import register_builtin_plugins
         
         # Ensure plugins are registered
         register_builtin_plugins()
-        
-        # Read initial authentication result
-        auth_result: bytearray = await self.stream.read_payload()
         
         # Check if server requests plugin authentication
         if len(auth_result) > 0:
@@ -300,13 +301,9 @@ class AsyncClient(BaseClient):
             elif packet_type == self.ERROR_PACKET:
                 # Error packet - authentication failed
                 raise ErrorPacket.decode(auth_result, self.context).toError(self.exception_factory)
-            elif packet_type == self.EOF_PACKET:
+            elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
                 # Auth switch request - server wants different plugin
                 await self._handle_auth_switch(auth_result)
-                return
-            else:
-                # Continue with plugin authentication
-                self._handle_plugin_auth_continue(auth_result)
                 return
         
         raise OperationalError("Empty authentication result packet")
@@ -329,14 +326,9 @@ class AsyncClient(BaseClient):
         try:
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
             
-            # Initialize plugin
             plugin = plugin_factory.initialize(self.configuration.password, plugin_data, self.configuration, self.host_address)
-            
-            # Process authentication - plugin will send response and read server's reply
             response: bytearray = await plugin.processAsync(self.stream, self.context)
-            
-            # Handle final response
-            self._handle_auth_final_response(response)
+            await self._handle_authentication(response)
             
         except Exception as e:
             # Re-raise if it's already a proper exception
