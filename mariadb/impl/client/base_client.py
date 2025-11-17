@@ -217,49 +217,28 @@ class BaseClient(ABC):
         
         # Server version (null-terminated string)
         version_end = bytes(packet).find(0, pos)
-        if version_end == -1:
-            raise OperationalError("Invalid handshake packet: missing server version")
-        
         server_version = packet[pos:version_end].decode('utf-8')
         pos = version_end + 1
-        
-        # Thread ID / Connection ID (4 bytes)
-        if pos + 4 > len(packet):
-            raise OperationalError("Invalid handshake packet: missing thread ID")
-        
+
         thread_id = struct.unpack('<I', packet[pos:pos + 4])[0]
         pos += 4
         
         # Auth plugin data part 1 - seed1 (8 bytes)
-        if pos + 8 > len(packet):
-            raise OperationalError("Invalid handshake packet: missing seed1")
-        
         seed1 = packet[pos:pos + 8]
         pos += 8
         
         # Skip filler (1 byte, should be 0x00)
-        if pos >= len(packet):
-            raise OperationalError("Invalid handshake packet: missing filler")
         pos += 1
         
         # Server capabilities first 2 bytes
-        if pos + 2 > len(packet):
-            raise OperationalError("Invalid handshake packet: missing server capabilities")
-        
         server_capabilities_2_first_bytes = struct.unpack('<H', packet[pos:pos + 2])[0]
         pos += 2
         
         # Default collation (1 byte)
-        if pos >= len(packet):
-            raise OperationalError("Invalid handshake packet: missing default collation")
-        
         default_collation = packet[pos]
         pos += 1
         
         # Server status (2 bytes)
-        if pos + 2 > len(packet):
-            raise OperationalError("Invalid handshake packet: missing server status")
-        
         server_status = struct.unpack('<H', packet[pos:pos + 2])[0]
         pos += 2
         
@@ -274,15 +253,11 @@ class BaseClient(ABC):
         # Salt length calculation
         salt_length = 0
         if (server_capabilities_4_first_bytes & constants.CAPABILITY.PLUGIN_AUTH) != 0:
-            if pos < len(packet):
-                salt_length = max(12, packet[pos] - 9)
-                pos += 1
-            else:
-                raise OperationalError("Invalid handshake packet: missing salt length")
+            salt_length = max(12, packet[pos] - 9)
+            pos += 1
         else:
             # Skip 1 byte
-            if pos < len(packet):
-                pos += 1
+            pos += 1
         
         # Skip reserved bytes (6 bytes)
         if pos + 6 <= len(packet):
@@ -324,8 +299,7 @@ class BaseClient(ABC):
             seed = seed1 + seed2
         
         # Skip null terminator if present
-        if pos < len(packet) and packet[pos] == 0:
-            pos += 1
+        pos += 1
         
         # Check for MariaDB 10.x replication hack, remove fake prefix if needed
         server_mariadb = False
@@ -346,12 +320,11 @@ class BaseClient(ABC):
         # Auth plugin type (null-terminated string)
         auth_plugin_name = None
         if (server_capabilities_4_first_bytes & constants.CAPABILITY.PLUGIN_AUTH) != 0:
-            if pos < len(packet):
-                plugin_end = packet.find(0, pos)
-                if plugin_end != -1:
-                    auth_plugin_name = packet[pos:plugin_end].decode('utf-8')
-                else:
-                    auth_plugin_name = packet[pos:].decode('utf-8')
+            plugin_end = packet.find(0, pos)
+            if plugin_end != -1:
+                auth_plugin_name = packet[pos:plugin_end].decode('utf-8')
+            else:
+                auth_plugin_name = packet[pos:].decode('utf-8')
         
         # Create context with parsed information
         context = Context(
@@ -407,77 +380,6 @@ class BaseClient(ABC):
     # =========================================================================
     # Result Set Parsing
     # =========================================================================
-    
-    def _parse_column_definition(self, packet: bytes) -> dict:
-        """
-        Parse column definition packet according to MySQL/MariaDB protocol
-        
-        Args:
-            packet: Column definition packet
-            
-        Returns:
-            Dictionary with column information
-        """
-        parser = PayloadParser(packet)
-        
-        catalog = parser.read_length_encoded_string()
-        schema = parser.read_length_encoded_string()
-        table = parser.read_length_encoded_string()
-        org_table = parser.read_length_encoded_string()
-        name = parser.read_length_encoded_string()
-        org_name = parser.read_length_encoded_string()
-        
-        # Handle extended info only if EXTENDED_METADATA capability is enabled
-        ext_type_name = None
-        ext_type_format = None
-        
-        # Check if we have extended metadata
-        if self.context.hasExtendedMetadata():
-            ext_length = parser.read_length_encoded_int()
-            ext_end = parser.pos + ext_length
-            
-            while parser.pos < ext_end and parser.has_remaining():
-                ext_type = parser.read_byte()
-                
-                if ext_type == 0:
-                    # Extended type name
-                    ext_type_name = parser.read_length_encoded_string()
-                elif ext_type == 1:
-                    # Extended type format
-                    ext_type_format = parser.read_length_encoded_string()
-                else:
-                    # Skip unknown extended data
-                    skip_length = parser.read_length_encoded_int()
-                    parser.skip(skip_length)
-        
-        # Skip length field (always 0x0c)
-        parser.skip(1)
-        
-        # Read fixed-length fields (12 bytes total) in one operation
-        if parser.remaining_bytes() >= 10:
-            # Unpack all fixed fields: charset(2), column_length(4), column_type(1), flags(2), decimals(1)
-            fixed_data = parser.read_bytes(10)
-            charset, column_length, column_type, flags, decimals = struct.unpack('<HIBHB', fixed_data)
-        else:
-            raise OperationalError(f"Column definition packet too short")
-        
-        column_info = {
-            'catalog': catalog,
-            'schema': schema,
-            'table': table,
-            'org_table': org_table,
-            'name': name,
-            'org_name': org_name,
-            'character_set': charset,
-            'column_length': column_length,
-            'column_type': column_type,
-            'flags': flags,
-            'decimals': decimals,
-            'ext_type_name': ext_type_name,
-            'ext_type_format': ext_type_format
-        }
-        
-        return column_info
         
     def _is_null_bitmap(self, index: int, null_bitmap: bytes) -> bool:
         """

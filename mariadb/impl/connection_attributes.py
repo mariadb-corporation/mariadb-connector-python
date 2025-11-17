@@ -12,45 +12,18 @@ import platform
 from typing import Dict, Optional
 
 
-def get_default_connection_attributes(host: Optional[str] = None, version: Optional[str] = None) -> Dict[str, str]:
+def get_default_connection_attributes(host: Optional[str] = None) -> Dict[str, str]:
     """Get default connection attributes"""
     attrs = {}
     
-    # Client name
+    import mariadb
     attrs["_client_name"] = "mariadb-connector-python"
-    
-    # Client version
-    if version:
-        attrs["_client_version"] = version
-    else:
-        # Try to get version from mariadb module
-        try:
-            import mariadb
-            attrs["_client_version"] = mariadb.__version__
-        except (ImportError, AttributeError):
-            attrs["_client_version"] = "2.0.0.dev"
-    
-    # Server host
+    attrs["_client_version"] = mariadb.__version__
     if host:
         attrs["_server_host"] = host
-    
-    # Operating system
-    try:
-        attrs["_os"] = platform.system()
-    except Exception:
-        attrs["_os"] = "Unknown"
-    
-    # Python implementation (CPython, PyPy, Jython, etc.)
-    try:
-        attrs["_python_vendor"] = platform.python_implementation()
-    except Exception:
-        attrs["_python_vendor"] = "Unknown"
-    
-    # Python version
-    try:
-        attrs["_python_version"] = platform.python_version()
-    except Exception:
-        attrs["_python_version"] = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    attrs["_os"] = platform.system()
+    attrs["_python_vendor"] = platform.python_implementation()
+    attrs["_python_version"] = platform.python_version()
     
     return attrs
 

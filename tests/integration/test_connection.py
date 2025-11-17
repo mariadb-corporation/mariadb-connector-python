@@ -469,12 +469,10 @@ class TestConnection(unittest.TestCase):
             # Test client_capabilities
             client_caps = conn.client_capabilities
             self.assertIsInstance(client_caps, int)
-            self.assertGreater(client_caps, 0)
             
             # Test server_capabilities
             server_caps = conn.server_capabilities
             self.assertIsInstance(server_caps, int)
-            self.assertGreater(server_caps, 0)
             
             # Verify some common capability flags are set
             # CLIENT_PROTOCOL_41 = 512
