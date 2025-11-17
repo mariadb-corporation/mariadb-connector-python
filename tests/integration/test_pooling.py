@@ -330,12 +330,14 @@ class TestPooling(unittest.TestCase):
         key = "t1"
         conn = mariadb.connect(pool_name=key, **default_conf)
         cursor = conn.cursor()
+        p = mariadb._CONNECTION_POOLS["t1"]
         del mariadb._CONNECTION_POOLS["t1"]
         self.assertEqual(mariadb._CONNECTION_POOLS, {})
         try:
             cursor.execute("SELECT 1")
         except mariadb.ProgrammingError:
             pass
+        p.close()
 
     def test_pool_getter(self):
         default_conf = conf()

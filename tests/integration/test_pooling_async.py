@@ -349,12 +349,14 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
         key = "t1"
         conn = await mariadb.asyncConnect(pool_name=key, **default_conf)
         cursor = conn.cursor()
+        pool = mariadb._ASYNC_CONNECTION_POOLS["t1"]
         del mariadb._ASYNC_CONNECTION_POOLS["t1"]
         self.assertEqual(mariadb._ASYNC_CONNECTION_POOLS, {})
         try:
             await cursor.execute("SELECT 1")
         except mariadb.ProgrammingError:
             pass
+        await pool.close()
 
     async def test_pool_getter(self):
         default_conf = conf()

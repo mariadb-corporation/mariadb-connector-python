@@ -294,12 +294,18 @@ __author__ = "MariaDB Corporation"
 _CONNECTION_POOLS = {}
 _ASYNC_CONNECTION_POOLS = {}
 
+# Cache for pool classes (lazy loaded)
+_ConnectionPoolClass = None
+_AsyncConnectionPoolClass = None
+
 # Dynamic version properties that reflect the actual implementation being used
 def __getattr__(name):
     """
     Dynamic attribute access for version info and optional pooling support.
     Returns version information based on the actual implementation being used.
     """
+    global _ConnectionPoolClass, _AsyncConnectionPoolClass
+    
     if name == '__version__':
         return _get_current_version()
     elif name == '__version_type__':
@@ -307,17 +313,15 @@ def __getattr__(name):
     elif name == '__version_info__':
         return _get_current_version_info()
     elif name == 'ConnectionPool':
-        # Lazy import and return compatibility wrapper
-        return _get_connection_pool_class()
+        # Lazy import and cache compatibility wrapper
+        if _ConnectionPoolClass is None:
+            _ConnectionPoolClass = _get_connection_pool_class()
+        return _ConnectionPoolClass
     elif name == 'AsyncConnectionPool':
-        # Lazy import and return async connection pool
-        return _get_async_connection_pool_class()
-    elif name == '_CONNECTION_POOLS':
-        # Return the global connection pools dictionary
-        return _CONNECTION_POOLS
-    elif name == '_ASYNC_CONNECTION_POOLS':
-        # Return the global connection pools dictionary
-        return _ASYNC_CONNECTION_POOLS
+        # Lazy import and cache async connection pool
+        if _AsyncConnectionPoolClass is None:
+            _AsyncConnectionPoolClass = _get_async_connection_pool_class()
+        return _AsyncConnectionPoolClass
     else:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
