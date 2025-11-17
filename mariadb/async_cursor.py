@@ -143,7 +143,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                 
             # Use provided buffered parameter or fall back to cursor default
             effective_buffered = buffered if buffered is not None else self._buffered
-            completions = await self.connection._client.execute(query_packet, config=self._config, can_redo=False, buffered=effective_buffered)
+            completions = await self.connection._client.execute(query_packet, self._config, effective_buffered)
             
             # Process the completions to extract result data
             self._process_completions(completions)
@@ -243,7 +243,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                 query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
                 # Use provided buffered parameter or fall back to cursor default
                 effective_buffered = buffered if buffered is not None else self._buffered
-                compl = await self.connection._client.execute(query_packet, config=self._config, can_redo=False, buffered=effective_buffered)
+                compl = await self.connection._client.execute(query_packet, self._config, effective_buffered)
                 completions.extend(compl)
 
             # Process the completions - aggregate result sets with compatible metadata
@@ -399,7 +399,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
         # Check if we have a result set
         if self._result is None:
             raise ProgrammingError("Cursor doesn't have a result set")
-        
+
         # For streaming results, only forward relative scrolling is allowed
         if self._result.streaming():
             if mode != "relative":
@@ -458,7 +458,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                 # Execute with parameters using ExecutePacket
                 from .impl.message.client.execute_packet import ExecutePacket
                 execute_packet = ExecutePacket(stmt.statement_id, list(args), call_sql)
-                completions = await self.connection._client.execute(execute_packet, self._config, can_redo=False)
+                completions = await self.connection._client.execute(execute_packet, self._config)
                 self._process_completions(completions)
                 
                 return None  # Match C extension behavior

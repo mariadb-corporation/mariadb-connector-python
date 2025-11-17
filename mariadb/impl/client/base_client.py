@@ -117,14 +117,14 @@ class BaseClient(ABC):
     def _handle_auth_switch(self) -> None:
         """Handle authentication switch """
         ...
-    
+
     @abstractmethod
     def _send_message(self, message: ClientMessage) -> None:
         """Send client message to server"""
         ...
     
     @abstractmethod
-    def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List['Completion']:
+    def execute(self, message: ClientMessage, config: 'Configuration', buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List['Completion']:
         """Send client message and read result"""
         ...
     
@@ -425,35 +425,49 @@ class BaseClient(ABC):
         # For now, treat as successful authentication
         # This would need more sophisticated handling for multi-round auth
         OkPacket.decode(packet, self.context)
-    
-    def _apply_converters(self, row_values: list, columns: List[Dict[str, Any]], config: 'Configuration') -> tuple:
+
+    def _apply_converters_to_rows(self, rows: List[tuple], columns: List[ColumnDefinitionPacket], config: 'Configuration') -> List[tuple]:
         """
-        Apply converters to row values
+        Apply converters to all rows at once
         
         Args:
-            row_values: List of parsed row values
+            rows: List of row tuples
             columns: Column definitions
             config: Configuration with converter settings
             
         Returns:
-            Tuple of converted values
+            List of converted row tuples
         """
-        if not config.converter:
-            return tuple(row_values)
+        if not config.converter or not rows:
+            return rows
+
+        # Build list of column indices that need conversion
+        converter_indices = []
+        converter_funcs = []
+        for i, column in enumerate(columns):
+            if column.column_type in config.converter:
+                converter_indices.append(i)
+                converter_funcs.append(config.converter[column.column_type])
         
-        converted_values = []
-        for i, value in enumerate(row_values):
-            if columns[i].column_type in config.converter:
-                converter_func = config.converter[columns[i].column_type]
+        # If no converters needed, return as-is
+        if not converter_indices:
+            return rows
+
+        # Apply converters to all rows
+        converted_rows = []
+        for row in rows:
+            row_list = list(row)
+            for idx, converter_func in zip(converter_indices, converter_funcs):
                 try:
-                    value = converter_func(value)
+                    row_list[idx] = converter_func(row_list[idx])
                 except Exception:
                     # If conversion fails, keep original value
                     pass
-            converted_values.append(value)
-        return tuple(converted_values)
+            converted_rows.append(tuple(row_list))
 
-    def _parse_row_data(self, packet: bytes, columns: List[ColumnDefinitionPacket], config: 'Configuration', is_binary: bool = False) -> tuple:
+        return converted_rows
+
+    def _parse_row_data(self, packet: bytearray, columns: List[ColumnDefinitionPacket], config: 'Configuration', is_binary: bool = False) -> tuple:
         """
         Parse row data packet
         
@@ -464,145 +478,138 @@ class BaseClient(ABC):
         Returns:
             Tuple of row values
         """
-        try:
-            if is_binary:
-                return self._parse_binary_row_data(packet, columns, config)
-            
-            pos = 0
-            row_values = []
-                
-            for column in columns:
-                match column.column_type:
-                    case (FIELD_TYPE.TINY | FIELD_TYPE.SHORT | FIELD_TYPE.LONG | 
-                          FIELD_TYPE.LONGLONG | FIELD_TYPE.INT24 | FIELD_TYPE.YEAR):
-                        # Read as string and convert to integer (simpler and more reliable)
-                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+        if is_binary:
+            return self._parse_binary_row_data(packet, columns, config)
+
+        pos = 0
+        row_values = []
+
+        for column in columns:
+            match column.column_type:
+                case (FIELD_TYPE.TINY | FIELD_TYPE.SHORT | FIELD_TYPE.LONG |
+                      FIELD_TYPE.LONGLONG | FIELD_TYPE.INT24 | FIELD_TYPE.YEAR):
+                    # Read as string and convert to integer (simpler and more reliable)
+                    val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                    try:
+                        value = int(val) if val is not None else None
+                    except (ValueError, TypeError):
+                        value = None
+                case FIELD_TYPE.FLOAT | FIELD_TYPE.DOUBLE:
+                    # Read as string and convert to float
+                    val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                    value = float(val) if val is not None else None
+                case FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE:
+                    # Parse DATE as datetime.date
+                    val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                    if val is not None:
                         try:
-                            value = int(val) if val is not None else None
-                        except (ValueError, TypeError):
-                            value = None
-                    case FIELD_TYPE.FLOAT | FIELD_TYPE.DOUBLE:
-                        # Read as string and convert to float
-                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                        value = float(val) if val is not None else None
-                    case FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE:
-                        # Parse DATE as datetime.date
-                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                        if val is not None:
-                            try:
+                            year, month, day = map(int, val.split('-'))
+                            value = datetime.date(year, month, day)
+                        except (ValueError, AttributeError) as e:
+                            value = None  # Fallback to None if parsing fails
+                    else:
+                        value = None
+                case FIELD_TYPE.TIME:
+                    # Parse TIME as datetime.timedelta
+                    val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                    if val is not None:
+                        try:
+                            # Handle TIME format: HH:MM:SS[.ffffff] or HHH:MM:SS[.ffffff] (can be > 24 hours)
+                            # Can also be negative: -HH:MM:SS[.ffffff]
+                            is_negative = val.startswith('-')
+                            if is_negative:
+                                val = val[1:]
+
+                            parts = val.split(':')
+                            if len(parts) >= 3:
+                                hours = int(parts[0])
+                                minutes = int(parts[1])
+                                # Handle fractional seconds: "24.051" -> seconds=24, microseconds=51000
+                                seconds_parts = parts[2].split('.')
+                                seconds = int(seconds_parts[0])
+                                microseconds = 0
+
+                                if len(seconds_parts) > 1:
+                                    # Pad or truncate to 6 digits for microseconds
+                                    frac_str = seconds_parts[1].ljust(6, '0')[:6]
+                                    microseconds = int(frac_str)
+
+                                td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
+                                value = -td if is_negative else td
+                            else:
+                                value = val  # Fallback to string
+                        except (ValueError, AttributeError):
+                            value = val  # Fallback to string if parsing fails
+                    else:
+                        value = None
+                case (FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP):
+                    # Parse DATETIME as datetime.datetime
+                    val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                    if val is not None:
+                        try:
+                            # Handle DATETIME format: YYYY-MM-DD HH:MM:SS[.ffffff]
+                            if ' ' in val:
+                                date_part, time_part = val.split(' ', 1)
+                                year, month, day = map(int, date_part.split('-'))
+
+                                time_parts = time_part.split(':')
+                                hours = int(time_parts[0])
+                                minutes = int(time_parts[1])
+                                # Handle fractional seconds: "24.123456" -> seconds=24, microseconds=123456
+                                seconds_parts = time_parts[2].split('.')
+                                seconds = int(seconds_parts[0])
+                                microseconds = 0
+
+                                if len(seconds_parts) > 1:
+                                    # Pad or truncate to 6 digits for microseconds
+                                    frac_str = seconds_parts[1].ljust(6, '0')[:6]
+                                    microseconds = int(frac_str)
+
+                                value = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                            else:
+                                # Date only
                                 year, month, day = map(int, val.split('-'))
-                                value = datetime.date(year, month, day)
-                            except (ValueError, AttributeError) as e:
-                                value = None  # Fallback to None if parsing fails
-                        else:
-                            value = None
-                    case FIELD_TYPE.TIME:
-                        # Parse TIME as datetime.timedelta
-                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                        if val is not None:
-                            try:
-                                # Handle TIME format: HH:MM:SS[.ffffff] or HHH:MM:SS[.ffffff] (can be > 24 hours)
-                                # Can also be negative: -HH:MM:SS[.ffffff]
-                                is_negative = val.startswith('-')
-                                if is_negative:
-                                    val = val[1:]
-                                
-                                parts = val.split(':')
-                                if len(parts) >= 3:
-                                    hours = int(parts[0])
-                                    minutes = int(parts[1])
-                                    # Handle fractional seconds: "24.051" -> seconds=24, microseconds=51000
-                                    seconds_parts = parts[2].split('.')
-                                    seconds = int(seconds_parts[0])
-                                    microseconds = 0
-                                    
-                                    if len(seconds_parts) > 1:
-                                        # Pad or truncate to 6 digits for microseconds
-                                        frac_str = seconds_parts[1].ljust(6, '0')[:6]
-                                        microseconds = int(frac_str)
-                                    
-                                    td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
-                                    value = -td if is_negative else td
-                                else:
-                                    value = val  # Fallback to string
-                            except (ValueError, AttributeError):
-                                value = val  # Fallback to string if parsing fails
-                        else:
-                            value = None
-                    case (FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP):
-                        # Parse DATETIME as datetime.datetime
-                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                        if val is not None:
-                            try:
-                                # Handle DATETIME format: YYYY-MM-DD HH:MM:SS[.ffffff]
-                                if ' ' in val:
-                                    date_part, time_part = val.split(' ', 1)
-                                    year, month, day = map(int, date_part.split('-'))
-                                    
-                                    time_parts = time_part.split(':')
-                                    hours = int(time_parts[0])
-                                    minutes = int(time_parts[1])
-                                    # Handle fractional seconds: "24.123456" -> seconds=24, microseconds=123456
-                                    seconds_parts = time_parts[2].split('.')
-                                    seconds = int(seconds_parts[0])
-                                    microseconds = 0
-                                    
-                                    if len(seconds_parts) > 1:
-                                        # Pad or truncate to 6 digits for microseconds
-                                        frac_str = seconds_parts[1].ljust(6, '0')[:6]
-                                        microseconds = int(frac_str)
-                                    
-                                    value = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
-                                else:
-                                    # Date only
-                                    year, month, day = map(int, val.split('-'))
-                                    value = datetime.datetime(year, month, day)
-                            except (ValueError, AttributeError):
-                                value = val  # Fallback to string if parsing fails
-                        else:
-                            value = None
-                    case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
-                        # DECIMAL types must return decimal.Decimal
-                        val, pos = PayloadParser.read_length_encoded_string_at(packet, pos, encoding='ascii')
-                        value = decimal.Decimal(val) if val is not None else None
-                    case FIELD_TYPE.JSON:
+                                value = datetime.datetime(year, month, day)
+                        except (ValueError, AttributeError):
+                            value = val  # Fallback to string if parsing fails
+                    else:
+                        value = None
+                case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
+                    # DECIMAL types must return decimal.Decimal
+                    val, pos = PayloadParser.read_length_encoded_string_at(packet, pos, encoding='ascii')
+                    value = decimal.Decimal(val) if val is not None else None
+                case FIELD_TYPE.JSON:
+                    value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                case FIELD_TYPE.NULL:
+                    # NULL type - read length-encoded value (will be None)
+                    value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                case _:
+                    if (column.ext_type_format == 'json'):
                         value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                    case FIELD_TYPE.NULL:
-                        # NULL type - read length-encoded value (will be None)
-                        value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                    case _:
-                        if (column.ext_type_format == 'json'):
-                            value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                        else:
-                            match column.ext_type_name:
-                                case ('inet6' | 'inet4'):
+                    else:
+                        match column.ext_type_name:
+                            case ('inet6' | 'inet4'):
+                                value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                                if config.native_object:
+                                    value = ipaddress.ip_address(value)
+                            case 'uuid':
+                                value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
+                                if config.native_object:
+                                    value = uuid.UUID(value)
+                            case _:
+                                # Default case for VARCHAR, STRING, etc.
+                                # Check if BINARY flag is set to determine if we should read as bytes or string
+                                if (column.character_set == 63):
+                                    # Binary data - read as bytes
+                                    value, pos = PayloadParser.read_length_encoded_bytes_at(packet, pos)
+                                else:
+                                    # Text data - read as string
                                     value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                                    if config.native_object:
-                                        value = ipaddress.ip_address(value)
-                                case 'uuid':
-                                    value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                                    if config.native_object:
-                                        value = uuid.UUID(value)
-                                case _:
-                                    # Default case for VARCHAR, STRING, etc.
-                                    # Check if BINARY flag is set to determine if we should read as bytes or string
-                                    if (column.character_set == 63):
-                                        # Binary data - read as bytes
-                                        value, pos = PayloadParser.read_length_encoded_bytes_at(packet, pos)
-                                    else:
-                                        # Text data - read as string
-                                        value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
 
+            row_values.append(value)
 
-                row_values.append(value)
-            
-            # Apply converters if configured (after parsing all values)
-            return self._apply_converters(row_values, columns, config)
-            
-        except Exception as e:
-            # Return tuple with None values if parsing fails
-            return tuple(None for _ in columns)
-    
+        return tuple(row_values)
+
     def _parse_binary_row_data(self, packet: bytes, columns: List[ColumnDefinitionPacket], config: 'Configuration') -> tuple:
         """
         Parse binary row data packet (from COM_STMT_EXECUTE)
@@ -637,8 +644,7 @@ class BaseClient(ABC):
             value, pos = self._parse_binary_column_value(packet, pos, column, config)
             row_values.append(value)
         
-        # Apply converters if configured (after parsing all values)
-        return self._apply_converters(row_values, columns, config)
+        return tuple(row_values)
     
     # _is_null_bitmap() is inherited from BaseClient (synchronous, no I/O)
     

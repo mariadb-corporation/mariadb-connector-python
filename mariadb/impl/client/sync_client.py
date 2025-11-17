@@ -238,7 +238,7 @@ class SyncClient(BaseClient):
         elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
             # Auth switch - server requests different auth plugin
             self._handle_auth_switch(packet)
-        else: 
+        else:
             # Auth more data
             raise OperationalError(f"Unexpected packet during authentication: {packet[0]:02x}")
 
@@ -268,13 +268,13 @@ class SyncClient(BaseClient):
         encoded = message.encode(self.context)
         self.stream.send_payload(encoded, message.type(), reset_sequence)
 
-    def execute(self, message: ClientMessage, config: 'Configuration' = None, can_redo: bool = False, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
+    def execute(self, message: ClientMessage, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         """Execute command and return list of completion results"""
         with self.lock:
             if self.closed:
                 raise OperationalError("Connection is closed")
             
-            try:            
+            try:
                 self._send_message(message)
                 results = []
                 
@@ -416,7 +416,7 @@ class SyncClient(BaseClient):
             if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                 # skip metadata
                 columns = prepare_stmt_packet.columns
-            else:                      
+            else:
                 for _ in range(column_count):
                     columns.append(ColumnDefinitionPacket.decode(self.stream.read_payload(), self.context))
             
@@ -458,6 +458,9 @@ class SyncClient(BaseClient):
                     else:
                         completion = OkPacket.decode(row_packet, self.context)
 
+                    # Apply converters to all rows at once
+                    rows = self._apply_converters_to_rows(rows, columns, config)
+
                     from ..result import SyncCompleteResult
                     complete_result = SyncCompleteResult(
                         columns=columns,
@@ -472,8 +475,7 @@ class SyncClient(BaseClient):
                     
                 else:
                     # Row data packet
-                    row_data = self._parse_row_data(row_packet, columns, config, is_binary)
-                    rows.append(row_data)
+                    rows.append(self._parse_row_data(row_packet, columns, config, is_binary))
             
             
         except Exception as e:

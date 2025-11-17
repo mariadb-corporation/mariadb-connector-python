@@ -67,11 +67,6 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
                     pass  # Ignore errors during close
             
             self._closed = True
-            self.arraysize = 1
-            self._completions = []
-            self._completion_index = 0
-            self._config = None
-            self._result = None
     
     # =========================================================================
     # Query Execution Methods
@@ -108,11 +103,11 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
             raise TypeError("SQL statement must be a string")
         if (not sql):
             raise ProgrammingError("Empty SQL statement")
-        
+
         # Consume any pending streaming results before executing new query
         if self._result is not None and self._result.streaming():
             self._result.fetch_remaining()
-        
+
         try:
             # Use provided buffered parameter or fall back to cursor default
             effective_buffered = buffered if buffered is not None else self._buffered
@@ -137,13 +132,13 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
                     if (self._stmt is None):
                         self._stmt = self._client.prepare_statement(sql)
 
-                    
+
                     # Execute with parameters using ExecutePacket
                     from .impl.message.client.execute_packet import ExecutePacket
                     execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
                     completions = self._client.execute(execute_packet, self._config, False, effective_buffered, prepare_stmt_packet=self._stmt)
 
-                else:    
+                else:
 
                     sql_bytes, param_positions = split_sql_parts(sql)
 
@@ -153,7 +148,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
                         raise ProgrammingError(
                             f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
                             f"but only {len(parameters)} parameters provided"
-                        )                       
+                        )
                     # Use parameterized query packet with bytes
                     query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
                     completions = self._client.execute(query_packet, self._config, False, effective_buffered)
@@ -196,7 +191,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
         # Consume any pending streaming results before executing new query
         if self._result is not None and self._result.streaming():
             self._result.fetch_remaining()
-        
+
         # Check if data is None or not an array-like type
         if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):
             raise ProgrammingError("No data provided")
@@ -218,7 +213,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
             # For positional parameters, parse SQL once
             sql_bytes, param_positions = split_sql_parts(sql)
             placeholder_count = len(param_positions) // 2
-        
+
             # Execute the statement for each parameter set
             for params in data:
                 # Execute with current parameter set
@@ -239,7 +234,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
                 query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
                 # Use provided buffered parameter or fall back to cursor default
                 effective_buffered = buffered if buffered is not None else self._buffered
-                compl_list = self._client.execute(query_packet, self._config, False, effective_buffered)
+                compl_list = self._client.execute(query_packet, self._get_config(), effective_buffered)
                 completions.extend(compl_list)
 
             # Process the completions - aggregate result sets with compatible metadata
@@ -346,8 +341,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
         
         # Check if we have a result set
         if self._result is None:
-            raise ProgrammingError("Cursor doesn't have a result set")       
-        
+            raise ProgrammingError("Cursor doesn't have a result set")
+
         # For streaming results, only forward relative scrolling is allowed
         if self._result.streaming():
             if mode != "relative":
@@ -405,9 +400,9 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
             # Execute with parameters using ExecutePacket
             from .impl.message.client.execute_packet import ExecutePacket
             execute_packet = ExecutePacket(self._stmt.statement_id, list(args), call_sql)
-            completions = self._client.execute(execute_packet, self._config, can_redo=False, prepare_stmt_packet=self._stmt)
+            completions = self._client.execute(execute_packet, self._config, self._stmt)
             self._process_completions(completions)
-            
+
             return None  # Match C extension behavior
         except DatabaseError as e:
             raise e

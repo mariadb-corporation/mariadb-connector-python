@@ -192,7 +192,7 @@ class AsyncClient(BaseClient):
         if len(sql_commands) > 0:
             sql_command = 'SET ' + ', '.join(sql_commands)
             query_packet = QueryPacket(sql_command)
-            await self.execute(query_packet, self.configuration, can_redo=True)
+            await self.execute(query_packet, self.configuration)
     
     # _parse_handshake() and _calculate_client_capabilities() are inherited from BaseClient
     
@@ -289,7 +289,7 @@ class AsyncClient(BaseClient):
         
         # Ensure plugins are registered
         register_builtin_plugins()
-        
+
         # Check if server requests plugin authentication
         if len(auth_result) > 0:
             packet_type = auth_result[0]
@@ -325,7 +325,7 @@ class AsyncClient(BaseClient):
         # Get authentication plugin
         try:
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
-            
+
             plugin = plugin_factory.initialize(self.configuration.password, plugin_data, self.configuration, self.host_address)
             response: bytearray = await plugin.processAsync(self.stream, self.context)
             await self._handle_authentication(response)
@@ -350,7 +350,7 @@ class AsyncClient(BaseClient):
                     query_packet = QueryPacket(init_command)
                     
                     # Execute the query - this handles all the packet framing and response parsing
-                    await self.execute(query_packet, config=self.configuration, can_redo=False)
+                    await self.execute(query_packet, self.configuration)
                     
             except Exception as e:
                 raise OperationalError(f"Failed to execute init command '{self.configuration.init_command}': {e}")
@@ -364,7 +364,7 @@ class AsyncClient(BaseClient):
         except Exception as e:
             raise OperationalError(f"Failed to send message: {e}")
     
-    async def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List[Completion]:
+    async def execute(self, message: ClientMessage, config: 'Configuration', buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List[Completion]:
         """Execute command asynchronously and return list of completion results"""
         with self.lock:
             if self.closed:
@@ -496,18 +496,12 @@ class AsyncClient(BaseClient):
     
     async def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> Completion:
         """Parse result packet into completion object asynchronously"""
-        if len(packet) == 0:
-            raise OperationalError("Empty result packet")
-        
         packet_type = packet[0]
         if packet_type == self.OK_PACKET:
-            # OK packet
             return OkPacket.decode(packet, self.context)
         elif packet_type == self.ERROR_PACKET:
-            # Error packet
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
-            # Result set packet - parse according to MySQL/MariaDB protocol
             return await self._parse_result_set(packet, config, is_binary, buffered, prepare_stmt_packet)
     
     # _parse_ok_packet(), _process_session_tracking(), _process_system_variables(), 
@@ -528,7 +522,7 @@ class AsyncClient(BaseClient):
             if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                 # skip metadata
                 columns = prepare_stmt_packet.columns
-            else:                      
+            else:
                 for _ in range(column_count):
                     col_packet: bytearray = await self.stream.read_payload()
                     columns.append(ColumnDefinitionPacket.decode(col_packet, self.context))
@@ -576,6 +570,9 @@ class AsyncClient(BaseClient):
                         # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
                         completion = OkPacket.decode(row_packet, self.context)
                     
+                    # Apply converters to all rows at once
+                    rows = self._apply_converters_to_rows(rows, columns, config)
+
                     # Create AsyncCompleteResult with all rows
                     from ..result import AsyncCompleteResult
                     complete_result = AsyncCompleteResult(
