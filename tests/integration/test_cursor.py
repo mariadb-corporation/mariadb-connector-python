@@ -2252,6 +2252,132 @@ class TestCursor(unittest.TestCase):
         # explicitly close connection before cursor
         conn.close();
         cursor.close()
+
+    def test_xfield_types_binary(self):
+        """Test field types with binary=True cursor"""
+        if is_maxscale():
+            self.skipTest("Test doesn't work with maxscale")
+        cursor = self.connection.cursor(binary=True)
+        fieldinfo = mariadb.fieldinfo()
+        cursor.execute("CREATE TEMPORARY TABLE test_xfield_types_binary ("
+                       "a tinyint not null auto_increment primary "
+                       "key, b smallint, c int, d bigint, e float, "
+                       "f decimal, g double, h char(10), i varchar(255), "
+                       "j blob, k json, index(b))")
+        info = cursor.description
+        self.assertEqual(info, None)
+        cursor.execute("SELECT * FROM test_xfield_types_binary WHERE 1=?", (1,))
+        info = cursor.description
+        self.assertEqual(fieldinfo.type(info[0]), "TINY")
+        self.assertEqual(fieldinfo.type(info[1]), "SHORT")
+        self.assertEqual(fieldinfo.type(info[2]), "LONG")
+        self.assertEqual(fieldinfo.type(info[3]), "LONGLONG")
+        self.assertEqual(fieldinfo.type(info[4]), "FLOAT")
+        self.assertEqual(fieldinfo.type(info[5]), "NEWDECIMAL")
+        self.assertEqual(fieldinfo.type(info[6]), "DOUBLE")
+        self.assertEqual(fieldinfo.type(info[7]), "STRING")
+        self.assertEqual(fieldinfo.type(info[8]), "VAR_STRING")
+        self.assertEqual(fieldinfo.type(info[9]), "BLOB")
+        x = self.connection.server_version_info
+        if not is_maxscale() and (x > (10, 5, 1) or is_mysql()):
+            self.assertEqual(fieldinfo.type(info[10]), "JSON")
+        else:
+            self.assertEqual(fieldinfo.type(info[10]), "BLOB")
+        self.assertEqual(fieldinfo.flag(info[0]),
+                             "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT | NUMERIC")
+        self.assertEqual(fieldinfo.flag(info[1]), "PART_KEY | NUMERIC")
+        self.assertEqual(fieldinfo.flag(info[9]), "BLOB | BINARY")
+        del cursor
+
+    def test_ext_field_types_binary(self):
+        """Test extended field types with binary=True cursor"""
+        x = self.connection.server_version_info
+        if x < (10, 10, 0) or is_mysql():
+            self.skipTest("Skip (MySQL and MariaDB < 10.10)")
+        cursor = self.connection.cursor(binary=True)
+        
+        # Test all extended field types including all geometry types
+        cursor.execute("CREATE TEMPORARY TABLE t1_binary ("
+                       "a json, "
+                       "b uuid, "
+                       "c inet4, "
+                       "d inet6, "
+                       "e point, "
+                       "f multipoint, "
+                       "g linestring, "
+                       "h multilinestring, "
+                       "i polygon, "
+                       "j multipolygon, "
+                       "k geometrycollection)")
+        cursor.execute("SELECT a,b,c,d,e,f,g,h,i,j,k FROM t1_binary WHERE 1=?", (1,))
+        metadata = cursor.metadata
+        
+        # JSON
+        self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
+        self.assertEqual(metadata["type"][0], FIELD_TYPE.BLOB)
+        
+        # UUID
+        self.assertEqual(metadata["ext_type_or_format"][1], EXT_FIELD_TYPE.UUID)
+        self.assertEqual(metadata["type"][1], FIELD_TYPE.STRING)
+        
+        # INET4
+        self.assertEqual(metadata["ext_type_or_format"][2], EXT_FIELD_TYPE.INET4)
+        self.assertEqual(metadata["type"][2], FIELD_TYPE.STRING)
+        
+        # INET6
+        self.assertEqual(metadata["ext_type_or_format"][3], EXT_FIELD_TYPE.INET6)
+        self.assertEqual(metadata["type"][3], FIELD_TYPE.STRING)
+        
+        # POINT
+        self.assertEqual(metadata["ext_type_or_format"][4], EXT_FIELD_TYPE.POINT)
+        self.assertEqual(metadata["type"][4], FIELD_TYPE.GEOMETRY)
+        
+        # MULTIPOINT
+        self.assertEqual(metadata["ext_type_or_format"][5], EXT_FIELD_TYPE.MULTIPOINT)
+        self.assertEqual(metadata["type"][5], FIELD_TYPE.GEOMETRY)
+        
+        # LINESTRING
+        self.assertEqual(metadata["ext_type_or_format"][6], EXT_FIELD_TYPE.LINESTRING)
+        self.assertEqual(metadata["type"][6], FIELD_TYPE.GEOMETRY)
+        
+        # MULTILINESTRING
+        self.assertEqual(metadata["ext_type_or_format"][7], EXT_FIELD_TYPE.MULTILINESTRING)
+        self.assertEqual(metadata["type"][7], FIELD_TYPE.GEOMETRY)
+        
+        # POLYGON
+        self.assertEqual(metadata["ext_type_or_format"][8], EXT_FIELD_TYPE.POLYGON)
+        self.assertEqual(metadata["type"][8], FIELD_TYPE.GEOMETRY)
+        
+        # MULTIPOLYGON
+        self.assertEqual(metadata["ext_type_or_format"][9], EXT_FIELD_TYPE.MULTIPOLYGON)
+        self.assertEqual(metadata["type"][9], FIELD_TYPE.GEOMETRY)
+        
+        # GEOMETRYCOLLECTION
+        self.assertEqual(metadata["ext_type_or_format"][10], EXT_FIELD_TYPE.GEOMETRYCOLLECTION)
+        self.assertEqual(metadata["type"][10], FIELD_TYPE.GEOMETRY)
+
+        cursor.close()
+
+    def test_conpy270_binary(self):
+        """Test UUID field type with binary=True cursor"""
+        with create_connection() as connection:
+            x = connection.server_version_info
+            if x < (10, 7, 0) or is_mysql():
+                self.skipTest("Skip (MySQL and MariaDB < 10.7)")
+
+            cursor = connection.cursor(binary=True)
+
+            cursor.execute("drop table if exists t1_binary_270")
+            cursor.execute("create table t1_binary_270 (a uuid)")
+            cursor.execute("insert into t1_binary_270 values (uuid())")
+
+            # binary protocol with parameters
+            cursor.execute("select a from t1_binary_270 WHERE 1=?", (1,))
+            self.assertEqual(cursor.description[0][1], mariadb.STRING)
+            cursor.fetchall()
+
+            cursor.execute("drop table if exists t1_binary_270")
+            cursor.close()
         
 
 if __name__ == '__main__':

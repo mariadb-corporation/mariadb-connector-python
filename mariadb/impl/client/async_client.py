@@ -364,7 +364,7 @@ class AsyncClient(BaseClient):
         except Exception as e:
             raise OperationalError(f"Failed to send message: {e}")
     
-    async def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False, buffered: bool = True) -> List[Completion]:
+    async def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List[Completion]:
         """Execute command asynchronously and return list of completion results"""
         with self.lock:
             if self.closed:
@@ -382,7 +382,7 @@ class AsyncClient(BaseClient):
                 # Continue reading results while MORE_RESULTS_EXIST is set
                 while True:
                     result_packet: bytes = await self.stream.read_payload()
-                    completion = await self._parse_result_packet(result_packet, config, is_binary, buffered)
+                    completion = await self._parse_result_packet(result_packet, config, is_binary, buffered, prepare_stmt_packet)
                     results.append(completion)
                     
                     # Check if there are more results to read
@@ -494,7 +494,7 @@ class AsyncClient(BaseClient):
             pass
         return None
     
-    async def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> Completion:
+    async def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> Completion:
         """Parse result packet into completion object asynchronously"""
         if len(packet) == 0:
             raise OperationalError("Empty result packet")
@@ -508,12 +508,12 @@ class AsyncClient(BaseClient):
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
             # Result set packet - parse according to MySQL/MariaDB protocol
-            return await self._parse_result_set(packet, config, is_binary, buffered)
+            return await self._parse_result_set(packet, config, is_binary, buffered, prepare_stmt_packet)
     
     # _parse_ok_packet(), _process_session_tracking(), _process_system_variables(), 
     # and _process_schema_change() are inherited from BaseClient
     
-    async def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> 'Completion':
+    async def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> 'Completion' :
         """Parse result set with column definitions and row data asynchronously"""
         from ..completion import Completion
         
@@ -525,9 +525,13 @@ class AsyncClient(BaseClient):
             
             # Step 2: Read column definition packets
             columns: List[ColumnDefinitionPacket] = []
-            for i in range(column_count):
-                col_packet: bytearray = await self.stream.read_payload()
-                columns.append(ColumnDefinitionPacket.decode(col_packet, self.context))
+            if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+                # skip metadata
+                columns = prepare_stmt_packet.columns
+            else:                      
+                for _ in range(column_count):
+                    col_packet: bytearray = await self.stream.read_payload()
+                    columns.append(ColumnDefinitionPacket.decode(col_packet, self.context))
             
             # Step 3: Handle EOF packet after column definitions based on capabilities
             # Check if DEPRECATE_EOF capability is set

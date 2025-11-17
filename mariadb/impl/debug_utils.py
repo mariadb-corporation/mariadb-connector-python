@@ -73,6 +73,6 @@ def hex_dump(data: Union[bytes, bytearray], descr: str = "") -> str:
         offset += 16
     
     # Footer
-    lines.append("+------+--------------------------------------------------+------------------+")
+    lines.append("+------+---------------------------------------------------+------------------+")
     
     return "\n".join(lines)

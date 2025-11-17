@@ -6,7 +6,7 @@ Unit tests for SQL parser
 """
 
 import unittest
-from mariadb.impl.sql_parser import split_sql_parts, parse_named_placeholders
+from mariadb.impl.sql_parser import split_sql_parts
 
 
 class TestSQLParser(unittest.TestCase):
@@ -95,66 +95,6 @@ class TestSQLParser(unittest.TestCase):
         sql_bytes, positions = split_sql_parts(sql)
         self.assertEqual(sql_bytes, b"SELECT * FROM users")
         self.assertEqual(positions, [])
-
-    def test_parse_named_placeholders_simple(self):
-        """Test simple named placeholder"""
-        sql = "SELECT * FROM users WHERE id = :id"
-        sql_bytes, positions, param_names = parse_named_placeholders(sql)
-        self.assertEqual(sql_bytes, b"SELECT * FROM users WHERE id = :id")
-        self.assertEqual(param_names, ['id'])
-        # Positions should mark the :id placeholder
-        self.assertEqual(len(positions), 2)
-
-    def test_parse_named_placeholders_multiple(self):
-        """Test multiple named placeholders"""
-        sql = "INSERT INTO users VALUES (:id, :name, :email)"
-        sql_bytes, positions, param_names = parse_named_placeholders(sql)
-        self.assertEqual(sql_bytes, b"INSERT INTO users VALUES (:id, :name, :email)")
-        self.assertEqual(param_names, ['id', 'name', 'email'])
-        # Should have 3 placeholders = 6 positions (start, end pairs)
-        self.assertEqual(len(positions), 6)
-
-    def test_parse_named_placeholders_with_underscore(self):
-        """Test named placeholder with underscore"""
-        sql = "SELECT * FROM users WHERE user_id = :user_id"
-        sql_bytes, positions, param_names = parse_named_placeholders(sql)
-        self.assertEqual(param_names, ['user_id'])
-        self.assertEqual(len(positions), 2)
-
-    def test_parse_named_placeholders_with_dash(self):
-        """Test named placeholder with dash"""
-        sql = "SELECT * FROM users WHERE user-id = :user-id"
-        sql_bytes, positions, param_names = parse_named_placeholders(sql)
-        self.assertEqual(param_names, ['user-id'])
-        self.assertEqual(len(positions), 2)
-
-    def test_parse_named_placeholders_in_string(self):
-        """Test named placeholder inside string is ignored"""
-        sql = "SELECT * FROM users WHERE name = ':ignored' AND id = :id"
-        sql_bytes, positions, param_names = parse_named_placeholders(sql)
-        # Only :id should be found, not :ignored (inside string)
-        self.assertEqual(param_names, ['id'])
-        self.assertEqual(len(positions), 2)
-
-    def test_parse_named_placeholders_in_comment(self):
-        """Test named placeholder inside comment is ignored"""
-        sql = "SELECT * FROM users /* :ignored */ WHERE id = :id"
-        sql_bytes, positions, param_names = parse_named_placeholders(sql)
-        # Only :id should be found, not :ignored (inside comment)
-        self.assertEqual(param_names, ['id'])
-        self.assertEqual(len(positions), 2)
-    
-    def test_parse_named_placeholders_build_params(self):
-        """Test building parameter list from dict using param_names"""
-        sql = "INSERT INTO users VALUES (:id, :name, :email)"
-        sql_bytes, positions, param_names = parse_named_placeholders(sql)
-        
-        # Build parameters from dict
-        params_dict = {'id': 1, 'name': 'John', 'email': 'john@example.com'}
-        parameters = [params_dict[name] for name in param_names]
-        
-        self.assertEqual(parameters, [1, 'John', 'john@example.com'])
-        self.assertEqual(param_names, ['id', 'name', 'email'])
 
     def test_complex_sql_with_strings_and_comments(self):
         """Test complex SQL with strings, comments, and placeholders"""

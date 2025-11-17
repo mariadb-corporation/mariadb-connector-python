@@ -8,6 +8,8 @@ Based on MySQL/MariaDB protocol COM_STMT_PREPARE response structure.
 """
 
 from typing import TYPE_CHECKING, Optional
+
+from .column_definition_packet import ColumnDefinitionPacket
 from ...client.socket.payload_parser import PayloadParser
 if TYPE_CHECKING:
     from ...client.context import Context
@@ -37,19 +39,21 @@ class PrepareStmtPacket:
         statement_id: int,
         column_count: int,
         parameter_count: int,
-        warning_count: int = 0
+        warning_count: int = 0,
+        sql: str = None
     ):
         """Initialize prepare statement packet with statement ID, column count, and parameter count"""
         self.statement_id = statement_id
         self.column_count = column_count
         self.parameter_count = parameter_count
         self.warning_count = warning_count
-        self.columns = []
-        self.parameters = []
+        self.sql = sql
+        self.columns: List[ColumnDefinitionPacket] = []
+        self.parameters: List[ColumnDefinitionPacket] = []
         self.closed = False
     
     @staticmethod
-    def decode(data: bytearray, context: Optional['Context'] = None) -> 'PrepareStmtPacket':
+    def decode(data: bytearray, context: Optional['Context'] = None, sql: str = None) -> 'PrepareStmtPacket':
         """Decode COM_STMT_PREPARE response packet from bytearray with optional context"""
         parser = PayloadParser(data)
         
@@ -68,7 +72,8 @@ class PrepareStmtPacket:
             statement_id=statement_id,
             column_count=column_count,
             parameter_count=parameter_count,
-            warning_count=warning_count
+            warning_count=warning_count,
+            sql=sql
         )
     
     def __repr__(self) -> str:

@@ -13,7 +13,7 @@ from .impl.client.sync_client import SyncClient
 from .base_cursor import BaseCursor
 from .exceptions import DatabaseError, ProgrammingError
 from .impl.message.client.query_packet import QueryPacket, QueryWithParamPacket
-from .impl.sql_parser import parse_named_placeholders, split_sql_parts
+from .impl.sql_parser import split_sql_parts
 
 
 if TYPE_CHECKING:
@@ -54,6 +54,11 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
         After closing, the cursor cannot be used anymore.
         """
         if not self._closed:
+
+            if self._stmt:
+                self._client.close_prepared_statement(self._stmt)
+                self._stmt = None
+
             # Consume any remaining streaming results
             if self._result is not None and self._result.streaming():
                 try:
@@ -109,42 +114,54 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
             self._result.fetch_remaining()
         
         try:
+            # Use provided buffered parameter or fall back to cursor default
+            effective_buffered = buffered if buffered is not None else self._buffered
+
             if data:
-                sql_bytes = None
-                param_positions = None
                 parameters = None
+
                 if isinstance(data, (list, tuple)):
                     # Positional parameters
                     parameters = list(data)
+                else:
+                    raise ProgrammingError(f"wrong parameter type")
+
+                if self._force_binary:
+                    # Prepare the statement
+
+                    if (self._stmt is not None):
+                        if (self._stmt.sql != sql):
+                            self._client.close_prepared_statement(self._stmt)
+                            self._stmt = None
+
+                    if (self._stmt is None):
+                        self._stmt = self._client.prepare_statement(sql)
+
+                    
+                    # Execute with parameters using ExecutePacket
+                    from .impl.message.client.execute_packet import ExecutePacket
+                    execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
+                    completions = self._client.execute(execute_packet, self._config, False, effective_buffered, prepare_stmt_packet=self._stmt)
+
+                else:    
+
                     sql_bytes, param_positions = split_sql_parts(sql)
-                elif isinstance(data, dict):
-                    # Named parameters - parse and build parameter list
-                    sql_bytes, param_positions, param_names = parse_named_placeholders(sql)
-                    # Build parameters list from dict using param_names order
-                    parameters = []
-                    for name in param_names:
-                        if name not in data:
-                            raise ProgrammingError(f"Named parameter ':{name}' is not provided")
-                        parameters.append(data[name])
-            
-                if parameters:
+
                     # Validate parameter count
                     placeholder_count = len(param_positions) // 2  # Positions come in pairs
                     if len(parameters) < placeholder_count:
                         raise ProgrammingError(
                             f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
                             f"but only {len(parameters)} parameters provided"
-                        )
+                        )                       
                     # Use parameterized query packet with bytes
                     query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
+                    completions = self._client.execute(query_packet, self._config, False, effective_buffered)
 
             else:
                 # Use simple query packet
                 query_packet = QueryPacket(sql)
-            
-            # Use provided buffered parameter or fall back to cursor default
-            effective_buffered = buffered if buffered is not None else self._buffered
-            completions = self._client.execute(query_packet, self._config, False, effective_buffered)
+                completions = self._client.execute(query_packet, self._config, False, effective_buffered)
             
             # Process the completions to extract result data
             self._process_completions(completions)
@@ -186,45 +203,29 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
         
         # Reset result state
         self._result = None
-        total_affected = 0
-        lastrowid = None
         
         try:
             completions = list()
-            # Determine if using named parameters and prepare SQL
-            use_named_params = data and len(data) > 0 and isinstance(data[0], dict)
-            
+
+            if data and len(data) > 0 and not isinstance(data, (list, tuple)):
+                raise ProgrammingError(f"wrong parameter type")
             # Pre-parse SQL once for optimization (avoid re-parsing for each row)
             sql_bytes = None
             param_positions = None
             param_names = None
             placeholder_count = 0
             
-            if use_named_params:
-                # For named parameters, parse SQL once to get structure
-                sql_bytes, param_positions, param_names = parse_named_placeholders(sql)
-                placeholder_count = len(param_positions) // 2
-            else:
-                # For positional parameters, parse SQL once
-                sql_bytes, param_positions = split_sql_parts(sql)
-                placeholder_count = len(param_positions) // 2
-            
+            # For positional parameters, parse SQL once
+            sql_bytes, param_positions = split_sql_parts(sql)
+            placeholder_count = len(param_positions) // 2
+        
             # Execute the statement for each parameter set
             for params in data:
                 # Execute with current parameter set
                 # Convert data to list format for parameter binding
                 parameters = None
                 if params:
-                    if not use_named_params:
-                        # Positional parameters
-                        parameters = list(params)
-                    else:
-                        # Named parameters - build parameter list from dict using param_names
-                        parameters = []
-                        for name in param_names:
-                            if name not in params:
-                                raise ProgrammingError(f"Named parameter ':{name}' is not provided")
-                            parameters.append(params[name])
+                    parameters = list(params)
                 
                 # Validate parameter count matches placeholders
                 if parameters:
@@ -240,19 +241,9 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
                 effective_buffered = buffered if buffered is not None else self._buffered
                 compl_list = self._client.execute(query_packet, self._config, False, effective_buffered)
                 completions.extend(compl_list)
-                for c in compl_list:
-                    if c.affected_rows >= 0:
-                        total_affected += c.affected_rows
-                    if c.insert_id is not None and c.insert_id > 0:
-                        lastrowid = c.insert_id
 
             # Process the completions - aggregate result sets with compatible metadata
             self._process_executemany_completions(completions)
-            
-            # Accumulate affected rows from all completions
-
-            # Note: rowcount, affected_rows, and lastrowid are now properties
-            # that get their values from the current completion
 
         except DatabaseError as e:
             raise e            
@@ -404,21 +395,20 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
             call_sql = f"CALL {procname}({placeholders})"
             
             # Prepare the statement
-            stmt: PrepareStmtPacket = self._client.prepare_statement(call_sql)
+            if (self._stmt is not None and self._stmt.sql != call_sql):
+                self._client.close_prepared_statement(self._stmt)
+                self._stmt = None
+
+            if (self._stmt is None):
+                self._stmt = self._client.prepare_statement(call_sql)
             
-            try:
-                # Execute with parameters using ExecutePacket
-                from .impl.message.client.execute_packet import ExecutePacket
-                execute_packet = ExecutePacket(stmt.statement_id, list(args), call_sql)
-                completions = self._client.execute(execute_packet, self._config, can_redo=False)
-                
-                # Process all completions
-                self._process_callproc_completions(completions)
-                
-                return None  # Match C extension behavior
-                
-            finally:
-                self._client.close_prepared_statement(stmt)
+            # Execute with parameters using ExecutePacket
+            from .impl.message.client.execute_packet import ExecutePacket
+            execute_packet = ExecutePacket(self._stmt.statement_id, list(args), call_sql)
+            completions = self._client.execute(execute_packet, self._config, can_redo=False, prepare_stmt_packet=self._stmt)
+            self._process_completions(completions)
+            
+            return None  # Match C extension behavior
         except DatabaseError as e:
             raise e
         except Exception as e:

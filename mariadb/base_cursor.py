@@ -10,6 +10,8 @@ from abc import ABC, abstractmethod
 from collections import namedtuple
 from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING, TypeVar, Generic
 
+from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
+
 from .impl.completion import Completion
 from .impl.message.server.column_definition_packet import ColumnDefinitionPacket
 
@@ -68,7 +70,8 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._executemany_mode: bool = False
         self._executemany_rowcount: int = 0
         self._executemany_lastrowid: Optional[int] = None
-        
+        self._force_binary: bool = False
+        self._stmt: Optional[PrepareStmtPacket] = None
         if kwargs:
             self._config = copy.copy(self.connection._configuration)
             
@@ -81,6 +84,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                     self._config.dictionary = rtype
             
             self._config.native_object = bool(kwargs.pop("native_object", self._config.native_object))
+            self._force_binary = bool(kwargs.pop("binary", False))
         else:
             self._config = self.connection._configuration        
 
@@ -462,12 +466,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             248: 4, 249: 4, 250: 4, 255: 4
         }
         return charset_max_lengths.get(charset_id)
-    
-    def _process_callproc_completions(self, completions: List[Any]) -> None:
-        """Process completions from callproc execution"""
-        self._completions = completions
-        self._completion_index = 0
-        self._process_current_completion()
     
     @property
     def metadata(self) -> Optional[Dict[str, tuple]]:

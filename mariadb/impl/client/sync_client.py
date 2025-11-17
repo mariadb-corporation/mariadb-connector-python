@@ -268,7 +268,7 @@ class SyncClient(BaseClient):
         encoded = message.encode(self.context)
         self.stream.send_payload(encoded, message.type(), reset_sequence)
 
-    def execute(self, message: ClientMessage, config: 'Configuration' = None, can_redo: bool = False, buffered: bool = True) -> List[Completion]:
+    def execute(self, message: ClientMessage, config: 'Configuration' = None, can_redo: bool = False, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         """Execute command and return list of completion results"""
         with self.lock:
             if self.closed:
@@ -280,7 +280,7 @@ class SyncClient(BaseClient):
                 
                 while True:
                     result_packet: bytearray = self.stream.read_payload()
-                    completion = self._parse_result_packet(result_packet, config, message.is_binary(), buffered)
+                    completion = self._parse_result_packet(result_packet, config, message.is_binary(), buffered, prepare_stmt_packet)
                     results.append(completion)
                     
                     if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
@@ -395,26 +395,30 @@ class SyncClient(BaseClient):
                 pass
         return None
 
-    def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> Completion:
+    def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> Completion:
         """Parse result packet into completion object"""
         if packet[0] == self.OK_PACKET:
             return OkPacket.decode(packet, self.context)
         elif packet[0] == self.ERROR_PACKET:
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
-            return self._parse_result_set(packet, config, is_binary, buffered)
+            return self._parse_result_set(packet, config, is_binary, buffered, prepare_stmt_packet)
 
-    def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True) -> 'Completion':
+    def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> 'Completion':
         """Parse result set with column definitions and row data"""
         try:
             # Parse column count from first packet
             parser = PayloadParser(packet)
             column_count = parser.read_length_encoded_int()
-            
+
             # Read column definitions
             columns: List[ColumnDefinitionPacket] = []
-            for _ in range(column_count):
-                columns.append(ColumnDefinitionPacket.decode(self.stream.read_payload(), self.context))
+            if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+                # skip metadata
+                columns = prepare_stmt_packet.columns
+            else:                      
+                for _ in range(column_count):
+                    columns.append(ColumnDefinitionPacket.decode(self.stream.read_payload(), self.context))
             
             # Read EOF packet after column definitions (if not deprecated)
             if not self.context.isEofDeprecated():
@@ -530,7 +534,7 @@ class SyncClient(BaseClient):
         if packet_type == self.ERROR_PACKET:
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         elif packet_type == 0x00:
-            prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context)
+            prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context, sql)
 
             # Read parameter metadata if present
             if prepare_stmt_packet.parameter_count > 0:

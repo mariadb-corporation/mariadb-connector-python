@@ -207,11 +207,16 @@ class SyncStream():
             self.sequence.set(self._readbuf[3])
 
             # Read payload chunk
-            self._ensure_capacity(pkt_len)
-            self._recv_exact(pkt_len, 0)
-            
+            self._ensure_capacity(pkt_len + 4)
+            self._recv_exact(pkt_len, 4)            
+
+            # Log if debug enabled
+            if logger.isEnabledFor(logging.DEBUG):
+                conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
+                logger.debug(hex_dump(self._readbuf[0:pkt_len + 4], f"RECV sync: {conn_id_str}"))
+
             # Append only the payload (not the header) to result
-            result.extend(self._view[0:pkt_len])
+            result.extend(self._view[4:pkt_len + 4])
 
             # Continuation condition
             if pkt_len < 0xFFFFFF:

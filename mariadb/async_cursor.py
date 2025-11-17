@@ -9,7 +9,7 @@ from .impl.result import AsyncResult
 from .base_cursor import BaseCursor, ROWS_ALL, RESULT_TUPLE, RESULT_NAMEDTUPLE, RESULT_DICTIONARY
 from .exceptions import DatabaseError, ProgrammingError, NotSupportedError, OperationalError
 from .impl.message.client.query_packet import QueryPacket, QueryWithParamPacket
-from .impl.sql_parser import parse_named_placeholders, split_sql_parts
+from .impl.sql_parser import split_sql_parts
 from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 
 if TYPE_CHECKING:
@@ -124,15 +124,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                     # Positional parameters
                     parameters = list(data)
                     sql_bytes, param_positions = split_sql_parts(sql)
-                elif isinstance(data, dict):
-                    # Named parameters - parse and build parameter list
-                    sql_bytes, param_positions, param_names = parse_named_placeholders(sql)
-                    # Build parameters list from dict using param_names order
-                    parameters = []
-                    for name in param_names:
-                        if name not in data:
-                            raise ProgrammingError(f"Named parameter ':{name}' is not provided")
-                        parameters.append(data[name])
+                else:
+                    raise ProgrammingError(f"wrong parameter type")
             
             if parameters:
                 # Validate parameter count
@@ -214,28 +207,21 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
         
         # Reset result state
         self._result = None
-        total_affected = 0
-        lastrowid = None
         
         try:
             completions = list()
-            # Determine if using named parameters and prepare SQL
-            use_named_params = data and len(data) > 0 and isinstance(data[0], dict)
-            
+            if data and len(data) > 0 and not isinstance(data, (list, tuple)):
+                raise ProgrammingError(f"wrong parameter type")
+
             # Pre-parse SQL once for optimization (avoid re-parsing for each row)
             sql_bytes = None
             param_positions = None
             param_names = None
             placeholder_count = 0
             
-            if use_named_params:
-                # For named parameters, parse SQL once to get structure
-                sql_bytes, param_positions, param_names = parse_named_placeholders(sql)
-                placeholder_count = len(param_positions) // 2
-            else:
-                # For positional parameters, parse SQL once
-                sql_bytes, param_positions = split_sql_parts(sql)
-                placeholder_count = len(param_positions) // 2
+            # For positional parameters, parse SQL once
+            sql_bytes, param_positions = split_sql_parts(sql)
+            placeholder_count = len(param_positions) // 2
             
             # Execute the statement for each parameter set
             for params in data:
@@ -243,16 +229,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                 # Convert data to list format for parameter binding
                 parameters = None
                 if params:
-                    if not use_named_params:
-                        # Positional parameters
-                        parameters = list(params)
-                    else:
-                        # Named parameters - build parameter list from dict using param_names
-                        parameters = []
-                        for name in param_names:
-                            if name not in params:
-                                raise ProgrammingError(f"Named parameter ':{name}' is not provided")
-                            parameters.append(params[name])
+                    parameters = list(params)
                 
                 # Validate parameter count matches placeholders
                 if parameters:
@@ -268,19 +245,9 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                 effective_buffered = buffered if buffered is not None else self._buffered
                 compl = await self.connection._client.execute(query_packet, config=self._config, can_redo=False, buffered=effective_buffered)
                 completions.extend(compl)
-                for c in compl:
-                    if c.affected_rows >= 0:
-                        total_affected += c.affected_rows
-                    if c.insert_id is not None and c.insert_id > 0:
-                        lastrowid = c.insert_id
 
             # Process the completions - aggregate result sets with compatible metadata
             self._process_executemany_completions(completions)
-            
-            # Accumulate affected rows from all completions
-
-            # Note: rowcount, affected_rows, and lastrowid are now properties
-            # that get their values from the current completion
 
         except DatabaseError as e:
             raise e            
@@ -492,9 +459,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
                 from .impl.message.client.execute_packet import ExecutePacket
                 execute_packet = ExecutePacket(stmt.statement_id, list(args), call_sql)
                 completions = await self.connection._client.execute(execute_packet, self._config, can_redo=False)
-                
-                # Process all completions
-                self._process_callproc_completions(completions)
+                self._process_completions(completions)
                 
                 return None  # Match C extension behavior
                 

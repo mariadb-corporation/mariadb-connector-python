@@ -124,7 +124,7 @@ class BaseClient(ABC):
         ...
     
     @abstractmethod
-    def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False, buffered: bool = True) -> List['Completion']:
+    def execute(self, message: ClientMessage, config: 'Configuration', can_redo: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List['Completion']:
         """Send client message and read result"""
         ...
     
@@ -617,7 +617,7 @@ class BaseClient(ABC):
         if len(packet) == 0:
             return tuple(None for _ in columns)
         
-        pos += 1
+        pos = 1
         
         # Read NULL bitmap
         null_bitmap_length = (len(columns) + 9) // 8
