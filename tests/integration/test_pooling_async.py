@@ -449,5 +449,72 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
 
         await pool.close()
 
+    async def test_async_pool_connection_url(self):
+        """Test creating async pool with connection URL"""
+        default_conf = conf()
+        
+        # Build connection URL from config
+        user = default_conf.get('user', 'root')
+        password = default_conf.get('password', '')
+        host = default_conf.get('host', 'localhost')
+        port = default_conf.get('port', 3306)
+        database = default_conf.get('database', 'test')
+        
+        # Test 1: URL with pool_name in query params
+        url = f"mariadb://{user}:{password}@{host}:{port}/{database}?pool_name=test_url_pool"
+        async with mariadb.AsyncConnectionPool(url) as pool:
+            await pool.open()
+            
+            # Verify pool is registered
+            self.assertIn("test_url_pool", mariadb._ASYNC_CONNECTION_POOLS)
+            self.assertEqual(pool.pool_name, "test_url_pool")
+            
+            # Test connection works
+            async with pool.get_connection() as conn:
+                async with conn.cursor() as cursor:
+                    await cursor.execute("SELECT 1")
+                    result = await cursor.fetchone()
+                    self.assertEqual(result[0], 1)
+        
+        self.assertNotIn("test_url_pool", mariadb._ASYNC_CONNECTION_POOLS)
+        
+        # Test 2: URL as first arg, pool_name as kwarg
+        url2 = f"mariadb://{user}:{password}@{host}:{port}/{database}"
+        async with mariadb.AsyncConnectionPool(url2, pool_name="test_url_pool2", pool_size=3) as pool2:
+            await pool2.open()
+        
+            self.assertIn("test_url_pool2", mariadb._ASYNC_CONNECTION_POOLS)
+            self.assertEqual(pool2.pool_name, "test_url_pool2")
+            
+            # Test connection works
+            async with pool2.get_connection() as conn2:
+                async with conn2.cursor() as cursor2:
+                    await cursor2.execute("SELECT 2")
+                    result2 = await cursor2.fetchone()
+                    self.assertEqual(result2[0], 2)
+            
+        self.assertNotIn("test_url_pool2", mariadb._ASYNC_CONNECTION_POOLS)
+        
+        # Test 3: Pool name as first arg, connection params as kwargs
+        async with mariadb.AsyncConnectionPool("test_url_pool3", 
+                                           user=user,
+                                           password=password,
+                                           host=host,
+                                           port=port,
+                                           database=database,
+                                           pool_size=2) as pool3:
+            await pool3.open()
+        
+            self.assertIn("test_url_pool3", mariadb._ASYNC_CONNECTION_POOLS)
+            self.assertEqual(pool3.pool_name, "test_url_pool3")
+            
+            async with pool3.get_connection() as conn3:
+                async with conn3.cursor() as cursor3:
+                    await cursor3.execute("SELECT 3")
+                    result3 = await cursor3.fetchone()
+                    self.assertEqual(result3[0], 3)
+        
+        self.assertNotIn("test_url_pool3", mariadb._ASYNC_CONNECTION_POOLS)
+
 if __name__ == '__main__':
     unittest.main()

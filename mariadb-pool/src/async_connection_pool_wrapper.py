@@ -18,6 +18,31 @@ except ImportError:
 
 MAX_POOL_SIZE = 64
 
+class _AsyncConnectionAcquirer:
+    """Helper class to make get_connection() work both as awaitable and async context manager"""
+    
+    def __init__(self, pool):
+        self._pool = pool
+        self._pooled_conn = None
+    
+    def __await__(self):
+        """Make this awaitable - returns the connection directly"""
+        async def _acquire():
+            self._pooled_conn = await self._pool.acquire()
+            return self._pooled_conn.connection
+        return _acquire().__await__()
+    
+    async def __aenter__(self):
+        """Async context manager entry - acquire and return connection"""
+        self._pooled_conn = await self._pool.acquire()
+        return self._pooled_conn.connection
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit - return connection to pool"""
+        if self._pooled_conn:
+            await self._pooled_conn.connection.close()
+        return False
+
 class AsyncConnectionPoolWrapper:
     """
     Async compatibility wrapper for mariadb_pool.AsyncConnectionPool
@@ -120,10 +145,22 @@ class AsyncConnectionPoolWrapper:
         """Open the pool and establish initial connections"""
         await self._pool.open()
     
-    async def get_connection(self):
-        """Get a connection from the pool"""
-        pooled_conn = await self._pool.acquire()
-        return pooled_conn.connection
+    def get_connection(self):
+        """
+        Get a connection from the pool
+        
+        Returns an async context manager that can be used with 'async with':
+            async with pool.get_connection() as conn:
+                # use conn
+        
+        Or can be awaited directly for manual management:
+            conn = await pool.get_connection()
+            try:
+                # use conn
+            finally:
+                await conn.close()
+        """
+        return _AsyncConnectionAcquirer(self._pool)
     
     async def add_connection(self, connection: Optional[Any] = None):
         """Add a connection to the pool
