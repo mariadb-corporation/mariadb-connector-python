@@ -428,6 +428,21 @@ class BaseConnection(ABC, Generic[TClient]):
     # Server Information Properties
     # =========================================================================
     
+
+    @property
+    def client_capabilities(self):
+        """Client capability flags."""
+
+        self._check_closed()
+        return self._client.context.client_capabilities
+
+    @property
+    def server_capabilities(self):
+        """Server capability flags."""
+
+        self._check_closed()
+        return self._client.context.server_capabilities
+
     @property
     def server_info(self) -> str:
         """

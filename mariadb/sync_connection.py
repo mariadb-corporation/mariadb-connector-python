@@ -233,6 +233,8 @@ class SyncConnection(BaseConnection['SyncClient']):
             OperationalError: If kill fails
         """
         self._check_closed()
+        if not isinstance(connection_id, int):
+            raise ProgrammingError("connection_id must be of type int.")        
         try:
             with self.cursor() as cursor:
                 cursor.execute(f"KILL {connection_id}")
@@ -545,6 +547,28 @@ class SyncConnection(BaseConnection['SyncClient']):
             List of warning tuples (level, code, message), or None if no warnings
         """
         self._check_closed()
+        if self._client.context.warning_count == 0:
+            return None
         with self.cursor() as cursor:
             cursor.execute("SHOW WARNINGS")
             return cursor.fetchall()
+
+
+    @property
+    def open(self):
+        """
+        Returns true if the connection is alive.
+
+        A ping command will be sent to the server for this purpose,
+        which means this function might fail if there are still
+        non-processed pending result sets.
+
+        for pymysql compatibility
+        """
+
+        self._check_closed()
+        try:
+            self.ping()
+        except Error:
+            return False
+        return True

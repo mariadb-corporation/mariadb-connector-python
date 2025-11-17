@@ -304,7 +304,9 @@ class ConnectionOptionsTest(unittest.TestCase):
         """Test show_warnings method"""
         conn = create_connection()
         cursor = conn.cursor()
-        
+
+        self.assertIsNone(conn.show_warnings())
+
         # Generate a warning
         cursor.execute("SET session sql_mode=''")
         cursor.execute("CREATE TEMPORARY TABLE test_show_warn (a tinyint)")

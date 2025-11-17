@@ -320,6 +320,8 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
         conn = await mariadb.AsyncConnection.connect(**config)
         cursor = conn.cursor()
         
+        self.assertIsNone(await conn.show_warnings())
+
         # Generate a warning
         await cursor.execute("SET session sql_mode=''")
         await cursor.execute("CREATE TEMPORARY TABLE test_show_warn (a tinyint)")

@@ -172,6 +172,34 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             except (mariadb.InterfaceError, mariadb.DatabaseError):
                 pass
 
+    async def test_open(self):
+        """Test connection.open property"""
+        if is_maxscale():
+            self.skipTest("MAXSCALE wrong thread id")
+        
+        config = conf()
+        conn = await mariadb.AsyncConnection.connect(**config)
+        try:
+            # Connection should be open
+            self.assertTrue(await conn.open)
+            
+            # Kill the connection
+            oldid = conn.connection_id
+            cursor = conn.cursor()
+            try:
+                await cursor.execute("KILL {id}".format(id=oldid))
+            except (mariadb.Error, mariadb.OperationalError):
+                pass
+            await cursor.close()
+            
+            # Connection should now be closed/not open
+            self.assertFalse(await conn.open)
+        finally:
+            try:
+                await conn.close()
+            except:
+                pass
+
     async def test_ed25519(self):
         if is_native():
             self.skipTest("Ed25519 not supported on native")

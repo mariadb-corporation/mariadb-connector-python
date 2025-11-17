@@ -68,15 +68,6 @@ class Connection(CConnection):
                                                "MariaDB Connector/C 3.3.0 "
                                                "or newer")
 
-        # compatibility feature: if SSL is provided as a dictionary,
-        # we will map it's content
-        if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
-            ssl = kwargs.pop("ssl", None)
-            for key in ["ca", "cert", "capath", "key", "cipher"]:
-                if key in ssl:
-                    kwargs["ssl_%s" % key] = ssl[key]
-            kwargs["ssl"] = True
-
         # Initialize using parent C extension class
         super().__init__(*args, **kwargs)
         self.autocommit = autocommit
@@ -645,6 +636,8 @@ class Connection(CConnection):
         A ping command will be sent to the server for this purpose,
         which means this function might fail if there are still
         non-processed pending result sets.
+
+        for pymysql compatibility
         """
 
         self._check_closed()

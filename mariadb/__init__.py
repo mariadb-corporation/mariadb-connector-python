@@ -128,6 +128,15 @@ def connect(*args, connectionclass=None, **kwargs):
                 # Remove the URI from args
                 args = args[1:]
     
+    # Compatibility feature: if SSL is provided as a dictionary,
+    # map its content to ssl_* parameters (mariadb-c compatibility)
+    if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
+        ssl = kwargs.pop("ssl", None)
+        for key in ["ca", "cert", "capath", "key", "cipher"]:
+            if key in ssl:
+                kwargs["ssl_%s" % key] = ssl[key]
+        kwargs["ssl"] = True
+    
     # Check if pool_name is specified
     pool_name = kwargs.get('pool_name')
     if pool_name:
@@ -200,7 +209,16 @@ async def asyncConnect(*args, connectionclass=None, **kwargs):
                 # Remove the URI from args
                 args = args[1:]
     
-   # Check if pool_name is specified
+    # Compatibility feature: if SSL is provided as a dictionary,
+    # map its content to ssl_* parameters (mariadb-c compatibility)
+    if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
+        ssl = kwargs.pop("ssl", None)
+        for key in ["ca", "cert", "capath", "key", "cipher"]:
+            if key in ssl:
+                kwargs["ssl_%s" % key] = ssl[key]
+        kwargs["ssl"] = True
+    
+    # Check if pool_name is specified
     pool_name = kwargs.get('pool_name')
     if pool_name:
         if pool_name in _ASYNC_CONNECTION_POOLS:

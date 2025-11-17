@@ -236,6 +236,8 @@ class AsyncConnection(BaseConnection['AsyncClient']):
             OperationalError: If kill fails
         """
         self._check_closed()
+        if not isinstance(connection_id, int):
+            raise ProgrammingError("connection_id must be of type int.")             
         try:
             async with self.cursor() as cursor:
                 await cursor.execute(f"KILL {connection_id}")
@@ -547,10 +549,32 @@ class AsyncConnection(BaseConnection['AsyncClient']):
     async def show_warnings(self) -> Optional[List[tuple]]:
         """Shows error, warning and note messages from last executed command"""
         self._check_closed()
+        if self._client.context.warning_count == 0:
+            return None
         async with self.cursor() as cursor:
             await cursor.execute("SHOW WARNINGS")
             return await cursor.fetchall()
-    
+
+
+    @property
+    async def open(self):
+        """
+        Returns true if the connection is alive.
+
+        A ping command will be sent to the server for this purpose,
+        which means this function might fail if there are still
+        non-processed pending result sets.
+
+        for pymysql compatibility
+        """
+
+        self._check_closed()
+        try:
+            await self.ping()
+        except Error:
+            return False
+        return True
+
     # Async context manager
     async def __aenter__(self) -> 'AsyncConnection':
         """Async context manager entry"""
