@@ -780,7 +780,16 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 year= uint2korr(*row);
                 month= uint1korr(*row + 2);
                 day= uint1korr(*row + 3);
-                self->values[column]= PyDate_FromDate(year, month, day);
+
+                if (check_date(year, month, day))
+                {
+                    self->values[column]= PyDate_FromDate(year, month, day);
+                }
+                else {
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
+                }
+
                 *row+= len;
                 break;
             }
