@@ -487,7 +487,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(pool2.pool_name, "test_url_pool2")
             
             # Test connection works
-            async with pool2.get_connection() as conn2:
+            async with await pool2.get_connection() as conn2:
                 async with conn2.cursor() as cursor2:
                     await cursor2.execute("SELECT 2")
                     result2 = await cursor2.fetchone()
