@@ -189,6 +189,9 @@ class ErrorHandlingTest(unittest.TestCase):
 
     def test_connection_invalid_host2(self):
         """Test connection with invalid host"""
+        if not is_native():
+            self.skipTest("only native test, mariadb C with no host behavior vary")
+
         config = get_test_config()
         config['host'] = None
         config['connect_timeout'] = 2
