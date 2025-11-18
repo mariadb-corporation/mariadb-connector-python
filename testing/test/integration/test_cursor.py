@@ -57,6 +57,15 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[1], 255)
         cursor.execute("DROP TABLE t1")
 
+    def test_conpy329(self):
+        cursor= self.connection.cursor(binary=True)
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a date)")
+        cursor.execute("INSERT INTO t1 VALUES ('0000-01-01')")
+        cursor.execute("SELECT * FROM t1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0],None)
+        cursor.execute("DROP TABLE t1")
+
     def test_conpy306(self):
         with create_connection() as conn:
             cursor=conn.cursor(binary=False)

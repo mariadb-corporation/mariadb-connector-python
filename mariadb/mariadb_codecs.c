@@ -790,7 +790,6 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 
                 if (!len)
                 {
-                    self->values[column]= PyDate_FromDate(0,0,0);
                     break;
                 }
                 year= uint2korr(*row);
@@ -898,6 +897,12 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         }
         default:
             break;
+    }
+    if (!self->values[column])
+    {
+         PyErr_Clear();
+         Py_INCREF(Py_None);
+         self->values[column]= Py_None;
     }
     /* check if values need to be converted */
     if (self->connection->converter)
