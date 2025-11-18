@@ -35,6 +35,7 @@ class OkPacket(Completion):
         self,
         affected_rows: int = 0,
         insert_id: int = 0,
+        server_status: int = 0,
         warning_count: int = 0,
     ):
         """Initialize OK packet with affected rows, insert ID, status, and warnings"""
@@ -44,7 +45,7 @@ class OkPacket(Completion):
             insert_id,
             warning_count
         )
-      
+        self.server_status = server_status
 
     def is_output_parameters(self) -> bool:
         """Check if completion has output parameters"""
@@ -89,6 +90,7 @@ class OkPacket(Completion):
         return OkPacket(
             affected_rows,
             insert_id,
+            server_status,
             warning_count
         )
 
