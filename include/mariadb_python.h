@@ -535,6 +535,7 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_le
 /* MariaDB protocol macros */
 #define int1store(T,A) *((int8_t*) (T)) = (A)
 #define uint1korr(A)   (*(((uint8_t*)(A))))
+#define sint1korr(A)   (*(((int8_t*)(A))))
 #if defined(__i386__) || defined(_WIN32)
 #define sint2korr(A)	(*((int16_t *) (A)))
 #define sint3korr(A)	((int32_t) ((((unsigned char) (A)[2]) & 128) ? \

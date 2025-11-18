@@ -700,8 +700,8 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         case MYSQL_TYPE_TINY:
             self->values[column]= (self->fields[column].flags &
                  UNSIGNED_FLAG) ?
-                PyLong_FromUnsignedLong((unsigned long)*row[0]) :
-                PyLong_FromLong((long)*row[0]);
+                PyLong_FromUnsignedLong((unsigned long)uint1korr(*row)) :
+                PyLong_FromLong(sint1korr(*row));
             *row+= 1;
             break;
         case MYSQL_TYPE_SHORT:

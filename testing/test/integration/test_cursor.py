@@ -47,6 +47,16 @@ class TestCursor(unittest.TestCase):
         os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
         "Test skipped for PyPy"
     )
+    def test_conpy328(self):
+        cursor= self.connection.cursor(binary=True)
+        cursor.execute("CREATE TEMPORARY TABLE t1 (a tinyint, b tinyint unsigned)")
+        cursor.execute("INSERT INTO t1 VALUES (-1, 255)")
+        cursor.execute("SELECT * FROM t1")
+        row= cursor.fetchone()
+        self.assertEqual(row[0],-1)
+        self.assertEqual(row[1], 255)
+        cursor.execute("DROP TABLE t1")
+
     def test_conpy306(self):
         with create_connection() as conn:
             cursor=conn.cursor(binary=False)
