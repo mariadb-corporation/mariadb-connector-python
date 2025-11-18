@@ -88,7 +88,7 @@ class AsyncClient(BaseClient):
                 await self._cleanup_connection()
                 # Continue to next host
                 continue
-        
+
         # All hosts failed
         if last_exception:
             raise last_exception
@@ -405,10 +405,6 @@ class AsyncClient(BaseClient):
         from ..message.client.ping_packet import PingPacket
         await self.execute(PingPacket(), self.configuration)
     
-    async def abort(self, executor: Any) -> None:
-        """Abort connection"""
-        await self.close()
-    
     async def close(self) -> None:
         """Close connection and cleanup resources asynchronously"""
         with self.lock:
@@ -427,17 +423,6 @@ class AsyncClient(BaseClient):
             self.closed = True
             self.connected = False
             await self._cleanup_connection()
-    
-    
-    def set_socket_timeout(self, seconds: float) -> None:
-        """Set socket timeout in seconds"""
-        self.socket_timeout = seconds
-        # Note: asyncio doesn't support setting timeout on individual sockets
-        # Timeouts should be handled at the operation level using asyncio.wait_for()
-    
-    async def reset(self) -> None:
-        """Reset connection state without reconnecting asynchronously"""
-        await self.execute(ResetConnectionPacket())
     
     # =========================================================================
     # SSL/TLS Information

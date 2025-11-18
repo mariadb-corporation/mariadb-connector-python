@@ -118,10 +118,10 @@ class TestUnixSocket(unittest.TestCase):
         # Connect using Unix socket
         conf = get_test_config()
         conf['unix_socket'] = socket_path
+        conf["connect_timeout"] = 0
         # Remove host/port to force Unix socket usage
         conf.pop('host', None)
         conf.pop('port', None)
-        
         try:
             socket_conn = mariadb.connect(**conf)
             socket_cursor = socket_conn.cursor()

@@ -340,16 +340,6 @@ class SyncClient(BaseClient):
             self.connected = False
             self._cleanup_connection()
 
-    def set_socket_timeout(self, seconds: float) -> None:
-        """Set socket timeout in seconds"""
-        self.socket_timeout = seconds
-        if self.socket:
-            self.socket.settimeout(seconds)
-
-    def reset(self) -> None:
-        """Reset connection state without reconnecting"""
-        self.execute(ResetConnectionPacket(), self.configuration)
-
     # =========================================================================
     # SSL/TLS Information
     # =========================================================================

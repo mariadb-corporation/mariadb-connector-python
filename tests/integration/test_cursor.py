@@ -2509,6 +2509,10 @@ class TestCursor(unittest.TestCase):
         row = cursor.fetchone()
         self.assertAlmostEqual(row[0], 1.1, places=7)
         self.assertAlmostEqual(row[1], 2.2, places=7)
+        cursor.execute("SELECT * FROM test_float_types WHERE 1=?", (1,))
+        row = cursor.fetchone()
+        self.assertAlmostEqual(row[0], 1.1, places=7)
+        self.assertAlmostEqual(row[1], 2.2, places=7)
 
     def test_field_json_types(self):
         """Test integer field types"""

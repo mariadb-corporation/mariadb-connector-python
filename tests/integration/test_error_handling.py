@@ -187,6 +187,15 @@ class ErrorHandlingTest(unittest.TestCase):
         with self.assertRaises(mariadb.OperationalError):
             mariadb.connect(**config)
 
+    def test_connection_invalid_host2(self):
+        """Test connection with invalid host"""
+        config = get_test_config()
+        config['host'] = None
+        config['connect_timeout'] = 2
+        
+        with self.assertRaises(mariadb.OperationalError):
+            mariadb.connect(**config)
+
     def test_connection_invalid_port(self):
         """Test connection with invalid port"""
         config = get_test_config()

@@ -193,6 +193,16 @@ class AsyncErrorHandlingTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(mariadb.OperationalError):
             await mariadb.AsyncConnection.connect(**config)
 
+    async def test_connection_invalid_host_none(self):
+        """Test connection with invalid host"""
+        config = get_test_config()
+        config['host'] = None
+        config['connect_timeout'] = 2
+        
+        with self.assertRaises(mariadb.OperationalError):
+            await mariadb.AsyncConnection.connect(**config)
+
+
     async def test_connection_invalid_port(self):
         """Test connection with invalid port"""
         config = get_test_config()

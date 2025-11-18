@@ -144,16 +144,6 @@ class BaseClient(ABC):
         ...
     
     @abstractmethod
-    def set_socket_timeout(self, milliseconds: int) -> None:
-        """Set socket timeout"""
-        ...
-    
-    @abstractmethod
-    def reset(self) -> None:
-        """Reset connection"""
-        ...
-    
-    @abstractmethod
     def get_ssl_cipher(self) -> Optional[tuple]:
         """
         Get current SSL cipher information

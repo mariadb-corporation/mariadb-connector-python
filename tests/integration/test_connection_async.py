@@ -346,6 +346,12 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                             parse_version('3.3.0'))
             pass
 
+    async def test_no_timeout(self):
+        default_conf = conf()
+        default_conf["connect_timeout"] = 0
+        async with await mariadb.AsyncConnection.connect(**default_conf) as conn:
+            pass
+
     async def test_tls_verification(self):
         if is_maxscale():
             self.skipTest("MAXSCALE test has no SSL on port by default")

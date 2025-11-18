@@ -2456,6 +2456,89 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
             await cursor.execute("drop table if exists t1_binary_270")
             await cursor.close()
+
         
+    async def test_field_info_integer_types(self):
+        """Test integer field types"""
+        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute("CREATE TEMPORARY TABLE test_integer_types (tiny TINYINT, small SMALLINT, medium MEDIUMINT, normal INT, big BIGINT)")
+                await cursor.execute("INSERT INTO test_integer_types VALUES (1, 2, 3, 4, 5)")
+                
+                await self.field_info_integer_types_res(cursor)
+            
+            async with connection.cursor(binary=True) as cursor:
+                await self.field_info_integer_types_res(cursor)
+        
+    async def field_info_integer_types_res(self, cursor):    
+        await cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
+        row = await cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        self.assertEqual(row[1], 2)
+        self.assertEqual(row[2], 3)
+        self.assertEqual(row[3], 4)
+        self.assertEqual(row[4], 5)
+
+    async def test_field_info_integer_types_unsigned(self):
+        """Test integer field types"""
+        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute("CREATE TEMPORARY TABLE test_integer_types (tiny TINYINT UNSIGNED, small SMALLINT UNSIGNED, medium MEDIUMINT UNSIGNED, normal INT UNSIGNED, big BIGINT UNSIGNED)")
+                await cursor.execute("INSERT INTO test_integer_types VALUES (255, 65535, 16777215, 4294967295, 18446744073709551615)")
+                
+                await self.field_info_integer_types_res_unsigned(cursor)
+            
+            async with connection.cursor(binary=True) as cursor:
+                await self.field_info_integer_types_res_unsigned(cursor)
+        
+    async def field_info_integer_types_res_unsigned(self, cursor):    
+        await cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
+        row = await cursor.fetchone()
+        self.assertEqual(row[0], 255)
+        self.assertEqual(row[1], 65535)
+        self.assertEqual(row[2], 16777215)
+        self.assertEqual(row[3], 4294967295)
+        self.assertEqual(row[4], 18446744073709551615)
+
+
+    async def test_field_info_float_types(self):
+        """Test integer field types"""
+        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute("CREATE TEMPORARY TABLE test_float_types (f FLOAT, d DOUBLE)")
+                await cursor.execute("INSERT INTO test_float_types VALUES (1.1, 2.2)")
+                
+                await self.field_info_float_types_res(cursor)
+            
+            async with connection.cursor(binary=True) as cursor:
+                await self.field_info_float_types_res(cursor)
+        
+    async def field_info_float_types_res(self, cursor):    
+        await cursor.execute("SELECT * FROM test_float_types WHERE 1=?", (1,))
+        row = await cursor.fetchone()
+        self.assertAlmostEqual(row[0], 1.1, places=7)
+        self.assertAlmostEqual(row[1], 2.2, places=7)
+        await cursor.execute("SELECT * FROM test_float_types WHERE 1=?", (1,))
+        row = await cursor.fetchone()
+        self.assertAlmostEqual(row[0], 1.1, places=7)
+        self.assertAlmostEqual(row[1], 2.2, places=7)
+
+    async def test_field_json_types(self):
+        """Test integer field types"""
+        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute("CREATE TEMPORARY TABLE test_json_types (f JSON)")
+                await cursor.execute("INSERT INTO test_json_types VALUES ('{\"age\": 30,\"email\": \"john.doe@example.com\",\"preferences\": {\"theme\": \"dark\",\"notifications\": true}}')")
+                
+                await self.field_json_types_res(cursor)
+            
+            async with connection.cursor(binary=True) as cursor:
+                await self.field_json_types_res(cursor)
+        
+    async def field_json_types_res(self, cursor):    
+        await cursor.execute("SELECT * FROM test_json_types WHERE 1=?", (1,))
+        row = await cursor.fetchone()
+        self.assertEqual(row[0], '{"age": 30,"email": "john.doe@example.com","preferences": {"theme": "dark","notifications": true}}')
+
 if __name__ == '__main__':
     unittest.main()

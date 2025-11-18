@@ -70,6 +70,8 @@ class Configuration:
         hosts: List[HostAddress] = []
         
         # Split by comma for multiple hosts
+        if (host_string is None):
+            return hosts
         host_parts = [h.strip() for h in host_string.split(',') if h.strip()]
         
         for host_part in host_parts:
