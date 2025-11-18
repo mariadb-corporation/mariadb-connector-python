@@ -136,7 +136,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
                     # Execute with parameters using ExecutePacket
                     from .impl.message.client.execute_packet import ExecutePacket
                     execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
-                    completions = self._client.execute(execute_packet, self._config, False, effective_buffered, prepare_stmt_packet=self._stmt)
+                    completions = self._client.execute(execute_packet, self._config, effective_buffered, prepare_stmt_packet=self._stmt)
 
                 else:
 
@@ -151,12 +151,12 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
                         )
                     # Use parameterized query packet with bytes
                     query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
-                    completions = self._client.execute(query_packet, self._config, False, effective_buffered)
+                    completions = self._client.execute(query_packet, self._config, effective_buffered)
 
             else:
                 # Use simple query packet
                 query_packet = QueryPacket(sql)
-                completions = self._client.execute(query_packet, self._config, False, effective_buffered)
+                completions = self._client.execute(query_packet, self._config, effective_buffered)
             
             # Process the completions to extract result data
             self._process_completions(completions)
@@ -234,7 +234,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
                 query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
                 # Use provided buffered parameter or fall back to cursor default
                 effective_buffered = buffered if buffered is not None else self._buffered
-                compl_list = self._client.execute(query_packet, self._get_config(), effective_buffered)
+                compl_list = self._client.execute(query_packet, self._config, effective_buffered)
                 completions.extend(compl_list)
 
             # Process the completions - aggregate result sets with compatible metadata

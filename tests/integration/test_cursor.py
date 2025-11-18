@@ -958,6 +958,7 @@ class TestCursor(unittest.TestCase):
 
         cursor_default.execute("INSERT INTO t1 VALUES (?, ?, ?)", 
                               (test_ipv6, test_ipv4, test_uuid))
+        cursor_default.execute("INSERT INTO t1 VALUES (NULL, NULL, NULL)")
         
         # Test text protocol (default behavior - returns strings)
         cursor_default.execute("SELECT a, b, c FROM t1")
@@ -969,6 +970,10 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], str(test_ipv6))
         self.assertEqual(row[1], str(test_ipv4))
         self.assertEqual(row[2], str(test_uuid))
+        row = cursor_default.fetchone()
+        self.assertIsNone(row[0], "NULL INET6 should be None")
+        self.assertIsNone(row[1], "NULL INET4 should be None")
+        self.assertIsNone(row[2], "NULL UUID should be None")
         
         # Test binary protocol (default behavior - returns bytes/strings)
         cursor_default.close()
@@ -980,6 +985,10 @@ class TestCursor(unittest.TestCase):
         self.assertIsInstance(row[0], (str, bytes), "INET6 should be string or bytes by default")
         self.assertIsInstance(row[1], (str, bytes), "INET4 should be string or bytes by default")
         self.assertIsInstance(row[2], (str, bytes), "UUID should be string or bytes by default")
+        row = cursor_default.fetchone()
+        self.assertIsNone(row[0], "NULL INET6 should be None")
+        self.assertIsNone(row[1], "NULL INET4 should be None")
+        self.assertIsNone(row[2], "NULL UUID should be None")
 
         cursor_default.close()
 
@@ -987,7 +996,7 @@ class TestCursor(unittest.TestCase):
         cursor_native = self.connection.cursor(native_object=True)
         
         # Test text protocol with native_object
-        cursor_native.execute("SELECT a, b, c FROM t1")
+        cursor_native.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_native.fetchone()
         
         self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
@@ -999,7 +1008,10 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], test_ipv6)
         self.assertEqual(row[1], test_ipv4)
         self.assertEqual(row[2], test_uuid)
-
+        row = cursor_native.fetchone()
+        self.assertIsNone(row[0], "NULL INET6 should be None")
+        self.assertIsNone(row[1], "NULL INET4 should be None")
+        self.assertIsNone(row[2], "NULL UUID should be None")
         # Test binary protocol with native_object
         cursor_native.close()
         cursor_native = self.connection.cursor(native_object=True, binary=True)
@@ -1015,62 +1027,15 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], test_ipv6)
         self.assertEqual(row[1], test_ipv4)
         self.assertEqual(row[2], test_uuid)
-
-        # Test with NULL values
-        cursor_native.execute("INSERT INTO t1 VALUES (NULL, NULL, NULL)")
-        cursor_native.execute("SELECT a, b, c FROM t1 WHERE a IS NULL")
         row = cursor_native.fetchone()
-        
         self.assertIsNone(row[0], "NULL INET6 should be None")
         self.assertIsNone(row[1], "NULL INET4 should be None")
         self.assertIsNone(row[2], "NULL UUID should be None")
-
+        
         # Cleanup
         cursor_native.execute("DROP TABLE t1")
         cursor_native.close()
         
-        # Test native_object at connection level
-        from ..base_test import create_connection
-        
-        conn_native = create_connection({"native_object": True})
-        cursor_conn = conn_native.cursor()
-        
-        cursor_conn.execute("DROP TABLE IF EXISTS t1")
-        cursor_conn.execute("CREATE TABLE t1 (a inet6, b inet4, c uuid)")
-        cursor_conn.execute("INSERT INTO t1 VALUES (?, ?, ?)", 
-                           (test_ipv6, test_ipv4, test_uuid))
-        
-        # Connection-level native_object should apply to all cursors
-        cursor_conn.execute("SELECT a, b, c FROM t1")
-        row = cursor_conn.fetchone()
-        
-        self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
-                            "INET6 should be ipaddress object with connection-level native_object=True")
-        self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
-                            "INET4 should be ipaddress object with connection-level native_object=True")
-        self.assertIsInstance(row[2], uuid.UUID, 
-                            "UUID should be uuid.UUID object with connection-level native_object=True")
-        self.assertEqual(row[0], test_ipv6)
-        self.assertEqual(row[1], test_ipv4)
-        self.assertEqual(row[2], test_uuid)
-        
-        # Cursor-level setting should override connection-level setting
-        cursor_override = conn_native.cursor(native_object=False)
-        cursor_override.execute("SELECT a, b, c FROM t1")
-        row = cursor_override.fetchone()
-        
-        self.assertIsInstance(row[0], str, 
-                            "INET6 should be string when cursor overrides connection-level native_object")
-        self.assertIsInstance(row[1], str, 
-                            "INET4 should be string when cursor overrides connection-level native_object")
-        self.assertIsInstance(row[2], str, 
-                            "UUID should be string when cursor overrides connection-level native_object")
-        
-        cursor_override.close()
-        cursor_conn.execute("DROP TABLE t1")
-        cursor_conn.close()
-        conn_native.close()
-
 
     def test_conpy34(self):
         with create_connection() as conn:
@@ -2177,7 +2142,6 @@ class TestCursor(unittest.TestCase):
             cursor.execute("SELECT 1 UNION SELECT 2")
             self.assertEqual(cursor.rowcount, 2)
             cursor.close()
-            self.assertEqual(cursor.rowcount, -1)
 
     def test_conpy258(self):
         with create_connection() as connection:

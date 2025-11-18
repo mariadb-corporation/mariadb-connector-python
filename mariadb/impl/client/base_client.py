@@ -590,11 +590,11 @@ class BaseClient(ABC):
                         match column.ext_type_name:
                             case ('inet6' | 'inet4'):
                                 value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                                if config.native_object:
+                                if config.native_object and value is not None:
                                     value = ipaddress.ip_address(value)
                             case 'uuid':
                                 value, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                                if config.native_object:
+                                if config.native_object and value is not None:
                                     value = uuid.UUID(value)
                             case _:
                                 # Default case for VARCHAR, STRING, etc.
