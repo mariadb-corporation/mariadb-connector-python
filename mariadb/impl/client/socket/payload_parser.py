@@ -24,61 +24,39 @@ class PayloadParser:
 
     def get_byte(self) -> int:
         """Read single byte from packet without advancing position"""
-        if self.pos >= len(self.packet):
-            raise IOError("Not enough data in packet to read byte")
-        
         return self.packet[self.pos]
 
     def read_byte(self) -> int:
         """Read single byte from packet and advance position"""
-        if self.pos >= len(self.packet):
-            raise IOError("Not enough data in packet to read byte")
-        
         value = self.packet[self.pos]
         self.pos += 1
         return value
     
     def read_int16(self) -> int:
         """Read 2-byte integer (little-endian) and advance position"""
-        if self.pos + 2 > len(self.packet):
-            raise IOError("Not enough data in packet to read int16")
-        
-        value = struct.unpack('<H', self.packet[self.pos:self.pos+2])[0]
         self.pos += 2
-        return value
+        return ((self.packet[self.pos - 2] & 0xff) + (self.packet[self.pos - 1] << 8)) & 0xffff;        
     
     def read_int24(self) -> int:
         """Read 3-byte integer (little-endian) and advance position"""
-        if self.pos + 3 > len(self.packet):
-            raise IOError("Not enough data in packet to read int24")
-        
         value = struct.unpack('<I', self.packet[self.pos:self.pos+3] + b'\x00')[0]
         self.pos += 3
         return value
     
     def read_int32(self) -> int:
         """Read 4-byte integer (little-endian) and advance position"""
-        if self.pos + 4 > len(self.packet):
-            raise IOError("Not enough data in packet to read int32")
-        
         value = struct.unpack('<I', self.packet[self.pos:self.pos+4])[0]
         self.pos += 4
         return value
     
     def read_int64(self) -> int:
         """Read 8-byte integer (little-endian) and advance position"""
-        if self.pos + 8 > len(self.packet):
-            raise IOError("Not enough data in packet to read int64")
-        
         value = struct.unpack('<Q', self.packet[self.pos:self.pos+8])[0]
         self.pos += 8
         return value
     
     def read_length_encoded_int(self) -> Optional[int]:
         """Read length-encoded integer (MySQL protocol format) and advance position"""
-        if self.pos >= len(self.packet):
-            raise IOError("Not enough data in packet to read length-encoded int")
-        
         first_byte = self.packet[self.pos]
         self.pos += 1
         
@@ -90,10 +68,7 @@ class PayloadParser:
             return self.read_int16()
         elif first_byte == 253:
             return self.read_int24()
-        elif first_byte == 254:
-            return self.read_int64()
-        else:
-            raise IOError(f"Invalid length-encoded int first byte: {first_byte}")
+        return self.read_int64()
     
     def read_length_encoded_string(self, encoding: str = 'utf-8') -> Optional[str]:
         """Read length-encoded string with specified encoding and advance position"""
@@ -124,18 +99,12 @@ class PayloadParser:
         if length is None:
             return None
 
-        if self.pos + length > len(self.packet):
-            raise IOError(f"Not enough data in packet to read {length} bytes")
-        
         data = self.packet[self.pos:self.pos+length]
         self.pos += length
         return data
     
     def read_fixed_length_string(self, length: int, encoding: str = 'utf-8') -> str:
         """Read fixed-length string with specified encoding and advance position"""
-        if self.pos + length > len(self.packet):
-            raise IOError(f"Not enough data in packet to read string of length {length}")
-        
         string_data = self.packet[self.pos:self.pos+length]
         self.pos += length
         
@@ -166,9 +135,6 @@ class PayloadParser:
     
     def read_bytes(self, length: int) -> bytes:
         """Read fixed number of bytes and advance position"""
-        if self.pos + length > len(self.packet):
-            raise IOError(f"Not enough data in packet to read {length} bytes")
-        
         data = self.packet[self.pos:self.pos+length]
         self.pos += length
         return data
@@ -181,9 +147,6 @@ class PayloadParser:
     
     def skip(self, num_bytes: int) -> None:
         """Skip specified number of bytes and advance position"""
-        if self.pos + num_bytes > len(self.packet):
-            raise IOError(f"Not enough data in packet to skip {num_bytes} bytes")
-        
         self.pos += num_bytes
     
     def has_remaining(self) -> bool:
@@ -200,9 +163,6 @@ class PayloadParser:
     
     def seek(self, position: int) -> None:
         """Set read position to specified location"""
-        if position < 0 or position > len(self.packet):
-            raise IOError(f"Invalid position: {position}")
-        
         self.pos = position
     
     @staticmethod

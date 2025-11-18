@@ -97,9 +97,6 @@ class SyncConnection(BaseConnection['SyncClient']):
         Raises:
             ProgrammingError: If connection is closed
         """
-        self._check_closed()       
-        
-        # Update configuration with cursor-specific options
         if cursor_class is None:
             # Import here to avoid circular dependency
             from .sync_cursor import SyncCursor

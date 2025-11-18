@@ -35,10 +35,12 @@ class QueryPacket(ClientMessage):
         
     def encode(self, context: Context) -> bytearray:
         """Encode COM_QUERY packet with SQL"""
-        writer = PayloadWriter()
-        writer.write_byte(COM_QUERY)
-        writer.write_string(self.sql, 'utf-8')
-        return writer.get_payload()
+        encoded_sql = self.sql.encode('utf-8')
+        result = bytearray(len(encoded_sql) + 1)
+        result[0] = COM_QUERY
+        result[1:] = encoded_sql
+
+        return result
 
     def is_binary(self) -> bool:
         return False

@@ -7,6 +7,7 @@ OK Packet parser for MariaDB protocol
 Based on MySQL/MariaDB protocol OK packet structure.
 """
 
+import struct
 from typing import TYPE_CHECKING, Optional
 from ...client.socket.payload_parser import PayloadParser
 from ...completion import Completion
@@ -34,22 +35,16 @@ class OkPacket(Completion):
         self,
         affected_rows: int = 0,
         insert_id: int = 0,
-        server_status: int = 0,
         warning_count: int = 0,
-        info: Optional[str] = None
     ):
         """Initialize OK packet with affected rows, insert ID, status, and warnings"""
         # Initialize parent Completion with common fields
         super().__init__(
-            affected_rows=affected_rows,
-            insert_id=insert_id,
-            warning_count=warning_count
+            affected_rows,
+            insert_id,
+            warning_count
         )
-        
-        # OkPacket-specific fields
-        self.server_status = server_status
-        self.info = info
-    
+      
 
     def is_output_parameters(self) -> bool:
         """Check if completion has output parameters"""
@@ -60,64 +55,42 @@ class OkPacket(Completion):
         """Decode OK packet from bytearray with context"""
         parser = PayloadParser(data)
         
-        parser.read_byte() # Skip OK marker (0x00 or 0xFE)
+        parser.skip(1) # Skip OK marker (0x00 or 0xFE)
         affected_rows = parser.read_length_encoded_int()
         insert_id = parser.read_length_encoded_int()
-        server_status = parser.read_int16()
-        warning_count = parser.read_int16()
         
-        # Update context with server status
-        if context:
-            context.server_status = server_status
-            context.warning_count = warning_count
+        # Read server_status and warning_count in one operation (4 bytes total)
+        server_status, warning_count = struct.unpack('<HH', data[parser.pos:parser.pos + 4])
+        parser.pos += 4
+        
+        # Update context with server status (context is always present)
+        context.server_status = server_status
+        context.warning_count = warning_count
         
         # Optional info string and session tracking
-        info = None
         if parser.has_remaining():
             # Check if session tracking is present
-            if (context and 
-                context.has_capability(constants.CAPABILITY.SESSION_TRACKING) and
-                (server_status & constants.STATUS.SESSION_STATE_CHANGED)):
+            has_session_tracking = (context.has_capability(constants.CAPABILITY.SESSION_TRACKING) and
+                                   (server_status & constants.STATUS.SESSION_STATE_CHANGED))
+            
+            try:
+                # Read info string length
+                info_length = parser.read_length_encoded_int()
+                if info_length > 0:
+                    parser.skip(info_length)
                 
-                # With session tracking, the format is:
-                # - info string (length-encoded)
-                # - session tracking data (length-encoded, then tracking blocks)
-                try:
-                    # Read info string length
-                    info_length = parser.read_length_encoded_int()
-                    if info_length > 0:
-                        info_bytes = parser.read_bytes(info_length)
-                        info = info_bytes.decode('utf-8', errors='replace')
-                    
-                    # Process session tracking data
-                    if parser.has_remaining():
-                        _process_session_tracking(parser, context)
-                except Exception:
-                    # Log but don't fail on session tracking errors
-                    pass
-            else:
-                # No session tracking - just read info string if present
-                try:
-                    info_length = parser.read_length_encoded_int()
-                    if info_length > 0:
-                        info_bytes = parser.read_bytes(info_length)
-                        info = info_bytes.decode('utf-8', errors='replace')
-                except Exception:
-                    pass
+                # Process session tracking data if present
+                if has_session_tracking and parser.has_remaining():
+                    _process_session_tracking(parser, context)
+            except Exception:
+                # Don't fail on info/session tracking errors
+                pass
         
         return OkPacket(
-            affected_rows=affected_rows,
-            insert_id=insert_id,
-            server_status=server_status,
-            warning_count=warning_count,
-            info=info
+            affected_rows,
+            insert_id,
+            warning_count
         )
-    
-    def __repr__(self) -> str:
-        return (f"OkPacket(affected_rows={self.affected_rows}, "
-                f"insert_id={self.insert_id}, "
-                f"server_status=0x{self.server_status:04X}, "
-                f"warning_count={self.warning_count})")
 
 
 def _process_session_tracking(parser: PayloadParser, context: 'Context') -> None:
