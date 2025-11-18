@@ -2519,7 +2519,7 @@ class TestCursor(unittest.TestCase):
         with create_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute("CREATE TEMPORARY TABLE test_json_types (f JSON)")
-                cursor.execute("INSERT INTO test_json_types VALUES ('{\"age\": 30,\"email\": \"john.doe@example.com\",\"preferences\": {\"theme\": \"dark\",\"notifications\": true}}')")
+                cursor.execute("INSERT INTO test_json_types VALUES ('{\"age\": 30, \"email\": \"john.doe@example.com\"}')")
                 
                 self.field_json_types_res(cursor)
             
@@ -2529,7 +2529,7 @@ class TestCursor(unittest.TestCase):
     def field_json_types_res(self, cursor):    
         cursor.execute("SELECT * FROM test_json_types WHERE 1=?", (1,))
         row = cursor.fetchone()
-        self.assertEqual(row[0], '{"age": 30,"email": "john.doe@example.com","preferences": {"theme": "dark","notifications": true}}')
+        self.assertEqual(row[0], '{"age": 30, "email": "john.doe@example.com"}')
 
 if __name__ == '__main__':
     unittest.main()

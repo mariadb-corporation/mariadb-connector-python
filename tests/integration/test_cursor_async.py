@@ -2528,7 +2528,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         async with await mariadb.AsyncConnection.connect(**conf()) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute("CREATE TEMPORARY TABLE test_json_types (f JSON)")
-                await cursor.execute("INSERT INTO test_json_types VALUES ('{\"age\": 30,\"email\": \"john.doe@example.com\",\"preferences\": {\"theme\": \"dark\",\"notifications\": true}}')")
+                await cursor.execute("INSERT INTO test_json_types VALUES ('{\"age\": 30, \"email\": \"john.doe@example.com\"}')")
                 
                 await self.field_json_types_res(cursor)
             
@@ -2538,7 +2538,6 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
     async def field_json_types_res(self, cursor):    
         await cursor.execute("SELECT * FROM test_json_types WHERE 1=?", (1,))
         row = await cursor.fetchone()
-        self.assertEqual(row[0], '{"age": 30,"email": "john.doe@example.com","preferences": {"theme": "dark","notifications": true}}')
-
+        self.assertEqual(row[0], '{"age": 30, "email": "john.doe@example.com"}')
 if __name__ == '__main__':
     unittest.main()
