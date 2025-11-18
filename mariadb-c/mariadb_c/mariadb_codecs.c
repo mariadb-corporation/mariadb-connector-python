@@ -602,9 +602,20 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             self->values[column]= decimal;
             break;
         }
+        case MYSQL_TYPE_JSON:
+            unsigned long len= 0;
+            if ((self->values[column]=
+                PyUnicode_FromStringAndSize((const char *)data,
+                                            (Py_ssize_t)length[column])))
+                len= (unsigned long)PyUnicode_GET_LENGTH(self->values[column]);
+            if (len > self->fields[column].max_length)
+            {
+                self->fields[column].max_length= len;
+            }
+            break;
+
         case MYSQL_TYPE_STRING:
         case MYSQL_TYPE_VAR_STRING:
-        case MYSQL_TYPE_JSON:
         case MYSQL_TYPE_VARCHAR:
         case MYSQL_TYPE_DECIMAL:
         case MYSQL_TYPE_SET:
@@ -859,10 +870,26 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 *row+= length;
                 break;
             }
+        case MYSQL_TYPE_JSON:
+        {
+            unsigned long length;
+            unsigned long utf8len;
+            length= mysql_net_field_length(row);
+
+            if ((self->values[column]=
+            PyUnicode_FromStringAndSize((const char *)*row,
+                                        (Py_ssize_t)length)))
+            {
+                utf8len= (unsigned long)PyUnicode_GET_LENGTH(self->values[column]);
+                if (utf8len > self->fields[column].max_length)
+                self->fields[column].max_length= utf8len;
+            }
+            *row+= length;
+            break;
+        }
         case MYSQL_TYPE_GEOMETRY:
         case MYSQL_TYPE_STRING:
         case MYSQL_TYPE_VAR_STRING:
-        case MYSQL_TYPE_JSON:
         case MYSQL_TYPE_VARCHAR:
         case MYSQL_TYPE_DECIMAL:
         case MYSQL_TYPE_SET:
