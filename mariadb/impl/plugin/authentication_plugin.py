@@ -31,11 +31,13 @@ class AuthenticationPlugin(ABC):
         ...
     
     
+    @abstractmethod
     def is_mitm_proof(self) -> bool:
         """Check if plugin is MitM-proof, permitting returning HASH"""
-        return False
+        ...
     
+    @abstractmethod
     def hash(self, conf: Configuration) -> Optional[bytes]:
         """Return hash for credential"""
-        return None
+        ...
 
