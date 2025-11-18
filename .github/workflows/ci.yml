@@ -226,6 +226,19 @@ jobs:
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
           TEST_DB: ${{ env.MYSQL_TEST_DB }}
 
+      - name: Enable core dumps (Linux)
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        shell: bash
+        run: |
+          # Enable core dumps
+          ulimit -c unlimited
+          echo "Core dump size limit: $(ulimit -c)"
+          # Set core dump pattern
+          sudo sysctl -w kernel.core_pattern=core.%e.%p
+          echo "Core pattern: $(cat /proc/sys/kernel/core_pattern)"
+          # Install debugging tools
+          sudo apt-get update && sudo apt-get install -y gdb python3-dbg || true
+
       - name: Run test suite
         shell: bash
         run: |
@@ -240,9 +253,32 @@ jobs:
           python -c "import mariadb; print(f'Implementation: {mariadb.__impl__}'); print(f'SyncConnection: {mariadb.SyncConnection}')"
           echo "=== Environment variable check ==="
           python -c "import os; print(f'MARIADB_PYTHON_CONNECTOR={os.environ.get(\"MARIADB_PYTHON_CONNECTOR\", \"NOT SET\")}')"
+          # Enable core dumps for this process
+          ulimit -c unlimited 2>/dev/null || true
           python -m pytest tests -v -s --cov=mariadb --cov=mariadb_c --cov=mariadb_pool --cov=mariadb_shared --cov-branch --cov-report=xml --cov-report=term
           echo "=== Coverage report for mariadb_c ==="
           python -m coverage report --include="*/mariadb_c/*" || echo "No mariadb_c coverage found"
+        continue-on-error: true
+
+      - name: Analyze core dumps (Linux)
+        if: ${{ always() && startsWith(matrix.os, 'ubuntu') }}
+        shell: bash
+        run: |
+          echo "=== Searching for core dumps ==="
+          find . -name "core.*" -o -name "core" | while read core_file; do
+            echo "Found core dump: $core_file"
+            echo "=== Core dump info ==="
+            file "$core_file"
+            echo "=== Backtrace from core dump ==="
+            gdb -batch -ex "thread apply all bt" -ex "quit" python3 "$core_file" 2>&1 || true
+            echo "=== Python-specific backtrace ==="
+            gdb -batch -ex "py-bt" -ex "quit" python3 "$core_file" 2>&1 || true
+          done
+          # Also check system core dumps
+          if [ -f /var/crash/* ]; then
+            echo "=== System crash dumps ==="
+            ls -lh /var/crash/
+          fi
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
           TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}

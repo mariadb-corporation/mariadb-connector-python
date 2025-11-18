@@ -775,6 +775,8 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 
                 if (!len)
                 {
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
                     break;
                 }
                 year= uint2korr(*row);
