@@ -490,10 +490,7 @@ class BaseClient(ABC):
                       FIELD_TYPE.LONGLONG | FIELD_TYPE.INT24 | FIELD_TYPE.YEAR):
                     # Read as string and convert to integer (simpler and more reliable)
                     val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                    try:
-                        value = int(val) if val is not None else None
-                    except (ValueError, TypeError):
-                        value = None
+                    value = int(val) if val is not None else None
                 case FIELD_TYPE.FLOAT | FIELD_TYPE.DOUBLE:
                     # Read as string and convert to float
                     val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
@@ -501,18 +498,20 @@ class BaseClient(ABC):
                 case FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE:
                     # Parse DATE as datetime.date
                     val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                    if val is not None:
+                    if val is None:
+                        value = None
+                    else:    
                         try:
                             year, month, day = map(int, val.split('-'))
                             value = datetime.date(year, month, day)
                         except (ValueError, AttributeError) as e:
                             value = None  # Fallback to None if parsing fails
-                    else:
-                        value = None
                 case FIELD_TYPE.TIME:
                     # Parse TIME as datetime.timedelta
                     val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                    if val is not None:
+                    if val is None:
+                        value = None
+                    else:    
                         try:
                             # Handle TIME format: HH:MM:SS[.ffffff] or HHH:MM:SS[.ffffff] (can be > 24 hours)
                             # Can also be negative: -HH:MM:SS[.ffffff]
@@ -521,59 +520,50 @@ class BaseClient(ABC):
                                 val = val[1:]
 
                             parts = val.split(':')
-                            if len(parts) >= 3:
-                                hours = int(parts[0])
-                                minutes = int(parts[1])
-                                # Handle fractional seconds: "24.051" -> seconds=24, microseconds=51000
-                                seconds_parts = parts[2].split('.')
-                                seconds = int(seconds_parts[0])
-                                microseconds = 0
 
-                                if len(seconds_parts) > 1:
-                                    # Pad or truncate to 6 digits for microseconds
-                                    frac_str = seconds_parts[1].ljust(6, '0')[:6]
-                                    microseconds = int(frac_str)
+                            hours = int(parts[0])
+                            minutes = int(parts[1])
+                            # Handle fractional seconds: "24.051" -> seconds=24, microseconds=51000
+                            seconds_parts = parts[2].split('.')
+                            seconds = int(seconds_parts[0])
+                            microseconds = 0
 
-                                td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
-                                value = -td if is_negative else td
-                            else:
-                                value = val  # Fallback to string
+                            if len(seconds_parts) > 1:
+                                # Pad or truncate to 6 digits for microseconds
+                                frac_str = seconds_parts[1].ljust(6, '0')[:6]
+                                microseconds = int(frac_str)
+
+                            td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
+                            value = -td if is_negative else td
                         except (ValueError, AttributeError):
                             value = val  # Fallback to string if parsing fails
-                    else:
-                        value = None
                 case (FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP):
                     # Parse DATETIME as datetime.datetime
                     val, pos = PayloadParser.read_length_encoded_string_at(packet, pos)
-                    if val is not None:
+                    if val is None:
+                        value = None
+                    else:    
                         try:
                             # Handle DATETIME format: YYYY-MM-DD HH:MM:SS[.ffffff]
-                            if ' ' in val:
-                                date_part, time_part = val.split(' ', 1)
-                                year, month, day = map(int, date_part.split('-'))
+                            date_part, time_part = val.split(' ', 1)
+                            year, month, day = map(int, date_part.split('-'))
 
-                                time_parts = time_part.split(':')
-                                hours = int(time_parts[0])
-                                minutes = int(time_parts[1])
-                                # Handle fractional seconds: "24.123456" -> seconds=24, microseconds=123456
-                                seconds_parts = time_parts[2].split('.')
-                                seconds = int(seconds_parts[0])
-                                microseconds = 0
+                            time_parts = time_part.split(':')
+                            hours = int(time_parts[0])
+                            minutes = int(time_parts[1])
+                            # Handle fractional seconds: "24.123456" -> seconds=24, microseconds=123456
+                            seconds_parts = time_parts[2].split('.')
+                            seconds = int(seconds_parts[0])
+                            microseconds = 0
 
-                                if len(seconds_parts) > 1:
-                                    # Pad or truncate to 6 digits for microseconds
-                                    frac_str = seconds_parts[1].ljust(6, '0')[:6]
-                                    microseconds = int(frac_str)
+                            if len(seconds_parts) > 1:
+                                # Pad or truncate to 6 digits for microseconds
+                                frac_str = seconds_parts[1].ljust(6, '0')[:6]
+                                microseconds = int(frac_str)
 
-                                value = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
-                            else:
-                                # Date only
-                                year, month, day = map(int, val.split('-'))
-                                value = datetime.datetime(year, month, day)
+                            value = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
                         except (ValueError, AttributeError):
                             value = val  # Fallback to string if parsing fails
-                    else:
-                        value = None
                 case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
                     # DECIMAL types must return decimal.Decimal
                     val, pos = PayloadParser.read_length_encoded_string_at(packet, pos, encoding='ascii')
@@ -662,50 +652,40 @@ class BaseClient(ABC):
         """
         match column.column_type:
             case FIELD_TYPE.TINY:
-                if pos + 1 > len(packet):
-                    return None, pos
                 if column.flags & FIELD_FLAG.UNSIGNED:
-                    value = struct.unpack('<B', packet[pos:pos + 1])[0]
+                    value = packet[pos]
                 else:
-                    value = struct.unpack('<b', packet[pos:pos + 1])[0]
+                    value = packet[pos]
+                    if value > 127:
+                        value -= 256
                 return value, pos + 1
                 
             case (FIELD_TYPE.SHORT | FIELD_TYPE.YEAR):
-                if pos + 2 > len(packet):
-                    return None, pos
                 if column.flags & FIELD_FLAG.UNSIGNED:
-                    value = struct.unpack('<H', packet[pos:pos + 2])[0]
+                    value = int.from_bytes(packet[pos:pos+2], byteorder='little', signed=False)
                 else:
-                    value = struct.unpack('<h', packet[pos:pos + 2])[0]
+                    value = int.from_bytes(packet[pos:pos+2], byteorder='little', signed=True)
                 return value, pos + 2
                 
             case FIELD_TYPE.LONG | FIELD_TYPE.INT24:
-                if pos + 4 > len(packet):
-                    return None, pos
                 if column.flags & FIELD_FLAG.UNSIGNED:
-                    value = struct.unpack('<I', packet[pos:pos + 4])[0]
+                    value = int.from_bytes(packet[pos:pos+4], byteorder='little', signed=False)
                 else:
-                    value = struct.unpack('<i', packet[pos:pos + 4])[0]
+                    value = int.from_bytes(packet[pos:pos+4], byteorder='little', signed=True)
                 return value, pos + 4
                 
             case FIELD_TYPE.LONGLONG:
-                if pos + 8 > len(packet):
-                    return None, pos
                 if column.flags & FIELD_FLAG.UNSIGNED:
-                    value = struct.unpack('<Q', packet[pos:pos + 8])[0]
+                    value = int.from_bytes(packet[pos:pos+8], byteorder='little', signed=False)
                 else:
-                    value = struct.unpack('<q', packet[pos:pos + 8])[0]
+                    value = int.from_bytes(packet[pos:pos+8], byteorder='little', signed=True)
                 return value, pos + 8
                 
             case FIELD_TYPE.FLOAT:
-                if pos + 4 > len(packet):
-                    return None, pos
                 value = struct.unpack('<f', packet[pos:pos + 4])[0]
                 return value, pos + 4
                 
             case FIELD_TYPE.DOUBLE:
-                if pos + 8 > len(packet):
-                    return None, pos
                 value = struct.unpack('<d', packet[pos:pos + 8])[0]
                 return value, pos + 8
                 
@@ -717,8 +697,6 @@ class BaseClient(ABC):
                 if length_byte == 0:
                     return None, pos
                 elif length_byte >= 4:
-                    if pos + 4 > len(packet):
-                        return None, pos
                     year = struct.unpack('<H', packet[pos:pos + 2])[0]
                     month = packet[pos + 2]
                     day = packet[pos + 3]
@@ -738,8 +716,6 @@ class BaseClient(ABC):
                 if length_byte == 0:
                     return None, pos
                 elif length_byte >= 8:
-                    if pos + 8 > len(packet):
-                        return None, pos
                     negative = packet[pos]
                     days = struct.unpack('<I', packet[pos + 1:pos + 5])[0]
                     hours = packet[pos + 5]
@@ -773,8 +749,6 @@ class BaseClient(ABC):
                 if length_byte == 0:
                     return None, pos
                 elif length_byte >= 4:
-                    if pos + 4 > len(packet):
-                        return None, pos
                     year = struct.unpack('<H', packet[pos:pos + 2])[0]
                     month = packet[pos + 2]
                     day = packet[pos + 3]

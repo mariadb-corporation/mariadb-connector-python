@@ -214,7 +214,7 @@ class TestCursor(unittest.TestCase):
     def test_date(self):
         v = self.connection.server_version
         i = self.connection.server_info.lower()
-        if (v) or ("mariadb" not in i and v < 50600):
+        if "mariadb" not in i or v < 50600:
             self.skipTest("microsecond not supported")
 
         cursor = self.connection.cursor()
@@ -229,6 +229,14 @@ class TestCursor(unittest.TestCase):
         cursor.execute("INSERT INTO test_date VALUES (?,?,?,?)",
                        (c1, c2, c3, c4))
 
+        c2_1 = datetime.datetime(2018, 6, 20, 12, 22, 31, 0)
+        c2_2 = datetime.timedelta(hours=-12, minutes=22, seconds=31)
+        c2_3 = datetime.datetime(9999, 6, 20, 12, 22, 31, 0)
+        c2_4 = datetime.date(2018, 6, 20)
+
+        cursor.execute("INSERT INTO test_date VALUES (?,?,?,?)",
+                       (c2_1, c2_2, c2_3, c2_4))
+
         cursor.execute("SELECT c1,c2,c3,c4 FROM test_date")
         row = cursor.fetchone()
         self.assertEqual(row[0], c1)
@@ -236,6 +244,12 @@ class TestCursor(unittest.TestCase):
                                                     microseconds=123456))
         self.assertEqual(row[2], c3)
         self.assertEqual(row[3], c4)
+
+        row = cursor.fetchone()
+        self.assertEqual(row[0], c2_1)
+        self.assertEqual(row[1], c2_2)
+        self.assertEqual(row[2], c2_3)
+        self.assertEqual(row[3], c2_4)
         cursor.close()
 
         with self.connection.cursor(binary=True) as cursor:
@@ -246,7 +260,11 @@ class TestCursor(unittest.TestCase):
                                                         microseconds=123456))
             self.assertEqual(row[2], c3)
             self.assertEqual(row[3], c4)
-
+            row = cursor.fetchone()
+            self.assertEqual(row[0], c2_1)
+            self.assertEqual(row[1], c2_2)
+            self.assertEqual(row[2], c2_3)
+            self.assertEqual(row[3], c2_4)
 
     def test_numbers(self):
         cursor = self.connection.cursor()
@@ -2431,6 +2449,83 @@ class TestCursor(unittest.TestCase):
             cursor.execute("drop table if exists t1_binary_270")
             cursor.close()
         
+    def test_field_info_integer_types(self):
+        """Test integer field types"""
+        with create_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("CREATE TEMPORARY TABLE test_integer_types (tiny TINYINT, small SMALLINT, medium MEDIUMINT, normal INT, big BIGINT)")
+                cursor.execute("INSERT INTO test_integer_types VALUES (1, 2, 3, 4, 5)")
+                
+                self.field_info_integer_types_res(cursor)
+            
+            with connection.cursor(binary=True) as cursor:
+                self.field_info_integer_types_res(cursor)
+        
+    def field_info_integer_types_res(self, cursor):    
+        cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 1)
+        self.assertEqual(row[1], 2)
+        self.assertEqual(row[2], 3)
+        self.assertEqual(row[3], 4)
+        self.assertEqual(row[4], 5)
+
+    def test_field_info_integer_types_unsigned(self):
+        """Test integer field types"""
+        with create_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("CREATE TEMPORARY TABLE test_integer_types (tiny TINYINT UNSIGNED, small SMALLINT UNSIGNED, medium MEDIUMINT UNSIGNED, normal INT UNSIGNED, big BIGINT UNSIGNED)")
+                cursor.execute("INSERT INTO test_integer_types VALUES (255, 65535, 16777215, 4294967295, 18446744073709551615)")
+                
+                self.field_info_integer_types_res_unsigned(cursor)
+            
+            with connection.cursor(binary=True) as cursor:
+                self.field_info_integer_types_res_unsigned(cursor)
+        
+    def field_info_integer_types_res_unsigned(self, cursor):    
+        cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
+        row = cursor.fetchone()
+        self.assertEqual(row[0], 255)
+        self.assertEqual(row[1], 65535)
+        self.assertEqual(row[2], 16777215)
+        self.assertEqual(row[3], 4294967295)
+        self.assertEqual(row[4], 18446744073709551615)
+
+
+    def test_field_info_float_types(self):
+        """Test integer field types"""
+        with create_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("CREATE TEMPORARY TABLE test_float_types (f FLOAT, d DOUBLE)")
+                cursor.execute("INSERT INTO test_float_types VALUES (1.1, 2.2)")
+                
+                self.field_info_float_types_res(cursor)
+            
+            with connection.cursor(binary=True) as cursor:
+                self.field_info_float_types_res(cursor)
+        
+    def field_info_float_types_res(self, cursor):    
+        cursor.execute("SELECT * FROM test_float_types WHERE 1=?", (1,))
+        row = cursor.fetchone()
+        self.assertAlmostEqual(row[0], 1.1, places=7)
+        self.assertAlmostEqual(row[1], 2.2, places=7)
+
+    def test_field_json_types(self):
+        """Test integer field types"""
+        with create_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("CREATE TEMPORARY TABLE test_json_types (f JSON)")
+                cursor.execute("INSERT INTO test_json_types VALUES ('{\"age\": 30,\"email\": \"john.doe@example.com\",\"preferences\": {\"theme\": \"dark\",\"notifications\": true}}')")
+                
+                self.field_json_types_res(cursor)
+            
+            with connection.cursor(binary=True) as cursor:
+                self.field_json_types_res(cursor)
+        
+    def field_json_types_res(self, cursor):    
+        cursor.execute("SELECT * FROM test_json_types WHERE 1=?", (1,))
+        row = cursor.fetchone()
+        self.assertEqual(row[0], '{"age": 30,"email": "john.doe@example.com","preferences": {"theme": "dark","notifications": true}}')
 
 if __name__ == '__main__':
     unittest.main()
