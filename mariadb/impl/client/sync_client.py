@@ -58,6 +58,8 @@ class SyncClient(BaseClient):
         # Sync-specific attributes
         self.socket: Optional[socket.socket] = None
         self.stream: Optional[SyncStream] = None
+        self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
+        self.auth_plugin: Optional['AuthenticationPlugin'] = None
 
     # =========================================================================
     # Connection Management
@@ -148,6 +150,10 @@ class SyncClient(BaseClient):
             self.context.eof_deprecated = bool(client_capabilities & constants.CAPABILITY.DEPRECATE_EOF)
             self.context.extended_metadata = bool(client_capabilities & constants.CAPABILITY.EXTENDED_METADATA)
 
+            # Initialize auth plugin for handshake response (default: mysql_native_password)
+            from ..plugin.authentication.native_password_plugin import NativePasswordPlugin
+            self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
+
             response = HandshakeResponse(self.configuration, self.context)
             self.stream.send_payload(response.encode(self.context), response.type(), reset_sequence=False)
 
@@ -201,16 +207,37 @@ class SyncClient(BaseClient):
         #self._send_message(ssl_request, False)
         
         try:
-            # Import SSL utility
+            # Import SSL utility and fingerprint validator
             from .socket.ssl_utility import SSLUtility
+            from .socket.ssl_fingerprint_validator import SSLFingerprintValidator
+            
             # Create SSL context
             ssl_context = SSLUtility.create_ssl_context(self.configuration)
+            
+            # Check if we need fingerprint validation (MariaDB-specific feature)
+            # Only enable when: MariaDB server >= 11.4.1 + no SSL CA configured + password provided
+            use_fingerprint_validation = (
+                self.context.is_mariadb_server() and
+                self.context.get_version().version_greater_or_equal(11, 4, 1) and
+                not self.configuration.ssl_ca and
+                self.configuration.password
+            )
+            
+            if use_fingerprint_validation:
+                # Create fingerprint validator
+                self.cert_fingerprint_validator = SSLFingerprintValidator()
+                # Create unverified context to capture fingerprint
+                ssl_context = self.cert_fingerprint_validator.create_unverified_context(ssl_context)
             
             # Wrap socket with SSL
             self.socket = ssl_context.wrap_socket(
                 self.socket,
-                server_hostname=self.host_address.host
+                server_hostname=self.host_address.host if self.configuration.ssl_verify_cert and not use_fingerprint_validation else None
             )
+            
+            # Capture fingerprint if using fingerprint validation
+            if use_fingerprint_validation and self.cert_fingerprint_validator:
+                self.cert_fingerprint_validator.capture_fingerprint(self.socket)
             
             # Create new SyncStream with the upgraded connection
             connection_id = self.context.connection_id if self.context else -1
@@ -232,7 +259,9 @@ class SyncClient(BaseClient):
         packet_type = packet[0]
         
         if packet_type == self.OK_PACKET:
-            OkPacket.decode(packet, self.context)
+            ok_packet = OkPacket.decode(packet, self.context)
+            # Validate SSL fingerprint if needed
+            self._validate_ssl_fingerprint(ok_packet)
         elif packet_type == self.ERROR_PACKET:
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
@@ -252,12 +281,75 @@ class SyncClient(BaseClient):
         try:
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
             plugin = plugin_factory.initialize(self.configuration.password, auth_data, self.configuration, self.host_address)
+            # Store plugin for fingerprint validation
+            self.auth_plugin = plugin
             response = plugin.processSync(self.stream, self.context)
             self._handle_authentication(response)
         except DatabaseError as e:
             raise e
         except Exception as e:
             raise OperationalError(f"Authentication plugin '{plugin_name}' failed: {e}")
+    
+    def _validate_ssl_fingerprint(self, ok_packet: OkPacket) -> None:
+        """
+        Validate SSL certificate fingerprint using server-provided hash
+        
+        This implements MariaDB's self-signed certificate validation:
+        - Server sends SHA256(hash(password) + seed + cert_fingerprint) in OK packet info
+        - Client verifies by calculating the same hash and comparing
+        
+        Args:
+            ok_packet: OK packet from server containing validation hash in info field
+            
+        Raises:
+            OperationalError: If fingerprint validation fails
+        """
+        # Only validate if we have a fingerprint (self-signed cert scenario)
+        if not self.cert_fingerprint_validator or not self.cert_fingerprint_validator.get_fingerprint():
+            return
+        
+        # Skip validation for Unix domain sockets (MitM-proof by design)
+        if hasattr(self.socket, 'family') and self.socket.family == socket.AF_UNIX:
+            return
+        
+        # Check if auth plugin is MitM-proof and has password
+        if not self.auth_plugin:
+            raise OperationalError(
+                "Self signed certificates. Either set ssl_verify_cert=True, use password with a "
+                "MitM-Proof authentication plugin or provide server certificate to client"
+            )
+        
+        if not self.auth_plugin.is_mitm_proof():
+            raise OperationalError(
+                f"Cannot use authentication plugin {type(self.auth_plugin).__name__} with self signed certificates. "
+                "Either set ssl_verify_cert=True, use password with a MitM-Proof authentication plugin "
+                "or provide server certificate to client"
+            )
+        
+        if not self.configuration.password:
+            raise OperationalError(
+                "Self signed certificates require a password. Either set ssl_verify_cert=True, "
+                "use password with a MitM-Proof authentication plugin or provide server certificate to client"
+            )
+        
+        # Get auth plugin hash
+        auth_hash = self.auth_plugin.hash(self.configuration)
+        if not auth_hash:
+            raise OperationalError(
+                "Authentication plugin did not provide hash for fingerprint validation"
+            )
+        
+        # Validate fingerprint using server's validation hash from OK packet info
+        if not self.cert_fingerprint_validator.validate_fingerprint(
+            auth_hash,
+            self.context.auth_data,
+            ok_packet.info
+        ):
+            raise OperationalError(
+                "Self signed certificates fingerprint validation failed. "
+                "Either set ssl_verify_cert=True, use password with a MitM-Proof authentication plugin "
+                "or provide server certificate to client"
+            )
 
     # =========================================================================
     # Command Execution

@@ -634,5 +634,152 @@ class TestConnection(unittest.TestCase):
             # Expected if server doesn't support SSL or requires certs
             pass
 
+    def test_ssl_fingerprint_validation(self):
+        """Test SSL fingerprint validation for MariaDB >= 11.4.1 without ssl_ca"""
+        default_conf = conf()
+        
+        # First, check if we're connecting to MariaDB >= 11.4.1
+        test_conn = mariadb.connect(**default_conf)
+        cursor = test_conn.cursor()
+        cursor.execute("SELECT VERSION()")
+        version_str = cursor.fetchone()[0]
+        cursor.close()
+        test_conn.close()
+        
+        # Parse version to check if it's MariaDB >= 11.4.1
+        is_mariadb = 'MariaDB' in version_str
+        if not is_mariadb:
+            self.skipTest("SSL fingerprint validation is MariaDB-specific")
+        
+        # Extract version numbers
+        import re
+        version_match = re.match(r'(\d+)\.(\d+)\.(\d+)', version_str)
+        if not version_match:
+            self.skipTest("Could not parse server version")
+        
+        major, minor, patch = map(int, version_match.groups())
+        if (major, minor, patch) < (11, 4, 1):
+            self.skipTest(f"SSL fingerprint validation requires MariaDB >= 11.4.1, got {major}.{minor}.{patch}")
+        
+        # Check if cryptography package is available for PARSEC
+        has_cryptography = False
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            has_cryptography = True
+        except ImportError:
+            pass
+        
+        # Test setup: Create test users with different authentication plugins
+        admin_conn = mariadb.connect(**default_conf)
+        admin_cursor = admin_conn.cursor()
+        
+        
+        # Check if server supports PARSEC plugin
+        has_parsec = False
+        if has_cryptography:
+            admin_cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
+            has_parsec = admin_cursor.fetchone() is not None
+        
+        test_users = [
+            ('fp_native_user', 'native_password', 'mysql_native_password'),
+            ('fp_nopass_user', None, 'mysql_native_password'),  # No password
+        ]
+        
+        # Check if server supports caching_sha2_password (MariaDB >= 12.1.1)
+        if (major, minor, patch) >= (12, 1, 1):
+            try:
+                admin_cursor.execute("INSTALL SONAME 'auth_mysql_sha2'")
+            except:
+                pass
+            test_users.insert(1, ('fp_sha2_user', 'sha2_password', 'caching_sha2_password'))
+        
+        # Add PARSEC user if available
+        if has_cryptography and has_parsec:
+            test_users.append(('fp_parsec_user', 'parsec_password', 'parsec'))
+        
+        try:
+            # Create test users
+            for username, password, plugin in test_users:
+                # Drop user if exists
+                try:
+                    admin_cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                except:
+                    pass
+                
+                # Create user with specific plugin
+                if password:
+                    admin_cursor.execute(
+                        f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
+                    )
+                else:
+                    admin_cursor.execute(
+                        f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin}"
+                    )
+                
+                # Grant privileges
+                admin_cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{username}'@'%'")
+            
+            admin_cursor.execute("FLUSH PRIVILEGES")
+            admin_conn.commit()
+            
+            # Test 1: SSL connection with password and no ssl_ca (should use fingerprint validation)
+            for username, password, plugin in test_users:
+                if password:  # Only test users with passwords
+                    test_conf = default_conf.copy()
+                    test_conf['user'] = username
+                    test_conf['password'] = password
+                    test_conf['ssl'] = True
+                    # Remove ssl_ca to trigger fingerprint validation
+                    test_conf.pop('ssl_ca', None)
+                    test_conf.pop('ssl_cert', None)
+                    test_conf.pop('ssl_key', None)
+                    
+                    try:
+                        conn = mariadb.connect(**test_conf)
+                        # Connection should succeed with fingerprint validation
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT 1")
+                        result = cursor.fetchone()
+                        self.assertEqual(result[0], 1, 
+                            f"Connection with {plugin} and fingerprint validation should work")
+                        cursor.close()
+                        conn.close()
+                    except mariadb.OperationalError as e:
+                        # If it fails, it should be due to SSL configuration, not fingerprint
+                        self.fail(f"SSL fingerprint validation failed for {username} ({plugin}): {e}")
+            
+            # Test 2: SSL connection without password (should fail)
+            username, password, plugin = test_users[2]  # fp_nopass_user
+            test_conf = default_conf.copy()
+            test_conf['user'] = username
+            test_conf['password'] = ''  # No password
+            test_conf['ssl'] = True
+            test_conf.pop('ssl_ca', None)
+            test_conf.pop('ssl_cert', None)
+            test_conf.pop('ssl_key', None)
+            
+            with self.assertRaises(mariadb.OperationalError) as cm:
+                conn = mariadb.connect(**test_conf)
+            
+            # Should fail because fingerprint validation requires password
+            error_msg = str(cm.exception).lower()
+            # The error might be about authentication or fingerprint validation
+            # Either is acceptable for no-password scenario
+            self.assertTrue(
+                'password' in error_msg or 'access denied' in error_msg or 'fingerprint' in error_msg,
+                f"Expected password/auth error for no-password user, got: {cm.exception}"
+            )
+            
+        finally:
+            # Cleanup: Drop test users
+            for username, _, _ in test_users:
+                try:
+                    admin_cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                except:
+                    pass
+            
+            admin_cursor.close()
+            admin_conn.close()
+
 if __name__ == '__main__':
     unittest.main()

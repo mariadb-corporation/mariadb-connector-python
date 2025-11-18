@@ -37,8 +37,9 @@ class OkPacket(Completion):
         insert_id: int = 0,
         server_status: int = 0,
         warning_count: int = 0,
+        info: bytes = b'',
     ):
-        """Initialize OK packet with affected rows, insert ID, status, and warnings"""
+        """Initialize OK packet with affected rows, insert ID, status, warnings, and info"""
         # Initialize parent Completion with common fields
         super().__init__(
             affected_rows,
@@ -46,6 +47,7 @@ class OkPacket(Completion):
             warning_count
         )
         self.server_status = server_status
+        self.info = info
 
     def is_output_parameters(self) -> bool:
         """Check if completion has output parameters"""
@@ -69,6 +71,7 @@ class OkPacket(Completion):
         context.warning_count = warning_count
         
         # Optional info string and session tracking
+        info = b''
         if parser.has_remaining():
             # Check if session tracking is present
             has_session_tracking = (context.has_capability(constants.CAPABILITY.SESSION_TRACKING) and
@@ -78,7 +81,8 @@ class OkPacket(Completion):
                 # Read info string length
                 info_length = parser.read_length_encoded_int()
                 if info_length > 0:
-                    parser.skip(info_length)
+                    # Read info bytes (may contain fingerprint validation hash)
+                    info = parser.read_bytes(info_length)
                 
                 # Process session tracking data if present
                 if has_session_tracking and parser.has_remaining():
@@ -91,7 +95,8 @@ class OkPacket(Completion):
             affected_rows,
             insert_id,
             server_status,
-            warning_count
+            warning_count,
+            info
         )
 
 
