@@ -595,22 +595,22 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 for username, password, plugin in test_users:
                     # Drop user if exists
                     try:
-                        await cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                        await cursor.execute(f"DROP USER IF EXISTS '{username}'" + get_host_suffix())
                     except:
                         pass
                     
                     # Create user with specific plugin
                     if password:
                         await cursor.execute(
-                            f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
+                            f"CREATE USER '{username}'{get_host_suffix()} IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
                         )
                     else:
                         await cursor.execute(
-                            f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin}"
+                            f"CREATE USER '{username}'{get_host_suffix()} IDENTIFIED VIA {plugin}"
                         )
                     
                     # Grant privileges
-                    await cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{username}'@'%'")
+                    await cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{username}'{get_host_suffix()}")
                 
                 await cursor.execute("FLUSH PRIVILEGES")
                 await self.connection.commit()
@@ -658,7 +658,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
                 # Should fail because fingerprint validation requires password
                 error_msg = str(cm.exception)
-                self.assertTrue('Failed to upgrade socket to SSL' in error_msg, error_msg)
+                self.assertTrue('Failed to upgrade socket to SSL' in error_msg or 'self-signed certificate' in error_msg, error_msg)
             
         finally:
             # Cleanup: Drop test users

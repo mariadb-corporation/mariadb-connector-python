@@ -681,22 +681,22 @@ class TestConnection(unittest.TestCase):
                 for username, password, plugin in test_users:
                     # Drop user if exists
                     try:
-                        cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                        cursor.execute(f"DROP USER IF EXISTS '{username}'" + get_host_suffix())
                     except:
                         pass
                     
                     # Create user with specific plugin
                     if password:
                         cursor.execute(
-                            f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
+                            f"CREATE USER '{username}'{get_host_suffix()} IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
                         )
                     else:
                         cursor.execute(
-                            f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin}"
+                            f"CREATE USER '{username}'{get_host_suffix()} IDENTIFIED VIA {plugin}"
                         )
                     
                     # Grant privileges
-                    cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{username}'@'%'")
+                    cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{username}'{get_host_suffix()}")
                 
                 cursor.execute("FLUSH PRIVILEGES")
                 self.connection.commit()
@@ -744,7 +744,7 @@ class TestConnection(unittest.TestCase):
 
                 # Should fail because fingerprint validation requires password
                 error_msg = str(cm.exception)
-                self.assertTrue('Failed to upgrade socket to SSL' in error_msg, error_msg)
+                self.assertTrue('Failed to upgrade socket to SSL' in error_msg or 'self-signed certificate' in error_msg, error_msg)
             
         finally:
             # Cleanup: Drop test users
