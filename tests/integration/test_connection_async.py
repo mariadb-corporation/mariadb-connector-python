@@ -548,5 +548,127 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         finally:
             await conn.close()
 
+    async def test_ssl_fingerprint_validation(self):
+        
+        if self.connection.server_version < 110401:
+            self.skipTest(f"SSL fingerprint validation requires MariaDB >= 11.4.1, got {major}.{minor}.{patch}")
+        
+        # Check if cryptography package is available for PARSEC
+        has_cryptography = False
+        try:
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            has_cryptography = True
+        except ImportError:
+            pass
+        
+        default_conf = conf()
+        
+        
+        # Check if server supports PARSEC plugin
+        has_parsec = False
+        if has_cryptography:
+            async with self.connection.cursor() as cursor:
+                await cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
+                has_parsec = (await cursor.fetchone()) is not None
+        
+        test_users = [
+            ('fp_native_user', 'native_password', 'mysql_native_password'),
+            ('fp_nopass_user', None, 'mysql_native_password'),  # No password
+        ]
+        
+        # Check if server supports caching_sha2_password (MariaDB >= 12.1.1)
+        if self.connection.server_version >= 120101:
+            async with self.connection.cursor() as cursor:
+                try:
+                    await cursor.execute("INSTALL SONAME 'auth_mysql_sha2'")
+                except:
+                    pass
+            test_users.insert(1, ('fp_sha2_user', 'sha2_password', 'caching_sha2_password'))
+        
+        # Add PARSEC user if available
+        if has_cryptography and has_parsec:
+            test_users.append(('fp_parsec_user', 'parsec_password', 'parsec'))
+        
+        try:
+            # Create test users
+            async with self.connection.cursor() as cursor:
+                for username, password, plugin in test_users:
+                    # Drop user if exists
+                    try:
+                        await cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                    except:
+                        pass
+                    
+                    # Create user with specific plugin
+                    if password:
+                        await cursor.execute(
+                            f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
+                        )
+                    else:
+                        await cursor.execute(
+                            f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin}"
+                        )
+                    
+                    # Grant privileges
+                    await cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{username}'@'%'")
+                
+                await cursor.execute("FLUSH PRIVILEGES")
+                await self.connection.commit()
+            
+            # Test 1: SSL connection with password and no ssl_ca (should use fingerprint validation)
+            for username, password, plugin in test_users:
+                if password:  # Only test users with passwords
+                    test_conf = default_conf.copy()
+                    test_conf['user'] = username
+                    test_conf['password'] = password
+                    test_conf['ssl'] = True
+                    test_conf['ssl_verify_cert'] = True  # Enable certificate verification
+                    # Remove ssl_ca to trigger fingerprint validation
+                    test_conf.pop('ssl_ca', None)
+                    test_conf.pop('ssl_cert', None)
+                    test_conf.pop('ssl_key', None)
+                    
+                    try:
+                        conn = await mariadb.AsyncConnection.connect(**test_conf)
+                        # Connection should succeed with fingerprint validation
+                        cursor = conn.cursor()
+                        await cursor.execute("SELECT 1")
+                        result = await cursor.fetchone()
+                        self.assertEqual(result[0], 1, 
+                            f"Connection with {plugin} and fingerprint validation should work")
+                        await cursor.close()
+                        await conn.close()
+                    except mariadb.OperationalError as e:
+                        # If it fails, it should be due to SSL configuration, not fingerprint
+                        self.fail(f"SSL fingerprint validation failed for {username} ({plugin}): {e}")
+            
+            # Test 2: SSL connection without password (should succeed but not use fingerprint validation)
+            if default_conf['host'] != 'localhost' and default_conf['host'] != '127.0.0.1':
+                test_conf = default_conf.copy()
+                test_conf['user'] = "fp_nopass_user"
+                test_conf['password'] = ''
+                test_conf['ssl'] = True
+                test_conf['ssl_verify_cert'] = True
+                test_conf.pop('ssl_ca', None)
+                test_conf.pop('ssl_cert', None)
+                test_conf.pop('ssl_key', None)
+                
+                with self.assertRaises(mariadb.OperationalError) as cm:
+                    conn = await mariadb.AsyncConnection.connect(**test_conf)
+
+                # Should fail because fingerprint validation requires password
+                error_msg = str(cm.exception)
+                self.assertTrue('Failed to upgrade socket to SSL' in error_msg, error_msg)
+            
+        finally:
+            # Cleanup: Drop test users
+            for username, _, _ in test_users:
+                try:
+                    await cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                except:
+                    pass
+            
+            await cursor.close()
+
 if __name__ == '__main__':
     unittest.main()

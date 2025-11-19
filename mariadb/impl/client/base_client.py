@@ -179,6 +179,46 @@ class BaseClient(ABC):
         ...
     
     # =========================================================================
+    # Connection Type Checks
+    # =========================================================================
+    
+    def is_local_connection(self) -> bool:
+        """
+        Determine if the current connection is to localhost.
+        
+        This method checks if the connection is considered "local" based on:
+        - Unix domain sockets are always local
+        - TCP connections to localhost addresses (127.0.0.1, ::1)
+        
+        On Windows, "localhost" hostname is also considered local for TCP connections
+        to avoid false "self-signed certificate" errors with default configurations.
+        
+        Returns:
+            True if connection is local, False otherwise
+        """
+        import platform
+        
+        # Unix domain sockets are always local
+        if self.host_address and self.configuration.unix_socket:
+            return True
+        
+        # If no host address, not local
+        if not self.host_address or not self.host_address.host:
+            return False
+        
+        hostname = self.host_address.host
+        
+        # Define local host names based on platform
+        local_host_names = ["127.0.0.1", "::1"]
+        
+        # On Windows, also consider "localhost" as local for TCP connections
+        if platform.system() == "Windows":
+            local_host_names.append("localhost")
+        
+        # Check if hostname matches any local host name
+        return hostname in local_host_names
+    
+    # =========================================================================
     # Protocol Parsing
     # =========================================================================
     

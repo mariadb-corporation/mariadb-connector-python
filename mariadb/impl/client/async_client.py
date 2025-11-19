@@ -57,6 +57,8 @@ class AsyncClient(BaseClient):
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
         self.stream: Optional[AsyncStream] = None
+        self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
+        self.auth_plugin: Optional['AuthenticationPlugin'] = None
         
     async def connect(self) -> None:
         """Establish async connection to MariaDB server with host failover support"""
@@ -215,12 +217,15 @@ class AsyncClient(BaseClient):
         await self.stream.send_payload(encoded, ssl_request.type(), False)
         
         try:
-            # Upgrade socket to SSL
             # Import SSL utility
             from .socket.ssl_utility import SSLUtility
             
-            # Create SSL context
-            ssl_context = SSLUtility.create_ssl_context(self.configuration)
+            # Prepare SSL context with optional fingerprint validation
+            ssl_context, self.cert_fingerprint_validator = SSLUtility.prepare_ssl_context(
+                self.configuration,
+                self.context,
+                self.is_local_connection()
+            )
             
             # Get the transport and protocol from the writer
             transport = self.writer.transport
@@ -229,6 +234,11 @@ class AsyncClient(BaseClient):
             # Get the event loop
             loop = asyncio.get_event_loop()
             
+            # Determine server hostname for SSL verification
+            server_hostname = None
+            if self.configuration.ssl_verify_cert and not self.cert_fingerprint_validator:
+                server_hostname = self.host_address.host
+            
             # Perform TLS upgrade using loop.start_tls()
             # This returns a new SSL transport
             new_transport = await loop.start_tls(
@@ -236,8 +246,15 @@ class AsyncClient(BaseClient):
                 protocol,
                 ssl_context,
                 server_side=False,
-                server_hostname=self.configuration.host
+                server_hostname=server_hostname
             )
+            
+            # Capture fingerprint if using fingerprint validation
+            if self.cert_fingerprint_validator:
+                # Get the SSL socket from the transport
+                ssl_socket = new_transport.get_extra_info('ssl_object')
+                if ssl_socket:
+                    self.cert_fingerprint_validator.capture_fingerprint(ssl_socket)
             
             # After start_tls, the protocol's transport is updated automatically
             # The existing reader and writer now use the SSL transport

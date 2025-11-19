@@ -8,6 +8,7 @@ Provides SSL/TLS socket creation utilities for database connections.
 """
 
 import ssl
+from typing import Optional, Tuple
 from ...configuration import Configuration
 from ....exceptions import OperationalError
 
@@ -136,3 +137,57 @@ class SSLUtility:
             else:
                 import warnings
                 warnings.warn(f"Unsupported TLS version '{configuration.tls_version}', using default")
+    
+    @staticmethod
+    def prepare_ssl_context(
+        configuration: Configuration,
+        context,
+        is_local_connection: bool
+    ) -> Tuple[ssl.SSLContext, Optional['SSLFingerprintValidator']]:
+        """
+        Prepare SSL context with optional fingerprint validation support.
+        
+        This method handles:
+        - Disabling SSL verification for local connections (matching C connector behavior)
+        - Setting up fingerprint validation for MariaDB >= 11.4.1 when appropriate
+        - Creating unverified context for fingerprint capture
+        
+        Args:
+            configuration: Connection configuration
+            context: Connection context with server version info
+            is_local_connection: Whether connection is to localhost
+            
+        Returns:
+            Tuple of (ssl_context, fingerprint_validator or None)
+            
+        Raises:
+            OperationalError: If SSL context preparation fails
+        """
+        from .ssl_fingerprint_validator import SSLFingerprintValidator
+        
+        # Disable SSL verification for local connections, like C does
+        if is_local_connection and configuration.ssl_verify_cert:
+            configuration.ssl_verify_cert = False
+        
+        # Create SSL context
+        ssl_context = SSLUtility.create_ssl_context(configuration)
+        
+        # Check if we need fingerprint validation (MariaDB-specific feature)
+        # Only enable when: MariaDB server >= 11.4.1 + ssl_verify_cert enabled + no SSL CA configured + password provided
+        use_fingerprint_validation = (
+            context.is_mariadb_server() and
+            context.get_version().version_greater_or_equal(11, 4, 1) and
+            configuration.ssl_verify_cert and
+            not configuration.ssl_ca and
+            configuration.password is not None and 
+            configuration.password != ""
+        )
+        
+        cert_fingerprint_validator = None
+        if use_fingerprint_validation:
+            # Create fingerprint validator
+            cert_fingerprint_validator = SSLFingerprintValidator()
+            # Create unverified context to capture fingerprint
+            ssl_context = cert_fingerprint_validator.create_unverified_context(ssl_context)
+        
+        return ssl_context, cert_fingerprint_validator

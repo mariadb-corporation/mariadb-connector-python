@@ -207,36 +207,24 @@ class SyncClient(BaseClient):
         #self._send_message(ssl_request, False)
         
         try:
-            # Import SSL utility and fingerprint validator
+            # Import SSL utility
             from .socket.ssl_utility import SSLUtility
-            from .socket.ssl_fingerprint_validator import SSLFingerprintValidator
             
-            # Create SSL context
-            ssl_context = SSLUtility.create_ssl_context(self.configuration)
-            
-            # Check if we need fingerprint validation (MariaDB-specific feature)
-            # Only enable when: MariaDB server >= 11.4.1 + no SSL CA configured + password provided
-            use_fingerprint_validation = (
-                self.context.is_mariadb_server() and
-                self.context.get_version().version_greater_or_equal(11, 4, 1) and
-                not self.configuration.ssl_ca and
-                self.configuration.password
+            # Prepare SSL context with optional fingerprint validation
+            ssl_context, self.cert_fingerprint_validator = SSLUtility.prepare_ssl_context(
+                self.configuration,
+                self.context,
+                self.is_local_connection()
             )
-            
-            if use_fingerprint_validation:
-                # Create fingerprint validator
-                self.cert_fingerprint_validator = SSLFingerprintValidator()
-                # Create unverified context to capture fingerprint
-                ssl_context = self.cert_fingerprint_validator.create_unverified_context(ssl_context)
             
             # Wrap socket with SSL
             self.socket = ssl_context.wrap_socket(
                 self.socket,
-                server_hostname=self.host_address.host if self.configuration.ssl_verify_cert and not use_fingerprint_validation else None
+                server_hostname=self.host_address.host if self.configuration.ssl_verify_cert and not self.cert_fingerprint_validator else None
             )
             
             # Capture fingerprint if using fingerprint validation
-            if use_fingerprint_validation and self.cert_fingerprint_validator:
+            if self.cert_fingerprint_validator:
                 self.cert_fingerprint_validator.capture_fingerprint(self.socket)
             
             # Create new SyncStream with the upgraded connection
@@ -326,7 +314,7 @@ class SyncClient(BaseClient):
                 "or provide server certificate to client"
             )
         
-        if not self.configuration.password:
+        if self.configuration.password == None or self.configuration.password == "":
             raise OperationalError(
                 "Self signed certificates require a password. Either set ssl_verify_cert=True, "
                 "use password with a MitM-Proof authentication plugin or provide server certificate to client"

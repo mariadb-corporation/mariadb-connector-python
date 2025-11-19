@@ -635,30 +635,8 @@ class TestConnection(unittest.TestCase):
             pass
 
     def test_ssl_fingerprint_validation(self):
-        """Test SSL fingerprint validation for MariaDB >= 11.4.1 without ssl_ca"""
-        default_conf = conf()
         
-        # First, check if we're connecting to MariaDB >= 11.4.1
-        test_conn = mariadb.connect(**default_conf)
-        cursor = test_conn.cursor()
-        cursor.execute("SELECT VERSION()")
-        version_str = cursor.fetchone()[0]
-        cursor.close()
-        test_conn.close()
-        
-        # Parse version to check if it's MariaDB >= 11.4.1
-        is_mariadb = 'MariaDB' in version_str
-        if not is_mariadb:
-            self.skipTest("SSL fingerprint validation is MariaDB-specific")
-        
-        # Extract version numbers
-        import re
-        version_match = re.match(r'(\d+)\.(\d+)\.(\d+)', version_str)
-        if not version_match:
-            self.skipTest("Could not parse server version")
-        
-        major, minor, patch = map(int, version_match.groups())
-        if (major, minor, patch) < (11, 4, 1):
+        if self.connection.server_version < 110401:
             self.skipTest(f"SSL fingerprint validation requires MariaDB >= 11.4.1, got {major}.{minor}.{patch}")
         
         # Check if cryptography package is available for PARSEC
@@ -669,16 +647,15 @@ class TestConnection(unittest.TestCase):
         except ImportError:
             pass
         
-        # Test setup: Create test users with different authentication plugins
-        admin_conn = mariadb.connect(**default_conf)
-        admin_cursor = admin_conn.cursor()
+        default_conf = conf()
         
         
         # Check if server supports PARSEC plugin
         has_parsec = False
         if has_cryptography:
-            admin_cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
-            has_parsec = admin_cursor.fetchone() is not None
+            with self.connection.cursor() as cursor:
+                cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
+                has_parsec = cursor.fetchone() is not None
         
         test_users = [
             ('fp_native_user', 'native_password', 'mysql_native_password'),
@@ -686,11 +663,12 @@ class TestConnection(unittest.TestCase):
         ]
         
         # Check if server supports caching_sha2_password (MariaDB >= 12.1.1)
-        if (major, minor, patch) >= (12, 1, 1):
-            try:
-                admin_cursor.execute("INSTALL SONAME 'auth_mysql_sha2'")
-            except:
-                pass
+        if self.connection.server_version >= 120101:
+            with self.connection.cursor() as cursor:
+                try:
+                    cursor.execute("INSTALL SONAME 'auth_mysql_sha2'")
+                except:
+                    pass
             test_users.insert(1, ('fp_sha2_user', 'sha2_password', 'caching_sha2_password'))
         
         # Add PARSEC user if available
@@ -699,28 +677,29 @@ class TestConnection(unittest.TestCase):
         
         try:
             # Create test users
-            for username, password, plugin in test_users:
-                # Drop user if exists
-                try:
-                    admin_cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
-                except:
-                    pass
+            with self.connection.cursor() as cursor:
+                for username, password, plugin in test_users:
+                    # Drop user if exists
+                    try:
+                        cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                    except:
+                        pass
+                    
+                    # Create user with specific plugin
+                    if password:
+                        cursor.execute(
+                            f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
+                        )
+                    else:
+                        cursor.execute(
+                            f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin}"
+                        )
+                    
+                    # Grant privileges
+                    cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{username}'@'%'")
                 
-                # Create user with specific plugin
-                if password:
-                    admin_cursor.execute(
-                        f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
-                    )
-                else:
-                    admin_cursor.execute(
-                        f"CREATE USER '{username}'@'%' IDENTIFIED VIA {plugin}"
-                    )
-                
-                # Grant privileges
-                admin_cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{username}'@'%'")
-            
-            admin_cursor.execute("FLUSH PRIVILEGES")
-            admin_conn.commit()
+                cursor.execute("FLUSH PRIVILEGES")
+                self.connection.commit()
             
             # Test 1: SSL connection with password and no ssl_ca (should use fingerprint validation)
             for username, password, plugin in test_users:
@@ -729,6 +708,7 @@ class TestConnection(unittest.TestCase):
                     test_conf['user'] = username
                     test_conf['password'] = password
                     test_conf['ssl'] = True
+                    test_conf['ssl_verify_cert'] = True  # Enable certificate verification
                     # Remove ssl_ca to trigger fingerprint validation
                     test_conf.pop('ssl_ca', None)
                     test_conf.pop('ssl_cert', None)
@@ -748,38 +728,34 @@ class TestConnection(unittest.TestCase):
                         # If it fails, it should be due to SSL configuration, not fingerprint
                         self.fail(f"SSL fingerprint validation failed for {username} ({plugin}): {e}")
             
-            # Test 2: SSL connection without password (should fail)
-            username, password, plugin = test_users[2]  # fp_nopass_user
-            test_conf = default_conf.copy()
-            test_conf['user'] = username
-            test_conf['password'] = ''  # No password
-            test_conf['ssl'] = True
-            test_conf.pop('ssl_ca', None)
-            test_conf.pop('ssl_cert', None)
-            test_conf.pop('ssl_key', None)
-            
-            with self.assertRaises(mariadb.OperationalError) as cm:
-                conn = mariadb.connect(**test_conf)
-            
-            # Should fail because fingerprint validation requires password
-            error_msg = str(cm.exception).lower()
-            # The error might be about authentication or fingerprint validation
-            # Either is acceptable for no-password scenario
-            self.assertTrue(
-                'password' in error_msg or 'access denied' in error_msg or 'fingerprint' in error_msg,
-                f"Expected password/auth error for no-password user, got: {cm.exception}"
-            )
+            # Test 2: SSL connection without password (should succeed but not use fingerprint validation)
+            if default_conf['host'] != 'localhost' and default_conf['host'] != '127.0.0.1':
+                test_conf = default_conf.copy()
+                test_conf['user'] = "fp_nopass_user"
+                test_conf['password'] = ''
+                test_conf['ssl'] = True
+                test_conf['ssl_verify_cert'] = True
+                test_conf.pop('ssl_ca', None)
+                test_conf.pop('ssl_cert', None)
+                test_conf.pop('ssl_key', None)
+                
+                with self.assertRaises(mariadb.OperationalError) as cm:
+                    conn = mariadb.connect(**test_conf)
+
+                # Should fail because fingerprint validation requires password
+                error_msg = str(cm.exception)
+                self.assertTrue('Failed to upgrade socket to SSL' in error_msg, error_msg)
             
         finally:
             # Cleanup: Drop test users
             for username, _, _ in test_users:
                 try:
-                    admin_cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                    cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
                 except:
                     pass
             
-            admin_cursor.close()
-            admin_conn.close()
+            cursor.close()
+
 
 if __name__ == '__main__':
     unittest.main()
