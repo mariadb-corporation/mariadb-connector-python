@@ -81,9 +81,11 @@ class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
             self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256UserAsync'{get_host_suffix()}")
         except:
             pass
+        keyword = "VIA" if is_mariadb else "WITH"
+        password_clause = f"USING PASSWORD('{password}')" if is_mariadb else f"BY '{password}'"
         self.cursor.execute(
             f"CREATE USER 'cachingSha256UserAsync'{get_host_suffix()} "
-            f"IDENTIFIED {"VIA" if is_mariadb else "WITH"} caching_sha2_password {"USING PASSWORD('" + password + "')" if is_mariadb else "BY '" + password + "'"}"
+            f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
         )
         self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256UserAsync'{get_host_suffix()}")
         
@@ -92,9 +94,11 @@ class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
             self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256UserAsync2'{get_host_suffix()}")
         except:
             pass
+        keyword = "VIA" if is_mariadb else "WITH"
+        password_clause = "USING PASSWORD('')" if is_mariadb else "BY ''"
         self.cursor.execute(
             f"CREATE USER 'cachingSha256UserAsync2'{get_host_suffix()} "
-            f"IDENTIFIED {"VIA" if is_mariadb else "WITH"} caching_sha2_password {"USING PASSWORD('')" if is_mariadb else "BY ''"}"
+            f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
         )
         self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256UserAsync2'{get_host_suffix()}")
         
@@ -103,9 +107,11 @@ class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
             self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256UserAsync3'{get_host_suffix()}")
         except:
             pass
+        keyword = "VIA" if is_mariadb else "WITH"
+        password_clause = f"USING PASSWORD('{password}')" if is_mariadb else f"BY '{password}'"
         self.cursor.execute(
             f"CREATE USER 'cachingSha256UserAsync3'{get_host_suffix()} "
-            f"IDENTIFIED {"VIA" if is_mariadb else "WITH"} caching_sha2_password {"USING PASSWORD('" + password + "')" if is_mariadb else "BY '" + password + "'"}"
+            f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
         )
         self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256UserAsync3'{get_host_suffix()}")
         
@@ -114,9 +120,11 @@ class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
             self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256UserAsync4'{get_host_suffix()}")
         except:
             pass
+        keyword = "VIA" if is_mariadb else "WITH"
+        password_clause = f"USING PASSWORD('{password}')" if is_mariadb else f"BY '{password}'"
         self.cursor.execute(
             f"CREATE USER 'cachingSha256UserAsync4'{get_host_suffix()} "
-            f"IDENTIFIED {"VIA" if is_mariadb else "WITH"} caching_sha2_password {"USING PASSWORD('" + password + "')" if is_mariadb else "BY '" + password + "'"}"
+            f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
         )
         self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256UserAsync4'{get_host_suffix()}")
         

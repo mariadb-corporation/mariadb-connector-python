@@ -77,9 +77,11 @@ class TestCachingSha256Authentication(unittest.TestCase):
             self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256User'{get_host_suffix()}")
         except:
             pass
+        keyword = "VIA" if is_mariadb else "WITH"
+        password_clause = f"USING PASSWORD('{password}')" if is_mariadb else f"BY '{password}'"
         self.cursor.execute(
             f"CREATE USER 'cachingSha256User'{get_host_suffix()} "
-            f"IDENTIFIED {"VIA" if is_mariadb else "WITH"} caching_sha2_password {"USING PASSWORD('" + password +"')" if is_mariadb else "BY '" + password + "'"}"
+            f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
         )
         self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256User'{get_host_suffix()}")
         
@@ -88,9 +90,11 @@ class TestCachingSha256Authentication(unittest.TestCase):
             self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256User2'{get_host_suffix()}")
         except:
             pass
+        keyword = "VIA" if is_mariadb else "WITH"
+        password_clause = "USING PASSWORD('')" if is_mariadb else "BY ''"
         self.cursor.execute(
             f"CREATE USER 'cachingSha256User2'{get_host_suffix()} "
-            f"IDENTIFIED {"VIA" if is_mariadb else "WITH"} caching_sha2_password {"USING PASSWORD('')" if is_mariadb else "BY ''"}"
+            f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
         )
         self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256User2'{get_host_suffix()}")
         
@@ -99,9 +103,11 @@ class TestCachingSha256Authentication(unittest.TestCase):
             self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256User3'{get_host_suffix()}")
         except:
             pass
+        keyword = "VIA" if is_mariadb else "WITH"
+        password_clause = f"USING PASSWORD('{password}')" if is_mariadb else f"BY '{password}'"
         self.cursor.execute(
             f"CREATE USER 'cachingSha256User3'{get_host_suffix()} "
-            f"IDENTIFIED {"VIA" if is_mariadb else "WITH"} caching_sha2_password {"USING PASSWORD('" + password +"')" if is_mariadb else "BY '" + password + "'"}"
+            f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
         )
         self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256User3'{get_host_suffix()}")
         
@@ -110,9 +116,11 @@ class TestCachingSha256Authentication(unittest.TestCase):
             self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256User4'{get_host_suffix()}")
         except:
             pass
+        keyword = "VIA" if is_mariadb else "WITH"
+        password_clause = f"USING PASSWORD('{password}')" if is_mariadb else f"BY '{password}'"
         self.cursor.execute(
             f"CREATE USER 'cachingSha256User4'{get_host_suffix()} "
-            f"IDENTIFIED {"VIA" if is_mariadb else "WITH"} caching_sha2_password {"USING PASSWORD('" + password +"')" if is_mariadb else "BY '" + password + "'"}"
+            f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
         )
         self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256User4'{get_host_suffix()}")
         
