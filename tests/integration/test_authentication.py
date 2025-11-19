@@ -41,7 +41,10 @@ class TestParsecAuthentication(unittest.TestCase):
         
         self.connection = create_connection()
         self.cursor = self.connection.cursor()
-        
+        try:
+            self.cursor.execute("INSTALL SONAME 'auth_parsec'")
+        except:
+            pass
         # Check if server supports PARSEC plugin
         self.cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
         if not self.cursor.fetchone():

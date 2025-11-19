@@ -45,7 +45,10 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         config = get_test_config()
         self.connection = await mariadb.AsyncConnection.connect(**config)
         self.cursor = self.connection.cursor()
-        
+        try:
+            await self.cursor.execute("INSTALL SONAME 'auth_parsec'")
+        except:
+            pass
         # Check if server supports PARSEC plugin
         await self.cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
         if not await self.cursor.fetchone():
