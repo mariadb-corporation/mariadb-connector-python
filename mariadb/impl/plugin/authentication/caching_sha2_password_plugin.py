@@ -253,13 +253,8 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         password = conf.password
         if password is None:
             return None
+        # Truncate seed to 20 bytes (remove null terminator if present)
+        truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
         
-        password_bytes = password.encode('utf-8')
-        
-        # SHA256(password)
-        stage1 = hashlib.sha256(password_bytes).digest()
-        
-        # SHA256(SHA256(password))
-        stage2 = hashlib.sha256(stage1).digest()
-        
-        return stage2
+        # Encrypt password and write to payload
+        return self.encrypt_password(self.authentication_data, truncated_seed)

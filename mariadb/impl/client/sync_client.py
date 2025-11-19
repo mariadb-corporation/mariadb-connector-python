@@ -321,15 +321,15 @@ class SyncClient(BaseClient):
             )
         
         # Get auth plugin hash
-        auth_hash = self.auth_plugin.hash(self.configuration)
-        if not auth_hash:
+        plugin_hash = self.auth_plugin.hash(self.configuration)
+        if not plugin_hash:
             raise OperationalError(
                 "Authentication plugin did not provide hash for fingerprint validation"
             )
         
         # Validate fingerprint using server's validation hash from OK packet info
         if not self.cert_fingerprint_validator.validate_fingerprint(
-            auth_hash,
+            plugin_hash,
             self.context.auth_data,
             ok_packet.info
         ):
