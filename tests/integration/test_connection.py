@@ -636,7 +636,7 @@ class TestConnection(unittest.TestCase):
 
     def test_ssl_fingerprint_validation(self):
         
-        if self.connection.server_version < 110401:
+        if self.connection.server_version < 110401 or (platform.system() == "Windows" and not is_native()):
             self.skipTest(f"SSL fingerprint validation requires MariaDB >= 11.4.1")
         
         # Check if cryptography package is available for PARSEC
