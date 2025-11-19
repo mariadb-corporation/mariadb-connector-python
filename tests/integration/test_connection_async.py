@@ -572,7 +572,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 has_parsec = (await cursor.fetchone()) is not None
         
         test_users = [
-            ('fp_native_user', 'native_password', 'mysql_native_password'),
+            ('fp_native_user', 'heyPassw-!*20oRd', 'mysql_native_password'),
             ('fp_nopass_user', None, 'mysql_native_password'),  # No password
         ]
         
@@ -583,11 +583,11 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                     await cursor.execute("INSTALL SONAME 'auth_mysql_sha2'")
                 except:
                     pass
-            test_users.append(('fp_sha2_user', 'sha2_password', 'caching_sha2_password'))
+            test_users.append(('fp_sha2_user', 'heyPassw-!*20oRd', 'caching_sha2_password'))
         
         # Add PARSEC user if available
         if has_cryptography and has_parsec:
-            test_users.append(('fp_parsec_user', 'parsec_password', 'parsec'))
+            test_users.append(('fp_parsec_user', 'heyPassw-!*20oRd', 'parsec'))
         
         try:
             # Create test users
