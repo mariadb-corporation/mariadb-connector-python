@@ -551,7 +551,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
     async def test_ssl_fingerprint_validation(self):
         
         if self.connection.server_version < 110401:
-            self.skipTest(f"SSL fingerprint validation requires MariaDB >= 11.4.1, got {major}.{minor}.{patch}")
+            self.skipTest(f"SSL fingerprint validation requires MariaDB >= 11.4.1")
         
         # Check if cryptography package is available for PARSEC
         has_cryptography = False
