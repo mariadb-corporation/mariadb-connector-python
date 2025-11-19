@@ -46,6 +46,10 @@ class TestCachingSha256Authentication(unittest.TestCase):
                 cursor.close()
             except:
                 pass 
+            with cls.connection.cursor() as cursor:
+                cursor.execute("SHOW STATUS like 'Caching_sha2_password_rsa_public_key'")
+                result = cursor.fetchone()
+                print("Caching_sha2_password_rsa_public_key: ", result)
         else:
             if cls.server_version < 80000:
                 raise unittest.SkipTest("caching_sha2_password requires MySQL >= 8.0.0")
