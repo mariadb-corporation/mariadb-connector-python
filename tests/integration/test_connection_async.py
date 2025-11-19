@@ -583,7 +583,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                     await cursor.execute("INSTALL SONAME 'auth_mysql_sha2'")
                 except:
                     pass
-            test_users.insert(1, ('fp_sha2_user', 'sha2_password', 'caching_sha2_password'))
+            test_users.append(('fp_sha2_user', 'sha2_password', 'caching_sha2_password'))
         
         # Add PARSEC user if available
         if has_cryptography and has_parsec:
@@ -629,7 +629,15 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                     test_conf.pop('ssl_key', None)
                     
                     try:
-                        conn = await mariadb.AsyncConnection.connect(**test_conf)
+                        try:
+                            conn = await mariadb.AsyncConnection.connect(**test_conf)
+                            if (plugin == 'caching_sha2_password'):
+                                self.fail(f"SSL fingerprint must have failed {username} ({plugin})")
+                        except mariadb.OperationalError as e:
+                            if (plugin == 'caching_sha2_password'):
+                                continue
+                            else:
+                                raise e
                         # Connection should succeed with fingerprint validation
                         cursor = conn.cursor()
                         await cursor.execute("SELECT 1")

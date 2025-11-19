@@ -79,7 +79,9 @@ class BaseClient(ABC):
         self.socket_timeout = configuration.socket_timeout
         self.connect_timeout = configuration.connect_timeout
         self.lock = threading.RLock()
-        
+        self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
+        self.auth_plugin: Optional['AuthenticationPlugin'] = None
+
         # Connection state
         self.connected = False
         self.read_only = configuration.read_only
@@ -218,6 +220,68 @@ class BaseClient(ABC):
         # Check if hostname matches any local host name
         return hostname in local_host_names
     
+
+    def validate_ssl_fingerprint(self, ok_packet: OkPacket) -> None:
+        """
+        Validate SSL certificate fingerprint using server-provided hash
+        
+        This implements MariaDB's self-signed certificate validation:
+        - Server sends SHA256(hash(password) + seed + cert_fingerprint) in OK packet info
+        - Client verifies by calculating the same hash and comparing
+        
+        Args:
+            ok_packet: OK packet from server containing validation hash in info field
+            
+        Raises:
+            OperationalError: If fingerprint validation fails
+        """
+        # Only validate if we have a fingerprint (self-signed cert scenario)
+        if not self.cert_fingerprint_validator or not self.cert_fingerprint_validator.get_fingerprint():
+            return
+        
+        # Skip validation for local and Unix domain sockets (MitM-proof by design)
+        if self.is_local_connection() or self.configuration.unix_socket:
+            return
+        
+        # Check if auth plugin is MitM-proof and has password
+        if not self.auth_plugin:
+            raise OperationalError(
+                "Self signed certificates. Either set ssl_verify_cert=True, use password with a "
+                "MitM-Proof authentication plugin or provide server certificate to client"
+            )
+        
+        if not self.auth_plugin.is_mitm_proof():
+            raise OperationalError(
+                f"Cannot use authentication plugin {type(self.auth_plugin).__name__} with self signed certificates. "
+                "Either set ssl_verify_cert=True, use password with a MitM-Proof authentication plugin "
+                "or provide server certificate to client"
+            )
+        
+        if self.configuration.password == None or self.configuration.password == "":
+            raise OperationalError(
+                "Self signed certificates require a password. Either set ssl_verify_cert=True, "
+                "use password with a MitM-Proof authentication plugin or provide server certificate to client"
+            )
+        
+        # Get auth plugin hash
+        plugin_hash = self.auth_plugin.hash(self.configuration)
+        if not plugin_hash:
+            raise OperationalError(
+                "Authentication plugin did not provide hash for fingerprint validation"
+            )
+        
+        # Validate fingerprint using server's validation hash from OK packet info
+        if not self.cert_fingerprint_validator.validate_fingerprint(
+            plugin_hash,
+            self.context.auth_data,
+            ok_packet.info
+        ):
+            raise OperationalError(
+                "Self signed certificates fingerprint validation failed. "
+                "Either set ssl_verify_cert=True, use password with a MitM-Proof authentication plugin "
+                "or provide server certificate to client"
+            )
+
     # =========================================================================
     # Protocol Parsing
     # =========================================================================

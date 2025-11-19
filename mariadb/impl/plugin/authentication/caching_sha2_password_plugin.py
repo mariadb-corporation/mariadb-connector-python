@@ -245,8 +245,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         return response
     
     def is_mitm_proof(self) -> bool:
-        """Caching SHA2 password plugin is MitM-proof"""
-        return True
+        return False
     
     def hash(self, conf: Configuration) -> Optional[bytes]:
         """Return hash for credential"""

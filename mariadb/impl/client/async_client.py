@@ -163,6 +163,10 @@ class AsyncClient(BaseClient):
             self.context.eof_deprecated = bool(client_capabilities & constants.CAPABILITY.DEPRECATE_EOF)
             self.context.extended_metadata = bool(client_capabilities & constants.CAPABILITY.EXTENDED_METADATA)
 
+            # Initialize auth plugin for handshake response (default: mysql_native_password)
+            from ..plugin.authentication.native_password_plugin import NativePasswordPlugin
+            self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
+
             # Create and send handshake response
             response = HandshakeResponse(self.configuration, self.context)
             await self.stream.send_payload(response.encode(self.context), response.type(), reset_sequence=False)
@@ -226,7 +230,6 @@ class AsyncClient(BaseClient):
                 self.context,
                 self.is_local_connection()
             )
-            
             # Get the transport and protocol from the writer
             transport = self.writer.transport
             protocol = transport.get_protocol()
@@ -255,7 +258,7 @@ class AsyncClient(BaseClient):
                 ssl_socket = new_transport.get_extra_info('ssl_object')
                 if ssl_socket:
                     self.cert_fingerprint_validator.capture_fingerprint(ssl_socket)
-            
+
             # After start_tls, the protocol's transport is updated automatically
             # The existing reader and writer now use the SSL transport
             # Update the stream's writer transport reference
@@ -308,23 +311,22 @@ class AsyncClient(BaseClient):
         register_builtin_plugins()
 
         # Check if server requests plugin authentication
-        if len(auth_result) > 0:
-            packet_type = auth_result[0]
-            
-            if packet_type == self.OK_PACKET:
-                # OK packet - authentication successful with handshake response
-                OkPacket.decode(auth_result, self.context)
-                return
-            elif packet_type == self.ERROR_PACKET:
-                # Error packet - authentication failed
-                raise ErrorPacket.decode(auth_result, self.context).toError(self.exception_factory)
-            elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
-                # Auth switch request - server wants different plugin
-                await self._handle_auth_switch(auth_result)
-                return
+        packet_type = auth_result[0]
         
-        raise OperationalError("Empty authentication result packet")
-    
+        if packet_type == self.OK_PACKET:
+            # OK packet - authentication successful with handshake response
+            ok_packet = OkPacket.decode(auth_result, self.context)
+            # Validate SSL fingerprint if needed
+            self.validate_ssl_fingerprint(ok_packet)
+        elif packet_type == self.ERROR_PACKET:
+            # Error packet - authentication failed
+            raise ErrorPacket.decode(auth_result, self.context).toError(self.exception_factory)
+        elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
+            # Auth switch request - server wants different plugin
+            await self._handle_auth_switch(auth_result)
+        else:
+            raise OperationalError(f"Unexpected packet during authentication: {packet_type:02x}")
+        
     async def _handle_auth_switch(self, packet: bytearray) -> None:
         """Handle authentication plugin switch request"""
         if len(packet) < 2:
@@ -344,6 +346,7 @@ class AsyncClient(BaseClient):
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
 
             plugin = plugin_factory.initialize(self.configuration.password, plugin_data, self.configuration, self.host_address)
+            self.auth_plugin = plugin
             response: bytearray = await plugin.processAsync(self.stream, self.context)
             await self._handle_authentication(response)
             

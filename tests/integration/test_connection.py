@@ -664,12 +664,12 @@ class TestConnection(unittest.TestCase):
         
         # Check if server supports caching_sha2_password (MariaDB >= 12.1.1)
         if self.connection.server_version >= 120101:
-            with self.connection.cursor() as cursor:
-                try:
-                    cursor.execute("INSTALL SONAME 'auth_mysql_sha2'")
-                except:
-                    pass
-            test_users.insert(1, ('fp_sha2_user', 'sha2_password', 'caching_sha2_password'))
+           with self.connection.cursor() as cursor:
+               try:
+                   cursor.execute("INSTALL SONAME 'auth_mysql_sha2'")
+               except:
+                   pass
+           test_users.append(('fp_sha2_user', 'sha2_password', 'caching_sha2_password'))
         
         # Add PARSEC user if available
         if has_cryptography and has_parsec:
@@ -715,7 +715,15 @@ class TestConnection(unittest.TestCase):
                     test_conf.pop('ssl_key', None)
                     
                     try:
-                        conn = mariadb.connect(**test_conf)
+                        try:
+                            conn = mariadb.connect(**test_conf)
+                            if (plugin == 'caching_sha2_password'):
+                                self.fail(f"SSL fingerprint must have failed {username} ({plugin})")
+                        except mariadb.OperationalError as e:
+                            if (plugin == 'caching_sha2_password'):
+                                continue
+                            else:
+                                raise e
                         # Connection should succeed with fingerprint validation
                         cursor = conn.cursor()
                         cursor.execute("SELECT 1")
