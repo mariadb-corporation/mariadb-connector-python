@@ -649,17 +649,8 @@ class TestConnection(unittest.TestCase):
         
         default_conf = conf()
         
-        
-        # Check if server supports PARSEC plugin
-        has_parsec = False
-        if has_cryptography:
-            with self.connection.cursor() as cursor:
-                cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
-                has_parsec = cursor.fetchone() is not None
-        
         test_users = [
             ('fp_native_user', 'heyPassw-!*20oRd', 'mysql_native_password'),
-            ('fp_nopass_user', None, 'mysql_native_password'),  # No password
         ]
         
         # Check if server supports caching_sha2_password (MariaDB >= 12.1.1)
@@ -670,9 +661,19 @@ class TestConnection(unittest.TestCase):
                except:
                    pass
            test_users.append(('fp_sha2_user', 'heyPassw-!*20oRd', 'caching_sha2_password'))
-        
-        # Add PARSEC user if available
-        if has_cryptography and has_parsec:
+
+
+        local_host_names = ["127.0.0.1", "::1"]
+        if platform.system() == "Windows":
+            local_host_names.append("localhost")
+        is_local = default_conf['host'] in local_host_names
+
+        has_parsec = False
+        if has_cryptography:
+            with self.connection.cursor() as cursor:
+                cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
+                has_parsec = cursor.fetchone() is not None
+        if has_parsec:
             test_users.append(('fp_parsec_user', 'heyPassw-!*20oRd', 'parsec'))
         
         try:
@@ -686,14 +687,9 @@ class TestConnection(unittest.TestCase):
                         pass
                     
                     # Create user with specific plugin
-                    if password:
-                        cursor.execute(
-                            f"CREATE USER '{username}'{get_host_suffix()} IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
-                        )
-                    else:
-                        cursor.execute(
-                            f"CREATE USER '{username}'{get_host_suffix()} IDENTIFIED VIA {plugin}"
-                        )
+                    cursor.execute(
+                        f"CREATE USER '{username}'{get_host_suffix()} IDENTIFIED VIA {plugin} USING PASSWORD('{password}')"
+                    )
                     
                     # Grant privileges
                     cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO '{username}'{get_host_suffix()}")
@@ -703,41 +699,59 @@ class TestConnection(unittest.TestCase):
             
             # Test 1: SSL connection with password and no ssl_ca (should use fingerprint validation)
             for username, password, plugin in test_users:
-                if password:  # Only test users with passwords
-                    test_conf = default_conf.copy()
-                    test_conf['user'] = username
-                    test_conf['password'] = password
-                    test_conf['ssl'] = True
-                    test_conf['ssl_verify_cert'] = True  # Enable certificate verification
-                    # Remove ssl_ca to trigger fingerprint validation
-                    test_conf.pop('ssl_ca', None)
-                    test_conf.pop('ssl_cert', None)
-                    test_conf.pop('ssl_key', None)
-                    
+                test_conf = default_conf.copy()
+                test_conf['user'] = username
+                test_conf['password'] = password
+                test_conf['ssl'] = True
+                test_conf['ssl_verify_cert'] = True  # Enable certificate verification
+                # Remove ssl_ca to trigger fingerprint validation
+                test_conf.pop('ssl_ca', None)
+                test_conf.pop('ssl_cert', None)
+                test_conf.pop('ssl_key', None)
+                
+                try:
                     try:
-                        try:
-                            conn = mariadb.connect(**test_conf)
-                            if (plugin == 'caching_sha2_password'):
-                                self.fail(f"SSL fingerprint must have failed {username} ({plugin})")
-                        except mariadb.OperationalError as e:
-                            if (plugin == 'caching_sha2_password'):
-                                continue
-                            else:
-                                raise e
-                        # Connection should succeed with fingerprint validation
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT 1")
-                        result = cursor.fetchone()
-                        self.assertEqual(result[0], 1, 
-                            f"Connection with {plugin} and fingerprint validation should work")
-                        cursor.close()
-                        conn.close()
+                        conn = mariadb.connect(**test_conf)
+                        if (plugin == 'caching_sha2_password' and not is_local):
+                            self.fail(f"SSL fingerprint must have failed {username} ({plugin})")
                     except mariadb.OperationalError as e:
-                        # If it fails, it should be due to SSL configuration, not fingerprint
-                        self.fail(f"SSL fingerprint validation failed for {username} ({plugin}): {e}")
-            
+                        if (plugin == 'caching_sha2_password' and not is_local):
+                            continue
+                        else:
+                            raise e
+                    # Connection should succeed with fingerprint validation
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT 1")
+                    result = cursor.fetchone()
+                    self.assertEqual(result[0], 1, 
+                        f"Connection with {plugin} and fingerprint validation should work")
+                    cursor.close()
+                    conn.close()
+                except mariadb.OperationalError as e:
+                    # If it fails, it should be due to SSL configuration, not fingerprint
+                    self.fail(f"SSL fingerprint validation failed for {username} ({plugin}): {e}")
+
+            with self.connection.cursor() as cursor:
+                # Create user with specific plugin
+                server_permits_no_password = True
+                try:
+                    cursor.execute(f"DROP USER IF EXISTS 'fp_nopass_user'" + get_host_suffix())
+                except:
+                    pass
+                try:
+                    cursor.execute(
+                        f"CREATE USER 'fp_nopass_user'{get_host_suffix()} IDENTIFIED VIA mysql_native_password"
+                    )
+                    cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'fp_nopass_user'{get_host_suffix()}")
+                except:
+                    server_permits_no_password = False
+                    pass
+                
+                cursor.execute("FLUSH PRIVILEGES")
+                self.connection.commit()     
+
             # Test 2: SSL connection without password (should succeed but not use fingerprint validation)
-            if default_conf['host'] != 'localhost' and default_conf['host'] != '127.0.0.1':
+            if server_permits_no_password and default_conf['host'] != 'localhost' and default_conf['host'] != '127.0.0.1':
                 test_conf = default_conf.copy()
                 test_conf['user'] = "fp_nopass_user"
                 test_conf['password'] = ''

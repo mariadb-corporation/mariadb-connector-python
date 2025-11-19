@@ -227,8 +227,7 @@ class AsyncClient(BaseClient):
             # Prepare SSL context with optional fingerprint validation
             ssl_context, self.cert_fingerprint_validator = SSLUtility.prepare_ssl_context(
                 self.configuration,
-                self.context,
-                self.is_local_connection()
+                self.context
             )
             # Get the transport and protocol from the writer
             transport = self.writer.transport

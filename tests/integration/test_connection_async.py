@@ -564,16 +564,8 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         default_conf = conf()
         
         
-        # Check if server supports PARSEC plugin
-        has_parsec = False
-        if has_cryptography:
-            async with self.connection.cursor() as cursor:
-                await cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
-                has_parsec = (await cursor.fetchone()) is not None
-        
         test_users = [
             ('fp_native_user', 'heyPassw-!*20oRd', 'mysql_native_password'),
-            ('fp_nopass_user', None, 'mysql_native_password'),  # No password
         ]
         
         # Check if server supports caching_sha2_password (MariaDB >= 12.1.1)
@@ -586,9 +578,19 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             test_users.append(('fp_sha2_user', 'heyPassw-!*20oRd', 'caching_sha2_password'))
         
         # Add PARSEC user if available
-        if has_cryptography and has_parsec:
+        has_parsec = False
+        if has_cryptography:
+            async with self.connection.cursor() as cursor:
+                await cursor.execute("SELECT PLUGIN_NAME FROM information_schema.PLUGINS WHERE PLUGIN_NAME='parsec'")
+                has_parsec = (await cursor.fetchone()) is not None
+        if has_parsec:
             test_users.append(('fp_parsec_user', 'heyPassw-!*20oRd', 'parsec'))
         
+        local_host_names = ["127.0.0.1", "::1"]
+        if platform.system() == "Windows":
+            local_host_names.append("localhost")
+        is_local = default_conf['host'] in local_host_names
+
         try:
             # Create test users
             async with self.connection.cursor() as cursor:
@@ -617,41 +619,58 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             
             # Test 1: SSL connection with password and no ssl_ca (should use fingerprint validation)
             for username, password, plugin in test_users:
-                if password:  # Only test users with passwords
-                    test_conf = default_conf.copy()
-                    test_conf['user'] = username
-                    test_conf['password'] = password
-                    test_conf['ssl'] = True
-                    test_conf['ssl_verify_cert'] = True  # Enable certificate verification
-                    # Remove ssl_ca to trigger fingerprint validation
-                    test_conf.pop('ssl_ca', None)
-                    test_conf.pop('ssl_cert', None)
-                    test_conf.pop('ssl_key', None)
-                    
+                test_conf = default_conf.copy()
+                test_conf['user'] = username
+                test_conf['password'] = password
+                test_conf['ssl'] = True
+                test_conf['ssl_verify_cert'] = True  # Enable certificate verification
+                # Remove ssl_ca to trigger fingerprint validation
+                test_conf.pop('ssl_ca', None)
+                test_conf.pop('ssl_cert', None)
+                test_conf.pop('ssl_key', None)
+                
+                try:
                     try:
-                        try:
-                            conn = await mariadb.AsyncConnection.connect(**test_conf)
-                            if (plugin == 'caching_sha2_password'):
-                                self.fail(f"SSL fingerprint must have failed {username} ({plugin})")
-                        except mariadb.OperationalError as e:
-                            if (plugin == 'caching_sha2_password'):
-                                continue
-                            else:
-                                raise e
-                        # Connection should succeed with fingerprint validation
-                        cursor = conn.cursor()
-                        await cursor.execute("SELECT 1")
-                        result = await cursor.fetchone()
-                        self.assertEqual(result[0], 1, 
-                            f"Connection with {plugin} and fingerprint validation should work")
-                        await cursor.close()
-                        await conn.close()
+                        conn = await mariadb.AsyncConnection.connect(**test_conf)
+                        if (plugin == 'caching_sha2_password' and not is_local):
+                            self.fail(f"SSL fingerprint must have failed {username} ({plugin})")
                     except mariadb.OperationalError as e:
-                        # If it fails, it should be due to SSL configuration, not fingerprint
-                        self.fail(f"SSL fingerprint validation failed for {username} ({plugin}): {e}")
-            
+                        if (plugin == 'caching_sha2_password' and not is_local):
+                            continue
+                        else:
+                            raise e
+                    # Connection should succeed with fingerprint validation
+                    cursor = conn.cursor()
+                    await cursor.execute("SELECT 1")
+                    result = await cursor.fetchone()
+                    self.assertEqual(result[0], 1, 
+                        f"Connection with {plugin} and fingerprint validation should work")
+                    await cursor.close()
+                    await conn.close()
+                except mariadb.OperationalError as e:
+                    # If it fails, it should be due to SSL configuration, not fingerprint
+                    self.fail(f"SSL fingerprint validation failed for {username} ({plugin}): {e}")
+        
             # Test 2: SSL connection without password (should succeed but not use fingerprint validation)
-            if default_conf['host'] != 'localhost' and default_conf['host'] != '127.0.0.1':
+            async with self.connection.cursor() as cursor:
+                server_permits_no_password = True
+                try:
+                    await cursor.execute(f"DROP USER IF EXISTS 'fp_nopass_user'" + get_host_suffix())
+                except:
+                    pass                
+                try:
+                    await cursor.execute(
+                        f"CREATE USER 'fp_nopass_user'{get_host_suffix()} IDENTIFIED VIA mysql_native_password"
+                    )
+                    await cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'fp_nopass_user'{get_host_suffix()}")
+                
+                    await cursor.execute("FLUSH PRIVILEGES")
+                    await self.connection.commit()
+                except:
+                    server_permits_no_password = False
+                    pass    
+                        
+            if server_permits_no_password and default_conf['host'] != 'localhost' and default_conf['host'] != '127.0.0.1':
                 test_conf = default_conf.copy()
                 test_conf['user'] = "fp_nopass_user"
                 test_conf['password'] = ''

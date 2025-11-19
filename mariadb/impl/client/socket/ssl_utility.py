@@ -142,7 +142,6 @@ class SSLUtility:
     def prepare_ssl_context(
         configuration: Configuration,
         context,
-        is_local_connection: bool
     ) -> Tuple[ssl.SSLContext, Optional['SSLFingerprintValidator']]:
         """
         Prepare SSL context with optional fingerprint validation support.
@@ -165,10 +164,6 @@ class SSLUtility:
         """
         from .ssl_fingerprint_validator import SSLFingerprintValidator
         
-        # Disable SSL verification for local connections, like C does
-        if is_local_connection and configuration.ssl_verify_cert:
-            configuration.ssl_verify_cert = False
-        
         # Create SSL context
         ssl_context = SSLUtility.create_ssl_context(configuration)
         
@@ -185,6 +180,7 @@ class SSLUtility:
         
         cert_fingerprint_validator = None
         if use_fingerprint_validation:
+            configuration.ssl_verify_cert = False
             # Create fingerprint validator
             cert_fingerprint_validator = SSLFingerprintValidator()
             # Create unverified context to capture fingerprint
