@@ -83,7 +83,7 @@ __version__ = "{version}"
     print(f"Updated {mariadb_release_file}")
     
     # Update release_info.py for mariadb_c package to ensure version sync
-    mariadb_c_release_file = project_root / "mariadb_c" / "src" / "release_info.py"
+    mariadb_c_release_file = project_root / "mariadb-c" / "src" / "release_info.py"
     
     # Parse version to extract numeric parts and suffix
     # Handle formats like "2.0.0", "2.0.0.dev", "2.0.0-dev"
@@ -119,7 +119,7 @@ __version_info__ = {version_info_tuple}
     print(f"Updated {mariadb_c_release_file}")
     
     # Update release_info.py for mariadb_pool package to ensure version sync
-    mariadb_pool_release_file = project_root / "mariadb_pool" / "src" / "release_info.py"
+    mariadb_pool_release_file = project_root / "mariadb-pool" / "src" / "release_info.py"
     mariadb_pool_release_content = f'''# This file is auto-generated during build from root pyproject.toml
 # Do not edit manually
 
