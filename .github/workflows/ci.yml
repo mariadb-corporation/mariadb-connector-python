@@ -113,7 +113,7 @@ jobs:
           TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
           TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
-          TEST_DB_SERVER_CERT: ${{ matrix.db-type != 'mysql' && './.github/workflows/certs/ca_server.crt' || '' }}          
+          TEST_DB_SERVER_CERT: ${{ matrix.db-type != 'mysql' && steps.setup-env.outputs.database-type == 'container' && './.github/workflows/certs/ca_server.crt' || '' }}          
           LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
           MARIADB_PYTHON_CONNECTOR: mariadb
@@ -266,7 +266,7 @@ jobs:
           TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
           TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
-          TEST_DB_SERVER_CERT: ${{ matrix.db-type != 'mysql' && './.github/workflows/certs/ca_server.crt' || '' }}          
+          TEST_DB_SERVER_CERT: ${{ matrix.db-type != 'mysql' && steps.setup-env.outputs.database-type == 'container' && './.github/workflows/certs/ca_server.crt' || '' }}          
           LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
           MARIADB_PYTHON_CONNECTOR: mariadb_c

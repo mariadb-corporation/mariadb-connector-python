@@ -111,6 +111,18 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         await cursor.close()
         await conn.close()
 
+    async def test_tls_version_list(self):
+        if is_maxscale():
+            self.skipTest("MAXSCALE test has no SSL on port by default")
+        default_conf = conf()
+        conn = await mariadb.AsyncConnection.connect(**default_conf, tls_version="TLSv1.2,TLSv1.3")
+        cursor = conn.cursor()
+        await cursor.execute("SHOW STATUS LIKE 'ssl_version'")
+        row = await cursor.fetchone()
+        self.assertIn(row[1], ["TLSv1.2", "TLSv1.3"])
+        await cursor.close()
+        await conn.close()
+
     async def test_init_command(self):
         default_conf = conf()
         new_conn = await mariadb.AsyncConnection.connect(**default_conf, init_command="SET @a:=1")
