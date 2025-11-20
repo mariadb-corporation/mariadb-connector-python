@@ -514,6 +514,19 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
                     result3 = await cursor3.fetchone()
                     self.assertEqual(result3[0], 3)
         
+        # Test 4 name and url
+        async with mariadb.AsyncConnectionPool("test_url_pool4", url2 , pool_size=3) as pool4:
+            await pool4.open()
+        
+            self.assertIn("test_url_pool4", mariadb._ASYNC_CONNECTION_POOLS)
+            self.assertEqual(pool4.pool_name, "test_url_pool4")
+            
+            # Test connection works
+            async with await pool4.get_connection() as conn4:
+                await conn4.open()
+            
+        self.assertNotIn("test_url_pool2", mariadb._ASYNC_CONNECTION_POOLS)
+        
         self.assertNotIn("test_url_pool3", mariadb._ASYNC_CONNECTION_POOLS)
 
 if __name__ == '__main__':

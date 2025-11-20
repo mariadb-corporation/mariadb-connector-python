@@ -194,7 +194,6 @@ async def asyncConnect(*args, connectionclass=None, **kwargs):
     
     Note: Pool connections are not supported with asyncConnect.
     """
-    
     # Parse URI if provided as first positional argument
     if args and len(args) > 0:
         first_arg = args[0]
