@@ -102,36 +102,13 @@ class PayloadParser:
         data = self.packet[self.pos:self.pos+length]
         self.pos += length
         return data
-    
-    def read_fixed_length_string(self, length: int, encoding: str = 'utf-8') -> str:
-        """Read fixed-length string with specified encoding and advance position"""
-        string_data = self.packet[self.pos:self.pos+length]
-        self.pos += length
         
-        try:
-            value = string_data.decode(encoding)
-        except UnicodeDecodeError as e:
-            # Fallback to replace invalid characters
-            value = string_data.decode(encoding, errors='replace')
-        
-        return value
-    
     def read_null_terminated_string(self, encoding: str = 'utf-8') -> str:
         """Read null-terminated string"""
         null_pos = self.packet.find(0, self.pos)
-        if null_pos == -1:
-            raise IOError("No null terminator found in packet")
-        
         string_data = self.packet[self.pos:null_pos]
         self.pos = null_pos + 1
-        
-        try:
-            value = string_data.decode(encoding)
-        except UnicodeDecodeError as e:
-            # Fallback to replace invalid characters
-            value = string_data.decode(encoding, errors='replace')
-        
-        return value
+        return string_data.decode(encoding)
     
     def read_bytes(self, length: int) -> bytes:
         """Read fixed number of bytes and advance position"""
@@ -156,14 +133,6 @@ class PayloadParser:
     def remaining_bytes(self) -> int:
         """Get number of remaining bytes"""
         return len(self.packet) - self.pos
-    
-    def reset(self) -> None:
-        """Reset read position to beginning"""
-        self.pos = 0
-    
-    def seek(self, position: int) -> None:
-        """Set read position to specified location"""
-        self.pos = position
     
     @staticmethod
     def read_length_encoded_string_at(packet: bytes, pos: int, encoding: str = 'utf-8') -> tuple:

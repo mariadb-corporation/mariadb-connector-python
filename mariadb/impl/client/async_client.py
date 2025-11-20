@@ -318,31 +318,21 @@ class AsyncClient(BaseClient):
         
     async def _handle_auth_switch(self, packet: bytearray) -> None:
         """Handle authentication plugin switch request"""
-        if len(packet) < 2:
-            raise OperationalError("Invalid auth switch packet")
-        
-        # Parse auth switch packet
-        # Format: 0xFE + plugin_name + 0x00 + plugin_data
-        plugin_name_end = packet.find(0, 1)
-        if plugin_name_end == -1:
-            raise OperationalError("Invalid auth switch packet format")
-        
-        plugin_name = packet[1:plugin_name_end].decode('utf-8')
-        plugin_data = packet[plugin_name_end + 1:]
+        parser = PayloadParser(packet)
+        parser.skip(1)  # Skip 0xFE marker
+        plugin_name = parser.read_null_terminated_string("ascii")
+        auth_data = parser.read_remaining()
         
         # Get authentication plugin
         try:
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
-
-            plugin = plugin_factory.initialize(self.configuration.password, plugin_data, self.configuration, self.host_address)
+            plugin = plugin_factory.initialize(self.configuration.password, auth_data, self.configuration, self.host_address)
             self.auth_plugin = plugin
             response: bytearray = await plugin.processAsync(self.stream, self.context)
             await self._handle_authentication(response)
-            
+        except DatabaseError as e:
+            raise e            
         except Exception as e:
-            # Re-raise if it's already a proper exception
-            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
-                raise
             raise OperationalError(f"Authentication plugin '{plugin_name}' failed: {e}")
     
     # _handle_plugin_auth_continue() and _handle_auth_final_response() inherited from BaseClient
@@ -474,18 +464,6 @@ class AsyncClient(BaseClient):
                         return ssl_object.getpeercert()
                     except:
                         return None
-        return None
-    
-    def get_socket_ip(self) -> Optional[str]:
-        """Get socket IP address"""
-        if not self.writer:
-            return None
-        try:
-            peername = self.writer.transport.get_extra_info('peername')
-            if peername and isinstance(peername, tuple):
-                return peername[0]
-        except:
-            pass
         return None
     
     async def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> Completion:

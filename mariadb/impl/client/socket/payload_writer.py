@@ -22,21 +22,6 @@ class PayloadWriter:
         self.max_packet_size: int = 16777215  # 16MB - 1 (0xffffff)
         self._buffer_len: int = buffer_size
         
-    def pos(self) -> int:
-        """Get current buffer position"""
-        return self.position
-    
-    def buf(self) -> bytearray:
-        """Get current buffer"""
-        return self.buffer
-    
-    def set_pos(self, pos: int) -> None:
-        """Set current buffer position"""
-        if pos > len(self.buffer):
-            self._grow_buffer(pos)
-        self.position = pos
-    
-    
     def write_short(self, value: int) -> None:
         """Write 2-byte little-endian short"""
         self._ensure_capacity(2)

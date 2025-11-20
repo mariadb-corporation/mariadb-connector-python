@@ -76,35 +76,7 @@ class ExceptionFactory:
     
         return exception
 
-
-    def create_communication_exception(self, message: str, cause: Optional[Exception] = None) -> OperationalError:
-        """
-        Create communication exception
-        
-        Args:
-            message: Error message
-            cause: Underlying cause exception
-            
-        Returns:
-            OperationalError instance
-        """
-        exc = OperationalError(msg=message, errno=2013, sqlstate='08S01')  # Lost connection error code
-        if cause:
-            exc.__cause__ = cause
-        return exc
-    
-    def create_timeout_exception(self, message: str) -> OperationalError:
-        """
-        Create timeout exception
-        
-        Args:
-            message: Error message
-            
-        Returns:
-            OperationalError instance
-        """
-        return OperationalError(msg=message, errno=1205, sqlstate='HYT00')  # Lock wait timeout
-    
+   
     def create_connection_exception(self, message: str, cause: Optional[Exception] = None) -> OperationalError:
         """
         Create connection exception

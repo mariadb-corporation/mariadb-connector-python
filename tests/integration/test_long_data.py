@@ -58,17 +58,24 @@ class LongDataTest(unittest.TestCase):
         # Create data slightly larger than 16MB
         data_size = 17 * 1024 * 1024  # 17MB
         test_data = 'x' * data_size
-        
+        with self.connection.cursor() as cursor:
+            self.insert_long_varchar(test_data, data_size, cursor)
+        self.cursor.execute('TRUNCATE TABLE test_long_varchar')
+
+        with self.connection.cursor(binary=True) as cursor:
+            self.insert_long_varchar(test_data, data_size, cursor)
+    
+    def insert_long_varchar(self, test_data: str, data_size: int, cursor):    
         # Insert long data
-        self.cursor.execute(
+        cursor.execute(
             "INSERT INTO test_long_varchar (data) VALUES (?)",
             (test_data,)
         )
         self.connection.commit()
         
         # Retrieve and verify
-        self.cursor.execute("SELECT data FROM test_long_varchar WHERE id = 1")
-        result = self.cursor.fetchone()
+        cursor.execute("SELECT data FROM test_long_varchar WHERE id = ?", (1,))
+        result = cursor.fetchone()
         
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
@@ -89,15 +96,23 @@ class LongDataTest(unittest.TestCase):
         test_data = bytes(range(256)) * (data_size // 256)
         test_data = test_data[:data_size]  # Ensure exact size
         
+        with self.connection.cursor() as cursor:
+            self.insert_long_blob(test_data, data_size, cursor)
+        self.cursor.execute('TRUNCATE TABLE test_long_blob')
+
+        with self.connection.cursor(binary=True) as cursor:
+            self.insert_long_blob(test_data, data_size, cursor)
+
+    def insert_long_blob(self, test_data: bytes, data_size: int, cursor):
         # Insert long data
-        self.cursor.execute(
+        cursor.execute(
             "INSERT INTO test_long_blob (data) VALUES (?)",
             (test_data,)
         )
         self.connection.commit()
         
         # Retrieve and verify
-        self.cursor.execute("SELECT data FROM test_long_blob WHERE id = 1")
+        self.cursor.execute("SELECT data FROM test_long_blob WHERE id = ?", (1,))
         result = self.cursor.fetchone()
         
         self.assertIsNotNone(result)
@@ -122,6 +137,14 @@ class LongDataTest(unittest.TestCase):
         test_data2 = 'b' * data_size
         test_data3 = bytes([0xAA]) * data_size
         
+        with self.connection.cursor() as cursor:
+            self.insert_multiple_long_columns(test_data1, test_data2, test_data3, data_size, cursor)
+        self.cursor.execute('TRUNCATE TABLE test_multiple_long')
+
+        with self.connection.cursor(binary=True) as cursor:
+            self.insert_multiple_long_columns(test_data1, test_data2, test_data3, data_size, cursor)
+    
+    def insert_multiple_long_columns(self, test_data1: str, test_data2: str, test_data3: bytes, data_size: int, cursor):
         # Insert long data
         self.cursor.execute(
             "INSERT INTO test_multiple_long (data1, data2, data3) VALUES (?, ?, ?)",
@@ -130,7 +153,7 @@ class LongDataTest(unittest.TestCase):
         self.connection.commit()
         
         # Retrieve and verify
-        self.cursor.execute("SELECT data1, data2, data3 FROM test_multiple_long WHERE id = 1")
+        self.cursor.execute("SELECT data1, data2, data3 FROM test_multiple_long WHERE id = ?", (1,))
         result = self.cursor.fetchone()
         
         self.assertIsNotNone(result)
@@ -161,6 +184,14 @@ class LongDataTest(unittest.TestCase):
             ('row3', 'z' * data_size),
         ]
         
+        with self.connection.cursor() as cursor:
+            self.executemany_with_long_data(rows, data_size, cursor)
+        self.cursor.execute('TRUNCATE TABLE test_executemany_long')
+
+        with self.connection.cursor(binary=True) as cursor:
+            self.executemany_with_long_data(rows, data_size, cursor)
+    
+    def executemany_with_long_data(self, rows: list[tuple[str, bytes]], data_size: int, cursor):
         # Insert multiple rows with long data
         self.cursor.executemany(
             "INSERT INTO test_executemany_long (name, data) VALUES (?, ?)",
@@ -192,8 +223,16 @@ class LongDataTest(unittest.TestCase):
         data_size = 17 * 1024 * 1024  # 17MB
         test_data = 'p' * data_size
         
+        with self.connection.cursor() as cursor:
+            self.prepared_statement_with_long_data(test_data, data_size, cursor)
+        self.cursor.execute('TRUNCATE TABLE test_prepared_long')
+
+        with self.connection.cursor(binary=True) as cursor:
+            self.prepared_statement_with_long_data(test_data, data_size, cursor)
+    
+    def prepared_statement_with_long_data(self, test_data: bytes, data_size: int, cursor):
         # Use prepared statement
-        self.cursor.execute(
+        cursor.execute(
             "INSERT INTO test_prepared_long (data) VALUES (?)",
             (test_data,)
         )
@@ -233,7 +272,7 @@ class LongDataTest(unittest.TestCase):
         self.connection.commit()
         
         # Retrieve and verify
-        self.cursor.execute("SELECT data FROM test_long_unicode WHERE id = 1")
+        self.cursor.execute("SELECT data FROM test_long_unicode WHERE id = ?", (1,))
         result = self.cursor.fetchone()
         
         self.assertIsNotNone(result)
@@ -264,7 +303,7 @@ class LongDataTest(unittest.TestCase):
         self.connection.commit()
         
         # Verify update
-        self.cursor.execute("SELECT data FROM test_update_long WHERE id = 1")
+        self.cursor.execute("SELECT data FROM test_update_long WHERE id = ?", (1,))
         result = self.cursor.fetchone()
         
         self.assertIsNotNone(result)
@@ -330,7 +369,7 @@ class LongDataTest(unittest.TestCase):
         self.connection.commit()
         
         # Retrieve and verify
-        self.cursor.execute("SELECT data FROM test_boundary WHERE id = 1")
+        self.cursor.execute("SELECT data FROM test_boundary WHERE id = ?", (1,))
         result = self.cursor.fetchone()
         
         self.assertIsNotNone(result)

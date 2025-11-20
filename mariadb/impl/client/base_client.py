@@ -175,10 +175,6 @@ class BaseClient(ABC):
         """
         ...
     
-    @abstractmethod
-    def get_socket_ip(self) -> Optional[str]:
-        """Get socket IP address"""
-        ...
     
     # =========================================================================
     # Connection Type Checks

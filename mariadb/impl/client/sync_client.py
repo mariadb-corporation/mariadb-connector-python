@@ -253,7 +253,7 @@ class SyncClient(BaseClient):
         """Handle authentication plugin switch request"""
         parser = PayloadParser(packet)
         parser.skip(1)  # Skip 0xFE marker
-        plugin_name = parser.read_null_terminated_string()
+        plugin_name = parser.read_null_terminated_string("ascii")
         auth_data = parser.read_remaining()
         
         try:
@@ -380,16 +380,6 @@ class SyncClient(BaseClient):
         if self.socket and isinstance(self.socket, ssl.SSLSocket):
             try:
                 return self.socket.getpeercert()
-            except:
-                pass
-        return None
-
-    def get_socket_ip(self) -> Optional[str]:
-        """Get socket IP address"""
-        if self.socket:
-            try:
-                peer = self.socket.getpeername()
-                return peer[0] if isinstance(peer, tuple) else None
             except:
                 pass
         return None

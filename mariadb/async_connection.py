@@ -72,12 +72,11 @@ class AsyncConnection(BaseConnection['AsyncClient']):
         instance = cls(*args, **kwargs)
         try:
             await instance._client.connect()
-        except Error as e:
+        except Exception as e:
             instance._closed = True
-            raise
-        # Set autocommit if configured
-        if instance._configuration.autocommit:
-            await instance.set_autocommit(True)
+            if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
+                raise
+            raise self._exception_factory.create_connection_exception(f"Connection failed: {e}", cause=e)
         return instance
 
     # =========================================================================
