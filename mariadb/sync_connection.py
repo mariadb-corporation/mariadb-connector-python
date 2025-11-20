@@ -10,7 +10,7 @@ Provides a blocking API using the sync Client.
 from typing import Optional, Any, Type, List, TYPE_CHECKING
 from mariadb_shared.constants import STATUS, TPC_STATE
 from mariadb_shared.xid import Xid
-
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
 from .base_connection import BaseConnection
 
 from .impl.client.sync_client import SyncClient
@@ -18,7 +18,7 @@ from .impl.client.sync_client import SyncClient
 from .exceptions import ProgrammingError, Error
 
 
-class SyncConnection(BaseConnection['SyncClient']):
+class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):
     """
     Synchronous MariaDB connection
     
@@ -62,15 +62,6 @@ class SyncConnection(BaseConnection['SyncClient']):
         """Context manager entry"""
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
-        """
-        Context manager exit
-        
-        Automatically closes the connection.
-        """
-        self.close()
-        return False
-
     # =========================================================================
     # Core Connection Methods
     # =========================================================================
@@ -133,7 +124,7 @@ class SyncConnection(BaseConnection['SyncClient']):
         self._check_closed()
         try:
             self._client.ping()
-        except Exception as e:
+        except Exception as e:  
             raise self._exception_factory.create_exception(
                 f"Ping failed: {e}",
                 errno=2013,
@@ -214,254 +205,6 @@ class SyncConnection(BaseConnection['SyncClient']):
                 sql_state='HY000'
             )
     
-    def kill(self, connection_id: int) -> None:
-        """
-        Kill a database connection
-        
-        Args:
-            connection_id: Connection ID to kill
-            
-        Raises:
-            OperationalError: If kill fails
-        """
-        self._check_closed()
-        if not isinstance(connection_id, int):
-            raise ProgrammingError("connection_id must be of type int.")        
-        try:
-            with self.cursor() as cursor:
-                cursor.execute(f"KILL {connection_id}")
-        except Exception as e:
-            raise self._exception_factory.create_exception(
-                f"Failed to kill connection {connection_id}: {e}",
-                errno=2013,
-                sql_state='HY000'
-            )
-
-    # =========================================================================
-    # Transaction Methods
-    # =========================================================================
-    
-    def commit(self) -> None:
-        """
-        Commit the current transaction
-        
-        Makes all changes since the last commit/rollback permanent.
-        
-        Raises:
-            ProgrammingError: If called during XA transaction
-        """
-        self._check_closed()
-        if self._xid is not None:
-            raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
-        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            with self.cursor() as cursor:
-                cursor.execute("COMMIT")
-    
-    def rollback(self) -> None:
-        """
-        Rollback the current transaction
-        
-        Discards all changes since the last commit/rollback.
-        
-        Raises:
-            ProgrammingError: If called during XA transaction
-        """
-        self._check_closed()
-        if self._xid is not None:
-            raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
-        if (self._client.context.server_status & STATUS.IN_TRANS) > 0:
-            with self.cursor() as cursor:
-                cursor.execute("ROLLBACK")
-    
-    
-    def begin(self) -> None:
-        """
-        Start a new transaction explicitly
-        
-        Note: Transactions usually start implicitly when autocommit is off.
-        """
-        self._check_closed()
-        with self.cursor() as cursor:
-            cursor.execute("BEGIN")
-
-    # =========================================================================
-    # TPC/XA Transaction Methods
-    # =========================================================================
-    
-    def tpc_begin(self, xid: Xid) -> None:
-        """
-        Parameter:
-          xid: xid object which was created by .xid() method of connection
-               class
-
-        Begins a TPC transaction with the given transaction ID xid.
-
-        This method should be called outside a transaction
-        (i.e., nothing may have been executed since the last .commit()
-        or .rollback()).
-        Furthermore, it is an error to call .commit() or .rollback() within
-        the TPC transaction. A ProgrammingError is raised if the application
-        calls .commit() or .rollback() during an active TPC transaction.
-        """
-
-        self._check_closed()
-        if not isinstance(xid, Xid):
-            raise ProgrammingError("argument 1 must be xid "
-                                           "not %s", type(xid).__name__)
-        with self.cursor() as cursor:
-            cursor.execute("XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0]))
-        self.tpc_state = TPC_STATE.XID
-        self._xid = xid
-    
-    def tpc_prepare(self) -> None:
-        """
-        Performs the first phase of a transaction started with .tpc_begin().
-        A ProgrammingError will be raised if this method was called outside
-        a TPC transaction.
-
-        After calling .tpc_prepare(), no statements can be executed until
-        .tpc_commit() or .tpc_rollback() have been called.
-        """
-
-        self._check_closed()
-        if self.tpc_state == TPC_STATE.NONE:
-            raise ProgrammingError("Transaction not started.")
-        if self.tpc_state == TPC_STATE.PREPARE:
-            raise ProgrammingError("Transaction is already in "
-                                           "prepared state.")
-
-        xid = self._xid
-        try:
-            with self.cursor() as cursor:
-                cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
-        except Error:
-            self._xid = None
-            self.tpc_state = TPC_STATE.NONE
-            raise
-
-        try:
-            with self.cursor() as cursor:
-                cursor.execute("XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0]))
-        except Error:
-            self._xid = None
-            self.tpc_state = TPC_STATE.NONE
-            raise
-
-        self.tpc_state = TPC_STATE.PREPARE
-
-
-    def tpc_commit(self, xid: Xid=None) -> None:
-        """
-        Optional parameter:
-
-        - xid
-          : xid object which was created by .xid() method of connection class.
-
-        When called with no arguments, .tpc_commit() commits a TPC transaction
-        previously prepared with .tpc_prepare().
-
-        If .tpc_commit() is called prior to .tpc_prepare(), a single phase
-        commit is performed. A transaction manager may choose to do this if
-        only a single resource is participating in the global transaction.
-        When called with a transaction ID xid, the database commits the given
-        transaction. If an invalid transaction ID is provided,
-        a ProgrammingError will be raised.
-        This form should be called outside a transaction, and
-        is intended for use in recovery.
-        """
-
-        self._check_closed()
-
-        if self.tpc_state == TPC_STATE.NONE:
-            raise ProgrammingError("Transaction not started.")
-        if xid is None and self.tpc_state != TPC_STATE.PREPARE:
-            raise ProgrammingError("Transaction is not prepared.")
-
-        if not xid:
-            xid = self._xid
-        if xid and not isinstance(xid, Xid):
-            raise ProgrammingError("argument 1 must be xid "
-                                           "not %s" % type(xid).__name__)
-
-        if self.tpc_state < TPC_STATE.PREPARE:
-            try:
-                with self.cursor() as cursor:
-                    cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
-            except Error:
-                self._xid = None
-                self.tpc_state = TPC_STATE.NONE
-                raise
-
-        xa_command = "XA COMMIT '%s','%s',%s" % (xid[1], xid[2], xid[0])
-        if self.tpc_state < TPC_STATE.PREPARE:
-            xa_command = xa_command + " ONE PHASE"
-        try:
-            with self.cursor() as cursor:
-                cursor.execute(xa_command)
-        except Error:
-            self._xid = None
-            self.tpc_state = TPC_STATE.NONE
-            raise
-
-        # cleanup
-        self._xid = None
-        self.tpc_state = TPC_STATE.NONE
-
-    
-    def tpc_rollback(self, xid: Xid=None) -> None:
-        """
-        Parameter:
-           xid: xid object which was created by .xid() method of connection
-                class
-
-        Performs the first phase of a transaction started with .tpc_begin().
-        A ProgrammingError will be raised if this method outside a TPC
-        transaction.
-
-        After calling .tpc_prepare(), no statements can be executed until
-        .tpc_commit() or .tpc_rollback() have been called.
-        """
-
-        self._check_closed()
-        if self.tpc_state == TPC_STATE.NONE:
-            raise ProgrammingError("Transaction not started.")
-
-        if not xid:
-            xid = self._xid
-
-        if xid and not isinstance(xid, Xid):
-            raise ProgrammingError("argument 1 must be xid "
-                                           "not %s" % type(xid).__name__)
-
-        if self.tpc_state < TPC_STATE.PREPARE:
-            try:
-                with self.cursor() as cursor:
-                    cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
-            except Error:
-                self._xid = None
-                self.tpc_state = TPC_STATE.NONE
-                raise
-
-        try:
-            with self.cursor() as cursor:
-                cursor.execute("XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0]))
-        except Error:
-            self._xid = None
-            self.tpc_state = TPC_STATE.NONE
-            raise
-
-        self.tpc_state = TPC_STATE.PREPARE
-
-    def tpc_recover(self) -> List[tuple]:
-        """
-        Returns a list of pending transaction IDs suitable for use with
-        tpc_commit(xid) or .tpc_rollback(xid).
-        """
-        self._check_closed()
-        with self.cursor() as cursor:
-            cursor.execute("XA RECOVER")
-            return cursor.fetchall()
-        
     # =========================================================================
     # Properties and Setters
     # =========================================================================
@@ -481,28 +224,6 @@ class SyncConnection(BaseConnection['SyncClient']):
             self._client.execute(ChangeDbPacket(value), self._configuration)
         self._database = value
 
-    @property
-    def autocommit(self) -> bool:
-        """
-        Get current autocommit status
-        
-        Returns:
-            True if autocommit is enabled, False otherwise
-        """
-        if self._client:
-            return (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
-        return False
-    
-    @autocommit.setter
-    def autocommit(self, value: bool) -> None:
-        """
-        Set autocommit status
-        
-        Args:
-            value: True to enable autocommit, False to disable
-        """
-        self.set_autocommit(value)
-
     # =========================================================================
     # Utility Methods
     # =========================================================================
@@ -517,50 +238,17 @@ class SyncConnection(BaseConnection['SyncClient']):
             new_db: Database name to select
         """
         self.database = new_db
-    
-    def set_autocommit(self, value: bool) -> None:
-        """
-        Set autocommit status
-        
-        Args:
-            value: True to enable autocommit, False to disable
-        """
-        self._check_closed()
-        current = (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
-        if current != bool(value):
-            with self.cursor() as cursor:
-                cursor.execute(f"SET autocommit={1 if bool(value) else 0}")
-    
-    def show_warnings(self) -> Optional[List[tuple]]:
-        """
-        Get warnings from the last executed command
-        
-        Returns:
-            List of warning tuples (level, code, message), or None if no warnings
-        """
-        self._check_closed()
-        if self._client.context.warning_count == 0:
-            return None
-        with self.cursor() as cursor:
-            cursor.execute("SHOW WARNINGS")
-            return cursor.fetchall()
-
 
     @property
-    def open(self):
+    def server_status(self) -> int:
         """
-        Returns true if the connection is alive.
-
-        A ping command will be sent to the server for this purpose,
-        which means this function might fail if there are still
-        non-processed pending result sets.
-
-        for pymysql compatibility
+        Returns the server status.
         """
+        return self._client.context.server_status
 
-        self._check_closed()
-        try:
-            self.ping()
-        except Error:
-            return False
-        return True
+    @property
+    def warnings(self) -> int:
+        """
+        Returns the last execution warnings count.
+        """
+        return self._client.context.warning_count

@@ -191,160 +191,32 @@ class BaseConnection(ABC, Generic[TClient]):
         """Change the default database for the current connection"""
         ...
 
+
+    @property
+    @abstractmethod
+    def server_status(self) -> int:
+        """
+        Returns the server status.
+        """
+        ...
+
+    @property
+    @abstractmethod
+    def warnings(self) -> int:
+        """
+        Returns the last execution warnings count.
+        """
+        ...        
+        
+
     # =========================================================================
     # Transaction Methods (Abstract - must be implemented by subclasses)
     # =========================================================================
-    
-    @abstractmethod
-    def commit(self):
-        """
-        Commit the current transaction
-        
-        Makes all changes made since the last commit/rollback permanent.
-        """
-        ...
-
-    @abstractmethod
-    def rollback(self):
-        """
-        Rollback the current transaction
-        
-        Discards all changes made since the last commit/rollback.
-        """
-        ...
-
-    @abstractmethod
-    def begin(self):
-        """
-        Start a new transaction explicitly
-        
-        Note: Most operations start a transaction implicitly if autocommit is off.
-        """
-        ...
-
-    # =========================================================================
-    # TPC/XA Transaction Methods (Abstract - for distributed transactions)
-    # =========================================================================
-    
-    def xid(self, format_id: int, transaction_id: str, branch_qualifier: str) -> Xid:
-        """
-        Create a transaction ID object for two-phase commit
-        
-        Args:
-            format_id: Format identifier (0 will be converted to 1)
-            transaction_id: Global transaction identifier
-            branch_qualifier: Branch qualifier
-            
-        Returns:
-            Xid object suitable for TPC methods
-            
-        Raises:
-            ProgrammingError: If parameters are invalid
-        """
-        return Xid(format_id, transaction_id, branch_qualifier)
-    
-    @abstractmethod
-    def tpc_begin(self, xid: Xid) -> None:
-        """
-        Begin a TPC transaction with the given transaction ID
-        
-        This method should be called outside a transaction.
-        
-        Args:
-            xid: Transaction ID object created by xid() method
-            
-        Raises:
-            ProgrammingError: If called within an active transaction
-        """
-        ...
-    
-    @abstractmethod
-    def tpc_prepare(self) -> None:
-        """
-        Perform the first phase of a two-phase commit transaction
-        
-        After calling this, no statements can be executed until
-        tpc_commit() or tpc_rollback() is called.
-        
-        Raises:
-            ProgrammingError: If called outside a TPC transaction
-        """
-        ...
-
-    @abstractmethod
-    def tpc_commit(self, xid: Optional[Xid] = None) -> None:
-        """
-        Commit a TPC transaction
-        
-        When called with no arguments, commits a TPC transaction previously
-        prepared with tpc_prepare().
-        
-        If called prior to tpc_prepare(), performs a single-phase commit.
-        
-        When called with a transaction ID, commits the given transaction
-        (used for recovery).
-        
-        Args:
-            xid: Optional transaction ID for recovery
-            
-        Raises:
-            ProgrammingError: If transaction state is invalid
-        """
-        ...
-    
-    @abstractmethod
-    def tpc_rollback(self, xid: Optional[Xid] = None) -> None:
-        """
-        Rollback a TPC transaction
-        
-        Args:
-            xid: Optional transaction ID for recovery
-            
-        Raises:
-            ProgrammingError: If called outside a TPC transaction
-        """
-        ...
-
-    @abstractmethod
-    def tpc_recover(self) -> list:
-        """
-        Return a list of pending transaction IDs
-        
-        Returns:
-            List of transaction IDs suitable for tpc_commit() or tpc_rollback()
-        """
-        ...
-
-    # =========================================================================
-    # Administrative Methods (Abstract)
-    # =========================================================================
-    
-    @abstractmethod
-    def kill(self, connection_id: int):
-        """
-        Kill a database connection
-        
-        Args:
-            connection_id: Connection ID to kill
-            
-        Raises:
-            OperationalError: If kill fails
-        """
-        ...
 
     # =========================================================================
     # Utility Methods
     # =========================================================================
     
-    def _set_pooled_connection(self, pooled_connection: 'PooledConnection') -> None:
-        """
-        Set the PooledConnection wrapper (internal use only)
-        
-        Args:
-            pooled_connection: PooledConnection wrapper object
-        """
-        self._pooled_connection = pooled_connection
-
     def escape_string(self, string: str) -> str:
         """
         Escape a string for use in SQL statements
@@ -558,19 +430,6 @@ class BaseConnection(ABC, Generic[TClient]):
         """
         return self._client.context.get_collation() or _DEFAULT_COLLATION
 
-    # =========================================================================
-    # Transaction State Properties
-    # =========================================================================
-    
-    @property
-    def autocommit(self) -> bool:
-        """
-        Get current autocommit status
-        
-        Returns:
-            True if autocommit is enabled, False otherwise
-        """
-        return (self._client.context.server_status & STATUS.AUTOCOMMIT) > 0
 
     # =========================================================================
     # TLS/SSL Properties

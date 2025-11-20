@@ -4,6 +4,8 @@
 from collections import namedtuple
 from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING
 
+from mariadb_shared.async_cursor_common import AsyncCursorCommon
+
 from .impl.result import AsyncResult
 
 from .base_cursor import BaseCursor, ROWS_ALL, RESULT_TUPLE, RESULT_NAMEDTUPLE, RESULT_DICTIONARY
@@ -16,7 +18,7 @@ if TYPE_CHECKING:
     from .base_connection import BaseConnection
     from .async_connection import AsyncConnection
 
-class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
+class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon):
     """
     Asynchronous MariaDB Cursor Object
     

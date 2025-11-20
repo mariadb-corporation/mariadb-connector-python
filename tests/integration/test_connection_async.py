@@ -193,7 +193,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         conn = await mariadb.AsyncConnection.connect(**config)
         try:
             # Connection should be open
-            self.assertTrue(await conn.open)
+            self.assertTrue(await conn.open())
             
             # Kill the connection
             oldid = conn.connection_id
@@ -205,7 +205,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             await cursor.close()
             
             # Connection should now be closed/not open
-            self.assertFalse(await conn.open)
+            self.assertFalse(await conn.open())
         finally:
             try:
                 await conn.close()

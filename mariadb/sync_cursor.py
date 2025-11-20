@@ -14,13 +14,13 @@ from .base_cursor import BaseCursor
 from .exceptions import DatabaseError, ProgrammingError
 from .impl.message.client.query_packet import QueryPacket, QueryWithParamPacket
 from .impl.sql_parser import split_sql_parts
-
+from mariadb_shared.sync_cursor_common import SyncCursorCommon
 
 if TYPE_CHECKING:
     from .base_connection import BaseConnection
     from .sync_connection import SyncConnection
 
-class SyncCursor(BaseCursor[SyncResult, 'SyncConnection']):
+class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     """
     Synchronous MariaDB Cursor Object
     
