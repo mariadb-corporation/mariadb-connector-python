@@ -107,30 +107,22 @@ class SSLFingerprintValidator:
         if not self.fingerprint or not server_validation_hash:
             return False
         
-        try:
-            # Server validation hash format: 0x01 (SHA256 marker) + hex_string
-            if len(server_validation_hash) == 0:
-                return False
-            
-            # First byte should be 0x01 indicating SHA-256
-            if server_validation_hash[0] != 0x01:
-                return False
-            
-            # Rest is hex string of the expected hash
-            server_hash_hex = server_validation_hash[1:].decode('ascii')
-            
-            # Calculate our hash: SHA256(auth_hash + seed + fingerprint)
-            hasher = hashlib.sha256()
-            hasher.update(auth_plugin_hash)
-            hasher.update(seed)
-            hasher.update(self.fingerprint)
-            calculated_hash = hasher.digest()
-            
-            # Convert to hex for comparison
-            calculated_hash_hex = calculated_hash.hex()
-            
-            # Compare (case-insensitive)
-            return calculated_hash_hex.lower() == server_hash_hex.lower()
-            
-        except Exception:
+        # Server validation hash format: 0x01 (SHA256 marker) + hex_string
+        if len(server_validation_hash) == 0 or server_validation_hash[0] != 0x01:
             return False
+        
+        # Rest is hex string of the expected hash
+        server_hash_hex = server_validation_hash[1:].decode('ascii')
+        
+        # Calculate our hash: SHA256(auth_hash + seed + fingerprint)
+        hasher = hashlib.sha256()
+        hasher.update(auth_plugin_hash)
+        hasher.update(seed)
+        hasher.update(self.fingerprint)
+        calculated_hash = hasher.digest()
+        
+        # Convert to hex for comparison
+        calculated_hash_hex = calculated_hash.hex()
+        
+        # Compare (case-insensitive)
+        return calculated_hash_hex.lower() == server_hash_hex.lower()

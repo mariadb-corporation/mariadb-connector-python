@@ -828,6 +828,42 @@ class TestConnection(unittest.TestCase):
                 except:
                     pass
 
+    def test_ssl_connection_with_ca(self):
+        """Test SSL connection with server CA certificate"""
+        import os
+        
+        # Skip if TEST_DB_SERVER_CERT is not set
+        server_cert = os.environ.get('TEST_DB_SERVER_CERT')
+        if not server_cert:
+            self.skipTest("TEST_DB_SERVER_CERT not set, skipping SSL test")
+        
+        # Skip if certificate file doesn't exist
+        if not os.path.exists(server_cert):
+            self.skipTest(f"Server certificate file not found: {server_cert}")
+        
+        default_conf = conf()
+        
+        # Test SSL connection with CA certificate
+        test_conf = default_conf.copy()
+        test_conf['ssl'] = True
+        test_conf['ssl_ca'] = server_cert
+        test_conf['ssl_verify_cert'] = True
+        
+        try:
+            conn = mariadb.connect(**test_conf)
+            
+            # Verify SSL is active
+            cursor = conn.cursor()
+            cursor.execute("SHOW STATUS LIKE 'Ssl_cipher'")
+            result = cursor.fetchone()
+            self.assertIsNotNone(result)
+            self.assertNotEqual(result[1], '', "SSL cipher should not be empty")
+            
+            cursor.close()
+            conn.close()
+        except mariadb.Error as e:
+            self.fail(f"SSL connection with CA failed: {e}")
+
 
 if __name__ == '__main__':
     unittest.main()

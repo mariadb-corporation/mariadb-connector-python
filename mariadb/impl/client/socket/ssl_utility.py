@@ -141,7 +141,7 @@ class SSLUtility:
     @staticmethod
     def prepare_ssl_context(
         configuration: Configuration,
-        context,
+        context
     ) -> Tuple[ssl.SSLContext, Optional['SSLFingerprintValidator']]:
         """
         Prepare SSL context with optional fingerprint validation support.
