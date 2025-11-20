@@ -63,7 +63,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         result = bytes(a ^ b for a, b in zip(stage1, stage3))
         return result
     
-    def _build_initial_payload(self) -> bytearray:
+    def _send_encrypted_pwd(self) -> bytearray:
         """Build initial authentication payload"""
         writer = PayloadWriter()
         truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
@@ -71,7 +71,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         writer.write_bytes(encrypted)        
         return writer.get_payload()
     
-    def _build_cleartext_password_payload(self) -> bytearray:
+    def _send_clear_pwd(self) -> bytearray:
         """Build cleartext password payload for SSL connections"""
         writer = PayloadWriter()
         if self.authentication_data and self.authentication_data != "":
@@ -84,7 +84,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         return writer.get_payload()
     
     
-    def _encrypt_password_with_rsa(self, public_key_pem: str) -> bytearray:
+    def _send_rsa_encrytped_pwd(self, public_key_pem: str) -> bytearray:
         """Encrypt password using RSA public key """
         try:
             # Load the public key
@@ -94,7 +94,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                 raise OperationalError("Server provided non-RSA public key")
             
             # Encrypt password with RSA public key
-            if self.authentication_data:
+            if self.authentication_data and self.authentication_data != "":
                 password_bytes = self.authentication_data.encode('utf-8')
                 password_bytes += b'\x00'  # Null terminator
                 
@@ -126,7 +126,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
         """Process caching SHA2 password plugin authentication (async)"""
         # Build and send initial payload
-        payload = self._build_initial_payload()
+        payload = self._send_encrypted_pwd()
         await stream.send_payload(payload, "CACHING_SHA2_PASSWORD", reset_sequence=False)
         
         # Read response packet
@@ -142,7 +142,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                 # Perform full authentication
                 if self.conf.ssl:
                     # Send password in clear text over SSL
-                    payload = self._build_cleartext_password_payload()
+                    payload = self._send_clear_pwd()
                     await stream.send_payload(payload, "CACHING_SHA2_CLEAR_PWD", reset_sequence=False)
                     return await stream.read_payload()
                 else:
@@ -166,7 +166,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     public_key_pem = key_response[1:].decode('utf-8')
                     
                     # Encrypt password using shared logic
-                    encrypted_payload = self._encrypt_password_with_rsa(public_key_pem)
+                    encrypted_payload = self._send_rsa_encrytped_pwd(public_key_pem)
                     
                     # Send encrypted password
                     await stream.send_payload(encrypted_payload, "CACHING_SHA2_RSA_PWD", reset_sequence=False)
@@ -180,7 +180,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     def processSync(self, stream: SyncStream, context: Context) -> bytearray:
         """Process caching SHA2 password plugin authentication (sync)"""
         # Build and send initial payload
-        payload = self._build_initial_payload()
+        payload = self._send_encrypted_pwd()
         stream.send_payload(payload, "CACHING_SHA2_PASSWORD", reset_sequence=False)
         
         # Read response packet
@@ -196,7 +196,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                 # Perform full authentication
                 if self.conf.ssl:
                     # Send password in clear text over SSL
-                    payload = self._build_cleartext_password_payload()
+                    payload = self._send_clear_pwd()
                     stream.send_payload(payload, "CACHING_SHA2_CLEAR_PWD", reset_sequence=False)
                     return stream.read_payload()
                 else:
@@ -220,7 +220,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     public_key_pem = key_response[1:].decode('utf-8')
                     
                     # Encrypt password using shared logic
-                    encrypted_payload = self._encrypt_password_with_rsa(public_key_pem)
+                    encrypted_payload = self._send_rsa_encrytped_pwd(public_key_pem)
                     
                     # Send encrypted password
                     stream.send_payload(encrypted_payload, "CACHING_SHA2_RSA_PWD", reset_sequence=False)
@@ -236,11 +236,4 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     
     def hash(self, conf: Configuration) -> Optional[bytes]:
         """Return hash for credential"""
-        password = conf.password
-        if password is None:
-            return None
-        # Truncate seed to 20 bytes (remove null terminator if present)
-        truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
-        
-        # Encrypt password and write to payload
-        return self.encrypt_password(self.authentication_data, truncated_seed)
+        return None

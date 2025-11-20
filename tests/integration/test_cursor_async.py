@@ -2534,10 +2534,17 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             
             async with connection.cursor(binary=True) as cursor:
                 await self.field_json_types_res(cursor)
+
         
     async def field_json_types_res(self, cursor):    
         await cursor.execute("SELECT * FROM test_json_types WHERE 1=?", (1,))
         row = await cursor.fetchone()
         self.assertEqual(row[0], '{"age": 30, "email": "john.doe@example.com"}')
+
+    async def test_prepare_error(self):
+        async with self.connection.cursor(binary=True) as cursor:
+            with self.assertRaises(mariadb.ProgrammingError):
+                await cursor.execute("CANNOT BE PREPARED WHERE 1=?", (1,))
+
 if __name__ == '__main__':
     unittest.main()

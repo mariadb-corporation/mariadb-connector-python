@@ -778,6 +778,56 @@ class TestConnection(unittest.TestCase):
             
             cursor.close()
 
+    def test_pre41_error_format(self):
+        """Test handling of pre-4.1 error format when max connections is reached"""
+        # Skip for MaxScale
+        if is_maxscale():
+            self.skipTest("Skipping for MaxScale")
+        
+        exception = None
+        max_connections = 0
+        
+        # Get max_connections setting
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT @@max_connections")
+        result = cursor.fetchone()
+        max_connections = result[0]
+        cursor.close()
+        
+        # Skip if max_connections is too high (would take too long)
+        if max_connections >= 1000:
+            self.skipTest(f"max_connections too high ({max_connections}), skipping test")
+        
+        connections = []
+        try:
+            # Try to create max_connections connections
+            for i in range(max_connections + 1):
+                try:
+                    conn = mariadb.connect(**conf())
+                    connections.append(conn)
+                except mariadb.DatabaseError as e:
+                    exception = e
+                    break
+            
+            # Should have gotten an exception
+            self.assertIsNotNone(exception, "Expected exception when reaching max_connections")
+            
+            # Check error message contains "Too many"
+            error_msg = str(exception)
+            self.assertTrue(
+                "Too many" in error_msg or "too many" in error_msg,
+                f"Expected 'Too many' in error message, got: {error_msg}"
+            )
+        
+        finally:
+            # Clean up all connections
+            for conn in connections:
+                try:
+                    if conn:
+                        conn.close()
+                except:
+                    pass
+
 
 if __name__ == '__main__':
     unittest.main()

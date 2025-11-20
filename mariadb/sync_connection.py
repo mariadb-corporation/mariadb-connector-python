@@ -66,13 +66,8 @@ class SyncConnection(BaseConnection['SyncClient']):
         """
         Context manager exit
         
-        Automatically commits on success, rolls back on exception,
-        and closes the connection.
+        Automatically closes the connection.
         """
-        if exc_type:
-            self.rollback()
-        else:
-            self.commit()
         self.close()
         return False
 

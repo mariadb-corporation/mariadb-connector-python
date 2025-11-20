@@ -132,38 +132,31 @@ class SyncClient(BaseClient):
 
     def _perform_handshake(self) -> None:
         """Perform initial handshake and authentication with server"""
-        try:
-            handshake_packet = self.stream.read_payload()
-            if (handshake_packet[0] == 0xff):
-                raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
-            self.context = self._parse_handshake(handshake_packet)
-            self.stream.connection_id = self.context.connection_id
+        handshake_packet = self.stream.read_payload()
+        if (handshake_packet[0] == 0xff):
+            raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
+        self.context = self._parse_handshake(handshake_packet)
+        self.stream.connection_id = self.context.connection_id
 
-            client_capabilities = self._calculate_client_capabilities()
+        client_capabilities = self._calculate_client_capabilities()
 
-            if self.configuration.ssl:
-                self._handle_ssl_connection(client_capabilities)
+        if self.configuration.ssl:
+            self._handle_ssl_connection(client_capabilities)
 
-            self.context.client_capabilities = client_capabilities
-            self.context.eof_deprecated = bool(client_capabilities & constants.CAPABILITY.DEPRECATE_EOF)
-            self.context.extended_metadata = bool(client_capabilities & constants.CAPABILITY.EXTENDED_METADATA)
+        self.context.client_capabilities = client_capabilities
+        self.context.eof_deprecated = bool(client_capabilities & constants.CAPABILITY.DEPRECATE_EOF)
+        self.context.extended_metadata = bool(client_capabilities & constants.CAPABILITY.EXTENDED_METADATA)
 
-            # Initialize auth plugin for handshake response (default: mysql_native_password)
-            from ..plugin.authentication.native_password_plugin import NativePasswordPlugin
-            self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
+        # Initialize auth plugin for handshake response (default: mysql_native_password)
+        from ..plugin.authentication.native_password_plugin import NativePasswordPlugin
+        self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
 
-            response = HandshakeResponse(self.configuration, self.context)
-            self.stream.send_payload(response.encode(self.context), response.type(), reset_sequence=False)
+        response = HandshakeResponse(self.configuration, self.context)
+        self.stream.send_payload(response.encode(self.context), response.type(), reset_sequence=False)
 
-            self._handle_authentication(self.stream.read_payload())
-            
-            self.connected = True
-                
-        except Exception as e:
-            self.close()
-            if isinstance(e, (OperationalError, DatabaseError)):
-                raise
-            raise OperationalError(f"Handshake failed: {e}")
+        self._handle_authentication(self.stream.read_payload())
+        
+        self.connected = True
 
     def _execute_init_command(self) -> None:
         """
@@ -331,11 +324,11 @@ class SyncClient(BaseClient):
             change_user_packet = ChangeUserPacket(new_conf.user, new_conf.password, new_conf.database)
             self._send_message(change_user_packet)
             self._handle_authentication(self.stream.read_payload())
-                
+        except DatabaseError as e:
+            self.configuration = old_conf
+            raise
         except Exception as e:
             self.configuration = old_conf
-            if isinstance(e, DatabaseError):
-                raise
             raise OperationalError(f"Change user failed: {e}")
 
     def close(self) -> None:
@@ -528,9 +521,7 @@ class SyncClient(BaseClient):
             
             prepare_packet = PreparePacket(sql)
             self._send_message(prepare_packet)
-            
-            response = self.stream.read_payload()
-            return self._parse_prepare_response(response, sql)
+            return self._parse_prepare_response(self.stream.read_payload(), sql)
 
     def _parse_prepare_response(self, packet: bytearray, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet"""
@@ -539,9 +530,7 @@ class SyncClient(BaseClient):
         
         packet_type = packet[0]
         
-        if packet_type == self.ERROR_PACKET:
-            raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
-        elif packet_type == 0x00:
+        if packet_type == 0x00:
             prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context, sql)
 
             # Read parameter metadata if present
@@ -555,15 +544,15 @@ class SyncClient(BaseClient):
             
             # Read column metadata if present
             if prepare_stmt_packet.column_count > 0:
-                columns = []
                 for _ in range(prepare_stmt_packet.column_count):
-                    columns.append(ColumnDefinitionPacket.decode(self.stream.read_payload(), self.context))
-                prepare_stmt_packet.columns = columns
+                    prepare_stmt_packet.columns.append(ColumnDefinitionPacket.decode(self.stream.read_payload(), self.context))
                 
                 if not self.context.isEofDeprecated():
                     self.stream.read_payload()
             
             return prepare_stmt_packet
+        elif packet_type == self.ERROR_PACKET:
+            raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
     

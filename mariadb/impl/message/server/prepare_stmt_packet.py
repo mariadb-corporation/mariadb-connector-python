@@ -69,11 +69,11 @@ class PrepareStmtPacket:
             context.warning_count = warning_count
         
         return PrepareStmtPacket(
-            statement_id=statement_id,
-            column_count=column_count,
-            parameter_count=parameter_count,
-            warning_count=warning_count,
-            sql=sql
+            statement_id,
+            column_count,
+            parameter_count,
+            warning_count,
+            sql
         )
     
     def __repr__(self) -> str:

@@ -105,45 +105,62 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection']):
         # Validate SQL type
         if not isinstance(sql, str):
             raise TypeError("SQL statement must be a string")
-        
+        if (not sql):
+            raise ProgrammingError("Empty SQL statement")
+
         # Consume any pending streaming results before executing new query
         if self._result is not None and self._result.streaming():
             await self._result.fetch_remaining()
-        
-        if (not sql):
-            raise ProgrammingError("Empty SQL statement")
+
         try:
-            
-            # Convert data to list format for parameter binding
-            parameters = None
-            sql_bytes = None
-            param_positions = None
-            
+            # Use provided buffered parameter or fall back to cursor default
+            effective_buffered = buffered if buffered is not None else self._buffered
+
             if data:
+                parameters = None
+
                 if isinstance(data, (list, tuple)):
                     # Positional parameters
                     parameters = list(data)
-                    sql_bytes, param_positions = split_sql_parts(sql)
                 else:
                     raise ProgrammingError(f"wrong parameter type")
-            
-            if parameters:
-                # Validate parameter count
-                placeholder_count = len(param_positions) // 2  # Positions come in pairs
-                if len(parameters) < placeholder_count:
-                    raise ProgrammingError(
-                        f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
-                        f"but only {len(parameters)} parameters provided"
-                    )
-                # Use parameterized query packet with bytes
-                query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
+
+                if self._force_binary:
+                    # Prepare the statement
+
+                    if (self._stmt is not None):
+                        if (self._stmt.sql != sql):
+                            await self.connection._client.close_prepared_statement(self._stmt)
+                            self._stmt = None
+
+                    if (self._stmt is None):
+                        self._stmt = await self.connection._client.prepare_statement(sql)
+
+
+                    # Execute with parameters using ExecutePacket
+                    from .impl.message.client.execute_packet import ExecutePacket
+                    execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
+                    completions = await self.connection._client.execute(execute_packet, self._config, effective_buffered, prepare_stmt_packet=self._stmt)
+
+                else:
+
+                    sql_bytes, param_positions = split_sql_parts(sql)
+
+                    # Validate parameter count
+                    placeholder_count = len(param_positions) // 2  # Positions come in pairs
+                    if len(parameters) < placeholder_count:
+                        raise ProgrammingError(
+                            f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
+                            f"but only {len(parameters)} parameters provided"
+                        )
+                    # Use parameterized query packet with bytes
+                    query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
+                    completions = await self.connection._client.execute(query_packet, self._config, effective_buffered)
+
             else:
                 # Use simple query packet
                 query_packet = QueryPacket(sql)
-                
-            # Use provided buffered parameter or fall back to cursor default
-            effective_buffered = buffered if buffered is not None else self._buffered
-            completions = await self.connection._client.execute(query_packet, self._config, effective_buffered)
+                completions = await self.connection._client.execute(query_packet, self._config, effective_buffered)
             
             # Process the completions to extract result data
             self._process_completions(completions)

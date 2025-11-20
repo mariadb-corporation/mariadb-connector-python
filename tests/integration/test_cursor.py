@@ -2522,14 +2522,19 @@ class TestCursor(unittest.TestCase):
                 cursor.execute("INSERT INTO test_json_types VALUES ('{\"age\": 30, \"email\": \"john.doe@example.com\"}')")
                 
                 self.field_json_types_res(cursor)
-            
+
             with connection.cursor(binary=True) as cursor:
                 self.field_json_types_res(cursor)
+
         
     def field_json_types_res(self, cursor):    
         cursor.execute("SELECT * FROM test_json_types WHERE 1=?", (1,))
         row = cursor.fetchone()
         self.assertEqual(row[0], '{"age": 30, "email": "john.doe@example.com"}')
+
+    def test_prepare_error(self):
+        with self.connection.cursor(binary=True) as cursor:
+            self.assertRaises(mariadb.ProgrammingError, cursor.execute, "CANNOT BE PREPARED WHERE 1=?", (1,))
 
 if __name__ == '__main__':
     unittest.main()

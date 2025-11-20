@@ -143,48 +143,38 @@ class AsyncClient(BaseClient):
     
     async def _perform_handshake(self) -> None:
         """Perform initial handshake and authentication with server asynchronously"""
-        try:
-            # Read initial handshake packet from server
-            handshake_packet: bytes = await self.stream.read_payload()
-            if (handshake_packet[0] == 0xff):
-                raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
+        # Read initial handshake packet from server
+        handshake_packet: bytes = await self.stream.read_payload()
+        if (handshake_packet[0] == 0xff):
+            raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
 
-            self.context = self._parse_handshake(handshake_packet)
-            self.stream.connection_id = self.context.connection_id
-            
-            client_capabilities = self._calculate_client_capabilities()
+        self.context = self._parse_handshake(handshake_packet)
+        self.stream.connection_id = self.context.connection_id
+        
+        client_capabilities = self._calculate_client_capabilities()
 
-            # Handle SSL if enabled
-            if self.configuration.ssl:
-                await self._handle_ssl_connection(client_capabilities)
-            
-            # Store client capabilities in context for later use
-            self.context.client_capabilities = client_capabilities
-            self.context.eof_deprecated = bool(client_capabilities & constants.CAPABILITY.DEPRECATE_EOF)
-            self.context.extended_metadata = bool(client_capabilities & constants.CAPABILITY.EXTENDED_METADATA)
+        # Handle SSL if enabled
+        if self.configuration.ssl:
+            await self._handle_ssl_connection(client_capabilities)
+        
+        # Store client capabilities in context for later use
+        self.context.client_capabilities = client_capabilities
+        self.context.eof_deprecated = bool(client_capabilities & constants.CAPABILITY.DEPRECATE_EOF)
+        self.context.extended_metadata = bool(client_capabilities & constants.CAPABILITY.EXTENDED_METADATA)
 
-            # Initialize auth plugin for handshake response (default: mysql_native_password)
-            from ..plugin.authentication.native_password_plugin import NativePasswordPlugin
-            self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
+        # Initialize auth plugin for handshake response (default: mysql_native_password)
+        from ..plugin.authentication.native_password_plugin import NativePasswordPlugin
+        self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
 
-            # Create and send handshake response
-            response = HandshakeResponse(self.configuration, self.context)
-            await self.stream.send_payload(response.encode(self.context), response.type(), reset_sequence=False)
+        # Create and send handshake response
+        response = HandshakeResponse(self.configuration, self.context)
+        await self.stream.send_payload(response.encode(self.context), response.type(), reset_sequence=False)
 
-            # Handle authentication (may involve multiple rounds)
-            auth_result: bytearray = await self.stream.read_payload()
-            await self._handle_authentication(auth_result)
-            
-            self.connected = True
-                
-        except Exception as e:
-            # Cleanup without calling close() to avoid masking the original exception
-            try:
-                await self._cleanup_connection()
-            except:
-                # Ignore cleanup errors to avoid masking the original exception
-                pass
-            raise e
+        # Handle authentication (may involve multiple rounds)
+        auth_result: bytearray = await self.stream.read_payload()
+        await self._handle_authentication(auth_result)
+        
+        self.connected = True
     
     async def _ensure_default(self) -> None:
         """Ensure autocommit and charset are correctly set"""
@@ -625,15 +615,9 @@ class AsyncClient(BaseClient):
             if self.closed:
                 raise OperationalError("Connection is closed")
             
-            try:
-                prepare_packet = PreparePacket(sql)
-                await self._send_message(prepare_packet)
-                return await self._parse_prepare_response(await self.stream.read_payload(), sql)
-                
-            except DatabaseError as e:
-                raise e
-            except Exception as e:
-                raise OperationalError(f"Statement preparation failed: {e}")
+            prepare_packet = PreparePacket(sql)
+            await self._send_message(prepare_packet)
+            return await self._parse_prepare_response(await self.stream.read_payload(), sql)
     
     async def _parse_prepare_response(self, packet: bytearray, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet asynchronously"""
@@ -642,10 +626,7 @@ class AsyncClient(BaseClient):
         
         packet_type = packet[0]
         
-        if packet_type == self.ERROR_PACKET:
-            # Error packet
-            raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
-        elif packet_type == self.OK_PACKET:
+        if packet_type == self.OK_PACKET:
             prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context)
             # Read parameter metadata if present
             if prepare_stmt_packet.parameter_count > 0:
@@ -669,6 +650,9 @@ class AsyncClient(BaseClient):
                     await self.stream.read_payload()
             
             return prepare_stmt_packet
+        elif packet_type == self.ERROR_PACKET:
+            # Error packet
+            raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
     

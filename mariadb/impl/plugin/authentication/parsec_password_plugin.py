@@ -116,12 +116,9 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         salt = parser.read_remaining()
         
         # Validate format
-        if first_byte != 0x50:  # 'P' for PBKDF2
-            raise OperationalError("Wrong parsec authentication format: expected 'P' for KDF algorithm")
-        
-        if iterations_exp > 3:  # Maximum iteration of 8192 (2^13 = 1024 << 3)
-            raise OperationalError("Wrong parsec authentication format: iteration count too high")
-        
+        if first_byte != 0x50 or iterations_exp > 3:  # 'P' for PBKDF2, Maximum iteration of 8192 (2^13 = 1024 << 3)
+            raise OperationalError("Wrong parsec authentication format: expected 'P' for KDF algorithm or iteration count too high")
+
         # Derive key and create signature
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         
@@ -161,11 +158,8 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         salt = parser.read_remaining()
         
         # Validate format
-        if first_byte != 0x50:  # 'P' for PBKDF2
-            raise OperationalError("Wrong parsec authentication format: expected 'P' for KDF algorithm")
-        
-        if iterations_exp > 3:  # Maximum iteration of 8192 (2^13 = 1024 << 3)
-            raise OperationalError("Wrong parsec authentication format: iteration count too high")
+        if first_byte != 0x50 or iterations_exp > 3:  # 'P' for PBKDF2, Maximum iteration of 8192 (2^13 = 1024 << 3)
+            raise OperationalError("Wrong parsec authentication format: expected 'P' for KDF algorithm or iteration count too high")
         
         # Derive key and create signature
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
