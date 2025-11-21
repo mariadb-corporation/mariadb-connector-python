@@ -32,6 +32,12 @@ class TestCursor(unittest.TestCase):
         self.connection.close()
         del self.connection
 
+    def test_do1(self):
+        for i in range(10000):
+            cursor = self.connection.cursor()
+            cursor.execute("DO 1")
+            cursor.close()
+
     def test_conpy251(self):
         cursor = self.connection.cursor()
         x = cursor.nextset()

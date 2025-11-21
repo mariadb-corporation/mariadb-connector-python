@@ -6,7 +6,6 @@ Socket package for MariaDB client communication
 """
 
 from .payload_parser import PayloadParser
-from .payload_writer import PayloadWriter
 from .mutable_int import MutableInt
 
-__all__ = ['PayloadParser', 'PayloadWriter', 'MutableInt']
+__all__ = ['PayloadParser', 'MutableInt']

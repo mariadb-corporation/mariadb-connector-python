@@ -10,10 +10,9 @@ from typing import Optional, TYPE_CHECKING
 
 from ...configuration import Configuration
 
-from ...client.socket.stream import AsyncStream, PacketBuffer, SyncStream
+from ...client.socket.read_stream import AsyncReadStream, SyncReadStream, PacketBuffer
+from ...client.socket.write_stream import AsyncWriteStream, SyncWriteStream
 from ...client.context import Context
-
-from ...client.socket.payload_writer import PayloadWriter
 from ...client.socket.payload_parser import PayloadParser
 from ..authentication_plugin import AuthenticationPlugin
 from ....exceptions import OperationalError
@@ -87,7 +86,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         
         return client_scramble, signature, raw_public_key
     
-    async def processAsync(self, stream: AsyncStream, context: Context) -> PacketBuffer:
+    async def processAsync(self, read_stream: AsyncReadStream, write_stream: AsyncWriteStream, context: Context) -> PacketBuffer:
         """Process Parsec password plugin authentication (async)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
@@ -96,11 +95,11 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        stream.begin_write(False)
-        await stream.flush("PARSEC_REQUEST_SALT")
+        write_stream.begin_write(False)
+        await write_stream.flush("PARSEC_REQUEST_SALT")
 
         # Step 2: Read server response with salt and parameters
-        response = await stream.read_payload()
+        response = await read_stream.read_payload()
         
         if len(response) < 3:
             response.release()
@@ -126,15 +125,15 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         
         # Send client scramble + signature to server
-        stream.begin_write(False)
-        stream.write_bytes(client_scramble)
-        stream.write_bytes(signature)
-        await stream.flush("PARSEC_AUTH")
+        write_stream.begin_write(False)
+        write_stream.write_bytes(client_scramble)
+        write_stream.write_bytes(signature)
+        await write_stream.flush("PARSEC_AUTH")
 
         # Read final response
-        return await stream.read_payload()
+        return await read_stream.read_payload()
     
-    def processSync(self, stream: SyncStream, context: Context) -> PacketBuffer:
+    def processSync(self, read_stream: SyncReadStream, write_stream: SyncWriteStream, context: Context) -> PacketBuffer:
         """Process Parsec password plugin authentication (sync)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
@@ -143,11 +142,11 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        stream.begin_write(False)
-        stream.flush("PARSEC_REQUEST_SALT")
+        write_stream.begin_write(False)
+        write_stream.flush("PARSEC_REQUEST_SALT")
         
         # Step 2: Read server response with salt and parameters
-        response = stream.read_payload()
+        response = read_stream.read_payload()
         
         if len(response) < 3:
             response.release()
@@ -171,13 +170,13 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         
         # Send client scramble + signature to server
-        stream.begin_write(False)
-        stream.write_bytes(client_scramble)
-        stream.write_bytes(signature)
-        stream.flush("PARSEC_AUTH")
+        write_stream.begin_write(False)
+        write_stream.write_bytes(client_scramble)
+        write_stream.write_bytes(signature)
+        write_stream.flush("PARSEC_AUTH")
         
         # Read final response
-        return stream.read_payload()
+        return read_stream.read_payload()
     
     def is_mitm_proof(self) -> bool:
         """Parsec password plugin is MitM-proof"""

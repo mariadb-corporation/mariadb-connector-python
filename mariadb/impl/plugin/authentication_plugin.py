@@ -9,10 +9,8 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from ..configuration import Configuration
-
-
-from ..client.socket.stream import AsyncStream
-from ..client.socket.stream import SyncStream
+from ..client.socket.read_stream import AsyncReadStream, SyncReadStream
+from ..client.socket.write_stream import AsyncWriteStream, SyncWriteStream
 from ..client.context import Context
 
 class AuthenticationPlugin(ABC):
@@ -21,12 +19,12 @@ class AuthenticationPlugin(ABC):
     """
     
     @abstractmethod
-    async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
+    async def processAsync(self, read_stream: AsyncReadStream, write_stream: AsyncWriteStream, context: Context) -> bytearray:
         """Process plugin authentication"""
         ...
 
     @abstractmethod
-    def processSync(self, stream: SyncStream, context: Context) -> bytearray:
+    def processSync(self, read_stream: SyncReadStream, write_stream: SyncWriteStream, context: Context) -> bytearray:
         """Process plugin authentication"""
         ...
     

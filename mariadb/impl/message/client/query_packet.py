@@ -13,7 +13,6 @@ except ImportError:
     HAS_NUMPY = False
 
 from ...client.context import Context
-from ...client.socket.payload_writer import PayloadWriter
 from ...string_utils import StringEscaper
 from ...sql_parser import split_sql_parts
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
@@ -21,7 +20,7 @@ from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
 from ....exceptions import NotSupportedError
 if TYPE_CHECKING:
-    from ...client.socket.stream import SyncStream
+    from ...client.socket.write_stream import BaseWriteStream
 
 BINARY_PREFIX: bytes = bytearray(b"_binary'")
 QUOTE_BYTE: int = b"'"[0]
@@ -39,7 +38,7 @@ class QueryPacket(ClientMessage):
         self.sql = sql
         
 
-    def process(self, stream: 'SyncStream', context: Context) -> None:
+    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
         """Encode COM_QUERY packet directly to stream (zero-copy, preferred)"""
         stream.write_byte(COM_QUERY)
         stream.write_string(self.sql, 'utf-8')
@@ -69,7 +68,7 @@ class QueryWithParamPacket(ClientMessage):
         self.param_positions = param_positions
         self.parameters = parameters
         
-    def process(self, stream: 'SyncStream', context: Context) -> None:
+    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
         """Encode COM_QUERY packet with SQL and bound parameters"""
         no_backslash_escapes = context.server_status & NO_BACKSLASH_ESCAPES > 0
         
@@ -101,7 +100,7 @@ class QueryWithParamPacket(ClientMessage):
             stream.write_bytes(self.sql_bytes[last_pos:])
                     
     
-    def _write_parameter_value(self, stream: 'SyncStream', param: Any, no_backslash_escapes: bool) -> None:
+    def _write_parameter_value(self, stream: 'BaseWriteStream', param: Any, no_backslash_escapes: bool) -> None:
         """
         Write parameter value directly as its string representation
         (for COM_QUERY, parameters are converted to strings)

@@ -15,13 +15,12 @@ except ImportError:
 from typing import TYPE_CHECKING
 
 from ...client.context import Context
-from ...client.socket.payload_writer import PayloadWriter
 from mariadb_shared.constants import FIELD_TYPE
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
 from ....exceptions import NotSupportedError
 if TYPE_CHECKING:
-    from ...client.socket.stream import SyncStream
+    from ...client.socket.write_stream import BaseWriteStream
 class ExecutePacket(ClientMessage):
     """
     Execute packet for prepared statement execution (COM_STMT_EXECUTE)
@@ -37,7 +36,7 @@ class ExecutePacket(ClientMessage):
         self.parameters = parameters or []
         self.sql = sql
 
-    def process(self, stream: 'SyncStream', context: Context) -> None:
+    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
         stream.write_byte(self.COM_STMT_EXECUTE)
         stream.write_bytes(struct.pack('<I', self.statement_id))
         stream.write_byte(0x00) # Write flags  
@@ -215,7 +214,7 @@ class ExecutePacket(ClientMessage):
             stream.write_byte(dt.minute)
             stream.write_byte(dt.second)
     
-    def _write_date(self, writer: PayloadWriter, date: datetime.date) -> None:
+    def _write_date(self, stream, date: datetime.date) -> None:
         """Write date in MySQL binary format"""
         # 4 bytes: year(2) + month(1) + day(1)
         stream.write_byte(4)
@@ -223,7 +222,7 @@ class ExecutePacket(ClientMessage):
         stream.write_byte(date.month)
         stream.write_byte(date.day)
     
-    def _write_time(self, writer: PayloadWriter, time: datetime.time) -> None:
+    def _write_time(self, stream, time: datetime.time) -> None:
         """Write time in MySQL binary format"""
         if time.microsecond:
             # 12 bytes: negative(1) + days(4) + hour(1) + minute(1) + second(1) + microsecond(4)

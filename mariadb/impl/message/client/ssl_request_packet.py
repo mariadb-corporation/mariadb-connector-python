@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from mariadb.impl.client.context import Context
 from ..client_message import ClientMessage
 if TYPE_CHECKING:
-    from ...client.socket.stream import SyncStream
+    from ...client.socket.write_stream import BaseWriteStream
 
 class SslRequestPacket(ClientMessage):
     """
@@ -18,7 +18,7 @@ class SslRequestPacket(ClientMessage):
         """Initialize SSL request packet with client capabilities"""
         self.client_capabilities: int = client_capabilities
 
-    def process(self, stream: 'SyncStream', context: Context) -> None:
+    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
         stream.write_uint32(self.client_capabilities & 0xFFFFFFFF)  # Client capabilities (4 bytes)
         stream.write_uint32(1024 * 1024 * 1024)  # Max packet size (4 bytes)
         stream.write_byte(45)  # Charset (1 byte)

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from ...client.socket.stream import SyncStream
+    from ...client.socket.write_stream import BaseWriteStream
 
 class ChangeDbPacket(ClientMessage):
     """
@@ -24,7 +24,7 @@ class ChangeDbPacket(ClientMessage):
         """Initialize COM_INIT_DB packet with database name"""
         self.database = database
         
-    def process(self, stream: 'SyncStream', context: Context) -> None:
+    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
         stream.write_byte(self.COM_INIT_DB)
         stream.write_string(self.database)
 

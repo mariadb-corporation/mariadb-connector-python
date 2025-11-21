@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from mariadb_shared.constants import CAPABILITY
 if TYPE_CHECKING:
-    from ...client.socket.stream import SyncStream, AsyncStream
+    from ...client.socket.write_stream import BaseWriteStream
 
 class ChangeUserPacket(ClientMessage):
     """
@@ -39,7 +39,7 @@ class ChangeUserPacket(ClientMessage):
         self.charset_collation = charset_collation
         self.connect_attrs = connect_attrs or {}
     
-    def process(self, stream: 'SyncStream', context: Context) -> None:
+    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
         # Command byte
         stream.write_byte(0x11)  # COM_CHANGE_USER
         

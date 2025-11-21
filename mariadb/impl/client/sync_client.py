@@ -20,7 +20,8 @@ from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
 from .base_client import BaseClient
 from .socket.payload_parser import PayloadParser
-from .socket.stream import SyncStream
+from .socket.read_stream import SyncReadStream, PacketBuffer
+from .socket.write_stream import SyncWriteStream
 from ..configuration import Configuration
 from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
@@ -34,7 +35,6 @@ from ..completion import Completion
 from ...exceptions import OperationalError, DatabaseError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
-from .socket.stream import PacketBuffer
 
 class SyncClient(BaseClient):
     """
@@ -55,7 +55,8 @@ class SyncClient(BaseClient):
         
         # Sync-specific attributes
         self.socket: Optional[socket.socket] = None
-        self.stream: Optional[SyncStream] = None
+        self.read_stream: Optional[SyncReadStream] = None
+        self.write_stream: Optional[SyncWriteStream] = None
 
     # =========================================================================
     # Connection Management
@@ -112,7 +113,10 @@ class SyncClient(BaseClient):
             if self.socket_timeout:
                 self.socket.settimeout(self.socket_timeout)
             
-            self.stream = SyncStream(self.socket)
+            self.read_stream = SyncReadStream(self.socket)
+            self.write_stream = SyncWriteStream(self.socket)
+            # Share the same sequence counter between read and write streams
+            self.write_stream.sequence = self.read_stream.sequence
             
         except Exception as e:
             if self.socket:
@@ -130,12 +134,12 @@ class SyncClient(BaseClient):
 
     def _perform_handshake(self) -> None:
         """Perform initial handshake and authentication with server"""
-        handshake_packet = self.stream.read_payload()
+        handshake_packet = self.read_stream.read_payload()
         if (handshake_packet[0] == 0xff):
             raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
         self.context = self._parse_handshake(handshake_packet)
         
-        self.stream.connection_id = self.context.connection_id
+        self.read_stream.connection_id = self.write_stream.connection_id = self.context.connection_id
 
         client_capabilities = self._calculate_client_capabilities()
 
@@ -151,7 +155,7 @@ class SyncClient(BaseClient):
         self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
 
         self._send_message(HandshakeResponse(self.configuration, self.context), False)
-        self._handle_authentication(self.stream.read_payload())
+        self._handle_authentication(self.read_stream.read_payload())
         
         self.connected = True
 
@@ -213,8 +217,11 @@ class SyncClient(BaseClient):
             
             # Create new SyncStream with the upgraded connection
             connection_id = self.context.connection_id if self.context else -1
-            self.stream = SyncStream(self.socket, connection_id)
-            self.stream.sequence.set(1)
+            self.read_stream = SyncReadStream(self.socket, connection_id)
+            self.write_stream = SyncWriteStream(self.socket, connection_id)
+            # Share the same sequence counter between read and write streams
+            self.write_stream.sequence = self.read_stream.sequence
+            self.read_stream.sequence.set(1)
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
     
@@ -255,7 +262,7 @@ class SyncClient(BaseClient):
             plugin = plugin_factory.initialize(self.configuration.password, auth_data, self.configuration, self.host_address)
             # Store plugin for fingerprint validation
             self.auth_plugin = plugin
-            response = plugin.processSync(self.stream, self.context)
+            response = plugin.processSync(self.read_stream, self.write_stream, self.context)
             self._handle_authentication(response)
         except DatabaseError as e:
             raise e
@@ -268,9 +275,9 @@ class SyncClient(BaseClient):
 
     def _send_message(self, message: ClientMessage, reset_sequence: bool = True) -> None:
         """Send client message to server using streaming API (zero-copy)"""
-        self.stream.begin_write(reset_sequence)
-        message.process(self.stream, self.context)
-        self.stream.flush(message.type())
+        self.write_stream.begin_write(reset_sequence)
+        message.process(self.write_stream, self.context)
+        self.write_stream.flush(message.type())
 
     def execute(self, message: ClientMessage, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         """Execute command and return list of completion results"""
@@ -283,7 +290,7 @@ class SyncClient(BaseClient):
                 results = []
                 
                 while True:
-                    result_packet = self.stream.read_payload()
+                    result_packet = self.read_stream.read_payload()
                     completion = self._parse_result_packet(result_packet, config, message.is_binary(), buffered, prepare_stmt_packet)
                     results.append(completion)
                     
@@ -318,7 +325,7 @@ class SyncClient(BaseClient):
 
             change_user_packet = ChangeUserPacket(new_conf.user, new_conf.password, new_conf.database)
             self._send_message(change_user_packet)
-            self._handle_authentication(self.stream.read_payload())
+            self._handle_authentication(self.read_stream.read_payload())
         except DatabaseError as e:
             self.configuration = old_conf
             raise
@@ -404,18 +411,17 @@ class SyncClient(BaseClient):
             else:
                 packet.release()
                 for _ in range(column_count):
-                    col_packet = self.stream.read_payload()
+                    col_packet = self.read_stream.read_payload()
                     columns.append(ColumnDefinitionPacket.decode(col_packet, self.context))
             
             # Read EOF packet after column definitions (if not deprecated)
             if not self.context.isEofDeprecated():
-                (self.stream.read_payload()).release()
+                (self.read_stream.read_payload()).release()
 
             # If unbuffered, create streaming result
             if not buffered:
                 from ..result import SyncStreamingResult
-                streaming_result = SyncStreamingResult(
-                    self.stream,
+                streaming_result = SyncStreamingResult(self.read_stream,
                     self.context,
                     columns,
                     column_count,
@@ -433,7 +439,7 @@ class SyncClient(BaseClient):
             rows: List[tuple] = []
             parser = PayloadParser(None)
             while True:
-                row_packet = self.stream.read_payload()
+                row_packet = self.read_stream.read_payload()
                 # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
                 # EOF/OK packets start with 0xFE and have specific length constraints
                 if (row_packet[0] == 0xFE and 
@@ -479,8 +485,10 @@ class SyncClient(BaseClient):
             except:
                 pass
             self.socket = None
-        if hasattr(self, 'stream'):
-            self.stream = None
+        if hasattr(self, 'read_stream'):
+            self.read_stream = None
+        if hasattr(self, 'write_stream'):
+            self.write_stream = None
     
 
     def _ensure_default(self) -> None:
@@ -512,7 +520,7 @@ class SyncClient(BaseClient):
             
             prepare_packet = PreparePacket(sql)
             self._send_message(prepare_packet)
-            return self._parse_prepare_response(self.stream.read_payload(), sql)
+            return self._parse_prepare_response(self.read_stream.read_payload(), sql)
 
     def _parse_prepare_response(self, packet: PacketBuffer, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet"""
@@ -528,18 +536,18 @@ class SyncClient(BaseClient):
             if prepare_stmt_packet.parameter_count > 0:
                 # Skip parameter metadata
                 for _ in range(prepare_stmt_packet.parameter_count):
-                    self.stream.read_payload().release()
+                    self.read_stream.read_payload().release()
 
                 if not self.context.isEofDeprecated():
-                    eof_packet = self.stream.read_payload().release()
+                    eof_packet = self.read_stream.read_payload().release()
             
             # Read column metadata if present
             if prepare_stmt_packet.column_count > 0:
                 for _ in range(prepare_stmt_packet.column_count):
-                    prepare_stmt_packet.columns.append(ColumnDefinitionPacket.decode(self.stream.read_payload(), self.context))
+                    prepare_stmt_packet.columns.append(ColumnDefinitionPacket.decode(self.read_stream.read_payload(), self.context))
                 
                 if not self.context.isEofDeprecated():
-                    self.stream.read_payload().release()
+                    self.read_stream.read_payload().release()
             
             return prepare_stmt_packet
         elif packet_type == self.ERROR_PACKET:

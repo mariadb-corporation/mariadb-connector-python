@@ -8,7 +8,7 @@ Does NOT perform any I/O - only parses bytes.
 import struct
 from typing import Optional
 
-from mariadb.impl.client.socket.stream import PacketBuffer
+from mariadb.impl.client.socket.read_stream import PacketBuffer
 
 
 class PayloadParser:
@@ -184,34 +184,3 @@ class PayloadParser:
     def remaining_bytes(self) -> int:
         """Get number of remaining bytes"""
         return len(self.packet) - self.pos
-    
-    @staticmethod
-    def read_length_encoded_string_at(packet: bytes, pos: int, encoding: str = 'utf-8') -> tuple:
-        """Read length-encoded string at position and return (value, new_position)"""
-        len, pos2 = PayloadParser.read_length_encoded_at(packet, pos)
-        if (len is None):
-            return None, pos2
-        return bytes(packet[pos2:pos2 + len]).decode(encoding, errors='replace'), pos2 + len
-    
-    @staticmethod
-    def read_length_encoded_bytes_at(packet: bytes, pos: int) -> tuple:
-        """Read length-encoded bytes at position and return (value, new_position)"""
-        len, pos2 = PayloadParser.read_length_encoded_at(packet, pos)
-        if (len is None):
-            return None, pos2   
-        return bytes(packet[pos2:pos2 + len]), pos2 + len
-
-    @staticmethod
-    def read_length_encoded_at(packet: bytes, pos: int) -> tuple:
-        first_byte = packet[pos]
-        pos2 = pos + 1
-        
-        if first_byte < 251:
-            return first_byte, pos2
-        elif first_byte == 251:    
-            return None, pos2
-        elif first_byte == 252:
-            return ((packet[pos2] & 0xff) + (packet[pos2 + 1] << 8)) & 0xffff, pos2 + 2
-        elif first_byte == 253:
-            return struct.unpack('<I', bytes(packet[pos2:pos2+3]) + b'\x00')[0], pos2 + 3
-        return struct.unpack('<Q', packet[pos2:pos2+8])[0], pos2 + 8

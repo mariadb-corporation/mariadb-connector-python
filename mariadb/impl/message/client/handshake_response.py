@@ -10,7 +10,7 @@ from ..client_message import ClientMessage
 from ...configuration import Configuration
 from mariadb_shared.constants import CAPABILITY
 if TYPE_CHECKING:
-    from ...client.socket.stream import SyncStream
+    from ...client.socket.write_stream import BaseWriteStream
 
 class HandshakeResponse(ClientMessage):
     """
@@ -23,7 +23,7 @@ class HandshakeResponse(ClientMessage):
         self.configuration = configuration
         self.context = context
         
-    def process(self, stream: 'SyncStream', context: Context) -> None:
+    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
         """Encode handshake response packet with capabilities, auth, and connection attributes"""
         
         # Client capabilities (4 bytes)

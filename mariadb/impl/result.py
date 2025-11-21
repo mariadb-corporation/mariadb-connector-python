@@ -8,13 +8,13 @@ Result set classes for MariaDB query results
 from typing import List, Optional, Any, TYPE_CHECKING, Callable, Tuple
 from abc import ABC, abstractmethod
 from .client.socket.payload_parser import PayloadParser
-from .client.socket.stream import PacketBuffer
+from .client.socket.read_stream import PacketBuffer
 from .message.server.eof_packet import EofPacket
 from .message.server.ok_packet import OkPacket
 from .message.server.column_definition_packet import ColumnDefinitionPacket
 
 if TYPE_CHECKING:
-    from .client.socket.async_stream import AsyncStream
+    from .client.socket.read_stream import AsyncReadStream, SyncReadStream
     from .client.context import Context
     from .configuration import Configuration
 

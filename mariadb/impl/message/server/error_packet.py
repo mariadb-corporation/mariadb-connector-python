@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from ...client.context import Context
     from ...client.exception_factory import ExceptionFactory
 from ...client.socket.payload_parser import PayloadParser
-from ...client.socket.stream import PacketBuffer
+from ...client.socket.read_stream import PacketBuffer
 
 
 class ErrorPacket:

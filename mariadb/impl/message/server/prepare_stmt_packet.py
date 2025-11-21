@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Optional
 
 from .column_definition_packet import ColumnDefinitionPacket
 from ...client.socket.payload_parser import PayloadParser
-from ...client.socket.stream import PacketBuffer
+from ...client.socket.read_stream import PacketBuffer
 if TYPE_CHECKING:
     from ...client.context import Context
 

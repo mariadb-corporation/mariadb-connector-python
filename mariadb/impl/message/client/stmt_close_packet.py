@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from ...client.context import Context
 from ..client_message import ClientMessage
 if TYPE_CHECKING:
-    from ...client.socket.stream import SyncStream
+    from ...client.socket.write_stream import BaseWriteStream
 
 class StmtClosePacket(ClientMessage):
     """
@@ -26,7 +26,7 @@ class StmtClosePacket(ClientMessage):
         """Initialize COM_STMT_CLOSE packet with statement ID"""
         self.statement_id = statement_id
 
-    def process(self, stream: 'SyncStream', context: Context) -> None:
+    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
         """Encode COM_STMT_CLOSE packet with statement ID"""
         stream.write_byte(COM_STMT_CLOSE)
         stream.write_uint32(self.statement_id)

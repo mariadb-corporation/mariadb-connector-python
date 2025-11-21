@@ -8,7 +8,8 @@ from typing import Optional
 
 from ...configuration import Configuration
 
-from ...client.socket.stream import AsyncStream, PacketBuffer, SyncStream
+from ...client.socket.read_stream import AsyncReadStream, SyncReadStream, PacketBuffer
+from ...client.socket.write_stream import AsyncWriteStream, SyncWriteStream
 from ...client.context import Context
 from ..authentication_plugin import AuthenticationPlugin
 
@@ -51,25 +52,25 @@ class NativePasswordPlugin(AuthenticationPlugin):
         # Encrypt password
         return self.encrypt_password(self.authentication_data, truncated_seed)
     
-    async def processAsync(self, stream: AsyncStream, context: Context) -> PacketBuffer:
+    async def processAsync(self, read_stream: AsyncReadStream, write_stream: AsyncWriteStream, context: Context) -> PacketBuffer:
         """Process native password plugin authentication (async)"""
         encrypted = self._build_auth_payload()
 
-        stream.begin_write(False)
-        stream.write_bytes(encrypted)        
-        await stream.flush("NATIVE_PASSWORD")
+        write_stream.begin_write(False)
+        write_stream.write_bytes(encrypted)        
+        await write_stream.flush("NATIVE_PASSWORD")
 
-        return await stream.read_payload()
+        return await read_stream.read_payload()
     
-    def processSync(self, stream: SyncStream, context: Context) -> PacketBuffer:
+    def processSync(self, read_stream: SyncReadStream, write_stream: SyncWriteStream, context: Context) -> PacketBuffer:
         """Process native password plugin authentication (sync)"""
         encrypted = self._build_auth_payload()
 
-        stream.begin_write(False)
-        stream.write_bytes(encrypted)        
-        stream.flush("NATIVE_PASSWORD")
+        write_stream.begin_write(False)
+        write_stream.write_bytes(encrypted)        
+        write_stream.flush("NATIVE_PASSWORD")
 
-        return stream.read_payload()
+        return read_stream.read_payload()
     
     def is_mitm_proof(self) -> bool:
         """Native password plugin is MitM-proof"""

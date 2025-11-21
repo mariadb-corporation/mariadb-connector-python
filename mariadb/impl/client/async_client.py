@@ -19,19 +19,18 @@ from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
 from .base_client import BaseClient
 from .socket.payload_parser import PayloadParser
-from .socket.stream import AsyncStream, PacketBuffer
+from .socket.read_stream import AsyncReadStream, PacketBuffer
+from .socket.write_stream import AsyncWriteStream
 from ..configuration import Configuration
-from ..host_address import HostAddress
 from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
-from ..message.client.reset_connection_packet import ResetConnectionPacket
 from ..message.client.query_packet import QueryPacket
 from ..message.client.quit_packet import QuitPacket
 from ..message.client.prepare_packet import PreparePacket
 from ..message.client.change_user_packet import ChangeUserPacket
 from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..completion import Completion
-from ...exceptions import OperationalError, DatabaseError, NotSupportedError
+from ...exceptions import OperationalError, DatabaseError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
 
@@ -56,7 +55,8 @@ class AsyncClient(BaseClient):
         # Async-specific attributes
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
-        self.stream: Optional[AsyncStream] = None
+        self.read_stream: Optional[AsyncReadStream] = None
+        self.write_stream: Optional[AsyncWriteStream] = None
         self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
         self.auth_plugin: Optional['AuthenticationPlugin'] = None
         
@@ -123,7 +123,10 @@ class AsyncClient(BaseClient):
                         self.host_address.port
                     )
             
-            self.stream = AsyncStream(self.reader, self.writer)
+            self.read_stream = AsyncReadStream(self.reader)
+            self.write_stream = AsyncWriteStream(self.writer)
+            # Share the same sequence counter between read and write streams
+            self.write_stream.sequence = self.read_stream.sequence
             
         except Exception as e:
             if self.writer:
@@ -144,12 +147,12 @@ class AsyncClient(BaseClient):
     async def _perform_handshake(self) -> None:
         """Perform initial handshake and authentication with server asynchronously"""
         # Read initial handshake packet from server
-        handshake_packet = await self.stream.read_payload()
+        handshake_packet = await self.read_stream.read_payload()
         if (handshake_packet[0] == 0xff):
             raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
 
         self.context = self._parse_handshake(handshake_packet)
-        self.stream.connection_id = self.context.connection_id
+        self.read_stream.connection_id = self.write_stream.connection_id = self.context.connection_id
         
         client_capabilities = self._calculate_client_capabilities()
 
@@ -170,7 +173,7 @@ class AsyncClient(BaseClient):
         await self._send_message(HandshakeResponse(self.configuration, self.context), False)
 
         # Handle authentication (may involve multiple rounds)
-        auth_result = await self.stream.read_payload()
+        auth_result = await self.read_stream.read_payload()
         await self._handle_authentication(auth_result)
         
         self.connected = True
@@ -252,7 +255,7 @@ class AsyncClient(BaseClient):
             self.writer._transport = new_transport
             
             # Update the stream sequence for the next packet
-            self.stream.sequence.set(1)
+            self.read_stream.sequence.set(1)
             
         except ssl.SSLError as e:
             # SSL-specific error - close transport immediately to avoid cleanup issues
@@ -280,7 +283,7 @@ class AsyncClient(BaseClient):
             await self._send_message(change_user_packet)
 
             # Read initial authentication result
-            auth_result = await self.stream.read_payload()
+            auth_result = await self.read_stream.read_payload()
             await self._handle_authentication(auth_result)
                 
         except Exception as e:
@@ -327,7 +330,7 @@ class AsyncClient(BaseClient):
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
             plugin = plugin_factory.initialize(self.configuration.password, auth_data, self.configuration, self.host_address)
             self.auth_plugin = plugin
-            response: bytearray = await plugin.processAsync(self.stream, self.context)
+            response: bytearray = await plugin.processAsync(self.read_stream, self.write_stream, self.context)
             await self._handle_authentication(response)
         except DatabaseError as e:
             raise e            
@@ -355,9 +358,9 @@ class AsyncClient(BaseClient):
 
     async def _send_message(self, message: ClientMessage, reset_sequence: bool = True) -> None:
         """Send client message to server"""
-        self.stream.begin_write(reset_sequence)
-        message.process(self.stream, self.context)
-        await self.stream.flush(message.type())
+        self.write_stream.begin_write(reset_sequence)
+        message.process(self.write_stream, self.context)
+        await self.write_stream.flush(message.type())
     
     async def execute(self, message: ClientMessage, config: 'Configuration', buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List[Completion]:
         """Execute command asynchronously and return list of completion results"""
@@ -376,7 +379,7 @@ class AsyncClient(BaseClient):
                 
                 # Continue reading results while MORE_RESULTS_EXIST is set
                 while True:
-                    result_packet = await self.stream.read_payload()
+                    result_packet = await self.read_stream.read_payload()
                     completion = await self._parse_result_packet(result_packet, config, is_binary, buffered, prepare_stmt_packet)
                     results.append(completion)
                     
@@ -494,20 +497,20 @@ class AsyncClient(BaseClient):
             else:
                 packet.release()
                 for _ in range(column_count):
-                    columns.append(ColumnDefinitionPacket.decode(await self.stream.read_payload(), self.context))
+                    columns.append(ColumnDefinitionPacket.decode(await self.read_stream.read_payload(), self.context))
             
             # Step 3: Handle EOF packet after column definitions based on capabilities
             # Check if DEPRECATE_EOF capability is set
             
             if not self.context.isEofDeprecated():
                 # skip intermediate EOF packet
-                (await self.stream.read_payload()).release()
+                (await self.read_stream.read_payload()).release()
             
             # Step 4: If unbuffered, create streaming result
             if not buffered:
                 from ..result import AsyncStreamingResult
                 streaming_result = AsyncStreamingResult(
-                    stream=self.stream,
+                    stream=self.read_stream,
                     context=self.context,
                     columns=columns,
                     column_count=column_count,
@@ -525,7 +528,7 @@ class AsyncClient(BaseClient):
             rows = []
             parser = PayloadParser(None)
             while True:
-                row_packet = await self.stream.read_payload()
+                row_packet = await self.read_stream.read_payload()
                 # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
                 # EOF/OK packets start with 0xFE and have specific length constraints
                 if (row_packet[0] == self.EOF_PACKET and 
@@ -573,15 +576,17 @@ class AsyncClient(BaseClient):
         """Cleanup socket and stream resources asynchronously"""       
         if hasattr(self, 'writer') and self.writer:
             try:
-                self.writer.close()
+                self.write_stream.writer.close()
                 await asyncio.wait_for(self.writer.wait_closed(), timeout=1.0)
             except (asyncio.TimeoutError, ssl.SSLError, Exception):
                 pass
             self.writer = None
         if hasattr(self, 'reader'):
             self.reader = None
-        if hasattr(self, 'stream'):
-            self.stream = None
+        if hasattr(self, 'read_stream'):
+            self.read_stream = None
+        if hasattr(self, 'write_stream'):
+            self.write_stream = None
     
     # =========================================================================
     # Prepared Statements
@@ -595,7 +600,7 @@ class AsyncClient(BaseClient):
             
             prepare_packet = PreparePacket(sql)
             await self._send_message(prepare_packet)
-            return await self._parse_prepare_response(await self.stream.read_payload(), sql)
+            return await self._parse_prepare_response(await self.read_stream.read_payload(), sql)
     
     async def _parse_prepare_response(self, packet: PacketBuffer, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet asynchronously"""
@@ -610,22 +615,22 @@ class AsyncClient(BaseClient):
             if prepare_stmt_packet.parameter_count > 0:
                 # Skip parameter metadata
                 for _ in range(prepare_stmt_packet.parameter_count):
-                    (await self.stream.read_payload()).release()                
+                    (await self.read_stream.read_payload()).release()                
 
                 # Read EOF packet after parameters (if not deprecated)
                 if not self.context.isEofDeprecated():
-                    (await self.stream.read_payload()).release()
+                    (await self.read_stream.read_payload()).release()
             
             # Read column metadata if present
             if prepare_stmt_packet.column_count > 0:
                 columns = []
                 for _ in range(prepare_stmt_packet.column_count):
-                    columns.append(ColumnDefinitionPacket.decode(await self.stream.read_payload(), self.context))
+                    columns.append(ColumnDefinitionPacket.decode(await self.read_stream.read_payload(), self.context))
                 prepare_stmt_packet.columns = columns
                 
                 # Read EOF packet after columns (if not deprecated)
                 if not self.context.isEofDeprecated():
-                    (await self.stream.read_payload()).release()
+                    (await self.read_stream.read_payload()).release()
             
             return prepare_stmt_packet
         elif packet_type == self.ERROR_PACKET:

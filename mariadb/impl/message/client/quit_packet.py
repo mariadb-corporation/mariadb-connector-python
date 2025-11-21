@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from ...client.context import Context
 from ..client_message import ClientMessage
 if TYPE_CHECKING:
-    from ...client.socket.stream import SyncStream
+    from ...client.socket.write_stream import BaseWriteStream
 
 class QuitPacket(ClientMessage):
     """
@@ -23,7 +23,7 @@ class QuitPacket(ClientMessage):
     
     COM_QUIT = 0x01
     
-    def process(self, stream: 'SyncStream', context: Context) -> None:
+    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
         stream.write_byte(self.COM_QUIT)
 
     def is_binary(self) -> bool:

@@ -16,7 +16,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from mariadb.impl.client.socket.stream import PacketBuffer
+from mariadb.impl.client.socket.read_stream import PacketBuffer
 
 from .context import Context
 from .socket.payload_parser import PayloadParser

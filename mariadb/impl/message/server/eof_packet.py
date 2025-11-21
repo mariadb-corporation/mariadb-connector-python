@@ -10,7 +10,7 @@ Based on MySQL/MariaDB protocol EOF packet structure.
 from typing import TYPE_CHECKING
 from ...completion import Completion
 from ...client.socket.payload_parser import PayloadParser
-from ...client.socket.stream import PacketBuffer
+from ...client.socket.read_stream import PacketBuffer
 if TYPE_CHECKING:
     from ...client.context import Context
 

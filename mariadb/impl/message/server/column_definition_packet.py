@@ -10,7 +10,7 @@ Based on MySQL/MariaDB protocol column definition structure.
 import struct
 from typing import TYPE_CHECKING, Optional
 from ...client.socket.payload_parser import PayloadParser
-from ...client.socket.stream import PacketBuffer
+from ...client.socket.read_stream import PacketBuffer
 if TYPE_CHECKING:
     from ...client.context import Context
 
