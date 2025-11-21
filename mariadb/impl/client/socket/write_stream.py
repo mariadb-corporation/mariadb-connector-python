@@ -69,10 +69,10 @@ class BaseWriteStream(ABC):
         """Write bytes to the write buffer"""
         ...
     
-    @abstractmethod
     def write_string(self, text: str, encoding: str = 'utf-8') -> None:
         """Write string to the write buffer"""
-        ...
+        encoded = text.encode(encoding)
+        self.write_bytes(encoded)
     
     @abstractmethod
     def write_uint16(self, data: int) -> None:
@@ -192,11 +192,6 @@ class AsyncWriteStream(BaseWriteStream):
         self._write_view[self._write_pos:self._write_pos + length] = data
         self._write_pos += length
     
-    def write_string(self, text: str, encoding: str = 'utf-8') -> None:
-        """Write string to the write buffer"""
-        encoded = text.encode(encoding)
-        self.write_bytes(encoded)
-    
     def write_uint16(self, data: int) -> None:
         """Write a 16-bit integer to the write buffer"""
         self._ensure_write_capacity(2)
@@ -302,11 +297,6 @@ class SyncWriteStream(BaseWriteStream):
             return
         self._write_view[self._write_pos:self._write_pos + length] = data
         self._write_pos += length
-    
-    def write_string(self, text: str, encoding: str = 'utf-8') -> None:
-        """Write string to the write buffer"""
-        encoded = text.encode(encoding)
-        self.write_bytes(encoded)
     
     def write_uint16(self, data: int) -> None:
         """Write a 16-bit integer to the write buffer"""

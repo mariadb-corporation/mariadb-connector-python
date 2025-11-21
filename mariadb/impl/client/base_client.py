@@ -32,6 +32,7 @@ from ...exceptions import OperationalError
 from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
 from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
+from .field_decoders import get_decoder
 
 
 class BaseClient(ABC):
@@ -483,6 +484,30 @@ class BaseClient(ABC):
         return self.host_address
     
     # ========================================================================
+    # Decoder List Building
+    # ========================================================================
+    
+    def _build_decoder_list(self, columns: List[ColumnDefinitionPacket], is_binary: bool) -> List[Callable]:
+        """
+        Build list of decoder functions for columns (done once per result set)
+        
+        Args:
+            columns: Column definitions
+            is_binary: True for binary protocol, False for text protocol
+            
+        Returns:
+            List of decoder functions (one per column)
+        """
+        column_count = len(columns)
+        decoders = [None] * column_count
+        
+        for i in range(column_count):
+            is_unsigned = bool(columns[i].flags & FIELD_FLAG.UNSIGNED)
+            decoders[i] = get_decoder(columns[i].column_type, is_binary=is_binary, is_unsigned=is_unsigned)
+        
+        return decoders
+    
+    # ========================================================================
     # Synchronous parsing methods (no I/O, shared between Async and Sync)
     # ========================================================================
     
@@ -538,325 +563,48 @@ class BaseClient(ABC):
 
         return converted_rows
 
-    def _parse_row_data(self, parser: PayloadParser, columns: List[ColumnDefinitionPacket], config: 'Configuration', is_binary: bool = False) -> tuple:
-        """
-        Parse row data packet
-        
-        Args:
-            packet: Row data packet
-            columns: Column definitions
-            
-        Returns:
-            Tuple of row values
-        """
-        if is_binary:
-            return self._parse_binary_row_data(parser, columns, config)
-
-        row_values = []
-        try:
-            for column in columns:
-                match column.column_type:
-                    case (FIELD_TYPE.TINY | FIELD_TYPE.SHORT | FIELD_TYPE.LONG |
-                        FIELD_TYPE.LONGLONG | FIELD_TYPE.INT24 | FIELD_TYPE.YEAR):
-                        # Read as string and convert to integer (simpler and more reliable)
-                        val = parser.read_length_encoded_string(encoding='ascii')
-                        value = int(val) if val is not None else None
-                    case FIELD_TYPE.FLOAT | FIELD_TYPE.DOUBLE:
-                        # Read as string and convert to float
-                        val = parser.read_length_encoded_string()
-                        value = float(val) if val is not None else None
-                    case FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE:
-                        # Parse DATE as datetime.date
-                        val = parser.read_length_encoded_string(encoding='ascii')
-                        if val is None:
-                            value = None
-                        else:    
-                            try:
-                                year, month, day = map(int, val.split('-'))
-                                value = datetime.date(year, month, day)
-                            except (ValueError, AttributeError) as e:
-                                value = None  # Fallback to None if parsing fails
-                    case FIELD_TYPE.TIME:
-                        # Parse TIME as datetime.timedelta
-                        val = parser.read_length_encoded_string(encoding='ascii')
-                        if val is None:
-                            value = None
-                        else:    
-                            try:
-                                # Handle TIME format: HH:MM:SS[.ffffff] or HHH:MM:SS[.ffffff] (can be > 24 hours)
-                                # Can also be negative: -HH:MM:SS[.ffffff]
-                                is_negative = val.startswith('-')
-                                if is_negative:
-                                    val = val[1:]
-
-                                parts = val.split(':')
-
-                                hours = int(parts[0])
-                                minutes = int(parts[1])
-                                # Handle fractional seconds: "24.051" -> seconds=24, microseconds=51000
-                                seconds_parts = parts[2].split('.')
-                                seconds = int(seconds_parts[0])
-                                microseconds = 0
-
-                                if len(seconds_parts) > 1:
-                                    # Pad or truncate to 6 digits for microseconds
-                                    frac_str = seconds_parts[1].ljust(6, '0')[:6]
-                                    microseconds = int(frac_str)
-
-                                td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
-                                value = -td if is_negative else td
-                            except (ValueError, AttributeError):
-                                value = val  # Fallback to string if parsing fails
-                    case (FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP):
-                        # Parse DATETIME as datetime.datetime
-                        val = parser.read_length_encoded_string(encoding='ascii')
-                        if val is None:
-                            value = None
-                        else:    
-                            try:
-                                # Handle DATETIME format: YYYY-MM-DD HH:MM:SS[.ffffff]
-                                date_part, time_part = val.split(' ', 1)
-                                year, month, day = map(int, date_part.split('-'))
-
-                                time_parts = time_part.split(':')
-                                hours = int(time_parts[0])
-                                minutes = int(time_parts[1])
-                                # Handle fractional seconds: "24.123456" -> seconds=24, microseconds=123456
-                                seconds_parts = time_parts[2].split('.')
-                                seconds = int(seconds_parts[0])
-                                microseconds = 0
-
-                                if len(seconds_parts) > 1:
-                                    # Pad or truncate to 6 digits for microseconds
-                                    frac_str = seconds_parts[1].ljust(6, '0')[:6]
-                                    microseconds = int(frac_str)
-
-                                value = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
-                            except (ValueError, AttributeError):
-                                value = val  # Fallback to string if parsing fails
-                    case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
-                        # DECIMAL types must return decimal.Decimal
-                        val = parser.read_length_encoded_string(encoding='ascii')
-                        value = decimal.Decimal(val) if val is not None else None
-                    case FIELD_TYPE.JSON:
-                        value = parser.read_length_encoded_string()
-                    case FIELD_TYPE.NULL:
-                        # NULL type - read length-encoded value (will be None)
-                        value = parser.read_length_encoded_string()
-                    case _:
-                        if (column.ext_type_format == 'json'):
-                            value = parser.read_length_encoded_string()
-                        else:
-                            match column.ext_type_name:
-                                case ('inet6' | 'inet4'):
-                                    value = parser.read_length_encoded_string(encoding='ascii')
-                                    if config.native_object and value is not None:
-                                        value = ipaddress.ip_address(value)
-                                case 'uuid':
-                                    value = parser.read_length_encoded_string(encoding='ascii')
-                                    if config.native_object and value is not None:
-                                        value = uuid.UUID(value)
-                                case _:
-                                    # Default case for VARCHAR, STRING, etc.
-                                    # Check if BINARY flag is set to determine if we should read as bytes or string
-                                    if (column.character_set == 63):
-                                        # Binary data - read as bytes
-                                        value = bytes(parser.read_length_encoded_bytes())
-                                    else:
-                                        # Text data - read as string
-                                        value = parser.read_length_encoded_string()
-
-                row_values.append(value)
-        finally:
-            parser.packet.release()
+    def _parse_text_row_data(self, parser: PayloadParser, columns: List[ColumnDefinitionPacket], config: 'Configuration', decoders: List[Callable]) -> tuple:
+        """Parse text protocol row data packet"""
+        row_values = [None] * len(decoders)
+        for i, decoder in enumerate(decoders):
+            value = decoder(parser, columns[i], config)
+            row_values[i] = value
         return tuple(row_values)
 
-    def _parse_binary_row_data(self, parser: PayloadParser, columns: List[ColumnDefinitionPacket], config: 'Configuration') -> tuple:
-        """
-        Parse binary row data packet (from COM_STMT_EXECUTE)
-        
-        Args:
-            packet: Binary row data packet
-            columns: Column definitions
-            
-        Returns:
-            Tuple of row values
-        """
-        parser.read_byte()
+    def _parse_binary_row_data(self, parser: PayloadParser, columns: List[ColumnDefinitionPacket], config: 'Configuration', decoders: List[Callable]) -> tuple:
+        """Parse binary protocol row data packet"""
+        parser.read_byte()  # Skip 0x00 header
         
         # Read NULL bitmap
         null_bitmap_length = (len(columns) + 9) // 8
         null_bitmap = parser.read_bytes(null_bitmap_length)
         
         # Parse column values
-        row_values = []
-        try:
-            for i, column in enumerate(columns):
-                # Check if column is NULL using bitmap
-                if self._is_null_bitmap(i, null_bitmap):
-                    row_values.append(None)
-                    continue
-                
-                # Parse non-NULL value based on column type
-                match column.column_type:
-                    case FIELD_TYPE.TINY:
-                        value = parser.read_byte()
-                        if not (column.flags & FIELD_FLAG.UNSIGNED):
-                            if value > 127:
-                                value -= 256
-                        
-                    case (FIELD_TYPE.SHORT | FIELD_TYPE.YEAR):
-                        if column.flags & FIELD_FLAG.UNSIGNED:
-                            value = parser.read_uint16()
-                        else:
-                            value = parser.read_int16()
-                        
-                    case FIELD_TYPE.LONG | FIELD_TYPE.INT24:
-                        if column.flags & FIELD_FLAG.UNSIGNED:
-                            value = parser.read_uint32()
-                        else:
-                            value = parser.read_int32()
-                        
-                    case FIELD_TYPE.LONGLONG:
-                        if column.flags & FIELD_FLAG.UNSIGNED:
-                            value = parser.read_uint64()
-                        else:
-                            value = parser.read_int64()
-                        
-                    case FIELD_TYPE.FLOAT:
-                        value = parser.read_float()
-                        
-                    case FIELD_TYPE.DOUBLE:
-                        value = parser.read_double()
-                        
-                    case (FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE):
-                        # Binary DATE format: 1 + 4 bytes (length + year + month + day)
-                        length_byte = parser.read_byte()
-                        if length_byte < 4:
-                            value = None
-                        else:
-                            year = parser.read_uint16()
-                            month = parser.read_byte()
-                            day = parser.read_byte()
-                            try:
-                                value = datetime.date(year, month, day)
-                            except ValueError as e:
-                                value = None
-                    case FIELD_TYPE.TIME:
-                        # Binary TIME format: 1 + 8 or 12 bytes
-                        length_byte = parser.read_byte()
-                        if length_byte < 8:
-                            value = None
-                        else:
-                            negative = parser.read_byte()
-                            days = parser.read_uint32()
-                            hours = parser.read_byte()
-                            minutes = parser.read_byte()
-                            seconds = parser.read_byte()
-                            microseconds = 0
-                            
-                            if length_byte == 12:
-                                microseconds = parser.read_uint32()
-                            
-                            # Calculate total hours
-                            total_hours = days * 24 + hours
-                            
-                            try:
-                                # Use timedelta for TIME values >= 24 hours
-                                value = datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
-                                if negative:
-                                    value = -value
-                            except ValueError:
-                                value = None
-                            
-                    case FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP:
-                        # Binary DATETIME format: 1 + 4, 7, or 11 bytes
-                        length_byte = parser.read_byte()
-                        
-                        if length_byte < 4:
-                            value = None
-                        else:
-                            year = parser.read_uint16()
-                            month = parser.read_byte()
-                            day = parser.read_byte()
-                            
-                            hours = minutes = seconds = microseconds = 0
-                            
-                            if length_byte >= 7:
-                                hours = parser.read_byte()
-                                minutes = parser.read_byte()
-                                seconds = parser.read_byte()
-                                
-                            if length_byte == 11:
-                                microseconds = parser.read_uint32()
-                            
-                            try:
-                                value = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
-                            except ValueError:
-                                value = None
-                        
-                    case (FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL):
-                        # DECIMAL types must return decimal.Decimal
-                        val = parser.read_length_encoded_string()
-                        value = decimal.Decimal(val) if val is not None else None
-
-                    case FIELD_TYPE.JSON:
-                        value = parser.read_length_encoded_string()
-                    case _:
-                        match (column.ext_type_name):
-                            case ("inet6" | "inet4"):
-                                value = parser.read_length_encoded_string()
-                                if config.native_object and value is not None:
-                                    value = ipaddress.ip_address(value)
-
-                            case "uuid":
-                                value = parser.read_length_encoded_string()
-                                if config.native_object and value is not None:
-                                    value = uuid.UUID(value)
-                            case _:
-                                # String types - check BINARY flag or binary charset (63)
-                                # MySQL uses charset 63 for OUT parameters instead of BINARY flag
-                                if (column.character_set == 63):
-                                    # Binary string - return bytes
-                                    value = bytes(parser.read_length_encoded_bytes())
-                                else:
-                                    # Text string - return string
-                                    value = parser.read_length_encoded_string()       
+        row_values = [None] * len(decoders)
+        for i, decoder in enumerate(decoders):
+            # Check if column is NULL using bitmap
+            if self._is_null_bitmap(i, null_bitmap):
+                row_values[i] = None
+                continue
             
-
-                row_values.append(value)
-        finally:
-            parser.packet.release()
+            # Use pre-built decoder for non-NULL values
+            value = decoder(parser, columns[i], config)
+            row_values[i] = value
         return tuple(row_values)
 
         
     @abstractmethod
     def get_ssl_cipher(self) -> Optional[tuple]:
-        """
-        Get current SSL cipher information
-        
-        Returns:
-            Cipher tuple (name, version, bits) or None if not using SSL
-        """
+        """Get current SSL cipher information"""
         pass
     
     @abstractmethod
     def get_ssl_version(self) -> Optional[str]:
-        """
-        Get current TLS/SSL version
-        
-        Returns:
-            TLS version string (e.g., 'TLSv1.3') or None if not using SSL
-        """
+        """Get current TLS/SSL version"""
         pass
     
     @abstractmethod
     def get_peer_certificate(self) -> Optional[dict]:
-        """
-        Get peer SSL certificate information
-        
-        Returns:
-            Certificate dict or None if not using SSL
-        """
+        """Get peer SSL certificate information"""
         pass
     

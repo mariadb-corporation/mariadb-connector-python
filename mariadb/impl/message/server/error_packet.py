@@ -30,7 +30,11 @@ class ErrorPacket:
     
     Note: Pre-4.1 format doesn't include SQL state marker and state.
     """
-    
+    __slots__ = (
+        'error_code',
+        'sql_state',
+        'error_message',
+    )
     def __init__(
         self,
         error_code: int,

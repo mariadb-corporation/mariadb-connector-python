@@ -34,7 +34,16 @@ class PrepareStmtPacket:
     - column_count × Column Definition packets (if column_count > 0)
     - EOF packet (if not DEPRECATE_EOF and column_count > 0)
     """
-    
+    __slots__ = (
+        'statement_id',
+        'column_count',
+        'parameter_count',
+        'warning_count',
+        'sql',
+        'columns',
+        'parameters',
+        'closed',
+    )
     def __init__(
         self,
         statement_id: int,

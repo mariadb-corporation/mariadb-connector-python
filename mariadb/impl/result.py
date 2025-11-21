@@ -318,7 +318,8 @@ class BaseStreamingResult(Result):
         column_count: int,
         config: 'Configuration',
         is_binary: bool = False,
-        row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = None
+        row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = None,
+        decoders: List[Callable] = None
     ):
         """
         Initialize streaming result
@@ -331,11 +332,13 @@ class BaseStreamingResult(Result):
             config: Configuration for parsing
             is_binary: Whether result uses binary protocol
             row_parser: Function to parse row packets (from Client)
+            decoders: Pre-built list of decoder functions (performance optimization)
         """
         super().__init__(columns, column_count, config, is_binary)
         self.stream: Any = stream
         self.context: Context = context
         self.row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = row_parser
+        self.decoders: List[Callable] = decoders  # Store pre-built decoder list
         self.loaded: bool = False
         self._row_count: int = 0  # Track number of rows fetched
         self.parser: PayloadParser = PayloadParser(None)
@@ -375,8 +378,8 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         # Increment row count
         self._row_count += 1
         
-        # Parse row using the provided parser
-        return self.row_parser(self.parser, self.columns, self.config, self.is_binary)
+        # Parse row using the provided parser with pre-built decoders
+        return self.row_parser(self.parser, self.columns, self.config, self.decoders)
         
     def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
@@ -528,8 +531,8 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         # Increment row count
         self._row_count += 1
         self.parser.set_buffer(row_packet)
-        # Parse row using the provided parser
-        return self.row_parser(self.parser, self.columns, self.config, self.is_binary)
+        # Parse row using the provided parser with pre-built decoders
+        return self.row_parser(self.parser, self.columns, self.config, self.decoders)
     
     async def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows (async)"""

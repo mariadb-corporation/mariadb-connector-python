@@ -14,11 +14,23 @@ class Completion(ABC):
     """
     Query completion result
     """
+    __slots__ = (
+        'affected_rows',
+        'insert_id',
+        'warning_count',
+        'result_set',
+    )
     
-    affected_rows: int = 0
-    insert_id: int = 0
-    warning_count: int = 0
-    result_set: Optional['Result'] = None
+    def __init__(
+        self,
+        affected_rows: int = 0,
+        insert_id: int = 0,
+        warning_count: int = 0,
+    ):
+        self.affected_rows = affected_rows
+        self.insert_id = insert_id
+        self.warning_count = warning_count
+        self.result_set: Optional['Result'] = None
     
     def has_result_set(self) -> bool:
         """Check if completion has result set"""

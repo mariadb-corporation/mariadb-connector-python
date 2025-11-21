@@ -45,12 +45,15 @@ class PayloadParser:
     
     def read_int16(self) -> int:
         """Read 2-byte integer (little-endian) and advance position"""
+        value = struct.unpack('<h', self.packet[self.pos:self.pos+2])[0]
         self.pos += 2
-        return int.from_bytes(self.packet[self.pos - 2:self.pos], byteorder='little', signed=True)
+        return value
 
     def read_uint24(self) -> int:
         """Read 3-byte integer (little-endian) and advance position"""
-        value = struct.unpack('<I', bytes(self.packet[self.pos:self.pos+3]) + b'\x00')[0]
+        value = (self.packet[self.pos] | 
+                (self.packet[self.pos + 1] << 8) | 
+                (self.packet[self.pos + 2] << 16))
         self.pos += 3
         return value
 
@@ -107,25 +110,18 @@ class PayloadParser:
     
     def read_length_encoded_string(self, encoding: str = 'utf-8') -> Optional[str]:
         """Read length-encoded string with specified encoding and advance position"""
-        
         length = self.read_length_encoded_int()
         
         if length is None:
             return None
         
-        if self.pos + length > len(self.packet):
-            raise IOError(f"Not enough data in packet to read string of length {length}")
-        
+        # Direct decode without intermediate bytes() conversion
+        # memoryview supports decode directly
         string_data = self.packet[self.pos:self.pos+length]
         self.pos += length
         
-        try:
-            value = bytes(string_data).decode(encoding)
-        except UnicodeDecodeError as e:
-            # Fallback to replace invalid characters
-            value = bytes(string_data).decode(encoding, errors='replace')
-        
-        return value
+        # Decode directly from memoryview - faster than bytes()
+        return bytes(string_data).decode(encoding, errors='replace')
     
     def read_length_encoded_bytes(self) -> Optional[bytes]:
         """Read length-encoded bytes and advance position"""
@@ -134,7 +130,7 @@ class PayloadParser:
         if length is None:
             return None
 
-        data = self.packet[self.pos:self.pos+length]
+        data = bytes(self.packet[self.pos:self.pos+length])
         self.pos += length
         return data
 
@@ -156,14 +152,14 @@ class PayloadParser:
             if self.packet[i] == 0x00:
                 string_data = bytes(self.packet[self.pos:i]).decode(encoding)
                 self.pos = i + 1
-                return string_data
+            return string_data
         string_data = bytes(self.packet[self.pos:]).decode(encoding)        
         self.pos = len(self.packet)
         return string_data
     
     def read_bytes(self, length: int) -> bytes:
         """Read fixed number of bytes and advance position"""
-        data = self.packet[self.pos:self.pos+length]
+        data = bytes(self.packet[self.pos:self.pos+length])
         self.pos += length
         return data
     

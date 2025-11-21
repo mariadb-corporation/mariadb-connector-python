@@ -35,7 +35,21 @@ class ColumnDefinitionPacket:
     - 1 byte: decimals
     - 2 bytes: reserved (0x00 0x00)
     """
-    
+    __slots__ = (
+        'catalog',
+        'schema',
+        'table',
+        'org_table',
+        'name',
+        'org_name',
+        'character_set',
+        'column_length',
+        'column_type',
+        'flags',
+        'decimals',
+        'ext_type_name',
+        'ext_type_format',
+    )
     def __init__(
         self,
         catalog: str,

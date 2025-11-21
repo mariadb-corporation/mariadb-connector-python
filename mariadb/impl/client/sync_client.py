@@ -418,6 +418,12 @@ class SyncClient(BaseClient):
             if not self.context.isEofDeprecated():
                 (self.read_stream.read_payload()).release()
 
+            # Build decoder list once for all rows (performance optimization)
+            decoders = self._build_decoder_list(columns, is_binary)
+            
+            # Select appropriate row parser based on protocol
+            row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+
             # If unbuffered, create streaming result
             if not buffered:
                 from ..result import SyncStreamingResult
@@ -427,7 +433,8 @@ class SyncClient(BaseClient):
                     column_count,
                     config,
                     is_binary,
-                    self._parse_row_data  # Pass row parser function
+                    row_parser,  # Pass appropriate row parser function
+                    decoders  # Pass pre-built decoder list
                 )
                 
                 # Create completion with streaming result
@@ -438,40 +445,44 @@ class SyncClient(BaseClient):
             # Read rows
             rows: List[tuple] = []
             parser = PayloadParser(None)
-            while True:
-                row_packet = self.read_stream.read_payload()
-                # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
-                # EOF/OK packets start with 0xFE and have specific length constraints
-                if (row_packet[0] == 0xFE and 
-                    ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
-                     (not self.context.isEofDeprecated() and len(row_packet) < 8))):
-                    
-                    if not self.context.isEofDeprecated():
-                        completion = EofPacket.decode(row_packet, self.context)
+            try:
+                while True:
+                    row_packet = self.read_stream.read_payload()
+                    # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
+                    # EOF/OK packets start with 0xFE and have specific length constraints
+                    if (row_packet[0] == 0xFE and 
+                        ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
+                        (not self.context.isEofDeprecated() and len(row_packet) < 8))):
+                        
+                        if not self.context.isEofDeprecated():
+                            completion = EofPacket.decode(row_packet, self.context)
+                        else:
+                            completion = OkPacket.decode(row_packet, self.context)
+
+                        # Apply converters to all rows at once
+                        rows = self._apply_converters_to_rows(rows, columns, config)
+
+                        from ..result import SyncCompleteResult
+                        complete_result = SyncCompleteResult(
+                            columns,
+                            column_count,
+                            config,
+                            rows,
+                            is_binary
+                        )
+                        completion.result_set = complete_result
+                                            
+                        return completion               
+                    elif row_packet[0] == self.ERROR_PACKET:
+                        raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)
+                        
                     else:
-                        completion = OkPacket.decode(row_packet, self.context)
-
-                    # Apply converters to all rows at once
-                    rows = self._apply_converters_to_rows(rows, columns, config)
-
-                    from ..result import SyncCompleteResult
-                    complete_result = SyncCompleteResult(
-                        columns,
-                        column_count,
-                        config,
-                        rows,
-                        is_binary
-                    )
-                    completion.result_set = complete_result
-                                        
-                    return completion               
-                elif row_packet[0] == self.ERROR_PACKET:
-                    raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)
-                    
-                else:
-                    # Row data packet
-                    parser.set_buffer(row_packet)
-                    rows.append(self._parse_row_data(parser, columns, config, is_binary))
+                        # Row data packet - use pre-built decoders
+                        parser.set_buffer(row_packet)
+                        rows.append(row_parser(parser, columns, config, decoders))
+            finally:
+                if parser.packet:
+                    parser.packet.release()
             
             
         except Exception as e:

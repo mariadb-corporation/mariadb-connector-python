@@ -9,7 +9,6 @@ Based on MySQL/MariaDB protocol EOF packet structure.
 
 from typing import TYPE_CHECKING
 from ...completion import Completion
-from ...client.socket.payload_parser import PayloadParser
 from ...client.socket.read_stream import PacketBuffer
 if TYPE_CHECKING:
     from ...client.context import Context
@@ -29,7 +28,10 @@ class EofPacket(Completion):
     an OK packet with 0xFE header instead of a traditional EOF packet.
     In that case, use OkPacket.decode() instead.
     """
-    
+    __slots__ = (
+        'warning_count',
+        'server_status',
+    )
     def __init__(
         self,
         warning_count: int = 0,
@@ -37,13 +39,10 @@ class EofPacket(Completion):
         is_output_parameters: bool = False
     ):
         """Initialize EOF packet with warning count and server status"""
-        # Initialize parent Completion
-        super().__init__(
-            affected_rows=0,
-            insert_id=0,
-            warning_count=warning_count,
-            is_output_parameters=is_output_parameters
-        )
+        self.affected_rows = 0
+        self.insert_id = 0
+        self.warning_count = warning_count
+        self.result_set = None
         
         # EofPacket-specific fields
         self.server_status = server_status
@@ -55,30 +54,20 @@ class EofPacket(Completion):
     @staticmethod
     def decode(data: PacketBuffer, context: 'Context') -> 'EofPacket':
         """Decode EOF packet from bytearray with context"""
-        parser = PayloadParser(data)
-        parser.read_byte() # Skip ERR marker
-        warning_count = parser.read_uint16()
-        server_status = parser.read_uint16()
+        warning_count = data[1] | (data[2] << 8)
+        server_status = data[3] | (data[4] << 8)
         
         # Update context with server status
-        if context:
-            context.server_status = server_status
-            context.warning_count = warning_count
+        context.server_status = server_status
+        context.warning_count = warning_count
         
         # Check if this marks output parameters (PS_OUT_PARAMS flag)
-        from mariadb_shared.constants import STATUS
-        is_output_parameters = (server_status & STATUS.PS_OUT_PARAMS) != 0
+        is_output_parameters = (server_status & constants.STATUS.PS_OUT_PARAMS) != 0
         data.release()
+        
         return EofPacket(
             warning_count=warning_count,
             server_status=server_status,
             is_output_parameters=is_output_parameters
         )
     
-    def __repr__(self) -> str:
-        return (f"EofPacket(warning_count={self.warning_count}, "
-                f"server_status=0x{self.server_status:04X}, "
-                f"is_output_parameters={self.is_output_parameters})")
-    
-    def __str__(self) -> str:
-        return f"EOF: {self.warning_count} warnings, status=0x{self.server_status:04X}"
