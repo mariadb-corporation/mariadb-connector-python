@@ -22,10 +22,8 @@ from .base_client import BaseClient
 from .socket.payload_parser import PayloadParser
 from .socket.stream import SyncStream
 from ..configuration import Configuration
-from ..host_address import HostAddress
 from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
-from ..message.client.reset_connection_packet import ResetConnectionPacket
 from ..message.client.query_packet import QueryPacket
 from ..message.client.ping_packet import PingPacket
 from ..message.client.quit_packet import QuitPacket
@@ -36,7 +34,7 @@ from ..completion import Completion
 from ...exceptions import OperationalError, DatabaseError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
-
+from .socket.stream import PacketBuffer
 
 class SyncClient(BaseClient):
     """
@@ -136,6 +134,7 @@ class SyncClient(BaseClient):
         if (handshake_packet[0] == 0xff):
             raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
         self.context = self._parse_handshake(handshake_packet)
+        
         self.stream.connection_id = self.context.connection_id
 
         client_capabilities = self._calculate_client_capabilities()
@@ -151,9 +150,7 @@ class SyncClient(BaseClient):
         from ..plugin.authentication.native_password_plugin import NativePasswordPlugin
         self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
 
-        response = HandshakeResponse(self.configuration, self.context)
-        self.stream.send_payload(response.encode(self.context), response.type(), reset_sequence=False)
-
+        self._send_message(HandshakeResponse(self.configuration, self.context), False)
         self._handle_authentication(self.stream.read_payload())
         
         self.connected = True
@@ -192,10 +189,7 @@ class SyncClient(BaseClient):
         
         # Send SSL request packet
         ssl_request = SslRequestPacket(client_capabilities)
-        encoded = ssl_request.encode(self.context)
-        self.stream.send_payload(encoded, ssl_request.type(), False)
-
-        #self._send_message(ssl_request, False)
+        self._send_message(ssl_request, False)
         
         try:
             # Import SSL utility
@@ -229,7 +223,7 @@ class SyncClient(BaseClient):
     # Authentication
     # =========================================================================
 
-    def _handle_authentication(self, packet: bytearray) -> None:
+    def _handle_authentication(self, packet: PacketBuffer) -> None:
         """Process authentication response from server"""
         if len(packet) == 0:
             raise OperationalError("Empty authentication response")
@@ -246,16 +240,16 @@ class SyncClient(BaseClient):
             # Auth switch - server requests different auth plugin
             self._handle_auth_switch(packet)
         else:
-            # Auth more data
+            packet.release()
             raise OperationalError(f"Unexpected packet during authentication: {packet[0]:02x}")
 
-    def _handle_auth_switch(self, packet: bytearray) -> None:
+    def _handle_auth_switch(self, packet: PacketBuffer) -> None:
         """Handle authentication plugin switch request"""
         parser = PayloadParser(packet)
         parser.skip(1)  # Skip 0xFE marker
         plugin_name = parser.read_null_terminated_string("ascii")
         auth_data = parser.read_remaining()
-        
+        packet.release()
         try:
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
             plugin = plugin_factory.initialize(self.configuration.password, auth_data, self.configuration, self.host_address)
@@ -273,9 +267,10 @@ class SyncClient(BaseClient):
     # =========================================================================
 
     def _send_message(self, message: ClientMessage, reset_sequence: bool = True) -> None:
-        """Send client message to server"""
-        encoded = message.encode(self.context)
-        self.stream.send_payload(encoded, message.type(), reset_sequence)
+        """Send client message to server using streaming API (zero-copy)"""
+        self.stream.begin_write(reset_sequence)
+        message.process(self.stream, self.context)
+        self.stream.flush(message.type())
 
     def execute(self, message: ClientMessage, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         """Execute command and return list of completion results"""
@@ -288,7 +283,7 @@ class SyncClient(BaseClient):
                 results = []
                 
                 while True:
-                    result_packet: bytearray = self.stream.read_payload()
+                    result_packet = self.stream.read_payload()
                     completion = self._parse_result_packet(result_packet, config, message.is_binary(), buffered, prepare_stmt_packet)
                     results.append(completion)
                     
@@ -393,7 +388,7 @@ class SyncClient(BaseClient):
         else:
             return self._parse_result_set(packet, config, is_binary, buffered, prepare_stmt_packet)
 
-    def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> 'Completion':
+    def _parse_result_set(self, packet: PacketBuffer, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> 'Completion':
         """Parse result set with column definitions and row data"""
         try:
             # Parse column count from first packet
@@ -404,26 +399,29 @@ class SyncClient(BaseClient):
             columns: List[ColumnDefinitionPacket] = []
             if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                 # skip metadata
+                packet.release()
                 columns = prepare_stmt_packet.columns
             else:
+                packet.release()
                 for _ in range(column_count):
-                    columns.append(ColumnDefinitionPacket.decode(self.stream.read_payload(), self.context))
+                    col_packet = self.stream.read_payload()
+                    columns.append(ColumnDefinitionPacket.decode(col_packet, self.context))
             
             # Read EOF packet after column definitions (if not deprecated)
             if not self.context.isEofDeprecated():
-                self.stream.read_payload()
+                (self.stream.read_payload()).release()
 
             # If unbuffered, create streaming result
             if not buffered:
                 from ..result import SyncStreamingResult
                 streaming_result = SyncStreamingResult(
-                    stream=self.stream,
-                    context=self.context,
-                    columns=columns,
-                    column_count=column_count,
-                    config=config,
-                    is_binary=is_binary,
-                    row_parser=self._parse_row_data  # Pass row parser function
+                    self.stream,
+                    self.context,
+                    columns,
+                    column_count,
+                    config,
+                    is_binary,
+                    self._parse_row_data  # Pass row parser function
                 )
                 
                 # Create completion with streaming result
@@ -433,9 +431,9 @@ class SyncClient(BaseClient):
 
             # Read rows
             rows: List[tuple] = []
+            parser = PayloadParser(None)
             while True:
                 row_packet = self.stream.read_payload()
-
                 # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
                 # EOF/OK packets start with 0xFE and have specific length constraints
                 if (row_packet[0] == 0xFE and 
@@ -452,19 +450,22 @@ class SyncClient(BaseClient):
 
                     from ..result import SyncCompleteResult
                     complete_result = SyncCompleteResult(
-                        columns=columns,
-                        column_count=column_count,
-                        config=config,
-                        rows=rows,
-                        is_binary=is_binary
+                        columns,
+                        column_count,
+                        config,
+                        rows,
+                        is_binary
                     )
                     completion.result_set = complete_result
                                         
                     return completion               
+                elif row_packet[0] == self.ERROR_PACKET:
+                    raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)
                     
                 else:
                     # Row data packet
-                    rows.append(self._parse_row_data(row_packet, columns, config, is_binary))
+                    parser.set_buffer(row_packet)
+                    rows.append(self._parse_row_data(parser, columns, config, is_binary))
             
             
         except Exception as e:
@@ -513,7 +514,7 @@ class SyncClient(BaseClient):
             self._send_message(prepare_packet)
             return self._parse_prepare_response(self.stream.read_payload(), sql)
 
-    def _parse_prepare_response(self, packet: bytearray, sql: str) -> PrepareStmtPacket:
+    def _parse_prepare_response(self, packet: PacketBuffer, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet"""
         if len(packet) == 0:
             raise OperationalError("Empty prepare response packet")
@@ -527,10 +528,10 @@ class SyncClient(BaseClient):
             if prepare_stmt_packet.parameter_count > 0:
                 # Skip parameter metadata
                 for _ in range(prepare_stmt_packet.parameter_count):
-                    self.stream.read_payload()                
+                    self.stream.read_payload().release()
 
                 if not self.context.isEofDeprecated():
-                    self.stream.read_payload()
+                    eof_packet = self.stream.read_payload().release()
             
             # Read column metadata if present
             if prepare_stmt_packet.column_count > 0:
@@ -538,12 +539,13 @@ class SyncClient(BaseClient):
                     prepare_stmt_packet.columns.append(ColumnDefinitionPacket.decode(self.stream.read_payload(), self.context))
                 
                 if not self.context.isEofDeprecated():
-                    self.stream.read_payload()
+                    self.stream.read_payload().release()
             
             return prepare_stmt_packet
         elif packet_type == self.ERROR_PACKET:
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
+            packet.release()
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
     
     def close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:

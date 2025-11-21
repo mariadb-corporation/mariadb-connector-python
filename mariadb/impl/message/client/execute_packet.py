@@ -12,6 +12,7 @@ try:
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
+from typing import TYPE_CHECKING
 
 from ...client.context import Context
 from ...client.socket.payload_writer import PayloadWriter
@@ -19,7 +20,8 @@ from mariadb_shared.constants import FIELD_TYPE
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
 from ....exceptions import NotSupportedError
-
+if TYPE_CHECKING:
+    from ...client.socket.stream import SyncStream
 class ExecutePacket(ClientMessage):
     """
     Execute packet for prepared statement execution (COM_STMT_EXECUTE)
@@ -34,26 +36,14 @@ class ExecutePacket(ClientMessage):
         self.statement_id = statement_id
         self.parameters = parameters or []
         self.sql = sql
-        
-    def encode(self, context: Context) -> bytearray:
-        """Encode COM_STMT_EXECUTE packet with statement ID, flags, and bound parameters"""
-        # Build payload
-        writer = PayloadWriter()
-        
-        # Write COM_STMT_EXECUTE command
-        writer.write_byte(self.COM_STMT_EXECUTE)
-        
-        # Write statement ID (4 bytes, little endian)
-        writer.write_bytes(struct.pack('<I', self.statement_id))
-        
-        # Write flags (1 byte) - 0 = no flags
-        writer.write_byte(0x00)
-        
-        # Write iteration count (4 bytes, little endian) - always 1
-        writer.write_bytes(struct.pack('<I', 1))
-        
+
+    def process(self, stream: 'SyncStream', context: Context) -> None:
+        stream.write_byte(self.COM_STMT_EXECUTE)
+        stream.write_bytes(struct.pack('<I', self.statement_id))
+        stream.write_byte(0x00) # Write flags  
+        stream.write_uint32(1) # Write iteration count - always 1
+
         if self.parameters:
-            # Write NULL bitmap
             null_bitmap_length = (len(self.parameters) + 7) // 8
             null_bitmap = bytearray(null_bitmap_length)
             
@@ -66,24 +56,19 @@ class ExecutePacket(ClientMessage):
                     bit_pos = i % 8
                     null_bitmap[byte_pos] |= (1 << bit_pos)
             
-            writer.write_bytes(null_bitmap)
-            
-            # Write new params bound flag (1 byte) - 1 = new params
-            writer.write_byte(0x01)
+            stream.write_bytes(null_bitmap) # Write NULL bitmap
+            stream.write_byte(0x01) # new params bound flag
             
             # Write parameter types (2 bytes per parameter)
             for param in self.parameters:
                 param_type, unsigned = self._get_parameter_type(param)
-                writer.write_bytes(struct.pack('<BB', param_type, unsigned))
+                stream.write_bytes(struct.pack('<BB', param_type, unsigned))
             
             # Write parameter values
             for param in self.parameters:
                 if param is not None:
-                    self._write_parameter_value(writer, param)
-        
-        # Send payload through stream
-        return writer.get_payload()
-    
+                    self._write_parameter_value(stream, param)
+
     def _get_parameter_type(self, param: Any) -> tuple[int, int]:
         """
         Get MySQL field type and unsigned flag for parameter
@@ -138,7 +123,7 @@ class ExecutePacket(ClientMessage):
             # Default to string
             return FIELD_TYPE.VAR_STRING, 0
     
-    def _write_parameter_value(self, writer: PayloadWriter, param: Any) -> None:
+    def _write_parameter_value(self, stream, param: Any) -> None:
         """
         Write parameter value in binary format
         
@@ -147,38 +132,38 @@ class ExecutePacket(ClientMessage):
             param: Parameter value
         """
         if isinstance(param, bool):
-            writer.write_byte(1 if param else 0)
+            stream.write_byte(1 if param else 0)
         elif isinstance(param, int):
             if -128 <= param <= 127:
-                writer.write_bytes(struct.pack('<b', param))
+                stream.write_bytes(struct.pack('<b', param))
             elif -32768 <= param <= 32767:
-                writer.write_bytes(struct.pack('<h', param))
+                stream.write_bytes(struct.pack('<h', param))
             elif -2147483648 <= param <= 2147483647:
-                writer.write_bytes(struct.pack('<i', param))
+                stream.write_bytes(struct.pack('<i', param))
             else:
-                writer.write_bytes(struct.pack('<q', param))
+                stream.write_bytes(struct.pack('<q', param))
         elif isinstance(param, float):
             if repr(param) in ("nan", "inf", "-inf"):
                 raise NotSupportedError(f"Float value '{repr(param)}' is not supported.")
-            writer.write_bytes(struct.pack('<d', param))
+            stream.write_bytes(struct.pack('<d', param))
         elif isinstance(param, decimal.Decimal):
             if param.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
                 raise NotSupportedError(f"Decimal value '{param.__str__()}' is not supported.")
             # Write as string
             decimal_str = str(param)
-            writer.write_length_encoded_string(decimal_str)
+            stream.write_length_encoded_string(decimal_str)
         elif isinstance(param, str):
-            writer.write_length_encoded_string(param)
+            stream.write_length_encoded_string(param)
         elif isinstance(param, (bytes, bytearray)):
-            writer.write_length_encoded_bytes(param)
+            stream.write_length_encoded_bytes(param)
         elif isinstance(param, datetime.datetime):
-            self._write_datetime(writer, param)
+            self._write_datetime(stream, param)
         elif isinstance(param, datetime.date):
-            self._write_date(writer, param)
+            self._write_date(stream, param)
         elif isinstance(param, datetime.time):
-            self._write_time(writer, param)
+            self._write_time(stream, param)
         elif isinstance(param, datetime.timedelta):
-            self._write_time_from_timedelta(writer, param)
+            self._write_time_from_timedelta(stream, param)
         elif isinstance(param, array.array) and param.typecode == 'f':
             if len(param) == 0:
                 return
@@ -188,13 +173,13 @@ class ExecutePacket(ClientMessage):
             else:
                 # Fallback: use array.tobytes() directly
                 float_bytes = param.tobytes()
-            writer.write_length_encoded_bytes(float_bytes)
+            stream.write_length_encoded_bytes(float_bytes)
         elif isinstance(param, MrdbIndicator):
             # Handle MariaDB indicator values
             if param.indicator == 1:  # NULL - already handled in NULL bitmap
                 return
             elif param.indicator == 2:  # DEFAULT
-                writer.write_length_encoded_string('DEFAULT')
+                stream.write_length_encoded_string('DEFAULT')
             elif param.indicator == 3:  # IGNORE
                 # Skip this parameter - should be handled at a higher level
                 return
@@ -206,59 +191,59 @@ class ExecutePacket(ClientMessage):
                 return
         else:
             # Convert to string
-            writer.write_length_encoded_string(str(param))
+            stream.write_length_encoded_string(str(param))
     
-    def _write_datetime(self, writer: PayloadWriter, dt: datetime.datetime) -> None:
+    def _write_datetime(self, stream, dt: datetime.datetime) -> None:
         """Write datetime in MySQL binary format"""
         if dt.microsecond:
             # 11 bytes: year(2) + month(1) + day(1) + hour(1) + minute(1) + second(1) + microsecond(4)
-            writer.write_byte(11)
-            writer.write_bytes(struct.pack('<H', dt.year))
-            writer.write_byte(dt.month)
-            writer.write_byte(dt.day)
-            writer.write_byte(dt.hour)
-            writer.write_byte(dt.minute)
-            writer.write_byte(dt.second)
-            writer.write_bytes(struct.pack('<I', dt.microsecond))
+            stream.write_byte(11)
+            stream.write_bytes(struct.pack('<H', dt.year))
+            stream.write_byte(dt.month)
+            stream.write_byte(dt.day)
+            stream.write_byte(dt.hour)
+            stream.write_byte(dt.minute)
+            stream.write_byte(dt.second)
+            stream.write_bytes(struct.pack('<I', dt.microsecond))
         else:
             # 7 bytes: year(2) + month(1) + day(1) + hour(1) + minute(1) + second(1)
-            writer.write_byte(7)
-            writer.write_bytes(struct.pack('<H', dt.year))
-            writer.write_byte(dt.month)
-            writer.write_byte(dt.day)
-            writer.write_byte(dt.hour)
-            writer.write_byte(dt.minute)
-            writer.write_byte(dt.second)
+            stream.write_byte(7)
+            stream.write_bytes(struct.pack('<H', dt.year))
+            stream.write_byte(dt.month)
+            stream.write_byte(dt.day)
+            stream.write_byte(dt.hour)
+            stream.write_byte(dt.minute)
+            stream.write_byte(dt.second)
     
     def _write_date(self, writer: PayloadWriter, date: datetime.date) -> None:
         """Write date in MySQL binary format"""
         # 4 bytes: year(2) + month(1) + day(1)
-        writer.write_byte(4)
-        writer.write_bytes(struct.pack('<H', date.year))
-        writer.write_byte(date.month)
-        writer.write_byte(date.day)
+        stream.write_byte(4)
+        stream.write_bytes(struct.pack('<H', date.year))
+        stream.write_byte(date.month)
+        stream.write_byte(date.day)
     
     def _write_time(self, writer: PayloadWriter, time: datetime.time) -> None:
         """Write time in MySQL binary format"""
         if time.microsecond:
             # 12 bytes: negative(1) + days(4) + hour(1) + minute(1) + second(1) + microsecond(4)
-            writer.write_byte(12)
-            writer.write_byte(0)  # positive
-            writer.write_bytes(struct.pack('<I', 0))  # days
-            writer.write_byte(time.hour)
-            writer.write_byte(time.minute)
-            writer.write_byte(time.second)
-            writer.write_bytes(struct.pack('<I', time.microsecond))
+            stream.write_byte(12)
+            stream.write_byte(0)  # positive
+            stream.write_bytes(struct.pack('<I', 0))  # days
+            stream.write_byte(time.hour)
+            stream.write_byte(time.minute)
+            stream.write_byte(time.second)
+            stream.write_bytes(struct.pack('<I', time.microsecond))
         else:
             # 8 bytes: negative(1) + days(4) + hour(1) + minute(1) + second(1)
-            writer.write_byte(8)
-            writer.write_byte(0)  # positive
-            writer.write_bytes(struct.pack('<I', 0))  # days
-            writer.write_byte(time.hour)
-            writer.write_byte(time.minute)
-            writer.write_byte(time.second)
+            stream.write_byte(8)
+            stream.write_byte(0)  # positive
+            stream.write_bytes(struct.pack('<I', 0))  # days
+            stream.write_byte(time.hour)
+            stream.write_byte(time.minute)
+            stream.write_byte(time.second)
     
-    def _write_time_from_timedelta(self, writer: PayloadWriter, td: datetime.timedelta) -> None:
+    def _write_time_from_timedelta(self, stream, td: datetime.timedelta) -> None:
         """Write timedelta as time in MySQL binary format"""
         total_seconds = int(td.total_seconds())
         negative = total_seconds < 0
@@ -273,21 +258,21 @@ class ExecutePacket(ClientMessage):
         
         if microseconds:
             # 12 bytes: negative(1) + days(4) + hour(1) + minute(1) + second(1) + microsecond(4)
-            writer.write_byte(12)
-            writer.write_byte(1 if negative else 0)
-            writer.write_bytes(struct.pack('<I', days))
-            writer.write_byte(hours)
-            writer.write_byte(minutes)
-            writer.write_byte(seconds)
-            writer.write_bytes(struct.pack('<I', microseconds))
+            stream.write_byte(12)
+            stream.write_byte(1 if negative else 0)
+            stream.write_bytes(struct.pack('<I', days))
+            stream.write_byte(hours)
+            stream.write_byte(minutes)
+            stream.write_byte(seconds)
+            stream.write_bytes(struct.pack('<I', microseconds))
         else:
             # 8 bytes: negative(1) + days(4) + hour(1) + minute(1) + second(1)
-            writer.write_byte(8)
-            writer.write_byte(1 if negative else 0)
-            writer.write_bytes(struct.pack('<I', days))
-            writer.write_byte(hours)
-            writer.write_byte(minutes)
-            writer.write_byte(seconds)
+            stream.write_byte(8)
+            stream.write_byte(1 if negative else 0)
+            stream.write_bytes(struct.pack('<I', days))
+            stream.write_byte(hours)
+            stream.write_byte(minutes)
+            stream.write_byte(seconds)
 
     def is_binary(self) -> bool:
         return True

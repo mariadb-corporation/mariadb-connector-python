@@ -2,17 +2,21 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from ..client.context import Context
+
+if TYPE_CHECKING:
+    from ..client.socket.stream import SyncStream
 
 class ClientMessage(ABC):
     """
     Client message interface for MariaDB protocol
     """
-    
+
     @abstractmethod
-    def encode(self, context: Context) -> bytearray:
-        """Encode message to writer asynchronously"""
+    def process(self, stream: 'SyncStream', context: Context) -> None:
+        """Encode message directly to stream buffer."""
         ...
 
 

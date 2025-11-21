@@ -7,10 +7,11 @@ Statement Close packet for closing prepared statements
 Sends COM_STMT_CLOSE command to the server to deallocate a prepared statement.
 """
 
-import struct
+from typing import TYPE_CHECKING
 from ...client.context import Context
 from ..client_message import ClientMessage
-
+if TYPE_CHECKING:
+    from ...client.socket.stream import SyncStream
 
 class StmtClosePacket(ClientMessage):
     """
@@ -24,11 +25,11 @@ class StmtClosePacket(ClientMessage):
     def __init__(self, statement_id: int):
         """Initialize COM_STMT_CLOSE packet with statement ID"""
         self.statement_id = statement_id
-        
-    def encode(self, context: Context) -> bytearray:
+
+    def process(self, stream: 'SyncStream', context: Context) -> None:
         """Encode COM_STMT_CLOSE packet with statement ID"""
-        # COM_STMT_CLOSE (0x19) + statement_id (4 bytes, little-endian)
-        return bytearray(struct.pack('<BI', self.COM_STMT_CLOSE, self.statement_id))
+        stream.write_byte(COM_STMT_CLOSE)
+        stream.write_uint32(self.statement_id)
     
     def is_binary(self) -> bool:
         return True

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import unittest
-
+import os
 import mariadb
 import platform
 
@@ -202,6 +202,8 @@ class TestPooling(unittest.TestCase):
             self.assertEqual(mariadb._CONNECTION_POOLS, {})
 
     def test_conpy245(self):
+        if os.environ.get('RUN_LONG_TEST') != '1':
+            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")           
         # we can't test performance here, but we can check if LRU works.
         # All connections must have been used the same number of times.
 

@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from typing import TYPE_CHECKING
 from ...client.context import Context
-from ...client.socket.payload_writer import PayloadWriter
 from ..client_message import ClientMessage
-
+if TYPE_CHECKING:
+    from ...client.socket.stream import SyncStream
 
 class PreparePacket(ClientMessage):
     """
@@ -19,12 +20,9 @@ class PreparePacket(ClientMessage):
         """Initialize COM_STMT_PREPARE packet with SQL statement"""
         self.sql = sql
         
-    def encode(self, context: Context) -> bytearray:
-        """Encode COM_STMT_PREPARE packet with SQL statement"""
-        writer = PayloadWriter()
-        writer.write_byte(self.COM_STMT_PREPARE)
-        writer.write_string(self.sql, 'utf-8')
-        return writer.get_payload()
+    def process(self, stream: 'SyncStream', context: Context) -> None:
+        stream.write_byte(self.COM_STMT_PREPARE)
+        stream.write_string(self.sql, 'utf-8')
 
     def is_binary(self) -> bool:
         return True

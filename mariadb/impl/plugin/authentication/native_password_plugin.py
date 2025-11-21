@@ -8,7 +8,7 @@ from typing import Optional
 
 from ...configuration import Configuration
 
-from ...client.socket.stream import AsyncStream, SyncStream
+from ...client.socket.stream import AsyncStream, PacketBuffer, SyncStream
 from ...client.context import Context
 from ..authentication_plugin import AuthenticationPlugin
 
@@ -51,16 +51,24 @@ class NativePasswordPlugin(AuthenticationPlugin):
         # Encrypt password
         return self.encrypt_password(self.authentication_data, truncated_seed)
     
-    async def processAsync(self, stream: AsyncStream, context: Context) -> bytes:
+    async def processAsync(self, stream: AsyncStream, context: Context) -> PacketBuffer:
         """Process native password plugin authentication (async)"""
         encrypted = self._build_auth_payload()
-        await stream.send_payload(encrypted, "NATIVE_PASSWORD", reset_sequence=False)
+
+        stream.begin_write(False)
+        stream.write_bytes(encrypted)        
+        await stream.flush("NATIVE_PASSWORD")
+
         return await stream.read_payload()
     
-    def processSync(self, stream: SyncStream, context: Context) -> bytes:
+    def processSync(self, stream: SyncStream, context: Context) -> PacketBuffer:
         """Process native password plugin authentication (sync)"""
         encrypted = self._build_auth_payload()
-        stream.send_payload(encrypted, "NATIVE_PASSWORD", reset_sequence=False)
+
+        stream.begin_write(False)
+        stream.write_bytes(encrypted)        
+        stream.flush("NATIVE_PASSWORD")
+
         return stream.read_payload()
     
     def is_mitm_proof(self) -> bool:

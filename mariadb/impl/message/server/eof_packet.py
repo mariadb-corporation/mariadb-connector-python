@@ -10,6 +10,7 @@ Based on MySQL/MariaDB protocol EOF packet structure.
 from typing import TYPE_CHECKING
 from ...completion import Completion
 from ...client.socket.payload_parser import PayloadParser
+from ...client.socket.stream import PacketBuffer
 if TYPE_CHECKING:
     from ...client.context import Context
 
@@ -52,12 +53,12 @@ class EofPacket(Completion):
         return (self.server_status & constants.STATUS.PS_OUT_PARAMS) != 0
 
     @staticmethod
-    def decode(data: bytearray, context: 'Context') -> 'EofPacket':
+    def decode(data: PacketBuffer, context: 'Context') -> 'EofPacket':
         """Decode EOF packet from bytearray with context"""
         parser = PayloadParser(data)
         parser.read_byte() # Skip ERR marker
-        warning_count = parser.read_int16()
-        server_status = parser.read_int16()
+        warning_count = parser.read_uint16()
+        server_status = parser.read_uint16()
         
         # Update context with server status
         if context:
@@ -67,7 +68,7 @@ class EofPacket(Completion):
         # Check if this marks output parameters (PS_OUT_PARAMS flag)
         from mariadb_shared.constants import STATUS
         is_output_parameters = (server_status & STATUS.PS_OUT_PARAMS) != 0
-        
+        data.release()
         return EofPacket(
             warning_count=warning_count,
             server_status=server_status,

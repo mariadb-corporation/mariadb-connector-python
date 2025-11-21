@@ -12,8 +12,9 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from ...client.context import Context
-    from ...exception_factory import ExceptionFactory
+    from ...client.exception_factory import ExceptionFactory
 from ...client.socket.payload_parser import PayloadParser
+from ...client.socket.stream import PacketBuffer
 
 
 class ErrorPacket:
@@ -46,11 +47,11 @@ class ErrorPacket:
         return False
 
     @staticmethod
-    def decode(data: bytearray, context: Optional['Context'] = None) -> 'ErrorPacket':
+    def decode(data: PacketBuffer, context: Optional['Context'] = None) -> 'ErrorPacket':
         """Decode error packet from bytearray with optional context"""
         parser = PayloadParser(data)
         parser.read_byte()
-        error_code = parser.read_int16()
+        error_code = parser.read_uint16()
         sql_state = "HY000"  # Default SQL state
         
         # Check for SQL state marker '#' (0x23)
@@ -58,12 +59,12 @@ class ErrorPacket:
             parser.read_byte()  # Skip '#' marker
             # SQL state (5 bytes)
             if parser.remaining_bytes() >= 5:
-                sql_state = parser.read_bytes(5).decode('ascii')
+                sql_state = bytes(parser.read_bytes(5)).decode('ascii')
             else:
                 raise IOError("Invalid error packet: SQL state truncated")
         
-        error_message = parser.read_remaining().decode('utf-8', errors='replace')
-        
+        error_message = bytes(parser.read_remaining()).decode('utf-8', errors='replace')
+        data.release()
         return ErrorPacket(
             error_code=error_code,
             sql_state=sql_state,

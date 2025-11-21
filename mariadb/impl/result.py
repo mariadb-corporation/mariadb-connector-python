@@ -7,9 +7,11 @@ Result set classes for MariaDB query results
 
 from typing import List, Optional, Any, TYPE_CHECKING, Callable, Tuple
 from abc import ABC, abstractmethod
-from mariadb.impl.message.server.eof_packet import EofPacket
-from mariadb.impl.message.server.ok_packet import OkPacket
-from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
+from .client.socket.payload_parser import PayloadParser
+from .client.socket.stream import PacketBuffer
+from .message.server.eof_packet import EofPacket
+from .message.server.ok_packet import OkPacket
+from .message.server.column_definition_packet import ColumnDefinitionPacket
 
 if TYPE_CHECKING:
     from .client.socket.async_stream import AsyncStream
@@ -336,6 +338,7 @@ class BaseStreamingResult(Result):
         self.row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = row_parser
         self.loaded: bool = False
         self._row_count: int = 0  # Track number of rows fetched
+        self.parser: PayloadParser = PayloadParser(None)
         
     def streaming(self) -> bool:
         """Check if this is a streaming result"""
@@ -368,16 +371,12 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         row_packet = self._read_next_row_packet()
         if row_packet is None:
             return None
-        
+        self.parser.set_buffer(row_packet)
         # Increment row count
         self._row_count += 1
         
         # Parse row using the provided parser
-        if self.row_parser:
-            return self.row_parser(row_packet, self.columns, self.config, self.is_binary)
-        else:
-            # Fallback - return raw packet (should not happen)
-            return row_packet
+        return self.row_parser(self.parser, self.columns, self.config, self.is_binary)
         
     def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
@@ -399,17 +398,17 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
                 row_packet = self._read_next_row_packet()
                 if row_packet is not None:
                     self._row_count += 1
+                    row_packet.release()    
     
-    def _read_next_row_packet(self) -> Optional[bytes]:
+    def _read_next_row_packet(self) -> Optional[PacketBuffer]:
         """
         Read next row packet from network (synchronous)
         
         Returns:
-            Row packet bytes, or None if no more rows
+            Row packet PacketBuffer, or None if no more rows
         """
         try:
-            row_packet: bytes = self.stream.read_payload()
-            
+            row_packet = self.stream.read_payload()
             # Check for EOF/OK packet
             if (row_packet[0] == 0xFE and 
                 ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
@@ -427,6 +426,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
 
             # Check for error packet
             if row_packet[0] == 0xFF:
+                row_packet.release()
                 self.loaded = True
                 # Error packet - will be handled by caller
                 raise Exception("Error packet received during streaming")
@@ -469,6 +469,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
             row_packet = self._read_next_row_packet()
             if row_packet is None:
                 raise ValueError("Cannot scroll past end of result set")
+            row_packet.release()
             self._row_count += 1
             self.row_pointer += 1
 
@@ -479,15 +480,15 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
     Uses non-blocking I/O to fetch rows from the network.
     """
     
-    async def _read_next_row_packet(self) -> Optional[bytes]:
+    async def _read_next_row_packet(self) -> Optional[PacketBuffer]:
         """
         Read next row packet from network (asynchronous)
         
         Returns:
-            Row packet bytes, or None if no more rows
+            Row packet PacketBuffer, or None if no more rows
         """
         try:
-            row_packet: bytes = await self.stream.read_payload()             
+            row_packet = await self.stream.read_payload()
             # Check for EOF/OK packet
             if (row_packet[0] == 0xFE and 
                 ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
@@ -499,12 +500,12 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
                 else:
                     # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
                     OkPacket.decode(row_packet, self.context)
-
                 self.loaded = True
                 return None
             
             # Check for error packet
             if row_packet[0] == 0xFF:
+                row_packet.release()
                 self.loaded = True
                 raise Exception("Error packet received during streaming")
             
@@ -526,13 +527,9 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         
         # Increment row count
         self._row_count += 1
-        
+        self.parser.set_buffer(row_packet)
         # Parse row using the provided parser
-        if self.row_parser:
-            return self.row_parser(row_packet, self.columns, self.config, self.is_binary)
-        else:
-            # Fallback - return raw packet (should not happen)
-            return row_packet
+        return self.row_parser(self.parser, self.columns, self.config, self.is_binary)
     
     async def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows (async)"""
@@ -554,6 +551,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
                 row_packet = await self._read_next_row_packet()
                 if row_packet is not None:
                     self._row_count += 1
+                    row_packet.release()
     
     async def scroll(self, value: int, mode: str = "relative") -> None:
         """
@@ -586,5 +584,6 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
             row_packet = await self._read_next_row_packet()
             if row_packet is None:
                 raise ValueError("Cannot scroll past end of result set")
+            row_packet.release()
             self._row_count += 1
             self.row_pointer += 1

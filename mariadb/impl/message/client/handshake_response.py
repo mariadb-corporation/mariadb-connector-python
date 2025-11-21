@@ -2,13 +2,15 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 import hashlib
+from typing import TYPE_CHECKING
+
 from ...client.context import Context
-from ...client.socket.payload_writer import PayloadWriter
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from ..client_message import ClientMessage
 from ...configuration import Configuration
 from mariadb_shared.constants import CAPABILITY
-
+if TYPE_CHECKING:
+    from ...client.socket.stream import SyncStream
 
 class HandshakeResponse(ClientMessage):
     """
@@ -21,31 +23,29 @@ class HandshakeResponse(ClientMessage):
         self.configuration = configuration
         self.context = context
         
-
-    def encode(self, context: Context) -> bytearray:
+    def process(self, stream: 'SyncStream', context: Context) -> None:
         """Encode handshake response packet with capabilities, auth, and connection attributes"""
-        # Build payload
-        writer = PayloadWriter()
         
         # Client capabilities (4 bytes)
-        writer.write_int(context.client_capabilities & 0xFFFFFFFF)
+        stream.write_uint32(context.client_capabilities & 0xFFFFFFFF)
         
         # Max packet size (4 bytes)
-        writer.write_int(1024 * 1024 * 1024)
-        writer.write_byte(45)
+        stream.write_uint32(1024 * 1024 * 1024)
+        stream.write_byte(45)
         
         # Reserved (23 bytes of zeros)
         for _ in range(19):
-            writer.write_byte(0)
+            stream.write_byte(0)
 
         # Client extended capabilities (4 bytes)
-        writer.write_int(context.client_capabilities >> 32)
+        stream.write_uint32(context.client_capabilities >> 32)
 
         # Username (null-terminated)
         if self.configuration.user:
-            writer.write_null_terminated_string(self.configuration.user)
+            stream.write_string(self.configuration.user)
+            stream.write_byte(0x00)
         else:
-            writer.write_byte(0)  # Empty username
+            stream.write_byte(0x00)  # Empty username
 
         # Authentication response
         from ...plugin.authentication.native_password_plugin import NativePasswordPlugin
@@ -53,21 +53,23 @@ class HandshakeResponse(ClientMessage):
         if auth_response:
             if context.server_capabilities & CAPABILITY.SECURE_CONNECTION:
                 # Length-encoded auth response
-                writer.write_byte(len(auth_response))
-                writer.write_bytes(auth_response)
+                stream.write_byte(len(auth_response))
+                stream.write_bytes(auth_response)
             else:
-                writer.write_bytes(auth_response)
-                writer.write_byte(0x00)
+                stream.write_bytes(auth_response)
+                stream.write_byte(0x00)
         else:
-            writer.write_byte(0)
+            stream.write_byte(0x00)
         
         # Database name (if specified)
         if self.configuration.database and (context.client_capabilities & CAPABILITY.CONNECT_WITH_DB):
-            writer.write_null_terminated_string(self.configuration.database)
+            stream.write_string(self.configuration.database)
+            stream.write_byte(0x00)
         
         # Authentication plugin name
         if (context.client_capabilities & CAPABILITY.PLUGIN_AUTH):
-            writer.write_null_terminated_string("mysql_native_password")
+            stream.write_string("mysql_native_password")
+            stream.write_byte(0x00)
         
         # Connection attributes
         if (context.client_capabilities & CAPABILITY.CONNECT_ATTRS):
@@ -82,11 +84,8 @@ class HandshakeResponse(ClientMessage):
             
             # Encode attributes
             attr_data = encode_connection_attributes(default_attrs)
-            writer.write_length_encoded_int(len(attr_data))
-            writer.write_bytes(attr_data)
-
-        # Send payload through stream (don't reset sequence - continue from handshake)
-        return writer.get_payload()
+            stream.write_length_encoded_int(len(attr_data))
+            stream.write_bytes(attr_data)
     
     def _calculate_auth_response(self, context: Context) -> bytes:
         """Calculate authentication response"""

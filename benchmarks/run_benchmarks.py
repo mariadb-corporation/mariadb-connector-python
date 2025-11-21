@@ -51,7 +51,7 @@ def run_pytest_benchmark(benchmark_file=None, driver=None, output_json=None):
     
     # Add benchmark options
     cmd.extend(['--benchmark-only', '--benchmark-warmup=on'])
-    cmd.extend(['--benchmark-min-rounds=10'])
+    cmd.extend(['--benchmark-min-rounds=100', '--benchmark-warmup-iterations=100'])
     
     if benchmark_file:
         cmd.append(benchmark_file)

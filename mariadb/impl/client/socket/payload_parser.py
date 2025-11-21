@@ -8,6 +8,8 @@ Does NOT perform any I/O - only parses bytes.
 import struct
 from typing import Optional
 
+from mariadb.impl.client.socket.stream import PacketBuffer
+
 
 class PayloadParser:
     """
@@ -17,11 +19,15 @@ class PayloadParser:
     to parse various data types from it. It does NOT perform any I/O.
     """
     
-    def __init__(self, packet: bytearray, pos: int = 0):
+    def __init__(self, packet: PacketBuffer, pos: int = 0):
         """Initialize parser with packet payload and optional starting position"""
-        self.packet: bytearray = packet
+        self.packet: PacketBuffer = packet
         self.pos: int = pos  # Current read position
-
+    
+    def set_buffer(self, packet: PacketBuffer, pos: int = 0):
+        self.packet = packet
+        self.pos = pos
+    
     def get_byte(self) -> int:
         """Read single byte from packet without advancing position"""
         return self.packet[self.pos]
@@ -32,29 +38,58 @@ class PayloadParser:
         self.pos += 1
         return value
     
-    def read_int16(self) -> int:
+    def read_uint16(self) -> int:
         """Read 2-byte integer (little-endian) and advance position"""
         self.pos += 2
         return ((self.packet[self.pos - 2] & 0xff) + (self.packet[self.pos - 1] << 8)) & 0xffff;        
     
-    def read_int24(self) -> int:
+    def read_int16(self) -> int:
+        """Read 2-byte integer (little-endian) and advance position"""
+        self.pos += 2
+        return int.from_bytes(self.packet[self.pos - 2:self.pos], byteorder='little', signed=True)
+
+    def read_uint24(self) -> int:
         """Read 3-byte integer (little-endian) and advance position"""
-        value = struct.unpack('<I', self.packet[self.pos:self.pos+3] + b'\x00')[0]
+        value = struct.unpack('<I', bytes(self.packet[self.pos:self.pos+3]) + b'\x00')[0]
         self.pos += 3
         return value
-    
-    def read_int32(self) -> int:
+
+    def read_uint32(self) -> int:
         """Read 4-byte integer (little-endian) and advance position"""
         value = struct.unpack('<I', self.packet[self.pos:self.pos+4])[0]
         self.pos += 4
         return value
+
+    def read_int32(self) -> int:
+        """Read 4-byte integer (little-endian) and advance position"""
+        value = struct.unpack('<i', self.packet[self.pos:self.pos+4])[0]
+        self.pos += 4
+        return value
     
-    def read_int64(self) -> int:
+    def read_uint64(self) -> int:
         """Read 8-byte integer (little-endian) and advance position"""
         value = struct.unpack('<Q', self.packet[self.pos:self.pos+8])[0]
         self.pos += 8
         return value
+
+    def read_int64(self) -> int:
+        """Read 8-byte integer (little-endian) and advance position"""
+        value = struct.unpack('<q', self.packet[self.pos:self.pos+8])[0]
+        self.pos += 8
+        return value
+
+    def read_float(self) -> float:
+        """Read 4-byte float (little-endian) and advance position"""
+        value = struct.unpack('<f', self.packet[self.pos:self.pos+4])[0]
+        self.pos += 4
+        return value
     
+    def read_double(self) -> float:
+        """Read 8-byte float (little-endian) and advance position"""
+        value = struct.unpack('<d', self.packet[self.pos:self.pos+8])[0]
+        self.pos += 8
+        return value
+
     def read_length_encoded_int(self) -> Optional[int]:
         """Read length-encoded integer (MySQL protocol format) and advance position"""
         first_byte = self.packet[self.pos]
@@ -65,10 +100,10 @@ class PayloadParser:
         elif first_byte == 251:    
             return None
         elif first_byte == 252:
-            return self.read_int16()
+            return self.read_uint16()
         elif first_byte == 253:
-            return self.read_int24()
-        return self.read_int64()
+            return self.read_uint24()
+        return self.read_uint64()
     
     def read_length_encoded_string(self, encoding: str = 'utf-8') -> Optional[str]:
         """Read length-encoded string with specified encoding and advance position"""
@@ -85,10 +120,10 @@ class PayloadParser:
         self.pos += length
         
         try:
-            value = string_data.decode(encoding)
+            value = bytes(string_data).decode(encoding)
         except UnicodeDecodeError as e:
             # Fallback to replace invalid characters
-            value = string_data.decode(encoding, errors='replace')
+            value = bytes(string_data).decode(encoding, errors='replace')
         
         return value
     
@@ -102,13 +137,29 @@ class PayloadParser:
         data = self.packet[self.pos:self.pos+length]
         self.pos += length
         return data
+
+    def read_null_terminated_bytes(self) -> memoryview:
+        """Read null-terminated string"""
+        for i in range(self.pos, len(self.packet)):
+            if self.packet[i] == 0x00:
+                data = self.packet[self.pos:i]
+                self.pos = i + 1
+                return data
+        data = self.packet[self.pos:]
+        self.pos = len(self.packet)
+        return data
+
         
     def read_null_terminated_string(self, encoding: str = 'utf-8') -> str:
         """Read null-terminated string"""
-        null_pos = self.packet.find(0, self.pos)
-        string_data = self.packet[self.pos:null_pos]
-        self.pos = null_pos + 1
-        return string_data.decode(encoding)
+        for i in range(self.pos, len(self.packet)):
+            if self.packet[i] == 0x00:
+                string_data = bytes(self.packet[self.pos:i]).decode(encoding)
+                self.pos = i + 1
+                return string_data
+        string_data = bytes(self.packet[self.pos:]).decode(encoding)        
+        self.pos = len(self.packet)
+        return string_data
     
     def read_bytes(self, length: int) -> bytes:
         """Read fixed number of bytes and advance position"""
@@ -137,13 +188,30 @@ class PayloadParser:
     @staticmethod
     def read_length_encoded_string_at(packet: bytes, pos: int, encoding: str = 'utf-8') -> tuple:
         """Read length-encoded string at position and return (value, new_position)"""
-        parser = PayloadParser(packet, pos)
-        value = parser.read_length_encoded_string(encoding)
-        return value, parser.pos
+        len, pos2 = PayloadParser.read_length_encoded_at(packet, pos)
+        if (len is None):
+            return None, pos2
+        return bytes(packet[pos2:pos2 + len]).decode(encoding, errors='replace'), pos2 + len
     
     @staticmethod
     def read_length_encoded_bytes_at(packet: bytes, pos: int) -> tuple:
         """Read length-encoded bytes at position and return (value, new_position)"""
-        parser = PayloadParser(packet, pos)
-        value = parser.read_length_encoded_bytes()
-        return value, parser.pos
+        len, pos2 = PayloadParser.read_length_encoded_at(packet, pos)
+        if (len is None):
+            return None, pos2   
+        return bytes(packet[pos2:pos2 + len]), pos2 + len
+
+    @staticmethod
+    def read_length_encoded_at(packet: bytes, pos: int) -> tuple:
+        first_byte = packet[pos]
+        pos2 = pos + 1
+        
+        if first_byte < 251:
+            return first_byte, pos2
+        elif first_byte == 251:    
+            return None, pos2
+        elif first_byte == 252:
+            return ((packet[pos2] & 0xff) + (packet[pos2 + 1] << 8)) & 0xffff, pos2 + 2
+        elif first_byte == 253:
+            return struct.unpack('<I', bytes(packet[pos2:pos2+3]) + b'\x00')[0], pos2 + 3
+        return struct.unpack('<Q', packet[pos2:pos2+8])[0], pos2 + 8

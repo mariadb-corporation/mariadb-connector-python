@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Optional
 
 from .column_definition_packet import ColumnDefinitionPacket
 from ...client.socket.payload_parser import PayloadParser
+from ...client.socket.stream import PacketBuffer
 if TYPE_CHECKING:
     from ...client.context import Context
 
@@ -53,21 +54,21 @@ class PrepareStmtPacket:
         self.closed = False
     
     @staticmethod
-    def decode(data: bytearray, context: Optional['Context'] = None, sql: str = None) -> 'PrepareStmtPacket':
+    def decode(data: PacketBuffer, context: Optional['Context'] = None, sql: str = None) -> 'PrepareStmtPacket':
         """Decode COM_STMT_PREPARE response packet from bytearray with optional context"""
         parser = PayloadParser(data)
         
         parser.read_byte()  # Skip OK marker (0x00)
-        statement_id = parser.read_int32()
-        column_count = parser.read_int16()
-        parameter_count = parser.read_int16()
+        statement_id = parser.read_uint32()
+        column_count = parser.read_uint16()
+        parameter_count = parser.read_uint16()
         parser.read_byte()  # Skip reserved byte (0x00)
-        warning_count = parser.read_int16()
+        warning_count = parser.read_uint16()
         
         # Update context if provided
         if context:
             context.warning_count = warning_count
-        
+        data.release()
         return PrepareStmtPacket(
             statement_id,
             column_count,

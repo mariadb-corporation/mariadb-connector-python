@@ -19,7 +19,7 @@ from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
 from .base_client import BaseClient
 from .socket.payload_parser import PayloadParser
-from .socket.stream import AsyncStream
+from .socket.stream import AsyncStream, PacketBuffer
 from ..configuration import Configuration
 from ..host_address import HostAddress
 from ..message.client_message import ClientMessage
@@ -144,7 +144,7 @@ class AsyncClient(BaseClient):
     async def _perform_handshake(self) -> None:
         """Perform initial handshake and authentication with server asynchronously"""
         # Read initial handshake packet from server
-        handshake_packet: bytes = await self.stream.read_payload()
+        handshake_packet = await self.stream.read_payload()
         if (handshake_packet[0] == 0xff):
             raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
 
@@ -167,11 +167,10 @@ class AsyncClient(BaseClient):
         self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
 
         # Create and send handshake response
-        response = HandshakeResponse(self.configuration, self.context)
-        await self.stream.send_payload(response.encode(self.context), response.type(), reset_sequence=False)
+        await self._send_message(HandshakeResponse(self.configuration, self.context), False)
 
         # Handle authentication (may involve multiple rounds)
-        auth_result: bytearray = await self.stream.read_payload()
+        auth_result = await self.stream.read_payload()
         await self._handle_authentication(auth_result)
         
         self.connected = True
@@ -207,9 +206,8 @@ class AsyncClient(BaseClient):
         
         # Send SSL request packet
         ssl_request = SslRequestPacket(client_capabilities)
-        encoded = ssl_request.encode(self.context)
-        await self.stream.send_payload(encoded, ssl_request.type(), False)
-        
+        await self._send_message(ssl_request, False)
+
         try:
             # Import SSL utility
             from .socket.ssl_utility import SSLUtility
@@ -282,7 +280,7 @@ class AsyncClient(BaseClient):
             await self._send_message(change_user_packet)
 
             # Read initial authentication result
-            auth_result: bytearray = await self.stream.read_payload()
+            auth_result = await self.stream.read_payload()
             await self._handle_authentication(auth_result)
                 
         except Exception as e:
@@ -291,7 +289,7 @@ class AsyncClient(BaseClient):
                 raise
             raise OperationalError(f"Change user failed: {e}")
 
-    async def _handle_authentication(self, auth_result: bytearray) -> None:
+    async def _handle_authentication(self, auth_result: PacketBuffer) -> None:
         """Process authentication response from server using plugin system"""
         # Import plugin system
         from ..plugin.authentication.plugin_registry import register_builtin_plugins
@@ -314,15 +312,16 @@ class AsyncClient(BaseClient):
             # Auth switch request - server wants different plugin
             await self._handle_auth_switch(auth_result)
         else:
+            auth_result.release()
             raise OperationalError(f"Unexpected packet during authentication: {packet_type:02x}")
         
-    async def _handle_auth_switch(self, packet: bytearray) -> None:
+    async def _handle_auth_switch(self, packet: PacketBuffer) -> None:
         """Handle authentication plugin switch request"""
         parser = PayloadParser(packet)
         parser.skip(1)  # Skip 0xFE marker
         plugin_name = parser.read_null_terminated_string("ascii")
         auth_data = parser.read_remaining()
-        
+        packet.release()
         # Get authentication plugin
         try:
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
@@ -354,14 +353,11 @@ class AsyncClient(BaseClient):
             except Exception as e:
                 raise OperationalError(f"Failed to execute init command '{self.configuration.init_command}': {e}")
 
-    async def _send_message(self, message: ClientMessage) -> None:
+    async def _send_message(self, message: ClientMessage, reset_sequence: bool = True) -> None:
         """Send client message to server"""
-        try:
-            await self.stream.send_payload(message.encode(self.context), message.type(), reset_sequence=True)
-        except NotSupportedError as e:
-            raise e    
-        except Exception as e:
-            raise OperationalError(f"Failed to send message: {e}")
+        self.stream.begin_write(reset_sequence)
+        message.process(self.stream, self.context)
+        await self.stream.flush(message.type())
     
     async def execute(self, message: ClientMessage, config: 'Configuration', buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List[Completion]:
         """Execute command asynchronously and return list of completion results"""
@@ -380,7 +376,7 @@ class AsyncClient(BaseClient):
                 
                 # Continue reading results while MORE_RESULTS_EXIST is set
                 while True:
-                    result_packet: bytes = await self.stream.read_payload()
+                    result_packet = await self.stream.read_payload()
                     completion = await self._parse_result_packet(result_packet, config, is_binary, buffered, prepare_stmt_packet)
                     results.append(completion)
                     
@@ -466,7 +462,7 @@ class AsyncClient(BaseClient):
                         return None
         return None
     
-    async def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> Completion:
+    async def _parse_result_packet(self, packet: PacketBuffer, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> Completion:
         """Parse result packet into completion object asynchronously"""
         packet_type = packet[0]
         if packet_type == self.OK_PACKET:
@@ -479,7 +475,7 @@ class AsyncClient(BaseClient):
     # _parse_ok_packet(), _process_session_tracking(), _process_system_variables(), 
     # and _process_schema_change() are inherited from BaseClient
     
-    async def _parse_result_set(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> 'Completion' :
+    async def _parse_result_set(self, packet: PacketBuffer, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> 'Completion' :
         """Parse result set with column definitions and row data asynchronously"""
         from ..completion import Completion
         
@@ -493,18 +489,19 @@ class AsyncClient(BaseClient):
             columns: List[ColumnDefinitionPacket] = []
             if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                 # skip metadata
+                packet.release()
                 columns = prepare_stmt_packet.columns
             else:
+                packet.release()
                 for _ in range(column_count):
-                    col_packet: bytearray = await self.stream.read_payload()
-                    columns.append(ColumnDefinitionPacket.decode(col_packet, self.context))
+                    columns.append(ColumnDefinitionPacket.decode(await self.stream.read_payload(), self.context))
             
             # Step 3: Handle EOF packet after column definitions based on capabilities
             # Check if DEPRECATE_EOF capability is set
             
             if not self.context.isEofDeprecated():
                 # skip intermediate EOF packet
-                await self.stream.read_payload()
+                (await self.stream.read_payload()).release()
             
             # Step 4: If unbuffered, create streaming result
             if not buffered:
@@ -526,14 +523,14 @@ class AsyncClient(BaseClient):
 
             # Step 5: Read row data packets until EOF (buffered mode)
             rows = []
+            parser = PayloadParser(None)
             while True:
-                row_packet: bytes = await self.stream.read_payload()
-                
+                row_packet = await self.stream.read_payload()
                 # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
                 # EOF/OK packets start with 0xFE and have specific length constraints
                 if (row_packet[0] == self.EOF_PACKET and 
                     ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
-                     (not self.context.isEofDeprecated() and len(row_packet) < 8))):
+                        (not self.context.isEofDeprecated() and len(row_packet) < 8))):
                     
                     if not self.context.isEofDeprecated():
                         # Traditional EOF packet
@@ -559,10 +556,13 @@ class AsyncClient(BaseClient):
                     completion.result_set = complete_result
                                         
                     return completion
-                    
+                elif row_packet[0] == self.ERROR_PACKET:
+                    raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)
+
                 else:
                     # Row data packet
-                    row_data = self._parse_row_data(row_packet, columns, config, is_binary)
+                    parser.set_buffer(row_packet)
+                    row_data = self._parse_row_data(parser, columns, config, is_binary)
                     rows.append(row_data)
             
             
@@ -597,7 +597,7 @@ class AsyncClient(BaseClient):
             await self._send_message(prepare_packet)
             return await self._parse_prepare_response(await self.stream.read_payload(), sql)
     
-    async def _parse_prepare_response(self, packet: bytearray, sql: str) -> PrepareStmtPacket:
+    async def _parse_prepare_response(self, packet: PacketBuffer, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet asynchronously"""
         if len(packet) == 0:
             raise OperationalError("Empty prepare response packet")
@@ -610,11 +610,11 @@ class AsyncClient(BaseClient):
             if prepare_stmt_packet.parameter_count > 0:
                 # Skip parameter metadata
                 for _ in range(prepare_stmt_packet.parameter_count):
-                    await self.stream.read_payload()                
+                    (await self.stream.read_payload()).release()                
 
                 # Read EOF packet after parameters (if not deprecated)
                 if not self.context.isEofDeprecated():
-                    await self.stream.read_payload()
+                    (await self.stream.read_payload()).release()
             
             # Read column metadata if present
             if prepare_stmt_packet.column_count > 0:
@@ -625,13 +625,14 @@ class AsyncClient(BaseClient):
                 
                 # Read EOF packet after columns (if not deprecated)
                 if not self.context.isEofDeprecated():
-                    await self.stream.read_payload()
+                    (await self.stream.read_payload()).release()
             
             return prepare_stmt_packet
         elif packet_type == self.ERROR_PACKET:
             # Error packet
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
+            packet.release()
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
     
     async def close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:

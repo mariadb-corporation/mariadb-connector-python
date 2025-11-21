@@ -76,7 +76,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
             instance._closed = True
             if hasattr(e, 'errno') and hasattr(e, 'sqlstate'):
                 raise
-            raise self._exception_factory.create_connection_exception(f"Connection failed: {e}", cause=e)
+            raise instance._exception_factory.create_connection_exception(f"Connection failed: {e}", cause=e)
         return instance
 
     # =========================================================================

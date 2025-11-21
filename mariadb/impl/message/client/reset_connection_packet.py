@@ -6,12 +6,11 @@ Reset connection packet for MariaDB connection reset
 
 Resets the connection state without re-authenticating.
 """
-
+from typing import TYPE_CHECKING
 from ...client.context import Context
-
 from ..client_message import ClientMessage
-from ...client.socket.payload_writer import PayloadWriter
-
+if TYPE_CHECKING:
+    from ...client.socket.stream import SyncStream
 
 class ResetConnectionPacket(ClientMessage):
     """
@@ -23,9 +22,8 @@ class ResetConnectionPacket(ClientMessage):
     
     COM_RESET_CONNECTION = 0x1F
         
-    def encode(self, context: Context) -> bytearray:
-        """Encode COM_RESET_CONNECTION packet"""
-        return bytearray([self.COM_RESET_CONNECTION])
+    def process(self, stream: 'SyncStream', context: Context) -> None:
+        stream.write_byte(self.COM_RESET_CONNECTION)
 
     def is_binary(self) -> bool:
         return False

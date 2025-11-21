@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional
 from ...client.socket.payload_parser import PayloadParser
 from ...completion import Completion
 from mariadb_shared import constants
-
+from ...client.socket.stream import PacketBuffer
 if TYPE_CHECKING:
     from ...client.context import Context
 
@@ -54,7 +54,7 @@ class OkPacket(Completion):
         return (self.server_status & constants.STATUS.PS_OUT_PARAMS) != 0
     
     @staticmethod
-    def decode(data: bytearray, context: 'Context') -> 'OkPacket':
+    def decode(data: PacketBuffer, context: 'Context') -> 'OkPacket':
         """Decode OK packet from bytearray with context"""
         parser = PayloadParser(data)
         
@@ -89,8 +89,10 @@ class OkPacket(Completion):
                     _process_session_tracking(parser, context)
             except Exception:
                 # Don't fail on info/session tracking errors
+                data.release()
                 pass
         
+        data.release()
         return OkPacket(
             affected_rows,
             insert_id,
@@ -129,10 +131,10 @@ def _process_session_tracking(parser: PayloadParser, context: 'Context') -> None
                 # System variable change
                 while parser.pos < start_pos + total_length:
                     var_name_len = parser.read_length_encoded_int()
-                    var_name = parser.read_bytes(var_name_len).decode('utf-8')
+                    var_name = bytes(parser.read_bytes(var_name_len)).decode('utf-8')
                     
                     var_value_len = parser.read_length_encoded_int()
-                    var_value = parser.read_bytes(var_value_len).decode('utf-8')
+                    var_value = bytes(parser.read_bytes(var_value_len)).decode('utf-8')
                     
                     # Update context with system variable change
                     if hasattr(context, 'update_system_variable'):
@@ -141,7 +143,7 @@ def _process_session_tracking(parser: PayloadParser, context: 'Context') -> None
             elif tracking_type == constants.SESSION_TRACK.SCHEMA:
                 # Schema change
                 schema_len = parser.read_length_encoded_int()
-                schema = parser.read_bytes(schema_len).decode('utf-8')
+                schema = bytes(parser.read_bytes(schema_len)).decode('utf-8')
                 if hasattr(context, 'database'):
                     context.database = schema
             

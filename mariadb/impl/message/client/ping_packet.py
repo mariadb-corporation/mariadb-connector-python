@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+
+from typing import TYPE_CHECKING
 from ...client.context import Context
-
 from ..client_message import ClientMessage
-from ...client.socket.payload_writer import PayloadWriter
 
+if TYPE_CHECKING:
+    from ...client.socket.stream import SyncStream
 
 class PingPacket(ClientMessage):
     """
@@ -14,10 +16,9 @@ class PingPacket(ClientMessage):
     
     COM_PING = 0x0E
         
-    def encode(self, context: Context) -> bytearray:
-        """Encode COM_PING packet"""
-        return bytearray([PingPacket.COM_PING])
-    
+    def process(self, stream: 'SyncStream', context: Context) -> None:
+        stream.write_byte(self.COM_PING)
+
     def is_binary(self) -> bool:
         return False
 

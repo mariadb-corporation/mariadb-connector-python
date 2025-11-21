@@ -10,7 +10,7 @@ from typing import Optional, TYPE_CHECKING
 
 from ...configuration import Configuration
 
-from ...client.socket.stream import AsyncStream, SyncStream
+from ...client.socket.stream import AsyncStream, PacketBuffer, SyncStream
 from ...client.context import Context
 
 from ...client.socket.payload_writer import PayloadWriter
@@ -87,7 +87,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         
         return client_scramble, signature, raw_public_key
     
-    async def processAsync(self, stream: AsyncStream, context: Context) -> bytearray:
+    async def processAsync(self, stream: AsyncStream, context: Context) -> PacketBuffer:
         """Process Parsec password plugin authentication (async)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
@@ -96,12 +96,14 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        await stream.send_payload(bytearray(), "PARSEC_REQUEST_SALT", reset_sequence=False)
-        
+        stream.begin_write(False)
+        await stream.flush("PARSEC_REQUEST_SALT")
+
         # Step 2: Read server response with salt and parameters
         response = await stream.read_payload()
         
         if len(response) < 3:
+            response.release()
             raise OperationalError("Invalid parsec authentication response")
         
         # Parse response
@@ -114,6 +116,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         first_byte = parser.read_byte()
         iterations_exp = parser.read_byte()
         salt = parser.read_remaining()
+        response.release()
         
         # Validate format
         if first_byte != 0x50 or iterations_exp > 3:  # 'P' for PBKDF2, Maximum iteration of 8192 (2^13 = 1024 << 3)
@@ -123,15 +126,15 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         
         # Send client scramble + signature to server
-        writer = PayloadWriter()
-        writer.write_bytes(client_scramble)
-        writer.write_bytes(signature)
-        await stream.send_payload(writer.get_payload(), "PARSEC_AUTH", reset_sequence=False)
-        
+        stream.begin_write(False)
+        stream.write_bytes(client_scramble)
+        stream.write_bytes(signature)
+        await stream.flush("PARSEC_AUTH")
+
         # Read final response
         return await stream.read_payload()
     
-    def processSync(self, stream: SyncStream, context: Context) -> bytearray:
+    def processSync(self, stream: SyncStream, context: Context) -> PacketBuffer:
         """Process Parsec password plugin authentication (sync)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
@@ -140,12 +143,14 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        stream.send_payload(bytearray(), "PARSEC_REQUEST_SALT", reset_sequence=False)
+        stream.begin_write(False)
+        stream.flush("PARSEC_REQUEST_SALT")
         
         # Step 2: Read server response with salt and parameters
         response = stream.read_payload()
         
         if len(response) < 3:
+            response.release()
             raise OperationalError("Invalid parsec authentication response")
         
         # Parse response
@@ -156,6 +161,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         first_byte = parser.read_byte()
         iterations_exp = parser.read_byte()
         salt = parser.read_remaining()
+        response.release()
         
         # Validate format
         if first_byte != 0x50 or iterations_exp > 3:  # 'P' for PBKDF2, Maximum iteration of 8192 (2^13 = 1024 << 3)
@@ -165,10 +171,10 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         
         # Send client scramble + signature to server
-        writer = PayloadWriter()
-        writer.write_bytes(client_scramble)
-        writer.write_bytes(signature)
-        stream.send_payload(writer.get_payload(), "PARSEC_AUTH", reset_sequence=False)
+        stream.begin_write(False)
+        stream.write_bytes(client_scramble)
+        stream.write_bytes(signature)
+        stream.flush("PARSEC_AUTH")
         
         # Read final response
         return stream.read_payload()

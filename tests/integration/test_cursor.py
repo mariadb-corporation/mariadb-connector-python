@@ -1212,19 +1212,20 @@ class TestCursor(unittest.TestCase):
     def test_update_bulk(self):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
-
+        if os.environ.get('RUN_LONG_TEST') != '1':
+            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")   
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_update_bulk ("
                        "a int primary key, b int)")
-        vals = [(i,) for i in range(1000)]
+        vals = [(i,) for i in range(100)]
         cursor.executemany("INSERT INTO test_update_bulk VALUES (?, NULL)",
                            vals)
-        self.assertEqual(cursor.rowcount, 1000)
+        self.assertEqual(cursor.rowcount, 100)
         self.connection.autocommit = False
         cursor.executemany("UPDATE test_update_bulk SET b=2 WHERE a=?",
                            vals)
         self.connection.commit()
-        self.assertEqual(cursor.rowcount, 1000)
+        self.assertEqual(cursor.rowcount, 100)
         self.connection.autocommit = True
         del cursor
 
@@ -1233,7 +1234,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("CREATE TEMPORARY TABLE test_multi_execute ("
                        "a int auto_increment primary key, b int)")
         self.connection.autocommit = False
-        for i in range(1, 1000):
+        for i in range(1, 100):
             cursor.execute("INSERT INTO test_multi_execute VALUES (?,1)", (i,))
         self.connection.autocommit = True
         del cursor

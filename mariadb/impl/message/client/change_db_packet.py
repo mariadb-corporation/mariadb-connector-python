@@ -4,8 +4,11 @@
 from ...client.context import Context
 
 from ..client_message import ClientMessage
-from ...client.socket.payload_writer import PayloadWriter
+from typing import TYPE_CHECKING
 
+
+if TYPE_CHECKING:
+    from ...client.socket.stream import SyncStream
 
 class ChangeDbPacket(ClientMessage):
     """
@@ -20,14 +23,11 @@ class ChangeDbPacket(ClientMessage):
     def __init__(self, database: str):
         """Initialize COM_INIT_DB packet with database name"""
         self.database = database
-    
-    def encode(self, context: Context) -> bytearray:
-        """Encode COM_INIT_DB packet with database name"""
-        writer = PayloadWriter()
-        writer.write_byte(self.COM_INIT_DB)
-        writer.write_string(self.database)
-        return writer.get_payload()
-    
+        
+    def process(self, stream: 'SyncStream', context: Context) -> None:
+        stream.write_byte(self.COM_INIT_DB)
+        stream.write_string(self.database)
+
     def is_binary(self) -> bool:
         return False
 
