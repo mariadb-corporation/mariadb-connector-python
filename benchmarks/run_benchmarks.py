@@ -47,7 +47,9 @@ DRIVERS = ['mariadb', 'mariadb_c', 'pymysql']
 def run_pytest_benchmark(benchmark_file=None, driver=None, output_json=None):
     """Run pytest-benchmark with specified parameters."""
     
-    cmd = ['pytest', '-v']
+    # Use the current Python interpreter to invoke pytest in a cross-platform
+    # way, instead of relying on a "pytest" executable being present on PATH.
+    cmd = [sys.executable, '-m', 'pytest', '-v']
     
     # Add benchmark options
     cmd.extend(['--benchmark-only', '--benchmark-warmup=on'])

@@ -31,7 +31,7 @@ bench:
 	python run_benchmarks.py
 
 bench-all:
-	./run_all_benchmarks.sh
+	python run_all_benchmarks.py
 
 bench-mariadb:
 	python run_benchmarks.py --driver mariadb --json benchmark_mariadb.json
