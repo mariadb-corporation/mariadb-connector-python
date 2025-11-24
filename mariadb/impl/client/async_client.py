@@ -505,7 +505,12 @@ class AsyncClient(BaseClient):
             if not self.context.isEofDeprecated():
                 # skip intermediate EOF packet
                 (await self.read_stream.read_payload()).release()
+                        # Build decoder list once for all rows (performance optimization)
+            decoders = self._build_decoder_list(columns, is_binary)
             
+            # Select appropriate row parser based on protocol
+            row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+
             # Step 4: If unbuffered, create streaming result
             if not buffered:
                 from ..result import AsyncStreamingResult
@@ -516,7 +521,8 @@ class AsyncClient(BaseClient):
                     column_count=column_count,
                     config=config,
                     is_binary=is_binary,
-                    row_parser=self._parse_row_data  # Pass row parser function
+                    row_parser=row_parser,  # Pass appropriate row parser function
+                    decoders=decoders  # Pass pre-built decoder list
                 )
                 
                 # Create completion with streaming result
@@ -527,47 +533,50 @@ class AsyncClient(BaseClient):
             # Step 5: Read row data packets until EOF (buffered mode)
             rows = []
             parser = PayloadParser(None)
-            while True:
-                row_packet = await self.read_stream.read_payload()
-                # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
-                # EOF/OK packets start with 0xFE and have specific length constraints
-                if (row_packet[0] == self.EOF_PACKET and 
-                    ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
-                        (not self.context.isEofDeprecated() and len(row_packet) < 8))):
-                    
-                    if not self.context.isEofDeprecated():
-                        # Traditional EOF packet
-                        completion = EofPacket.decode(row_packet, self.context)
+            try:
+                while True:
+                    row_packet = await self.read_stream.read_payload()
+                    # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
+                    # EOF/OK packets start with 0xFE and have specific length constraints
+                    if (row_packet[0] == self.EOF_PACKET and 
+                        ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
+                            (not self.context.isEofDeprecated() and len(row_packet) < 8))):
+                        
+                        if not self.context.isEofDeprecated():
+                            # Traditional EOF packet
+                            completion = EofPacket.decode(row_packet, self.context)
+                        else:
+                            # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
+                            completion = OkPacket.decode(row_packet, self.context)
+                        
+                        # Apply converters to all rows at once
+                        rows = self._apply_converters_to_rows(rows, columns, config)
+
+                        # Create AsyncCompleteResult with all rows
+                        from ..result import AsyncCompleteResult
+                        complete_result = AsyncCompleteResult(
+                            columns=columns,
+                            column_count=column_count,
+                            config=config,
+                            rows=rows,
+                            is_binary=is_binary
+                        )
+                        
+                        # Store result object in completion
+                        completion.result_set = complete_result
+                                            
+                        return completion
+                    elif row_packet[0] == self.ERROR_PACKET:
+                        raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)
+
                     else:
-                        # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
-                        completion = OkPacket.decode(row_packet, self.context)
-                    
-                    # Apply converters to all rows at once
-                    rows = self._apply_converters_to_rows(rows, columns, config)
-
-                    # Create AsyncCompleteResult with all rows
-                    from ..result import AsyncCompleteResult
-                    complete_result = AsyncCompleteResult(
-                        columns=columns,
-                        column_count=column_count,
-                        config=config,
-                        rows=rows,
-                        is_binary=is_binary
-                    )
-                    
-                    # Store result object in completion
-                    completion.result_set = complete_result
-                                        
-                    return completion
-                elif row_packet[0] == self.ERROR_PACKET:
-                    raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)
-
-                else:
-                    # Row data packet
-                    parser.set_buffer(row_packet)
-                    row_data = self._parse_row_data(parser, columns, config, is_binary)
-                    rows.append(row_data)
-            
+                        # Row data packet
+                        # Row data packet - use pre-built decoders
+                        parser.set_buffer(row_packet)
+                        rows.append(row_parser(parser, columns, config, decoders))
+            finally:
+                if parser and parser.packet:
+                    parser.packet.release()
             
         except Exception as e:
             raise OperationalError(f"Failed to parse result set: {e}")

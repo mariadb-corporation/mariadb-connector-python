@@ -481,7 +481,7 @@ class SyncClient(BaseClient):
                         parser.set_buffer(row_packet)
                         rows.append(row_parser(parser, columns, config, decoders))
             finally:
-                if parser.packet:
+                if parser and parser.packet:
                     parser.packet.release()
             
             

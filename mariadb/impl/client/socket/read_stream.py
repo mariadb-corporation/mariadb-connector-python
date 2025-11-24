@@ -47,7 +47,7 @@ class PacketBuffer:
     
     def release(self) -> None:
         """Release buffer back to stream (only needed for views)"""
-        if self._is_view:
+        if self._is_view and self._stream:
             self._stream._release_buffer()
             self._stream = None
     

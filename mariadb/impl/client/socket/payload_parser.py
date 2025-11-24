@@ -152,7 +152,7 @@ class PayloadParser:
             if self.packet[i] == 0x00:
                 string_data = bytes(self.packet[self.pos:i]).decode(encoding)
                 self.pos = i + 1
-            return string_data
+                return string_data
         string_data = bytes(self.packet[self.pos:]).decode(encoding)        
         self.pos = len(self.packet)
         return string_data

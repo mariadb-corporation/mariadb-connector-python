@@ -569,6 +569,7 @@ class BaseClient(ABC):
         for i, decoder in enumerate(decoders):
             value = decoder(parser, columns[i], config)
             row_values[i] = value
+        parser.packet.release()
         return tuple(row_values)
 
     def _parse_binary_row_data(self, parser: PayloadParser, columns: List[ColumnDefinitionPacket], config: 'Configuration', decoders: List[Callable]) -> tuple:
@@ -590,6 +591,7 @@ class BaseClient(ABC):
             # Use pre-built decoder for non-NULL values
             value = decoder(parser, columns[i], config)
             row_values[i] = value
+        parser.packet.release()    
         return tuple(row_values)
 
         
