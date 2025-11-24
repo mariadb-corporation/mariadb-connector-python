@@ -14,7 +14,7 @@ import struct
 import ipaddress
 import uuid
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Callable
 
 from mariadb.impl.client.socket.read_stream import PacketBuffer
 
