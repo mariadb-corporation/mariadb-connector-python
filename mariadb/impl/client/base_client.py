@@ -78,7 +78,7 @@ class BaseClient(ABC):
         self.closed = False
         self.socket_timeout = configuration.socket_timeout
         self.connect_timeout = configuration.connect_timeout
-        self.lock = threading.RLock()
+        self.lock = threading.Lock()
         self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
         self.auth_plugin: Optional['AuthenticationPlugin'] = None
 
