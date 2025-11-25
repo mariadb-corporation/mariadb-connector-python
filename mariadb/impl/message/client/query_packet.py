@@ -4,8 +4,11 @@
 import array
 import datetime
 import decimal
-from typing import TYPE_CHECKING, Any, List, Optional, Union as UnionType
-
+import ipaddress
+import uuid
+from typing import TYPE_CHECKING, Any, List
+import struct
+import re
 try:
     import numpy
     HAS_NUMPY = True
@@ -13,15 +16,12 @@ except ImportError:
     HAS_NUMPY = False
 
 from ...client.context import Context
-from ...string_utils import StringEscaper
 from ...sql_parser import split_sql_parts
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
 from ..payload_stream import PayloadStream
 from ....exceptions import NotSupportedError
-if TYPE_CHECKING:
-    from ...client.socket.write_stream import BaseWriteStream
 
 BINARY_PREFIX: bytes = bytearray(b"_binary'")
 QUOTE_BYTE: int = b"'"[0]
@@ -33,7 +33,7 @@ class QueryPacket(ClientMessage):
     """
     Simple query packet for SQL execution without parameters
     """
-    
+
     def __init__(self, sql: str):
         """Initialize COM_QUERY packet with SQL"""
         self.sql = sql
@@ -52,11 +52,11 @@ class QueryWithParamPacket(ClientMessage):
     """
     Parameterized query packet for SQL execution with parameter binding
     """
-    
+
     def __init__(self, sql_bytes: bytes, param_positions: List[int], parameters: List[Any]):
         """
         Initialize COM_QUERY packet with pre-parsed SQL bytes and parameters
-        
+
         Args:
             sql_bytes: SQL encoded as UTF-8 bytes
             param_positions: Byte positions (start, end) pairs where placeholders are
@@ -70,136 +70,153 @@ class QueryWithParamPacket(ClientMessage):
         """Generate COM_QUERY packet payload with SQL and bound parameters"""
         stream = PayloadStream()
         no_backslash_escapes = context.server_status & NO_BACKSLASH_ESCAPES > 0
-        
+
         # Write SQL fragments interleaved with parameters
         last_pos = 0
         param_idx = 0
+        params = self.parameters
+        converter = PARAM_CONVERT_TBL
+        parts = [b''] * (len(self.param_positions) + 2 + 1)
         
-        stream.write_byte(COM_QUERY)
+        parts[0] = b'\x03'
+        count= 1
         # Iterate through placeholder positions (they come in pairs: start, end)
         for i in range(0, len(self.param_positions), 2):
             start_pos = self.param_positions[i]
             end_pos = self.param_positions[i + 1]
-            
+
             # Write SQL fragment before this placeholder
             if start_pos > last_pos:
-                stream.write_bytes(self.sql_bytes[last_pos:start_pos])
-            
+                parts[count]= self.sql_bytes[last_pos:start_pos]
+                count += 1
+
             # Write parameter value
             if param_idx < len(self.parameters):
-                self._write_parameter_value(stream, self.parameters[param_idx], no_backslash_escapes)
+                parts[count] = converter.get(type(params[param_idx]), lambda v, ctx=None: str(v).encode('utf8'))(params[param_idx], no_backslash_escapes)
                 param_idx += 1
+                count += 1
             else:
-                stream.write_string('NULL', 'ascii')
-            
+                parts[count] = b'NULL'
+                count += 1
+
             last_pos = end_pos
-        
+
         # Write remaining SQL after last placeholder
         if last_pos < len(self.sql_bytes):
-            stream.write_bytes(self.sql_bytes[last_pos:])
-        
-        return stream.get_payload()
-    
-    def _write_parameter_value(self, stream: UnionType['BaseWriteStream', PayloadStream], param: Any, no_backslash_escapes: bool) -> None:
-        """
-        Write parameter value directly as its string representation
-        (for COM_QUERY, parameters are converted to strings)
-        
-        Args:
-            stream: Stream writer (BaseWriteStream or PayloadStream)
-            param: Parameter value
-            no_backslash_escapes: Whether to use NO_BACKSLASH_ESCAPES mode
-        """
-        if param is None:
-            stream.write_string('NULL', 'ascii')
-        elif isinstance(param, MrdbIndicator):
-            # Handle MariaDB indicator values
-            if param.indicator == 1:  # NULL
-                stream.write_string('NULL', 'ascii')
-            elif param.indicator == 2:  # DEFAULT
-                stream.write_string('DEFAULT', 'ascii')
-            elif param.indicator == 3:  # IGNORE
-                # Skip this parameter - should be handled at a higher level
-                pass
-            elif param.indicator == 4:  # IGNORE_ROW
-                # Skip entire row - should be handled at a higher level
-                pass
-            else:
-                # Unknown indicator, treat as NULL
-                stream.write_bytes(NULL_BYTES)
-        else:
-            match param:
-                case str():
-                    stream.write_byte(QUOTE_BYTE)
-                    stream.write_string(StringEscaper.escape_string(param, no_backslash_escapes))
-                    stream.write_byte(QUOTE_BYTE)
-                case bytes() | bytearray():
-                    stream.write_bytes(BINARY_PREFIX)
-                    stream.write_escaped_bytes(param, no_backslash_escapes)
-                    stream.write_byte(QUOTE_BYTE)
-                case bool():
-                    # Handle boolean before int/float since bool is a subclass of int in Python
-                    stream.write_string( '1' if param else '0', 'ascii')
-                case int():
-                    stream.write_string( str(param), 'ascii')
-                case float():
-                    if repr(param) in ("nan", "inf", "-inf"):
-                        raise NotSupportedError(f"Float value '{repr(param)}' is not supported.")
-                    stream.write_string( str(param), 'ascii')                
-                case datetime.datetime():
-                    # DATETIME: 'YYYY-MM-DD HH:MM:SS.ffffff'
-                    if param.microsecond:
-                        stream.write_string(f"'{param.strftime('%Y-%m-%d %H:%M:%S')}.{param.microsecond:06d}'", 'ascii')
-                    else:
-                        stream.write_string(f"'{param.strftime('%Y-%m-%d %H:%M:%S')}'", 'ascii')
-                case datetime.date():
-                    # DATE: 'YYYY-MM-DD'
-                    stream.write_string(f"'{param.strftime('%Y-%m-%d')}'", 'ascii')
-                case datetime.time():
-                    # TIME: 'HH:MM:SS.ffffff'
-                    if param.microsecond:
-                        stream.write_string(f"'{param.strftime('%H:%M:%S')}.{param.microsecond:06d}'", 'ascii')
-                    else:
-                        stream.write_string(f"'{param.strftime('%H:%M:%S')}'", 'ascii')
-                case datetime.timedelta():
-                    # Convert timedelta to TIME format (can be negative)
-                    total_seconds = int(param.total_seconds())
-                    hours, remainder = divmod(abs(total_seconds), 3600)
-                    minutes, seconds = divmod(remainder, 60)
-                    microseconds = param.microseconds
-                    
-                    sign = '-' if total_seconds < 0 else ''
-                    if microseconds:
-                        stream.write_string(f"'{sign}{hours:02d}:{minutes:02d}:{seconds:02d}.{microseconds:06d}'", 'ascii')
-                    else:
-                        stream.write_string(f"'{sign}{hours:02d}:{minutes:02d}:{seconds:02d}'", 'ascii')
-                case decimal.Decimal():
-                    if param.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
-                        raise NotSupportedError(f"Decimal value '{param.__str__()}' is not supported.")                    
-                    # DECIMAL/NUMERIC: no quotes needed, just string representation                    
-                    stream.write_string(str(param), 'ascii')
-                case array.array() if param.typecode == 'f':
-                    if len(param) == 0:
-                        stream.write_bytes(NULL_BYTES)
-                        return
-                    # Float array for VECTOR columns - encode as numpy float32 bytes
-                    if HAS_NUMPY:
-                        float_bytes = numpy.array(param, numpy.float32).tobytes()
-                    else:
-                        # Fallback: use array.tobytes() directly
-                        float_bytes = param.tobytes()
-                    stream.write_bytes(BINARY_PREFIX)
-                    stream.write_escaped_bytes(float_bytes, no_backslash_escapes)
-                    stream.write_byte(QUOTE_BYTE)
-                case _:
-                    # For other types, convert to string and escape
-                    stream.write_byte(QUOTE_BYTE)
-                    stream.write_string(StringEscaper.escape_string(str(param), no_backslash_escapes))
-                    stream.write_byte(QUOTE_BYTE)
+            parts[count] = self.sql_bytes[last_pos:]
+        return b'' . join(parts)
 
     def is_binary(self) -> bool:
         return False
 
     def type(self) -> str:
         return "COM_QUERY"
-        
+
+
+#### Conversion routines should be moved to a "central" place
+
+def float2bytes(value: float) -> bytes:
+    if repr(value) in ("nan", "inf", "-inf"):
+        raise NotSupportedError(f"Float value '{repr(value)}' is not supported.")
+    return str(value).encode('ascii')
+
+def decimal2bytes(value: float) -> bytes:
+    if value.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
+        raise NotSupportedError(f"Decimal value '{value.__str__()}' is not supported.")
+    return str(value).encode('ascii')
+
+_ESCAPE_REGEX = re.compile(r'[\\\'"\0]')
+_ESCAPE_MAP = {'\\': '\\\\', "'": "\\'", '"': '\\"', '\0': '\\0'}
+
+def escape_str(string: str, no_backslash_escapes: bool = False) -> bytes:
+    """
+    Escape a string for SQL statements
+    """
+    if no_backslash_escapes:
+        # When NO_BACKSLASH_ESCAPES is set, single quotes are escaped by doubling them
+        escaped = string.replace("'", "''")
+    else:
+        # Standard escaping: backslash, quote, double quote, zero byte
+        escaped = _ESCAPE_REGEX.sub(lambda m: _ESCAPE_MAP[m.group(0)], string)
+
+    return b"'" + escaped.encode(encoding="utf8") + b"'"
+
+def timedelta(val: datetime.timedelta) -> bytes:
+    total_seconds = int(val.total_seconds())
+    is_negative = total_seconds < 0
+    
+    # Work with absolute values
+    abs_seconds = abs(total_seconds)
+    hours = abs_seconds // 3600
+    minutes = (abs_seconds % 3600) // 60
+    seconds = abs_seconds % 60
+    microseconds = abs(val.microseconds)
+    
+    sign = '-' if is_negative else ''
+    return f"'{sign}{hours}:{minutes:02d}:{seconds:02d}.{microseconds}'".encode('ascii')
+
+_ESCAPE_BYTES_REGEX = re.compile(rb'[\\\'"\0]')
+_ESCAPE_BYTES_MAP = {b'\\': b'\\\\', b"'": b"\\'", b'"': b'\\"', b'\0': b'\\0'}
+
+def escape_bytes(b : bytes, no_backslash_escapes: bool = False) -> bytes:
+    """
+    Escape a string for SQL statements
+    """
+    if no_backslash_escapes:
+        # When NO_BACKSLASH_ESCAPES is set, single quotes are escaped by doubling them
+        escaped = b.replace(b"'", b"''")
+    else:
+        # Standard escaping: backslash, quote, double quote, zero byte
+        escaped = _ESCAPE_BYTES_REGEX.sub(lambda m: _ESCAPE_BYTES_MAP[m.group(0)], b)
+
+    return b"_binary'" + escaped + b"'"
+
+def float_array_to_bytes(arr: array.array, no_backslash_escapes: bool = False) -> bytes:
+    """Convert float array to binary representation for VECTOR columns"""
+    if len(arr) == 0:
+        return b'NULL'
+    # Float array for VECTOR columns - encode as numpy float32 bytes
+    if HAS_NUMPY:
+        float_bytes = numpy.array(arr, numpy.float32).tobytes()
+    else:
+        # Fallback: use array.tobytes() directly
+        float_bytes = arr.tobytes()
+    return escape_bytes(float_bytes, no_backslash_escapes)
+
+def tuple_to_bytes(t: tuple, no_backslash_escapes: bool = False) -> bytes:
+    """Convert tuple to bytes - raises error as tuples are not directly supported"""
+    raise NotSupportedError("Tuple parameters are not supported. Use individual values or convert to a supported type.")
+
+def indicator_val(v):
+   if v.indicator == 1:
+       return b'NULL'
+   elif v.indicator == 2:
+       return b'DEFAULT'
+   elif v.indicator == 3: # bulk only
+       pass
+   elif v.indicator == 4: # bulk only
+       pass
+   else:
+       return b'NULL'
+
+
+PARAM_CONVERT_TBL = {
+  int: lambda v, ctx= None: str(v).encode('ascii'),
+  float: lambda v, ctx= None: float2bytes(v),
+  str: lambda v, ctx: escape_str(v, ctx),
+  bytes: lambda v, ctx= None: escape_bytes(v, ctx),
+  bytearray: lambda v, ctx= None: escape_bytes(v, ctx),
+  decimal.Decimal: lambda v, ctx=None: decimal2bytes(v),
+  datetime.date: lambda v, ctx=None: b"'" + str(v).encode('ascii') + b"'",
+  datetime.datetime: lambda v, ctx=None: b"'" + str(v).encode('ascii') + b"'",
+  datetime.time: lambda v, ctx=None: b"'" + str(v).encode('ascii') + b"'",
+  datetime.timedelta: lambda v, ctx=None: timedelta(v),
+  type(None): lambda v, ctx= None: b'NULL',
+  bool: lambda v, ctx= None: b'1' if v else b'0',
+  MrdbIndicator: lambda v, ctx=None: indicator_val(v),
+  ipaddress.IPv4Address: lambda v, ctx=None: b"'" +str(v).encode('ascii') + b"'",
+  ipaddress.IPv6Address: lambda v, ctx=None: b"'" +str(v).encode('ascii') + b"'",
+  uuid.UUID: lambda v, ctx=None: b"'" +str(v).encode('ascii') + b"'",
+  array.array: lambda v, ctx=None: float_array_to_bytes(v, ctx),
+  tuple: lambda v, ctx=None: tuple_to_bytes(v, ctx),
+}
