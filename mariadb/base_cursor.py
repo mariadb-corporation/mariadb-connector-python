@@ -377,7 +377,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         description = []
         for col in columns:
             # Determine column type (override for JSON)
-            col_type = JSON if col.ext_type_format == 'json' else col.column_type
+            col_type = JSON if col.ext_type_format == b'json' else col.type
             
             # Add NUM_FLAG for numeric types
             col_flags = col.flags
@@ -491,7 +491,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         org_field_tuple = tuple(col.org_name for col in columns)
         table_tuple = tuple(col.table for col in columns)
         org_table_tuple = tuple(col.org_table for col in columns)
-        type_tuple = tuple(col.column_type for col in columns)
+        type_tuple = tuple(col.type for col in columns)
         charset_tuple = tuple(col.character_set for col in columns)
         length_tuple = tuple(col.column_length for col in columns)
         max_length_tuple = tuple(col.column_length for col in columns)
@@ -504,32 +504,32 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             ext_field_type = EXT_FIELD_TYPE.NONE
             if col.ext_type_format:
                 ext_format_lower = col.ext_type_format.lower()
-                if ext_format_lower == 'json':
+                if ext_format_lower == b'json':
                     ext_field_type = EXT_FIELD_TYPE.JSON
             
             if col.ext_type_name:
                 ext_name_lower = col.ext_type_name.lower()
-                if ext_name_lower == 'json':
+                if ext_name_lower == b'json':
                     ext_field_type = EXT_FIELD_TYPE.JSON
-                elif ext_name_lower == 'uuid':
+                elif ext_name_lower == b'uuid':
                     ext_field_type = EXT_FIELD_TYPE.UUID
-                elif ext_name_lower == 'inet4':
+                elif ext_name_lower == b'inet4':
                     ext_field_type = EXT_FIELD_TYPE.INET4
-                elif ext_name_lower == 'inet6':
+                elif ext_name_lower == b'inet6':
                     ext_field_type = EXT_FIELD_TYPE.INET6
-                elif ext_name_lower == 'point':
+                elif ext_name_lower == b'point':
                     ext_field_type = EXT_FIELD_TYPE.POINT
-                elif ext_name_lower == 'multipoint':
+                elif ext_name_lower == b'multipoint':
                     ext_field_type = EXT_FIELD_TYPE.MULTIPOINT
-                elif ext_name_lower == 'linestring':
+                elif ext_name_lower == b'linestring':
                     ext_field_type = EXT_FIELD_TYPE.LINESTRING
-                elif ext_name_lower == 'multilinestring':
+                elif ext_name_lower == b'multilinestring':
                     ext_field_type = EXT_FIELD_TYPE.MULTILINESTRING
-                elif ext_name_lower == 'polygon':
+                elif ext_name_lower == b'polygon':
                     ext_field_type = EXT_FIELD_TYPE.POLYGON
-                elif ext_name_lower == 'multipolygon':
+                elif ext_name_lower == b'multipolygon':
                     ext_field_type = EXT_FIELD_TYPE.MULTIPOLYGON
-                elif ext_name_lower == 'geometrycollection':
+                elif ext_name_lower == b'geometrycollection':
                     ext_field_type = EXT_FIELD_TYPE.GEOMETRYCOLLECTION
             
             ext_type_list.append(ext_field_type)

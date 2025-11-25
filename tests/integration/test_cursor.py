@@ -1022,7 +1022,6 @@ class TestCursor(unittest.TestCase):
         # Test text protocol with native_object
         cursor_native.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_native.fetchone()
-        
         self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
                             "INET6 should be ipaddress object with native_object=True")
         self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
@@ -1622,7 +1621,10 @@ class TestCursor(unittest.TestCase):
             row = cursor.fetchone()
             self.assertEqual(row[0], None)
             cursor.execute("DELETE FROM ind1")
-            vals = [(1, 4, 3), (INDICATOR.NULL, INDICATOR.DEFAULT, None)]
+            if not is_native():
+                vals = [(1, 4, 3), (INDICATOR.NULL, INDICATOR.DEFAULT, None)]
+            else:
+                vals = [(1, 4, 3), (INDICATOR.NULL, 2, None)]
             cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
             cursor.execute("SELECT a, b, c FROM ind1")
             row = cursor.fetchone()

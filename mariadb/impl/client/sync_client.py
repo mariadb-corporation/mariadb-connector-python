@@ -482,7 +482,7 @@ class SyncClient(BaseClient):
     def ping(self) -> None:
         """Send ping command to server"""
         ping_packet = PingPacket()
-        self.execute(ping_packet, self.configuration)
+        self.execute([ping_packet], self.configuration)
 
     def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str]) -> None:
         """Change current user and database"""

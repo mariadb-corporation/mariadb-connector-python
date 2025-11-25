@@ -51,7 +51,7 @@ class ExecutePacket(ClientMessage):
             for i, param in enumerate(self.parameters):
                 is_null = (param is None or 
                           (isinstance(param, array.array) and param.typecode == 'f' and len(param) == 0) or
-                          (isinstance(param, MrdbIndicator) and param.indicator == 1))  # INDICATOR.NULL
+                          (isinstance(param, MrdbIndicator)))  # INDICATOR.NULL
                 if is_null:
                     byte_pos = i // 8
                     bit_pos = i % 8
@@ -119,7 +119,7 @@ class ExecutePacket(ClientMessage):
             if param.indicator == 1:  # NULL
                 return FIELD_TYPE.NULL, 0
             elif param.indicator == 2:  # DEFAULT - treat as string
-                return FIELD_TYPE.VAR_STRING, 0
+                return FIELD_TYPE.NULL, 0
             else:
                 return FIELD_TYPE.NULL, 0
         else:
@@ -182,7 +182,8 @@ class ExecutePacket(ClientMessage):
             if param.indicator == 1:  # NULL - already handled in NULL bitmap
                 return
             elif param.indicator == 2:  # DEFAULT
-                stream.write_length_encoded_string('DEFAULT')
+                #stream.write_length_encoded_string('DEFAULT')
+                return
             elif param.indicator == 3:  # IGNORE
                 # Skip this parameter - should be handled at a higher level
                 return

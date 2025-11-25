@@ -308,8 +308,7 @@ class BaseStreamingResult(Result):
         columns: List[ColumnDefinitionPacket],
         column_count: int,
         config: 'Configuration',
-        row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = None,
-        decoders: List[Callable] = None
+        row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration'], Tuple] = None,
     ):
         """
         Initialize streaming result
@@ -321,13 +320,11 @@ class BaseStreamingResult(Result):
             column_count: Number of columns
             config: Configuration for parsing
             row_parser: Function to parse row packets (from Client)
-            decoders: Pre-built list of decoder functions (performance optimization)
         """
         super().__init__(columns, column_count, config)
         self.read_payload_func: Callable[[], memoryview] = read_payload_func
         self.context: Context = context
-        self.row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = row_parser
-        self.decoders: List[Callable] = decoders  # Store pre-built decoder list
+        self.row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration'], Tuple] = row_parser
         self.loaded: bool = False
         self._row_count: int = 0  # Track number of rows fetched
         
@@ -365,9 +362,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         
         # Increment row count
         self._row_count += 1
-        
-        # Parse row using memoryview directly with pre-built decoders
-        return self.row_parser(row_packet, self.columns, self.config, self.decoders)
+        return self.row_parser(row_packet, self.columns, self.config)
         
     def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
@@ -516,9 +511,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         
         # Increment row count
         self._row_count += 1
-        
-        # Parse row using memoryview directly with pre-built decoders
-        return self.row_parser(row_packet, self.columns, self.config, self.decoders)
+        return self.row_parser(row_packet, self.columns, self.config)
     
     async def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows (async)"""

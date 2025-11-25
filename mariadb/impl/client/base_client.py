@@ -32,8 +32,6 @@ from ...exceptions import OperationalError
 from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
 from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
-from .field_decoders import get_decoder
-
 
 class BaseClient(ABC):
     """
@@ -72,7 +70,7 @@ class BaseClient(ABC):
             configuration: Connection configuration
             host_address: Host address to connect to
         """
-        self.configuration = configuration
+        self.configuration: Configuration = configuration
         self.host_address: Optional[HostAddress] = None
         self.sequence = MutableInt(0)  # Shared sequence number
         self.context: Optional[Context] = None
@@ -293,7 +291,6 @@ class BaseClient(ABC):
             OperationalError: If packet is invalid
         """
         if len(packet) < 10:
-            packet.release()
             raise self.exception_factory.create_exception(
                 "Invalid handshake packet: too short", 
                 errno=2027, 
@@ -305,7 +302,6 @@ class BaseClient(ABC):
         # Protocol version (1 byte)
         protocol_version = parser.read_byte()
         if protocol_version != 0x0a:
-            packet.release()
             raise OperationalError(f"Unexpected initial handshake protocol value [{protocol_version}]")
         
         # Server version (null-terminated string)
@@ -410,7 +406,6 @@ class BaseClient(ABC):
             auth_data=seed,
             is_mariadb=server_mariadb
         )
-        packet.release()
         return context
     
     def _calculate_client_capabilities(self) -> int:
@@ -477,31 +472,7 @@ class BaseClient(ABC):
     def get_host_address(self) -> HostAddress:
         """Get host address"""
         return self.host_address
-    
-    # ========================================================================
-    # Decoder List Building
-    # ========================================================================
-    
-    def _build_decoder_list(self, columns: List[ColumnDefinitionPacket], is_binary: bool) -> List[Callable]:
-        """
-        Build list of decoder functions for columns (done once per result set)
-        
-        Args:
-            columns: Column definitions
-            is_binary: True for binary protocol, False for text protocol
-            
-        Returns:
-            List of decoder functions (one per column)
-        """
-        column_count = len(columns)
-        decoders = [None] * column_count
-        
-        for i in range(column_count):
-            is_unsigned = bool(columns[i].flags & FIELD_FLAG.UNSIGNED)
-            decoders[i] = get_decoder(columns[i].column_type, is_binary=is_binary, is_unsigned=is_unsigned)
-        
-        return decoders
-    
+
     # ========================================================================
     # Synchronous parsing methods (no I/O, shared between Async and Sync)
     # ========================================================================
@@ -536,9 +507,9 @@ class BaseClient(ABC):
         converter_indices = []
         converter_funcs = []
         for i, column in enumerate(columns):
-            if column.column_type in config.converter:
+            if column.type in config.converter:
                 converter_indices.append(i)
-                converter_funcs.append(config.converter[column.column_type])
+                converter_funcs.append(config.converter[column.type])
         
         # If no converters needed, return as-is
         if not converter_indices:
@@ -558,17 +529,136 @@ class BaseClient(ABC):
 
         return converted_rows
 
-    def _parse_text_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', decoders: List[Callable]) -> tuple:
-        """Parse text protocol row data packet"""
-        row_values = [None] * len(decoders)
+    def _parse_text_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration') -> tuple:
+        """Parse text protocol row data packet with inlined decoding"""
+        row_values = [None] * len(columns)
         pos = 0
-        for i, decoder in enumerate(decoders):
-            value, pos = decoder(data, pos, columns[i], config)
-            row_values[i] = value
+        
+        for i, column in enumerate(columns):
+            # Read length-encoded integer for field length
+            if pos >= len(data):
+                #row_values[i] = None
+                continue
+                
+            first_byte = data[pos]
+            
+            # Handle length encoding
+            if first_byte < 0xFB:
+                length = first_byte
+                pos += 1
+            elif first_byte == 0xFB:
+                # NULL value
+                #row_values[i] = None
+                pos += 1
+                continue
+            elif first_byte == 0xFC:
+                length = data[pos + 1] | (data[pos + 2] << 8)
+                pos += 3
+            elif first_byte == 0xFD:
+                length = data[pos + 1] | (data[pos + 2] << 8) | (data[pos + 3] << 16)
+                pos += 4
+            elif first_byte == 0xFE:
+                length = struct.unpack_from('<Q', data, pos + 1)[0]
+                pos += 9
+            else:
+                #row_values[i] = None
+                pos += 1
+                continue
+            
+            if length == 0:
+                # Empty string/value
+                field_type = column.type
+                if field_type in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG, 
+                                 FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
+                    row_values[i] = 0
+                elif field_type in (FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE):
+                    row_values[i] = 0.0
+                elif field_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
+                    row_values[i] = decimal.Decimal('0')
+                else:
+                    row_values[i] = ''
+                continue
+            
+            # Decode based on field type
+            field_type = column.type
+            field_data = data[pos:pos + length]
+            
+            try:
+                if field_type in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG, 
+                                 FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
+                    row_values[i] = int(field_data.tobytes().decode('ascii'))
+                elif field_type in (FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE):
+                    row_values[i] = float(field_data.tobytes().decode('ascii'))
+                elif field_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
+                    row_values[i] = decimal.Decimal(field_data.tobytes().decode('ascii'))
+                elif field_type in (FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE):
+                    date_str = field_data.tobytes().decode('ascii')
+                    parts = date_str.split('-')
+                    if len(parts) == 3:
+                        row_values[i] = datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
+                    else:
+                        row_values[i] = None
+                elif field_type == FIELD_TYPE.TIME:
+                    time_str = field_data.tobytes().decode('ascii')
+                    negative = time_str.startswith('-')
+                    if negative:
+                        time_str = time_str[1:]
+                    parts = time_str.split(':')
+                    if len(parts) == 3:
+                        hours = int(parts[0])
+                        minutes = int(parts[1])
+                        sec_parts = parts[2].split('.')
+                        seconds = int(sec_parts[0])
+                        microseconds = int(sec_parts[1].ljust(6, '0')) if len(sec_parts) > 1 else 0
+                        td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
+                        row_values[i] = -td if negative else td
+                    else:
+                        row_values[i] = None
+                elif field_type in (FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP):
+                    dt_str = field_data.tobytes().decode('ascii')
+                    if ' ' in dt_str:
+                        date_part, time_part = dt_str.split(' ', 1)
+                        date_parts = date_part.split('-')
+                        time_parts = time_part.split(':')
+                        if len(date_parts) == 3 and len(time_parts) == 3:
+                            year, month, day = int(date_parts[0]), int(date_parts[1]), int(date_parts[2])
+                            hours, minutes = int(time_parts[0]), int(time_parts[1])
+                            sec_parts = time_parts[2].split('.')
+                            seconds = int(sec_parts[0])
+                            microseconds = int(sec_parts[1].ljust(6, '0')) if len(sec_parts) > 1 else 0
+                            row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                        else:
+                            row_values[i] = None
+                    else:
+                        row_values[i] = None
+                elif field_type == FIELD_TYPE.NULL:
+                    row_values[i] = None
+                else:
+                    if column.special_format:
+                        # String types (VARCHAR, TEXT, BLOB, JSON, etc.)
+                        if column.ext_type_format == b'json':
+                            row_values[i] = field_data.tobytes().decode('utf-8', errors='replace')
+                        elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
+                            row_values[i] = field_data.tobytes().decode('ascii')
+                            if config.native_object:
+                                row_values[i] = ipaddress.ip_address(row_values[i])
+                        elif column.ext_type_name == b'uuid':
+                            row_values[i] = field_data.tobytes().decode('ascii')
+                            if config.native_object:
+                                row_values[i] = uuid.UUID(row_values[i])
+                    elif column.character_set == 63:  # Binary
+                        row_values[i] = field_data.tobytes()
+                    else:
+                        row_values[i] = field_data.tobytes().decode('utf-8', errors='replace')
+            except (ValueError, IndexError, UnicodeDecodeError):
+                row_values[i] = None
+            
+            pos += length
+        
         return tuple(row_values)
 
-    def _parse_binary_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', decoders: List[Callable]) -> tuple:
-        """Parse binary protocol row data packet"""
+    def _parse_binary_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration') -> tuple:
+        """Parse binary protocol row data packet with inlined decoding"""
         pos = 1  # Skip 0x00 header
         
         # Read NULL bitmap
@@ -576,17 +666,161 @@ class BaseClient(ABC):
         null_bitmap = bytes(data[pos:pos + null_bitmap_length])
         pos += null_bitmap_length
         
-        # Parse column values
-        row_values = [None] * len(decoders)
-        for i, decoder in enumerate(decoders):
+        # Parse column values with inlined decoding
+        row_values = [None] * len(columns)
+        
+        for i, column in enumerate(columns):
             # Check if column is NULL using bitmap
-            if self._is_null_bitmap(i, null_bitmap):
+            byte_pos = (i + 2) // 8
+            bit_pos = (i + 2) % 8
+            if byte_pos < len(null_bitmap) and (null_bitmap[byte_pos] & (1 << bit_pos)):
                 row_values[i] = None
                 continue
             
-            # Use pre-built decoder for non-NULL values
-            value, pos = decoder(data, pos, columns[i], config)
-            row_values[i] = value
+            # Decode based on field type
+            field_type = column.type
+            is_unsigned = (column.flags & FIELD_FLAG.UNSIGNED) != 0
+            
+            try:
+                if field_type == FIELD_TYPE.TINY:
+                    if is_unsigned:
+                        row_values[i] = data[pos]
+                    else:
+                        row_values[i] = struct.unpack_from('<b', data, pos)[0]
+                    pos += 1
+                elif field_type == FIELD_TYPE.SHORT or field_type == FIELD_TYPE.YEAR:
+                    if is_unsigned:
+                        row_values[i] = struct.unpack_from('<H', data, pos)[0]
+                    else:
+                        row_values[i] = struct.unpack_from('<h', data, pos)[0]
+                    pos += 2
+                elif field_type == FIELD_TYPE.LONG or field_type == FIELD_TYPE.INT24:
+                    if is_unsigned:
+                        row_values[i] = struct.unpack_from('<I', data, pos)[0]
+                    else:
+                        row_values[i] = struct.unpack_from('<i', data, pos)[0]
+                    pos += 4
+                elif field_type == FIELD_TYPE.LONGLONG:
+                    if is_unsigned:
+                        row_values[i] = struct.unpack_from('<Q', data, pos)[0]
+                    else:
+                        row_values[i] = struct.unpack_from('<q', data, pos)[0]
+                    pos += 8
+                elif field_type == FIELD_TYPE.FLOAT:
+                    row_values[i] = struct.unpack_from('<f', data, pos)[0]
+                    pos += 4
+                elif field_type == FIELD_TYPE.DOUBLE:
+                    row_values[i] = struct.unpack_from('<d', data, pos)[0]
+                    pos += 8
+                elif field_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
+                    # Decimal as length-encoded string
+                    length = data[pos]
+                    pos += 1
+                    if length < 0xFB:
+                        if length > 0:
+                            row_values[i] = decimal.Decimal(data[pos:pos + length].tobytes().decode('ascii'))
+                            pos += length
+                        else:
+                            row_values[i] = decimal.Decimal('0')
+                    else:
+                        row_values[i] = None
+                elif field_type in (FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE):
+                    length_byte = data[pos]
+                    pos += 1
+                    if length_byte >= 4:
+                        year, month, day = struct.unpack_from('<HBB', data, pos)
+                        row_values[i] = datetime.date(year, month, day)
+                        pos += 4
+                    else:
+                        row_values[i] = None
+                elif field_type == FIELD_TYPE.TIME:
+                    length_byte = data[pos]
+                    pos += 1
+                    if length_byte >= 8:
+                        if length_byte == 12:
+                            negative, days, hours, minutes, seconds, microseconds = struct.unpack_from('<BIBBBI', data, pos)
+                            pos += 12
+                        else:
+                            negative, days, hours, minutes, seconds = struct.unpack_from('<BIBBB', data, pos)
+                            microseconds = 0
+                            pos += 8
+                        total_hours = days * 24 + hours
+                        td = datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
+                        row_values[i] = -td if negative else td
+                    else:
+                        row_values[i] = None
+                elif field_type in (FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP):
+                    length_byte = data[pos]
+                    pos += 1
+                    if length_byte >= 4:
+                        if length_byte == 11:
+                            year, month, day, hours, minutes, seconds, microseconds = struct.unpack_from('<HBBBBBI', data, pos)
+                            pos += 11
+                        elif length_byte >= 7:
+                            year, month, day, hours, minutes, seconds = struct.unpack_from('<HBBBBB', data, pos)
+                            microseconds = 0
+                            pos += 7
+                        else:
+                            year, month, day = struct.unpack_from('<HBB', data, pos)
+                            hours = minutes = seconds = microseconds = 0
+                            pos += 4
+                        row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                    else:
+                        row_values[i] = None
+                else:
+                    # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
+                    first_byte = data[pos]
+                    if first_byte < 0xFB:
+                        length = first_byte
+                        pos += 1
+                    elif first_byte == 0xFB:
+                        row_values[i] = None
+                        pos += 1
+                        continue
+                    elif first_byte == 0xFC:
+                        length = data[pos + 1] | (data[pos + 2] << 8)
+                        pos += 3
+                    elif first_byte == 0xFD:
+                        length = data[pos + 1] | (data[pos + 2] << 8) | (data[pos + 3] << 16)
+                        pos += 4
+                    elif first_byte == 0xFE:
+                        length = struct.unpack_from('<Q', data, pos + 1)[0]
+                        pos += 9
+                    else:
+                        row_values[i] = None
+                        pos += 1
+                        continue
+
+                    if length == 0:
+                        row_values[i] = b'' if column.character_set == 63 else ''
+                    else:
+                        val = data[pos:pos + length].tobytes()
+                        if column.special_format:
+                            if column.ext_type_format == b'json':
+                                row_values[i] = val.decode('utf-8')
+                            elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
+                                row_values[i] = val.decode('ascii')
+                                if config.native_object:
+                                    row_values[i] = ipaddress.ip_address(row_values[i])
+                            elif column.ext_type_name == b'uuid':
+                                row_values[i] = val.decode('ascii')
+                                if config.native_object:
+                                    row_values[i] = uuid.UUID(row_values[i])
+                            elif column.character_set == 63:  # Binary
+                                row_values[i] = val
+                            else:
+                                row_values[i] = val.decode('utf-8', errors='replace')
+
+                        else:
+                            if column.character_set == 63:  # Binary
+                                row_values[i] = val
+                            else:
+                                row_values[i] = val.decode('utf-8', errors='replace')
+                        pos += length
+
+            except (ValueError, struct.error, UnicodeDecodeError):
+                row_values[i] = None
+        
         return tuple(row_values)
 
         

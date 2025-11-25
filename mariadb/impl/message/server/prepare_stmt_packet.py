@@ -77,7 +77,7 @@ class PrepareStmtPacket:
         # Update context if provided
         if context:
             context.warning_count = warning_count
-        data.release()
+        
         return PrepareStmtPacket(
             statement_id,
             column_count,

@@ -63,11 +63,10 @@ class EofPacket(Completion):
         
         # Check if this marks output parameters (PS_OUT_PARAMS flag)
         is_output_parameters = (server_status & constants.STATUS.PS_OUT_PARAMS) != 0
-        data.release()
         
         return EofPacket(
-            warning_count=warning_count,
-            server_status=server_status,
-            is_output_parameters=is_output_parameters
+            warning_count,
+            server_status,
+            is_output_parameters
         )
     

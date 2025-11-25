@@ -134,10 +134,8 @@ class OkPacket(Completion):
 
             except Exception:
                 # Don't fail on info/session tracking errors
-                data.release()
                 pass
         
-        data.release()
         return OkPacket(
             affected_rows,
             insert_id,

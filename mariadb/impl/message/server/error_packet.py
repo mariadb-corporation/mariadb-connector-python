@@ -68,11 +68,10 @@ class ErrorPacket:
                 raise IOError("Invalid error packet: SQL state truncated")
         
         error_message = bytes(parser.read_remaining()).decode('utf-8', errors='replace')
-        data.release()
         return ErrorPacket(
-            error_code=error_code,
-            sql_state=sql_state,
-            error_message=error_message
+            error_code,
+            sql_state,
+            error_message
         )
 
 
