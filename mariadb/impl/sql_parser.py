@@ -14,118 +14,94 @@ while correctly handling:
 Based on mariadb-connector-nodejs implementation.
 """
 
-from enum import IntEnum
-from typing import List, Tuple, Dict, Any, Optional
-
-
-class ParseState(IntEnum):
-    """Parser state machine states"""
-    NORMAL = 1          # Normal SQL parsing
-    STRING = 2          # Inside string literal
-    SLASH_STAR_COMMENT = 3  # Inside /* */ comment
-    ESCAPE = 4          # Found backslash escape
-    EOL_COMMENT = 5     # Inside # or -- or // comment
-    BACKTICK = 6        # Inside backtick identifier
-
+from typing import List, Tuple
 
 def split_sql_parts(sql: str) -> Tuple[bytes, List[int]]:
     """
     Find positions of positional placeholders (?) in SQL and return SQL as bytes.
-    
-    Ignores placeholders inside strings, comments, and backtick identifiers.
-    
+
     Args:
         sql: SQL statement
-        
+
     Returns:
         Tuple of (sql_bytes, placeholder_byte_positions)
         - sql_bytes: SQL encoded as UTF-8 bytes
         - placeholder_byte_positions: List of byte positions (start, end) pairs
     """
     sql_bytes = sql.encode('utf-8')
-    param_positions = []
-    state = ParseState.NORMAL
-    last_char = '\0'
+    param_positions: List[int] = []
+
+    NORMAL = 0
+    STRING = 1
+    ESCAPE = 2
+    BACKTICK = 3
+    EOL = 4
+    COMMENT = 5
+    state = NORMAL
     single_quotes = False
-    
-    for i, char in enumerate(sql_bytes):
-        # Handle escape sequences
-        if state == ParseState.ESCAPE:
-            if not ((char == ord("'") and single_quotes) or (char == ord('"') and not single_quotes)):
-                state = ParseState.STRING
-                last_char = char
-                continue
-        
-        # State machine using match/case
-        match char:
-            case 42:  # ord('*')
-                if state == ParseState.NORMAL and last_char == 47:  # ord('/')
-                    # Check if this is an executable comment /*! or /*M!
-                    # Peek ahead to see if next char is ! or M
+
+    last_char = 0  # only used for comment detection
+
+    for i, c in enumerate(sql_bytes):
+        if state == ESCAPE:
+            # Escaped char ends escape sequence
+            state = STRING
+            last_char = c
+            continue
+
+        if state == NORMAL:
+            # Use dict lookup for clarity if desired
+            if c == 63:  # '?'
+                param_positions.append(i)
+                param_positions.append(i + 1)
+            elif c == 39:  # "'"
+                state = STRING
+                single_quotes = True
+            elif c == 34:  # '"'
+                state = STRING
+                single_quotes = False
+            elif c == 96:  # '`'
+                state = BACKTICK
+            elif c == 92:  # '\'
+                pass  # nothing to do in NORMAL
+            elif c == 42:  # '*'
+                if last_char == 47:  # '/*'
+                    # Check for executable comment
                     if i + 1 < len(sql_bytes):
-                        next_char = sql_bytes[i + 1]
-                        if next_char == 33:  # ord('!')
-                            # Executable comment /*! - treat as normal SQL, don't enter comment state
-                            pass
-                        elif next_char == 77 and i + 2 < len(sql_bytes) and sql_bytes[i + 2] == 33:  # ord('M') and ord('!')
-                            # MariaDB executable comment /*M! - treat as normal SQL
-                            pass
-                        else:
-                            state = ParseState.SLASH_STAR_COMMENT
+                        next_c = sql_bytes[i + 1]
+                        if next_c not in (33, 77):  # '!' or 'M'
+                            state = COMMENT
                     else:
-                        state = ParseState.SLASH_STAR_COMMENT
-            
-            case 47:  # ord('/')
-                if state == ParseState.SLASH_STAR_COMMENT and last_char == 42:  # ord('*')
-                    state = ParseState.NORMAL
-                elif state == ParseState.NORMAL and last_char == 47:  # ord('/')
-                    state = ParseState.EOL_COMMENT
-            
-            case 35:  # ord('#')
-                if state == ParseState.NORMAL:
-                    state = ParseState.EOL_COMMENT
-            
-            case 45:  # ord('-')
-                if state == ParseState.NORMAL and last_char == 45:  # ord('-')
-                    state = ParseState.EOL_COMMENT
-            
-            case 10:  # ord('\n')
-                if state == ParseState.EOL_COMMENT:
-                    state = ParseState.NORMAL
-            
-            case 34:  # ord('"')
-                if state == ParseState.NORMAL:
-                    state = ParseState.STRING
-                    single_quotes = False
-                elif state == ParseState.STRING and not single_quotes:
-                    state = ParseState.NORMAL
-                elif state == ParseState.ESCAPE:
-                    state = ParseState.STRING
-            
-            case 39:  # ord("'")
-                if state == ParseState.NORMAL:
-                    state = ParseState.STRING
-                    single_quotes = True
-                elif state == ParseState.STRING and single_quotes:
-                    state = ParseState.NORMAL
-                elif state == ParseState.ESCAPE:
-                    state = ParseState.STRING
-            
-            case 92:  # ord('\\')
-                if state == ParseState.STRING:
-                    state = ParseState.ESCAPE
-            
-            case 63:  # ord('?')
-                if state == ParseState.NORMAL:
-                    param_positions.append(i)
-                    param_positions.append(i + 1)
-            
-            case 96:  # ord('`')
-                if state == ParseState.BACKTICK:
-                    state = ParseState.NORMAL
-                elif state == ParseState.NORMAL:
-                    state = ParseState.BACKTICK
-        
-        last_char = char
-    
+                        state = COMMENT
+            elif c == 47:  # '/'
+                if last_char == 42:  # end of comment '*/'
+                    state = NORMAL
+                elif last_char == 47:  # start of // comment
+                    state = EOL
+            elif c == 35:  # '#'
+                state = EOL
+            elif c == 45:  # '-'
+                if last_char == 45:  # '--'
+                    state = EOL
+
+        elif state == STRING:
+            if c == 92:  # '\'
+                state = ESCAPE
+            elif (c == 39 and single_quotes) or (c == 34 and not single_quotes):
+                state = NORMAL
+
+        elif state == BACKTICK:
+            if c == 96:  # '`'
+                state = NORMAL
+
+        elif state == EOL:
+            if c == 10:  # '\n'
+                state = NORMAL
+
+        elif state == COMMENT:
+            if last_char == 42 and c == 47:  # '*/'
+                state = NORMAL
+
+        last_char = c
+
     return sql_bytes, param_positions
