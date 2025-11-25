@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Optional
 from ...client.socket.payload_parser import PayloadParser
 from ...completion import Completion
 from mariadb_shared import constants
-from ...client.socket.read_stream import PacketBuffer
+
 if TYPE_CHECKING:
     from ...client.context import Context
 
@@ -55,7 +55,7 @@ class OkPacket(Completion):
         return (self.server_status & constants.STATUS.PS_OUT_PARAMS) != 0
     
     @staticmethod
-    def decode(data: PacketBuffer, context: 'Context') -> 'OkPacket':
+    def decode(data: memoryview, context: 'Context') -> 'OkPacket':
         """Decode OK packet from bytearray with context"""
         parser = PayloadParser(data)
         
@@ -87,7 +87,51 @@ class OkPacket(Completion):
                 
                 # Process session tracking data if present
                 if has_session_tracking and parser.has_remaining():
-                    _process_session_tracking(parser, context)
+                    while parser.has_remaining():
+                        # Total length of session tracking data (length-encoded)
+                        total_length = parser.read_length_encoded_int()
+                        if total_length == 0:
+                            break
+
+                        # Track start position to ensure we don't read beyond this tracking block
+                        start_pos = parser.pos
+
+                        # Session tracking type (1 byte)
+                        tracking_type = parser.read_byte()
+
+                        # Data length (length-encoded)
+                        data_length = parser.read_length_encoded_int()
+
+                        # Process based on tracking type
+                        if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
+                            # System variable change
+                            end_pos = start_pos + total_length
+                            while parser.pos < end_pos:
+                                var_name_len = parser.read_length_encoded_int()
+                                var_name = parser.read_bytes(var_name_len).decode('utf-8')
+
+                                var_value_len = parser.read_length_encoded_int()
+                                var_value = parser.read_bytes(var_value_len).decode('utf-8')
+
+                                # Update context with system variable change
+                                if hasattr(context, 'update_system_variable'):
+                                    context.update_system_variable(var_name, var_value)
+
+                        elif tracking_type == constants.SESSION_TRACK.SCHEMA:
+                            # Schema change
+                            schema_len = parser.read_length_encoded_int()
+                            schema = parser.read_bytes(schema_len).decode('utf-8')
+                            if hasattr(context, 'database'):
+                                context.database = schema
+                        else:
+                            # Unknown tracking type - skip data
+                            parser.skip(data_length)
+
+                        # Ensure we're at the correct position
+                        expected_pos = start_pos + total_length
+                        if parser.pos < expected_pos:
+                            parser.skip(expected_pos - parser.pos)
+
             except Exception:
                 # Don't fail on info/session tracking errors
                 data.release()
@@ -101,57 +145,3 @@ class OkPacket(Completion):
             warning_count,
             info
         )
-
-
-def _process_session_tracking(parser: PayloadParser, context: 'Context') -> None:
-    """
-    Process session tracking information from OK packet
-    
-    Args:
-        parser: PayloadParser with remaining session tracking data
-        context: Connection context to update
-    """
-    while parser.has_remaining():
-        # Total length of session tracking data (length-encoded)
-        total_length = parser.read_length_encoded_int()
-        if total_length == 0:
-            break
-
-        # Track start position to ensure we don't read beyond this tracking block
-        start_pos = parser.pos
-
-        # Session tracking type (1 byte)
-        tracking_type = parser.read_byte()
-
-        # Data length (length-encoded)
-        data_length = parser.read_length_encoded_int()
-
-        # Process based on tracking type
-        if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
-            # System variable change
-            end_pos = start_pos + total_length
-            while parser.pos < end_pos:
-                var_name_len = parser.read_length_encoded_int()
-                var_name = parser.read_bytes(var_name_len).decode('utf-8')
-
-                var_value_len = parser.read_length_encoded_int()
-                var_value = parser.read_bytes(var_value_len).decode('utf-8')
-
-                # Update context with system variable change
-                if hasattr(context, 'update_system_variable'):
-                    context.update_system_variable(var_name, var_value)
-
-        elif tracking_type == constants.SESSION_TRACK.SCHEMA:
-            # Schema change
-            schema_len = parser.read_length_encoded_int()
-            schema = parser.read_bytes(schema_len).decode('utf-8')
-            if hasattr(context, 'database'):
-                context.database = schema
-        else:
-            # Unknown tracking type - skip data
-            parser.skip(data_length)
-
-        # Ensure we're at the correct position
-        expected_pos = start_pos + total_length
-        if parser.pos < expected_pos:
-            parser.skip(expected_pos - parser.pos)

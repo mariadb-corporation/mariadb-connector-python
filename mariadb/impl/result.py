@@ -7,14 +7,12 @@ Result set classes for MariaDB query results
 
 from typing import List, Optional, Any, TYPE_CHECKING, Callable, Tuple
 from abc import ABC, abstractmethod
-from .client.socket.payload_parser import PayloadParser
-from .client.socket.read_stream import PacketBuffer
+# No longer need PacketBuffer or PayloadParser imports
 from .message.server.eof_packet import EofPacket
 from .message.server.ok_packet import OkPacket
 from .message.server.column_definition_packet import ColumnDefinitionPacket
 
 if TYPE_CHECKING:
-    from .client.socket.read_stream import AsyncReadStream, SyncReadStream
     from .client.context import Context
     from .configuration import Configuration
 
@@ -28,8 +26,7 @@ class Result(ABC):
         self,
         columns: List[ColumnDefinitionPacket],
         column_count: int,
-        config: 'Configuration',
-        is_binary: bool = False
+        config: 'Configuration'
     ):
         """
         Initialize result
@@ -38,12 +35,10 @@ class Result(ABC):
             columns: Column metadata
             column_count: Number of columns
             config: Configuration for parsing
-            is_binary: Whether result uses binary protocol
         """
         self.columns: List[ColumnDefinitionPacket] = columns
         self.column_count: int = column_count
         self.config: 'Configuration' = config
-        self.is_binary: bool = is_binary
         self.loaded: bool = False  # All rows loaded flag
         self.warning_count: int = 0
         self.is_output_parameters: bool = False
@@ -88,10 +83,9 @@ class SyncResult(Result):
         self,
         columns: List[ColumnDefinitionPacket],
         column_count: int,
-        config: 'Configuration',
-        is_binary: bool = False
+        config: 'Configuration'
     ):
-        super().__init__(columns, column_count, config, is_binary)
+        super().__init__(columns, column_count, config)
     
     # =========================================================================
     # Abstract Methods
@@ -121,10 +115,9 @@ class AsyncResult(Result):
         self,
         columns: List[ColumnDefinitionPacket],
         column_count: int,
-        config: 'Configuration',
-        is_binary: bool = False
+        config: 'Configuration'
     ):
-        super().__init__(columns, column_count, config, is_binary)
+        super().__init__(columns, column_count, config)
     
     # =========================================================================
     # Abstract Methods
@@ -157,8 +150,7 @@ class BaseCompleteResult(Result):
         columns: List[ColumnDefinitionPacket],
         column_count: int,
         config: 'Configuration',
-        rows: List[tuple],
-        is_binary: bool = False
+        rows: List[tuple]
     ):
         """
         Initialize complete result with all rows
@@ -168,9 +160,8 @@ class BaseCompleteResult(Result):
             column_count: Number of columns
             config: Configuration for parsing
             rows: All row data (already parsed)
-            is_binary: Whether result uses binary protocol
         """
-        super().__init__(columns, column_count, config, is_binary)
+        super().__init__(columns, column_count, config)
         self.rows: List[tuple] = rows
         self.data_size: int = len(rows)
         self.loaded: bool = True
@@ -312,12 +303,11 @@ class BaseStreamingResult(Result):
     
     def __init__(
         self,
-        stream: Any,
+        read_payload_func: Callable[[], memoryview],
         context: 'Context',
         columns: List[ColumnDefinitionPacket],
         column_count: int,
         config: 'Configuration',
-        is_binary: bool = False,
         row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = None,
         decoders: List[Callable] = None
     ):
@@ -325,23 +315,21 @@ class BaseStreamingResult(Result):
         Initialize streaming result
         
         Args:
-            stream: Stream for reading packets (AsyncStream or SyncStream)
+            read_payload_func: Function to read next packet from network
             context: Connection context
             columns: Column metadata
             column_count: Number of columns
             config: Configuration for parsing
-            is_binary: Whether result uses binary protocol
             row_parser: Function to parse row packets (from Client)
             decoders: Pre-built list of decoder functions (performance optimization)
         """
-        super().__init__(columns, column_count, config, is_binary)
-        self.stream: Any = stream
+        super().__init__(columns, column_count, config)
+        self.read_payload_func: Callable[[], memoryview] = read_payload_func
         self.context: Context = context
         self.row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration', bool], Tuple] = row_parser
         self.decoders: List[Callable] = decoders  # Store pre-built decoder list
         self.loaded: bool = False
         self._row_count: int = 0  # Track number of rows fetched
-        self.parser: PayloadParser = PayloadParser(None)
         
     def streaming(self) -> bool:
         """Check if this is a streaming result"""
@@ -374,12 +362,12 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         row_packet = self._read_next_row_packet()
         if row_packet is None:
             return None
-        self.parser.set_buffer(row_packet)
+        
         # Increment row count
         self._row_count += 1
         
-        # Parse row using the provided parser with pre-built decoders
-        return self.row_parser(self.parser, self.columns, self.config, self.decoders)
+        # Parse row using memoryview directly with pre-built decoders
+        return self.row_parser(row_packet, self.columns, self.config, self.decoders)
         
     def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
@@ -401,17 +389,17 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
                 row_packet = self._read_next_row_packet()
                 if row_packet is not None:
                     self._row_count += 1
-                    row_packet.release()    
+                    # No cleanup needed with memoryview    
     
-    def _read_next_row_packet(self) -> Optional[PacketBuffer]:
+    def _read_next_row_packet(self) -> Optional[memoryview]:
         """
         Read next row packet from network (synchronous)
         
         Returns:
-            Row packet PacketBuffer, or None if no more rows
+            Row packet memoryview, or None if no more rows
         """
         try:
-            row_packet = self.stream.read_payload()
+            row_packet = self.read_payload_func()
             # Check for EOF/OK packet
             if (row_packet[0] == 0xFE and 
                 ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
@@ -429,7 +417,6 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
 
             # Check for error packet
             if row_packet[0] == 0xFF:
-                row_packet.release()
                 self.loaded = True
                 # Error packet - will be handled by caller
                 raise Exception("Error packet received during streaming")
@@ -472,7 +459,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
             row_packet = self._read_next_row_packet()
             if row_packet is None:
                 raise ValueError("Cannot scroll past end of result set")
-            row_packet.release()
+            # No cleanup needed with memoryview
             self._row_count += 1
             self.row_pointer += 1
 
@@ -483,15 +470,15 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
     Uses non-blocking I/O to fetch rows from the network.
     """
     
-    async def _read_next_row_packet(self) -> Optional[PacketBuffer]:
+    async def _read_next_row_packet(self) -> Optional[memoryview]:
         """
         Read next row packet from network (asynchronous)
         
         Returns:
-            Row packet PacketBuffer, or None if no more rows
+            Row packet memoryview, or None if no more rows
         """
         try:
-            row_packet = await self.stream.read_payload()
+            row_packet = await self.read_payload_func()
             # Check for EOF/OK packet
             if (row_packet[0] == 0xFE and 
                 ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
@@ -508,7 +495,6 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
             
             # Check for error packet
             if row_packet[0] == 0xFF:
-                row_packet.release()
                 self.loaded = True
                 raise Exception("Error packet received during streaming")
             
@@ -530,9 +516,9 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         
         # Increment row count
         self._row_count += 1
-        self.parser.set_buffer(row_packet)
-        # Parse row using the provided parser with pre-built decoders
-        return self.row_parser(self.parser, self.columns, self.config, self.decoders)
+        
+        # Parse row using memoryview directly with pre-built decoders
+        return self.row_parser(row_packet, self.columns, self.config, self.decoders)
     
     async def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows (async)"""
@@ -554,7 +540,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
                 row_packet = await self._read_next_row_packet()
                 if row_packet is not None:
                     self._row_count += 1
-                    row_packet.release()
+                    # No cleanup needed with memoryview
     
     async def scroll(self, value: int, mode: str = "relative") -> None:
         """
@@ -587,6 +573,6 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
             row_packet = await self._read_next_row_packet()
             if row_packet is None:
                 raise ValueError("Cannot scroll past end of result set")
-            row_packet.release()
+            # No cleanup needed with memoryview
             self._row_count += 1
             self.row_pointer += 1

@@ -366,8 +366,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._result = self._create_complete_result(
             columns=first_columns,
             column_count=len(first_columns),
-            rows=aggregated_rows,
-            is_binary=False
+            rows=aggregated_rows
         )
     
     def _build_description(self, columns: List[ColumnDefinitionPacket]) -> Optional[tuple]:

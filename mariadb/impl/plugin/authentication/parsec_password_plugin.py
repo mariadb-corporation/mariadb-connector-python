@@ -10,7 +10,7 @@ from typing import Optional, TYPE_CHECKING
 
 from ...configuration import Configuration
 
-from ...client.socket.read_stream import AsyncReadStream, SyncReadStream, PacketBuffer
+from typing import Callable, Awaitable
 from ...client.socket.write_stream import AsyncWriteStream, SyncWriteStream
 from ...client.context import Context
 from ...client.socket.payload_parser import PayloadParser
@@ -86,7 +86,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         
         return client_scramble, signature, raw_public_key
     
-    async def processAsync(self, read_stream: AsyncReadStream, write_stream: AsyncWriteStream, context: Context) -> PacketBuffer:
+    async def processAsync(self, read_payload_func: Callable[[], Awaitable[memoryview]], write_stream: AsyncWriteStream, context: Context) -> memoryview:
         """Process Parsec password plugin authentication (async)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
@@ -95,14 +95,12 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        write_stream.begin_write(False)
-        await write_stream.flush("PARSEC_REQUEST_SALT")
+        await write_stream.write_payload(b'', "PARSEC_REQUEST_SALT", reset_sequence=False)
 
         # Step 2: Read server response with salt and parameters
-        response = await read_stream.read_payload()
+        response = await read_payload_func()
         
         if len(response) < 3:
-            response.release()
             raise OperationalError("Invalid parsec authentication response")
         
         # Parse response
@@ -115,7 +113,6 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         first_byte = parser.read_byte()
         iterations_exp = parser.read_byte()
         salt = parser.read_remaining()
-        response.release()
         
         # Validate format
         if first_byte != 0x50 or iterations_exp > 3:  # 'P' for PBKDF2, Maximum iteration of 8192 (2^13 = 1024 << 3)
@@ -125,15 +122,13 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         
         # Send client scramble + signature to server
-        write_stream.begin_write(False)
-        write_stream.write_bytes(client_scramble)
-        write_stream.write_bytes(signature)
-        await write_stream.flush("PARSEC_AUTH")
+        payload = client_scramble + signature
+        await write_stream.write_payload(payload, "PARSEC_AUTH", reset_sequence=False)
 
         # Read final response
-        return await read_stream.read_payload()
+        return await read_payload_func()
     
-    def processSync(self, read_stream: SyncReadStream, write_stream: SyncWriteStream, context: Context) -> PacketBuffer:
+    def processSync(self, read_payload_func: Callable[[], memoryview], write_stream: SyncWriteStream, context: Context) -> memoryview:
         """Process Parsec password plugin authentication (sync)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
@@ -142,14 +137,12 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        write_stream.begin_write(False)
-        write_stream.flush("PARSEC_REQUEST_SALT")
+        write_stream.write_payload(b'', "PARSEC_REQUEST_SALT", reset_sequence=False)
         
         # Step 2: Read server response with salt and parameters
-        response = read_stream.read_payload()
+        response = read_payload_func()
         
         if len(response) < 3:
-            response.release()
             raise OperationalError("Invalid parsec authentication response")
         
         # Parse response
@@ -160,7 +153,6 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         first_byte = parser.read_byte()
         iterations_exp = parser.read_byte()
         salt = parser.read_remaining()
-        response.release()
         
         # Validate format
         if first_byte != 0x50 or iterations_exp > 3:  # 'P' for PBKDF2, Maximum iteration of 8192 (2^13 = 1024 << 3)
@@ -170,13 +162,11 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         
         # Send client scramble + signature to server
-        write_stream.begin_write(False)
-        write_stream.write_bytes(client_scramble)
-        write_stream.write_bytes(signature)
-        write_stream.flush("PARSEC_AUTH")
+        payload = client_scramble + signature
+        write_stream.write_payload(payload, "PARSEC_AUTH", reset_sequence=False)
         
         # Read final response
-        return read_stream.read_payload()
+        return read_payload_func()
     
     def is_mitm_proof(self) -> bool:
         """Parsec password plugin is MitM-proof"""

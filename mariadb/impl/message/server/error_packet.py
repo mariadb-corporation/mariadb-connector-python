@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from ...client.context import Context
     from ...client.exception_factory import ExceptionFactory
 from ...client.socket.payload_parser import PayloadParser
-from ...client.socket.read_stream import PacketBuffer
+# No longer need PacketBuffer import
 
 
 class ErrorPacket:
@@ -51,7 +51,7 @@ class ErrorPacket:
         return False
 
     @staticmethod
-    def decode(data: PacketBuffer, context: Optional['Context'] = None) -> 'ErrorPacket':
+    def decode(data: memoryview, context: Optional['Context'] = None) -> 'ErrorPacket':
         """Decode error packet from bytearray with optional context"""
         parser = PayloadParser(data)
         parser.read_byte()

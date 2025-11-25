@@ -6,10 +6,9 @@ Authentication Plugin Interface
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Callable, Awaitable
 
 from ..configuration import Configuration
-from ..client.socket.read_stream import AsyncReadStream, SyncReadStream
 from ..client.socket.write_stream import AsyncWriteStream, SyncWriteStream
 from ..client.context import Context
 
@@ -19,13 +18,13 @@ class AuthenticationPlugin(ABC):
     """
     
     @abstractmethod
-    async def processAsync(self, read_stream: AsyncReadStream, write_stream: AsyncWriteStream, context: Context) -> bytearray:
-        """Process plugin authentication"""
+    async def processAsync(self, read_payload_func: Callable[[], Awaitable[memoryview]], write_stream: AsyncWriteStream, context: Context) -> memoryview:
+        """Process plugin authentication (async)"""
         ...
 
     @abstractmethod
-    def processSync(self, read_stream: SyncReadStream, write_stream: SyncWriteStream, context: Context) -> bytearray:
-        """Process plugin authentication"""
+    def processSync(self, read_payload_func: Callable[[], memoryview], write_stream: SyncWriteStream, context: Context) -> memoryview:
+        """Process plugin authentication (sync)"""
         ...
     
     

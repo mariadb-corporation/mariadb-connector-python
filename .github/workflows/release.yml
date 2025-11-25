@@ -41,7 +41,7 @@ env:
   MYSQL_TEST_USER: root
   MYSQL_TEST_PASSWD: "heyPassw-!*20oRd"
   MYSQL_TEST_DB: testp
-  MARIADB_CONNECTOR_C_VERSION: 3.4.7
+  MARIADB_CONNECTOR_C_VERSION: 3.4.8
 
 jobs:
   # Build mariadb (pure Python) package
@@ -239,7 +239,7 @@ jobs:
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
-          CIBW_ENVIRONMENT_PASS_LINUX: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
+          CIBW_ENVIRONMENT_PASS_LINUX: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION
           CIBW_ENVIRONMENT: >-
             MARIADB_IMPL=binary
             LOCAL_DB=${{ steps.setup-mariadb-linux.outputs.database-type }}

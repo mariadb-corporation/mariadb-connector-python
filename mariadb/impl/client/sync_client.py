@@ -12,6 +12,7 @@ import socket
 import ssl
 import copy
 from typing import List, Optional
+import logging
 
 from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
@@ -20,8 +21,8 @@ from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
 from .base_client import BaseClient
 from .socket.payload_parser import PayloadParser
-from .socket.read_stream import SyncReadStream, PacketBuffer
 from .socket.write_stream import SyncWriteStream
+from .socket.mutable_int import MutableInt
 from ..configuration import Configuration
 from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
@@ -36,6 +37,8 @@ from ...exceptions import OperationalError, DatabaseError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
 
+MAX_PACKET_SIZE = 0xFFFFFF
+
 class SyncClient(BaseClient):
     """
     Synchronous client implementation for MariaDB connections
@@ -44,6 +47,8 @@ class SyncClient(BaseClient):
     using blocking I/O operations.
  
     """
+
+    logger = logging.getLogger(__name__)
     
     # =========================================================================
     # Initialization
@@ -55,8 +60,106 @@ class SyncClient(BaseClient):
         
         # Sync-specific attributes
         self.socket: Optional[socket.socket] = None
-        self.read_stream: Optional[SyncReadStream] = None
         self.write_stream: Optional[SyncWriteStream] = None
+        self.sequence: MutableInt = MutableInt(-1)
+        
+        # Read buffer management
+        self.default_readbuf: bytearray = bytearray(8192)
+        self.default_read_view: memoryview = memoryview(self.default_readbuf)
+
+        self._readbuf: bytearray = self.default_readbuf
+        self._read_view: memoryview = self.default_read_view
+        self.max_allowed_packet: int = 0xFFFFFF
+
+    # =========================================================================
+    # Packet Reading
+    # =========================================================================
+    
+    def _recv_exact(self, size: int, offset: int) -> None:
+        """Read exactly size bytes into buffer at offset"""
+        view = self._read_view[offset:offset + size]
+        pos = 0
+        while pos < size:
+            chunk = self.socket.recv_into(view[pos:], size - pos)
+            if chunk == 0:
+                raise OperationalError("Connection lost during packet read")
+            pos += chunk
+    
+    def reset_buffer(self) -> None:
+        self._readbuf = self.default_readbuf
+        self._read_view = self.default_read_view
+
+    def _ensure_read_capacity(self, size: int) -> None:
+        """Ensure buffer is large enough, within max_allowed_packet limit"""
+        if size > len(self._readbuf):
+            new_buf = bytearray(size)
+            new_buf[:len(self._readbuf)] = self._readbuf
+            self._readbuf = new_buf
+            self._read_view = memoryview(self._readbuf)
+    
+    def read_payload(self) -> memoryview:
+        """
+        Read one complete MariaDB logical packet (may consist of multiple sub-packets)
+        
+        Returns:
+            memoryview of the packet payload
+            
+        IMPORTANT: Data must be consumed before next read_payload() call
+        """
+        # Read first packet to determine if we need continuation
+        self._recv_exact(4, 0)
+        pkt_len = self._readbuf[0] | (self._readbuf[1] << 8) | (self._readbuf[2] << 16)
+        self.sequence.set(self._readbuf[3])
+        
+        # Read first payload chunk
+        self._ensure_read_capacity(pkt_len + 4)
+        self._recv_exact(pkt_len, 4)
+        
+        # Log if debug enabled
+        if self.logger.isEnabledFor(logging.DEBUG):
+            from ..debug_utils import hex_dump
+            conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
+            self.logger.debug(hex_dump(self._readbuf[0:pkt_len + 4], f"RECV sync: {conn_id_str}"))
+        
+        if pkt_len < MAX_PACKET_SIZE:
+            return self._read_view[4:pkt_len + 4]
+        
+        # multiple packets
+        result_offset = 0
+        self._readbuf[result_offset:result_offset + pkt_len] = self._read_view[4:pkt_len + 4]
+        result_len = pkt_len
+        
+        while True:
+            # Read next packet header
+            self._recv_exact(4, 0)
+            pkt_len = self._readbuf[0] | (self._readbuf[1] << 8) | (self._readbuf[2] << 16)
+            self.sequence.set(self._readbuf[3])
+            
+            # Ensure buffer has space for accumulated result + new chunk
+            needed = result_len + pkt_len + 4
+            self._ensure_read_capacity(needed)
+            
+            # Read payload chunk directly after accumulated data
+            self._recv_exact(pkt_len, result_len)
+            
+            # Log if debug enabled
+            if self.logger.isEnabledFor(logging.DEBUG):
+                from ...debug_utils import hex_dump
+                conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
+                # Log the header + chunk we just read
+                header_and_chunk = bytearray(4 + pkt_len)
+                header_and_chunk[0:3] = pkt_len.to_bytes(3, 'little')
+                header_and_chunk[3] = self.sequence.get()
+                header_and_chunk[4:] = self._readbuf[result_len:result_len + pkt_len]
+                self.logger.debug(hex_dump(header_and_chunk, f"RECV sync: {conn_id_str}"))
+            
+            result_len += pkt_len
+            
+            # Continuation condition
+            if pkt_len < MAX_PACKET_SIZE:
+                break
+        
+        return self._read_view[0:result_len]
 
     # =========================================================================
     # Connection Management
@@ -113,10 +216,9 @@ class SyncClient(BaseClient):
             if self.socket_timeout:
                 self.socket.settimeout(self.socket_timeout)
             
-            self.read_stream = SyncReadStream(self.socket)
             self.write_stream = SyncWriteStream(self.socket)
-            # Share the same sequence counter between read and write streams
-            self.write_stream.sequence = self.read_stream.sequence
+            # Share the same sequence counter between read and write
+            self.write_stream.sequence = self.sequence
             
         except Exception as e:
             if self.socket:
@@ -134,12 +236,12 @@ class SyncClient(BaseClient):
 
     def _perform_handshake(self) -> None:
         """Perform initial handshake and authentication with server"""
-        handshake_packet = self.read_stream.read_payload()
+        handshake_packet = self.read_payload()
         if (handshake_packet[0] == 0xff):
             raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
         self.context = self._parse_handshake(handshake_packet)
         
-        self.read_stream.connection_id = self.write_stream.connection_id = self.context.connection_id
+        self.write_stream.connection_id = self.context.connection_id
 
         client_capabilities = self._calculate_client_capabilities()
 
@@ -154,8 +256,9 @@ class SyncClient(BaseClient):
         from ..plugin.authentication.native_password_plugin import NativePasswordPlugin
         self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
 
-        self._send_message(HandshakeResponse(self.configuration, self.context), False)
-        self._handle_authentication(self.read_stream.read_payload())
+        message = HandshakeResponse(self.configuration, self.context)
+        self.write_stream.write_payload(message.payload(self.context), message.type(), False)
+        self._handle_authentication(self.read_payload())
         
         self.connected = True
 
@@ -192,8 +295,8 @@ class SyncClient(BaseClient):
         client_capabilities |= constants.CAPABILITY.SSL
         
         # Send SSL request packet
-        ssl_request = SslRequestPacket(client_capabilities)
-        self._send_message(ssl_request, False)
+        message = SslRequestPacket(client_capabilities)
+        self.write_stream.write_payload(message.payload(self.context), message.type(), False)
         
         try:
             # Import SSL utility
@@ -215,13 +318,12 @@ class SyncClient(BaseClient):
             if self.cert_fingerprint_validator:
                 self.cert_fingerprint_validator.capture_fingerprint(self.socket)
             
-            # Create new SyncStream with the upgraded connection
+            # Create new write stream with the upgraded connection
             connection_id = self.context.connection_id if self.context else -1
-            self.read_stream = SyncReadStream(self.socket, connection_id)
             self.write_stream = SyncWriteStream(self.socket, connection_id)
-            # Share the same sequence counter between read and write streams
-            self.write_stream.sequence = self.read_stream.sequence
-            self.read_stream.sequence.set(1)
+            # Share the same sequence counter
+            self.write_stream.sequence = self.sequence
+            self.sequence.set(1)
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
     
@@ -230,7 +332,7 @@ class SyncClient(BaseClient):
     # Authentication
     # =========================================================================
 
-    def _handle_authentication(self, packet: PacketBuffer) -> None:
+    def _handle_authentication(self, packet: memoryview) -> None:
         """Process authentication response from server"""
         if len(packet) == 0:
             raise OperationalError("Empty authentication response")
@@ -247,22 +349,20 @@ class SyncClient(BaseClient):
             # Auth switch - server requests different auth plugin
             self._handle_auth_switch(packet)
         else:
-            packet.release()
             raise OperationalError(f"Unexpected packet during authentication: {packet[0]:02x}")
 
-    def _handle_auth_switch(self, packet: PacketBuffer) -> None:
+    def _handle_auth_switch(self, packet: memoryview) -> None:
         """Handle authentication plugin switch request"""
         parser = PayloadParser(packet)
         parser.skip(1)  # Skip 0xFE marker
         plugin_name = parser.read_null_terminated_string("ascii")
         auth_data = parser.read_remaining()
-        packet.release()
         try:
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
             plugin = plugin_factory.initialize(self.configuration.password, auth_data, self.configuration, self.host_address)
             # Store plugin for fingerprint validation
             self.auth_plugin = plugin
-            response = plugin.processSync(self.read_stream, self.write_stream, self.context)
+            response = plugin.processSync(self.read_payload, self.write_stream, self.context)
             self._handle_authentication(response)
         except DatabaseError as e:
             raise e
@@ -273,12 +373,6 @@ class SyncClient(BaseClient):
     # Command Execution
     # =========================================================================
 
-    def _send_message(self, message: ClientMessage, reset_sequence: bool = True) -> None:
-        """Send client message to server using streaming API (zero-copy)"""
-        self.write_stream.begin_write(reset_sequence)
-        message.process(self.write_stream, self.context)
-        self.write_stream.flush(message.type())
-
     def execute(self, message: ClientMessage, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         """Execute command and return list of completion results"""
         with self.lock:
@@ -286,17 +380,95 @@ class SyncClient(BaseClient):
                 raise OperationalError("Connection is closed")
             
             try:
-                self._send_message(message)
+                self.write_stream.write_payload(message.payload(self.context), message.type(), True)
                 results = []
-                
+                self.reset_buffer()
+                is_binary = message.is_binary()
                 while True:
-                    result_packet = self.read_stream.read_payload()
-                    completion = self._parse_result_packet(result_packet, config, message.is_binary(), buffered, prepare_stmt_packet)
-                    results.append(completion)
-                    
+                    packet = self.read_payload()
+                    if packet[0] == self.OK_PACKET:
+                        results.append(OkPacket.decode(packet, self.context))
+                    elif packet[0] == self.ERROR_PACKET:
+                        raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
+                    else:
+                        """Parse result set with column definitions and row data"""
+                        # Parse column count from first packet
+                        parser = PayloadParser(packet)
+                        column_count = parser.read_length_encoded_int()
+
+                        # Read column definitions
+                        columns: List[ColumnDefinitionPacket] = [None] * column_count
+                        if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+                            # skip metadata
+                            columns = prepare_stmt_packet.columns
+                        else:
+                            for i in range(column_count):
+                                col_packet = self.read_payload()
+                                columns[i] = ColumnDefinitionPacket.decode(col_packet, self.context)
+                        
+                        # Read EOF packet after column definitions (if not deprecated)
+                        if not self.context.isEofDeprecated():
+                            self.read_payload()  # Skip EOF packet
+
+                        # Build decoder list once for all rows (performance optimization)
+                        decoders = self._build_decoder_list(columns, is_binary)
+                        
+                        # Select appropriate row parser based on protocol
+                        row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+
+                        # If unbuffered, create streaming result
+                        if not buffered:
+                            from ..result import SyncStreamingResult
+                            streaming_result = SyncStreamingResult(self.read_payload,
+                                self.context,
+                                columns,
+                                column_count,
+                                config,
+                                row_parser,  # Pass appropriate row parser function
+                                decoders  # Pass pre-built decoder list
+                            )
+                            
+                            # Create completion with streaming result
+                            completion = OkPacket()
+                            completion.result_set = streaming_result
+                            results.append(completion)
+                        else:    
+                            # Read rows
+                            rows: List[tuple] = []
+                            while True:
+                                row_packet = self.read_payload()
+                                # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
+                                # EOF/OK packets start with 0xFE and have specific length constraints
+                                if (row_packet[0] == 0xFE and 
+                                    ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
+                                    (not self.context.isEofDeprecated() and len(row_packet) < 8))):
+                                    
+                                    if not self.context.isEofDeprecated():
+                                        completion = EofPacket.decode(row_packet, self.context)
+                                    else:
+                                        completion = OkPacket.decode(row_packet, self.context)
+
+                                    # Apply converters to all rows at once
+                                    rows = self._apply_converters_to_rows(rows, columns, config)
+
+                                    from ..result import SyncCompleteResult
+                                    complete_result = SyncCompleteResult(
+                                        columns,
+                                        column_count,
+                                        config,
+                                        rows
+                                    )
+                                    completion.result_set = complete_result
+                                    results.append(completion)
+                                    break
+                                elif row_packet[0] == self.ERROR_PACKET:
+                                    raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)                                    
+                                else:
+                                    # Row data packet - use pre-built decoders
+                                    rows.append(row_parser(row_packet, columns, config, decoders))
+                            
                     if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                         break
-                
                 return results
             except DatabaseError as e:
                 raise e    
@@ -323,9 +495,9 @@ class SyncClient(BaseClient):
             new_conf.database = database if database is not None else self.context.database
             self.configuration = new_conf
 
-            change_user_packet = ChangeUserPacket(new_conf.user, new_conf.password, new_conf.database)
-            self._send_message(change_user_packet)
-            self._handle_authentication(self.read_stream.read_payload())
+            message = ChangeUserPacket(new_conf.user, new_conf.password, new_conf.database)
+            self.write_stream.write_payload(message.payload(self.context), message.type(), True)
+            self._handle_authentication(self.read_payload())
         except DatabaseError as e:
             self.configuration = old_conf
             raise
@@ -342,8 +514,8 @@ class SyncClient(BaseClient):
             # Send COM_QUIT packet to gracefully close the connection
             if self.connected and self.socket:
                 try:
-                    quit_packet = QuitPacket()
-                    self._send_message(quit_packet)
+                    message = QuitPacket()
+                    self.write_stream.write_payload(message.payload(self.context), message.type(), True)
                 except Exception:
                     # Ignore errors when sending quit - connection may already be broken
                     pass
@@ -386,108 +558,6 @@ class SyncClient(BaseClient):
                 pass
         return None
 
-    def _parse_result_packet(self, packet: bytes, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> Completion:
-        """Parse result packet into completion object"""
-        if packet[0] == self.OK_PACKET:
-            return OkPacket.decode(packet, self.context)
-        elif packet[0] == self.ERROR_PACKET:
-            raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
-        else:
-            return self._parse_result_set(packet, config, is_binary, buffered, prepare_stmt_packet)
-
-    def _parse_result_set(self, packet: PacketBuffer, config: 'Configuration', is_binary: bool = False, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> 'Completion':
-        """Parse result set with column definitions and row data"""
-        try:
-            # Parse column count from first packet
-            parser = PayloadParser(packet)
-            column_count = parser.read_length_encoded_int()
-
-            # Read column definitions
-            columns: List[ColumnDefinitionPacket] = []
-            if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
-                # skip metadata
-                packet.release()
-                columns = prepare_stmt_packet.columns
-            else:
-                packet.release()
-                for _ in range(column_count):
-                    col_packet = self.read_stream.read_payload()
-                    columns.append(ColumnDefinitionPacket.decode(col_packet, self.context))
-            
-            # Read EOF packet after column definitions (if not deprecated)
-            if not self.context.isEofDeprecated():
-                (self.read_stream.read_payload()).release()
-
-            # Build decoder list once for all rows (performance optimization)
-            decoders = self._build_decoder_list(columns, is_binary)
-            
-            # Select appropriate row parser based on protocol
-            row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
-
-            # If unbuffered, create streaming result
-            if not buffered:
-                from ..result import SyncStreamingResult
-                streaming_result = SyncStreamingResult(self.read_stream,
-                    self.context,
-                    columns,
-                    column_count,
-                    config,
-                    is_binary,
-                    row_parser,  # Pass appropriate row parser function
-                    decoders  # Pass pre-built decoder list
-                )
-                
-                # Create completion with streaming result
-                completion = OkPacket()
-                completion.result_set = streaming_result
-                return completion
-
-            # Read rows
-            rows: List[tuple] = []
-            parser = PayloadParser(None)
-            try:
-                while True:
-                    row_packet = self.read_stream.read_payload()
-                    # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
-                    # EOF/OK packets start with 0xFE and have specific length constraints
-                    if (row_packet[0] == 0xFE and 
-                        ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
-                        (not self.context.isEofDeprecated() and len(row_packet) < 8))):
-                        
-                        if not self.context.isEofDeprecated():
-                            completion = EofPacket.decode(row_packet, self.context)
-                        else:
-                            completion = OkPacket.decode(row_packet, self.context)
-
-                        # Apply converters to all rows at once
-                        rows = self._apply_converters_to_rows(rows, columns, config)
-
-                        from ..result import SyncCompleteResult
-                        complete_result = SyncCompleteResult(
-                            columns,
-                            column_count,
-                            config,
-                            rows,
-                            is_binary
-                        )
-                        completion.result_set = complete_result
-                                            
-                        return completion               
-                    elif row_packet[0] == self.ERROR_PACKET:
-                        raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)
-                        
-                    else:
-                        # Row data packet - use pre-built decoders
-                        parser.set_buffer(row_packet)
-                        rows.append(row_parser(parser, columns, config, decoders))
-            finally:
-                if parser and parser.packet:
-                    parser.packet.release()
-            
-            
-        except Exception as e:
-            raise OperationalError(f"Failed to parse result set: {e}")
-    
     def _cleanup_connection(self) -> None:
         """Cleanup socket and stream resources"""       
         if hasattr(self, 'socket') and self.socket:
@@ -496,8 +566,7 @@ class SyncClient(BaseClient):
             except:
                 pass
             self.socket = None
-        if hasattr(self, 'read_stream'):
-            self.read_stream = None
+        # Read buffer cleanup handled by garbage collection
         if hasattr(self, 'write_stream'):
             self.write_stream = None
     
@@ -529,11 +598,12 @@ class SyncClient(BaseClient):
             if self.closed:
                 raise OperationalError("Connection is closed")
             
-            prepare_packet = PreparePacket(sql)
-            self._send_message(prepare_packet)
-            return self._parse_prepare_response(self.read_stream.read_payload(), sql)
+            message = PreparePacket(sql)
+            self.write_stream.write_payload(message.payload(self.context), message.type(), True)
 
-    def _parse_prepare_response(self, packet: PacketBuffer, sql: str) -> PrepareStmtPacket:
+            return self._parse_prepare_response(self.read_payload(), sql)
+
+    def _parse_prepare_response(self, packet: memoryview, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet"""
         if len(packet) == 0:
             raise OperationalError("Empty prepare response packet")
@@ -547,24 +617,23 @@ class SyncClient(BaseClient):
             if prepare_stmt_packet.parameter_count > 0:
                 # Skip parameter metadata
                 for _ in range(prepare_stmt_packet.parameter_count):
-                    self.read_stream.read_payload().release()
+                    self.read_payload()  # Skip parameter metadata
 
                 if not self.context.isEofDeprecated():
-                    eof_packet = self.read_stream.read_payload().release()
+                    self.read_payload()  # Skip EOF packet
             
             # Read column metadata if present
             if prepare_stmt_packet.column_count > 0:
                 for _ in range(prepare_stmt_packet.column_count):
-                    prepare_stmt_packet.columns.append(ColumnDefinitionPacket.decode(self.read_stream.read_payload(), self.context))
+                    prepare_stmt_packet.columns.append(ColumnDefinitionPacket.decode(self.read_payload(), self.context))
                 
                 if not self.context.isEofDeprecated():
-                    self.read_stream.read_payload().release()
+                    self.read_payload()  # Skip EOF packet
             
             return prepare_stmt_packet
         elif packet_type == self.ERROR_PACKET:
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
-            packet.release()
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
     
     def close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
@@ -576,7 +645,8 @@ class SyncClient(BaseClient):
             with self.lock:
                 if not self.closed:
                     from ..message.client.stmt_close_packet import StmtClosePacket
-                    self._send_message(StmtClosePacket(stmt.statement_id))               
+                    message = StmtClosePacket(stmt.statement_id)
+                    self.write_stream.write_payload(message.payload(self.context), message.type(), True)
         except:
             # Ignore errors when closing
             pass

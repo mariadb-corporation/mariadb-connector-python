@@ -5,7 +5,7 @@ import array
 import datetime
 import decimal
 import struct
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union as UnionType
 
 try:
     import numpy
@@ -18,6 +18,7 @@ from ...client.context import Context
 from mariadb_shared.constants import FIELD_TYPE
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
+from ..payload_stream import PayloadStream
 from ....exceptions import NotSupportedError
 if TYPE_CHECKING:
     from ...client.socket.write_stream import BaseWriteStream
@@ -36,7 +37,8 @@ class ExecutePacket(ClientMessage):
         self.parameters = parameters or []
         self.sql = sql
 
-    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
+    def payload(self, context: Context) -> bytes:
+        stream = PayloadStream()
         stream.write_byte(self.COM_STMT_EXECUTE)
         stream.write_bytes(struct.pack('<I', self.statement_id))
         stream.write_byte(0x00) # Write flags  
@@ -67,6 +69,8 @@ class ExecutePacket(ClientMessage):
             for param in self.parameters:
                 if param is not None:
                     self._write_parameter_value(stream, param)
+        
+        return stream.get_payload()
 
     def _get_parameter_type(self, param: Any) -> tuple[int, int]:
         """
@@ -122,7 +126,7 @@ class ExecutePacket(ClientMessage):
             # Default to string
             return FIELD_TYPE.VAR_STRING, 0
     
-    def _write_parameter_value(self, stream, param: Any) -> None:
+    def _write_parameter_value(self, stream: UnionType['BaseWriteStream', PayloadStream], param: Any) -> None:
         """
         Write parameter value in binary format
         
@@ -192,7 +196,7 @@ class ExecutePacket(ClientMessage):
             # Convert to string
             stream.write_length_encoded_string(str(param))
     
-    def _write_datetime(self, stream, dt: datetime.datetime) -> None:
+    def _write_datetime(self, stream: UnionType['BaseWriteStream', PayloadStream], dt: datetime.datetime) -> None:
         """Write datetime in MySQL binary format"""
         if dt.microsecond:
             # 11 bytes: year(2) + month(1) + day(1) + hour(1) + minute(1) + second(1) + microsecond(4)
@@ -214,7 +218,7 @@ class ExecutePacket(ClientMessage):
             stream.write_byte(dt.minute)
             stream.write_byte(dt.second)
     
-    def _write_date(self, stream, date: datetime.date) -> None:
+    def _write_date(self, stream: UnionType['BaseWriteStream', PayloadStream], date: datetime.date) -> None:
         """Write date in MySQL binary format"""
         # 4 bytes: year(2) + month(1) + day(1)
         stream.write_byte(4)
@@ -222,7 +226,7 @@ class ExecutePacket(ClientMessage):
         stream.write_byte(date.month)
         stream.write_byte(date.day)
     
-    def _write_time(self, stream, time: datetime.time) -> None:
+    def _write_time(self, stream: UnionType['BaseWriteStream', PayloadStream], time: datetime.time) -> None:
         """Write time in MySQL binary format"""
         if time.microsecond:
             # 12 bytes: negative(1) + days(4) + hour(1) + minute(1) + second(1) + microsecond(4)
@@ -242,7 +246,7 @@ class ExecutePacket(ClientMessage):
             stream.write_byte(time.minute)
             stream.write_byte(time.second)
     
-    def _write_time_from_timedelta(self, stream, td: datetime.timedelta) -> None:
+    def _write_time_from_timedelta(self, stream: UnionType['BaseWriteStream', PayloadStream], td: datetime.timedelta) -> None:
         """Write timedelta as time in MySQL binary format"""
         total_seconds = int(td.total_seconds())
         negative = total_seconds < 0

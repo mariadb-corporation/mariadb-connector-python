@@ -2,15 +2,13 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 import hashlib
-from typing import TYPE_CHECKING
 
 from ...client.context import Context
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from ..client_message import ClientMessage
+from ..payload_stream import PayloadStream
 from ...configuration import Configuration
 from mariadb_shared.constants import CAPABILITY
-if TYPE_CHECKING:
-    from ...client.socket.write_stream import BaseWriteStream
 
 class HandshakeResponse(ClientMessage):
     """
@@ -23,8 +21,9 @@ class HandshakeResponse(ClientMessage):
         self.configuration = configuration
         self.context = context
         
-    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
-        """Encode handshake response packet with capabilities, auth, and connection attributes"""
+    def payload(self, context: Context) -> bytes:
+        """Generate handshake response payload as bytes"""
+        stream = PayloadStream()
         
         # Client capabilities (4 bytes)
         stream.write_uint32(context.client_capabilities & 0xFFFFFFFF)
@@ -78,14 +77,12 @@ class HandshakeResponse(ClientMessage):
             host = self.configuration.host if hasattr(self.configuration, 'host') else None
             default_attrs = get_default_connection_attributes(host=host)
             
-            # Merge with user-provided attributes if any
-            #if hasattr(self.configuration, 'connect_attrs') and self.configuration.connect_attrs:
-            #    default_attrs.update(self.configuration.connect_attrs)
-            
             # Encode attributes
             attr_data = encode_connection_attributes(default_attrs)
             stream.write_length_encoded_int(len(attr_data))
             stream.write_bytes(attr_data)
+        
+        return stream.get_payload()
     
     def _calculate_auth_response(self, context: Context) -> bytes:
         """Calculate authentication response"""

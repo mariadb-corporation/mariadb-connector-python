@@ -5,16 +5,17 @@
 Field decoder registry for MariaDB protocol
 
 Provides optimized decoder functions for text and binary protocol formats.
+All decoders work directly with memoryview and return (value, new_position).
 """
 
 import datetime
 import decimal
 import ipaddress
 import uuid
-from typing import Any, Optional, Callable, TYPE_CHECKING
+import struct
+from typing import Any, Optional, Callable, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .socket.payload_parser import PayloadParser
     from ..message.server.column_definition_packet import ColumnDefinitionPacket
     from ..configuration import Configuration
 
@@ -22,44 +23,106 @@ from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
 
 
 # ============================================================================
+# Helper Functions for Reading from memoryview
+# ============================================================================
+
+def read_length_encoded_int(data: memoryview, pos: int) -> Tuple[Optional[int], int]:
+    """Read length-encoded integer from memoryview"""
+    if pos >= len(data):
+        return None, pos
+    
+    first_byte = data[pos]
+    
+    if first_byte < 0xFB:
+        return first_byte, pos + 1
+    elif first_byte == 0xFB:
+        # NULL
+        return None, pos + 1
+    elif first_byte == 0xFC:
+        # 2-byte integer
+        value = data[pos + 1] | (data[pos + 2] << 8)
+        return value, pos + 3
+    elif first_byte == 0xFD:
+        # 3-byte integer
+        value = data[pos + 1] | (data[pos + 2] << 8) | (data[pos + 3] << 16)
+        return value, pos + 4
+    elif first_byte == 0xFE:
+        # 8-byte integer
+        value = struct.unpack_from('<Q', data, pos + 1)[0]
+        return value, pos + 9
+    else:
+        return None, pos + 1
+
+
+def read_length_encoded_string(data: memoryview, pos: int, encoding: str = 'utf-8') -> Tuple[Optional[str], int]:
+    """Read length-encoded string from memoryview"""
+    length, pos = read_length_encoded_int(data, pos)
+    if length is None:
+        return None, pos
+    
+    if length == 0:
+        return '', pos
+    
+    try:
+        return data[pos:pos + length].tobytes().decode(encoding), pos + length
+    except UnicodeDecodeError:
+        return data[pos:pos + length].tobytes().decode(encoding, errors='replace'), pos + length
+
+
+def read_length_encoded_bytes(data: memoryview, pos: int) -> Tuple[Optional[bytes], int]:
+    """Read length-encoded bytes from memoryview"""
+    length, pos = read_length_encoded_int(data, pos)
+    if length is None:
+        return None, pos
+    
+    if length == 0:
+        return b'', pos
+    
+    return data[pos:pos + length].tobytes(), pos + length
+
+
+# ============================================================================
 # Text Protocol Decoders
 # ============================================================================
 
-def decode_text_integer(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[int]:
+def decode_text_integer(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[int], int]:
     """Decode integer types from text protocol"""
-    val = parser.read_length_encoded_string(encoding='ascii')
-    return int(val) if val is not None else None
+    length, pos = read_length_encoded_int(data, pos)
+    if length is None:
+        return None, pos
+
+    return int(data[pos:pos + length].tobytes().decode('ascii')), pos + length
 
 
-def decode_text_float(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[float]:
+def decode_text_float(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[float], int]:
     """Decode float/double from text protocol"""
-    val = parser.read_length_encoded_string()
-    return float(val) if val is not None else None
+    val, pos = read_length_encoded_string(data, pos)
+    return (float(val) if val is not None else None, pos)
 
 
-def decode_text_decimal(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[decimal.Decimal]:
+def decode_text_decimal(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[decimal.Decimal], int]:
     """Decode decimal from text protocol"""
-    val = parser.read_length_encoded_string(encoding='ascii')
-    return decimal.Decimal(val) if val is not None else None
+    val, pos = read_length_encoded_string(data, pos, encoding='ascii')
+    return (decimal.Decimal(val) if val is not None else None, pos)
 
 
-def decode_text_date(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[datetime.date]:
+def decode_text_date(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[datetime.date], int]:
     """Decode DATE from text protocol"""
-    val = parser.read_length_encoded_string(encoding='ascii')
+    val, pos = read_length_encoded_string(data, pos, encoding='ascii')
     if val is None:
-        return None
+        return None, pos
     try:
         year, month, day = map(int, val.split('-'))
-        return datetime.date(year, month, day)
+        return datetime.date(year, month, day), pos
     except (ValueError, AttributeError):
-        return None
+        return None, pos
 
 
-def decode_text_time(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[datetime.timedelta]:
+def decode_text_time(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[datetime.timedelta], int]:
     """Decode TIME from text protocol"""
-    val = parser.read_length_encoded_string(encoding='ascii')
+    val, pos = read_length_encoded_string(data, pos, encoding='ascii')
     if val is None:
-        return None
+        return None, pos
     try:
         # Handle TIME format: HH:MM:SS[.ffffff] or HHH:MM:SS[.ffffff] (can be > 24 hours)
         # Can also be negative: -HH:MM:SS[.ffffff]
@@ -82,16 +145,16 @@ def decode_text_time(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', 
             microseconds = int(frac_str)
         
         td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
-        return -td if is_negative else td
+        return (-td if is_negative else td, pos)
     except (ValueError, AttributeError):
-        return val  # Fallback to string if parsing fails
+        return val, pos  # Fallback to string if parsing fails
 
 
-def decode_text_datetime(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[datetime.datetime]:
+def decode_text_datetime(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[datetime.datetime], int]:
     """Decode DATETIME/TIMESTAMP from text protocol"""
-    val = parser.read_length_encoded_string(encoding='ascii')
+    val, pos = read_length_encoded_string(data, pos, encoding='ascii')
     if val is None:
-        return None
+        return None, pos
     try:
         # Handle DATETIME format: YYYY-MM-DD HH:MM:SS[.ffffff]
         date_part, time_part = val.split(' ', 1)
@@ -111,138 +174,150 @@ def decode_text_datetime(parser: 'PayloadParser', column: 'ColumnDefinitionPacke
             frac_str = seconds_parts[1].ljust(6, '0')[:6]
             microseconds = int(frac_str)
         
-        return datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+        return datetime.datetime(year, month, day, hours, minutes, seconds, microseconds), pos
     except (ValueError, AttributeError):
-        return val  # Fallback to string if parsing fails
+        return val, pos  # Fallback to string if parsing fails
 
 
-def decode_text_string(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[Any]:
+def decode_text_string(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[Any], int]:
     """Decode string/varchar/text from text protocol"""
     # Check for special types
     if column.ext_type_format == 'json':
-        return parser.read_length_encoded_string()
+        return read_length_encoded_string(data, pos)
     
     if column.ext_type_name == 'inet6' or column.ext_type_name == 'inet4':
-        value = parser.read_length_encoded_string(encoding='ascii')
+        value, pos = read_length_encoded_string(data, pos, encoding='ascii')
         if config.native_object and value is not None:
-            return ipaddress.ip_address(value)
-        return value
+            return ipaddress.ip_address(value), pos
+        return value, pos
     
     if column.ext_type_name == 'uuid':
-        value = parser.read_length_encoded_string(encoding='ascii')
+        value, pos = read_length_encoded_string(data, pos, encoding='ascii')
         if config.native_object and value is not None:
-            return uuid.UUID(value)
-        return value
+            return uuid.UUID(value), pos
+        return value, pos
     
     # Check if BINARY (charset 63)
     if column.character_set == 63:
         # Binary data - read as bytes
-        return parser.read_length_encoded_bytes()
+        return read_length_encoded_bytes(data, pos)
     else:
         # Text data - read as string
-        return parser.read_length_encoded_string()
+        return read_length_encoded_string(data, pos)
 
 
-def decode_text_null(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> None:
+def decode_text_null(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[None, int]:
     """Decode NULL from text protocol"""
-    parser.read_length_encoded_string()
-    return None
+    _, pos = read_length_encoded_string(data, pos)
+    return None, pos
 
 
 # ============================================================================
 # Binary Protocol Decoders
 # ============================================================================
 
-def decode_binary_tiny_signed(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> int:
+def decode_binary_tiny_signed(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[int, int]:
     """Decode signed TINYINT from binary protocol"""
-    value = parser.read_byte()
+    value = data[pos]
     if value > 127:
         value -= 256
-    return value
+    return value, pos + 1
 
 
-def decode_binary_tiny_unsigned(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> int:
+def decode_binary_tiny_unsigned(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[int, int]:
     """Decode unsigned TINYINT from binary protocol"""
-    return parser.read_byte()
+    return data[pos], pos + 1
 
 
-def decode_binary_short_signed(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> int:
+def decode_binary_short_signed(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[int, int]:
     """Decode signed SMALLINT/YEAR from binary protocol"""
-    return parser.read_int16()
+    value = struct.unpack_from('<h', data, pos)[0]
+    return value, pos + 2
 
 
-def decode_binary_short_unsigned(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> int:
+def decode_binary_short_unsigned(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[int, int]:
     """Decode unsigned SMALLINT/YEAR from binary protocol"""
-    return parser.read_uint16()
+    value = struct.unpack_from('<H', data, pos)[0]
+    return value, pos + 2
 
 
-def decode_binary_long_signed(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> int:
+def decode_binary_long_signed(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[int, int]:
     """Decode signed INT/MEDIUMINT from binary protocol"""
-    return parser.read_int32()
+    value = struct.unpack_from('<i', data, pos)[0]
+    return value, pos + 4
 
 
-def decode_binary_long_unsigned(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> int:
+def decode_binary_long_unsigned(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[int, int]:
     """Decode unsigned INT/MEDIUMINT from binary protocol"""
-    return parser.read_uint32()
+    value = struct.unpack_from('<I', data, pos)[0]
+    return value, pos + 4
 
 
-def decode_binary_longlong_signed(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> int:
+def decode_binary_longlong_signed(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[int, int]:
     """Decode signed BIGINT from binary protocol"""
-    return parser.read_int64()
+    value = struct.unpack_from('<q', data, pos)[0]
+    return value, pos + 8
 
 
-def decode_binary_longlong_unsigned(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> int:
+def decode_binary_longlong_unsigned(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[int, int]:
     """Decode unsigned BIGINT from binary protocol"""
-    return parser.read_uint64()
+    value = struct.unpack_from('<Q', data, pos)[0]
+    return value, pos + 8
 
 
-def decode_binary_float(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> float:
+def decode_binary_float(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[float, int]:
     """Decode FLOAT from binary protocol"""
-    return parser.read_float()
+    value = struct.unpack_from('<f', data, pos)[0]
+    return value, pos + 4
 
 
-def decode_binary_double(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> float:
+def decode_binary_double(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[float, int]:
     """Decode DOUBLE from binary protocol"""
-    return parser.read_double()
+    value = struct.unpack_from('<d', data, pos)[0]
+    return value, pos + 8
 
 
-def decode_binary_decimal(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[decimal.Decimal]:
+def decode_binary_decimal(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[decimal.Decimal], int]:
     """Decode DECIMAL from binary protocol"""
-    val = parser.read_length_encoded_string()
-    return decimal.Decimal(val) if val is not None else None
+    val, pos = read_length_encoded_string(data, pos)
+    return (decimal.Decimal(val) if val is not None else None, pos)
 
 
-def decode_binary_date(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[datetime.date]:
+def decode_binary_date(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[datetime.date], int]:
     """Decode DATE from binary protocol"""
-    length_byte = parser.read_byte()
-    if length_byte < 4:
-        return None
+    length_byte = data[pos]
+    pos += 1
     
-    year = parser.read_uint16()
-    month = parser.read_byte()
-    day = parser.read_byte()
+    if length_byte < 4:
+        return None, pos
+    
+    # Unpack year (2 bytes) + month (1 byte) + day (1 byte) in one call
+    year, month, day = struct.unpack_from('<HBB', data, pos)
+    pos += 4
     
     try:
-        return datetime.date(year, month, day)
+        return datetime.date(year, month, day), pos
     except ValueError:
-        return None
+        return None, pos
 
 
-def decode_binary_time(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[datetime.timedelta]:
+def decode_binary_time(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[datetime.timedelta], int]:
     """Decode TIME from binary protocol"""
-    length_byte = parser.read_byte()
-    if length_byte < 8:
-        return None
+    length_byte = data[pos]
+    pos += 1
     
-    negative = parser.read_byte()
-    days = parser.read_uint32()
-    hours = parser.read_byte()
-    minutes = parser.read_byte()
-    seconds = parser.read_byte()
-    microseconds = 0
+    if length_byte < 8:
+        return None, pos
     
     if length_byte == 12:
-        microseconds = parser.read_uint32()
+        # Unpack all fields at once: negative (1) + days (4) + hours (1) + minutes (1) + seconds (1) + microseconds (4)
+        negative, days, hours, minutes, seconds, microseconds = struct.unpack_from('<BIBBBI', data, pos)
+        pos += 12
+    else:
+        # Unpack without microseconds: negative (1) + days (4) + hours (1) + minutes (1) + seconds (1)
+        negative, days, hours, minutes, seconds = struct.unpack_from('<BIBBB', data, pos)
+        microseconds = 0
+        pos += 8
     
     # Calculate total hours
     total_hours = days * 24 + hours
@@ -250,60 +325,62 @@ def decode_binary_time(parser: 'PayloadParser', column: 'ColumnDefinitionPacket'
     try:
         # Use timedelta for TIME values >= 24 hours
         value = datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
-        return -value if negative else value
+        return (-value if negative else value, pos)
     except ValueError:
-        return None
+        return None, pos
 
 
-def decode_binary_datetime(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[datetime.datetime]:
+def decode_binary_datetime(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[datetime.datetime], int]:
     """Decode DATETIME/TIMESTAMP from binary protocol"""
-    length_byte = parser.read_byte()
+    length_byte = data[pos]
+    pos += 1
     
     if length_byte < 4:
-        return None
-    
-    year = parser.read_uint16()
-    month = parser.read_byte()
-    day = parser.read_byte()
-    
-    hours = minutes = seconds = microseconds = 0
-    
-    if length_byte >= 7:
-        hours = parser.read_byte()
-        minutes = parser.read_byte()
-        seconds = parser.read_byte()
+        return None, pos
     
     if length_byte == 11:
-        microseconds = parser.read_uint32()
+        # Unpack all fields: year (2) + month (1) + day (1) + hours (1) + minutes (1) + seconds (1) + microseconds (4)
+        year, month, day, hours, minutes, seconds, microseconds = struct.unpack_from('<HBBBBBI', data, pos)
+        pos += 11
+    elif length_byte >= 7:
+        # Unpack date + time without microseconds: year (2) + month (1) + day (1) + hours (1) + minutes (1) + seconds (1)
+        year, month, day, hours, minutes, seconds = struct.unpack_from('<HBBBBB', data, pos)
+        microseconds = 0
+        pos += 7
+    else:
+        # Only date: year (2) + month (1) + day (1)
+        year, month, day = struct.unpack_from('<HBB', data, pos)
+        hours = minutes = seconds = microseconds = 0
+        pos += 4
     
     try:
-        return datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+        return datetime.datetime(year, month, day, hours, minutes, seconds, microseconds), pos
     except ValueError:
-        return None
+        return None, pos
 
 
-def decode_binary_string(parser: 'PayloadParser', column: 'ColumnDefinitionPacket', config: 'Configuration') -> Optional[Any]:
+def decode_binary_string(data: memoryview, pos: int, column: 'ColumnDefinitionPacket', config: 'Configuration') -> Tuple[Optional[Any], int]:
     """Decode string/varchar/text from binary protocol"""
     # Check for special types
     if column.ext_type_name == 'inet6' or column.ext_type_name == 'inet4':
-        value = parser.read_length_encoded_string()
+        value, pos = read_length_encoded_string(data, pos)
         if config.native_object and value is not None:
-            return ipaddress.ip_address(value)
-        return value
+            return ipaddress.ip_address(value), pos
+        return value, pos
     
     if column.ext_type_name == 'uuid':
-        value = parser.read_length_encoded_string()
+        value, pos = read_length_encoded_string(data, pos)
         if config.native_object and value is not None:
-            return uuid.UUID(value)
-        return value
+            return uuid.UUID(value), pos
+        return value, pos
     
     # Check if BINARY (charset 63)
     if column.character_set == 63:
         # Binary string - return bytes
-        return parser.read_length_encoded_bytes()
+        return read_length_encoded_bytes(data, pos)
     else:
         # Text string - return string
-        return parser.read_length_encoded_string()
+        return read_length_encoded_string(data, pos)
 
 
 # ============================================================================

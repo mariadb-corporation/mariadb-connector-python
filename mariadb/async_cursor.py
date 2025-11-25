@@ -567,13 +567,12 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     # =========================================================================
     
     def _create_complete_result(self, columns: List[Any], column_count: int, 
-                               rows: List[tuple], is_binary: bool = False):
+                               rows: List[tuple]):
         """Create an asynchronous complete result"""
         from .impl.result import AsyncCompleteResult
         return AsyncCompleteResult(
             columns=columns,
             column_count=column_count,
             config=self._config,
-            rows=rows,
-            is_binary=is_binary
+            rows=rows
         )

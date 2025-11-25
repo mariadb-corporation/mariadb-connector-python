@@ -453,13 +453,12 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # =========================================================================
     
     def _create_complete_result(self, columns: List[Any], column_count: int, 
-                               rows: List[tuple], is_binary: bool = False):
+                               rows: List[tuple]):
         """Create a synchronous complete result"""
         from .impl.result import SyncCompleteResult
         return SyncCompleteResult(
             columns=columns,
             column_count=column_count,
             config=self._config,
-            rows=rows,
-            is_binary=is_binary
+            rows=rows
         )

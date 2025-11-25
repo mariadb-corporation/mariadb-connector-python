@@ -15,10 +15,9 @@ class ClientMessage(ABC):
     """
 
     @abstractmethod
-    def process(self, stream: 'SyncStream', context: Context) -> None:
-        """Encode message directly to stream buffer."""
+    def payload(self, context: Context) -> bytes:
+        """Generate message payload as bytes (without packet header)."""
         ...
-
 
     @abstractmethod
     def is_binary(self) -> bool:

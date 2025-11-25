@@ -9,7 +9,7 @@ Based on MySQL/MariaDB protocol EOF packet structure.
 
 from typing import TYPE_CHECKING
 from ...completion import Completion
-from ...client.socket.read_stream import PacketBuffer
+# No longer need PacketBuffer import
 if TYPE_CHECKING:
     from ...client.context import Context
 
@@ -52,7 +52,7 @@ class EofPacket(Completion):
         return (self.server_status & constants.STATUS.PS_OUT_PARAMS) != 0
 
     @staticmethod
-    def decode(data: PacketBuffer, context: 'Context') -> 'EofPacket':
+    def decode(data: memoryview, context: 'Context') -> 'EofPacket':
         """Decode EOF packet from bytearray with context"""
         warning_count = data[1] | (data[2] << 8)
         server_status = data[3] | (data[4] << 8)

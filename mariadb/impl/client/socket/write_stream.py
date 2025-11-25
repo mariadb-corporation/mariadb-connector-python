@@ -5,24 +5,15 @@ Write stream interfaces for socket I/O operations (async and sync)
 from abc import ABC, abstractmethod
 import asyncio
 import socket
-import struct
 import logging
 
 from .mutable_int import MutableInt
 from ...debug_utils import hex_dump
 
-# Initial buffer size for write buffers
-initial_buffer_size = 8192
-
 logger = logging.getLogger(__name__)
 
 HEADER_SIZE = 4
 MAX_PACKET_SIZE = 0xFFFFFF
-
-SLASH_BYTE: int = b"\\"[0]
-QUOTE_BYTE: int = b"'"[0]
-DQUOTE_BYTE: int = b"\""[0]
-NULL_BYTE: int = b"\0"[0]
 
 
 class BaseWriteStream(ABC):
@@ -37,114 +28,17 @@ class BaseWriteStream(ABC):
         """
         self.connection_id: int = connection_id
         self.sequence: MutableInt = MutableInt(-1)
-        
-        self._writebuf: bytearray = bytearray(initial_buffer_size)
-        self._write_view: memoryview = memoryview(self._writebuf)
-        self._write_pos: int = HEADER_SIZE  # Start after header
-        self._write_start: int = HEADER_SIZE  # Track start of current packet
     
-    def begin_write(self, reset_sequence: bool = True) -> None:
+    @abstractmethod
+    def write_payload(self, payload: bytes, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
-        Begin writing a new packet directly to the write buffer.
-        Resets write position to start after 4-byte header.
+        Write payload with MariaDB packet framing
         
         Args:
-            reset_sequence: Whether to reset sequence number to 0
+            payload: Payload bytes to send
+            packet_type: Packet type for logging (e.g., "COM_QUERY")
+            reset_sequence: Whether to reset sequence number before sending
         """
-        if reset_sequence:
-            self.sequence.set(-1)
-        self._write_pos = HEADER_SIZE
-        self._write_start = HEADER_SIZE
-        if len(self._writebuf) > initial_buffer_size:
-            self._writebuf = bytearray(initial_buffer_size)
-            self._write_view = memoryview(self._writebuf)
-    
-    @abstractmethod
-    def write_byte(self, value: int) -> None:
-        """Write a single byte to the write buffer"""
-        ...
-    
-    @abstractmethod
-    def write_bytes(self, data: bytes) -> None:
-        """Write bytes to the write buffer"""
-        ...
-    
-    def write_string(self, text: str, encoding: str = 'utf-8') -> None:
-        """Write string to the write buffer"""
-        encoded = text.encode(encoding)
-        self.write_bytes(encoded)
-    
-    @abstractmethod
-    def write_uint16(self, data: int) -> None:
-        """Write a 16-bit integer to the write buffer"""
-        ...
-    
-    @abstractmethod
-    def write_uint24(self, data: int) -> None:
-        """Write a 24-bit integer to the write buffer"""
-        ...
-    
-    @abstractmethod
-    def write_uint32(self, data: int) -> None:
-        """Write a 32-bit unsigned integer to the write buffer"""
-        ...
-    
-    @abstractmethod
-    def write_uint64(self, data: int) -> None:
-        """Write a 64-bit integer to the write buffer"""
-        ...
-    
-    def write_escaped_bytes(self, data: bytes, no_backslash_escapes: bool) -> None:
-        """Write escaped bytes for SQL string literals"""
-        if not data:
-            return
-        length = len(data)
-        self._ensure_write_capacity(length * 2)
-        
-        if no_backslash_escapes:
-            for byte in data:
-                if byte == QUOTE_BYTE:
-                    self.write_byte(QUOTE_BYTE)
-                self.write_byte(byte)
-        else:
-            for byte in data:
-                if byte == QUOTE_BYTE or byte == DQUOTE_BYTE or byte == NULL_BYTE or byte == SLASH_BYTE:
-                    self.write_byte(SLASH_BYTE)
-                self.write_byte(byte)
-    
-    def write_length_encoded_string(self, text: str, encoding: str = 'utf-8') -> None:
-        """Write length-encoded string"""
-        encoded = text.encode(encoding)
-        self.write_length_encoded_int(len(encoded))
-        self.write_bytes(encoded)
-    
-    def write_length_encoded_bytes(self, data: bytes) -> None:
-        """Write length-encoded bytes"""
-        self.write_length_encoded_int(len(data))
-        self.write_bytes(data)
-    
-    def write_length_encoded_int(self, length: int) -> None:
-        """Write length-encoded integer"""
-        if length < 251:
-            self.write_byte(length)
-        elif length < 65536:
-            self.write_byte(0xfc)
-            self.write_uint16(length)
-        elif length < 16777216:
-            self.write_byte(0xfd)
-            self.write_uint24(length)
-        else:
-            self.write_byte(0xfe)
-            self.write_uint64(length)
-    
-    @abstractmethod
-    def _ensure_write_capacity(self, additional: int) -> None:
-        """Ensure write buffer has capacity for additional bytes"""
-        ...
-    
-    @abstractmethod
-    def flush(self, packet_type: str = "", end: bool = True) -> None:
-        """Flush write buffer to socket (subclass implements I/O)"""
         ...
     
     def reset_sequence(self) -> None:
@@ -166,86 +60,65 @@ class AsyncWriteStream(BaseWriteStream):
         self.writer: asyncio.StreamWriter = writer
         super().__init__(connection_id)
     
-    def _ensure_write_capacity(self, additional: int) -> None:
-        """Ensure write buffer has capacity for additional bytes"""
-        required = self._write_pos + additional
-        if required > len(self._writebuf):
-            if required > MAX_PACKET_SIZE + HEADER_SIZE:
-                new_size = max(required, int(len(self._writebuf) * 1.5))
-            else:
-                new_size = max(required, len(self._writebuf) * 2, MAX_PACKET_SIZE + HEADER_SIZE)
-            new_buf = bytearray(new_size)
-            new_buf[:len(self._writebuf)] = self._writebuf
-            self._writebuf = new_buf
-            self._write_view = memoryview(self._writebuf)
-    
-    def write_byte(self, value: int) -> None:
-        """Write a single byte to the write buffer"""
-        self._ensure_write_capacity(1)
-        self._write_view[self._write_pos] = value
-        self._write_pos += 1
-    
-    def write_bytes(self, data: bytes) -> None:
-        """Write bytes to the write buffer"""
-        length = len(data)
-        self._ensure_write_capacity(length)
-        self._write_view[self._write_pos:self._write_pos + length] = data
-        self._write_pos += length
-    
-    def write_uint16(self, data: int) -> None:
-        """Write a 16-bit integer to the write buffer"""
-        self._ensure_write_capacity(2)
-        self._write_view[self._write_pos:self._write_pos + 2] = struct.pack('<H', data)
-        self._write_pos += 2
-    
-    def write_uint24(self, data: int) -> None:
-        """Write a 24-bit integer to the write buffer"""
-        self._ensure_write_capacity(3)
-        self._write_view[self._write_pos:self._write_pos + 3] = struct.pack('<I', data)[:3]
-        self._write_pos += 3
-    
-    def write_uint32(self, data: int) -> None:
-        """Write a 32-bit unsigned integer to the write buffer"""
-        self._ensure_write_capacity(4)
-        self._write_view[self._write_pos:self._write_pos + 4] = struct.pack('<I', data)
-        self._write_pos += 4
-    
-    def write_uint64(self, data: int) -> None:
-        """Write a 64-bit integer to the write buffer"""
-        self._ensure_write_capacity(8)
-        self._write_view[self._write_pos:self._write_pos + 8] = struct.pack('<Q', data)
-        self._write_pos += 8
-    
-    async def flush(self, packet_type: str = "", end: bool = True) -> None:
+    async def write_payload(self, payload: bytes, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
-        Flush the write buffer to socket with proper MariaDB packet header (async version).
-        Handles packet splitting if data exceeds MAX_PACKET_SIZE.
+        Write payload with MariaDB packet framing (async version)
         
         Args:
+            payload: Payload bytes to send
             packet_type: Packet type for logging (e.g., "COM_QUERY")
-            end: Whether to send empty packet if size == MAX_PACKET_SIZE
+            reset_sequence: Whether to reset sequence number before sending
         """
-        seq = self.sequence.increment_and_get()
-        packet_size = self._write_pos - HEADER_SIZE
-        self._write_view[0:3] = struct.pack('<I', packet_size)[:3]
-        self._write_view[3] = seq
+        if reset_sequence:
+            self.sequence.set(-1)
         
-        # Log if debug enabled
-        if logger.isEnabledFor(logging.DEBUG):
-            conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
-            packet_type_str = f" {packet_type}" if packet_type else ""
-            logger.debug(hex_dump(self._write_view[0:self._write_pos], f"SEND async: {conn_id_str}{packet_type_str}"))
+        payload_len = len(payload)
+        offset = 0
         
-        # Send in one write call
-        self.writer.write(self._write_view[0:self._write_pos])
+        # Handle empty payload - still need to send header
+        if payload_len == 0:
+            seq = self.sequence.increment_and_get()
+            header = b'\x00\x00\x00' + bytes([seq])
+            
+            if logger.isEnabledFor(logging.DEBUG):
+                conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
+                packet_type_str = f" {packet_type}" if packet_type else ""
+                logger.debug(hex_dump(header, f"SEND async: {conn_id_str}{packet_type_str}"))
+            
+            self.writer.write(header)
+            await self.writer.drain()
+            return
+        
+        # Handle packet splitting for large payloads
+        while offset < payload_len:
+            chunk_size = min(MAX_PACKET_SIZE, payload_len - offset)
+            seq = self.sequence.increment_and_get()
+            
+            # Build header: 3-byte length + 1-byte sequence
+            header = chunk_size.to_bytes(3, 'little') + bytes([seq])
+            
+            # Log if debug enabled (need to build full packet for logging)
+            if logger.isEnabledFor(logging.DEBUG):
+                chunk = payload[offset:offset + chunk_size]
+                packet = header + chunk
+                conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
+                packet_type_str = f" {packet_type}" if packet_type else ""
+                logger.debug(hex_dump(packet, f"SEND async: {conn_id_str}{packet_type_str}"))
+            
+            # Send header and chunk separately (more efficient - no concatenation)
+            self.writer.write(header)
+            self.writer.write(payload[offset:offset + chunk_size])
+            offset += chunk_size
+        
+        # Flush all buffered data
         await self.writer.drain()
         
-        # Reset write position for next packet
-        self._write_pos = HEADER_SIZE
-        
-        # If we sent a full MAX_PACKET_SIZE packet, send empty packet to signal end
-        if end and packet_size == MAX_PACKET_SIZE:
-            await self.flush(packet_type)
+        # If last packet was exactly MAX_PACKET_SIZE, send empty packet to signal end
+        if payload_len % MAX_PACKET_SIZE == 0:
+            seq = self.sequence.increment_and_get()
+            header = b'\x00\x00\x00' + bytes([seq])
+            self.writer.write(header)
+            await self.writer.drain()
 
 
 class SyncWriteStream(BaseWriteStream):
@@ -262,111 +135,63 @@ class SyncWriteStream(BaseWriteStream):
         self.socket: socket.socket = sock
         super().__init__(connection_id)
     
-    def _ensure_write_capacity(self, additional: int) -> None:
-        """Ensure write buffer has capacity for additional bytes"""
-        required = self._write_pos + additional
-        if required > len(self._writebuf):
-            new_size = max(required, len(self._writebuf) * 2, MAX_PACKET_SIZE + HEADER_SIZE)
-            new_buf = bytearray(new_size)
-            new_buf[:len(self._writebuf)] = self._writebuf
-            self._writebuf = new_buf
-            self._write_view = memoryview(self._writebuf)
-    
-    def write_byte(self, value: int) -> None:
-        """Write a single byte to the write buffer"""
-        self._ensure_write_capacity(1)
-        if self._write_pos + 1 > len(self._writebuf):
-            self.write_bytes([value])
-            return
-        self._write_view[self._write_pos] = value
-        self._write_pos += 1
-    
-    def write_bytes(self, data: bytes) -> None:
-        """Write bytes to the write buffer"""
-        length = len(data)
-        self._ensure_write_capacity(length)
-        if self._write_pos + length > len(self._writebuf):
-            init_pos = 0
-            remaining = len(data)
-            while remaining > 0:
-                write_length = min(remaining, len(self._writebuf) - self._write_pos)
-                self._write_view[self._write_pos:self._write_pos + write_length] = data[init_pos:init_pos + write_length]
-                self.flush(False)
-                init_pos += write_length
-                remaining -= write_length
-            return
-        self._write_view[self._write_pos:self._write_pos + length] = data
-        self._write_pos += length
-    
-    def write_uint16(self, data: int) -> None:
-        """Write a 16-bit integer to the write buffer"""
-        self._ensure_write_capacity(2)
-        if self._write_pos + 1 > len(self._writebuf):
-            bytes_data = struct.pack('<H', data)
-            self.write_bytes(bytes_data)
-            return
-        
-        self._write_view[self._write_pos:self._write_pos + 2] = struct.pack('<H', data)
-        self._write_pos += 2
-    
-    def write_uint24(self, data: int) -> None:
-        """Write a 24-bit integer to the write buffer"""
-        self._ensure_write_capacity(3)
-        if self._write_pos + 1 > len(self._writebuf):
-            bytes_data = struct.pack('<I', data)[:3]
-            self.write_bytes(bytes_data)
-            return
-        
-        self._write_view[self._write_pos:self._write_pos + 3] = struct.pack('<I', data)[:3]
-        self._write_pos += 3
-    
-    def write_uint32(self, data: int) -> None:
-        """Write a 32-bit unsigned integer to the write buffer"""
-        self._ensure_write_capacity(4)
-        if self._write_pos + 1 > len(self._writebuf):
-            bytes_data = struct.pack('<I', data)
-            self.write_bytes(bytes_data)
-            return
-        
-        self._write_view[self._write_pos:self._write_pos + 4] = struct.pack('<I', data)
-        self._write_pos += 4
-    
-    def write_uint64(self, data: int) -> None:
-        """Write a 64-bit integer to the write buffer"""
-        self._ensure_write_capacity(8)
-        if self._write_pos + 1 > len(self._writebuf):
-            bytes_data = struct.pack('<Q', data)
-            self.write_bytes(bytes_data)
-            return
-        
-        self._write_view[self._write_pos:self._write_pos + 8] = struct.pack('<Q', data)
-        self._write_pos += 8
-    
-    def flush(self, packet_type: str = "", end: bool = True) -> None:
+    def write_payload(self, payload: bytes, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
-        Flush the write buffer to socket with proper MariaDB packet header (sync version).
+        Write payload with MariaDB packet framing (sync version)
         
         Args:
+            payload: Payload bytes to send
             packet_type: Packet type for logging (e.g., "COM_QUERY")
-            end: Whether to send empty packet if size == MAX_PACKET_SIZE
+            reset_sequence: Whether to reset sequence number before sending
         """
-        seq = self.sequence.increment_and_get()
-        packet_size = self._write_pos - HEADER_SIZE
-        self._write_view[0:3] = struct.pack('<I', packet_size)[:3]
-        self._write_view[3] = seq
+        if reset_sequence:
+            self.sequence.set(-1)
         
-        # Log if debug enabled
-        if logger.isEnabledFor(logging.DEBUG):
-            conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
-            packet_type_str = f" {packet_type}" if packet_type else ""
-            logger.debug(hex_dump(self._write_view[0:self._write_pos], f"SEND sync: {conn_id_str}{packet_type_str}"))
+        payload_len = len(payload)
+        offset = 0
         
-        # Send in one syscall
-        self.socket.sendall(self._write_view[0:self._write_pos])
+        # Handle empty payload - still need to send header
+        if payload_len == 0:
+            seq = self.sequence.increment_and_get()
+            header = b'\x00\x00\x00' + bytes([seq])
+            
+            if logger.isEnabledFor(logging.DEBUG):
+                conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
+                packet_type_str = f" {packet_type}" if packet_type else ""
+                logger.debug(hex_dump(header, f"SEND sync: {conn_id_str}{packet_type_str}"))
+            
+            self.socket.sendall(header)
+            return
         
-        # Reset write position for next packet
-        self._write_pos = HEADER_SIZE
+        # Handle packet splitting for large payloads
+        while offset < payload_len:
+            chunk_size = min(MAX_PACKET_SIZE, payload_len - offset)
+            seq = self.sequence.increment_and_get()
+            
+            # Build header: 3-byte length + 1-byte sequence
+            header = chunk_size.to_bytes(3, 'little') + bytes([seq])
+            chunk = payload[offset:offset + chunk_size]
+            
+            # Log if debug enabled (need full packet for logging)
+            if logger.isEnabledFor(logging.DEBUG):
+                packet = header + chunk
+                conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
+                packet_type_str = f" {packet_type}" if packet_type else ""
+                logger.debug(hex_dump(packet, f"SEND sync: {conn_id_str}{packet_type_str}"))
+            
+            # Send header and chunk in a single syscall using scatter-gather I/O
+            # sendmsg() is available on Unix and sends multiple buffers efficiently
+            try:
+                self.socket.sendmsg([header, chunk])
+            except Exception:
+                # Fallback for platforms without sendmsg (e.g., Windows)
+                self.socket.sendall(header)
+                self.socket.sendall(chunk)
+            
+            offset += chunk_size
         
-        # If we sent a full MAX_PACKET_SIZE packet, send empty packet to signal end
-        if end and packet_size == MAX_PACKET_SIZE:
-            self.flush(packet_type)
+        # If last packet was exactly MAX_PACKET_SIZE, send empty packet to signal end
+        if payload_len % MAX_PACKET_SIZE == 0:
+            seq = self.sequence.increment_and_get()
+            header = b'\x00\x00\x00' + bytes([seq])
+            self.socket.sendall(header)

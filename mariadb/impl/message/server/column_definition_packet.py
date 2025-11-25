@@ -10,7 +10,7 @@ Based on MySQL/MariaDB protocol column definition structure.
 import struct
 from typing import TYPE_CHECKING, Optional
 from ...client.socket.payload_parser import PayloadParser
-from ...client.socket.read_stream import PacketBuffer
+# No longer need PacketBuffer import
 if TYPE_CHECKING:
     from ...client.context import Context
 
@@ -82,7 +82,7 @@ class ColumnDefinitionPacket:
         self.ext_type_format = ext_type_format
     
     @staticmethod
-    def decode(data: PacketBuffer, context: 'Context') -> 'ColumnDefinitionPacket':
+    def decode(data: memoryview, context: 'Context') -> 'ColumnDefinitionPacket':
         """Decode column definition packet from bytearray with context"""
         parser = PayloadParser(data)
         

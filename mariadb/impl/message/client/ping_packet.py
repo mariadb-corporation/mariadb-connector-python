@@ -2,22 +2,16 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 
-from typing import TYPE_CHECKING
 from ...client.context import Context
 from ..client_message import ClientMessage
-
-if TYPE_CHECKING:
-    from ...client.socket.write_stream import BaseWriteStream
 
 class PingPacket(ClientMessage):
     """
     Ping packet for connection testing
     """
-    
-    COM_PING = 0x0E
         
-    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
-        stream.write_byte(self.COM_PING)
+    def payload(self, context: Context) -> bytes:
+        return b'\x0e'
 
     def is_binary(self) -> bool:
         return False

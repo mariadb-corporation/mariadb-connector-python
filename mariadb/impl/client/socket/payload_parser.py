@@ -8,7 +8,7 @@ Does NOT perform any I/O - only parses bytes.
 import struct
 from typing import Optional
 
-from mariadb.impl.client.socket.read_stream import PacketBuffer
+# No longer need PacketBuffer import
 
 
 class PayloadParser:
@@ -19,12 +19,12 @@ class PayloadParser:
     to parse various data types from it. It does NOT perform any I/O.
     """
     
-    def __init__(self, packet: PacketBuffer, pos: int = 0):
+    def __init__(self, packet: memoryview, pos: int = 0):
         """Initialize parser with packet payload and optional starting position"""
-        self.packet: PacketBuffer = packet
+        self.packet: memoryview = packet
         self.pos: int = pos  # Current read position
     
-    def set_buffer(self, packet: PacketBuffer, pos: int = 0):
+    def set_buffer(self, packet: memoryview, pos: int = 0):
         self.packet = packet
         self.pos = pos
     

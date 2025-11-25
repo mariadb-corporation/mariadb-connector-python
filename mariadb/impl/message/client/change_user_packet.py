@@ -9,14 +9,10 @@ Changes the user and optionally the database for the current connection.
 
 from typing import Optional
 from ...client.context import Context
-
 from ..client_message import ClientMessage
-from typing import TYPE_CHECKING
-
+from ..payload_stream import PayloadStream
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from mariadb_shared.constants import CAPABILITY
-if TYPE_CHECKING:
-    from ...client.socket.write_stream import BaseWriteStream
 
 class ChangeUserPacket(ClientMessage):
     """
@@ -39,7 +35,9 @@ class ChangeUserPacket(ClientMessage):
         self.charset_collation = charset_collation
         self.connect_attrs = connect_attrs or {}
     
-    def process(self, stream: 'BaseWriteStream', context: Context) -> None:
+    def payload(self, context: Context) -> bytes:
+        stream = PayloadStream()
+        
         # Command byte
         stream.write_byte(0x11)  # COM_CHANGE_USER
         
@@ -65,8 +63,6 @@ class ChangeUserPacket(ClientMessage):
         if context.client_capabilities & CAPABILITY.CONNECT_WITH_DB:
             stream.write_string(self.database)
             stream.write_byte(0x00)
-            context.database = self.database
-
         
         # Character set collation (2 bytes)
         stream.write_uint16(self.charset_collation)
@@ -90,6 +86,8 @@ class ChangeUserPacket(ClientMessage):
             attr_data = encode_connection_attributes(default_attrs)
             stream.write_length_encoded_int(len(attr_data))
             stream.write_bytes(attr_data)
+        
+        return stream.get_payload()
 
     def is_binary(self) -> bool:
         return False

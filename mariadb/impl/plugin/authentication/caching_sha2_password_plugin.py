@@ -9,7 +9,7 @@ from typing import Optional
 from ...configuration import Configuration
 from ...host_address import HostAddress
 
-from ...client.socket.read_stream import AsyncReadStream, SyncReadStream, PacketBuffer
+from typing import Callable, Awaitable
 from ...client.socket.write_stream import AsyncWriteStream, SyncWriteStream
 from ...client.context import Context
 
@@ -97,102 +97,86 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         except Exception as e:
             raise OperationalError(f"RSA authentication failed: {e}")
     
-    async def processAsync(self, read_stream: AsyncReadStream, write_stream: AsyncWriteStream, context: Context) -> PacketBuffer:
+    async def processAsync(self, read_payload_func: Callable[[], Awaitable[memoryview]], write_stream: AsyncWriteStream, context: Context) -> memoryview:
         """Process caching SHA2 password plugin authentication (async)"""
         # Build and send initial payload
-        write_stream.begin_write(False)
         truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
         encrypted = self.encrypt_password(self.authentication_data, truncated_seed)
-        write_stream.write_bytes(encrypted)        
-        await write_stream.flush("CACHING_SHA2_PASSWORD ENCRYPTED PWD")
+        await write_stream.write_payload(encrypted, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", reset_sequence=False)
         
         # Read response packet
-        response = await read_stream.read_payload()
+        response = await read_payload_func()
         # Server requests more authentication data
         if len(response) > 1 and response[0] == 0x01:
             auth_method = response[1]
-            response.release()
             if auth_method == 0x03:
                 # Fast authentication successful, return ending ok packet
-                return await read_stream.read_payload()
+                return await read_payload_func()
             elif auth_method == 0x04:
                 # Perform full authentication
                 if self.conf.ssl:
                     # Send password in clear text over SSL
-                    write_stream.begin_write(False)
-                    if self.authentication_data and self.authentication_data != "":
-                        write_stream.write_string(self.authentication_data)
-                        write_stream.write_byte(0x00)  # Null terminator
+                    if self.authentication_data:
+                        payload = self.authentication_data.encode('utf-8') + b'\x00'
                     else:
-                        write_stream.write_byte(0x00)  # Null terminator
-                    await write_stream.flush("CACHING_SHA2_PASSWORD CLEAR PWD")
-                    return await read_stream.read_payload()
+                        payload = b'\x00'  # Null terminator
+                    await write_stream.write_payload(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", reset_sequence=False)
+                    return await read_payload_func()
                 else:
                     # SSL not available - try RSA public key encryption
                     if not HAS_CRYPTOGRAPHY:
                         raise OperationalError(
-                            "Authentication plugin 'caching_sha2_password' requires SSL connection "
-                            "or cryptography library for RSA encryption when not cached"
+                            "caching_sha2_password requires SSL or cryptography library for RSA encryption"
                         )
                     
-                    # Request RSA public key from server
-                    write_stream.begin_write(False)
-                    write_stream.write_byte(0x02)
-                    await write_stream.flush("CACHING_SHA2_REQUEST_KEY")
+                    # Request public key from server
+                    await write_stream.write_payload(b'\x02', "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
                     
                     # Read public key response
-                    key_response = await read_stream.read_payload()
+                    key_response = await read_payload_func()
                     if len(key_response) > 0 and key_response[0] == 0xFF:
                         return key_response
                     
-                    # Parse public key (skip first byte which is packet type)
-                    public_key_pem = bytes(key_response[1:]).decode('utf-8')
-                    key_response.release()
+                    # Parse public key
+                    public_key_pem = bytes(key_response[1:])  # Skip first byte
                     
-                    # Encrypt password using shared logic
-                    write_stream.begin_write(False)
-                    write_stream.write_bytes(self._get_rsa_encrytped_pwd(public_key_pem))
-                    await write_stream.flush("CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD")
+                    # Encrypt password with RSA public key
+                    encrypted_pwd = self._get_rsa_encrytped_pwd(public_key_pem.decode('utf-8'))
+                    await write_stream.write_payload(encrypted_pwd, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", reset_sequence=False)
 
-                    return await read_stream.read_payload()
+                    return await read_payload_func()
             else:
-                response.release()
                 raise OperationalError(f"Unknown authentication method: {auth_method}")
         
         return response
     
 
 
-    def processSync(self, read_stream: SyncReadStream, write_stream: SyncWriteStream, context: Context) -> PacketBuffer:
+    def processSync(self, read_payload_func: Callable[[], memoryview], write_stream: SyncWriteStream, context: Context) -> memoryview:
         """Process caching SHA2 password plugin authentication (sync)"""
         # Build and send initial payload
-        write_stream.begin_write(False)
         truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
         encrypted = self.encrypt_password(self.authentication_data, truncated_seed)
-        write_stream.write_bytes(encrypted)        
-        write_stream.flush("CACHING_SHA2_PASSWORD ENCRYPTED PWD")
+        write_stream.write_payload(encrypted, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", reset_sequence=False)
         
         # Read response packet
-        response = read_stream.read_payload()
+        response = read_payload_func()
         # Server requests more authentication data
         if len(response) > 1 and response[0] == 0x01:
             auth_method = response[1]
-            response.release()
             if auth_method == 0x03:
                 # Fast authentication successful, return ending ok packet
-                return read_stream.read_payload()
+                return read_payload_func()
             elif auth_method == 0x04:
                 # Perform full authentication
                 if self.conf.ssl:
                     # Send password in clear text over SSL
-                    write_stream.begin_write(False)
                     if self.authentication_data and self.authentication_data != "":
-                        write_stream.write_string(self.authentication_data)
-                        write_stream.write_byte(0x00)  # Null terminator
+                        payload = self.authentication_data.encode('utf-8') + b'\x00'
                     else:
-                        write_stream.write_byte(0x00)  # Null terminator
-                    write_stream.flush("CACHING_SHA2_PASSWORD CLEAR PWD")
-                    return read_stream.read_payload()
+                        payload = b'\x00'  # Null terminator
+                    write_stream.write_payload(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", reset_sequence=False)
+                    return read_payload_func()
                 else:
                     # SSL not available - try RSA public key encryption
                     if not HAS_CRYPTOGRAPHY:
@@ -202,27 +186,22 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                         )
                     
                     # Request RSA public key from server
-                    write_stream.begin_write(False)
-                    write_stream.write_byte(0x02)
-                    write_stream.flush("CACHING_SHA2_REQUEST_KEY")
+                    write_stream.write_payload(b'\x02', "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
                     
                     # Read public key response
-                    key_response = read_stream.read_payload()
+                    key_response = read_payload_func()
                     if len(key_response) > 0 and key_response[0] == 0xFF:
                         return key_response
                     
                     # Parse public key (skip first byte which is packet type)
                     public_key_pem = bytes(key_response[1:]).decode('utf-8')
-                    key_response.release()
                     
                     # Encrypt password using shared logic
-                    write_stream.begin_write(False)
-                    write_stream.write_bytes(self._get_rsa_encrytped_pwd(public_key_pem))
-                    write_stream.flush("CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD")
+                    encrypted_pwd = self._get_rsa_encrytped_pwd(public_key_pem)
+                    write_stream.write_payload(encrypted_pwd, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", reset_sequence=False)
 
-                    return read_stream.read_payload()
+                    return read_payload_func()
             else:
-                response.release()
                 raise OperationalError(f"Unknown authentication method: {auth_method}")
         
         return response

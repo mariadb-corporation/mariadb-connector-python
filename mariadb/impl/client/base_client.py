@@ -16,7 +16,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import List, Optional, Callable
 
-from mariadb.impl.client.socket.read_stream import PacketBuffer
+# No longer need PacketBuffer import
 
 from .context import Context
 from .socket.payload_parser import PayloadParser
@@ -121,12 +121,7 @@ class BaseClient(ABC):
     def _handle_auth_switch(self) -> None:
         """Handle authentication switch """
         ...
-
-    @abstractmethod
-    def _send_message(self, message: ClientMessage) -> None:
-        """Send client message to server"""
-        ...
-    
+   
     @abstractmethod
     def execute(self, message: ClientMessage, config: 'Configuration', buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List['Completion']:
         """Send client message and read result"""
@@ -284,7 +279,7 @@ class BaseClient(ABC):
     # Protocol Parsing
     # =========================================================================
     
-    def _parse_handshake(self, packet: PacketBuffer) -> Context:
+    def _parse_handshake(self, packet: memoryview) -> Context:
         """
         Parse initial handshake packet from server
         
@@ -563,22 +558,23 @@ class BaseClient(ABC):
 
         return converted_rows
 
-    def _parse_text_row_data(self, parser: PayloadParser, columns: List[ColumnDefinitionPacket], config: 'Configuration', decoders: List[Callable]) -> tuple:
+    def _parse_text_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', decoders: List[Callable]) -> tuple:
         """Parse text protocol row data packet"""
         row_values = [None] * len(decoders)
+        pos = 0
         for i, decoder in enumerate(decoders):
-            value = decoder(parser, columns[i], config)
+            value, pos = decoder(data, pos, columns[i], config)
             row_values[i] = value
-        parser.packet.release()
         return tuple(row_values)
 
-    def _parse_binary_row_data(self, parser: PayloadParser, columns: List[ColumnDefinitionPacket], config: 'Configuration', decoders: List[Callable]) -> tuple:
+    def _parse_binary_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', decoders: List[Callable]) -> tuple:
         """Parse binary protocol row data packet"""
-        parser.read_byte()  # Skip 0x00 header
+        pos = 1  # Skip 0x00 header
         
         # Read NULL bitmap
         null_bitmap_length = (len(columns) + 9) // 8
-        null_bitmap = parser.read_bytes(null_bitmap_length)
+        null_bitmap = bytes(data[pos:pos + null_bitmap_length])
+        pos += null_bitmap_length
         
         # Parse column values
         row_values = [None] * len(decoders)
@@ -589,9 +585,8 @@ class BaseClient(ABC):
                 continue
             
             # Use pre-built decoder for non-NULL values
-            value = decoder(parser, columns[i], config)
+            value, pos = decoder(data, pos, columns[i], config)
             row_values[i] = value
-        parser.packet.release()    
         return tuple(row_values)
 
         
