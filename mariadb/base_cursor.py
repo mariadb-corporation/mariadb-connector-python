@@ -249,29 +249,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         ...
     
     # Common helper methods (non-async, pure data transformation)
-    
-    def _escape_bytes(self, value: bytes, no_backslash_escapes: bool) -> str:
-        """
-        Escape bytes value for binary data.
-        
-        Args:
-            value: Bytes value to escape
-            no_backslash_escapes: Whether NO_BACKSLASH_ESCAPES is set
-            
-        Returns:
-            str: Escaped bytes as binary literal
-        """
-        # Convert bytes to hex representation
-        hex_value = value.hex()
-        
-        if no_backslash_escapes:
-            # Use X'...' format for hex literals when NO_BACKSLASH_ESCAPES is set
-            return f"X'{hex_value.upper()}'"
-        else:
-            # Use _binary'...' format with proper escaping
-            escaped_hex = hex_value.replace('\\', '\\\\').replace("'", "\\'")
-            return f"_binary'{escaped_hex}'"
-    
+   
     def _process_completions(self, completions: List[Any]) -> None:
         """
         Process completions from client execution
