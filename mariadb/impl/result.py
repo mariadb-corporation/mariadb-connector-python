@@ -73,6 +73,10 @@ class Result(ABC):
         - etc.
         """
         return self.row_pointer + 1
+    
+    def __repr__(self) -> str:
+        """String representation for debugging"""
+        return f"{self.__class__.__name__}(columns={self.column_count}, row_pointer={self.row_pointer}, loaded={self.loaded})"
 
 class SyncResult(Result):
     """
@@ -144,6 +148,10 @@ class BaseCompleteResult(Result):
     
     All rows are loaded into memory at once, allowing random access.
     """
+    
+    def __repr__(self) -> str:
+        """String representation for debugging"""
+        return f"{self.__class__.__name__}(columns={self.column_count}, rows={self.rows})"
     
     def __init__(
         self,
@@ -300,6 +308,10 @@ class BaseStreamingResult(Result):
     
     Rows are fetched one at a time from the network as needed.
     """
+    
+    def __repr__(self) -> str:
+        """String representation for debugging"""
+        return f"{self.__class__.__name__}(columns={self.column_count}, row_pointer={self.row_pointer}, loaded={self.loaded})"
     
     def __init__(
         self,

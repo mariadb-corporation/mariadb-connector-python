@@ -67,9 +67,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._exception_factory = ExceptionFactory()
         self._buffered: bool = bool(kwargs.pop('buffered', True))
         self._result: Optional[TResult] = None
-        self._executemany_mode: bool = False
-        self._executemany_rowcount: int = 0
-        self._executemany_lastrowid: Optional[int] = None
         self._force_binary: bool = False
         self._stmt: Optional[PrepareStmtPacket] = None
         if kwargs:
@@ -91,9 +88,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     @property
     def rowcount(self) -> int:
         """Get the number of rows (read-only property)"""
-        # For executemany, return the aggregated rowcount
-        if self._executemany_mode:
-            return self._executemany_rowcount
         # Get the current completion
         if self._completion_index < len(self._completions):
             completion = self._completions[self._completion_index]
@@ -147,8 +141,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     def lastrowid(self) -> Optional[int]:
         """Get the last insert ID from the current completion"""
         # For executemany, return the last insert ID from all executions
-        if self._executemany_mode:
-            return self._executemany_lastrowid
         if self._completion_index < len(self._completions):
             completion = self._completions[self._completion_index]
             return completion.insert_id or None
@@ -287,11 +279,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         Args:
             completions: List of completion objects
         """
-        # Reset executemany mode for regular execute
-        self._executemany_mode = False
-        self._executemany_rowcount = 0
-        self._executemany_lastrowid = None
-        
         # Store all completions for nextset() functionality
         self._completions = completions
         self._completion_index = 0
@@ -321,53 +308,33 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         """
         self._result = result_set
     
-    def _process_executemany_completions(self, completions: List[Any]) -> None:
+    def _process_executemany_completions(self, completions: List[List[Completion]]) -> None:
         """
         Process completions from executemany - aggregate all result sets.
         Since executemany runs the same query multiple times, all completions have identical metadata.
+        
+        Args:
+            completions: List[List[Completion]] - one list per executed message
         """
-        # Enable executemany mode and calculate aggregated values
-        self._executemany_mode = True
-        self._executemany_rowcount = 0
-        self._executemany_lastrowid = None
-        
-        # Calculate total affected rows and last insert ID from all completions
-        for c in completions:
-            if c.affected_rows >= 0:
-                self._executemany_rowcount += c.affected_rows
-            if c.insert_id is not None and c.insert_id > 0:
-                self._executemany_lastrowid = c.insert_id
-        
         if not completions:
             self._result = None
             return
-        
-        # Find completions with result sets
-        result_set_completions = [c for c in completions if c.has_result_set()]
-        
-        if not result_set_completions:
-            # No result sets - just update counts (e.g., INSERT/UPDATE/DELETE)
-            # The aggregated values are already set above
+
+        firstCompletion = completions[0]
+        if not firstCompletion:
             self._result = None
             return
-        
-        # All completions have identical metadata - use the first one
-        first_rs = result_set_completions[0].get_result_set()
-        first_columns = first_rs.columns
-        
-        # Aggregate all rows from all result sets
-        aggregated_rows = []
-        for completion in result_set_completions:
-            rs = completion.get_result_set()
-            rows = rs.rows if hasattr(rs, 'rows') else rs.get('rows', [])
-            aggregated_rows.extend(rows)
-        
-        # Build result from aggregated data (description will be computed on-demand)
-        self._result = self._create_complete_result(
-            columns=first_columns,
-            column_count=len(first_columns),
-            rows=aggregated_rows
-        )
+
+        for u in range(1, len(completions)):
+            unit_completions = completions[u]
+            for i, c in enumerate(unit_completions):
+                if c.affected_rows >= 0:
+                    firstCompletion[i].affected_rows += c.affected_rows
+                if c.insert_id is not None and c.insert_id > 0:
+                    firstCompletion[i].insert_id = c.insert_id
+                if c.has_result_set():
+                    firstCompletion[i].result_set.rows.extend(c.result_set.rows)
+        self._process_completions(firstCompletion)
     
     def _build_description(self, columns: List[ColumnDefinitionPacket]) -> Optional[tuple]:
         """Build cursor description tuple from column definitions"""

@@ -46,9 +46,10 @@ class Completion(ABC):
         ...
 
     def __str__(self) -> str:
+        result_info = f", result_set={self.result_set}" if self.result_set else ""
         return (f"Completion(affected_rows={self.affected_rows}, "
                 f"insert_id={self.insert_id}, "
-                f"warning_count={self.warning_count})")
+                f"warning_count={self.warning_count}{result_info})")
     
     def __repr__(self) -> str:
         return self.__str__()

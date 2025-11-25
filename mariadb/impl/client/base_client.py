@@ -124,7 +124,12 @@ class BaseClient(ABC):
     def execute(self, message: ClientMessage, config: 'Configuration', buffered: bool = True, prepare_stmt_packet: Optional['PrepareStmtPacket'] = None) -> List['Completion']:
         """Send client message and read result"""
         ...
-    
+
+    @abstractmethod
+    def execute_many(self, messages: List[ClientMessage], config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[List['Completion']]:
+        """Send client messages and read result"""
+        ...
+
     @abstractmethod
     def close(self) -> None:
         """Close client connection"""

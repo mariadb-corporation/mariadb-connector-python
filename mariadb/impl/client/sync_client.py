@@ -381,99 +381,120 @@ class SyncClient(BaseClient):
             
             try:
                 self.write_stream.write_payload(message.payload(self.context), message.type(), True)
-                results = []
-                self.reset_buffer()
-                is_binary = message.is_binary()
-                while True:
-                    packet = self.read_payload()
-                    if packet[0] == self.OK_PACKET:
-                        results.append(OkPacket.decode(packet, self.context))
-                    elif packet[0] == self.ERROR_PACKET:
-                        raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
-                    else:
-                        """Parse result set with column definitions and row data"""
-                        # Parse column count from first packet
-                        parser = PayloadParser(packet)
-                        column_count = parser.read_length_encoded_int()
-
-                        # Read column definitions
-                        columns: List[ColumnDefinitionPacket] = [None] * column_count
-                        if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
-                            # skip metadata
-                            columns = prepare_stmt_packet.columns
-                        else:
-                            for i in range(column_count):
-                                col_packet = self.read_payload()
-                                columns[i] = ColumnDefinitionPacket.decode(col_packet, self.context)
-                        
-                        # Read EOF packet after column definitions (if not deprecated)
-                        if not self.context.isEofDeprecated():
-                            self.read_payload()  # Skip EOF packet
-
-                        # Build decoder list once for all rows (performance optimization)
-                        decoders = self._build_decoder_list(columns, is_binary)
-                        
-                        # Select appropriate row parser based on protocol
-                        row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
-
-                        # If unbuffered, create streaming result
-                        if not buffered:
-                            from ..result import SyncStreamingResult
-                            streaming_result = SyncStreamingResult(self.read_payload,
-                                self.context,
-                                columns,
-                                column_count,
-                                config,
-                                row_parser,  # Pass appropriate row parser function
-                                decoders  # Pass pre-built decoder list
-                            )
-                            
-                            # Create completion with streaming result
-                            completion = OkPacket()
-                            completion.result_set = streaming_result
-                            results.append(completion)
-                        else:    
-                            # Read rows
-                            rows: List[tuple] = []
-                            while True:
-                                row_packet = self.read_payload()
-                                # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
-                                # EOF/OK packets start with 0xFE and have specific length constraints
-                                if (row_packet[0] == 0xFE and 
-                                    ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
-                                    (not self.context.isEofDeprecated() and len(row_packet) < 8))):
-                                    
-                                    if not self.context.isEofDeprecated():
-                                        completion = EofPacket.decode(row_packet, self.context)
-                                    else:
-                                        completion = OkPacket.decode(row_packet, self.context)
-
-                                    # Apply converters to all rows at once
-                                    rows = self._apply_converters_to_rows(rows, columns, config)
-
-                                    from ..result import SyncCompleteResult
-                                    complete_result = SyncCompleteResult(
-                                        columns,
-                                        column_count,
-                                        config,
-                                        rows
-                                    )
-                                    completion.result_set = complete_result
-                                    results.append(completion)
-                                    break
-                                elif row_packet[0] == self.ERROR_PACKET:
-                                    raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)                                    
-                                else:
-                                    # Row data packet - use pre-built decoders
-                                    rows.append(row_parser(row_packet, columns, config, decoders))
-                            
-                    if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
-                        break
-                return results
+                return self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet)
             except DatabaseError as e:
                 raise e    
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")
+
+    def execute_many(self, messages: List[ClientMessage], config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[List[Completion]]:
+        """Execute commands and return list of completion results (one list per message)"""
+        with self.lock:
+            if self.closed:
+                raise OperationalError("Connection is closed")
+            
+            results = []
+            try:
+                for message in messages:
+                    self.write_stream.write_payload(message.payload(self.context), message.type(), True)
+                for message in messages:
+                    results.append(self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet))
+            except DatabaseError as e:
+                raise e    
+            except Exception as e:
+                raise OperationalError(f"Execution failed: {e}")
+            
+            return results
+
+
+    def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
+
+        results = []
+        self.reset_buffer()
+        while True:
+            packet = self.read_payload()
+            if packet[0] == self.OK_PACKET:
+                results.append(OkPacket.decode(packet, self.context))
+            elif packet[0] == self.ERROR_PACKET:
+                raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
+            else:
+                """Parse result set with column definitions and row data"""
+                # Parse column count from first packet
+                parser = PayloadParser(packet)
+                column_count = parser.read_length_encoded_int()
+
+                # Read column definitions
+                columns: List[ColumnDefinitionPacket] = [None] * column_count
+                if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+                    # skip metadata
+                    columns = prepare_stmt_packet.columns
+                else:
+                    for i in range(column_count):
+                        col_packet = self.read_payload()
+                        columns[i] = ColumnDefinitionPacket.decode(col_packet, self.context)
+                    if (prepare_stmt_packet is not None):
+                        prepare_stmt_packet.columns = columns
+                # Read EOF packet after column definitions (if not deprecated)
+                if not self.context.isEofDeprecated():
+                    self.read_payload()  # Skip EOF packet
+                
+                # Select appropriate row parser based on protocol
+                row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+
+                # If unbuffered, create streaming result
+                if not buffered:
+                    from ..result import SyncStreamingResult
+                    streaming_result = SyncStreamingResult(self.read_payload,
+                        self.context,
+                        columns,
+                        column_count,
+                        config,
+                        row_parser
+                    )
+                    
+                    # Create completion with streaming result
+                    completion = OkPacket()
+                    completion.result_set = streaming_result
+                    results.append(completion)
+                    return results
+                
+                # Read rows
+                rows: List[tuple] = []
+                while True:
+                    row_packet = self.read_payload()
+                    # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
+                    # EOF/OK packets start with 0xFE and have specific length constraints
+                    if (row_packet[0] == 0xFE and 
+                        ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
+                        (not self.context.isEofDeprecated() and len(row_packet) < 8))):
+                        
+                        if not self.context.isEofDeprecated():
+                            completion = EofPacket.decode(row_packet, self.context)
+                        else:
+                            completion = OkPacket.decode(row_packet, self.context)
+
+                        # Apply converters to all rows at once
+                        rows = self._apply_converters_to_rows(rows, columns, config)
+
+                        from ..result import SyncCompleteResult
+                        completion.result_set = SyncCompleteResult(
+                            columns,
+                            column_count,
+                            config,
+                            rows
+                        )
+                        results.append(completion)
+                        break
+                    elif row_packet[0] == self.ERROR_PACKET:
+                        raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)                                    
+                    else:
+                        # Row data packet - use pre-built decoders                        
+                        rows.append(row_parser(row_packet, columns, config))
+                    
+            if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
+                break
+        return results
+
 
     # =========================================================================
     # Connection Control
@@ -482,7 +503,7 @@ class SyncClient(BaseClient):
     def ping(self) -> None:
         """Send ping command to server"""
         ping_packet = PingPacket()
-        self.execute([ping_packet], self.configuration)
+        self.execute(ping_packet, self.configuration)
 
     def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str]) -> None:
         """Change current user and database"""

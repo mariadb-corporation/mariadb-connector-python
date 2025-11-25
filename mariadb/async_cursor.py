@@ -177,27 +177,6 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         
     async def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None) -> None:
         """
-        Execute a SQL statement multiple times with different parameter sets
-        
-        More efficient than calling execute() multiple times as it can
-        batch operations and reduce round trips.
-        
-        Args:
-            sql: SQL statement to execute (typically INSERT, UPDATE, DELETE)
-            data: Sequence of parameter sequences, one for each execution
-            buffered: Override cursor's buffered setting
-                
-        Raises:
-            ProgrammingError: If cursor is closed
-            DatabaseError: If execution fails
-            
-        Example:
-            >>> await cursor.executemany(
-            ...     "INSERT INTO users VALUES (?, ?)",
-            ...     [(1, 'Alice'), (2, 'Bob'), (3, 'Charlie')]
-            ... )
-        """
-        """
         Execute a statement multiple times with different parameter sets
         
         Args:
@@ -211,38 +190,34 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         if not isinstance(sql, str):
             raise TypeError("SQL statement must be a string")
         
-        # Check if data is None or not an array-like type
-        if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):
-            raise ProgrammingError("No data provided")
-        
         # Consume any pending streaming results before executing new query
         if self._result is not None and self._result.streaming():
             await self._result.fetch_remaining()
 
-        # If data is an empty list/tuple, return early with rowcount=0
-        if not data:
-            self._rowcount = 0
-            return
+        # Check if data is None or not an array-like type
+        if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):
+            raise ProgrammingError("No data provided")
         
         # Reset result state
         self._result = None
         
         try:
-            completions = list()
             if data and len(data) > 0 and not isinstance(data, (list, tuple)):
                 raise ProgrammingError(f"wrong parameter type")
 
-            # Pre-parse SQL once for optimization (avoid re-parsing for each row)
-            sql_bytes = None
-            param_positions = None
-            param_names = None
-            placeholder_count = 0
-            
-            # For positional parameters, parse SQL once
-            sql_bytes, param_positions = split_sql_parts(sql)
-            placeholder_count = len(param_positions) // 2
-            
+            if (self._stmt is not None):
+                if (self._stmt.sql != sql):
+                    await self.connection._client.close_prepared_statement(self._stmt)
+                    self._stmt = None
+
+            if (self._stmt is None):
+                self._stmt = await self.connection._client.prepare_statement(sql)
+
+            # Execute with parameters using ExecutePacket
+            from .impl.message.client.execute_packet import ExecutePacket
+
             # Execute the statement for each parameter set
+            commands = []
             for params in data:
                 # Execute with current parameter set
                 # Convert data to list format for parameter binding
@@ -252,18 +227,16 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 
                 # Validate parameter count matches placeholders
                 if parameters:
-                    if len(parameters) < placeholder_count:
+                    if len(parameters) < self._stmt.parameter_count:
                         raise ProgrammingError(
-                            f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
+                            f"Parameter count mismatch: SQL has {self._stmt.parameter_count} placeholders, "
                             f"but only {len(parameters)} parameters provided"
                         )
                 
-                # Create query packet and execute with bytes
-                query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
-                # Use provided buffered parameter or fall back to cursor default
-                effective_buffered = buffered if buffered is not None else self._buffered
-                compl = await self.connection._client.execute(query_packet, self._config, effective_buffered)
-                completions.extend(compl)
+                execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
+                commands.append(execute_packet)
+                
+            completions = await self.connection._client.execute_many(commands, self._config, True, self._stmt)
 
             # Process the completions - aggregate result sets with compatible metadata
             self._process_executemany_completions(completions)
@@ -276,6 +249,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 errno=2013,
                 sql_state='HY000'
             )
+        
     
     # =========================================================================
     # Result Fetching Methods

@@ -207,7 +207,6 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             if (self._stmt is None):
                 self._stmt = self.connection._client.prepare_statement(sql)
 
-
             # Execute with parameters using ExecutePacket
             from .impl.message.client.execute_packet import ExecutePacket
 
@@ -231,7 +230,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
                 commands.append(execute_packet)
                 
-            completions = self.connection._client.execute(commands, self._config, True, prepare_stmt_packet=self._stmt)
+            completions = self.connection._client.execute_many(commands, self._config, True, self._stmt)
 
             # Process the completions - aggregate result sets with compatible metadata
             self._process_executemany_completions(completions)
