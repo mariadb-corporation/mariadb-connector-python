@@ -541,70 +541,42 @@ class BaseClient(ABC):
         
         for i, column in enumerate(columns):
             # Read length-encoded integer for field length
-            if pos >= len(data):
-                #row_values[i] = None
-                continue
-                
-            first_byte = data[pos]
+            length = data[pos]
+            match length:
+                case 0xFB:
+                    pos += 1
+                    continue
+                case 0xFC:
+                    length = struct.unpack_from('<H', data, pos + 1)[0]
+                    pos += 3
+                case 0xFD:
+                    length = struct.unpack('<I', data[pos+ 1:pos+4].tobytes() + b'\x00')[0]
+                    pos += 4
+                case 0xFE:
+                    length = struct.unpack_from('<Q', data, pos + 1)[0]
+                    pos += 9
+                case _:
+                    pos += 1
             
-            # Handle length encoding
-            if first_byte < 0xFB:
-                length = first_byte
-                pos += 1
-            elif first_byte == 0xFB:
-                # NULL value
-                #row_values[i] = None
-                pos += 1
-                continue
-            elif first_byte == 0xFC:
-                length = data[pos + 1] | (data[pos + 2] << 8)
-                pos += 3
-            elif first_byte == 0xFD:
-                length = data[pos + 1] | (data[pos + 2] << 8) | (data[pos + 3] << 16)
-                pos += 4
-            elif first_byte == 0xFE:
-                length = struct.unpack_from('<Q', data, pos + 1)[0]
-                pos += 9
-            else:
-                #row_values[i] = None
-                pos += 1
-                continue
-            
-            if length == 0:
-                # Empty string/value
-                field_type = column.type
-                if field_type in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG, 
-                                 FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
-                    row_values[i] = 0
-                elif field_type in (FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE):
-                    row_values[i] = 0.0
-                elif field_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
-                    row_values[i] = decimal.Decimal('0')
-                else:
-                    row_values[i] = ''
-                continue
-            
-            # Decode based on field type
-            field_type = column.type
-            field_data = data[pos:pos + length]
-            
-            try:
-                if field_type in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG, 
-                                 FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
-                    row_values[i] = int(field_data.tobytes().decode('ascii'))
-                elif field_type in (FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE):
-                    row_values[i] = float(field_data.tobytes().decode('ascii'))
-                elif field_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
-                    row_values[i] = decimal.Decimal(field_data.tobytes().decode('ascii'))
-                elif field_type in (FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE):
-                    date_str = field_data.tobytes().decode('ascii')
+            match column.type:
+                case FIELD_TYPE.TINY | FIELD_TYPE.SHORT | FIELD_TYPE.LONG | FIELD_TYPE.LONGLONG | FIELD_TYPE.INT24 | FIELD_TYPE.YEAR:
+                    row_values[i] = int(data[pos:pos + length].tobytes().decode('ascii'))
+                case FIELD_TYPE.FLOAT | FIELD_TYPE.DOUBLE:
+                    row_values[i] = float(data[pos:pos + length].tobytes().decode('ascii'))
+                case FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL:
+                    row_values[i] = decimal.Decimal(data[pos:pos + length].tobytes().decode('ascii'))
+                case FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE:
+                    date_str = data[pos:pos + length].tobytes().decode('ascii')
                     parts = date_str.split('-')
                     if len(parts) == 3:
-                        row_values[i] = datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
+                        try:
+                            row_values[i] = datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
+                        except (ValueError):
+                            row_values[i] = None
                     else:
                         row_values[i] = None
-                elif field_type == FIELD_TYPE.TIME:
-                    time_str = field_data.tobytes().decode('ascii')
+                case FIELD_TYPE.TIME:
+                    time_str = data[pos:pos + length].tobytes().decode('ascii')
                     negative = time_str.startswith('-')
                     if negative:
                         time_str = time_str[1:]
@@ -619,8 +591,8 @@ class BaseClient(ABC):
                         row_values[i] = -td if negative else td
                     else:
                         row_values[i] = None
-                elif field_type in (FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP):
-                    dt_str = field_data.tobytes().decode('ascii')
+                case FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP:
+                    dt_str = data[pos:pos + length].tobytes().decode('ascii')
                     if ' ' in dt_str:
                         date_part, time_part = dt_str.split(' ', 1)
                         date_parts = date_part.split('-')
@@ -631,32 +603,33 @@ class BaseClient(ABC):
                             sec_parts = time_parts[2].split('.')
                             seconds = int(sec_parts[0])
                             microseconds = int(sec_parts[1].ljust(6, '0')) if len(sec_parts) > 1 else 0
-                            row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                            try:
+                                row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                            except (ValueError):
+                                row_values[i] = None
                         else:
                             row_values[i] = None
                     else:
                         row_values[i] = None
-                elif field_type == FIELD_TYPE.NULL:
+                case FIELD_TYPE.NULL:
                     row_values[i] = None
-                else:
+                case _:
                     if column.special_format:
                         # String types (VARCHAR, TEXT, BLOB, JSON, etc.)
                         if column.ext_type_format == b'json':
-                            row_values[i] = field_data.tobytes().decode('utf-8', errors='replace')
+                            row_values[i] = data[pos:pos + length].tobytes().decode('utf-8', errors='replace')
                         elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
-                            row_values[i] = field_data.tobytes().decode('ascii')
+                            row_values[i] = data[pos:pos + length].tobytes().decode('ascii')
                             if config.native_object:
                                 row_values[i] = ipaddress.ip_address(row_values[i])
                         elif column.ext_type_name == b'uuid':
-                            row_values[i] = field_data.tobytes().decode('ascii')
+                            row_values[i] = data[pos:pos + length].tobytes().decode('ascii')
                             if config.native_object:
                                 row_values[i] = uuid.UUID(row_values[i])
                     elif column.character_set == 63:  # Binary
-                        row_values[i] = field_data.tobytes()
+                        row_values[i] = data[pos:pos + length].tobytes()
                     else:
-                        row_values[i] = field_data.tobytes().decode('utf-8', errors='replace')
-            except (ValueError, IndexError, UnicodeDecodeError):
-                row_values[i] = None
+                        row_values[i] = data[pos:pos + length].tobytes().decode('utf-8', errors='replace')
             
             pos += length
         
@@ -686,59 +659,59 @@ class BaseClient(ABC):
             field_type = column.type
             is_unsigned = (column.flags & FIELD_FLAG.UNSIGNED) != 0
             
-            try:
-                if field_type == FIELD_TYPE.TINY:
+            match field_type:
+                case FIELD_TYPE.TINY:
                     if is_unsigned:
                         row_values[i] = data[pos]
                     else:
                         row_values[i] = struct.unpack_from('<b', data, pos)[0]
                     pos += 1
-                elif field_type == FIELD_TYPE.SHORT or field_type == FIELD_TYPE.YEAR:
+                case FIELD_TYPE.SHORT | FIELD_TYPE.YEAR:
                     if is_unsigned:
                         row_values[i] = struct.unpack_from('<H', data, pos)[0]
                     else:
                         row_values[i] = struct.unpack_from('<h', data, pos)[0]
                     pos += 2
-                elif field_type == FIELD_TYPE.LONG or field_type == FIELD_TYPE.INT24:
+                case FIELD_TYPE.LONG | FIELD_TYPE.INT24:
                     if is_unsigned:
                         row_values[i] = struct.unpack_from('<I', data, pos)[0]
                     else:
                         row_values[i] = struct.unpack_from('<i', data, pos)[0]
                     pos += 4
-                elif field_type == FIELD_TYPE.LONGLONG:
+                case FIELD_TYPE.LONGLONG:
                     if is_unsigned:
                         row_values[i] = struct.unpack_from('<Q', data, pos)[0]
                     else:
                         row_values[i] = struct.unpack_from('<q', data, pos)[0]
                     pos += 8
-                elif field_type == FIELD_TYPE.FLOAT:
+                case FIELD_TYPE.FLOAT:
                     row_values[i] = struct.unpack_from('<f', data, pos)[0]
                     pos += 4
-                elif field_type == FIELD_TYPE.DOUBLE:
+                case FIELD_TYPE.DOUBLE:
                     row_values[i] = struct.unpack_from('<d', data, pos)[0]
                     pos += 8
-                elif field_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
+                case FIELD_TYPE.DECIMAL | FIELD_TYPE.NEWDECIMAL:
                     # Decimal as length-encoded string
                     length = data[pos]
                     pos += 1
-                    if length < 0xFB:
-                        if length > 0:
-                            row_values[i] = decimal.Decimal(data[pos:pos + length].tobytes().decode('ascii'))
-                            pos += length
-                        else:
-                            row_values[i] = decimal.Decimal('0')
+                    if length > 0:
+                        row_values[i] = decimal.Decimal(data[pos:pos + length].tobytes().decode('ascii'))
+                        pos += length
                     else:
-                        row_values[i] = None
-                elif field_type in (FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE):
+                        row_values[i] = decimal.Decimal('0')
+                case FIELD_TYPE.DATE | FIELD_TYPE.NEWDATE:
                     length_byte = data[pos]
                     pos += 1
                     if length_byte >= 4:
                         year, month, day = struct.unpack_from('<HBB', data, pos)
-                        row_values[i] = datetime.date(year, month, day)
+                        try:
+                            row_values[i] = datetime.date(year, month, day)
+                        except (ValueError):
+                            row_values[i] = None
                         pos += 4
                     else:
                         row_values[i] = None
-                elif field_type == FIELD_TYPE.TIME:
+                case FIELD_TYPE.TIME:
                     length_byte = data[pos]
                     pos += 1
                     if length_byte >= 8:
@@ -754,7 +727,7 @@ class BaseClient(ABC):
                         row_values[i] = -td if negative else td
                     else:
                         row_values[i] = None
-                elif field_type in (FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP):
+                case FIELD_TYPE.DATETIME | FIELD_TYPE.TIMESTAMP:
                     length_byte = data[pos]
                     pos += 1
                     if length_byte >= 4:
@@ -769,62 +742,55 @@ class BaseClient(ABC):
                             year, month, day = struct.unpack_from('<HBB', data, pos)
                             hours = minutes = seconds = microseconds = 0
                             pos += 4
-                        row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                        try:
+                            row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                        except (ValueError):
+                            row_values[i] = None
                     else:
                         row_values[i] = None
-                else:
+                case _:
                     # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
-                    first_byte = data[pos]
-                    if first_byte < 0xFB:
-                        length = first_byte
-                        pos += 1
-                    elif first_byte == 0xFB:
-                        row_values[i] = None
-                        pos += 1
-                        continue
-                    elif first_byte == 0xFC:
-                        length = data[pos + 1] | (data[pos + 2] << 8)
-                        pos += 3
-                    elif first_byte == 0xFD:
-                        length = data[pos + 1] | (data[pos + 2] << 8) | (data[pos + 3] << 16)
-                        pos += 4
-                    elif first_byte == 0xFE:
-                        length = struct.unpack_from('<Q', data, pos + 1)[0]
-                        pos += 9
-                    else:
-                        row_values[i] = None
-                        pos += 1
-                        continue
+                    length = data[pos]
+                    match length:
+                        case 0xFB:
+                            pos += 1
+                            continue
+                        case 0xFC:
+                            length = struct.unpack_from('<H', data, pos + 1)[0]
+                            pos += 3
+                        case 0xFD:
+                            length = struct.unpack('<I', data[pos+ 1:pos+4].tobytes() + b'\x00')[0]
+                            pos += 4
+                        case 0xFE:
+                            length = struct.unpack_from('<Q', data, pos + 1)[0]
+                            pos += 9
+                        case _:
+                            pos += 1
 
-                    if length == 0:
-                        row_values[i] = b'' if column.character_set == 63 else ''
-                    else:
-                        val = data[pos:pos + length].tobytes()
-                        if column.special_format:
-                            if column.ext_type_format == b'json':
-                                row_values[i] = val.decode('utf-8')
-                            elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
-                                row_values[i] = val.decode('ascii')
-                                if config.native_object:
-                                    row_values[i] = ipaddress.ip_address(row_values[i])
-                            elif column.ext_type_name == b'uuid':
-                                row_values[i] = val.decode('ascii')
-                                if config.native_object:
-                                    row_values[i] = uuid.UUID(row_values[i])
-                            elif column.character_set == 63:  # Binary
-                                row_values[i] = val
-                            else:
-                                row_values[i] = val.decode('utf-8', errors='replace')
 
+                    val = data[pos:pos + length].tobytes()
+                    if column.special_format:
+                        if column.ext_type_format == b'json':
+                            row_values[i] = val.decode('utf-8')
+                        elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
+                            row_values[i] = val.decode('ascii')
+                            if config.native_object:
+                                row_values[i] = ipaddress.ip_address(row_values[i])
+                        elif column.ext_type_name == b'uuid':
+                            row_values[i] = val.decode('ascii')
+                            if config.native_object:
+                                row_values[i] = uuid.UUID(row_values[i])
+                        elif column.character_set == 63:  # Binary
+                            row_values[i] = val
                         else:
-                            if column.character_set == 63:  # Binary
-                                row_values[i] = val
-                            else:
-                                row_values[i] = val.decode('utf-8', errors='replace')
-                        pos += length
+                            row_values[i] = val.decode('utf-8', errors='replace')
 
-            except (ValueError, struct.error, UnicodeDecodeError):
-                row_values[i] = None
+                    else:
+                        if column.character_set == 63:  # Binary
+                            row_values[i] = val
+                        else:
+                            row_values[i] = val.decode('utf-8', errors='replace')
+                    pos += length
         
         return tuple(row_values)
 

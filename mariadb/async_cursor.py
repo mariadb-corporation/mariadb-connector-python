@@ -205,37 +205,51 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             if data and len(data) > 0 and not isinstance(data, (list, tuple)):
                 raise ProgrammingError(f"wrong parameter type")
 
-            if (self._stmt is not None):
-                if (self._stmt.sql != sql):
-                    await self.connection._client.close_prepared_statement(self._stmt)
-                    self._stmt = None
-
-            if (self._stmt is None):
-                self._stmt = await self.connection._client.prepare_statement(sql)
-
-            # Execute with parameters using ExecutePacket
-            from .impl.message.client.execute_packet import ExecutePacket
-
-            # Execute the statement for each parameter set
             commands = []
-            for params in data:
-                # Execute with current parameter set
-                # Convert data to list format for parameter binding
-                parameters = None
-                if params:
-                    parameters = list(params)
-                
-                # Validate parameter count matches placeholders
-                if parameters:
-                    if len(parameters) < self._stmt.parameter_count:
-                        raise ProgrammingError(
-                            f"Parameter count mismatch: SQL has {self._stmt.parameter_count} placeholders, "
-                            f"but only {len(parameters)} parameters provided"
-                        )
-                
-                execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
-                commands.append(execute_packet)
-                
+            if self._force_binary:
+                if (self._stmt is not None):
+                    if (self._stmt.sql != sql):
+                        await self.connection._client.close_prepared_statement(self._stmt)
+                        self._stmt = None
+
+                if (self._stmt is None):
+                    self._stmt = await self.connection._client.prepare_statement(sql)
+
+                from .impl.message.client.execute_packet import ExecutePacket
+
+                for params in data:
+                    parameters = None
+                    if params:
+                        parameters = list(params)
+                    
+                    if parameters:
+                        if len(parameters) < self._stmt.parameter_count:
+                            raise ProgrammingError(
+                                f"Parameter count mismatch: SQL has {self._stmt.parameter_count} placeholders, "
+                                f"but only {len(parameters)} parameters provided"
+                            )
+                    
+                    execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
+                    commands.append(execute_packet)
+            else:
+                sql_bytes, param_positions = split_sql_parts(sql)
+
+                placeholder_count = len(param_positions) // 2  # Positions come in pairs
+
+                for params in data:
+                    parameters = None
+                    if params:
+                        parameters = list(params)
+
+                    if parameters:
+                        if len(parameters) < placeholder_count:
+                            raise ProgrammingError(
+                                f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
+                                f"but only {len(parameters)} parameters provided"
+                                )
+                    query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
+                    commands.append(query_packet)
+
             completions = await self.connection._client.execute_many(commands, self._config, True, self._stmt)
 
             # Process the completions - aggregate result sets with compatible metadata
