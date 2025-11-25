@@ -1,4 +1,0 @@
-[submodule "mariadb-connector-c"]
-	path = mariadb-connector-c
-	url = https://github.com/MariaDB/mariadb-connector-c.git
-	branch = 3.0
