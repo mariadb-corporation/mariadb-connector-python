@@ -40,8 +40,9 @@ class PayloadParser:
     
     def read_uint16(self) -> int:
         """Read 2-byte integer (little-endian) and advance position"""
+        value = struct.unpack('<H', self.packet[self.pos:self.pos+2])[0]
         self.pos += 2
-        return ((self.packet[self.pos - 2] & 0xff) + (self.packet[self.pos - 1] << 8)) & 0xffff;        
+        return value
     
     def read_int16(self) -> int:
         """Read 2-byte integer (little-endian) and advance position"""

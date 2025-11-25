@@ -8,11 +8,23 @@ Based on MySQL/MariaDB protocol column definition structure.
 """
 
 import struct
-from typing import TYPE_CHECKING, Optional
-from ...client.socket.payload_parser import PayloadParser
+from typing import TYPE_CHECKING, Optional, Tuple
 # No longer need PacketBuffer import
 if TYPE_CHECKING:
     from ...client.context import Context
+
+
+def read_small_length_encoded_bytes(data: memoryview, pos: int) -> Tuple[bytes, int]:
+    """Read length-encoded bytes and advance position"""
+    length = data[pos]
+    pos += 1
+    
+    if length >= 251:
+        length = struct.unpack('<H', data[pos:pos+2])[0]
+        pos += 2
+
+    result = data[pos:pos+length].tobytes()
+    return result, pos + length
 
 
 class ColumnDefinitionPacket:
@@ -117,14 +129,15 @@ class ColumnDefinitionPacket:
     @staticmethod
     def decode(data: memoryview, context: 'Context') -> 'ColumnDefinitionPacket':
         """Decode column definition packet from bytearray with context"""
-        parser = PayloadParser(data)
         
-        catalog_bytes = parser.read_length_encoded_bytes()
-        schema_bytes = parser.read_length_encoded_bytes()
-        table_bytes = parser.read_length_encoded_bytes()
-        org_table_bytes = parser.read_length_encoded_bytes()
-        name_bytes = parser.read_length_encoded_bytes()
-        org_name_bytes = parser.read_length_encoded_bytes()
+        pos = 0
+        
+        catalog_bytes, pos = read_small_length_encoded_bytes(data, pos)
+        schema_bytes, pos = read_small_length_encoded_bytes(data, pos)
+        table_bytes, pos = read_small_length_encoded_bytes(data, pos)
+        org_table_bytes, pos = read_small_length_encoded_bytes(data, pos)
+        name_bytes, pos = read_small_length_encoded_bytes(data, pos)
+        org_name_bytes, pos = read_small_length_encoded_bytes(data, pos)
         
         # Handle extended info only if EXTENDED_METADATA capability is enabled
         ext_type_name = None
@@ -133,34 +146,28 @@ class ColumnDefinitionPacket:
 
         # Check if we have the length field (0x0C) or extended metadata
         if context.hasExtendedMetadata():
-                # Has extended info - read length-encoded buffer
-            ext_length = parser.read_length_encoded_int()
-            ext_end = parser.pos + ext_length
-            while parser.pos < ext_end and parser.has_remaining():
-                ext_type = parser.read_byte()
-                
+            # Has extended info - read length-encoded buffer
+            ext_length = data[pos]
+            pos += 1
+            ext_end = pos + ext_length
+            while pos < ext_end and pos < len(data):
+                ext_type = data[pos]
+                pos += 1
                 special_format = True
                 if ext_type == 0:
                     # Extended type name
-                    ext_type_name = parser.read_length_encoded_bytes()
+                    ext_type_name, pos = read_small_length_encoded_bytes(data, pos)
                 elif ext_type == 1:
                     # Extended type format
-                    ext_type_format = parser.read_length_encoded_bytes()
+                    ext_type_format, pos = read_small_length_encoded_bytes(data, pos)
                 else:
                     # Skip unknown extended data
-                    skip_length = parser.read_length_encoded_int()
-                    parser.skip(skip_length)
+                    _, pos = read_small_length_encoded_bytes(data, pos)
         
         # Skip length field (always 0x0C = 12 for fixed fields)
-        parser.skip(1)
-        
-        # Read fixed-length fields (10 bytes total)
-        if parser.remaining_bytes() >= 10:
-            # Unpack all fixed fields: charset(2), column_length(4), type(1), flags(2), decimals(1)
-            fixed_data = parser.read_bytes(10)
-            charset, column_length, type, flags, decimals = struct.unpack('<HIBHB', fixed_data)
-        else:
-            raise IOError("Column definition packet too short")
+        pos += 1
+        charset, column_length, type, flags, decimals = struct.unpack('<HIBHB', data[pos:pos+10])
+
         return ColumnDefinitionPacket(
             catalog_bytes,
             schema_bytes,
