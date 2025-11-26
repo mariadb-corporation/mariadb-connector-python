@@ -172,34 +172,26 @@ class SyncClient(BaseClient):
 
                 total_size += packet_length
 
-                # check if data is in buffer
-                missing = 0
-                if bytes_in_buffer == PKT_HDR_SIZE:
-                   missing= packet_length
-                   self._recv_pos += 4
-                elif bytes_in_buffer < PKT_HDR_SIZE + packet_length:
+                # check if we have complete packet data
+                if bytes_in_buffer < PKT_HDR_SIZE + packet_length:
+                    # Need to read more data
                     missing = PKT_HDR_SIZE + packet_length - bytes_in_buffer
-                    # Beside data we want to read also the next packet header
+                    # For MAX_PKT_SIZE packets, also try to read next packet header
                     if packet_length == MAX_PKT_SIZE:
                         missing += 4
-                # ensure that the buffer can store all data
-                if missing > 0:
                     self._ensure_space(missing)
                     self._recv_len += self._recv_into_buffer(missing)
                     continue
 
-                # if packet_size is
-                # below MAX_PACKET_SIZE we stored all data
+                # We have complete packet (header + payload)
+                # Check if this is the last packet
                 if packet_length < MAX_PKT_SIZE:
+                    # Last packet - return accumulated payload
                     self._recv_pos = first_pos + 4 + total_size
-                    # Todo: memoryview doesn't speed up for smaller packets, so we need
-                    #  to check the packet size and return either a bytearray or a memoryview
                     return memoryview(self._recv_buf[first_pos + 4:first_pos + 4 + total_size])
-                else:
-                    multi_packet= 1
 
-                # don't store packet lengths for subsequent packages
-                self._recv_pos= self._recv_len - 4
+                # Multi-packet: advance to next packet header
+                self._recv_pos += PKT_HDR_SIZE + packet_length
             else:
                 self._recv_len += self._recv_into_buffer()
 
@@ -427,6 +419,7 @@ class SyncClient(BaseClient):
             
             try:
                 self.write_stream.write_payload(message.payload(self.context), message.type(), True)
+                self.reset_buffer()
                 return self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet)
             except DatabaseError as e:
                 raise e    
@@ -443,6 +436,7 @@ class SyncClient(BaseClient):
             try:
                 for message in messages:
                     self.write_stream.write_payload(message.payload(self.context), message.type(), True)
+                self.reset_buffer()    
                 for message in messages:
                     results.append(self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet))
             except DatabaseError as e:
@@ -456,7 +450,6 @@ class SyncClient(BaseClient):
     def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
 
         results = []
-        self.reset_buffer()
         while True:
             packet = self.read_payload()
             if packet[0] == self.OK_PACKET:
