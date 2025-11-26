@@ -443,11 +443,23 @@ class SyncClient(BaseClient):
             
             results = []
             try:
-                for message in messages:
-                    self.write_stream.write_payload(message.payload(self.context), message.type(), True)
-                self.reset_buffer()    
-                for message in messages:
-                    results.append(self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet))
+                # Process in batches to avoid overwhelming the server and TCP buffers
+                # For very large executemany() calls (e.g., 300K rows), pipelining
+                # all writes before reading causes timeouts and connection resets
+                BATCH_SIZE = 1000
+                
+                self.reset_buffer()
+                for i in range(0, len(messages), BATCH_SIZE):
+                    batch = messages[i:i + BATCH_SIZE]
+                    
+                    # Write batch
+                    for message in batch:
+                        self.write_stream.write_payload(message.payload(self.context), message.type(), True)
+                    
+                    # Read responses for this batch
+                    for message in batch:
+                        results.append(self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet))
+                        
             except DatabaseError as e:
                 raise e    
             except Exception as e:
