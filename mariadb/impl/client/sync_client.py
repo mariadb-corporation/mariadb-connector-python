@@ -64,102 +64,147 @@ class SyncClient(BaseClient):
         self.sequence: MutableInt = MutableInt(-1)
         
         # Read buffer management
-        self.default_readbuf: bytearray = bytearray(8192)
-        self.default_read_view: memoryview = memoryview(self.default_readbuf)
+        self._recv_buf: bytearray = bytearray(8192)
+        self._recv_pos = 0
+        self._recv_len = 0
 
-        self._readbuf: bytearray = self.default_readbuf
-        self._read_view: memoryview = self.default_read_view
-        self.max_allowed_packet: int = 0xFFFFFF
 
     # =========================================================================
     # Packet Reading
     # =========================================================================
-    
-    def _recv_exact(self, size: int, offset: int) -> None:
-        """Read exactly size bytes into buffer at offset"""
-        view = self._read_view[offset:offset + size]
-        pos = 0
-        while pos < size:
-            chunk = self.socket.recv_into(view[pos:], size - pos)
-            if chunk == 0:
-                raise OperationalError("Connection lost during packet read")
-            pos += chunk
-    
-    def reset_buffer(self) -> None:
-        self._readbuf = self.default_readbuf
-        self._read_view = self.default_read_view
+    def _ensure_space(self, needed):
+        """
+        Resize buffer if necessary.
+        """
+        ALIGN = 16384 
+        if (len(self._recv_buf) - self._recv_len >= needed):
+            return
+        self._recv_buf.extend(bytearray((needed + ALIGN - 1) & ~(ALIGN - 1)))
 
-    def _ensure_read_capacity(self, size: int) -> None:
-        """Ensure buffer is large enough, within max_allowed_packet limit"""
-        if size > len(self._readbuf):
-            new_buf = bytearray(size)
-            new_buf[:len(self._readbuf)] = self._readbuf
-            self._readbuf = new_buf
-            self._read_view = memoryview(self._readbuf)
-    
-    def read_payload(self) -> memoryview:
+    def _recv_into_buffer(self, size=0):
         """
-        Read one complete MariaDB logical packet (may consist of multiple sub-packets)
-        
-        Returns:
-            memoryview of the packet payload
-            
-        IMPORTANT: Data must be consumed before next read_payload() call
+        Reads data from a blocking socket into a memoryview.
+
+        - If `size` is specified, it attempts to read exactly `size` bytes (blocking until done).
+        - If `size` is None, it reads whatever is currently available in the socket buffer.
+
+        Returns the number of bytes read.
         """
-        # Read first packet to determine if we need continuation
-        self._recv_exact(4, 0)
-        pkt_len = self._readbuf[0] | (self._readbuf[1] << 8) | (self._readbuf[2] << 16)
-        self.sequence.set(self._readbuf[3])
         
-        # Read first payload chunk
-        self._ensure_read_capacity(pkt_len + 4)
-        self._recv_exact(pkt_len, 4)
-        
-        # Log if debug enabled
-        if self.logger.isEnabledFor(logging.DEBUG):
-            from ..debug_utils import hex_dump
-            conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-            self.logger.debug(hex_dump(self._readbuf[0:pkt_len + 4], f"RECV sync: {conn_id_str}"))
-        
-        if pkt_len < MAX_PACKET_SIZE:
-            return self._read_view[4:pkt_len + 4]
-        
-        # multiple packets
-        result_offset = 0
-        self._readbuf[result_offset:result_offset + pkt_len] = self._read_view[4:pkt_len + 4]
-        result_len = pkt_len
-        
+
+        received = 0
+        mv= memoryview(self._recv_buf)
+
+        # Keep trying to read until we have enough data or there's nothing left
+        try:
+            if size == 0:
+                n = self.socket.recv_into(mv[self._recv_len + received:])
+                if n == 0:
+                    raise ConnectionError("Connection reset by peer")
+                return n
+            while received < size:
+                n = self.socket.recv_into(mv[self._recv_len + received:], size - received)
+                if n == 0:
+                    raise ConnectionError("Connection reset by peer")
+                received += n
+            return received
+
+        except socket.timeout:
+           raise TimeoutError("Socket recv timed out")
+
+        except ConnectionResetError:
+            raise ConnectionError("Connection reset by peer")
+
+        except OSError as e:
+            # Generic socket error (broken pipe, network down, etc.)
+            raise ConnectionError(f"Socket error: {e}") from e
+
+        return received  # Return the total number of bytes read
+
+
+    def read_payload(self):
+        """
+        Reads and returns a full packet from database server
+
+        Returns a tuple which contains packet size and first offset
+        of the buffer
+
+        """
+
+        # for faster local lookup
+        PKT_HDR_SIZE=4
+        MAX_PKT_SIZE=0xFFFFFF
+
+        # if everything was read - rewind buffer
+        if self._recv_pos >= self._recv_len:
+           self._recv_pos = 0
+           self._recv_len = 0
+
+        if self._recv_pos > 0 and len(self._recv_buf) - self._recv_len < 1024:
+            unread = self._recv_len - self._recv_pos
+            if unread > 0:
+                self._recv_buf[:unread] = self._recv_buf[self._recv_pos:self._recv_len]
+            self._recv_len = unread
+            self._recv_pos = 0
+
+        first_pos = self._recv_pos
+        total_size= 0
+        multi_packet= 0
+
         while True:
-            # Read next packet header
-            self._recv_exact(4, 0)
-            pkt_len = self._readbuf[0] | (self._readbuf[1] << 8) | (self._readbuf[2] << 16)
-            self.sequence.set(self._readbuf[3])
-            
-            # Ensure buffer has space for accumulated result + new chunk
-            needed = result_len + pkt_len + 4
-            self._ensure_read_capacity(needed)
-            
-            # Read payload chunk directly after accumulated data
-            self._recv_exact(pkt_len, result_len)
-            
-            # Log if debug enabled
-            if self.logger.isEnabledFor(logging.DEBUG):
-                from ...debug_utils import hex_dump
-                conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-                # Log the header + chunk we just read
-                header_and_chunk = bytearray(4 + pkt_len)
-                header_and_chunk[0:3] = pkt_len.to_bytes(3, 'little')
-                header_and_chunk[3] = self.sequence.get()
-                header_and_chunk[4:] = self._readbuf[result_len:result_len + pkt_len]
-                self.logger.debug(hex_dump(header_and_chunk, f"RECV sync: {conn_id_str}"))
-            
-            result_len += pkt_len
-            
-            # Continuation condition
-            if pkt_len < MAX_PACKET_SIZE:
-                break
-        
-        return self._read_view[0:result_len]
+
+            bytes_in_buffer = self._recv_len - self._recv_pos
+
+            if bytes_in_buffer > 0:
+
+                # buffer must contain at least a packet header
+                if bytes_in_buffer < PKT_HDR_SIZE:
+                    missing = PKT_HDR_SIZE - bytes_in_buffer
+                    self._ensure_space(missing)
+                    self._recv_len += self._recv_into_buffer(missing)
+                    continue
+
+                packet_length = (self._recv_buf[self._recv_pos] |
+                                 (self._recv_buf[self._recv_pos + 1] << 8) |
+                                 (self._recv_buf[self._recv_pos + 2] << 16))
+                sequence = self._recv_buf[self._recv_pos + 3]
+                self.sequence.set(sequence)
+
+                total_size += packet_length
+
+                # check if data is in buffer
+                missing = 0
+                if bytes_in_buffer == PKT_HDR_SIZE and sequence >= 0:
+                   missing= packet_length
+                   self._recv_pos += 4
+                elif bytes_in_buffer < PKT_HDR_SIZE + packet_length:
+                    missing = PKT_HDR_SIZE + packet_length - bytes_in_buffer
+                    # Beside data we want to read also the next packet header
+                    if packet_length == MAX_PKT_SIZE:
+                        missing += 4
+                # ensure that the buffer can store all data
+                if missing > 0:
+                    self._ensure_space(missing)
+                    self._recv_len += self._recv_into_buffer(missing)
+
+                # if packet_size is
+                # below MAX_PACKET_SIZE we stored all data
+                if packet_length < MAX_PKT_SIZE:
+                    self._recv_pos = first_pos + 4 + total_size
+                    # Todo: memoryview doesn't speed up for smaller packets, so we need
+                    #  to check the packet size and return either a bytearray or a memoryview
+                    return memoryview(self._recv_buf[first_pos + 4:first_pos + 4 + total_size])
+                else:
+                    multi_packet= 1
+
+                # don't store packet lengths for subsequent packages
+                self._recv_pos= self._recv_len - 4
+            else:
+                self._recv_len += self._recv_into_buffer()
+
+    def reset_buffer(self):
+        self._recv_pos = 0
+        self._recv_len = 0
 
     # =========================================================================
     # Connection Management
