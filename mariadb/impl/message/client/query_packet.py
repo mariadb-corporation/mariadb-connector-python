@@ -26,6 +26,10 @@ QUOTE_BYTE: int = b"'"[0]
 COM_QUERY = 0x03
 
 NULL_BYTES: bytes = b"NULL"
+TRUE_BYTES: bytes = b"1"
+FALSE_BYTES: bytes = b"0"
+QUOTE_BYTES: bytes = b"'"
+BINARY_QUOTE_PREFIX: bytes = b"_binary'"
 
 class QueryPacket(ClientMessage):
     """
@@ -72,36 +76,55 @@ class QueryWithParamPacket(ClientMessage):
         last_pos = 0
         param_idx = 0
         params = self.parameters
+        param_positions = self.param_positions
+        sql_bytes = self.sql_bytes
         converter = PARAM_CONVERT_TBL
-        parts = [b''] * (len(self.param_positions) + 2 + 1)
+        
+        # Pre-calculate exact size needed
+        num_placeholders = len(param_positions) >> 1  # Divide by 2 using bit shift
+        parts = [None] * (num_placeholders * 2 + 2)  # Pre-allocate exact size
         
         parts[0] = b'\0\0\0\0\x03'
-        count= 1
+        count = 1
+        
+        # Cache type() function to avoid global lookup in loop
+        _type = type
+        
         # Iterate through placeholder positions (they come in pairs: start, end)
-        for i in range(0, len(self.param_positions), 2):
-            start_pos = self.param_positions[i]
-            end_pos = self.param_positions[i + 1]
+        for i in range(0, len(param_positions), 2):
+            start_pos = param_positions[i]
+            end_pos = param_positions[i + 1]
 
             # Write SQL fragment before this placeholder
             if start_pos > last_pos:
-                parts[count]= self.sql_bytes[last_pos:start_pos]
+                parts[count] = sql_bytes[last_pos:start_pos]
                 count += 1
 
             # Write parameter value
-            if param_idx < len(self.parameters):
-                parts[count] = converter.get(type(params[param_idx]), lambda v, ctx=None: str(v).encode('utf8'))(params[param_idx], no_backslash_escapes)
+            if param_idx < len(params):
+                param = params[param_idx]
+                param_type = _type(param)
+                conv_func = converter.get(param_type)
+                if conv_func is not None:
+                    parts[count] = conv_func(param, no_backslash_escapes)
+                else:
+                    # Fallback for unknown types
+                    parts[count] = str(param).encode('utf8')
                 param_idx += 1
                 count += 1
             else:
-                parts[count] = b'NULL'
+                parts[count] = NULL_BYTES
                 count += 1
 
             last_pos = end_pos
 
         # Write remaining SQL after last placeholder
-        if last_pos < len(self.sql_bytes):
-            parts[count] = self.sql_bytes[last_pos:]
-        return b''.join(parts)
+        if last_pos < len(sql_bytes):
+            parts[count] = sql_bytes[last_pos:]
+            count += 1
+        
+        # Only join the parts we actually used
+        return b''.join(parts[:count])
 
     def is_binary(self) -> bool:
         return False
@@ -112,12 +135,12 @@ class QueryWithParamPacket(ClientMessage):
 
 #### Conversion routines should be moved to a "central" place
 
-def float2bytes(value: float) -> bytes:
+def float2bytes(value: float, ctx=None) -> bytes:
     if repr(value) in ("nan", "inf", "-inf"):
         raise NotSupportedError(f"Float value '{repr(value)}' is not supported.")
     return str(value).encode('ascii')
 
-def decimal2bytes(value: float) -> bytes:
+def decimal2bytes(value: float, ctx=None) -> bytes:
     if value.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
         raise NotSupportedError(f"Decimal value '{value.__str__()}' is not supported.")
     return str(value).encode('ascii')
@@ -131,14 +154,22 @@ def escape_str(string: str, no_backslash_escapes: bool = False) -> bytes:
     """
     if no_backslash_escapes:
         # When NO_BACKSLASH_ESCAPES is set, single quotes are escaped by doubling them
-        escaped = string.replace("'", "''")
+        if "'" in string:
+            escaped = string.replace("'", "''")
+        else:
+            escaped = string
     else:
-        # Standard escaping: backslash, quote, double quote, zero byte
-        escaped = _ESCAPE_REGEX.sub(lambda m: _ESCAPE_MAP[m.group(0)], string)
+        # Fast path: check if escaping is needed at all
+        if not any(c in string for c in '\\\'"\0'):
+            # No special characters, skip regex
+            escaped = string
+        else:
+            # Standard escaping: backslash, quote, double quote, zero byte
+            escaped = _ESCAPE_REGEX.sub(lambda m: _ESCAPE_MAP[m.group(0)], string)
 
     return b"'" + escaped.encode(encoding="utf8") + b"'"
 
-def timedelta(val: datetime.timedelta) -> bytes:
+def timedelta(val: datetime.timedelta, ctx=None) -> bytes:
     total_seconds = int(val.total_seconds())
     is_negative = total_seconds < 0
     
@@ -161,12 +192,19 @@ def escape_bytes(b : bytes, no_backslash_escapes: bool = False) -> bytes:
     """
     if no_backslash_escapes:
         # When NO_BACKSLASH_ESCAPES is set, single quotes are escaped by doubling them
-        escaped = b.replace(b"'", b"''")
+        if b"'" in b:
+            escaped = b.replace(b"'", b"''")
+        else:
+            escaped = b
     else:
-        # Standard escaping: backslash, quote, double quote, zero byte
-        escaped = _ESCAPE_BYTES_REGEX.sub(lambda m: _ESCAPE_BYTES_MAP[m.group(0)], b)
+        # Fast path: check if escaping is needed
+        if not any(c in b for c in b'\\\'"\0'):
+            escaped = b
+        else:
+            # Standard escaping: backslash, quote, double quote, zero byte
+            escaped = _ESCAPE_BYTES_REGEX.sub(lambda m: _ESCAPE_BYTES_MAP[m.group(0)], b)
 
-    return b"_binary'" + escaped + b"'"
+    return BINARY_QUOTE_PREFIX + escaped + QUOTE_BYTES
 
 def float_array_to_bytes(arr: array.array, no_backslash_escapes: bool = False) -> bytes:
     """Convert float array to binary representation for VECTOR columns"""
@@ -184,36 +222,55 @@ def tuple_to_bytes(t: tuple, no_backslash_escapes: bool = False) -> bytes:
     """Convert tuple to bytes - raises error as tuples are not directly supported"""
     raise NotSupportedError("Tuple parameters are not supported. Use individual values or convert to a supported type.")
 
-def indicator_val(v):
-   if v.indicator == 1:
-       return b'NULL'
-   elif v.indicator == 2:
+def indicator_val(v, ctx=None):
+   indicator = v.indicator
+   if indicator == 1:
+       return NULL_BYTES
+   elif indicator == 2:
        return b'DEFAULT'
-   elif v.indicator == 3: # bulk only
-       pass
-   elif v.indicator == 4: # bulk only
-       pass
    else:
-       return b'NULL'
+       return NULL_BYTES
 
+
+# Optimized converter functions (avoid lambda overhead)
+def _int_to_bytes(v, ctx=None):
+    return str(v).encode('ascii')
+
+def _bool_to_bytes(v, ctx=None):
+    return TRUE_BYTES if v else FALSE_BYTES
+
+def _none_to_bytes(v, ctx=None):
+    return NULL_BYTES
+
+def _date_to_bytes(v, ctx=None):
+    return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
+
+def _ipv4_to_bytes(v, ctx=None):
+    return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
+
+def _ipv6_to_bytes(v, ctx=None):
+    return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
+
+def _uuid_to_bytes(v, ctx=None):
+    return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
 PARAM_CONVERT_TBL = {
-  int: lambda v, ctx= None: str(v).encode('ascii'),
-  float: lambda v, ctx= None: float2bytes(v),
-  str: lambda v, ctx: escape_str(v, ctx),
-  bytes: lambda v, ctx= None: escape_bytes(v, ctx),
-  bytearray: lambda v, ctx= None: escape_bytes(v, ctx),
-  decimal.Decimal: lambda v, ctx=None: decimal2bytes(v),
-  datetime.date: lambda v, ctx=None: b"'" + str(v).encode('ascii') + b"'",
-  datetime.datetime: lambda v, ctx=None: b"'" + str(v).encode('ascii') + b"'",
-  datetime.time: lambda v, ctx=None: b"'" + str(v).encode('ascii') + b"'",
-  datetime.timedelta: lambda v, ctx=None: timedelta(v),
-  type(None): lambda v, ctx= None: b'NULL',
-  bool: lambda v, ctx= None: b'1' if v else b'0',
-  MrdbIndicator: lambda v, ctx=None: indicator_val(v),
-  ipaddress.IPv4Address: lambda v, ctx=None: b"'" +str(v).encode('ascii') + b"'",
-  ipaddress.IPv6Address: lambda v, ctx=None: b"'" +str(v).encode('ascii') + b"'",
-  uuid.UUID: lambda v, ctx=None: b"'" +str(v).encode('ascii') + b"'",
-  array.array: lambda v, ctx=None: float_array_to_bytes(v, ctx),
-  tuple: lambda v, ctx=None: tuple_to_bytes(v, ctx),
+  int: _int_to_bytes,
+  float: float2bytes,
+  str: escape_str,
+  bytes: escape_bytes,
+  bytearray: escape_bytes,
+  decimal.Decimal: decimal2bytes,
+  datetime.date: _date_to_bytes,
+  datetime.datetime: _date_to_bytes,
+  datetime.time: _date_to_bytes,
+  datetime.timedelta: timedelta,
+  type(None): _none_to_bytes,
+  bool: _bool_to_bytes,
+  MrdbIndicator: indicator_val,
+  ipaddress.IPv4Address: _ipv4_to_bytes,
+  ipaddress.IPv6Address: _ipv6_to_bytes,
+  uuid.UUID: _uuid_to_bytes,
+  array.array: float_array_to_bytes,
+  tuple: tuple_to_bytes,
 }

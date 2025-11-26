@@ -82,6 +82,7 @@ class SyncClient(BaseClient):
         if (len(self._recv_buf) - self._recv_len >= needed):
             return
         self._recv_buf = self._recv_buf + bytearray((needed + ALIGN - 1) & ~(ALIGN - 1))
+        self._recv_buf_mv = memoryview(self._recv_buf)
                 
 
     def _recv_into_buffer(self, size=0):
