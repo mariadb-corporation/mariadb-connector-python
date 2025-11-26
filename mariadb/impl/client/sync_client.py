@@ -521,12 +521,18 @@ class SyncClient(BaseClient):
     def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
 
         results = []
+        # Cache locals for faster access
+        context = self.context
+        ok_packet = self.OK_PACKET
+        error_packet = self.ERROR_PACKET
+        
         while True:
             packet = self.read_payload()
-            if packet[0] == self.OK_PACKET:
-                results.append(OkPacket.decode(packet, self.context))
-            elif packet[0] == self.ERROR_PACKET:
-                raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
+            packet_type = packet[0]
+            if packet_type == ok_packet:
+                results.append(OkPacket.decode(packet, context))
+            elif packet_type == error_packet:
+                raise ErrorPacket.decode(packet, context).toError(self.exception_factory)
             else:
                 """Parse result set with column definitions and row data"""
                 # Parse column count from first packet
@@ -535,17 +541,17 @@ class SyncClient(BaseClient):
 
                 # Read column definitions
                 columns: List[ColumnDefinitionPacket] = [None] * column_count
-                if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+                if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                     # skip metadata
                     columns = prepare_stmt_packet.columns
                 else:
                     for i in range(column_count):
                         col_packet = self.read_payload()
-                        columns[i] = ColumnDefinitionPacket.decode(col_packet, self.context)
-                    if (prepare_stmt_packet is not None):
+                        columns[i] = ColumnDefinitionPacket.decode(col_packet, context)
+                    if prepare_stmt_packet is not None:
                         prepare_stmt_packet.columns = columns
                 # Read EOF packet after column definitions (if not deprecated)
-                if not self.context.isEofDeprecated():
+                if not context.isEofDeprecated():
                     self.read_payload()  # Skip EOF packet
                 
                 # Select appropriate row parser based on protocol
@@ -555,7 +561,7 @@ class SyncClient(BaseClient):
                 if not buffered:
                     from ..result import SyncStreamingResult
                     streaming_result = SyncStreamingResult(self.read_payload,
-                        self.context,
+                        context,
                         columns,
                         column_count,
                         config,
@@ -570,18 +576,20 @@ class SyncClient(BaseClient):
                 
                 # Read rows
                 rows: List[tuple] = []
+                eof_deprecated = context.isEofDeprecated()
+                
                 while True:
                     row_packet = self.read_payload()
                     # Check for EOF/OK packet based on DEPRECATE_EOF capability and packet length
                     # EOF/OK packets start with 0xFE and have specific length constraints
                     if (row_packet[0] == 0xFE and 
-                        ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
-                        (not self.context.isEofDeprecated() and len(row_packet) < 8))):
+                        ((eof_deprecated and len(row_packet) < 16777215) or 
+                        (not eof_deprecated and len(row_packet) < 8))):
                         
-                        if not self.context.isEofDeprecated():
-                            completion = EofPacket.decode(row_packet, self.context)
+                        if not eof_deprecated:
+                            completion = EofPacket.decode(row_packet, context)
                         else:
-                            completion = OkPacket.decode(row_packet, self.context)
+                            completion = OkPacket.decode(row_packet, context)
 
                         # Apply converters to all rows at once
                         rows = self._apply_converters_to_rows(rows, columns, config)
@@ -595,8 +603,8 @@ class SyncClient(BaseClient):
                         )
                         results.append(completion)
                         break
-                    elif row_packet[0] == self.ERROR_PACKET:
-                        raise ErrorPacket.decode(row_packet, self.context).toError(self.exception_factory)                                    
+                    elif row_packet[0] == error_packet:
+                        raise ErrorPacket.decode(row_packet, context).toError(self.exception_factory)                                    
                     else:
                         # Row data packet - use pre-built decoders                        
                         rows.append(row_parser(row_packet, columns, config))
