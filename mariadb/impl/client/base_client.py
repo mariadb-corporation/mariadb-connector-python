@@ -613,9 +613,11 @@ class BaseClient(ABC):
                         row_values[i] = None
                 case FIELD_TYPE.NULL:
                     row_values[i] = None
+                case FIELD_TYPE.JSON:
+                    row_values[i] = data[pos:pos + length].tobytes().decode('utf-8', errors='replace')
                 case _:
                     if column.special_format:
-                        # String types (VARCHAR, TEXT, BLOB, JSON, etc.)
+                        # String types (VARCHAR, TEXT, BLOB, etc.)
                         if column.ext_type_format == b'json':
                             row_values[i] = data[pos:pos + length].tobytes().decode('utf-8', errors='replace')
                         elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
@@ -786,7 +788,7 @@ class BaseClient(ABC):
                             row_values[i] = val.decode('utf-8', errors='replace')
 
                     else:
-                        if column.character_set == 63:  # Binary
+                        if column.character_set == 63 and field_type != FIELD_TYPE.JSON:  # Binary
                             row_values[i] = val
                         else:
                             row_values[i] = val.decode('utf-8', errors='replace')
