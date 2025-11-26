@@ -7,13 +7,17 @@ Prepare Response Packet parser for MariaDB protocol
 Based on MySQL/MariaDB protocol COM_STMT_PREPARE response structure.
 """
 
-from typing import TYPE_CHECKING, Optional
+import struct
+from typing import TYPE_CHECKING, List, Optional
 
 from .column_definition_packet import ColumnDefinitionPacket
-from ...client.socket.payload_parser import PayloadParser
-# No longer need PacketBuffer import
+
 if TYPE_CHECKING:
     from ...client.context import Context
+
+# Pre-compile struct format for faster unpacking
+# Format: skip(B), statement_id(I), column_count(H), parameter_count(H), reserved(B), warning_count(H)
+_STRUCT_PREPARE_RESPONSE = struct.Struct('<BIHHBH')
 
 
 class PrepareStmtPacket:
@@ -49,10 +53,10 @@ class PrepareStmtPacket:
         statement_id: int,
         column_count: int,
         parameter_count: int,
-        warning_count: int = 0,
-        sql: str = None
+        warning_count: int,
+        sql: Optional[str]
     ):
-        """Initialize prepare statement packet with statement ID, column count, and parameter count"""
+        """Initialize prepare statement packet"""
         self.statement_id = statement_id
         self.column_count = column_count
         self.parameter_count = parameter_count
@@ -63,16 +67,10 @@ class PrepareStmtPacket:
         self.closed = False
     
     @staticmethod
-    def decode(data: memoryview, context: Optional['Context'] = None, sql: str = None) -> 'PrepareStmtPacket':
-        """Decode COM_STMT_PREPARE response packet from bytearray with optional context"""
-        parser = PayloadParser(data)
-        
-        parser.read_byte()  # Skip OK marker (0x00)
-        statement_id = parser.read_uint32()
-        column_count = parser.read_uint16()
-        parameter_count = parser.read_uint16()
-        parser.read_byte()  # Skip reserved byte (0x00)
-        warning_count = parser.read_uint16()
+    def decode(data: memoryview, context: Optional['Context'] = None, sql: Optional[str] = None) -> 'PrepareStmtPacket':
+        """Decode COM_STMT_PREPARE response packet (optimized)"""
+        # Unpack all fields in one operation using pre-compiled struct
+        _, statement_id, column_count, parameter_count, _, warning_count = _STRUCT_PREPARE_RESPONSE.unpack_from(data, 0)
         
         # Update context if provided
         if context:

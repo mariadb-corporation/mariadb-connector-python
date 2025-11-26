@@ -7,14 +7,16 @@ Error Packet parser for MariaDB protocol
 Based on MySQL/MariaDB protocol error packet structure.
 """
 
-import struct
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from ...client.context import Context
     from ...client.exception_factory import ExceptionFactory
 from ...client.socket.payload_parser import PayloadParser
-# No longer need PacketBuffer import
+
+# Pre-compute constants
+_HASH_MARKER = 0x23  # '#'
+_DEFAULT_SQL_STATE = "HY000"
 
 
 class ErrorPacket:
@@ -35,11 +37,12 @@ class ErrorPacket:
         'sql_state',
         'error_message',
     )
+    
     def __init__(
         self,
         error_code: int,
-        sql_state: str = "HY000",
-        error_message: str = "",
+        sql_state: str,
+        error_message: str,
     ):
         """Initialize error packet with error code, SQL state, and message"""
         self.error_code = error_code
@@ -54,34 +57,41 @@ class ErrorPacket:
     def decode(data: memoryview, context: Optional['Context'] = None) -> 'ErrorPacket':
         """Decode error packet from bytearray with optional context"""
         parser = PayloadParser(data)
-        parser.read_byte()
+        parser.skip(1)  # Skip error marker (0xFF) - skip is faster than read_byte if we don't use value
         error_code = parser.read_uint16()
-        sql_state = "HY000"  # Default SQL state
         
-        # Check for SQL state marker '#' (0x23)
-        if parser.has_remaining() and parser.get_byte() == 0x23:  # '#' symbol
-            parser.read_byte()  # Skip '#' marker
+        # Fast path: check for SQL state marker
+        if parser.has_remaining() and parser.get_byte() == _HASH_MARKER:
+            parser.skip(1)  # Skip '#' marker
+            
             # SQL state (5 bytes)
             if parser.remaining_bytes() >= 5:
-                sql_state = bytes(parser.read_bytes(5)).decode('ascii')
+                sql_state = parser.read_bytes(5).decode('ascii')
             else:
                 raise IOError("Invalid error packet: SQL state truncated")
+        else:
+            sql_state = _DEFAULT_SQL_STATE
         
-        error_message = bytes(parser.read_remaining()).decode('utf-8', errors='replace')
-        return ErrorPacket(
-            error_code,
-            sql_state,
-            error_message
-        )
-
+        # Decode error message - remove unnecessary bytes() wrapper if read_remaining returns bytes
+        error_message = parser.read_remaining().decode('utf-8', errors='replace')
+        
+        return ErrorPacket(error_code, sql_state, error_message)
 
     def toError(self, exception_factory: 'ExceptionFactory', sql: Optional[str] = None):
-        return exception_factory.create_exception(self.error_message, self.sql_state, self.error_code, sql)
+        """Convert to exception"""
+        return exception_factory.create_exception(
+            self.error_message, 
+            self.sql_state, 
+            self.error_code, 
+            sql
+        )
     
     def __repr__(self) -> str:
+        """String representation for debugging"""
         return (f"ErrorPacket(error_code={self.error_code}, "
                 f"sql_state='{self.sql_state}', "
                 f"error_message='{self.error_message}')")
     
     def __str__(self) -> str:
+        """Human-readable string representation"""
         return f"[{self.error_code}] ({self.sql_state}): {self.error_message}"

@@ -9,9 +9,13 @@ Based on MySQL/MariaDB protocol column definition structure.
 
 import struct
 from typing import TYPE_CHECKING, Optional, Tuple
-# No longer need PacketBuffer import
+
 if TYPE_CHECKING:
     from ...client.context import Context
+
+# Pre-compile struct formats for faster unpacking
+_STRUCT_UINT16 = struct.Struct('<H')
+_STRUCT_FIXED_FIELDS = struct.Struct('<HIBHB')  # charset(H), column_length(I), type(B), flags(H), decimals(B)
 
 
 def read_small_length_encoded_bytes(data: memoryview, pos: int) -> Tuple[bytes, int]:
@@ -19,11 +23,15 @@ def read_small_length_encoded_bytes(data: memoryview, pos: int) -> Tuple[bytes, 
     length = data[pos]
     pos += 1
     
-    if length >= 251:
-        length = struct.unpack('<H', data[pos:pos+2])[0]
-        pos += 2
-
-    result = data[pos:pos+length].tobytes()
+    # Fast path: most lengths are < 251
+    if length < 251:
+        result = bytes(data[pos:pos+length])
+        return result, pos + length
+    
+    # Slow path: 2-byte length
+    length = _STRUCT_UINT16.unpack_from(data, pos)[0]
+    pos += 2
+    result = bytes(data[pos:pos+length])
     return result, pos + length
 
 
@@ -128,7 +136,7 @@ class ColumnDefinitionPacket:
     
     @staticmethod
     def decode(data: memoryview, context: 'Context') -> 'ColumnDefinitionPacket':
-        """Decode column definition packet from bytearray with context"""
+        """Decode column definition packet"""
         
         pos = 0
         
@@ -139,35 +147,35 @@ class ColumnDefinitionPacket:
         name_bytes, pos = read_small_length_encoded_bytes(data, pos)
         org_name_bytes, pos = read_small_length_encoded_bytes(data, pos)
         
-        # Handle extended info only if EXTENDED_METADATA capability is enabled
+        # Fast path: no extended metadata (most common case)
         ext_type_name = None
         ext_type_format = None
         special_format = False
-
-        # Check if we have the length field (0x0C) or extended metadata
+        
         if context.hasExtendedMetadata():
-            # Has extended info - read length-encoded buffer
             ext_length = data[pos]
             pos += 1
-            ext_end = pos + ext_length
-            while pos < ext_end and pos < len(data):
-                ext_type = data[pos]
-                pos += 1
+            
+            if ext_length > 0:
                 special_format = True
-                if ext_type == 0:
-                    # Extended type name
-                    ext_type_name, pos = read_small_length_encoded_bytes(data, pos)
-                elif ext_type == 1:
-                    # Extended type format
-                    ext_type_format, pos = read_small_length_encoded_bytes(data, pos)
-                else:
-                    # Skip unknown extended data
-                    _, pos = read_small_length_encoded_bytes(data, pos)
+                ext_end = pos + ext_length
+                
+                while pos < ext_end:
+                    ext_type = data[pos]
+                    pos += 1
+                    
+                    if ext_type == 0:
+                        ext_type_name, pos = read_small_length_encoded_bytes(data, pos)
+                    elif ext_type == 1:
+                        ext_type_format, pos = read_small_length_encoded_bytes(data, pos)
+                    else:
+                        # Skip unknown extended data
+                        _, pos = read_small_length_encoded_bytes(data, pos)
         
-        # Skip length field (always 0x0C = 12 for fixed fields)
+        # Skip length field (0x0C) and unpack fixed fields using pre-compiled struct
         pos += 1
-        charset, column_length, type, flags, decimals = struct.unpack('<HIBHB', data[pos:pos+10])
-
+        charset, column_length, type, flags, decimals = _STRUCT_FIXED_FIELDS.unpack_from(data, pos)
+        
         return ColumnDefinitionPacket(
             catalog_bytes,
             schema_bytes,

@@ -9,11 +9,15 @@ Based on MySQL/MariaDB protocol EOF packet structure.
 
 from typing import TYPE_CHECKING
 from ...completion import Completion
-# No longer need PacketBuffer import
+
 if TYPE_CHECKING:
     from ...client.context import Context
 
 from mariadb_shared import constants
+
+# Pre-compute constant
+_PS_OUT_PARAMS_MASK = constants.STATUS.PS_OUT_PARAMS
+
 
 class EofPacket(Completion):
     """
@@ -29,14 +33,13 @@ class EofPacket(Completion):
     In that case, use OkPacket.decode() instead.
     """
     __slots__ = (
-        'warning_count',
         'server_status',
     )
+    
     def __init__(
         self,
-        warning_count: int = 0,
-        server_status: int = 0,
-        is_output_parameters: bool = False
+        warning_count: int,
+        server_status: int,
     ):
         """Initialize EOF packet with warning count and server status"""
         self.affected_rows = 0
@@ -44,12 +47,12 @@ class EofPacket(Completion):
         self.warning_count = warning_count
         self.result_set = None
         
-        # EofPacket-specific fields
+        # EofPacket-specific field
         self.server_status = server_status
     
     def is_output_parameters(self) -> bool:
         """Check if completion has output parameters"""
-        return (self.server_status & constants.STATUS.PS_OUT_PARAMS) != 0
+        return (self.server_status & _PS_OUT_PARAMS_MASK) != 0
 
     @staticmethod
     def decode(data: memoryview, context: 'Context') -> 'EofPacket':
@@ -61,12 +64,4 @@ class EofPacket(Completion):
         context.server_status = server_status
         context.warning_count = warning_count
         
-        # Check if this marks output parameters (PS_OUT_PARAMS flag)
-        is_output_parameters = (server_status & constants.STATUS.PS_OUT_PARAMS) != 0
-        
-        return EofPacket(
-            warning_count,
-            server_status,
-            is_output_parameters
-        )
-    
+        return EofPacket(warning_count, server_status)
