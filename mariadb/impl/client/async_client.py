@@ -519,7 +519,7 @@ class AsyncClient(BaseClient):
                     )
                     
                     # Create completion with streaming result
-                    completion = OkPacket()
+                    completion = OkPacket(0,0,0,0,b'')
                     completion.result_set = streaming_result
                     results.append(completion)
                     return results

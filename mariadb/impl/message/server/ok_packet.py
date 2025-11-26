@@ -16,6 +16,10 @@ if TYPE_CHECKING:
     from ...client.context import Context
 
 
+_PS_OUT_PARAMS_MASK = constants.STATUS.PS_OUT_PARAMS
+_SESSION_STATE_CHANGED = constants.STATUS.SESSION_STATE_CHANGED
+_SESSION_TRACKING_CAP = constants.CAPABILITY.SESSION_TRACKING
+
 class OkPacket(Completion):
     """
     OK Packet from MariaDB server
@@ -33,16 +37,15 @@ class OkPacket(Completion):
         'server_status',
         'info',
     )
+    
     def __init__(
         self,
-        affected_rows: int = 0,
-        insert_id: int = 0,
-        server_status: int = 0,
-        warning_count: int = 0,
-        info: bytes = b'',
+        affected_rows: int,
+        insert_id: int,
+        server_status: int,
+        warning_count: int,
+        info: bytes,
     ):
-        """Initialize OK packet with affected rows, insert ID, status, warnings, and info"""
-        # Direct assignment is faster than super().__init__
         self.affected_rows = affected_rows
         self.insert_id = insert_id
         self.warning_count = warning_count
@@ -51,95 +54,67 @@ class OkPacket(Completion):
         self.info = info
 
     def is_output_parameters(self) -> bool:
-        """Check if completion has output parameters"""
-        return (self.server_status & constants.STATUS.PS_OUT_PARAMS) != 0
+        return (self.server_status & _PS_OUT_PARAMS_MASK) != 0
     
     @staticmethod
     def decode(data: memoryview, context: 'Context') -> 'OkPacket':
-        """Decode OK packet from bytearray with context"""
         parser = PayloadParser(data)
         
-        parser.skip(1) # Skip OK marker (0x00 or 0xFE)
+        parser.skip(1)
         affected_rows = parser.read_length_encoded_int()
         insert_id = parser.read_length_encoded_int()
-        
-        # Read server_status and warning_count in one operation (4 bytes total)
         server_status = parser.read_int16()
         warning_count = parser.read_int16()
         
-        # Update context with server status (context is always present)
         context.server_status = server_status
         context.warning_count = warning_count
         
-        # Optional info string and session tracking
-        info = b''
-        if parser.has_remaining():
-            # Check if session tracking is present
-            has_session_tracking = (context.has_capability(constants.CAPABILITY.SESSION_TRACKING) and
-                                   (server_status & constants.STATUS.SESSION_STATE_CHANGED))
-            
-            try:
-                # Read info string length
-                info_length = parser.read_length_encoded_int()
-                if info_length > 0:
-                    # Read info bytes (may contain fingerprint validation hash)
-                    info = parser.read_bytes(info_length)
-                
-                # Process session tracking data if present
-                if has_session_tracking and parser.has_remaining():
-                    while parser.has_remaining():
-                        # Total length of session tracking data (length-encoded)
-                        total_length = parser.read_length_encoded_int()
-                        if total_length == 0:
-                            break
-
-                        # Track start position to ensure we don't read beyond this tracking block
-                        start_pos = parser.pos
-
-                        # Session tracking type (1 byte)
-                        tracking_type = parser.read_byte()
-
-                        # Data length (length-encoded)
-                        data_length = parser.read_length_encoded_int()
-
-                        # Process based on tracking type
-                        if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
-                            # System variable change
-                            end_pos = start_pos + total_length
-                            while parser.pos < end_pos:
-                                var_name_len = parser.read_length_encoded_int()
-                                var_name = parser.read_bytes(var_name_len).decode('utf-8')
-
-                                var_value_len = parser.read_length_encoded_int()
-                                var_value = parser.read_bytes(var_value_len).decode('utf-8')
-
-                                # Update context with system variable change
-                                if hasattr(context, 'update_system_variable'):
-                                    context.update_system_variable(var_name, var_value)
-
-                        elif tracking_type == constants.SESSION_TRACK.SCHEMA:
-                            # Schema change
-                            schema_len = parser.read_length_encoded_int()
-                            schema = parser.read_bytes(schema_len).decode('utf-8')
-                            if hasattr(context, 'database'):
-                                context.database = schema
-                        else:
-                            # Unknown tracking type - skip data
-                            parser.skip(data_length)
-
-                        # Ensure we're at the correct position
-                        expected_pos = start_pos + total_length
-                        if parser.pos < expected_pos:
-                            parser.skip(expected_pos - parser.pos)
-
-            except Exception:
-                # Don't fail on info/session tracking errors
-                pass
+        # Fast path: no info/tracking (most common case)
+        if not parser.has_remaining():
+            return OkPacket(affected_rows, insert_id, server_status, warning_count, b'')
         
-        return OkPacket(
-            affected_rows,
-            insert_id,
-            server_status,
-            warning_count,
-            info
-        )
+        info = b''
+        info_length = parser.read_length_encoded_int()
+        if info_length > 0:
+            info = parser.read_bytes(info_length)
+        
+        # Session tracking check
+        if ((server_status & _SESSION_STATE_CHANGED) and 
+            context.has_capability(_SESSION_TRACKING_CAP) and 
+            parser.has_remaining()):
+            _process_session_tracking(parser, context)
+
+        return OkPacket(affected_rows, insert_id, server_status, warning_count, info)
+
+
+def _process_session_tracking(parser: PayloadParser, context: 'Context') -> None:
+    """Process session tracking data (separate function for better branch prediction)"""
+    while parser.has_remaining():
+        total_length = parser.read_length_encoded_int()
+        if total_length == 0:
+            break
+        
+        start_pos = parser.pos
+        tracking_type = parser.read_byte()
+        data_length = parser.read_length_encoded_int()
+        
+        # NOT NEEDED FOR NOW
+        #if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
+        #    end_pos = start_pos + total_length
+        #    while parser.pos < end_pos:
+        #        var_name_len = parser.read_length_encoded_int()
+        #        var_name = parser.read_bytes(var_name_len).decode('utf-8')
+        #        var_value_len = parser.read_length_encoded_int()
+        #        var_value = parser.read_bytes(var_value_len).decode('utf-8')
+        #        context.update_system_variable(var_name, var_value)
+        
+        if tracking_type == constants.SESSION_TRACK.SCHEMA:
+            schema_len = parser.read_length_encoded_int()
+            context.database = parser.read_bytes(schema_len).decode('utf-8')
+        
+        else:
+            parser.skip(data_length)
+        
+        expected_pos = start_pos + total_length
+        if parser.pos < expected_pos:
+            parser.skip(expected_pos - parser.pos)
