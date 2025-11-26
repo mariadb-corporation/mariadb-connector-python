@@ -28,7 +28,7 @@ class PayloadStream:
     
     def __init__(self):
         """Initialize payload stream with empty buffer"""
-        self._buffer: bytearray = bytearray()
+        self._buffer: bytearray = bytearray(4)
     
     def get_payload(self) -> bytes:
         """Return the accumulated payload as bytes"""

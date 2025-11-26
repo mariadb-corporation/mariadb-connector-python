@@ -18,7 +18,7 @@ class PreparePacket(ClientMessage):
         self.sql = sql
         
     def payload(self, context: Context) -> bytes:
-        return b'\x16' + self.sql.encode('utf-8')
+        return b'\0\0\0\0\x16' + self.sql.encode('utf-8')
 
     def is_binary(self) -> bool:
         return True

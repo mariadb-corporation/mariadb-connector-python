@@ -17,7 +17,7 @@ class ChangeDbPacket(ClientMessage):
         self.database = database
         
     def payload(self, context: Context) -> bytes:
-        return b'\x02' + self.database.encode('utf-8')
+        return b'\0\0\0\0\2' + self.database.encode('utf-8')
 
     def is_binary(self) -> bool:
         return False

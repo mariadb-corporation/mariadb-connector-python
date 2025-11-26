@@ -20,7 +20,7 @@ class QuitPacket(ClientMessage):
     COM_QUIT = 0x01
     
     def payload(self, context: Context) -> bytes:
-        return b'\x01'
+        return b'\0\0\0\0\x01'
 
     def is_binary(self) -> bool:
         return False

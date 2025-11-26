@@ -25,6 +25,15 @@ def hex_dump(data: Union[bytes, bytearray], descr: str = "") -> str:
     if not data:
         return ""
     
+    MAX_DUMP_SIZE = 1024
+    original_len = len(data)
+    truncated = False
+    
+    # Truncate if data is too large
+    if len(data) > MAX_DUMP_SIZE:
+        data = data[:MAX_DUMP_SIZE]
+        truncated = True
+    
     lines = [f"{descr}"]
     
     # Header
@@ -74,5 +83,9 @@ def hex_dump(data: Union[bytes, bytearray], descr: str = "") -> str:
     
     # Footer
     lines.append("+------+---------------------------------------------------+------------------+")
+    
+    # Add truncation notice if data was truncated
+    if truncated:
+        lines.append(f"[DATA TRUNCATED: showing {MAX_DUMP_SIZE} of {original_len} bytes]")
     
     return "\n".join(lines)

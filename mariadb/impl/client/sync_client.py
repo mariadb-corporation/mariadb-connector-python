@@ -64,7 +64,9 @@ class SyncClient(BaseClient):
         self.sequence: MutableInt = MutableInt(-1)
         
         # Read buffer management
-        self._recv_buf: bytearray = bytearray(8192)
+        self._default_recv_buf: bytearray = bytearray(8192)
+        self._recv_buf: bytearray = self._default_recv_buf
+        
         self._recv_pos = 0
         self._recv_len = 0
 
@@ -79,7 +81,8 @@ class SyncClient(BaseClient):
         ALIGN = 16384 
         if (len(self._recv_buf) - self._recv_len >= needed):
             return
-        self._recv_buf.extend(bytearray((needed + ALIGN - 1) & ~(ALIGN - 1)))
+        self._recv_buf = self._recv_buf + bytearray((needed + ALIGN - 1) & ~(ALIGN - 1))
+                
 
     def _recv_into_buffer(self, size=0):
         """
@@ -97,20 +100,29 @@ class SyncClient(BaseClient):
 
         # Keep trying to read until we have enough data or there's nothing left
         try:
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug(f"_recv_into_buffer: requesting size={size}, buffer_len={len(self._recv_buf)}, recv_len={self._recv_len}, recv_pos={self._recv_pos}")
+            
             if size == 0:
                 n = self.socket.recv_into(mv[self._recv_len + received:])
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    self.logger.debug(f"_recv_into_buffer: received {n} bytes (no size limit)")
                 if n == 0:
                     raise ConnectionError("Connection reset by peer")
                 return n
             while received < size:
                 n = self.socket.recv_into(mv[self._recv_len + received:], size - received)
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    self.logger.debug(f"_recv_into_buffer: received {n} bytes, total {received + n}/{size}")
                 if n == 0:
                     raise ConnectionError("Connection reset by peer")
                 received += n
             return received
 
         except socket.timeout:
-           raise TimeoutError("Socket recv timed out")
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug(f"_recv_into_buffer: TIMEOUT after receiving {received} bytes (requested {size})")
+            raise TimeoutError("Socket recv timed out")
 
         except ConnectionResetError:
             raise ConnectionError("Connection reset by peer")
@@ -130,6 +142,7 @@ class SyncClient(BaseClient):
         of the buffer
 
         """
+        from ..debug_utils import hex_dump
 
         # for faster local lookup
         PKT_HDR_SIZE=4
@@ -149,7 +162,7 @@ class SyncClient(BaseClient):
 
         first_pos = self._recv_pos
         total_size = 0
-        payload_write_pos = None  # Track where to write compacted payload
+        packet_count = 0
 
         while True:
             bytes_in_buffer = self._recv_len - self._recv_pos
@@ -180,31 +193,57 @@ class SyncClient(BaseClient):
                     continue
 
                 # We have complete packet (header + payload)
-                if payload_write_pos is None:
-                    # First packet - payload starts after first header
-                    payload_write_pos = first_pos + PKT_HDR_SIZE
-                elif self._recv_pos != payload_write_pos:
-                    # Multi-packet: compact by removing intermediate header
-                    # Move this packet's payload to the write position
-                    payload_start = self._recv_pos + PKT_HDR_SIZE
-                    self._recv_buf[payload_write_pos:payload_write_pos + packet_length] = \
-                        self._recv_buf[payload_start:payload_start + packet_length]
+                packet_count += 1
                 
-                payload_write_pos += packet_length
+                # Log complete packet with data
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    packet_data = bytes(self._recv_buf[self._recv_pos:self._recv_pos + PKT_HDR_SIZE + packet_length])
+                    conn_id_str = f"[conn_id={self.connection_id}]" if hasattr(self, 'connection_id') and self.connection_id >= 0 else ""
+                    self.logger.debug(hex_dump(packet_data, f"RECV sync: {conn_id_str} packet {packet_count} complete"))
+                
+                if packet_count > 1:
+                    # Multi-packet: compact by removing intermediate header
+                    # Move this packet's payload immediately after previous payload
+                    payload_src = self._recv_pos + PKT_HDR_SIZE
+                    payload_dst = first_pos + PKT_HDR_SIZE + total_size
+                    if payload_src != payload_dst:
+                        # Calculate how much data is after this packet
+                        data_after_packet = self._recv_len - (self._recv_pos + PKT_HDR_SIZE + packet_length)
+                        # Move this packet's payload
+                        self._recv_buf[payload_dst:payload_dst + packet_length] = \
+                            self._recv_buf[payload_src:payload_src + packet_length]
+                        # Move any data after this packet
+                        if data_after_packet > 0:
+                            self._recv_buf[payload_dst + packet_length:payload_dst + packet_length + data_after_packet] = \
+                                self._recv_buf[self._recv_pos + PKT_HDR_SIZE + packet_length:self._recv_len]
+                        # After compaction, adjust buffer length to account for removed header
+                        self._recv_len -= PKT_HDR_SIZE
+                
                 total_size += packet_length
 
                 # Check if this is the last packet
                 if packet_length < MAX_PKT_SIZE:
                     # Last packet - return accumulated payload
+                    if self.logger.isEnabledFor(logging.DEBUG):
+                        conn_id_str = f"[conn_id={self.connection_id}]" if hasattr(self, 'connection_id') and self.connection_id >= 0 else ""
+                        self.logger.debug(f"RECV sync: {conn_id_str} complete multi-packet message: {packet_count} packets, {total_size} bytes total")
+                    
                     self._recv_pos = first_pos + PKT_HDR_SIZE + total_size
                     return memoryview(self._recv_buf[first_pos + PKT_HDR_SIZE:first_pos + PKT_HDR_SIZE + total_size])
 
                 # Multi-packet: advance to next packet header
-                self._recv_pos += PKT_HDR_SIZE + packet_length
+                # After compaction, the next header is immediately after current payload
+                if packet_count > 1:
+                    # After compaction, next header is at: first_pos + PKT_HDR_SIZE + total_size
+                    self._recv_pos = first_pos + PKT_HDR_SIZE + total_size
+                else:
+                    # First packet, no compaction yet
+                    self._recv_pos += PKT_HDR_SIZE + packet_length
             else:
                 self._recv_len += self._recv_into_buffer()
 
     def reset_buffer(self):
+        self._recv_buf = self._default_recv_buf
         self._recv_pos = 0
         self._recv_len = 0
 
@@ -449,16 +488,29 @@ class SyncClient(BaseClient):
                 BATCH_SIZE = 1000
                 
                 self.reset_buffer()
-                for i in range(0, len(messages), BATCH_SIZE):
-                    batch = messages[i:i + BATCH_SIZE]
-                    
-                    # Write batch
-                    for message in batch:
+                
+                # For large payloads (>1MB), process one at a time to avoid buffer issues
+                # For small payloads, batch for performance
+                has_large_payload = any(len(msg.payload(self.context)) > 1024 * 1024 for msg in messages[:min(10, len(messages))])
+                
+                if has_large_payload:
+                    # Process one command at a time for large payloads
+                    # This prevents TCP buffer issues and command mixing with multi-MB payloads
+                    for message in messages:
                         self.write_stream.write_payload(message.payload(self.context), message.type(), True)
-                    
-                    # Read responses for this batch
-                    for message in batch:
                         results.append(self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet))
+                else:
+                    # Batch processing for small payloads
+                    for i in range(0, len(messages), BATCH_SIZE):
+                        batch = messages[i:i + BATCH_SIZE]
+                        
+                        # Write batch
+                        for message in batch:
+                            self.write_stream.write_payload(message.payload(self.context), message.type(), True)
+                        
+                        # Read responses for this batch
+                        for message in batch:
+                            results.append(self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet))
                         
             except DatabaseError as e:
                 raise e    

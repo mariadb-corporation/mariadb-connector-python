@@ -21,7 +21,7 @@ class LongDataTest(unittest.TestCase):
             self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")
 
         """Set up test connection and check max_allowed_packet"""
-        self.connection = create_connection()
+        self.connection = create_connection({"socket_timeout": 30})
         self.cursor = self.connection.cursor()
         
         # Check current max_allowed_packet setting
@@ -93,8 +93,7 @@ class LongDataTest(unittest.TestCase):
         
         # Create binary data slightly larger than 16MB
         data_size = 18 * 1024 * 1024  # 18MB
-        test_data = bytes(range(256)) * (data_size // 256)
-        test_data = test_data[:data_size]  # Ensure exact size
+        test_data = b'\0' + b'x' * (data_size - 1)
         
         with self.connection.cursor() as cursor:
             self.insert_long_blob(test_data, data_size, cursor)
@@ -112,8 +111,8 @@ class LongDataTest(unittest.TestCase):
         self.connection.commit()
         
         # Retrieve and verify
-        self.cursor.execute("SELECT data FROM test_long_blob WHERE id = ?", (1,))
-        result = self.cursor.fetchone()
+        cursor.execute("SELECT data FROM test_long_blob WHERE id = ?", (1,))
+        result = cursor.fetchone()
         
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
@@ -146,15 +145,15 @@ class LongDataTest(unittest.TestCase):
     
     def insert_multiple_long_columns(self, test_data1: str, test_data2: str, test_data3: bytes, data_size: int, cursor):
         # Insert long data
-        self.cursor.execute(
+        cursor.execute(
             "INSERT INTO test_multiple_long (data1, data2, data3) VALUES (?, ?, ?)",
             (test_data1, test_data2, test_data3)
         )
         self.connection.commit()
         
         # Retrieve and verify
-        self.cursor.execute("SELECT data1, data2, data3 FROM test_multiple_long WHERE id = ?", (1,))
-        result = self.cursor.fetchone()
+        cursor.execute("SELECT data1, data2, data3 FROM test_multiple_long WHERE id = ?", (1,))
+        result = cursor.fetchone()
         
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
@@ -193,15 +192,15 @@ class LongDataTest(unittest.TestCase):
     
     def executemany_with_long_data(self, rows: list[tuple[str, bytes]], data_size: int, cursor):
         # Insert multiple rows with long data
-        self.cursor.executemany(
+        cursor.executemany(
             "INSERT INTO test_executemany_long (name, data) VALUES (?, ?)",
             rows
         )
         self.connection.commit()
         
         # Verify all rows
-        self.cursor.execute("SELECT name, data FROM test_executemany_long ORDER BY id")
-        results = self.cursor.fetchall()
+        cursor.execute("SELECT name, data FROM test_executemany_long ORDER BY id")
+        results = cursor.fetchall()
         
         self.assertEqual(len(results), len(rows))
         for i, (name, data) in enumerate(results):
@@ -239,8 +238,8 @@ class LongDataTest(unittest.TestCase):
         self.connection.commit()
         
         # Retrieve using prepared statement
-        self.cursor.execute("SELECT data FROM test_prepared_long WHERE id = ?", (1,))
-        result = self.cursor.fetchone()
+        cursor.execute("SELECT data FROM test_prepared_long WHERE id = ?", (1,))
+        result = cursor.fetchone()
         
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
@@ -358,8 +357,7 @@ class LongDataTest(unittest.TestCase):
         
         # Use 90% of max_allowed_packet to leave room for protocol overhead
         data_size = int(self.max_allowed_packet * 0.9)
-        test_data = bytes([i % 256 for i in range(min(1000, data_size))]) * (data_size // 1000)
-        test_data = test_data[:data_size]
+        test_data = b'\0' + b'x' * (data_size - 1)
         
         # Insert data near boundary
         self.cursor.execute(

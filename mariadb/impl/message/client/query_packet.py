@@ -16,11 +16,9 @@ except ImportError:
     HAS_NUMPY = False
 
 from ...client.context import Context
-from ...sql_parser import split_sql_parts
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
-from ..payload_stream import PayloadStream
 from ....exceptions import NotSupportedError
 
 BINARY_PREFIX: bytes = bytearray(b"_binary'")
@@ -39,7 +37,7 @@ class QueryPacket(ClientMessage):
         self.sql = sql
         
     def payload(self, context: Context) -> bytes:
-        return b'\x03' + self.sql.encode('utf-8')
+        return b'\0\0\0\0\x03' + self.sql.encode('utf-8')
 
     def is_binary(self) -> bool:
         return False
@@ -68,7 +66,6 @@ class QueryWithParamPacket(ClientMessage):
         
     def payload(self, context: Context) -> bytes:
         """Generate COM_QUERY packet payload with SQL and bound parameters"""
-        stream = PayloadStream()
         no_backslash_escapes = context.server_status & NO_BACKSLASH_ESCAPES > 0
 
         # Write SQL fragments interleaved with parameters
@@ -78,7 +75,7 @@ class QueryWithParamPacket(ClientMessage):
         converter = PARAM_CONVERT_TBL
         parts = [b''] * (len(self.param_positions) + 2 + 1)
         
-        parts[0] = b'\x03'
+        parts[0] = b'\0\0\0\0\x03'
         count= 1
         # Iterate through placeholder positions (they come in pairs: start, end)
         for i in range(0, len(self.param_positions), 2):
@@ -104,7 +101,7 @@ class QueryWithParamPacket(ClientMessage):
         # Write remaining SQL after last placeholder
         if last_pos < len(self.sql_bytes):
             parts[count] = self.sql_bytes[last_pos:]
-        return b'' . join(parts)
+        return b''.join(parts)
 
     def is_binary(self) -> bool:
         return False

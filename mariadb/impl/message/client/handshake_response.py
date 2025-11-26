@@ -24,7 +24,6 @@ class HandshakeResponse(ClientMessage):
     def payload(self, context: Context) -> bytes:
         """Generate handshake response payload as bytes"""
         stream = PayloadStream()
-        
         # Client capabilities (4 bytes)
         stream.write_uint32(context.client_capabilities & 0xFFFFFFFF)
         

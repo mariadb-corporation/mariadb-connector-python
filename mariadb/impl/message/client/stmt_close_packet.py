@@ -25,7 +25,7 @@ class StmtClosePacket(ClientMessage):
         self.statement_id = statement_id
 
     def payload(self, context: Context) -> bytes:
-        return b'\x19' + struct.pack('<I', self.statement_id)
+        return b'\0\0\0\0\x19' + struct.pack('<I', self.statement_id)
     
     def is_binary(self) -> bool:
         return True

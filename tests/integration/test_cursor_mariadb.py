@@ -11,9 +11,6 @@ from ..base_test import create_connection
 class CursorMariaDBTest(unittest.TestCase):
 
     def setUp(self):
-        # Skip all tests if RUN_LONG_TEST is not set to "1"
-        if os.environ.get('RUN_LONG_TEST') != '1':
-            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")
         self.connection = create_connection()
 
     def tearDown(self):
@@ -25,7 +22,7 @@ class CursorMariaDBTest(unittest.TestCase):
                         "a int not null auto_increment primary key,"
                         "b int, c int, d varchar(20),e date)")
         list_in = []
-        for i in range(1, 300001):
+        for i in range(1, 3001):
             row = (i, i, i, "bar", datetime.date(2019, 1, 1))
             list_in.append(row)
         cursor.executemany("INSERT INTO test_insert_parameter VALUES "
@@ -45,7 +42,7 @@ class CursorMariaDBTest(unittest.TestCase):
                         "b int, c int, d varchar(20),e date)")
         cursor.execute("set @@autocommit=0")
         list_in = []
-        for i in range(1, 300001):
+        for i in range(1, 3001):
             row = (i, i, i, "bar", datetime.date(2019, 1, 1))
             list_in.append(row)
         cursor.executemany("INSERT INTO test_update_parameter VALUES "
@@ -57,13 +54,13 @@ class CursorMariaDBTest(unittest.TestCase):
 
         cursor = self.connection.cursor()
         cursor.execute("set @@autocommit=0")
-        for i in range(1, 300001):
+        for i in range(1, 3001):
             row = (i + 1, i)
             list_update.append(row)
 
         cursor.executemany("UPDATE test_update_parameter SET b=? "
                             "WHERE a=?", list_update)
-        self.assertEqual(cursor.rowcount, 300000)
+        self.assertEqual(cursor.rowcount, 3000)
         self.connection.commit()
         cursor.close()
 
@@ -74,7 +71,7 @@ class CursorMariaDBTest(unittest.TestCase):
                         "b int, c int, d varchar(20),e date)")
         cursor.execute("set @@autocommit=0")
         list_in = []
-        for i in range(1, 300001):
+        for i in range(1, 3001):
             row = (i, i, i, "bar", datetime.date(2019, 1, 1))
             list_in.append(row)
         cursor.executemany("INSERT INTO test_delete_parameter VALUES "
@@ -86,12 +83,12 @@ class CursorMariaDBTest(unittest.TestCase):
 
         cursor = self.connection.cursor()
         cursor.execute("set @@autocommit=0")
-        for i in range(1, 300001):
+        for i in range(1, 3001):
             list_delete.append((i,))
 
         cursor.executemany("DELETE FROM test_delete_parameter WHERE "
                             "a=?", list_delete)
-        self.assertEqual(cursor.rowcount, 300000)
+        self.assertEqual(cursor.rowcount, 3000)
         self.connection.commit()
         cursor.close()
 

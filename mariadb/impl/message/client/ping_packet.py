@@ -11,7 +11,7 @@ class PingPacket(ClientMessage):
     """
         
     def payload(self, context: Context) -> bytes:
-        return b'\x0e'
+        return b'\0\0\0\0\x0e'
 
     def is_binary(self) -> bool:
         return False

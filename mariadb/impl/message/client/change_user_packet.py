@@ -37,7 +37,6 @@ class ChangeUserPacket(ClientMessage):
     
     def payload(self, context: Context) -> bytes:
         stream = PayloadStream()
-        
         # Command byte
         stream.write_byte(0x11)  # COM_CHANGE_USER
         

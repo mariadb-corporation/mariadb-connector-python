@@ -19,7 +19,8 @@ class SslRequestPacket(ClientMessage):
     def payload(self, context: Context) -> bytes:
         # Pack SSL request packet: client_capabilities (4) + max_packet_size (4) + charset (1) + reserved (19) + extended_capabilities (4) = 32 bytes
         return struct.pack(
-            '<IIB19sI',  # Little-endian: uint32, uint32, byte, 19 bytes, uint32
+            '<IIIB19sI',  # Little-endian: uint32, uint32, byte, 19 bytes, uint32
+            0, # header
             self.client_capabilities & 0xFFFFFFFF,  # Client capabilities (4 bytes)
             1024 * 1024 * 1024,  # Max packet size (4 bytes)
             45,  # Charset (1 byte)
