@@ -5,7 +5,7 @@
 # Copyright (c) 2015-2025 MariaDB Corporation Ab
 
 """
-Benchmark runner script for comparing mariadb, mariadb_c, and pymysql.
+Benchmark runner script for comparing mariadb, mariadb_c, pymysql, and mysql-connector-python.
 
 Usage:
     # Run all benchmarks for all drivers
@@ -16,6 +16,7 @@ Usage:
     
     # Run for specific driver
     python run_benchmarks.py --driver mariadb_c
+    python run_benchmarks.py --driver mysql_connector
     
     # Save results to JSON
     python run_benchmarks.py --json results.json
@@ -41,7 +42,7 @@ BENCHMARKS = [
     'test_bench_insert_batch.py',
 ]
 
-DRIVERS = ['mariadb', 'mariadb_c', 'pymysql']
+DRIVERS = ['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector']
 
 
 def run_pytest_benchmark(benchmark_file=None, driver=None, output_json=None):
@@ -159,8 +160,8 @@ def generate_comparison_report(json_files):
                 fastest_ops = ops
                 fastest_driver = driver
         
-        # Print header
-        print(f"{'Driver':<15} {'Mean (ms)':<15} {'OPS':<15} {'vs Fastest':<20}")
+        # Print header with wider driver column to accommodate "mysql_connector (Python)"
+        print(f"{'Driver':<25} {'Mean (ms)':<15} {'OPS':<15} {'vs Fastest':<20}")
         print("-" * 120)
         
         # Print results sorted by OPS (descending)
@@ -175,14 +176,15 @@ def generate_comparison_report(json_files):
                 slowdown = fastest_ops / ops
                 comparison = f"{slowdown:.2f}x slower"
             
-            print(f"{driver:<15} {mean_ms:<15.3f} {ops:<15.2f} {comparison:<20}")
+            # Driver name is already formatted with implementation type from pytest
+            print(f"{driver:<25} {mean_ms:<15.3f} {ops:<15.2f} {comparison:<20}")
     
     print("\n" + "=" * 120)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Run benchmarks comparing mariadb, mariadb_c, and pymysql'
+        description='Run benchmarks comparing mariadb, mariadb_c, pymysql, and mysql-connector-python'
     )
     parser.add_argument(
         '--benchmark',

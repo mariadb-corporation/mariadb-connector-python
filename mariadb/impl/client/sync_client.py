@@ -66,7 +66,7 @@ class SyncClient(BaseClient):
         # Read buffer management
         self._default_recv_buf: bytearray = bytearray(8192)
         self._recv_buf: bytearray = self._default_recv_buf
-        
+        self._recv_buf_mv = memoryview(self._recv_buf)
         self._recv_pos = 0
         self._recv_len = 0
 
@@ -96,7 +96,6 @@ class SyncClient(BaseClient):
         
 
         received = 0
-        mv= memoryview(self._recv_buf)
 
         # Keep trying to read until we have enough data or there's nothing left
         try:
@@ -104,14 +103,14 @@ class SyncClient(BaseClient):
                 self.logger.debug(f"_recv_into_buffer: requesting size={size}, buffer_len={len(self._recv_buf)}, recv_len={self._recv_len}, recv_pos={self._recv_pos}")
             
             if size == 0:
-                n = self.socket.recv_into(mv[self._recv_len + received:])
+                n = self.socket.recv_into(self._recv_buf_mv[self._recv_len + received:])
                 if self.logger.isEnabledFor(logging.DEBUG):
                     self.logger.debug(f"_recv_into_buffer: received {n} bytes (no size limit)")
                 if n == 0:
                     raise ConnectionError("Connection reset by peer")
                 return n
             while received < size:
-                n = self.socket.recv_into(mv[self._recv_len + received:], size - received)
+                n = self.socket.recv_into(self._recv_buf_mv[self._recv_len + received:], size - received)
                 if self.logger.isEnabledFor(logging.DEBUG):
                     self.logger.debug(f"_recv_into_buffer: received {n} bytes, total {received + n}/{size}")
                 if n == 0:
@@ -130,9 +129,6 @@ class SyncClient(BaseClient):
         except OSError as e:
             # Generic socket error (broken pipe, network down, etc.)
             raise ConnectionError(f"Socket error: {e}") from e
-
-        return received  # Return the total number of bytes read
-
 
     def read_payload(self):
         """
@@ -229,7 +225,7 @@ class SyncClient(BaseClient):
                         self.logger.debug(f"RECV sync: {conn_id_str} complete multi-packet message: {packet_count} packets, {total_size} bytes total")
                     
                     self._recv_pos = first_pos + PKT_HDR_SIZE + total_size
-                    return memoryview(self._recv_buf[first_pos + PKT_HDR_SIZE:first_pos + PKT_HDR_SIZE + total_size])
+                    return self._recv_buf_mv[first_pos + PKT_HDR_SIZE:first_pos + PKT_HDR_SIZE + total_size]
 
                 # Multi-packet: advance to next packet header
                 # After compaction, the next header is immediately after current payload
@@ -244,6 +240,7 @@ class SyncClient(BaseClient):
 
     def reset_buffer(self):
         self._recv_buf = self._default_recv_buf
+        self._recv_buf_mv = memoryview(self._recv_buf)
         self._recv_pos = 0
         self._recv_len = 0
 

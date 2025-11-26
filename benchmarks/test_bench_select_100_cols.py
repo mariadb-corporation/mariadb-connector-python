@@ -33,9 +33,9 @@ def test_select_100_cols_text(benchmark, connection, driver_name):
 def test_select_100_cols_binary(benchmark, connection, driver_name):
     """Benchmark SELECT 100 columns using binary protocol (prepared statement)."""
     
-    # Skip for pymysql as it doesn't support binary protocol
-    if driver_name == 'pymysql':
-        pytest.skip("pymysql doesn't support binary protocol")
+    # Skip for drivers that don't support binary protocol
+    if driver_name in ['pymysql', 'mysql_connector']:
+        pytest.skip(f"{driver_name} doesn't support binary protocol")
     
     def select_100_cols():
         cursor = connection.cursor(binary=True)

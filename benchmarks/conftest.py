@@ -22,6 +22,9 @@ DB_CONFIG = {
     'database': os.environ.get('TEST_DB_DATABASE', 'testp'),
 }
 
+# Global variable to store mysql_connector implementation type
+_mysql_connector_impl = None
+
 
 def get_driver_module(driver_name):
     """Import and return the specified driver module."""
@@ -33,20 +36,73 @@ def get_driver_module(driver_name):
     elif driver_name == 'pymysql':
         import pymysql
         return pymysql
+    elif driver_name == 'mysql_connector':
+        global _mysql_connector_impl
+        import mysql.connector
+        # Detect if using C extension or pure Python implementation
+        # The C extension module is _mysql_connector
+        try:
+            import _mysql_connector
+            from mysql.connector.connection_cext import CMySQLConnection
+            _mysql_connector_impl = "C"
+            impl_type = "C extension (CMySQLConnection)"
+        except ImportError:
+            _mysql_connector_impl = "Python"
+            impl_type = "pure Python (MySQLConnection)"
+        print(f"\n{driver_name} using implementation: {impl_type}")
+        print(f"Note: mysql-connector-python C extension is slower than mariadb-connector-python C implementation")
+        return mysql.connector
     else:
         raise ValueError(f"Unknown driver: {driver_name}")
 
 
-@pytest.fixture(scope='session', params=['mariadb', 'mariadb_c', 'pymysql'])
+def _get_driver_ids():
+    """Generate driver IDs for parametrization, detecting mysql_connector implementation type."""
+    global _mysql_connector_impl
+    
+    # Detect mysql_connector implementation type early
+    if _mysql_connector_impl is None:
+        try:
+            import mysql.connector
+            # Create a test connection to see which implementation is actually used
+            # Check the default connection class
+            test_config = {'host': 'localhost', 'user': 'root'}
+            try:
+                # Try to determine from connection class without actually connecting
+                # Check if CMySQLConnection is available and will be used by default
+                from mysql.connector.connection_cext import CMySQLConnection
+                _mysql_connector_impl = "C"
+            except ImportError:
+                _mysql_connector_impl = "Python"
+        except Exception:
+            # Fallback: check if _mysql_connector module exists
+            try:
+                import _mysql_connector
+                _mysql_connector_impl = "C"
+            except ImportError:
+                _mysql_connector_impl = "Python"
+    
+    ids = ['mariadb', 'mariadb_c', 'pymysql']
+    if _mysql_connector_impl:
+        ids.append(f'mysql_connector ({_mysql_connector_impl})')
+    else:
+        ids.append('mysql_connector')
+    
+    return ids
+
+
+@pytest.fixture(scope='session', params=['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector'], ids=_get_driver_ids())
 def driver_name(request):
-    """Parametrize tests across all three drivers."""
+    """Parametrize tests across all drivers."""
     return request.param
 
 
 @pytest.fixture(scope='session')
 def driver(driver_name):
     """Get the driver module for the current test."""
-    return get_driver_module(driver_name)
+    # Extract base driver name (remove implementation type suffix if present)
+    base_name = driver_name.split(' (')[0] if ' (' in driver_name else driver_name
+    return get_driver_module(base_name)
 
 
 @pytest.fixture(scope='function')

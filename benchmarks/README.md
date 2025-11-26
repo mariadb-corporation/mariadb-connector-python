@@ -22,6 +22,7 @@ make bench-all
 python run_benchmarks.py --driver mariadb --json benchmark_mariadb.json
 python run_benchmarks.py --driver mariadb_c --json benchmark_mariadb_c.json
 python run_benchmarks.py --driver pymysql --json benchmark_pymysql.json
+python run_benchmarks.py --driver mysql_connector --json benchmark_mysql_connector.json
 
 # Generate comparison report
 python run_benchmarks.py --compare

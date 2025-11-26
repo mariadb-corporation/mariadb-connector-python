@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-DRIVERS = ["mariadb", "mariadb_c", "pymysql"]
+DRIVERS = ["mariadb", "mariadb_c", "pymysql", "mysql_connector"]
 
 
 def check_database_connection() -> bool:
