@@ -174,7 +174,7 @@ class SyncClient(BaseClient):
 
                 # check if data is in buffer
                 missing = 0
-                if bytes_in_buffer == PKT_HDR_SIZE and sequence >= 0:
+                if bytes_in_buffer == PKT_HDR_SIZE:
                    missing= packet_length
                    self._recv_pos += 4
                 elif bytes_in_buffer < PKT_HDR_SIZE + packet_length:
@@ -186,6 +186,7 @@ class SyncClient(BaseClient):
                 if missing > 0:
                     self._ensure_space(missing)
                     self._recv_len += self._recv_into_buffer(missing)
+                    continue
 
                 # if packet_size is
                 # below MAX_PACKET_SIZE we stored all data
