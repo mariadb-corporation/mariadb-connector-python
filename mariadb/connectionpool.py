@@ -41,7 +41,7 @@ class ConnectionPool(object):
     - **`pool_size`** (``int``) - Size of pool. The Maximum allowed number is 64. Default to 5
     - **`pool_reset_connection`** (``bool``) - Will reset the connection before returning it to the pool. Default to True.
     - **`pool_validation_interval`** (``int``) - Specifies the validation interval in milliseconds after which the status of a connection requested from the pool is checked. A value of 0 means that the status will always be checked. Default to 500 (Added in version 1.1.6)
-    - **\*\*kwargs** - Optional additional connection arguments, as described in mariadb.connect() method.
+    - **\\*\\*kwargs** - Optional additional connection arguments, as described in mariadb.connect() method.
 
     """
 
