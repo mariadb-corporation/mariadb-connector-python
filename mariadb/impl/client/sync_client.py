@@ -148,15 +148,13 @@ class SyncClient(BaseClient):
             self._recv_pos = 0
 
         first_pos = self._recv_pos
-        total_size= 0
-        multi_packet= 0
+        total_size = 0
+        payload_write_pos = None  # Track where to write compacted payload
 
         while True:
-
             bytes_in_buffer = self._recv_len - self._recv_pos
 
             if bytes_in_buffer > 0:
-
                 # buffer must contain at least a packet header
                 if bytes_in_buffer < PKT_HDR_SIZE:
                     missing = PKT_HDR_SIZE - bytes_in_buffer
@@ -170,25 +168,36 @@ class SyncClient(BaseClient):
                 sequence = self._recv_buf[self._recv_pos + 3]
                 self.sequence.set(sequence)
 
-                total_size += packet_length
-
                 # check if we have complete packet data
                 if bytes_in_buffer < PKT_HDR_SIZE + packet_length:
                     # Need to read more data
                     missing = PKT_HDR_SIZE + packet_length - bytes_in_buffer
                     # For MAX_PKT_SIZE packets, also try to read next packet header
                     if packet_length == MAX_PKT_SIZE:
-                        missing += 4
+                        missing += PKT_HDR_SIZE
                     self._ensure_space(missing)
                     self._recv_len += self._recv_into_buffer(missing)
                     continue
 
                 # We have complete packet (header + payload)
+                if payload_write_pos is None:
+                    # First packet - payload starts after first header
+                    payload_write_pos = first_pos + PKT_HDR_SIZE
+                elif self._recv_pos != payload_write_pos:
+                    # Multi-packet: compact by removing intermediate header
+                    # Move this packet's payload to the write position
+                    payload_start = self._recv_pos + PKT_HDR_SIZE
+                    self._recv_buf[payload_write_pos:payload_write_pos + packet_length] = \
+                        self._recv_buf[payload_start:payload_start + packet_length]
+                
+                payload_write_pos += packet_length
+                total_size += packet_length
+
                 # Check if this is the last packet
                 if packet_length < MAX_PKT_SIZE:
                     # Last packet - return accumulated payload
-                    self._recv_pos = first_pos + 4 + total_size
-                    return memoryview(self._recv_buf[first_pos + 4:first_pos + 4 + total_size])
+                    self._recv_pos = first_pos + PKT_HDR_SIZE + total_size
+                    return memoryview(self._recv_buf[first_pos + PKT_HDR_SIZE:first_pos + PKT_HDR_SIZE + total_size])
 
                 # Multi-packet: advance to next packet header
                 self._recv_pos += PKT_HDR_SIZE + packet_length
