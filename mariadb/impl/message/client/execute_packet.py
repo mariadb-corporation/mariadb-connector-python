@@ -59,7 +59,7 @@ class ExecutePacket(ClientMessage):
         self.parameters = parameters or []
         self.sql = sql
 
-    def payload(self, context: Context) -> bytes:
+    def payload(self, context: Context) -> bytearray:
         stream = PayloadStream()
         stream.write_byte(self.COM_STMT_EXECUTE)
         stream.write_bytes(_STRUCT_I.pack(self.statement_id))

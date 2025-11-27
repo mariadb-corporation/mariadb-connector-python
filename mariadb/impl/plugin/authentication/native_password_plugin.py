@@ -55,13 +55,17 @@ class NativePasswordPlugin(AuthenticationPlugin):
     async def processAsync(self, read_payload_func: Callable[[], Awaitable[memoryview]], write_stream: AsyncWriteStream, context: Context) -> memoryview:
         """Process native password plugin authentication (async)"""
         encrypted = self._build_auth_payload()
-        await write_stream.write_payload(b'\0\0\0\0' + encrypted, "NATIVE_PASSWORD", reset_sequence=False)
+        payload = bytearray(b'\0\0\0\0')
+        payload.extend(encrypted)
+        await write_stream.write_payload(payload, "NATIVE_PASSWORD", reset_sequence=False)
         return await read_payload_func()
     
     def processSync(self, read_payload_func: Callable[[], memoryview], write_stream: SyncWriteStream, context: Context) -> memoryview:
         """Process native password plugin authentication (sync)"""
         encrypted = self._build_auth_payload()
-        write_stream.write_payload(b'\0\0\0\0' + encrypted, "NATIVE_PASSWORD", reset_sequence=False)
+        payload = bytearray(b'\0\0\0\0')
+        payload.extend(encrypted)
+        write_stream.write_payload(payload, "NATIVE_PASSWORD", reset_sequence=False)
         return read_payload_func()
     
     def is_mitm_proof(self) -> bool:

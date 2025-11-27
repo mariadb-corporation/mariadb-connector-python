@@ -30,9 +30,9 @@ class PayloadStream:
         """Initialize payload stream with empty buffer"""
         self._buffer: bytearray = bytearray(4)
     
-    def get_payload(self) -> bytes:
-        """Return the accumulated payload as bytes"""
-        return bytes(self._buffer)
+    def get_payload(self) -> bytearray:
+        """Return the accumulated payload as bytearray (avoids copy)"""
+        return self._buffer
     
     def write_byte(self, value: int) -> None:
         """Write a single byte"""

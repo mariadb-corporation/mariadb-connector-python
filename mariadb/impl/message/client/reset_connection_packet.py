@@ -19,8 +19,8 @@ class ResetConnectionPacket(ClientMessage):
     
     COM_RESET_CONNECTION = 0x1F
         
-    def payload(self, context: Context) -> bytes:
-        return b'\0\0\0\0\x1f'
+    def payload(self, context: Context) -> bytearray:
+        return bytearray(b'\0\0\0\0\x1f')
 
     def is_binary(self) -> bool:
         return False

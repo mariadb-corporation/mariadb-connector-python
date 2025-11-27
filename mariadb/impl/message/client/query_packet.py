@@ -40,8 +40,10 @@ class QueryPacket(ClientMessage):
         """Initialize COM_QUERY packet with SQL"""
         self.sql = sql
         
-    def payload(self, context: Context) -> bytes:
-        return b'\0\0\0\0\x03' + self.sql.encode('utf-8')
+    def payload(self, context: Context) -> bytearray:
+        result = bytearray(b'\0\0\0\0\x03')
+        result.extend(self.sql.encode('utf-8'))
+        return result
 
     def is_binary(self) -> bool:
         return False
@@ -68,7 +70,7 @@ class QueryWithParamPacket(ClientMessage):
         self.param_positions = param_positions
         self.parameters = parameters
         
-    def payload(self, context: Context) -> bytes:
+    def payload(self, context: Context) -> bytearray:
         """Generate COM_QUERY packet payload with SQL and bound parameters"""
         no_backslash_escapes = context.server_status & NO_BACKSLASH_ESCAPES > 0
 
@@ -123,8 +125,9 @@ class QueryWithParamPacket(ClientMessage):
             parts[count] = sql_bytes[last_pos:]
             count += 1
         
-        # Only join the parts we actually used
-        return b''.join(parts[:count])
+        # Join parts directly into bytearray (single allocation, no intermediate bytes object)
+        # bytearray().join() is available in Python 3.x and avoids creating intermediate bytes
+        return bytearray().join(parts[:count])
 
     def is_binary(self) -> bool:
         return False

@@ -24,8 +24,10 @@ class StmtClosePacket(ClientMessage):
         """Initialize COM_STMT_CLOSE packet with statement ID"""
         self.statement_id = statement_id
 
-    def payload(self, context: Context) -> bytes:
-        return b'\0\0\0\0\x19' + struct.pack('<I', self.statement_id)
+    def payload(self, context: Context) -> bytearray:
+        result = bytearray(b'\0\0\0\0\x19')
+        result.extend(struct.pack('<I', self.statement_id))
+        return result
     
     def is_binary(self) -> bool:
         return True

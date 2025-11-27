@@ -30,12 +30,12 @@ class BaseWriteStream(ABC):
         self.sequence: MutableInt = MutableInt(-1)
     
     @abstractmethod
-    def write_payload(self, payload: bytes, packet_type: str = "", reset_sequence: bool = True) -> None:
+    def write_payload(self, payload: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
         Write payload with MariaDB packet framing
         
         Args:
-            payload: Payload bytes to send
+            payload: Payload bytearray to send (first 4 bytes reserved for header)
             packet_type: Packet type for logging (e.g., "COM_QUERY")
             reset_sequence: Whether to reset sequence number before sending
         """
@@ -60,12 +60,12 @@ class AsyncWriteStream(BaseWriteStream):
         self.writer: asyncio.StreamWriter = writer
         super().__init__(connection_id)
     
-    async def write_payload(self, payload: bytes, packet_type: str = "", reset_sequence: bool = True) -> None:
+    async def write_payload(self, payload: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
         Write payload with MariaDB packet framing (async version)
         
         Args:
-            payload: Payload bytes with first 4 bytes reserved for header
+            payload: Payload bytearray with first 4 bytes reserved for header
             packet_type: Packet type for logging (e.g., "COM_QUERY")
             reset_sequence: Whether to reset sequence number before sending
         """
@@ -80,20 +80,20 @@ class AsyncWriteStream(BaseWriteStream):
         if payload_len == 0:
             seq = self.sequence.increment_and_get()
             # Write header into first 4 bytes
-            payload_buf = bytearray(payload)
-            payload_buf[0:4] = b'\x00\x00\x00' + bytes([seq])
-            
+            payload[0:3] = b'\x00\x00\x00'
+            payload[3] = seq
+
             if logger.isEnabledFor(logging.DEBUG):
                 conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
                 packet_type_str = f" {packet_type}" if packet_type else ""
-                logger.debug(hex_dump(bytes(payload_buf[0:4]), f"SEND async: {conn_id_str}{packet_type_str}"))
+                logger.debug(hex_dump(bytes(payload[0:4]), f"SEND async: {conn_id_str}{packet_type_str}"))
             
-            self.writer.write(payload_buf[0:4])
+            self.writer.write(payload[0:4])
             await self.writer.drain()
             return
         
-        # Convert to bytearray for in-place header writing
-        payload_buf = bytearray(payload)
+        # Use memoryview to avoid buffer copies when slicing
+        payload_view = memoryview(payload)
         
         # Handle packet splitting for large payloads
         sent = 0
@@ -108,20 +108,20 @@ class AsyncWriteStream(BaseWriteStream):
             
             # Write header 4 bytes before the chunk data
             header_pos = chunk_start - 4
-            payload_buf[header_pos] = chunk_size & 0xff
-            payload_buf[header_pos + 1] = (chunk_size >> 8) & 0xff
-            payload_buf[header_pos + 2] = (chunk_size >> 16) & 0xff
-            payload_buf[header_pos + 3] = seq
+            payload[header_pos] = chunk_size & 0xff
+            payload[header_pos + 1] = (chunk_size >> 8) & 0xff
+            payload[header_pos + 2] = (chunk_size >> 16) & 0xff
+            payload[header_pos + 3] = seq
             
             # Log if debug enabled
             if logger.isEnabledFor(logging.DEBUG):
-                packet = bytes(payload_buf[header_pos:chunk_end])
+                packet = payload_view[header_pos:chunk_end]
                 conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
                 packet_type_str = f" {packet_type}" if packet_type else ""
                 logger.debug(hex_dump(packet, f"SEND async: {conn_id_str}{packet_type_str}"))
             
-            # Send packet: header + chunk data
-            self.writer.write(payload_buf[header_pos:chunk_end])
+            # Send packet: header + chunk data using memoryview (no copy)
+            self.writer.write(payload_view[header_pos:chunk_end])
             sent += chunk_size
         
         # Flush all buffered data
@@ -146,12 +146,12 @@ class SyncWriteStream(BaseWriteStream):
         # Check once if sendmsg is supported (Unix) or if we need sendall (Windows)
         self.has_sendmsg = hasattr(socket, 'sendmsg')
     
-    def write_payload(self, payload: bytes, packet_type: str = "", reset_sequence: bool = True) -> None:
+    def write_payload(self, payload: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
         """
         Write payload with MariaDB packet framing (sync version)
         
         Args:
-            payload: Payload bytes with first 4 bytes reserved for header
+            payload: Payload bytearray with first 4 bytes reserved for header
             packet_type: Packet type for logging (e.g., "COM_QUERY")
             reset_sequence: Whether to reset sequence number before sending
         """
@@ -166,23 +166,22 @@ class SyncWriteStream(BaseWriteStream):
         if payload_len == 0:
             seq = self.sequence.increment_and_get()
             # Write header into first 4 bytes
-            payload_buf = bytearray(payload)
-            payload_buf[0:4] = b'\x00\x00\x00' + bytes([seq])
-            
+            payload[0:3] = b'\x00\x00\x00'
+            payload[3] = seq
+
             if logger.isEnabledFor(logging.DEBUG):
                 conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
                 packet_type_str = f" {packet_type}" if packet_type else ""
-                logger.debug(hex_dump(bytes(payload_buf[0:4]), f"SEND sync: {conn_id_str}{packet_type_str}"))
+                logger.debug(hex_dump(bytes(payload[0:4]), f"SEND sync: {conn_id_str}{packet_type_str}"))
             
-            self.socket.sendall(payload_buf[0:4])
+            self.socket.sendall(payload[0:4])
             return
         
-        # Convert to bytearray for in-place header writing
-        payload_buf = bytearray(payload)
+        # Use memoryview to avoid buffer copies when slicing
+        payload_view = memoryview(payload)
         
         # Handle packet splitting for large payloads
         sent = 0  # Track how much data we've sent
-        
         
         while sent < payload_len:
             chunk_size = min(MAX_PACKET_SIZE, payload_len - sent)
@@ -195,20 +194,20 @@ class SyncWriteStream(BaseWriteStream):
             # Write header 4 bytes before the chunk data
             header_pos = chunk_start - 4
             
-            payload_buf[header_pos] = chunk_size & 0xff
-            payload_buf[header_pos + 1] = (chunk_size >> 8) & 0xff
-            payload_buf[header_pos + 2] = (chunk_size >> 16) & 0xff
-            payload_buf[header_pos + 3] = seq
+            payload[header_pos] = chunk_size & 0xff
+            payload[header_pos + 1] = (chunk_size >> 8) & 0xff
+            payload[header_pos + 2] = (chunk_size >> 16) & 0xff
+            payload[header_pos + 3] = seq
             
             # Log if debug enabled
             if logger.isEnabledFor(logging.DEBUG):
-                packet = bytes(payload_buf[header_pos:chunk_end])
+                packet = bytes(payload_view[header_pos:chunk_end])
                 conn_id_str = f"[conn_id={self.connection_id}]" if self.connection_id >= 0 else ""
                 packet_type_str = f" {packet_type}" if packet_type else ""
                 logger.debug(hex_dump(packet, f"SEND sync: {conn_id_str}{packet_type_str}"))
             
-            # Send packet: header + chunk data
-            self.socket.sendall(payload_buf[header_pos:chunk_end])
+            # Send packet: header + chunk data using memoryview (no copy)
+            self.socket.sendall(payload_view[header_pos:chunk_end])
             
             sent += chunk_size
         

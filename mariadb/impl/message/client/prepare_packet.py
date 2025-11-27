@@ -17,8 +17,10 @@ class PreparePacket(ClientMessage):
         """Initialize COM_STMT_PREPARE packet with SQL statement"""
         self.sql = sql
         
-    def payload(self, context: Context) -> bytes:
-        return b'\0\0\0\0\x16' + self.sql.encode('utf-8')
+    def payload(self, context: Context) -> bytearray:
+        result = bytearray(b'\0\0\0\0\x16')
+        result.extend(self.sql.encode('utf-8'))
+        return result
 
     def is_binary(self) -> bool:
         return True

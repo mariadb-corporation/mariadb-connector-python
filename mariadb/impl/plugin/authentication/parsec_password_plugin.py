@@ -95,7 +95,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        await write_stream.write_payload(b'\0\0\0\0', "PARSEC_REQUEST_SALT", reset_sequence=False)
+        await write_stream.write_payload(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", reset_sequence=False)
 
         # Step 2: Read server response with salt and parameters
         response = await read_payload_func()
@@ -122,7 +122,9 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         
         # Send client scramble + signature to server
-        payload = b'\0\0\0\0' + client_scramble + signature
+        payload = bytearray(b'\0\0\0\0')
+        payload.extend(client_scramble)
+        payload.extend(signature)
         await write_stream.write_payload(payload, "PARSEC_AUTH", reset_sequence=False)
 
         # Read final response
@@ -137,7 +139,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        write_stream.write_payload(b'\0\0\0\0', "PARSEC_REQUEST_SALT", reset_sequence=False)
+        write_stream.write_payload(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", reset_sequence=False)
         
         # Step 2: Read server response with salt and parameters
         response = read_payload_func()
@@ -162,7 +164,9 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         
         # Send client scramble + signature to server
-        payload = b'\0\0\0\0' + client_scramble + signature
+        payload = bytearray(b'\0\0\0\0')
+        payload.extend(client_scramble)
+        payload.extend(signature)
         write_stream.write_payload(payload, "PARSEC_AUTH", reset_sequence=False)
         
         # Read final response

@@ -10,8 +10,8 @@ class PingPacket(ClientMessage):
     Ping packet for connection testing
     """
         
-    def payload(self, context: Context) -> bytes:
-        return b'\0\0\0\0\x0e'
+    def payload(self, context: Context) -> bytearray:
+        return bytearray(b'\0\0\0\0\x0e')
 
     def is_binary(self) -> bool:
         return False

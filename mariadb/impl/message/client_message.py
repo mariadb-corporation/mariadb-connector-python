@@ -15,8 +15,8 @@ class ClientMessage(ABC):
     """
 
     @abstractmethod
-    def payload(self, context: Context) -> bytes:
-        """Generate message payload as bytes (without packet header)."""
+    def payload(self, context: Context) -> bytearray:
+        """Generate message payload as bytearray (without packet header)."""
         ...
 
     @abstractmethod
