@@ -26,7 +26,7 @@ class NativePasswordPlugin(AuthenticationPlugin):
         self.seed = seed
 
     @staticmethod
-    def encrypt_password(password: Optional[str], seed: bytes) -> bytes:
+    def encrypt_password(password: Optional[str], seed: bytes) -> bytearray:
         """Encrypts a password using MySQL native password algorithm"""
         if password is None or password == "":
             return b''
@@ -38,13 +38,15 @@ class NativePasswordPlugin(AuthenticationPlugin):
         digest.update(seed)
         digest.update(stage2)
         stage3 = digest.digest()
-        result = bytes(a ^ b for a, b in zip(stage1, stage3))
+        result = bytearray(20)
+        for i in range(20):
+            result[i] = stage1[i] ^ stage3[i]
         return result
     
-    def _build_auth_payload(self) -> bytes:
+    def _build_auth_payload(self) -> bytearray:
         """Build authentication payload"""
         if self.authentication_data is None:
-            return bytes()
+            return bytearray()
         
         # Truncate seed to 20 bytes (remove null terminator if present)
         truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed

@@ -31,9 +31,8 @@ class HandshakeResponse(ClientMessage):
         stream.write_uint32(1024 * 1024 * 1024)
         stream.write_byte(45)
         
-        # Reserved (23 bytes of zeros)
-        for _ in range(19):
-            stream.write_byte(0)
+        # Reserved (19 bytes of zeros) - use extend to avoid 19 individual appends
+        stream.write_bytes(b'\x00' * 19)
 
         # Client extended capabilities (4 bytes)
         stream.write_uint32(context.client_capabilities >> 32)

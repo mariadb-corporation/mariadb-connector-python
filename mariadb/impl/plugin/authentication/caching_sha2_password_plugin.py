@@ -39,7 +39,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         self.host_address: HostAddress = host_address
     
     @staticmethod
-    def encrypt_password(password: Optional[str], seed: bytes) -> bytes:
+    def encrypt_password(password: Optional[str], seed: bytes) -> bytearray:
         """Send an SHA-2 encrypted password: XOR(SHA256(password), SHA256(seed, SHA256(SHA256(password))))"""
         if password is None or password == "":
             return b''
@@ -59,8 +59,9 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         digest.update(stage2)
         stage3 = digest.digest()
         
-        # XOR stage1 and stage3
-        result = bytes(a ^ b for a, b in zip(stage1, stage3))
+        result = bytearray(32)
+        for i in range(32):
+            result[i] = stage1[i] ^ stage3[i]
         return result
     
     def _get_rsa_encrytped_pwd(self, public_key_pem: str) -> bytes:

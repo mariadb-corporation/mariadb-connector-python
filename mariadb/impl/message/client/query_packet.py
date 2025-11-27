@@ -151,7 +151,7 @@ def decimal2bytes(value: float, ctx=None) -> bytes:
 _ESCAPE_REGEX = re.compile(r'[\\\'"\0]')
 _ESCAPE_MAP = {'\\': '\\\\', "'": "\\'", '"': '\\"', '\0': '\\0'}
 
-def escape_str(string: str, no_backslash_escapes: bool = False) -> bytes:
+def escape_str(string: str, no_backslash_escapes: bool = False) -> bytearray:
     """
     Escape a string for SQL statements
     """
@@ -170,7 +170,13 @@ def escape_str(string: str, no_backslash_escapes: bool = False) -> bytes:
             # Standard escaping: backslash, quote, double quote, zero byte
             escaped = _ESCAPE_REGEX.sub(lambda m: _ESCAPE_MAP[m.group(0)], string)
 
-    return b"'" + escaped.encode(encoding="utf8") + b"'"
+    # Avoid multiple allocations with concatenation
+    encoded = escaped.encode(encoding="utf8")
+    result = bytearray(len(encoded) + 2)
+    result[0] = 39  # Single quote '
+    result[1:-1] = encoded
+    result[-1] = 39  # Single quote '
+    return result
 
 def timedelta(val: datetime.timedelta, ctx=None) -> bytes:
     total_seconds = int(val.total_seconds())
@@ -189,7 +195,7 @@ def timedelta(val: datetime.timedelta, ctx=None) -> bytes:
 _ESCAPE_BYTES_REGEX = re.compile(rb'[\\\'"\0]')
 _ESCAPE_BYTES_MAP = {b'\\': b'\\\\', b"'": b"\\'", b'"': b'\\"', b'\0': b'\\0'}
 
-def escape_bytes(b : bytes, no_backslash_escapes: bool = False) -> bytes:
+def escape_bytes(b : bytes, no_backslash_escapes: bool = False) -> bytearray:
     """
     Escape a string for SQL statements
     """
@@ -207,7 +213,12 @@ def escape_bytes(b : bytes, no_backslash_escapes: bool = False) -> bytes:
             # Standard escaping: backslash, quote, double quote, zero byte
             escaped = _ESCAPE_BYTES_REGEX.sub(lambda m: _ESCAPE_BYTES_MAP[m.group(0)], b)
 
-    return BINARY_QUOTE_PREFIX + escaped + QUOTE_BYTES
+    # Avoid multiple allocations with concatenation
+    result = bytearray(len(BINARY_QUOTE_PREFIX) + len(escaped) + 9) # BINARY_QUOTE_PREFIX + escaped + QUOTE_BYTES
+    result[0:8] = BINARY_QUOTE_PREFIX
+    result[8:-1] = escaped
+    result[-1:] = QUOTE_BYTES
+    return result
 
 def float_array_to_bytes(arr: array.array, no_backslash_escapes: bool = False) -> bytes:
     """Convert float array to binary representation for VECTOR columns"""
