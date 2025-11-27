@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from ...client.context import Context
     from ...client.exception_factory import ExceptionFactory
-from ...client.socket.payload_parser import PayloadParser
+from ..payload_reader import PayloadReader
 
 # Pre-compute constants
 _HASH_MARKER = 0x23  # '#'
@@ -56,7 +56,7 @@ class ErrorPacket:
     @staticmethod
     def decode(data: memoryview, context: Optional['Context'] = None) -> 'ErrorPacket':
         """Decode error packet from bytearray with optional context"""
-        parser = PayloadParser(data)
+        parser = PayloadReader(data)
         parser.skip(1)  # Skip error marker (0xFF) - skip is faster than read_byte if we don't use value
         error_code = parser.read_uint16()
         

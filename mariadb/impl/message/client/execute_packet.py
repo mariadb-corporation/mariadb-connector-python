@@ -35,10 +35,8 @@ from ...client.context import Context
 from mariadb_shared.constants import FIELD_TYPE
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from ..client_message import ClientMessage
-from ..payload_stream import PayloadStream
+from ..payload_writer import PayloadWriter
 from ....exceptions import NotSupportedError
-if TYPE_CHECKING:
-    from ...client.socket.write_stream import BaseWriteStream
 
 # Type dispatch tables for parameter handling
 PARAM_TYPE_TBL = {}
@@ -60,7 +58,7 @@ class ExecutePacket(ClientMessage):
         self.sql = sql
 
     def payload(self, context: Context) -> bytearray:
-        stream = PayloadStream()
+        stream = PayloadWriter()
         stream.write_byte(self.COM_STMT_EXECUTE)
         stream.write_bytes(_STRUCT_I.pack(self.statement_id))
         stream.write_byte(0x00) # Write flags  

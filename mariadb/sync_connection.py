@@ -7,15 +7,11 @@ Synchronous connection implementation
 Provides a blocking API using the sync Client.
 """
 
-from typing import Optional, Any, Type, List, TYPE_CHECKING
-from mariadb_shared.constants import STATUS, TPC_STATE
-from mariadb_shared.xid import Xid
+from typing import Optional, Any
 from mariadb_shared.sync_connection_common import SyncConnectionCommon
 from .base_connection import BaseConnection
 
 from .impl.client.sync_client import SyncClient
-
-from .exceptions import ProgrammingError, Error
 
 
 class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):

@@ -11,9 +11,8 @@ from typing import Optional, TYPE_CHECKING
 from ...configuration import Configuration
 
 from typing import Callable, Awaitable
-from ...client.socket.write_stream import AsyncWriteStream, SyncWriteStream
 from ...client.context import Context
-from ...client.socket.payload_parser import PayloadParser
+from ...message.payload_reader import PayloadReader
 from ..authentication_plugin import AuthenticationPlugin
 from ....exceptions import OperationalError
 
@@ -86,7 +85,12 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         
         return client_scramble, signature, raw_public_key
     
-    async def processAsync(self, read_payload_func: Callable[[], Awaitable[memoryview]], write_stream: AsyncWriteStream, context: Context) -> memoryview:
+    async def processAsync(
+        self, 
+        read_payload_func: Callable[[], Awaitable[memoryview]], 
+        write_payload_func: Callable[[bytearray, str, bool], Awaitable[None]], 
+        context: Context
+    ) -> memoryview:
         """Process Parsec password plugin authentication (async)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
@@ -95,7 +99,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        await write_stream.write_payload(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", reset_sequence=False)
+        await write_payload_func(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", reset_sequence=False)
 
         # Step 2: Read server response with salt and parameters
         response = await read_payload_func()
@@ -104,7 +108,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             raise OperationalError("Invalid parsec authentication response")
         
         # Parse response
-        parser = PayloadParser(response)
+        parser = PayloadReader(response)
         
         if parser.get_byte() == 0x01:
             # skip authentication data header
@@ -125,12 +129,17 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         payload = bytearray(b'\0\0\0\0')
         payload.extend(client_scramble)
         payload.extend(signature)
-        await write_stream.write_payload(payload, "PARSEC_AUTH", reset_sequence=False)
+        await write_payload_func(payload, "PARSEC_AUTH", reset_sequence=False)
 
         # Read final response
         return await read_payload_func()
     
-    def processSync(self, read_payload_func: Callable[[], memoryview], write_stream: SyncWriteStream, context: Context) -> memoryview:
+    def processSync(
+        self, 
+        read_payload_func: Callable[[], memoryview], 
+        write_payload_func: Callable[[bytearray, str, bool], None], 
+        context: Context
+    ) -> memoryview:
         """Process Parsec password plugin authentication (sync)"""
         if not HAS_CRYPTOGRAPHY:
             raise OperationalError(
@@ -139,7 +148,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        write_stream.write_payload(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", reset_sequence=False)
+        write_payload_func(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", reset_sequence=False)
         
         # Step 2: Read server response with salt and parameters
         response = read_payload_func()
@@ -148,7 +157,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             raise OperationalError("Invalid parsec authentication response")
         
         # Parse response
-        parser = PayloadParser(response)
+        parser = PayloadReader(response)
         if (parser.get_byte() == 0x01):
             parser.read_byte()
             
@@ -167,7 +176,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         payload = bytearray(b'\0\0\0\0')
         payload.extend(client_scramble)
         payload.extend(signature)
-        write_stream.write_payload(payload, "PARSEC_AUTH", reset_sequence=False)
+        write_payload_func(payload, "PARSEC_AUTH", reset_sequence=False)
         
         # Read final response
         return read_payload_func()

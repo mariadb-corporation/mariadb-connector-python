@@ -10,7 +10,7 @@ Changes the user and optionally the database for the current connection.
 from typing import Optional
 from ...client.context import Context
 from ..client_message import ClientMessage
-from ..payload_stream import PayloadStream
+from ..payload_writer import PayloadWriter
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from mariadb_shared.constants import CAPABILITY
 
@@ -36,7 +36,7 @@ class ChangeUserPacket(ClientMessage):
         self.connect_attrs = connect_attrs or {}
     
     def payload(self, context: Context) -> bytearray:
-        stream = PayloadStream()
+        stream = PayloadWriter()
         # Command byte
         stream.write_byte(0x11)  # COM_CHANGE_USER
         

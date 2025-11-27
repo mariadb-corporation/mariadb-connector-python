@@ -11,7 +11,7 @@ import pytest
 
 import logging
 
-#logging.getLogger('mariadb').setLevel(logging.DEBUG)
+logging.getLogger('mariadb').setLevel(logging.DEBUG)
 
 def get_test_config():
     """Get test configuration from environment variables"""

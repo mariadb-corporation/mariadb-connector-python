@@ -9,7 +9,6 @@ from typing import Optional
 from ...configuration import Configuration
 
 from typing import Callable, Awaitable
-from ...client.socket.write_stream import AsyncWriteStream, SyncWriteStream
 from ...client.context import Context
 from ..authentication_plugin import AuthenticationPlugin
 
@@ -54,20 +53,30 @@ class NativePasswordPlugin(AuthenticationPlugin):
         # Encrypt password
         return self.encrypt_password(self.authentication_data, truncated_seed)
     
-    async def processAsync(self, read_payload_func: Callable[[], Awaitable[memoryview]], write_stream: AsyncWriteStream, context: Context) -> memoryview:
+    async def processAsync(
+        self, 
+        read_payload_func: Callable[[], Awaitable[memoryview]], 
+        write_payload_func: Callable[[bytearray, str, bool], Awaitable[None]], 
+        context: Context
+    ) -> memoryview:
         """Process native password plugin authentication (async)"""
         encrypted = self._build_auth_payload()
         payload = bytearray(b'\0\0\0\0')
         payload.extend(encrypted)
-        await write_stream.write_payload(payload, "NATIVE_PASSWORD", reset_sequence=False)
+        await write_payload_func(payload, "NATIVE_PASSWORD", False)
         return await read_payload_func()
     
-    def processSync(self, read_payload_func: Callable[[], memoryview], write_stream: SyncWriteStream, context: Context) -> memoryview:
+    def processSync(
+        self, 
+        read_payload_func: Callable[[], memoryview], 
+        write_payload_func: Callable[[bytearray, str, bool], None], 
+        context: Context
+    ) -> memoryview:
         """Process native password plugin authentication (sync)"""
         encrypted = self._build_auth_payload()
         payload = bytearray(b'\0\0\0\0')
         payload.extend(encrypted)
-        write_stream.write_payload(payload, "NATIVE_PASSWORD", reset_sequence=False)
+        write_payload_func(payload, "NATIVE_PASSWORD", False)
         return read_payload_func()
     
     def is_mitm_proof(self) -> bool:

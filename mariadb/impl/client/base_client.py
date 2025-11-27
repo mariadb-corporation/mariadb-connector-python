@@ -38,8 +38,8 @@ _STRUCT_DATETIME_TEXT = struct.Struct('4s1s2s1s2s1s2s1s2s1s2s')  # YYYY-MM-DD HH
 # No longer need PacketBuffer import
 
 from .context import Context
-from .socket.payload_parser import PayloadParser
-from .socket.mutable_int import MutableInt
+from ..message.payload_reader import PayloadReader
+from .mutable_int import MutableInt
 from ..configuration import Configuration
 from ..host_address import HostAddress
 from ..message.client_message import ClientMessage
@@ -51,6 +51,10 @@ from ...exceptions import OperationalError
 from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
 from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
+
+# Write stream constants
+HEADER_SIZE = 4
+MAX_PACKET_SIZE = 0xFFFFFF
 
 class BaseClient(ABC):
     """
@@ -104,6 +108,26 @@ class BaseClient(ABC):
         # Connection state
         self.connected = False
         self.read_only = configuration.read_only
+    
+    # =========================================================================
+    # Write Stream Methods
+    # =========================================================================
+    
+    def reset_sequence(self) -> None:
+        """Reset packet sequence number"""
+        self.sequence.set(0)
+    
+    @abstractmethod
+    def write_payload(self, payload: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
+        """
+        Write payload with MariaDB packet framing
+        
+        Args:
+            payload: Payload bytearray to send (first 4 bytes reserved for header)
+            packet_type: Packet type for logging (e.g., "COM_QUERY")
+            reset_sequence: Whether to reset sequence number before sending
+        """
+        ...
     
     # =========================================================================
     # Abstract Methods
@@ -321,7 +345,7 @@ class BaseClient(ABC):
                 sql_state='HY000'
             )
         
-        parser = PayloadParser(packet)
+        parser = PayloadReader(packet)
         
         # Protocol version (1 byte)
         protocol_version = parser.read_byte()
@@ -455,7 +479,8 @@ class BaseClient(ABC):
             constants.CAPABILITY.DEPRECATE_EOF |
             constants.CAPABILITY.BULK_OPERATIONS |
             constants.CAPABILITY.EXTENDED_METADATA |
-            constants.CAPABILITY.CACHE_METDATA
+            constants.CAPABILITY.CACHE_METDATA |
+            constants.CAPABILITY.BULK_UNIT_RESULTS
         )
         
         # Add database capability if database specified and server supports it

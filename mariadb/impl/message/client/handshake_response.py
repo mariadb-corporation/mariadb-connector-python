@@ -6,7 +6,7 @@ import hashlib
 from ...client.context import Context
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from ..client_message import ClientMessage
-from ..payload_stream import PayloadStream
+from ..payload_writer import PayloadWriter
 from ...configuration import Configuration
 from mariadb_shared.constants import CAPABILITY
 
@@ -23,7 +23,7 @@ class HandshakeResponse(ClientMessage):
         
     def payload(self, context: Context) -> bytearray:
         """Generate handshake response payload as bytes"""
-        stream = PayloadStream()
+        stream = PayloadWriter()
         # Client capabilities (4 bytes)
         stream.write_uint32(context.client_capabilities & 0xFFFFFFFF)
         

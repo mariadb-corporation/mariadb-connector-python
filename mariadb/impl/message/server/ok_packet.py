@@ -8,7 +8,7 @@ Based on MySQL/MariaDB protocol OK packet structure.
 """
 
 from typing import TYPE_CHECKING, Optional
-from ...client.socket.payload_parser import PayloadParser
+from ..payload_reader import PayloadReader
 from ...completion import Completion
 from mariadb_shared import constants
 
@@ -58,7 +58,7 @@ class OkPacket(Completion):
     
     @staticmethod
     def decode(data: memoryview, context: 'Context') -> 'OkPacket':
-        parser = PayloadParser(data)
+        parser = PayloadReader(data)
         
         parser.skip(1)
         affected_rows = parser.read_length_encoded_int()
@@ -87,7 +87,7 @@ class OkPacket(Completion):
         return OkPacket(affected_rows, insert_id, server_status, warning_count, info)
 
 
-def _process_session_tracking(parser: PayloadParser, context: 'Context') -> None:
+def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None:
     """Process session tracking data (separate function for better branch prediction)"""
     while parser.has_remaining():
         total_length = parser.read_length_encoded_int()

@@ -10,7 +10,6 @@ from ...configuration import Configuration
 from ...host_address import HostAddress
 
 from typing import Callable, Awaitable
-from ...client.socket.write_stream import AsyncWriteStream, SyncWriteStream
 from ...client.context import Context
 
 from ..authentication_plugin import AuthenticationPlugin
@@ -98,14 +97,19 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         except Exception as e:
             raise OperationalError(f"RSA authentication failed: {e}")
     
-    async def processAsync(self, read_payload_func: Callable[[], Awaitable[memoryview]], write_stream: AsyncWriteStream, context: Context) -> memoryview:
+    async def processAsync(
+        self, 
+        read_payload_func: Callable[[], Awaitable[memoryview]], 
+        write_payload_func: Callable[[bytearray, str, bool], Awaitable[None]], 
+        context: Context
+    ) -> memoryview:
         """Process caching SHA2 password plugin authentication (async)"""
         # Build and send initial payload
         truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
         encrypted = self.encrypt_password(self.authentication_data, truncated_seed)
         payload = bytearray(b'\0\0\0\0')
         payload.extend(encrypted)
-        await write_stream.write_payload(payload, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", reset_sequence=False)
+        await write_payload_func(payload, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", reset_sequence=False)
         
         # Read response packet
         response = await read_payload_func()
@@ -125,7 +129,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                         payload.append(0)
                     else:
                         payload = bytearray(b'\0\0\0\0\0')  # Null terminator
-                    await write_stream.write_payload(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", reset_sequence=False)
+                    await write_payload_func(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", reset_sequence=False)
                     return await read_payload_func()
                 else:
                     # SSL not available - try RSA public key encryption
@@ -135,7 +139,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                         )
                     
                     # Request public key from server
-                    await write_stream.write_payload(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
+                    await write_payload_func(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
                     
                     # Read public key response
                     key_response = await read_payload_func()
@@ -149,7 +153,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     encrypted_pwd = self._get_rsa_encrytped_pwd(public_key_pem.decode('utf-8'))
                     payload = bytearray(b'\0\0\0\0')
                     payload.extend(encrypted_pwd)
-                    await write_stream.write_payload(payload, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", reset_sequence=False)
+                    await write_payload_func(payload, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", reset_sequence=False)
 
                     return await read_payload_func()
             else:
@@ -159,14 +163,19 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     
 
 
-    def processSync(self, read_payload_func: Callable[[], memoryview], write_stream: SyncWriteStream, context: Context) -> memoryview:
+    def processSync(
+        self, 
+        read_payload_func: Callable[[], memoryview], 
+        write_payload_func: Callable[[bytearray, str, bool], None], 
+        context: Context
+    ) -> memoryview:
         """Process caching SHA2 password plugin authentication (sync)"""
         # Build and send initial payload
         truncated_seed = self.seed[:20] if len(self.seed) > 20 else self.seed
         encrypted = self.encrypt_password(self.authentication_data, truncated_seed)
         payload = bytearray(b'\0\0\0\0')
         payload.extend(encrypted)
-        write_stream.write_payload(payload, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", reset_sequence=False)
+        write_payload_func(payload, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", reset_sequence=False)
         
         # Read response packet
         response = read_payload_func()
@@ -186,7 +195,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                         payload.append(0)
                     else:
                         payload = bytearray(b'\0\0\0\0\0')  # Null terminator
-                    write_stream.write_payload(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", reset_sequence=False)
+                    write_payload_func(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", reset_sequence=False)
                     return read_payload_func()
                 else:
                     # SSL not available - try RSA public key encryption
@@ -197,7 +206,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                         )
                     
                     # Request RSA public key from server
-                    write_stream.write_payload(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
+                    write_payload_func(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
                     
                     # Read public key response
                     key_response = read_payload_func()
@@ -211,7 +220,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     encrypted_pwd = self._get_rsa_encrytped_pwd(public_key_pem)
                     payload = bytearray(b'\0\0\0\0')
                     payload.extend(encrypted_pwd)
-                    write_stream.write_payload(payload, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", reset_sequence=False)
+                    write_payload_func(payload, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", reset_sequence=False)
 
                     return read_payload_func()
             else:

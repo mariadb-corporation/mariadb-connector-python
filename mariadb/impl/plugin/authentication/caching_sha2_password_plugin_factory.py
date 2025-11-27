@@ -13,14 +13,11 @@ class CachingSha2PasswordPluginFactory(AuthenticationPluginFactory):
     """
     
     def type(self) -> str:
-        """Get authentication plugin type"""
         return "caching_sha2_password"
     
     def initialize(self, authentication_data: Optional[str], seed: bytes, 
                   conf: Any, host_address: Any) -> AuthenticationPlugin:
-        """Initialize caching SHA2 password plugin with authentication data and seed"""
         return CachingSha2PasswordPlugin(authentication_data, seed, conf, host_address)
     
     def require_ssl(self) -> bool:
-        """Check if plugin requires SSL (False for caching_sha2_password)"""
         return False

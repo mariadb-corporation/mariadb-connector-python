@@ -14,10 +14,8 @@ class NativePasswordPluginFactory(AuthenticationPluginFactory):
     """
     
     def type(self) -> str:
-        """Get authentication plugin type."""
         return "mysql_native_password"
     
     def initialize(self, authentication_data: Optional[str], seed: bytes, 
                   conf: Any, host_address: Any) -> AuthenticationPlugin:
-        """Initialize native password plugin with authentication data and seed."""
         return NativePasswordPlugin(authentication_data, seed)

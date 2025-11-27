@@ -1,5 +1,5 @@
 """
-Payload Parser for MariaDB protocol
+PayloadReader for MariaDB protocol
 
 Provides parsing facilities for MySQL/MariaDB packet payloads.
 Does NOT perform any I/O - only parses bytes.
@@ -8,12 +8,10 @@ Does NOT perform any I/O - only parses bytes.
 import struct
 from typing import Optional
 
-# No longer need PacketBuffer import
 
-
-class PayloadParser:
+class PayloadReader:
     """
-    Parser for MariaDB protocol payloads
+    Reader for MariaDB protocol payloads
     
     This class takes a packet payload (bytes) and provides methods
     to parse various data types from it. It does NOT perform any I/O.

@@ -1592,6 +1592,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(row[0], None)
             await cursor.execute("DELETE FROM ind1")
             vals = [(1, 4, 3), (INDICATOR.NULL, INDICATOR.DEFAULT, None)]
+            
             await cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
             await cursor.execute("SELECT a, b, c FROM ind1")
             row = await cursor.fetchone()

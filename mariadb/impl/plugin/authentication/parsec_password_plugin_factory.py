@@ -13,10 +13,8 @@ class ParsecPasswordPluginFactory(AuthenticationPluginFactory):
     """
     
     def type(self) -> str:
-        """Get authentication plugin type"""
         return "parsec"
     
     def initialize(self, authentication_data: Optional[str], seed: bytes, 
                   conf: Any, host_address: Any) -> AuthenticationPlugin:
-        """Initialize PARSEC password plugin with authentication data and seed"""
         return ParsecPasswordPlugin(authentication_data, seed)

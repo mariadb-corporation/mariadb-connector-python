@@ -64,14 +64,7 @@ class Result(ABC):
     # =========================================================================
     
     def row_number(self) -> Optional[int]:
-        """
-        Get current row number (1-based, DB-API style)
-        
-        Returns row_pointer + 1:
-        - row_pointer = -1 (before first) → rownumber = 0
-        - row_pointer = 0 (at first) → rownumber = 1
-        - etc.
-        """
+        """Get current row number (1-based, DB-API style). Returns row_pointer + 1."""
         return self.row_pointer + 1
     
     def __repr__(self) -> str:
@@ -176,34 +169,19 @@ class BaseCompleteResult(Result):
         self.row_pointer: int = -1  # Before first row
     
     def scroll(self, value: int, mode: str = "relative") -> None:
-        """
-        Scroll to a new position in the result set
-        
-        Args:
-            value: Position value (row index for absolute mode)
-            mode: "relative" or "absolute"
-            
-        Semantics:
-        - scroll(N, absolute) positions cursor so next fetch returns row N
-        - row_pointer tracks the last fetched row index (-1 = none fetched yet)
-        """
-        # Calculate new position
+        """Scroll to a new position in the result set. Mode: 'relative' or 'absolute'."""
         if mode == "relative":
             if value == 0:
-                return  # No movement needed
+                return
             new_pos = self.row_pointer + value
         elif mode == "absolute":
-            # For absolute mode, value is the row index to fetch next
-            # So we need to set row_pointer to value - 1
-            new_pos = value - 1
+            new_pos = value - 1  # absolute mode: value is row index to fetch next, so row_pointer = value - 1
         else:
             raise ValueError("Invalid scroll mode")
         
-        # Validate new position (-1 = before first, data_size-1 = at last)
-        if new_pos < -1 or new_pos >= self.data_size:
+        if new_pos < -1 or new_pos >= self.data_size:  # Validate: -1 = before first, data_size-1 = at last
             raise ValueError("Position value is out of range")
         
-        # Set new position
         self.row_pointer = new_pos
         
     def streaming(self) -> bool:
@@ -224,38 +202,28 @@ class SyncCompleteResult(BaseCompleteResult, SyncResult):
     """
     
     def fetch_one(self) -> Optional[Any]:
-        """
-        Fetch next row
+        """Fetch next row. row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
+        row_pointer = self.row_pointer
+        if row_pointer >= self.data_size - 1:
+            return None  # Already at or past last row
         
-        row_pointer semantics:
-        -1 = before first row
-        0 to data_size-1 = index of last fetched row
-        
-        rownumber = row_pointer + 1 (1-based, 0 = before first)
-        """
-        # Check if we can fetch more rows
-        if self.row_pointer >= self.data_size - 1:
-            # Already at or past last row
-            return None
-        
-        # Move to next row position and return it
-        self.row_pointer += 1
-        return self.rows[self.row_pointer]
+        row_pointer += 1
+        self.row_pointer = row_pointer
+        return self.rows[row_pointer]
     
     def fetch_all(self) -> List[Any]:
         """Fetch all remaining rows"""
-        if self.row_pointer < 0:
-            # Before first - return all rows
-            self.row_pointer = self.data_size
+        row_pointer = self.row_pointer
+        data_size = self.data_size
+        
+        if row_pointer < 0:
+            self.row_pointer = data_size  # Before first - return all rows
             return self.rows[:]
-        elif self.row_pointer < self.data_size:
-            # In middle - return remaining rows
-            remaining = self.rows[self.row_pointer + 1:]
-            self.row_pointer = self.data_size
+        elif row_pointer < data_size:
+            remaining = self.rows[row_pointer + 1:]  # In middle - return remaining rows
+            self.row_pointer = data_size
             return remaining
-        else:
-            # After last - return empty
-            return []
+        return []  # After last - return empty
 
 class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
     """
@@ -266,38 +234,28 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
     """
     
     async def fetch_one(self) -> Optional[Any]:
-        """
-        Fetch next row (async)
+        """Fetch next row (async). row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
+        row_pointer = self.row_pointer
+        if row_pointer >= self.data_size - 1:
+            return None  # Already at or past last row
         
-        row_pointer semantics:
-        -1 = before first row
-        0 to data_size-1 = index of last fetched row
-        
-        rownumber = row_pointer + 1 (1-based, 0 = before first)
-        """
-        # Check if we can fetch more rows
-        if self.row_pointer >= self.data_size - 1:
-            # Already at or past last row
-            return None
-        
-        # Move to next row position and return it
-        self.row_pointer += 1
-        return self.rows[self.row_pointer]
+        row_pointer += 1
+        self.row_pointer = row_pointer
+        return self.rows[row_pointer]
     
     async def fetch_all(self) -> List[Any]:
         """Fetch all remaining rows (async)"""
-        if self.row_pointer < 0:
-            # Before first - return all rows
-            self.row_pointer = self.data_size
+        row_pointer = self.row_pointer
+        data_size = self.data_size
+        
+        if row_pointer < 0:
+            self.row_pointer = data_size  # Before first - return all rows
             return self.rows[:]
-        elif self.row_pointer < self.data_size:
-            # In middle - return remaining rows
-            remaining = self.rows[self.row_pointer + 1:]
-            self.row_pointer = self.data_size
+        elif row_pointer < data_size:
+            remaining = self.rows[row_pointer + 1:]  # In middle - return remaining rows
+            self.row_pointer = data_size
             return remaining
-        else:
-            # After last - return empty
-            return []
+        return []  # After last - return empty
     
     async def scroll(self, value: int, mode: str = "relative") -> None:
         super().scroll(value, mode)
@@ -387,69 +345,44 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         return result
     
     def fetch_remaining(self) -> None:
-        """
-        Consume all remaining rows without processing them.
-        Called when a new query needs to be executed.
-        """
+        """Consume all remaining rows without processing them. Called when a new query needs to be executed."""
         if not self.loaded:
             while not self.loaded:
                 row_packet = self._read_next_row_packet()
                 if row_packet is not None:
-                    self._row_count += 1
-                    # No cleanup needed with memoryview    
+                    self._row_count += 1    
     
     def _read_next_row_packet(self) -> Optional[memoryview]:
-        """
-        Read next row packet from network (synchronous)
-        
-        Returns:
-            Row packet memoryview, or None if no more rows
-        """
+        """Read next row packet from network (synchronous). Returns row packet memoryview, or None if no more rows."""
         try:
             row_packet = self.read_payload_func()
-            # Check for EOF/OK packet
-            if (row_packet[0] == 0xFE and 
-                ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
-                    (not self.context.isEofDeprecated() and len(row_packet) < 8))):
+            packet_type = row_packet[0]
+            
+            if packet_type == 0xFE:  # Check for EOF/OK packet
+                eof_deprecated = self.context.isEofDeprecated()
+                packet_len = len(row_packet)
                 
-                if not self.context.isEofDeprecated():
-                    # Traditional EOF packet
-                    EofPacket.decode(row_packet, self.context)
-                else:
-                    # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
-                    OkPacket.decode(row_packet, self.context)
-                
-                self.loaded = True
-                return None
+                if (eof_deprecated and packet_len < 16777215) or (not eof_deprecated and packet_len < 8):
+                    if not eof_deprecated:
+                        EofPacket.decode(row_packet, self.context)  # Traditional EOF packet
+                    else:
+                        OkPacket.decode(row_packet, self.context)  # OK packet with 0xFE header (DEPRECATE_EOF enabled)
+                    
+                    self.loaded = True
+                    return None
 
-            # Check for error packet
-            if row_packet[0] == 0xFF:
+            if packet_type == 0xFF:  # Check for error packet
                 self.loaded = True
-                # Error packet - will be handled by caller
                 raise Exception("Error packet received during streaming")
             
-            # Regular row data packet
-            return row_packet
+            return row_packet  # Regular row data packet
             
-        except Exception as e:
+        except Exception:
             self.loaded = True
             raise
 
     def scroll(self, value: int, mode: str = "relative") -> None:
-        """
-        Scroll forward in streaming result (limited support)
-        
-        Args:
-            value: Number of rows to skip (must be positive)
-            mode: Must be "relative" (absolute not supported for streaming)
-            
-        Raises:
-            ValueError: If mode is not "relative" or value is negative
-            
-        Note:
-            Streaming results only support forward relative scrolling.
-            This consumes and discards rows from the stream.
-        """
+        """Scroll forward in streaming result (limited support). Only supports forward relative scrolling."""
         if mode != "relative":
             raise ValueError("Streaming results only support relative scroll mode")
         
@@ -457,16 +390,14 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
             raise ValueError("Streaming results only support forward scrolling (positive values)")
         
         if value == 0:
-            return  # No movement needed
+            return
         
-        # Skip 'value' rows by fetching and discarding them
-        for _ in range(value):
+        for _ in range(value):  # Skip 'value' rows by fetching and discarding them
             if self.loaded:
                 raise ValueError("Cannot scroll past end of result set")
             row_packet = self._read_next_row_packet()
             if row_packet is None:
                 raise ValueError("Cannot scroll past end of result set")
-            # No cleanup needed with memoryview
             self._row_count += 1
             self.row_pointer += 1
 
@@ -478,37 +409,30 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
     """
     
     async def _read_next_row_packet(self) -> Optional[memoryview]:
-        """
-        Read next row packet from network (asynchronous)
-        
-        Returns:
-            Row packet memoryview, or None if no more rows
-        """
+        """Read next row packet from network (asynchronous). Returns row packet memoryview, or None if no more rows."""
         try:
             row_packet = await self.read_payload_func()
-            # Check for EOF/OK packet
-            if (row_packet[0] == 0xFE and 
-                ((self.context.isEofDeprecated() and len(row_packet) < 16777215) or 
-                 (not self.context.isEofDeprecated() and len(row_packet) < 8))):
-                
-                if not self.context.isEofDeprecated():
-                    # Traditional EOF packet
-                    EofPacket.decode(row_packet, self.context)
-                else:
-                    # OK packet with 0xFE header (DEPRECATE_EOF enabled) - use existing OK packet parser
-                    OkPacket.decode(row_packet, self.context)
-                self.loaded = True
-                return None
+            packet_type = row_packet[0]
             
-            # Check for error packet
-            if row_packet[0] == 0xFF:
+            if packet_type == 0xFE:  # Check for EOF/OK packet
+                eof_deprecated = self.context.isEofDeprecated()
+                packet_len = len(row_packet)
+                
+                if (eof_deprecated and packet_len < 16777215) or (not eof_deprecated and packet_len < 8):
+                    if not eof_deprecated:
+                        EofPacket.decode(row_packet, self.context)  # Traditional EOF packet
+                    else:
+                        OkPacket.decode(row_packet, self.context)  # OK packet with 0xFE header (DEPRECATE_EOF enabled)
+                    self.loaded = True
+                    return None
+            
+            if packet_type == 0xFF:  # Check for error packet
                 self.loaded = True
                 raise Exception("Error packet received during streaming")
             
-            # Regular row data packet
-            return row_packet
+            return row_packet  # Regular row data packet
             
-        except Exception as e:
+        except Exception:
             self.loaded = True
             raise
     
@@ -536,32 +460,15 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         return result
     
     async def fetch_remaining(self) -> None:
-        """
-        Consume all remaining rows without processing them (async).
-        Called when a new query needs to be executed.
-        """
+        """Consume all remaining rows without processing them (async). Called when a new query needs to be executed."""
         if not self.loaded:
             while not self.loaded:
                 row_packet = await self._read_next_row_packet()
                 if row_packet is not None:
                     self._row_count += 1
-                    # No cleanup needed with memoryview
     
     async def scroll(self, value: int, mode: str = "relative") -> None:
-        """
-        Scroll forward in streaming result (limited support, async)
-        
-        Args:
-            value: Number of rows to skip (must be positive)
-            mode: Must be "relative" (absolute not supported for streaming)
-            
-        Raises:
-            ValueError: If mode is not "relative" or value is negative
-            
-        Note:
-            Streaming results only support forward relative scrolling.
-            This consumes and discards rows from the stream.
-        """
+        """Scroll forward in streaming result (limited support, async). Only supports forward relative scrolling."""
         if mode != "relative":
             raise ValueError("Streaming results only support relative scroll mode")
         
@@ -569,15 +476,13 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
             raise ValueError("Streaming results only support forward scrolling (positive values)")
         
         if value == 0:
-            return  # No movement needed
+            return
         
-        # Skip 'value' rows by fetching and discarding them
-        for _ in range(value):
+        for _ in range(value):  # Skip 'value' rows by fetching and discarding them
             if self.loaded:
                 raise ValueError("Cannot scroll past end of result set")
             row_packet = await self._read_next_row_packet()
             if row_packet is None:
                 raise ValueError("Cannot scroll past end of result set")
-            # No cleanup needed with memoryview
             self._row_count += 1
             self.row_pointer += 1

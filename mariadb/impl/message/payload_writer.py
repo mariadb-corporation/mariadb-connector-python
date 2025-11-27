@@ -2,7 +2,7 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 """
-PayloadStream - A write stream implementation that captures bytes to a buffer
+PayloadWriter - A write stream implementation that captures bytes to a buffer
 without sending them over the network. Used for generating message payloads.
 """
 
@@ -19,15 +19,11 @@ DQUOTE_BYTE: int = b"\""[0]
 NULL_BYTE: int = b"\0"[0]
 
 
-class PayloadStream:
-    """
-    A lightweight write stream that captures bytes to a buffer.
-    Implements the same write interface as BaseWriteStream but doesn't
-    send data over the network - just accumulates it in a bytearray.
-    """
+class PayloadWriter:
+    """A lightweight write stream that captures bytes to a buffer."""
     
     def __init__(self):
-        """Initialize payload stream with empty buffer"""
+        """Initialize payload writer with empty buffer"""
         self._buffer: bytearray = bytearray(4)
     
     def get_payload(self) -> bytearray:
