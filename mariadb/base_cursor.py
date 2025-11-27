@@ -84,21 +84,120 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         else:
             self._config = self.connection._configuration        
 
+    def _check_closed(self) -> None:
+        """Check if cursor is closed"""
+        if self._closed or self.connection._closed:
+            raise self._exception_factory.create_exception(
+                "Cursor is closed",
+                errno=0,
+                sql_state='42000'
+            )
+
+    # =========================================================================
+    # Properties
+    # =========================================================================
+
     @property
-    def _completion(self) -> Optional[Completion]:
-        """Get the current completion"""
-        if self._completion_index < len(self._completions):
-            return self._completions[self._completion_index]
-        return None
-    
+    def affected_rows(self) -> int:
+        """Alias for rowcount"""
+        return int(self.rowcount)
+
     @property
-    def _result(self) -> Optional[TResult]:
-        """Get the current result set (for backward compatibility)"""
+    def closed(self) -> bool:
+        """Return True if cursor is closed"""
+        return self._closed or self.connection._closed
+
+    @property
+    def description(self) -> Optional[tuple]:
+        """Get cursor description (computed on-demand from result set columns)"""
+        if not self._result or not hasattr(self._result, 'columns'):
+            return None
+        return self._build_description(self._result.columns)
+
+    @property
+    def lastrowid(self) -> Optional[int]:
+        """Get the last insert ID from the current completion"""
+        # For executemany, return the last insert ID from all executions
         completion = self._completion
-        if completion and completion.has_result_set():
-            return completion.result_set
+        if completion:
+            return completion.insert_id or None
         return None
-    
+
+    @property
+    def metadata(self) -> Optional[Dict[str, tuple]]:
+        """Get metadata information for result set columns"""
+        self._check_closed()
+        
+        if not self._completions:
+            return None
+        
+        completion = self._completion
+        if not completion or not completion.has_result_set():
+            return None
+        
+        result_set = completion.result_set
+        columns: List[ColumnDefinitionPacket] = result_set.columns if hasattr(result_set, 'columns') else []
+        
+        if not columns:
+            return None
+        
+        # Build metadata tuples
+        catalog_tuple = tuple(col.catalog for col in columns)
+        schema_tuple = tuple(col.schema for col in columns)  
+        field_tuple = tuple(col.name for col in columns)
+        org_field_tuple = tuple(col.org_name for col in columns)
+        table_tuple = tuple(col.table for col in columns)
+        org_table_tuple = tuple(col.org_table for col in columns)
+        type_tuple = tuple(col.type for col in columns)
+        charset_tuple = tuple(col.character_set for col in columns)
+        length_tuple = tuple(col.column_length for col in columns)
+        max_length_tuple = tuple(col.column_length for col in columns)
+        decimals_tuple = tuple(col.decimals for col in columns)
+        flags_tuple = tuple(col.flags for col in columns)
+        
+        # Calculate extended field type - use dict lookup for performance
+        ext_type_name_map = {
+            b'json': EXT_FIELD_TYPE.JSON,
+            b'uuid': EXT_FIELD_TYPE.UUID,
+            b'inet4': EXT_FIELD_TYPE.INET4,
+            b'inet6': EXT_FIELD_TYPE.INET6,
+            b'point': EXT_FIELD_TYPE.POINT,
+            b'multipoint': EXT_FIELD_TYPE.MULTIPOINT,
+            b'linestring': EXT_FIELD_TYPE.LINESTRING,
+            b'multilinestring': EXT_FIELD_TYPE.MULTILINESTRING,
+            b'polygon': EXT_FIELD_TYPE.POLYGON,
+            b'multipolygon': EXT_FIELD_TYPE.MULTIPOLYGON,
+            b'geometrycollection': EXT_FIELD_TYPE.GEOMETRYCOLLECTION
+        }
+        
+        ext_type_list = []
+        for col in columns:
+            ext_field_type = EXT_FIELD_TYPE.NONE
+            if col.ext_type_format and col.ext_type_format.lower() == b'json':
+                ext_field_type = EXT_FIELD_TYPE.JSON
+            elif col.ext_type_name:
+                ext_field_type = ext_type_name_map.get(col.ext_type_name.lower(), EXT_FIELD_TYPE.NONE)
+            
+            ext_type_list.append(ext_field_type)
+        
+        ext_type_tuple = tuple(ext_type_list)
+        
+        return {
+            'catalog': catalog_tuple,
+            'schema': schema_tuple,
+            'field': field_tuple,
+            'org_field': org_field_tuple,
+            'table': table_tuple,
+            'org_table': org_table_tuple,
+            'type': type_tuple,
+            'charset': charset_tuple,
+            'length': length_tuple,
+            'max_length': max_length_tuple,
+            'decimals': decimals_tuple,
+            'flags': flags_tuple,
+            'ext_type_or_format': ext_type_tuple
+        }
+
     @property
     def rowcount(self) -> int:
         """Get the number of rows (read-only property)"""
@@ -111,35 +210,13 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             return completion.affected_rows
         # No completions yet
         return -1
-    
-    @property
-    def description(self) -> Optional[tuple]:
-        """Get cursor description (computed on-demand from result set columns)"""
-        if not self._result or not hasattr(self._result, 'columns'):
-            return None
-        return self._build_description(self._result.columns)
-
-    def _check_closed(self) -> None:
-        """Check if cursor is closed"""
-        if self._closed or self.connection._closed:
-            raise self._exception_factory.create_exception(
-                "Cursor is closed",
-                errno=0,
-                sql_state='42000'
-            )
 
     @property
-    def closed(self) -> bool:
-        """Return True if cursor is closed"""
-        return self._closed or self.connection._closed
-    
-    @property
-    def warnings(self) -> int:
-        """Get the number of warnings from the last executed statement"""
-        completion = self._completion
-        if completion:
-            return getattr(completion, 'warning_count', 0)
-        return 0
+    def rownumber(self) -> Optional[int]:
+        """Current row number (1-based, DB-API style)"""
+        if self._result is not None:
+            return self._result.row_number()
+        return None
 
     @property
     def sp_outparams(self) -> bool:
@@ -148,26 +225,32 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         if completion:
             return completion.is_output_parameters()
         return False
-        
-    @property
-    def lastrowid(self) -> Optional[int]:
-        """Get the last insert ID from the current completion"""
-        # For executemany, return the last insert ID from all executions
-        completion = self._completion
-        if completion:
-            return completion.insert_id or None
-        return None
-    
-    @property
-    def affected_rows(self) -> int:
-        """Alias for rowcount"""
-        return int(self.rowcount)
 
     @property
-    def rownumber(self) -> Optional[int]:
-        """Current row number (1-based, DB-API style)"""
-        if self._result is not None:
-            return self._result.row_number()
+    def warnings(self) -> int:
+        """Get the number of warnings from the last executed statement"""
+        completion = self._completion
+        if completion:
+            return getattr(completion, 'warning_count', 0)
+        return 0
+
+    # =========================================================================
+    # Internal Properties
+    # =========================================================================
+
+    @property
+    def _completion(self) -> Optional[Completion]:
+        """Get the current completion"""
+        if self._completion_index < len(self._completions):
+            return self._completions[self._completion_index]
+        return None
+
+    @property
+    def _result(self) -> Optional[TResult]:
+        """Get the current result set (for backward compatibility)"""
+        completion = self._completion
+        if completion and completion.has_result_set():
+            return completion.result_set
         return None
 
     @property
@@ -180,15 +263,15 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             return RESULT_DICTIONARY
         return RESULT_TUPLE
 
-    def setinputsizes(self, sizes: Sequence[Optional[int]]) -> None:
-        """Predefine memory areas for parameters (no-op in this implementation)"""
-        pass
-        
-    def setoutputsize(self, size: int, column: Optional[int] = None) -> None:
-        """Set a column buffer size for fetches (no-op in this implementation)"""
-        pass
+    # =========================================================================
+    # DB-API 2.0 Methods
+    # =========================================================================
 
-    # Abstract methods that must be implemented by subclasses
+    @abstractmethod
+    def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:
+        """Call a stored procedure"""
+        ...
+
     @abstractmethod
     def close(self):
         """Close the cursor"""
@@ -205,8 +288,8 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         ...
 
     @abstractmethod
-    def fetchone(self) -> Optional[Any]:
-        """Fetch the next row"""
+    def fetchall(self) -> List[Any]:
+        """Fetch all remaining rows"""
         ...
 
     @abstractmethod
@@ -215,14 +298,17 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         ...
 
     @abstractmethod
-    def fetchall(self) -> List[Any]:
-        """Fetch all remaining rows"""
+    def fetchone(self) -> Optional[Any]:
+        """Fetch the next row"""
         ...
 
-    @abstractmethod
-    def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:
-        """Call a stored procedure"""
-        ...
+    def setinputsizes(self, sizes: Sequence[Optional[int]]) -> None:
+        """Predefine memory areas for parameters (no-op in this implementation)"""
+        pass
+        
+    def setoutputsize(self, size: int, column: Optional[int] = None) -> None:
+        """Set a column buffer size for fetches (no-op in this implementation)"""
+        pass
 
     def nextset(self) -> Optional[bool]:
         """
@@ -245,6 +331,10 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         return True
 
+    # =========================================================================
+    # Iterator Protocol
+    # =========================================================================
+
     @abstractmethod
     def __iter__(self):
         """Return iterator for cursor"""
@@ -254,10 +344,11 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     def __next__(self) -> Any:
         """Return next row"""
         ...
-    
-    # Common helper methods (non-async, pure data transformation)
 
-    
+    # =========================================================================
+    # Helper Methods (Data Transformation)
+    # =========================================================================
+
     def _process_executemany_completions(self, completions: List[List[Completion]]) -> None:
         """
         Process completions from executemany - aggregate all result sets.
@@ -388,78 +479,3 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             248: 4, 249: 4, 250: 4, 255: 4
         }
         return charset_max_lengths.get(charset_id)
-    
-    @property
-    def metadata(self) -> Optional[Dict[str, tuple]]:
-        """Get metadata information for result set columns"""
-        self._check_closed()
-        
-        if not self._completions:
-            return None
-        
-        completion = self._completion
-        if not completion or not completion.has_result_set():
-            return None
-        
-        result_set = completion.result_set
-        columns: List[ColumnDefinitionPacket] = result_set.columns if hasattr(result_set, 'columns') else []
-        
-        if not columns:
-            return None
-        
-        # Build metadata tuples
-        catalog_tuple = tuple(col.catalog for col in columns)
-        schema_tuple = tuple(col.schema for col in columns)  
-        field_tuple = tuple(col.name for col in columns)
-        org_field_tuple = tuple(col.org_name for col in columns)
-        table_tuple = tuple(col.table for col in columns)
-        org_table_tuple = tuple(col.org_table for col in columns)
-        type_tuple = tuple(col.type for col in columns)
-        charset_tuple = tuple(col.character_set for col in columns)
-        length_tuple = tuple(col.column_length for col in columns)
-        max_length_tuple = tuple(col.column_length for col in columns)
-        decimals_tuple = tuple(col.decimals for col in columns)
-        flags_tuple = tuple(col.flags for col in columns)
-        
-        # Calculate extended field type - use dict lookup for performance
-        ext_type_name_map = {
-            b'json': EXT_FIELD_TYPE.JSON,
-            b'uuid': EXT_FIELD_TYPE.UUID,
-            b'inet4': EXT_FIELD_TYPE.INET4,
-            b'inet6': EXT_FIELD_TYPE.INET6,
-            b'point': EXT_FIELD_TYPE.POINT,
-            b'multipoint': EXT_FIELD_TYPE.MULTIPOINT,
-            b'linestring': EXT_FIELD_TYPE.LINESTRING,
-            b'multilinestring': EXT_FIELD_TYPE.MULTILINESTRING,
-            b'polygon': EXT_FIELD_TYPE.POLYGON,
-            b'multipolygon': EXT_FIELD_TYPE.MULTIPOLYGON,
-            b'geometrycollection': EXT_FIELD_TYPE.GEOMETRYCOLLECTION
-        }
-        
-        ext_type_list = []
-        for col in columns:
-            ext_field_type = EXT_FIELD_TYPE.NONE
-            if col.ext_type_format and col.ext_type_format.lower() == b'json':
-                ext_field_type = EXT_FIELD_TYPE.JSON
-            elif col.ext_type_name:
-                ext_field_type = ext_type_name_map.get(col.ext_type_name.lower(), EXT_FIELD_TYPE.NONE)
-            
-            ext_type_list.append(ext_field_type)
-        
-        ext_type_tuple = tuple(ext_type_list)
-        
-        return {
-            'catalog': catalog_tuple,
-            'schema': schema_tuple,
-            'field': field_tuple,
-            'org_field': org_field_tuple,
-            'table': table_tuple,
-            'org_table': org_table_tuple,
-            'type': type_tuple,
-            'charset': charset_tuple,
-            'length': length_tuple,
-            'max_length': max_length_tuple,
-            'decimals': decimals_tuple,
-            'flags': flags_tuple,
-            'ext_type_or_format': ext_type_tuple
-        }

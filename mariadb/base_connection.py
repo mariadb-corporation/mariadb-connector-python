@@ -89,8 +89,6 @@ class BaseConnection(ABC, Generic[TClient]):
         self.tpc_state = TPC_STATE.NONE
         
         # Store connection parameters
-        self._host = kwargs.get('host', 'localhost')
-        self._port = kwargs.get('port', 3306)
         self._user = kwargs.get('user') or kwargs.get('username')
         self._database = kwargs.get('database') or kwargs.get('db')
         self._connection_params = kwargs
@@ -191,24 +189,6 @@ class BaseConnection(ABC, Generic[TClient]):
         """Change the default database for the current connection"""
         ...
 
-
-    @property
-    @abstractmethod
-    def server_status(self) -> int:
-        """
-        Returns the server status.
-        """
-        ...
-
-    @property
-    @abstractmethod
-    def warnings(self) -> int:
-        """
-        Returns the last execution warnings count.
-        """
-        ...        
-        
-
     # =========================================================================
     # Transaction Methods (Abstract - must be implemented by subclasses)
     # =========================================================================
@@ -257,16 +237,6 @@ class BaseConnection(ABC, Generic[TClient]):
         raise InterfaceError("Invalid connection or not connected")
     
     @property
-    def server_name(self) -> str:
-        """Get connection host"""
-        return self._host
-    
-    @property
-    def server_port(self) -> int:
-        """Get connection port"""
-        return self._port
-    
-    @property
     def user(self) -> Optional[str]:
         """Get connection username"""
         return self._user
@@ -300,18 +270,15 @@ class BaseConnection(ABC, Generic[TClient]):
     # Server Information Properties
     # =========================================================================
     
-
     @property
     def client_capabilities(self):
         """Client capability flags."""
-
         self._check_closed()
         return self._client.context.client_capabilities
 
     @property
     def server_capabilities(self):
         """Server capability flags."""
-
         self._check_closed()
         return self._client.context.server_capabilities
 
@@ -325,6 +292,17 @@ class BaseConnection(ABC, Generic[TClient]):
         """
         self._check_closed()
         return self._client.context.server_version
+
+    @property
+    def server_mariadb(self) -> bool:
+        """
+        Get server type
+        
+        Returns:
+            true if server is MariaDB, false otherwise
+        """
+        self._check_closed()
+        return self._client.context.is_mariadb_server()
 
     @property
     def server_name(self) -> Optional[str]:
@@ -349,16 +327,14 @@ class BaseConnection(ABC, Generic[TClient]):
         return 0 if self._client.configuration.unix_socket else self._client.get_host_address().port
 
     @property
-    def server_mariadb(self) -> bool:
+    def server_status(self) -> int:
         """
-        Get server type
+        Get current server status flags
         
         Returns:
-            true if server is MariaDB, false otherwise
+            Server status flags as integer
         """
-        self._check_closed()
-        return self._client.context.is_mariadb_server()
-
+        return int(self._client.context.server_status)
 
     @property
     def server_version(self) -> int:
@@ -373,7 +349,6 @@ class BaseConnection(ABC, Generic[TClient]):
         version = self._client.context.version
         return version.major * 10000 + version.minor * 100 + version.patch
 
-
     @property
     def server_version_info(self) -> tuple:
         """
@@ -385,16 +360,6 @@ class BaseConnection(ABC, Generic[TClient]):
         self._check_closed()
         version = self._client.context.version
         return (version.major, version.minor, version.patch)
-
-    @property
-    def server_status(self) -> int:
-        """
-        Get current server status flags
-        
-        Returns:
-            Server status flags as integer
-        """
-        return int(self._client.context.server_status)
 
     @property
     def warnings(self) -> int:

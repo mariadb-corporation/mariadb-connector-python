@@ -522,9 +522,9 @@ class BaseClient(ABC):
         """Get host address"""
         return self.host_address
 
-    # ========================================================================
-    # Synchronous parsing methods (no I/O, shared between Async and Sync)
-    # ========================================================================
+    # =========================================================================
+    # Authentication Helper Methods
+    # =========================================================================
     
     def _handle_plugin_auth_continue(self, packet: bytearray) -> None:
         """
@@ -577,6 +577,10 @@ class BaseClient(ABC):
             converted_rows.append(tuple(row_list))
 
         return converted_rows
+
+    # =========================================================================
+    # Row Data Parsing Methods
+    # =========================================================================
 
     def _parse_text_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration') -> tuple:
         """Parse text protocol row data packet with inlined decoding"""
@@ -846,15 +850,15 @@ class BaseClient(ABC):
     @abstractmethod
     def get_ssl_cipher(self) -> Optional[tuple]:
         """Get current SSL cipher information"""
-        pass
+        ...
     
     @abstractmethod
     def get_ssl_version(self) -> Optional[str]:
         """Get current TLS/SSL version"""
-        pass
+        ...
     
     @abstractmethod
     def get_peer_certificate(self) -> Optional[dict]:
         """Get peer SSL certificate information"""
-        pass
+        ...
     
