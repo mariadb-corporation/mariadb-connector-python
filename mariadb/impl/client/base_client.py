@@ -834,7 +834,7 @@ class BaseClient(ABC):
                         row_values[i] = val.decode('ascii')
                         if config.native_object:
                             row_values[i] = uuid.UUID(row_values[i])
-                elif column.character_set == 63:  # Binary
+                elif column.character_set == 63 and field_type != FIELD_TYPE.JSON:  # Binary
                     row_values[i] = val
                 else:
                     row_values[i] = val.decode('utf-8', errors='replace')
