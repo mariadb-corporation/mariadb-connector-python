@@ -105,9 +105,37 @@ def driver(driver_name):
     return get_driver_module(base_name)
 
 
+_driver_warmed_up = {}
+
+@pytest.fixture(scope='session', autouse=True)
+def warmup_session(driver):
+    """Warm up the database and driver once per session, automatically before any tests run."""
+    driver_key = id(driver)
+    if driver_key not in _driver_warmed_up:
+        # Create a temporary connection just for warmup
+        warmup_conn = driver.connect(**DB_CONFIG)
+        warmup_cursor = warmup_conn.cursor()
+        
+        # Warm up with simple queries (simulates running test_do_1 first)
+        for _ in range(6000):
+            warmup_cursor.execute("DO 1")
+        
+        # Also warm up cursor creation/destruction pattern
+        warmup_cursor.close()
+        for _ in range(6000):
+            warmup_cursor = warmup_conn.cursor()
+            warmup_cursor.execute("SELECT seq, 'abcdefghijabcdefghijabcdefghijaa' FROM seq_1_to_1000")
+            warmup_cursor.fetchall()
+            warmup_cursor.close()
+        
+        warmup_conn.close()
+        _driver_warmed_up[driver_key] = True
+
+
 @pytest.fixture(scope='function')
 def connection(driver):
     """Create a database connection for each test."""
+    # Now create the actual test connection
     conn = driver.connect(**DB_CONFIG)
     yield conn
     try:
@@ -143,6 +171,11 @@ def setup_database():
             cursor.execute(table_sql)
         vals = ",".join([str(i) for i in range(1, 101)])
         cursor.execute(f"INSERT INTO test100 VALUES ({vals})")
+        
+        # Warm up the test100 table by accessing it multiple times
+        for _ in range(100):
+            cursor.execute("SELECT * FROM test100")
+            cursor.fetchone()
         
         # Create perfTestTextBatch table
         cursor.execute("DROP TABLE IF EXISTS perfTestTextBatch")
