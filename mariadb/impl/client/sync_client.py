@@ -164,7 +164,7 @@ class SyncClient(BaseClient):
                                  (self._recv_buf[self._recv_pos + 1] << 8) |
                                  (self._recv_buf[self._recv_pos + 2] << 16))
                 sequence = self._recv_buf[self._recv_pos + 3]
-                self.sequence.set(sequence)
+                self.sequence[0] = sequence
 
                 # check if we have complete packet data
                 if bytes_in_buffer < PKT_HDR_SIZE + packet_length:
@@ -240,15 +240,15 @@ class SyncClient(BaseClient):
     def write_payload(self, payload: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
         """Write payload with MariaDB packet framing (sync version)"""
         if reset_sequence:
-            self.sequence.set(-1)
+            self.sequence[0] = -1
         
         payload_len = len(payload) - 4  # Payload has 4 bytes reserved at start for header
         data_offset = 4  # Data starts after reserved header space
         
         if payload_len == 0:  # Handle empty payload - still need to send header
-            seq = self.sequence.increment_and_get()
+            self.sequence[0] = (self.sequence[0] + 1) % 256
             payload[0:3] = b'\x00\x00\x00'
-            payload[3] = seq
+            payload[3] = self.sequence[0]
 
             if self.logger.isEnabledFor(logging.DEBUG):
                 conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
@@ -263,16 +263,16 @@ class SyncClient(BaseClient):
         
         while sent < payload_len:
             chunk_size = min(MAX_PACKET_SIZE, payload_len - sent)
-            seq = self.sequence.increment_and_get()
+            self.sequence[0] = (self.sequence[0] + 1) % 256
             
             chunk_start = data_offset + sent  # Data for this chunk starts at data_offset + sent
             chunk_end = chunk_start + chunk_size
             
             header_pos = chunk_start - 4  # Write header 4 bytes before the chunk data
-            payload[header_pos] = chunk_size & 0xff
-            payload[header_pos + 1] = (chunk_size >> 8) & 0xff
-            payload[header_pos + 2] = (chunk_size >> 16) & 0xff
-            payload[header_pos + 3] = seq
+            payload[header_pos] = chunk_size & 0xFF
+            payload[header_pos + 1] = (chunk_size >> 8) & 0xFF
+            payload[header_pos + 2] = (chunk_size >> 16) & 0xFF
+            payload[header_pos + 3] = self.sequence[0]
             
             if self.logger.isEnabledFor(logging.DEBUG):  # Log if debug enabled
                 packet = bytes(payload_view[header_pos:chunk_end])
@@ -284,8 +284,8 @@ class SyncClient(BaseClient):
             sent += chunk_size
         
         if payload_len % MAX_PACKET_SIZE == 0:  # If last packet was exactly MAX_PACKET_SIZE, send empty packet to signal end
-            seq = self.sequence.increment_and_get()
-            header = b'\x00\x00\x00' + bytes([seq])
+            self.sequence[0] = (self.sequence[0] + 1) % 256
+            header = b'\x00\x00\x00' + bytes([self.sequence[0]])
             self.socket.sendall(header)
 
     # =========================================================================
@@ -440,7 +440,7 @@ class SyncClient(BaseClient):
                 self.cert_fingerprint_validator.capture_fingerprint(self.socket)
             
             # Reset sequence after SSL upgrade
-            self.sequence.set(1)
+            self.sequence[0] = 1
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
     

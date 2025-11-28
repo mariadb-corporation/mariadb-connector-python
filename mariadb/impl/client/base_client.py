@@ -39,7 +39,6 @@ _STRUCT_DATETIME_TEXT = struct.Struct('4s1s2s1s2s1s2s1s2s1s2s')  # YYYY-MM-DD HH
 
 from .context import Context
 from ..message.payload_reader import PayloadReader
-from .mutable_int import MutableInt
 from ..configuration import Configuration
 from ..host_address import HostAddress
 from ..message.client_message import ClientMessage
@@ -96,7 +95,7 @@ class BaseClient(ABC):
         """
         self.configuration: Configuration = configuration
         self.host_address: Optional[HostAddress] = None
-        self.sequence = MutableInt(0)  # Shared sequence number
+        self.sequence = [0]
         self.context: Optional[Context] = None
         self.exception_factory = ExceptionFactory()
         self.closed = False
@@ -133,7 +132,7 @@ class BaseClient(ABC):
     
     def reset_sequence(self) -> None:
         """Reset packet sequence number"""
-        self.sequence.set(0)
+        self.sequence[0] = 0
     
     @abstractmethod
     def write_payload(self, payload: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
