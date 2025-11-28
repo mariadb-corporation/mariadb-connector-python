@@ -98,20 +98,22 @@ def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None
         tracking_type = parser.read_byte()
         data_length = parser.read_length_encoded_int()
         
-        # NOT NEEDED FOR NOW
-        #if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
-        #    end_pos = start_pos + total_length
-        #    while parser.pos < end_pos:
-        #        var_name_len = parser.read_length_encoded_int()
-        #        var_name = parser.read_bytes(var_name_len).decode('utf-8')
-        #        var_value_len = parser.read_length_encoded_int()
-        #        var_value = parser.read_bytes(var_value_len).decode('utf-8')
-        #        context.update_system_variable(var_name, var_value)
-        
-        if tracking_type == constants.SESSION_TRACK.SCHEMA:
+        if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
+            end_pos = start_pos + total_length
+            while parser.pos < end_pos:
+                var_name_len = parser.read_length_encoded_int()
+                var_name = parser.read_bytes(var_name_len).decode('utf-8')
+                var_value_len = parser.read_length_encoded_int()
+                if (var_name == 'character_set_client'):
+                    var_value = parser.read_bytes(var_value_len).decode('utf-8')
+                    context.charset = var_value
+                else:
+                    parser.skip(var_value_len)    
+                    
+        elif tracking_type == constants.SESSION_TRACK.SCHEMA:
             schema_len = parser.read_length_encoded_int()
             context.database = parser.read_bytes(schema_len).decode('utf-8')
-        
+    
         else:
             parser.skip(data_length)
         

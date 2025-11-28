@@ -52,6 +52,11 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         After closing, the cursor cannot be used anymore.
         """
         if not self._closed:
+            if self._stmt:
+                # Release cached statement reference
+                self.connection._client.prepared_statement_cache.release(self._stmt)
+                self._stmt = None
+
             # Consume any remaining streaming results
             if self._result is not None and self._result.streaming():
                 try:
@@ -64,60 +69,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             self._completions = []
             self._completion_index = 0
             self._config = None
-    
-    # =========================================================================
-    # Helper Methods
-    # =========================================================================
-    
-    def _can_use_bulk_execute(self, parameter_sets: list) -> bool:
-        """
-        Check if all parameter sets have compatible types for COM_STMT_BULK_EXECUTE.
         
-        COM_STMT_BULK_EXECUTE requires that all parameters at the same position
-        across all parameter sets have the same type.
-        
-        Args:
-            parameter_sets: List of parameter lists
-            
-        Returns:
-            True if bulk execute can be used, False otherwise
-        """
-        if not parameter_sets or len(parameter_sets) == 0:
-            return True
-        
-        num_params = len(parameter_sets[0])
-        if num_params == 0:
-            return True
-        
-        # If statement is prepared, validate parameter count
-        if self._stmt is not None:
-            expected_count = self._stmt.parameter_count
-            for param_set in parameter_sets:
-                if len(param_set) != expected_count:
-                    # Parameter count mismatch - cannot use bulk
-                    return False
-        
-        # Check each parameter position for type compatibility
-        from mariadb_shared.constants.INDICATOR import MrdbIndicator
-        
-        for param_idx in range(num_params):
-            # Get the type of the first non-None, non-Indicator value at this position
-            reference_type = None
-            
-            for param_set in parameter_sets:
-                if param_idx < len(param_set):
-                    param = param_set[param_idx]
-                    # Skip None and Indicator types
-                    if param is not None and not isinstance(param, MrdbIndicator):
-                        if reference_type is None:
-                            # First real value found - set as reference
-                            reference_type = type(param)
-                        elif type(param) != reference_type:
-                            # Type mismatch found
-                            return False
-        
-        return True
-    
     # =========================================================================
     # Query Execution Methods
     # =========================================================================
@@ -180,21 +132,9 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                     raise ProgrammingError(f"wrong parameter type")
 
                 if self._force_binary:
-                    # Prepare the statement
-
-                    if (self._stmt is not None):
-                        if (self._stmt.sql != sql):
-                            await self.connection._client.close_prepared_statement(self._stmt)
-                            self._stmt = None
-
-                    if (self._stmt is None):
-                        self._stmt = await self.connection._client.prepare_statement(sql)
-
-
-                    # Execute with parameters using ExecutePacket
                     from .impl.message.client.execute_packet import ExecutePacket
-                    execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
-                    self._completions = await self.connection._client.execute(execute_packet, self._config, effective_buffered, prepare_stmt_packet=self._stmt)
+                    execute_packet = ExecutePacket(None, parameters, sql)  # None = will be filled by execute_stmt
+                    self._completions = (await self.connection._client.execute_stmt(sql, [execute_packet], self._config, effective_buffered))[0]
 
                 else:
 
@@ -258,70 +198,46 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             context = self.connection._client.context
             use_bulk = context.has_capability(constants.CAPABILITY.BULK_OPERATIONS) and len(data) > 0 and len(data[0]) > 0
             
-            commands = []
-            
             # Always prepare statement when using bulk operations (required for COM_STMT_BULK_EXECUTE)
             if use_bulk or self._force_binary:
-                if (self._stmt is not None):
-                    if (self._stmt.sql != sql):
-                        await self.connection._client.close_prepared_statement(self._stmt)
-                        self._stmt = None
-
-                if (self._stmt is None):
-                    self._stmt = await self.connection._client.prepare_statement(sql)
-                
                 if use_bulk and self._can_use_bulk_execute(data):
                     # Use COM_STMT_BULK_EXECUTE for efficient bulk execution
                     from .impl.message.client.bulk_execute_packet import BulkExecutePacket
-                    bulk_packet = BulkExecutePacket(self._stmt.statement_id, data, sql)
-                    self._completions = await self.connection._client.execute(bulk_packet, self._config, True)
+                    bulk_packet = BulkExecutePacket(None, data, sql)
+                    self._completions = (await self.connection._client.execute_stmt(sql, [bulk_packet], self._config, True))[0]
+                    self._completion_index = 0
                 else: 
                     # Fallback to individual COM_STMT_EXECUTE packets (when bulk not available but binary forced)
                     from .impl.message.client.execute_packet import ExecutePacket
                     
-                    for params in data:
-                        parameters = None
-                        if params:
-                            parameters = list(params)
-                        
-                        if parameters:
-                            if len(parameters) < self._stmt.parameter_count:
-                                raise ProgrammingError(
-                                    f"Parameter count mismatch: SQL has {self._stmt.parameter_count} placeholders, "
-                                    f"but only {len(parameters)} parameters provided"
-                                )
-                        
-                        execute_packet = ExecutePacket(self._stmt.statement_id, parameters, sql)
-                        commands.append(execute_packet)
-                    completions = await self.connection._client.execute_many(commands, self._config, True, self._stmt)
-                    self._process_executemany_completions(completions)                        
+                    # Create all execute packets
+                    execute_packets = [ExecutePacket(None, params, sql) for params in data]
+                    
+                    # Execute all at once with single prepare
+                    completions = await self.connection._client.execute_stmt(sql, execute_packets, self._config, True)
 
+                    self._process_executemany_completions(completions)   
             else:
                 # Text protocol fallback (when bulk not available and binary not forced)
                 sql_bytes, param_positions = split_sql_parts(sql)
 
                 placeholder_count = len(param_positions) // 2  # Positions come in pairs
-
+                completions = [None] * len(data)
                 for params in data:
-                    parameters = None
+                    if len(params) < placeholder_count:
+                        raise ProgrammingError(
+                            f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
+                            f"but only {len(params)} parameters provided"
+                            )
+
+                for i in range(len(data)):
+                    params = data[i]
                     if params:
                         parameters = list(params)
-
-                    if parameters:
-                        if len(parameters) < placeholder_count:
-                            raise ProgrammingError(
-                                f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
-                                f"but only {len(parameters)} parameters provided"
-                                )
                     query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
-                    commands.append(query_packet)
+                    completions[i] = await self.connection._client.execute(query_packet, self._config, True, self._stmt)
 
-                completions = await self.connection._client.execute_many(commands, self._config, True, self._stmt)
                 self._process_executemany_completions(completions)
-                self._completion_index = 0
-            
-            # Process the completions - aggregate result sets with compatible metadata
-            
 
         except DatabaseError as e:
             raise e            
@@ -527,22 +443,12 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             placeholders = ', '.join(['?' for _ in args])
             call_sql = f"CALL {procname}({placeholders})"
             
-            # Cache client reference
-            client = self.connection._client
-            
-            # Prepare the statement
-            stmt: PrepareStmtPacket = await client.prepare_statement(call_sql)
-            
-            try:
-                # Execute with parameters using ExecutePacket
-                from .impl.message.client.execute_packet import ExecutePacket
-                execute_packet = ExecutePacket(stmt.statement_id, list(args), call_sql)
-                self._completions = await client.execute(execute_packet, self._config)
-                self._completion_index = 0
-                return None  # Match C extension behavior
-                
-            finally:
-                await client.close_prepared_statement(stmt)
+            # Use execute_stmt which handles prepared statement caching internally
+            from .impl.message.client.execute_packet import ExecutePacket
+            execute_packet = ExecutePacket(None, list(args), call_sql)  # None = will be filled by execute_stmt
+            self._completions = (await self.connection._client.execute_stmt(call_sql, [execute_packet], self._config))[0]
+            self._completion_index = 0
+            return None  # Match C extension behavior
         except DatabaseError as e:
             raise e
         except Exception as e:

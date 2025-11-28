@@ -51,6 +51,7 @@ from ...exceptions import OperationalError
 from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
 from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
+from cachetools import LRUCache
 
 # Write stream constants
 HEADER_SIZE = 4
@@ -108,6 +109,23 @@ class BaseClient(ABC):
         # Connection state
         self.connected = False
         self.read_only = configuration.read_only
+        
+        # Prepared statement cache (LRU cache with eviction callback, configurable)
+        cache_size = configuration.prep_stmt_cache_size if configuration.cache_prep_stmts else 0
+        if cache_size > 0:
+            # Create LRU cache that calls evicted_from_cache on eviction
+            class PreparedStatementLRUCache(LRUCache):
+                def popitem(self):
+                    """Called when LRU evicts an item"""
+                    key, value = super().popitem()
+                    # Notify the statement it's been evicted
+                    if hasattr(value, 'evicted_from_cache'):
+                        value.evicted_from_cache()
+                    return key, value
+            
+            self.prepared_statement_cache = PreparedStatementLRUCache(maxsize=cache_size)
+        else:
+            self.prepared_statement_cache = {}
     
     # =========================================================================
     # Write Stream Methods
@@ -169,8 +187,8 @@ class BaseClient(ABC):
         ...
 
     @abstractmethod
-    def execute_many(self, messages: List[ClientMessage], config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[List['Completion']]:
-        """Send client messages and read result"""
+    def execute_stmt(self, sql: str, messages: 'List[ClientMessage]', config: 'Configuration' = None, buffered: bool = True) -> 'List[Completion] | List[List[Completion]]':
+        """Execute SQL with prepared statements (with caching), handles prepare if needed. Returns List[Completion] for single message, List[List[Completion]] for multiple messages."""
         ...
 
     @abstractmethod
@@ -181,11 +199,6 @@ class BaseClient(ABC):
     @abstractmethod
     def _cleanup_connection(self) -> None:
         """Clean up connection resources"""
-        ...
-
-    @abstractmethod
-    def close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
-        """Close a prepared statement"""
         ...
     
     @abstractmethod

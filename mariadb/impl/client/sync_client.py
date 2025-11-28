@@ -17,7 +17,7 @@ import logging
 from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
-from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket
+from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
 from .base_client import BaseClient, MAX_PACKET_SIZE
 from ..message.payload_reader import PayloadReader
@@ -97,28 +97,19 @@ class SyncClient(BaseClient):
 
         # Keep trying to read until we have enough data or there's nothing left
         try:
-            if self.logger.isEnabledFor(logging.DEBUG):
-                self.logger.debug(f"_recv_into_buffer: requesting size={size}, buffer_len={len(self._recv_buf)}, recv_len={self._recv_len}, recv_pos={self._recv_pos}")
-            
             if size == 0:
                 n = self.socket.recv_into(self._recv_buf_mv[self._recv_len + received:])
-                if self.logger.isEnabledFor(logging.DEBUG):
-                    self.logger.debug(f"_recv_into_buffer: received {n} bytes (no size limit)")
                 if n == 0:
                     raise ConnectionError("Connection reset by peer")
                 return n
             while received < size:
                 n = self.socket.recv_into(self._recv_buf_mv[self._recv_len + received:], size - received)
-                if self.logger.isEnabledFor(logging.DEBUG):
-                    self.logger.debug(f"_recv_into_buffer: received {n} bytes, total {received + n}/{size}")
                 if n == 0:
                     raise ConnectionError("Connection reset by peer")
                 received += n
             return received
 
         except socket.timeout:
-            if self.logger.isEnabledFor(logging.DEBUG):
-                self.logger.debug(f"_recv_into_buffer: TIMEOUT after receiving {received} bytes (requested {size})")
             raise TimeoutError("Socket recv timed out")
 
         except ConnectionResetError:
@@ -193,7 +184,7 @@ class SyncClient(BaseClient):
                 if self.logger.isEnabledFor(logging.DEBUG):
                     packet_data = bytes(self._recv_buf[self._recv_pos:self._recv_pos + PKT_HDR_SIZE + packet_length])
                     conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-                    self.logger.debug(hex_dump(packet_data, f"RECV sync: {conn_id_str} packet {packet_count} complete"))
+                    self.logger.debug(hex_dump(packet_data, f"RECV sync: {conn_id_str}"))
                 
                 if packet_count > 1:
                     # Multi-packet: compact by removing intermediate header
@@ -220,7 +211,7 @@ class SyncClient(BaseClient):
                     # Last packet - return accumulated payload
                     if self.logger.isEnabledFor(logging.DEBUG):
                         conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-                        self.logger.debug(f"RECV sync: {conn_id_str} complete multi-packet message: {packet_count} packets, {total_size} bytes total")
+                        self.logger.debug(f"RECV sync: {conn_id_str}")
                     
                     self._recv_pos = first_pos + PKT_HDR_SIZE + total_size
                     return self._recv_buf_mv[first_pos + PKT_HDR_SIZE:first_pos + PKT_HDR_SIZE + total_size]
@@ -514,51 +505,67 @@ class SyncClient(BaseClient):
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")
 
-    def execute_many(self, messages: List[ClientMessage], config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[List[Completion]]:
-        """Execute commands and return list of completion results (one list per message)"""
+    def execute_stmt(self, sql: str, messages: List[ClientMessage], config: 'Configuration' = None, buffered: bool = True):
+        """Execute SQL with prepared statements (with caching), handles prepare if needed"""
         with self.lock:
             if self.closed:
                 raise OperationalError("Connection is closed")
-            
-            results = []
+
             try:
-                # Process in batches to avoid overwhelming the server and TCP buffers
-                # For very large executemany() calls (e.g., 300K rows), pipelining
-                # all writes before reading causes timeouts and connection resets
-                BATCH_SIZE = 1000
+                key = (self.context.database, sql)
                 
+                # Check cache first
+                cached_stmt = self.prepared_statement_cache.get(key)
+                if cached_stmt and cached_stmt.acquire():
+                    with cached_stmt:
+                        all_completions = []
+                        for message in messages:
+                            message.statement_id = cached_stmt.statement_id
+                            self.write_payload(message.payload(self.context), message.type(), True)
+                            self.reset_buffer()
+                            completions = self._read_result(message.is_binary(), config, buffered, cached_stmt)
+                            all_completions.append(completions)                        
+                        return all_completions
+                
+                # Not in cache, prepare once and execute all
+                from ..message.client.prepare_packet import PreparePacket
+                prepare_message = PreparePacket(sql)
+                self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
+                for message in messages:
+                    self.write_payload(message.payload(self.context), message.type(), True)
                 self.reset_buffer()
                 
-                # For large payloads (>1MB), process one at a time to avoid buffer issues
-                # For small payloads, batch for performance
-                has_large_payload = any(len(msg.payload(self.context)) > 1024 * 1024 for msg in messages[:min(10, len(messages))])
-                
-                if has_large_payload:
-                    # Process one command at a time for large payloads
-                    # This prevents TCP buffer issues and command mixing with multi-MB payloads
+                prepareResult = None
+                first_error = None 
+                try:
+                    prepareResult = self._parse_prepare_response(self.read_payload(), sql)
+                except DatabaseError as e:
+                    first_error = e
+                finally:
+                    # Ensure reading, even if prepared has an error
+
+                    all_completions = []
                     for message in messages:
-                        self.write_payload(message.payload(self.context), message.type(), True)
-                        results.append(self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet))
-                else:
-                    # Batch processing for small payloads
-                    for i in range(0, len(messages), BATCH_SIZE):
-                        batch = messages[i:i + BATCH_SIZE]
-                        
-                        # Write batch
-                        for message in batch:
-                            self.write_payload(message.payload(self.context), message.type(), True)
-                        
-                        # Read responses for this batch
-                        for message in batch:
-                            results.append(self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet))
-                        
+                        try:
+                            completions = self._read_result(message.is_binary(), config, buffered, prepareResult)
+                            all_completions.append(completions)
+                        except DatabaseError as e:
+                            if not first_error:
+                                first_error = e
+
+                    if prepareResult:
+                        if self.configuration.cache_prep_stmts:
+                            self.prepared_statement_cache[key] = prepareResult
+                        prepareResult.close()
+
+                if first_error:
+                    raise first_error
+                return all_completions    
+
             except DatabaseError as e:
-                raise e    
+                raise e
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")
-            
-            return results
-
 
     def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         from ..result import SyncStreamingResult, SyncCompleteResult
@@ -698,6 +705,9 @@ class SyncClient(BaseClient):
             if self.closed:
                 return
             
+            # Clear prepared statement cache
+            self.prepared_statement_cache.clear()
+            
             # Send COM_QUIT packet to gracefully close the connection
             if self.connected and self.socket:
                 try:
@@ -764,6 +774,7 @@ class SyncClient(BaseClient):
         sql_commands = []
         if ((self.context.server_status & constants.STATUS.AUTOCOMMIT) > 0) != self.configuration.autocommit:
             sql_commands.append('autocommit = ' + str(int(self.configuration.autocommit)))
+
         if (self.context.charset != 'utf8mb4'):
             sql_commands.append('NAMES utf8mb4')
             self.context.charset = 'utf8mb4'
@@ -776,18 +787,7 @@ class SyncClient(BaseClient):
     # =========================================================================
     # Prepared Statements
     # =========================================================================
-    
-    def prepare_statement(self, sql: str) -> PrepareStmtPacket:
-        """Prepare SQL statement and return statement info"""
-        with self.lock:
-            if self.closed:
-                raise OperationalError("Connection is closed")
-            
-            message = PreparePacket(sql)
-            self.write_payload(message.payload(self.context), message.type(), True)
-
-            return self._parse_prepare_response(self.read_payload(), sql)
-
+  
     def _parse_prepare_response(self, packet: memoryview, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet"""
         if len(packet) == 0:
@@ -796,7 +796,10 @@ class SyncClient(BaseClient):
         packet_type = packet[0]
         
         if packet_type == 0x00:
-            prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context, sql)
+            if self.configuration.cache_prep_stmts:
+                prepare_stmt_packet = CachedPrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)
+            else:
+                prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)
 
             # Read parameter metadata if present
             if prepare_stmt_packet.parameter_count > 0:
@@ -820,20 +823,18 @@ class SyncClient(BaseClient):
             raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
         else:
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
-    
-    def close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
-        """Close prepared statement and free resources"""
+       
+    def _close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
+        """Close prepared statement on server (for cache eviction callback)"""
         if stmt.is_closed():
             return
         
         try:
-            with self.lock:
-                if not self.closed:
-                    from ..message.client.stmt_close_packet import StmtClosePacket
-                    message = StmtClosePacket(stmt.statement_id)
-                    self.write_payload(message.payload(self.context), message.type(), True)
+            if not self.closed:
+                from ..message.client.stmt_close_packet import StmtClosePacket
+                message = StmtClosePacket(stmt.statement_id)
+                self.write_payload(message.payload(self.context), message.type(), True)
         except:
             # Ignore errors when closing
             pass
-        finally:
-            stmt.close()
+    

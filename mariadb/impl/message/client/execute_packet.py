@@ -60,7 +60,7 @@ class ExecutePacket(ClientMessage):
     def payload(self, context: Context) -> bytearray:
         stream = PayloadWriter()
         stream.write_byte(self.COM_STMT_EXECUTE)
-        stream.write_bytes(_STRUCT_I.pack(self.statement_id))
+        stream.write_bytes(_STRUCT_I.pack(self.statement_id) if self.statement_id is not None else b'\xFF\xFF\xFF\xFF')
         stream.write_byte(0x00) # Write flags  
         stream.write_uint32(1) # Write iteration count - always 1
 

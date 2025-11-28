@@ -7,14 +7,13 @@ Asynchronous connection implementation
 Provides a native async API directly using the async Client.
 """
 
-from typing import Optional, Any, Type, List, TYPE_CHECKING
-from mariadb_shared.constants import STATUS, TPC_STATE
-from mariadb_shared.xid import Xid
+from typing import Optional, Any, TYPE_CHECKING
+
+from mariadb_shared.constants import CAPABILITY
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
 from .base_connection import BaseConnection
 
 from .impl.client.async_client import AsyncClient
-from .exceptions import ProgrammingError, Error
 
 
 class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
@@ -241,6 +240,9 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
             from .impl.message.client.change_db_packet import ChangeDbPacket
             await self._client.execute(ChangeDbPacket(database), self._configuration)
         self._database = database
+        if not self._client.context.has_capability(CAPABILITY.SESSION_TRACKING):
+            self._client.context.database = database
+
 
     # Async context manager
     async def __aenter__(self) -> 'AsyncConnection':

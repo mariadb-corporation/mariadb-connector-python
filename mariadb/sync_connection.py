@@ -8,6 +8,7 @@ Provides a blocking API using the sync Client.
 """
 
 from typing import Optional, Any
+from mariadb_shared.constants import CAPABILITY
 from mariadb_shared.sync_connection_common import SyncConnectionCommon
 from .base_connection import BaseConnection
 
@@ -219,6 +220,8 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):
             from .impl.message.client.change_db_packet import ChangeDbPacket
             self._client.execute(ChangeDbPacket(value), self._configuration)
         self._database = value
+        if not self._client.context.has_capability(CAPABILITY.SESSION_TRACKING):
+            self._client.context.database = value
 
     # =========================================================================
     # Utility Methods

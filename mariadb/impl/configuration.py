@@ -61,6 +61,10 @@ class Configuration:
     dictionary: bool = False
     native_object: bool = False
     
+    # Prepared statement caching
+    cache_prep_stmts: bool = True  # Enable prepared statement caching
+    prep_stmt_cache_size: int = 100  # Maximum number of cached prepared statements
+    
     # Additional options
     non_mapped_options: Dict[str, Any] = field(default_factory=dict)
     
@@ -188,6 +192,12 @@ class Configuration:
         if 'native_object' in params:
             config.native_object = bool(params['native_object'])
         
+        # Prepared statement caching
+        if 'cache_prep_stmts' in params:
+            config.cache_prep_stmts = bool(params['cache_prep_stmts'])
+        if 'prep_stmt_cache_size' in params:
+            config.prep_stmt_cache_size = int(params['prep_stmt_cache_size'])
+        
         # Store any unmapped options
         valid_params = {
             'host', 'hostname', 'server', 'user', 'username', 'password', 'passwd',
@@ -199,7 +209,8 @@ class Configuration:
             'autocommit', 'read_only',
             'compress',
             'query_timeout', 'max_allowed_packet',
-            'character_encoding', 'charset', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object'
+            'character_encoding', 'charset', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object',
+            'cache_prep_stmts', 'prep_stmt_cache_size'
         }
         
         for key, value in params.items():

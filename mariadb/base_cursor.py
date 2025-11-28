@@ -348,7 +348,63 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     # =========================================================================
     # Helper Methods (Data Transformation)
     # =========================================================================
+    def _can_use_bulk_execute(self, parameter_sets: list) -> bool:
+        """
+        Check if all parameter sets have compatible types for COM_STMT_BULK_EXECUTE.
+        
+        COM_STMT_BULK_EXECUTE requires that all parameters at the same position
+        across all parameter sets have the same type.
+        
+        Args:
+            parameter_sets: List of parameter lists
+            
+        Returns:
+            True if bulk execute can be used, False otherwise
+        """
+        if not parameter_sets or len(parameter_sets) == 0:
+            return True
+        
+        num_params = len(parameter_sets[0])
+        if num_params == 0:
+            return False
+        
+        # If statement is prepared, validate parameter count
+        expected_count = 0
+        if self._stmt is not None:
+            expected_count = self._stmt.parameter_count
+        else:
+            expected_count = num_params
 
+        for param_set in parameter_sets:
+            if len(param_set) != expected_count:
+                # Parameter count mismatch - this is always an error
+                from mariadb import ProgrammingError
+                raise ProgrammingError(
+                    f"Parameter count mismatch: expected {expected_count} parameters, "
+                    f"but got {len(param_set)} parameters in one of the parameter sets"
+                )
+        
+        # Check each parameter position for type compatibility
+        from mariadb_shared.constants.INDICATOR import MrdbIndicator
+        
+        for param_idx in range(num_params):
+            # Get the type of the first non-None, non-Indicator value at this position
+            reference_type = None
+            
+            for param_set in parameter_sets:
+                if param_idx < len(param_set):
+                    param = param_set[param_idx]
+                    # Skip None and Indicator types
+                    if param is not None and not isinstance(param, MrdbIndicator):
+                        if reference_type is None:
+                            # First real value found - set as reference
+                            reference_type = type(param)
+                        elif type(param) != reference_type:
+                            # Type mismatch found
+                            return False
+        
+        return True
+    
     def _process_executemany_completions(self, completions: List[List[Completion]]) -> None:
         """
         Process completions from executemany - aggregate all result sets.

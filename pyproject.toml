@@ -42,6 +42,7 @@ classifiers = [
 dependencies = [
     "packaging",
     "cryptography>=3.0.0",
+    "cachetools>=5.0.0",
 ]
 
 [project.optional-dependencies]

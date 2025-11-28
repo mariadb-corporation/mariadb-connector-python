@@ -1858,6 +1858,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                            "char CHARACTER SET utf8mb4);\nEND")
 
             for i in range(0, 500):
+                print("DIEGO")
                 await cursor.callproc("p2", ("foo", "bar", 1))
                 row = await cursor.fetchone()
                 self.assertEqual(row[0], b"foobar" if is_mysql() else "foobar")

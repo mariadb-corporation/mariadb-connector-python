@@ -16,7 +16,7 @@ import logging
 from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
-from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket
+from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
 from .base_client import BaseClient, MAX_PACKET_SIZE
 from ..message.payload_reader import PayloadReader
@@ -502,26 +502,66 @@ class AsyncClient(BaseClient):
                 raise OperationalError(f"Execution failed: {e}")
 
 
-
-    async def execute_many(self, messages: List[ClientMessage], config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[List[Completion]]:
-        """Execute commands and return list of completion results (one list per message)"""
+    async def execute_stmt(self, sql: str, messages: List[ClientMessage], config: 'Configuration' = None, buffered: bool = True):
+        """Execute SQL with prepared statements (with caching), handles prepare if needed"""
         with self.lock:
             if self.closed:
                 raise OperationalError("Connection is closed")
-            
-            all_results = []
+
             try:
+                key = (self.context.database, sql)
+                
+                # Check cache first
+                cached_stmt = self.prepared_statement_cache.get(key)
+                if cached_stmt and cached_stmt.acquire():
+                    with cached_stmt:
+                        all_completions = []
+                        for message in messages:
+                            message.statement_id = cached_stmt.statement_id
+                            await self.write_payload(message.payload(self.context), message.type(), True)
+                            completions = await self._read_result(message.is_binary(), config, buffered, cached_stmt)
+                            all_completions.append(completions)                        
+                        return all_completions
+                
+                # Not in cache, prepare once and execute all
+                from ..message.client.prepare_packet import PreparePacket
+                prepare_message = PreparePacket(sql)
+                await self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
                 for message in messages:
                     await self.write_payload(message.payload(self.context), message.type(), True)
-                for message in messages:
-                    results = await self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet)
-                    all_results.append(results)  # Keep as list of lists
+                prepareResult = None
+                first_error = None 
+                try:
+                    prepareResult = await self._parse_prepare_response(await self.read_payload(), sql)
+                except DatabaseError as e:
+                    first_error = e
+                finally:
+                    # Ensure reading, even if prepared has an error
+
+                    all_completions = []
+                    for message in messages:
+                        try:
+                            completions = await self._read_result(message.is_binary(), config, buffered, prepareResult)
+                            all_completions.append(completions)
+                        except DatabaseError as e:
+                            if not first_error:
+                                first_error = e
+
+                    if prepareResult:
+                        if self.configuration.cache_prep_stmts:
+                            self.prepared_statement_cache[key] = prepareResult
+                        prepareResult.close()
+
+                if first_error:
+                    raise first_error
+                return all_completions    
+
             except DatabaseError as e:
-                raise e    
+                raise e
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")
-            
-            return all_results
+
+
 
     async def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         # Move imports outside hot path
@@ -638,6 +678,8 @@ class AsyncClient(BaseClient):
             if self.closed:
                 return
             
+            self.prepared_statement_cache.clear()
+            
             # Send COM_QUIT packet to gracefully close the connection
             if self.connected and self.writer:
                 try:
@@ -711,17 +753,7 @@ class AsyncClient(BaseClient):
     # =========================================================================
     # Prepared Statements
     # =========================================================================
-    
-    async def prepare_statement(self, sql: str) -> PrepareStmtPacket:
-        """Prepare SQL statement and return statement info asynchronously"""
-        with self.lock:
-            if self.closed:
-                raise OperationalError("Connection is closed")
-            
-            message = PreparePacket(sql)
-            await self.write_payload(message.payload(self.context), message.type(), True)
-
-            return await self._parse_prepare_response(await self.read_payload(), sql)
+ 
     
     async def _parse_prepare_response(self, packet: memoryview, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet asynchronously"""
@@ -731,7 +763,10 @@ class AsyncClient(BaseClient):
         packet_type = packet[0]
         
         if packet_type == self.OK_PACKET:
-            prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context)
+            if self.configuration.cache_prep_stmts:
+                prepare_stmt_packet = CachedPrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)
+            else:
+                prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)
             # Read parameter metadata if present
             if prepare_stmt_packet.parameter_count > 0:
                 # Skip parameter metadata
@@ -760,19 +795,27 @@ class AsyncClient(BaseClient):
         else:
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
     
-    async def close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
-        """Close prepared statement and free resources asynchronously"""
+    def _close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
+        """Close prepared statement on server (for cache eviction callback) - sync wrapper"""
+        # This is called from __exit__ which is sync, so we schedule the async close
+        try:
+            loop = asyncio.get_running_loop()
+            # Schedule the async close as a task
+            loop.create_task(self._close_prepared_statement_async(stmt))
+        except RuntimeError:
+            # No event loop running, can't close
+            pass
+    
+    async def _close_prepared_statement_async(self, stmt: PrepareStmtPacket) -> None:
+        """Async implementation of close prepared statement"""
         if stmt.is_closed():
             return
         
         try:
-            # Send COM_STMT_CLOSE packet
-            with self.lock:
-                if not self.closed:
-                    from ..message.client.stmt_close_packet import StmtClosePacket
-                    message = StmtClosePacket(stmt.statement_id)
-                    await self.write_payload(message.payload(self.context), message.type(), True)               
-        except Exception as e:
+            if not self.closed:
+                from ..message.client.stmt_close_packet import StmtClosePacket
+                message = StmtClosePacket(stmt.statement_id)
+                await self.write_payload(message.payload(self.context), message.type(), True)
+        except:
+            # Ignore errors when closing
             pass
-        finally:
-            stmt.close()

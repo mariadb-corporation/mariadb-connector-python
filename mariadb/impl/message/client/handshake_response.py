@@ -62,6 +62,7 @@ class HandshakeResponse(ClientMessage):
         if self.configuration.database and (context.client_capabilities & CAPABILITY.CONNECT_WITH_DB):
             stream.write_string(self.configuration.database)
             stream.write_byte(0x00)
+            context.database = self.configuration.database
         
         # Authentication plugin name
         if (context.client_capabilities & CAPABILITY.PLUGIN_AUTH):

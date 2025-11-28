@@ -68,7 +68,7 @@ class Context:
         self.extended_metadata: bool = False
         
         # Connection state
-        self.database: Optional[str] = None
+        self.database: str = ""
         self.charset: str = ""
         self.collation: str = ""
         
@@ -134,15 +134,7 @@ class Context:
     # =========================================================================
     # Database/Charset Methods
     # =========================================================================
-    
-    def set_database(self, database: str) -> None:
-        """Set current database"""
-        self.database = database
-    
-    def get_database(self) -> Optional[str]:
-        """Get current database"""
-        return self.database
-    
+       
     def set_charset(self, charset: str, collation: Optional[str] = None) -> None:
         """Set character set and optional collation"""
         self.charset = charset
