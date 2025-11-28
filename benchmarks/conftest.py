@@ -15,7 +15,7 @@ import pytest
 
 # Database configuration from environment variables
 DB_CONFIG = {
-    'host': os.environ.get('TEST_DB_HOST', 'localhost'),
+    'host': os.environ.get('TEST_DB_HOST', '127.0.0.1'),
     'port': int(os.environ.get('TEST_DB_PORT', '3306')),
     'user': os.environ.get('TEST_DB_USER', 'root'),
     'password': os.environ.get('TEST_DB_PASSWORD', ''),
