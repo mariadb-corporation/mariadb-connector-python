@@ -562,30 +562,46 @@ class BaseClient(ABC):
         Returns:
             List of converted row tuples
         """
-        if not config.converter or not rows:
-            return rows
 
         # Build list of column indices that need conversion
+        converter_map = config.converter
+        num_cols = len(columns)
         converter_indices = []
         converter_funcs = []
-        for i, column in enumerate(columns):
-            if column.type in config.converter:
+        
+        for i in range(num_cols):
+            col_type = columns[i].type
+            if col_type in converter_map:
                 converter_indices.append(i)
-                converter_funcs.append(config.converter[column.type])
+                converter_funcs.append(converter_map[col_type])
         
         # If no converters needed, return as-is
         if not converter_indices:
             return rows
 
-        # Apply converters to all rows
+        # Fast path: all columns need conversion
+        num_converters = len(converter_indices)
+        if num_converters == num_cols:
+            converted_rows = []
+            for row in rows:
+                converted_row = []
+                for i in range(num_cols):
+                    try:
+                        converted_row.append(converter_funcs[i](row[i]))
+                    except Exception:
+                        converted_row.append(row[i])
+                converted_rows.append(tuple(converted_row))
+            return converted_rows
+
+        # Partial conversion: only some columns need it
         converted_rows = []
         for row in rows:
             row_list = list(row)
-            for idx, converter_func in zip(converter_indices, converter_funcs):
+            for i in range(num_converters):
+                idx = converter_indices[i]
                 try:
-                    row_list[idx] = converter_func(row_list[idx])
+                    row_list[idx] = converter_funcs[i](row_list[idx])
                 except Exception:
-                    # If conversion fails, keep original value
                     pass
             converted_rows.append(tuple(row_list))
 

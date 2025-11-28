@@ -7,7 +7,6 @@ Result set classes for MariaDB query results
 
 from typing import List, Optional, Any, TYPE_CHECKING, Callable, Tuple
 from abc import ABC, abstractmethod
-# No longer need PacketBuffer or PayloadParser imports
 from .message.server.eof_packet import EofPacket
 from .message.server.ok_packet import OkPacket
 from .message.server.column_definition_packet import ColumnDefinitionPacket
@@ -21,6 +20,7 @@ class Result(ABC):
     """
     Abstract base class for result sets
     """
+    __slots__ = ('columns', 'column_count', 'config', 'loaded', 'warning_count', 'is_output_parameters', 'row_pointer')
     
     def __init__(
         self,
@@ -75,6 +75,7 @@ class SyncResult(Result):
     """
     Abstract base class for result sets
     """
+    __slots__ = ()
     
     def __init__(
         self,
@@ -107,6 +108,7 @@ class AsyncResult(Result):
     """
     Abstract base class for result sets
     """
+    __slots__ = ()
     
     def __init__(
         self,
@@ -141,6 +143,7 @@ class BaseCompleteResult(Result):
     
     All rows are loaded into memory at once, allowing random access.
     """
+    __slots__ = ('rows', 'data_size')
     
     def __repr__(self) -> str:
         """String representation for debugging"""
@@ -200,6 +203,7 @@ class SyncCompleteResult(BaseCompleteResult, SyncResult):
     All rows are loaded into memory at once, allowing random access.
     Uses synchronous (non-async) methods.
     """
+    __slots__ = ()
     
     def fetch_one(self) -> Optional[Any]:
         """Fetch next row. row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
@@ -232,6 +236,7 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
     All rows are loaded into memory at once, allowing random access.
     Uses async methods for consistency with async API.
     """
+    __slots__ = ()
     
     async def fetch_one(self) -> Optional[Any]:
         """Fetch next row (async). row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
@@ -266,6 +271,7 @@ class BaseStreamingResult(Result):
     
     Rows are fetched one at a time from the network as needed.
     """
+    __slots__ = ('read_payload_func', 'context', 'row_parser', '_row_count')
     
     def __repr__(self) -> str:
         """String representation for debugging"""
@@ -320,6 +326,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
     
     Uses blocking I/O to fetch rows from the network.
     """
+    __slots__ = ()
     
     def fetch_one(self) -> Optional[tuple]:
         """Fetch next row"""
@@ -407,6 +414,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
     
     Uses non-blocking I/O to fetch rows from the network.
     """
+    __slots__ = ()
     
     async def _read_next_row_packet(self) -> Optional[memoryview]:
         """Read next row packet from network (asynchronous). Returns row packet memoryview, or None if no more rows."""

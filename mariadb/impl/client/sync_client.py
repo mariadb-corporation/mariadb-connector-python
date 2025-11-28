@@ -647,8 +647,8 @@ class SyncClient(BaseClient):
                     else:
                         completion = EofPacket.decode(row_packet, context)
 
-                    # Apply converters to all rows at once
-                    rows = self._apply_converters_to_rows(rows, columns, config)
+                    if config.converter:
+                        rows = self._apply_converters_to_rows(rows, columns, config)
 
                     completion.result_set = SyncCompleteResult(
                         columns,
