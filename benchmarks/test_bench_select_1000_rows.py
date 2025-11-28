@@ -19,18 +19,20 @@ def test_select_1000_rows_text(benchmark, connection, driver_name):
     """Benchmark SELECT 1000 rows using text protocol (regular execute)."""
     
     # Warmup: ensure seq table is in cache
-    cursor = connection.cursor()
-    for _ in range(5):
+    for _ in range(500):
+        cursor = connection.cursor()
         cursor.execute(SQL)
         cursor.fetchall()
+        cursor.close()
     
     def select_1000_rows():
+        cursor = connection.cursor()
         cursor.execute(SQL)
         rows = cursor.fetchall()
+        cursor.close()
         return len(rows)
     
     result = benchmark(select_1000_rows)
-    cursor.close()
     print(f"\n{driver_name} (text): {result}")
 
 
@@ -43,15 +45,17 @@ def test_select_1000_rows_binary(benchmark, connection, driver_name):
     
     # Warmup: ensure seq table is in cache
     cursor = connection.cursor(binary=True)
-    for _ in range(5):
+    for _ in range(500):
         cursor.execute(SQL)
         cursor.fetchall()
+    cursor.close()
     
     def select_1000_rows():
+        cursor = connection.cursor(binary=True)
         cursor.execute(SQL)
         rows = cursor.fetchall()
+        cursor.close()
         return len(rows)
     
     result = benchmark(select_1000_rows)
-    cursor.close()
     print(f"\n{driver_name} (binary): {result}")
