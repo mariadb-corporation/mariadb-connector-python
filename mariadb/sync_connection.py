@@ -63,12 +63,11 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):
     # Core Connection Methods
     # =========================================================================
 
-    def cursor(self, cursor_class=None, **kwargs) -> 'SyncCursor':
+    def cursor(self, **kwargs) -> 'SyncCursor':
         """
         Create a new cursor for executing queries
         
         Args:
-            cursor_class: Optional custom cursor class
             **kwargs: Additional cursor parameters:
                 - named_tuple: Return rows as named tuples
                 - dictionary: Return rows as dictionaries
@@ -80,12 +79,9 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):
         Raises:
             ProgrammingError: If connection is closed
         """
-        if cursor_class is None:
-            # Import here to avoid circular dependency
-            from .sync_cursor import SyncCursor
-            return SyncCursor(self, **kwargs)
-        else:
-            return cursor_class(self, **kwargs)
+        # Import here to avoid circular dependency
+        from .sync_cursor import SyncCursor
+        return SyncCursor(self, **kwargs)
     
     def close(self) -> None:
         """

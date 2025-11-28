@@ -49,6 +49,20 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         TResult: The result type (SyncResult or AsyncResult)
         TConnection: The connection type (SyncConnection or AsyncConnection)
     """
+    
+    __slots__ = (
+        'connection',
+        '_closed',
+        'arraysize',
+        '_completions',
+        '_completion_index',
+        '_current_completion',
+        '_config',
+        '_exception_factory',
+        '_buffered',
+        '_force_binary',
+        '_stmt',
+    )
 
     def __init__(self, connection: TConnection, **kwargs):
         """
@@ -63,6 +77,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self.arraysize: int = 1
         self._completions: List[Completion] = []
         self._completion_index: int = 0
+        self._current_completion: Optional[Completion] = None
         self._config = None
         self._exception_factory = ExceptionFactory()
         self._buffered: bool = bool(kwargs.pop('buffered', True))
@@ -86,7 +101,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
 
     def _check_closed(self) -> None:
         """Check if cursor is closed"""
-        if self._closed or self.connection._closed:
+        if self._closed:
             raise self._exception_factory.create_exception(
                 "Cursor is closed",
                 errno=0,
@@ -118,22 +133,27 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     def lastrowid(self) -> Optional[int]:
         """Get the last insert ID from the current completion"""
         # For executemany, return the last insert ID from all executions
-        completion = self._completion
-        if completion:
-            return completion.insert_id or None
+        # Use cached _current_completion for performance
+        if self._current_completion:
+            return self._current_completion.insert_id or None
         return None
 
     @property
     def metadata(self) -> Optional[Dict[str, tuple]]:
         """Get metadata information for result set columns"""
-        self._check_closed()
+        # Inline _check_closed for performance
+        if self._closed:
+            raise self._exception_factory.create_exception(
+                "Cursor is closed",
+                errno=0,
+                sql_state='42000'
+            )
         
-        if not self._completions:
+        # Use cached _current_completion for performance
+        if not self._current_completion or not self._current_completion.has_result_set():
             return None
         
-        completion = self._completion
-        if not completion or not completion.has_result_set():
-            return None
+        completion = self._current_completion
         
         result_set = completion.result_set
         columns: List[ColumnDefinitionPacket] = result_set.columns if hasattr(result_set, 'columns') else []
@@ -201,37 +221,38 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     @property
     def rowcount(self) -> int:
         """Get the number of rows (read-only property)"""
-        completion = self._completion
-        if completion:
+        # Use cached _current_completion for performance
+        if self._current_completion:
             # For result sets, return the current row count from the result set
-            if completion.has_result_set():
-                return completion.result_set.get_row_count()
+            if self._current_completion.has_result_set():
+                return self._current_completion.result_set.get_row_count()
             # For non-result operations (INSERT/UPDATE/DELETE), return affected_rows
-            return completion.affected_rows
+            return self._current_completion.affected_rows
         # No completions yet
         return -1
 
     @property
     def rownumber(self) -> Optional[int]:
         """Current row number (1-based, DB-API style)"""
-        if self._result is not None:
-            return self._result.row_number()
+        # Use cached _current_completion for performance
+        if self._current_completion and self._current_completion.has_result_set():
+            return self._current_completion.result_set.row_number()
         return None
 
     @property
     def sp_outparams(self) -> bool:
         """Check if current result set contains output parameters"""
-        completion = self._completion
-        if completion:
-            return completion.is_output_parameters()
+        # Use cached _current_completion for performance
+        if self._current_completion:
+            return self._current_completion.is_output_parameters()
         return False
 
     @property
     def warnings(self) -> int:
         """Get the number of warnings from the last executed statement"""
-        completion = self._completion
-        if completion:
-            return getattr(completion, 'warning_count', 0)
+        # Use cached _current_completion for performance
+        if self._current_completion:
+            return getattr(self._current_completion, 'warning_count', 0)
         return 0
 
     # =========================================================================
@@ -327,8 +348,10 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         self._completion_index += 1
         if self._completion_index >= len(self._completions):
+            self._current_completion = None
             return None
         
+        self._current_completion = self._completions[self._completion_index]
         return True
 
     # =========================================================================
@@ -509,19 +532,17 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     
     def _apply_row_formatting(self, rows: List[Any]) -> List[Any]:
         """Apply row formatting (named_tuple or dictionary) based on configuration"""
-        result = self._result
-        if not result:
-            return rows
-        
-        columns = result.columns
-        if not columns:
-            return rows
-        
-        config = self._config
-        if config.named_tuple:
-            return self._convert_rows_to_named_tuples(rows, columns)
-        elif config.dictionary:
-            return self._convert_rows_to_dictionaries(rows, columns)
+        # Use cached _current_completion for performance
+        if self._config.named_tuple or self._config.dictionary:
+            if self._current_completion and self._current_completion.has_result_set():
+                result = self._current_completion.result_set
+                columns = result.columns
+                if columns:
+                    # Inline config checks for performance
+                    if self._config.named_tuple:
+                        return self._convert_rows_to_named_tuples(rows, columns)
+                    elif self._config.dictionary:
+                        return self._convert_rows_to_dictionaries(rows, columns)
         
         return rows
     

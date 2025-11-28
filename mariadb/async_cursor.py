@@ -27,6 +27,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
 
     """
     
+    __slots__ = ()  # No additional attributes beyond BaseCursor
+    
     # =========================================================================
     # Initialization and Lifecycle
     # =========================================================================
@@ -68,6 +70,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             self.arraysize = 1
             self._completions = []
             self._completion_index = 0
+            self._current_completion = None
             self._config = None
         
     # =========================================================================
@@ -157,6 +160,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 self._completions = await self.connection._client.execute(query_packet, self._config, effective_buffered)
             
             self._completion_index = 0
+            self._current_completion = self._completions[0]
         except DatabaseError as e:
             raise e                
         except Exception as e:
@@ -216,7 +220,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                     # Execute all at once with single prepare
                     completions = await self.connection._client.execute_stmt(sql, execute_packets, self._config, True)
 
-                    self._process_executemany_completions(completions)   
+                    self._process_executemany_completions(completions)
             else:
                 # Text protocol fallback (when bulk not available and binary not forced)
                 sql_bytes, param_positions = split_sql_parts(sql)
@@ -238,6 +242,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                     completions[i] = await self.connection._client.execute(query_packet, self._config, True, self._stmt)
 
                 self._process_executemany_completions(completions)
+            self._current_completion = self._completions[0]
 
         except DatabaseError as e:
             raise e            
@@ -448,6 +453,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             execute_packet = ExecutePacket(None, list(args), call_sql)  # None = will be filled by execute_stmt
             self._completions = (await self.connection._client.execute_stmt(call_sql, [execute_packet], self._config))[0]
             self._completion_index = 0
+            self._current_completion = self._completions[0]
             return None  # Match C extension behavior
         except DatabaseError as e:
             raise e

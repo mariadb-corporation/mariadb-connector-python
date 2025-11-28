@@ -29,6 +29,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     
     """
     
+    __slots__ = ()  # No additional attributes beyond BaseCursor
+    
     # =========================================================================
     # Initialization and Lifecycle
     # =========================================================================
@@ -149,6 +151,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             
             # Process the completions to extract result data
             self._completion_index = 0
+            self._current_completion = self._completions[0]
         except DatabaseError as e:
             raise e                
         except Exception as e:
@@ -230,6 +233,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                     completions[i] = self.connection._client.execute(query_packet, self._config, True, self._stmt)
 
                 self._process_executemany_completions(completions)
+                self._current_completion = self._completions[0] if self._completions else None
+            self._current_completion = self._completions[0]
 
         except DatabaseError as e:
             raise e            
@@ -257,9 +262,10 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         if self._closed:
             raise ProgrammingError("Cursor is closed")
         
-        result = self._result
-        if result is None:
+        # Use cached _current_completion for performance
+        if not self._current_completion or not self._current_completion.has_result_set():
             raise ProgrammingError("No result set to fetch from")
+        result = self._current_completion.result_set
         
         if self.connection._closed and result.streaming():
             raise ProgrammingError("Cursor is closed")
@@ -277,9 +283,10 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         if self._closed:
             raise ProgrammingError("Cursor is closed")
         
-        result = self._result
-        if result is None:
+        # Use cached _current_completion for performance
+        if not self._current_completion or not self._current_completion.has_result_set():
             raise ProgrammingError("No result set to fetch from")
+        result = self._current_completion.result_set
         
         if self.connection._closed and result.streaming():
             raise ProgrammingError("Cursor is closed")
@@ -306,9 +313,10 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         if self._closed:
             raise ProgrammingError("Cursor is closed")
         
-        result = self._result
-        if result is None:
+        # Use cached _current_completion for performance
+        if not self._current_completion or not self._current_completion.has_result_set():
             raise ProgrammingError("No result set to fetch from")
+        result = self._current_completion.result_set
         
         if self.connection._closed and result.streaming():
             raise ProgrammingError("Cursor is closed")
@@ -395,6 +403,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             execute_packet = ExecutePacket(None, list(args), call_sql)  # None = will be filled by execute_stmt
             self._completions = self.connection._client.execute_stmt(call_sql, [execute_packet], self._config)[0]
             self._completion_index = 0
+            self._current_completion = self._completions[0]
             return None  # Match C extension behavior
         except DatabaseError as e:
             raise e

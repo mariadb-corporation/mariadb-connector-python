@@ -87,7 +87,6 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
         Create a new async cursor for executing queries
         
         Args:
-            cursor_class: Optional custom cursor class
             **kwargs: Additional cursor parameters:
                 - named_tuple: Return rows as named tuples
                 - dictionary: Return rows as dictionaries
@@ -99,14 +98,9 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
         Raises:
             ProgrammingError: If connection is closed
         """
-        self._check_closed()
-        
-        if cursor_class is None:
-            # Import here to avoid circular dependency
-            from .async_cursor import AsyncCursor
-            return AsyncCursor(self, **kwargs)
-        else:
-            return cursor_class(self, **kwargs)
+        # Import here to avoid circular dependency
+        from .async_cursor import AsyncCursor
+        return AsyncCursor(self, **kwargs)
     
     async def close(self) -> None:
         """
