@@ -18,14 +18,19 @@ SQL = "SELECT seq, 'abcdefghijabcdefghijabcdefghijaa' FROM seq_1_to_1000"
 def test_select_1000_rows_text(benchmark, connection, driver_name):
     """Benchmark SELECT 1000 rows using text protocol (regular execute)."""
     
+    # Warmup: ensure seq table is in cache
+    cursor = connection.cursor()
+    for _ in range(5):
+        cursor.execute(SQL)
+        cursor.fetchall()
+    
     def select_1000_rows():
-        cursor = connection.cursor()
         cursor.execute(SQL)
         rows = cursor.fetchall()
-        cursor.close()
         return len(rows)
     
     result = benchmark(select_1000_rows)
+    cursor.close()
     print(f"\n{driver_name} (text): {result}")
 
 
@@ -36,12 +41,17 @@ def test_select_1000_rows_binary(benchmark, connection, driver_name):
     if driver_name in ['pymysql', 'mysql_connector']:
         pytest.skip(f"{driver_name} doesn't support binary protocol")
     
+    # Warmup: ensure seq table is in cache
+    cursor = connection.cursor(binary=True)
+    for _ in range(5):
+        cursor.execute(SQL)
+        cursor.fetchall()
+    
     def select_1000_rows():
-        cursor = connection.cursor(binary=True)
         cursor.execute(SQL)
         rows = cursor.fetchall()
-        cursor.close()
         return len(rows)
     
     result = benchmark(select_1000_rows)
+    cursor.close()
     print(f"\n{driver_name} (binary): {result}")

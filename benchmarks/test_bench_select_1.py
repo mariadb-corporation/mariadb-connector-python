@@ -15,12 +15,17 @@ import pytest
 def test_select_1(benchmark, connection, driver_name):
     """Benchmark SELECT 1 query execution."""
     
+    # Warmup: ensure connection is established and cached
+    cursor = connection.cursor()
+    for _ in range(10):
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+    
     def select_1():
-        cursor = connection.cursor()
         cursor.execute("SELECT 1")
         result = cursor.fetchone()
-        cursor.close()
         return result[0]
     
     result = benchmark(select_1)
+    cursor.close()
     print(f"\n{driver_name}: {result}")

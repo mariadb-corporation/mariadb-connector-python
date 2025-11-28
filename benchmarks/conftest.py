@@ -136,7 +136,11 @@ def setup_database():
         # Create test100 table (100 integer columns)
         cursor.execute("DROP TABLE IF EXISTS test100")
         cols = ",".join([f"i{i} int" for i in range(1, 101)])
-        cursor.execute(f"CREATE TABLE test100 ({cols})")
+        table_sql = f"CREATE TABLE test100 ({cols})"
+        try:
+            cursor.execute(table_sql + " ENGINE = MEMORY")
+        except:
+            cursor.execute(table_sql)
         vals = ",".join([str(i) for i in range(1, 101)])
         cursor.execute(f"INSERT INTO test100 VALUES ({vals})")
         

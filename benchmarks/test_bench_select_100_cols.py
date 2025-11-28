@@ -16,16 +16,21 @@ import pytest
 def test_select_100_cols_text(benchmark, connection, driver_name):
     """Benchmark SELECT 100 columns using text protocol."""
     
+    # Warmup: ensure table is in database cache
+    cursor = connection.cursor()
+    for _ in range(10):
+        cursor.execute("SELECT * FROM test100")
+        cursor.fetchone()
+    
     def select_100_cols():
-        cursor = connection.cursor()
         cursor.execute("SELECT * FROM test100")
         row = cursor.fetchone()
-        cursor.close()
         # Consume all values to ensure fair comparison
         total = sum(row)
         return total
     
     result = benchmark(select_100_cols)
+    cursor.close()
     print(f"\n{driver_name} (text): {result}")
 
 
@@ -37,14 +42,19 @@ def test_select_100_cols_binary(benchmark, connection, driver_name):
     if driver_name in ['pymysql', 'mysql_connector']:
         pytest.skip(f"{driver_name} doesn't support binary protocol")
     
+    # Warmup: ensure table is in database cache
+    cursor = connection.cursor(binary=True)
+    for _ in range(10):
+        cursor.execute("SELECT * FROM test100")
+        cursor.fetchone()
+    
     def select_100_cols():
-        cursor = connection.cursor(binary=True)
         cursor.execute("SELECT * FROM test100")
         row = cursor.fetchone()
-        cursor.close()
         # Consume all values to ensure fair comparison
         total = sum(row)
         return total
     
     result = benchmark(select_100_cols)
+    cursor.close()
     print(f"\n{driver_name} (binary): {result}")
