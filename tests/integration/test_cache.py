@@ -4,6 +4,7 @@ Tests for prepared statement cache functionality
 
 import unittest
 import mariadb
+from tests.base_test import is_native
 from ..conftest import get_test_config as conf
 
 
@@ -158,6 +159,8 @@ class TestPreparedStatementCache(unittest.TestCase):
     
     def test_cache_executemany(self):
         """Test that executemany uses cache"""
+        if is_mysql():
+            self.skipTest("MySQL don't use bulk")
         cursor = self.conn.cursor()
         
         data = [(10, 'test10'), (11, 'test11'), (12, 'test12')]
