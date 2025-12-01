@@ -65,6 +65,9 @@ class Configuration:
     cache_prep_stmts: bool = True  # Enable prepared statement caching
     prep_stmt_cache_size: int = 100  # Maximum number of cached prepared statements
     
+    # Pipeline option
+    pipeline: bool = True  # Enable pipelining for prepared statements
+    
     # Additional options
     non_mapped_options: Dict[str, Any] = field(default_factory=dict)
     
@@ -198,6 +201,10 @@ class Configuration:
         if 'prep_stmt_cache_size' in params:
             config.prep_stmt_cache_size = int(params['prep_stmt_cache_size'])
         
+        # Pipeline option
+        if 'pipeline' in params:
+            config.pipeline = bool(params['pipeline'])
+        
         # Store any unmapped options
         valid_params = {
             'host', 'hostname', 'server', 'user', 'username', 'password', 'passwd',
@@ -210,7 +217,7 @@ class Configuration:
             'compress',
             'query_timeout', 'max_allowed_packet',
             'character_encoding', 'charset', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object',
-            'cache_prep_stmts', 'prep_stmt_cache_size'
+            'cache_prep_stmts', 'prep_stmt_cache_size', 'pipeline'
         }
         
         for key, value in params.items():
