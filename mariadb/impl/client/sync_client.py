@@ -535,24 +535,25 @@ class SyncClient(BaseClient):
                 use_pipeline = (self.configuration.pipeline and 
                                self.context.has_capability(constants.CAPABILITY.BULK_OPERATIONS))
                 
-                if use_pipeline:
-                    # Pipeline mode: write prepare and all execute messages before reading
-                    self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
-                    
-                    for message in messages:
-                        self.write_payload(message.payload(self.context), message.type(), True)
-                    self.reset_buffer()
-                    
-                    prepareResult = None
-                    first_error = None 
-                    try:
-                        prepareResult = self._parse_prepare_response(self.read_payload(), sql)
-                    except DatabaseError as e:
-                        first_error = e
-                    finally:
-                        # Ensure reading, even if prepared has an error
-
-                        all_completions = []
+                prepareResult = None
+                first_error = None
+                all_completions = []
+                
+                try:
+                    if use_pipeline:
+                        # Pipeline mode: write prepare and all execute messages before reading
+                        self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
+                        
+                        for message in messages:
+                            self.write_payload(message.payload(self.context), message.type(), True)
+                        self.reset_buffer()
+                        
+                        try:
+                            prepareResult = self._parse_prepare_response(self.read_payload(), sql)
+                        except DatabaseError as e:
+                            first_error = e
+                        
+                        # Read all execute results (even if prepare failed)
                         for message in messages:
                             try:
                                 completions = self._read_result(message.is_binary(), config, buffered, prepareResult)
@@ -560,49 +561,34 @@ class SyncClient(BaseClient):
                             except DatabaseError as e:
                                 if not first_error:
                                     first_error = e
-
-                        if prepareResult:
-                            if self.configuration.cache_prep_stmts:
-                                self.prepared_statement_cache[key] = prepareResult
-                            prepareResult.close()
-
-                    if first_error:
-                        raise first_error
-                    return all_completions
-                else:
-                    # Non-pipeline mode: read prepare response before writing execute messages
-                    self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
-                    self.reset_buffer()
-                    
-                    prepareResult = None
-                    first_error = None
-                    try:
-                        prepareResult = self._parse_prepare_response(self.read_payload(), sql)
-                    except DatabaseError as e:
-                        first_error = e
-                        raise
-                    
-                    # Now write and read execute messages
-                    all_completions = []
-                    for message in messages:
-                        message.statement_id = prepareResult.statement_id
-                        self.write_payload(message.payload(self.context), message.type(), True)
+                    else:
+                        # Non-pipeline mode: read prepare response before writing execute messages
+                        self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
                         self.reset_buffer()
-                        try:
-                            completions = self._read_result(message.is_binary(), config, buffered, prepareResult)
-                            all_completions.append(completions)
-                        except DatabaseError as e:
-                            if not first_error:
-                                first_error = e
-                    
+                        
+                        prepareResult = self._parse_prepare_response(self.read_payload(), sql)
+                        
+                        # Now write and read execute messages
+                        for message in messages:
+                            message.statement_id = prepareResult.statement_id
+                            self.write_payload(message.payload(self.context), message.type(), True)
+                            self.reset_buffer()
+                            try:
+                                completions = self._read_result(message.is_binary(), config, buffered, prepareResult)
+                                all_completions.append(completions)
+                            except DatabaseError as e:
+                                if not first_error:
+                                    first_error = e
+                finally:
+                    # Cache and close prepared statement
                     if prepareResult:
                         if self.configuration.cache_prep_stmts:
                             self.prepared_statement_cache[key] = prepareResult
                         prepareResult.close()
-                    
-                    if first_error:
-                        raise first_error
-                    return all_completions    
+                
+                if first_error:
+                    raise first_error
+                return all_completions    
 
             except DatabaseError as e:
                 raise e
