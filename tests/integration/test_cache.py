@@ -4,7 +4,7 @@ Tests for prepared statement cache functionality
 
 import unittest
 import mariadb
-from tests.base_test import is_native
+from tests.base_test import is_mysql
 from ..conftest import get_test_config as conf
 
 
