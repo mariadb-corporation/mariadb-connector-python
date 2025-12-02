@@ -9,6 +9,7 @@ class PingPacket(ClientMessage):
     """
     Ping packet for connection testing
     """
+    __slots__ = ()
         
     def payload(self, context: Context) -> bytearray:
         return bytearray(b'\0\0\0\0\x0e')

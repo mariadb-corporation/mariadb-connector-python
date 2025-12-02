@@ -16,6 +16,7 @@ class ResetConnectionPacket(ClientMessage):
     Resets the current connection and clears session state and pending results.
     This is more efficient than reconnecting as it doesn't require re-authentication.
     """
+    __slots__ = ()
     
     COM_RESET_CONNECTION = 0x1F
         

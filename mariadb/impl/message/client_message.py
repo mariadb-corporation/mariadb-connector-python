@@ -13,6 +13,7 @@ class ClientMessage(ABC):
     """
     Client message interface for MariaDB protocol
     """
+    __slots__ = ()
 
     @abstractmethod
     def payload(self, context: Context) -> bytearray:

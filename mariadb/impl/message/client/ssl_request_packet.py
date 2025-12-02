@@ -11,6 +11,7 @@ class SslRequestPacket(ClientMessage):
     
     See https://mariadb.com/kb/en/connection/#sslrequest-packet
     """
+    __slots__ = ('client_capabilities',)
     
     def __init__(self, client_capabilities: int):
         """Initialize SSL request packet with client capabilities"""

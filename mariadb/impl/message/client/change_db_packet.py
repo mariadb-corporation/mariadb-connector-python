@@ -11,6 +11,7 @@ class ChangeDbPacket(ClientMessage):
     Sends COM_INIT_DB command to change the current database.
     See https://mariadb.com/kb/en/com_init_db/ protocol
     """
+    __slots__ = ('database',)
     
     def __init__(self, database: str):
         """Initialize COM_INIT_DB packet with database name"""

@@ -14,6 +14,7 @@ class HandshakeResponse(ClientMessage):
     """
     Handshake response packet for MySQL authentication
     """
+    __slots__ = ('configuration', 'context')
     
     
     def __init__(self, configuration: Configuration, context: Context):

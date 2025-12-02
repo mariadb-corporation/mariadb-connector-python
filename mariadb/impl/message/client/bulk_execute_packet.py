@@ -46,6 +46,7 @@ class BulkExecutePacket(ClientMessage):
     Allows sending multiple parameter sets in a single packet for efficient batch execution.
     See: https://mariadb.com/kb/en/com_stmt_bulk_execute/
     """
+    __slots__ = ('statement_id', 'parameter_sets', 'sql', 'parameter_types', 'parameter_writers')
     
     COM_STMT_BULK_EXECUTE = 0xFA
     

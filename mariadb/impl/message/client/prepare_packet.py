@@ -10,6 +10,7 @@ class PreparePacket(ClientMessage):
     
     See: https://mariadb.com/kb/en/com_stmt_prepare/
     """
+    __slots__ = ('sql',)
     
     COM_STMT_PREPARE = 0x16
     

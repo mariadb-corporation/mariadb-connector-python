@@ -48,6 +48,7 @@ class ExecutePacket(ClientMessage):
     
     See: https://mariadb.com/kb/en/com_stmt_execute/
     """
+    __slots__ = ('statement_id', 'parameters', 'sql')
     
     COM_STMT_EXECUTE = 0x17
     

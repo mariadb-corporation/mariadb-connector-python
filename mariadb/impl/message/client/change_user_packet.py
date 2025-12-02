@@ -21,6 +21,7 @@ class ChangeUserPacket(ClientMessage):
     Changes the user and optionally the database for the current connection.
     Resets the connection state (variables, temp tables, prepared statements, etc.)
     """
+    __slots__ = ('username', 'password', 'database', 'charset_collation', 'connect_attrs')
     
     def __init__(self, 
                  username: str,

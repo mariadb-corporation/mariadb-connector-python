@@ -17,6 +17,7 @@ class StmtClosePacket(ClientMessage):
     
     Sends COM_STMT_CLOSE command to deallocate a prepared statement on the server.
     """
+    __slots__ = ('statement_id',)
     
     COM_STMT_CLOSE = 0x19
     

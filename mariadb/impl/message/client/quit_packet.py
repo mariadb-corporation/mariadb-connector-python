@@ -16,6 +16,7 @@ class QuitPacket(ClientMessage):
     
     Sends COM_QUIT command to notify the server that the client is closing.
     """
+    __slots__ = ()
     
     COM_QUIT = 0x01
     
