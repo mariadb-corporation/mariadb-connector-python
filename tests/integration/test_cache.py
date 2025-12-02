@@ -4,11 +4,7 @@ Tests for prepared statement cache functionality
 
 import unittest
 import mariadb
-<<<<<<< HEAD
-from tests.base_test import is_mysql
-=======
 from tests.base_test import is_mysql, is_native
->>>>>>> 3c4c047 (refactor: permit format/pyformat and named parameter query)
 from ..conftest import get_test_config as conf
 
 
