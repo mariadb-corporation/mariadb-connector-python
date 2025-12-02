@@ -671,8 +671,6 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_pyformat(self):
-        if is_native():
-            self.skipTest("Native doesn't support pyformat")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
@@ -693,8 +691,6 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], "Andrey")
 
     def test_format(self):
-        if (is_native()):
-            self.skipTest("Native only support qmark")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
@@ -834,8 +830,6 @@ class TestCursor(unittest.TestCase):
         del cursor
 
     def test_indicator(self):
-        if is_native():
-            self.skipTest("Skip for native, until suporting bulk")
         if is_mysql():
             self.skipTest("Skip (MySQL)")
         if self.connection.server_version < server_indicator_version:
@@ -1476,8 +1470,6 @@ class TestCursor(unittest.TestCase):
             cursor.close()
 
     def test_conpy48(self):
-        if is_native():
-            self.skipTest("Native only support QMARK")
         with create_connection() as con:
             cur = con.cursor()
             cur.execute("select %s", [True])
@@ -1566,8 +1558,6 @@ class TestCursor(unittest.TestCase):
             cur.close()
 
     def test_conpy58(self):
-        if is_native():
-            self.skipTest("Native only support QMARK")
         with create_connection() as con:
             cursor = con.cursor()
             cursor.execute("SELECT %(val)s", {"val": 3})
@@ -1924,8 +1914,6 @@ class TestCursor(unittest.TestCase):
                 self.assertEqual(row[0], b"foobar" if is_mysql() else "foobar")
 
     def test_conpy205(self):
-        if is_native():
-            self.skipTest("Native only support QMARK")
         with create_connection() as conn:
             cursor = conn.cursor()
 
@@ -2234,8 +2222,6 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(rows, data)
 
     def test_conpy91(self):
-        if is_native():
-            self.skipTest("Native only support QMARK")
         with create_connection() as connection:
             with connection.cursor() as cursor:
                 for parameter_type in (int, decimal.Decimal):

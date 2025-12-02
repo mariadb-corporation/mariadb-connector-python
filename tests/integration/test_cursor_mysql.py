@@ -16,8 +16,6 @@ class CursorMySQLTest(unittest.TestCase):
         self.connection.close()
 
     def test_parameter(self):
-        if is_native():
-            self.skipTest("Native only support qmark")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 

@@ -392,7 +392,7 @@ class SyncClient(BaseClient):
         """
         if self.configuration.init_command:
             try:
-                query_packet = QueryPacket(self.configuration.init_command)
+                query_packet = QueryPacket.from_sql(self.configuration.init_command)
                 self.execute(query_packet, self.configuration)
             except Exception as e:
                 raise OperationalError(f"Failed to execute init command: {e}")
@@ -809,7 +809,7 @@ class SyncClient(BaseClient):
 
         if len(sql_commands) > 0:
             sql_command = 'SET ' + ', '.join(sql_commands)
-            query_packet = QueryPacket(sql_command)
+            query_packet = QueryPacket.from_sql(sql_command)
             self.execute(query_packet)
     
     # =========================================================================

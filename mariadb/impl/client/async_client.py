@@ -322,7 +322,7 @@ class AsyncClient(BaseClient):
 
         if len(sql_commands) > 0:
             sql_command = 'SET ' + ', '.join(sql_commands)
-            query_packet = QueryPacket(sql_command)
+            query_packet = QueryPacket.from_sql(sql_command)
             await self.execute(query_packet, self.configuration)
     
     # _parse_handshake() and _calculate_client_capabilities() are inherited from BaseClient
@@ -479,7 +479,7 @@ class AsyncClient(BaseClient):
                     # Use the existing QueryPacket and execute method
                     from ...impl.message.client.query_packet import QueryPacket
                     
-                    query_packet = QueryPacket(init_command)
+                    query_packet = QueryPacket.from_sql(init_command)
                     
                     # Execute the query - this handles all the packet framing and response parsing
                     await self.execute(query_packet, self.configuration)

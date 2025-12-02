@@ -632,8 +632,6 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         del cursor
 
     async def test_pyformat(self):
-        if is_native():
-            self.skipTest("Native doesn't support pyformat")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
@@ -654,8 +652,6 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row[0], "Andrey")
 
     async def test_format(self):
-        if (is_native()):
-            self.skipTest("Native only support qmark")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
 
@@ -795,8 +791,6 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         del cursor
 
     async def test_indicator(self):
-        if is_native():
-            self.skipTest("Skip for native, until suporting bulk")
         if is_mysql():
             self.skipTest("Skip (MySQL)")
         if self.connection.server_version < server_indicator_version:
@@ -1466,8 +1460,6 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.close()
 
     async def test_conpy48(self):
-        if is_native():
-            self.skipTest("Native only support QMARK")
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
             cur = con.cursor()
             await cur.execute("select %s", [True])
@@ -1546,8 +1538,6 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.close()
 
     async def test_conpy58(self):
-        if is_native():
-            self.skipTest("Native only support QMARK")
         async with await mariadb.AsyncConnection.connect(**conf()) as con:
             cursor = con.cursor()
             await cursor.execute("SELECT %(val)s", {"val": 3})
@@ -1863,8 +1853,6 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(row[0], b"foobar" if is_mysql() else "foobar")
 
     async def test_conpy205(self):
-        if is_native():
-            self.skipTest("Native only support QMARK")
         async with await mariadb.AsyncConnection.connect(**conf()) as conn:
             cursor = conn.cursor()
 
@@ -2174,11 +2162,8 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(rows, data)
 
     async def test_conpy91(self):
-        if is_native():
-            self.skipTest("Native only support QMARK")
-
         async with await mariadb.AsyncConnection.connect(**conf()) as connection:
-            with connection.cursor() as cursor:
+            async with connection.cursor() as cursor:
                 for parameter_type in (int, decimal.Decimal):
                     with self.subTest(parameter_type=parameter_type):
                         with self.subTest(parameter_count=1):

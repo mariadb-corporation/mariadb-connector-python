@@ -4,10 +4,15 @@ Tests for prepared statement cache functionality
 
 import unittest
 import mariadb
+<<<<<<< HEAD
 from tests.base_test import is_mysql
+=======
+from tests.base_test import is_mysql, is_native
+>>>>>>> 3c4c047 (refactor: permit format/pyformat and named parameter query)
 from ..conftest import get_test_config as conf
 
 
+@unittest.skipIf(not is_native(), "cache not available using c implementation")
 class TestPreparedStatementCache(unittest.TestCase):
     """Test prepared statement caching"""
     
@@ -298,7 +303,7 @@ class TestPreparedStatementCache(unittest.TestCase):
         
         cursor.close()
 
-
+@unittest.skipIf(not is_native(), "cache not available using c implementation")
 class TestPreparedStatementCacheAsync(unittest.IsolatedAsyncioTestCase):
     """Test prepared statement caching with async connections"""
     

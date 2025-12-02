@@ -33,101 +33,54 @@ BINARY_QUOTE_PREFIX: bytes = b"_binary'"
 
 class QueryPacket(ClientMessage):
     """
-    Simple query packet for SQL execution without parameters
+    Query packet for SQL execution
+    Use static factory methods to create instances:
+    - QueryPacket.from_sql(sql_string) for plain SQL
+    - QueryPacket.from_payload(payload_bytes) for pre-formatted payload with parameters
     """
 
-    def __init__(self, sql: str):
-        """Initialize COM_QUERY packet with SQL"""
-        self.sql = sql
-        
-    def payload(self, context: Context) -> bytearray:
-        result = bytearray(b'\0\0\0\0\x03')
-        result.extend(self.sql.encode('utf-8'))
-        return result
-
-    def is_binary(self) -> bool:
-        return False
-
-    def type(self) -> str:
-        return "COM_QUERY"
-
-
-class QueryWithParamPacket(ClientMessage):
-    """
-    Parameterized query packet for SQL execution with parameter binding
-    """
-
-    def __init__(self, sql_bytes: bytes, param_positions: List[int], parameters: List[Any]):
+    def __init__(self, payload_bytes: bytearray):
         """
-        Initialize COM_QUERY packet with pre-parsed SQL bytes and parameters
-
+        Initialize COM_QUERY packet with pre-formatted payload
+        
         Args:
-            sql_bytes: SQL encoded as UTF-8 bytes
-            param_positions: Byte positions (start, end) pairs where placeholders are
-            parameters: Parameter values to bind
+            payload_bytes: Complete packet payload including header + COM_QUERY + SQL
         """
-        self.sql_bytes = sql_bytes
-        self.param_positions = param_positions
-        self.parameters = parameters
+        self._payload_bytes = payload_bytes
+    
+    @staticmethod
+    def from_sql(sql: str) -> 'QueryPacket':
+        """
+        Create QueryPacket from SQL string
+        
+        Args:
+            sql: SQL statement as string
+            
+        Returns:
+            QueryPacket instance
+        """
+        sql_bytes = sql.encode('utf-8')
+        payload = bytearray(5 + len(sql_bytes))
+        payload[0:4] = b'\x00\x00\x00\x00'  # Length placeholder
+        payload[4] = 0x03  # COM_QUERY
+        payload[5:] = sql_bytes
+        return QueryPacket(payload)
+    
+    @staticmethod
+    def from_payload(payload_bytes: bytes) -> 'QueryPacket':
+        """
+        Create QueryPacket from pre-formatted payload bytes
+        
+        Args:
+            payload_bytes: Complete packet payload (header + COM_QUERY + formatted SQL)
+            
+        Returns:
+            QueryPacket instance
+        """
+        return QueryPacket(payload_bytes)
         
     def payload(self, context: Context) -> bytearray:
-        """Generate COM_QUERY packet payload with SQL and bound parameters"""
-        no_backslash_escapes = context.server_status & NO_BACKSLASH_ESCAPES > 0
-
-        # Write SQL fragments interleaved with parameters
-        last_pos = 0
-        param_idx = 0
-        params = self.parameters
-        param_positions = self.param_positions
-        sql_bytes = self.sql_bytes
-        converter = PARAM_CONVERT_TBL
-        
-        # Pre-calculate exact size needed
-        num_placeholders = len(param_positions) >> 1  # Divide by 2 using bit shift
-        parts = [None] * (num_placeholders * 2 + 2)  # Pre-allocate exact size
-        
-        parts[0] = b'\0\0\0\0\x03'
-        count = 1
-        
-        # Cache type() function to avoid global lookup in loop
-        _type = type
-        
-        # Iterate through placeholder positions (they come in pairs: start, end)
-        for i in range(0, len(param_positions), 2):
-            start_pos = param_positions[i]
-            end_pos = param_positions[i + 1]
-
-            # Write SQL fragment before this placeholder
-            if start_pos > last_pos:
-                parts[count] = sql_bytes[last_pos:start_pos]
-                count += 1
-
-            # Write parameter value
-            if param_idx < len(params):
-                param = params[param_idx]
-                param_type = _type(param)
-                conv_func = converter.get(param_type)
-                if conv_func is not None:
-                    parts[count] = conv_func(param, no_backslash_escapes)
-                else:
-                    # Fallback for unknown types
-                    parts[count] = str(param).encode('utf8')
-                param_idx += 1
-                count += 1
-            else:
-                parts[count] = NULL_BYTES
-                count += 1
-
-            last_pos = end_pos
-
-        # Write remaining SQL after last placeholder
-        if last_pos < len(sql_bytes):
-            parts[count] = sql_bytes[last_pos:]
-            count += 1
-        
-        # Join parts directly into bytearray (single allocation, no intermediate bytes object)
-        # bytearray().join() is available in Python 3.x and avoids creating intermediate bytes
-        return bytearray().join(parts[:count])
+        return self._payload_bytes
 
     def is_binary(self) -> bool:
         return False
@@ -136,7 +89,10 @@ class QueryWithParamPacket(ClientMessage):
         return "COM_QUERY"
 
 
-#### Conversion routines should be moved to a "central" place
+# ============================================================================
+# Parameter Conversion Functions
+# Used by sql_parser.py for parameter substitution
+# ============================================================================
 
 def float2bytes(value: float, ctx=None) -> bytes:
     if repr(value) in ("nan", "inf", "-inf"):

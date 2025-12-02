@@ -12,9 +12,10 @@ from .impl.client.sync_client import SyncClient
 
 from .base_cursor import BaseCursor
 from .exceptions import DatabaseError, ProgrammingError
-from .impl.message.client.query_packet import QueryPacket, QueryWithParamPacket
-from .impl.sql_parser import split_sql_parts
+from .impl.message.client.query_packet import QueryPacket
+from .impl.sql_parser import substitute, normalize_to_qmark
 from mariadb_shared.sync_cursor_common import SyncCursorCommon
+from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 
 if TYPE_CHECKING:
     from .base_connection import BaseConnection
@@ -116,37 +117,44 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             effective_buffered = buffered if buffered is not None else self._buffered
 
             if data:
-                parameters = None
-
                 if isinstance(data, (list, tuple)):
                     # Positional parameters
                     parameters = list(data)
+                elif isinstance(data, dict):
+                    # Named parameters
+                    parameters = data
                 else:
                     raise ProgrammingError(f"wrong parameter type")
 
-                if self._force_binary:
+                if self._force_binary and not isinstance(parameters, dict):
+
                     from .impl.message.client.execute_packet import ExecutePacket
                     execute_packet = ExecutePacket(None, parameters, sql)
                     self._completions = self.connection._client.execute_stmt(sql, [execute_packet], self._config, effective_buffered)[0]
 
                 else:
-
-                    sql_bytes, param_positions = split_sql_parts(sql)
-
-                    # Validate parameter count
-                    placeholder_count = len(param_positions) // 2  # Positions come in pairs
-                    if len(parameters) < placeholder_count:
-                        raise ProgrammingError(
-                            f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
-                            f"but only {len(parameters)} parameters provided"
-                        )
-                    # Use parameterized query packet with bytes
-                    query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
+                    # Get NO_BACKSLASH_ESCAPES status from connection
+                    no_backslash_escapes = (self.connection._client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
+                    
+                    # Parse SQL and substitute parameters
+                    payload_bytes, param_positions = substitute(sql, parameters, no_backslash_escapes)
+                    
+                    # Validate parameter count if parsing found placeholders but no substitution happened
+                    if len(param_positions) > 0:
+                        placeholder_count = len(param_positions) // 2
+                        if len(parameters) < placeholder_count:
+                            raise ProgrammingError(
+                                f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
+                                f"but only {len(parameters)} parameters provided"
+                            )
+                    
+                    # Use query packet with formatted payload
+                    query_packet = QueryPacket.from_payload(payload_bytes)
                     self._completions = self.connection._client.execute(query_packet, self._config, effective_buffered)
 
             else:
                 # Use simple query packet
-                query_packet = QueryPacket(sql)
+                query_packet = QueryPacket.from_sql(sql)
                 self._completions = self.connection._client.execute(query_packet, self._config, effective_buffered)
             
             # Process the completions to extract result data
@@ -188,48 +196,58 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             if data and len(data) > 0 and not isinstance(data, (list, tuple)):
                 raise ProgrammingError(f"wrong parameter type")
 
-            # Check if server supports COM_STMT_BULK_EXECUTE (check once for both paths)
+            # Normalize SQL to qmark style and get parameter mapping
+            normalized_sql, param_names = normalize_to_qmark(sql)
+            
+            # Reorder parameters if needed (for named/pyformat styles)
+            if param_names is not None:
+                # Named parameters - reorder each parameter set according to param_names
+                reordered_data = []
+                for param_set in data:
+                    if isinstance(param_set, dict):
+                        reordered = [param_set.get(name) for name in param_names]
+                        reordered_data.append(reordered)
+                    else:
+                        raise ProgrammingError("Named placeholders require dict parameters")
+                data = reordered_data
+            
+            # Check if server supports COM_STMT_BULK_EXECUTE
             from mariadb_shared import constants
             context = self.connection._client.context
-            use_bulk = context.has_capability(constants.CAPABILITY.BULK_OPERATIONS) and len(data) > 0 and len(data[0]) > 0
+            use_bulk = (context.has_capability(constants.CAPABILITY.BULK_OPERATIONS) and 
+                       len(data) > 0 and len(data[0]) > 0)
             
-            # Always prepare statement when using bulk operations (required for COM_STMT_BULK_EXECUTE)
+            # Use binary protocol with normalized SQL (always qmark now)
             if use_bulk or self._force_binary:
                 if use_bulk and self._can_use_bulk_execute(data):
                     # Use COM_STMT_BULK_EXECUTE for efficient bulk execution
                     from .impl.message.client.bulk_execute_packet import BulkExecutePacket
-                    bulk_packet = BulkExecutePacket(None, data, sql)
-                    self._completions = self.connection._client.execute_stmt(sql, [bulk_packet], self._config, True)[0]
+                    bulk_packet = BulkExecutePacket(None, data, normalized_sql)
+                    self._completions = self.connection._client.execute_stmt(normalized_sql, [bulk_packet], self._config, True)[0]
                     self._completion_index = 0
                 else: 
                     # Fallback to individual COM_STMT_EXECUTE packets (when bulk not available but binary forced)
                     from .impl.message.client.execute_packet import ExecutePacket
                     
                     # Create all execute packets
-                    execute_packets = [ExecutePacket(None, params, sql) for params in data]
+                    execute_packets = [ExecutePacket(None, params, normalized_sql) for params in data]
                     
                     # Execute all at once with single prepare
-                    completions = self.connection._client.execute_stmt(sql, execute_packets, self._config, True)
+                    completions = self.connection._client.execute_stmt(normalized_sql, execute_packets, self._config, True)
 
                     self._process_executemany_completions(completions)   
             else:
                 # Text protocol fallback (when bulk not available and binary not forced)
-                sql_bytes, param_positions = split_sql_parts(sql)
-
-                placeholder_count = len(param_positions) // 2  # Positions come in pairs
+                # Get NO_BACKSLASH_ESCAPES status from connection
+                no_backslash_escapes = (self.connection._client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
+                
                 completions = [None] * len(data)
-                for params in data:
-                    if len(params) < placeholder_count:
-                        raise ProgrammingError(
-                            f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
-                            f"but only {len(params)} parameters provided"
-                            )
-
                 for i in range(len(data)):
                     params = data[i]
-                    if params:
-                        parameters = list(params)
-                    query_packet = QueryWithParamPacket(sql_bytes, param_positions, parameters)
+                    parameters = list(params) if params else []
+                    # substitute() will validate parameter count and raise ProgrammingError if mismatch
+                    payload_bytes, _ = substitute(sql, parameters, no_backslash_escapes)
+                    query_packet = QueryPacket.from_payload(payload_bytes)
                     completions[i] = self.connection._client.execute(query_packet, self._config, True, self._stmt)
 
                 self._process_executemany_completions(completions)
