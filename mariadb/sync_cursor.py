@@ -12,8 +12,7 @@ from .impl.client.sync_client import SyncClient
 
 from .base_cursor import BaseCursor
 from .exceptions import DatabaseError, ProgrammingError
-from .impl.message.client.query_packet import QueryPacket
-from .impl.sql_parser import substitute, normalize_to_qmark
+from .impl.message.client.query_packet import QueryPacket, normalize_to_qmark
 from mariadb_shared.sync_cursor_common import SyncCursorCommon
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 
@@ -133,23 +132,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                     self._completions = self.connection._client.execute_stmt(sql, [execute_packet], self._config, effective_buffered)[0]
 
                 else:
-                    # Get NO_BACKSLASH_ESCAPES status from connection
                     no_backslash_escapes = (self.connection._client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
-                    
-                    # Parse SQL and substitute parameters
-                    payload_bytes, param_positions = substitute(sql, parameters, no_backslash_escapes)
-                    
-                    # Validate parameter count if parsing found placeholders but no substitution happened
-                    if len(param_positions) > 0:
-                        placeholder_count = len(param_positions) // 2
-                        if len(parameters) < placeholder_count:
-                            raise ProgrammingError(
-                                f"Parameter count mismatch: SQL has {placeholder_count} placeholders, "
-                                f"but only {len(parameters)} parameters provided"
-                            )
-                    
-                    # Use query packet with formatted payload
-                    query_packet = QueryPacket.from_payload(payload_bytes)
+                    query_packet = QueryPacket.from_substitute(sql, parameters, no_backslash_escapes)
                     self._completions = self.connection._client.execute(query_packet, self._config, effective_buffered)
 
             else:
@@ -245,9 +229,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 for i in range(len(data)):
                     params = data[i]
                     parameters = list(params) if params else []
-                    # substitute() will validate parameter count and raise ProgrammingError if mismatch
-                    payload_bytes, _ = substitute(sql, parameters, no_backslash_escapes)
-                    query_packet = QueryPacket.from_payload(payload_bytes)
+                    # from_substitute() will validate parameter count and raise ProgrammingError if mismatch
+                    query_packet = QueryPacket.from_substitute(sql, parameters, no_backslash_escapes)
                     completions[i] = self.connection._client.execute(query_packet, self._config, True, self._stmt)
 
                 self._process_executemany_completions(completions)
