@@ -10,8 +10,7 @@ Uses asyncio for non-blocking I/O operations.
 import asyncio
 import ssl
 import copy
-from typing import List, Optional, Any
-import logging
+from typing import List, Optional
 
 from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
@@ -21,7 +20,6 @@ from mariadb.impl.message.server.column_definition_packet import ColumnDefinitio
 from .base_client import BaseClient, MAX_PACKET_SIZE
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
-from ..debug_utils import hex_dump
 from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
 from ..message.client.query_packet import QueryPacket
@@ -34,7 +32,6 @@ from ...exceptions import OperationalError, DatabaseError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
 
-logger = logging.getLogger(__name__)
 
 class AsyncClient(BaseClient):
     """
@@ -96,14 +93,7 @@ class AsyncClient(BaseClient):
         self._ensure_read_capacity(pkt_len)
         payload = await self.reader.readexactly(pkt_len)
         self._readbuf[0:pkt_len] = payload
-        
-        # Log if debug enabled
-        if logger.isEnabledFor(logging.DEBUG):
-            from ..debug_utils import hex_dump
-            conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-            full_packet = header + payload
-            logger.debug(hex_dump(full_packet, f"RECV async: {conn_id_str}"))
-        
+                
         # Fast path: single packet (99.9999% of cases)
         if pkt_len < MAX_PACKET_SIZE:
             return self._read_view[0:pkt_len]
@@ -124,13 +114,7 @@ class AsyncClient(BaseClient):
             # Read payload chunk directly after accumulated data
             payload = await self.reader.readexactly(pkt_len)
             self._readbuf[result_len:result_len + pkt_len] = payload
-            
-            # Log if debug enabled
-            if logger.isEnabledFor(logging.DEBUG):
-                conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-                full_packet = header + payload
-                logger.debug(hex_dump(full_packet, f"RECV async: {conn_id_str}"))
-            
+                        
             result_len += pkt_len
             
             # Continuation condition
@@ -156,11 +140,6 @@ class AsyncClient(BaseClient):
             payload[0:3] = b'\x00\x00\x00'
             payload[3] = self.sequence[0]
 
-            if logger.isEnabledFor(logging.DEBUG):
-                conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context.connection_id >= 0 else ""
-                packet_type_str = f" {packet_type}" if packet_type else ""
-                logger.debug(hex_dump(bytes(payload[0:4]), f"SEND async: {conn_id_str}{packet_type_str}"))
-            
             self.writer.write(payload[0:4])
             await self.writer.drain()
             return
@@ -180,12 +159,6 @@ class AsyncClient(BaseClient):
             payload[header_pos + 1] = (chunk_size >> 8) & 0xFF
             payload[header_pos + 2] = (chunk_size >> 16) & 0xFF
             payload[header_pos + 3] = self.sequence[0]
-            
-            if logger.isEnabledFor(logging.DEBUG):  # Log if debug enabled
-                packet = payload_view[header_pos:chunk_end]
-                conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context.connection_id >= 0 else ""
-                packet_type_str = f" {packet_type}" if packet_type else ""
-                logger.debug(hex_dump(packet, f"SEND async: {conn_id_str}{packet_type_str}"))
             
             self.writer.write(payload_view[header_pos:chunk_end])  # Send packet: header + chunk data using memoryview (no copy)
             sent += chunk_size

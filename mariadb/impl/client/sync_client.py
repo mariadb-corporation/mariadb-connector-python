@@ -12,7 +12,6 @@ import socket
 import ssl
 import copy
 from typing import List, Optional
-import logging
 
 from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
@@ -22,7 +21,6 @@ from mariadb.impl.message.server.column_definition_packet import ColumnDefinitio
 from .base_client import BaseClient, MAX_PACKET_SIZE
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
-from ..debug_utils import hex_dump
 from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
 from ..message.client.query_packet import QueryPacket
@@ -46,8 +44,6 @@ class SyncClient(BaseClient):
     using blocking I/O operations.
  
     """
-
-    logger = logging.getLogger(__name__)
     
     # =========================================================================
     # Initialization
@@ -127,8 +123,6 @@ class SyncClient(BaseClient):
         of the buffer
 
         """
-        from ..debug_utils import hex_dump
-
         # for faster local lookup
         PKT_HDR_SIZE=4
         MAX_PKT_SIZE=0xFFFFFF
@@ -180,12 +174,6 @@ class SyncClient(BaseClient):
                 # We have complete packet (header + payload)
                 packet_count += 1
                 
-                # Log complete packet with data
-                if self.logger.isEnabledFor(logging.DEBUG):
-                    packet_data = bytes(self._recv_buf[self._recv_pos:self._recv_pos + PKT_HDR_SIZE + packet_length])
-                    conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-                    self.logger.debug(hex_dump(packet_data, f"RECV sync: {conn_id_str}"))
-                
                 if packet_count > 1:
                     # Multi-packet: compact by removing intermediate header
                     # Move this packet's payload immediately after previous payload
@@ -209,10 +197,6 @@ class SyncClient(BaseClient):
                 # Check if this is the last packet
                 if packet_length < MAX_PKT_SIZE:
                     # Last packet - return accumulated payload
-                    if self.logger.isEnabledFor(logging.DEBUG):
-                        conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-                        self.logger.debug(f"RECV sync: {conn_id_str}")
-                    
                     self._recv_pos = first_pos + PKT_HDR_SIZE + total_size
                     return self._recv_buf_mv[first_pos + PKT_HDR_SIZE:first_pos + PKT_HDR_SIZE + total_size]
 
@@ -249,11 +233,6 @@ class SyncClient(BaseClient):
             self.sequence[0] = (self.sequence[0] + 1) % 256
             payload[0:3] = b'\x00\x00\x00'
             payload[3] = self.sequence[0]
-
-            if self.logger.isEnabledFor(logging.DEBUG):
-                conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-                packet_type_str = f" {packet_type}" if packet_type else ""
-                self.logger.debug(hex_dump(bytes(payload[0:4]), f"SEND sync: {conn_id_str}{packet_type_str}"))
             
             self.socket.sendall(payload[0:4])
             return
@@ -273,12 +252,6 @@ class SyncClient(BaseClient):
             payload[header_pos + 1] = (chunk_size >> 8) & 0xFF
             payload[header_pos + 2] = (chunk_size >> 16) & 0xFF
             payload[header_pos + 3] = self.sequence[0]
-            
-            if self.logger.isEnabledFor(logging.DEBUG):  # Log if debug enabled
-                packet = bytes(payload_view[header_pos:chunk_end])
-                conn_id_str = f"[conn_id={self.context.connection_id}]" if self.context and self.context.connection_id >= 0 else ""
-                packet_type_str = f" {packet_type}" if packet_type else ""
-                self.logger.debug(hex_dump(packet, f"SEND sync: {conn_id_str}{packet_type_str}"))
             
             self.socket.sendall(payload_view[header_pos:chunk_end])  # Send packet: header + chunk data using memoryview (no copy)
             sent += chunk_size
