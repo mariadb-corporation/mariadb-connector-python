@@ -612,29 +612,27 @@ class BaseClient(ABC):
 
     def _parse_text_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration') -> tuple:
         """Parse text protocol row data packet with inlined decoding"""
-        row_values = [None] * len(columns)
+        num_cols = len(columns)
+        row_values = [None] * num_cols
         pos = 0
         data_bytes = data.tobytes()  # Convert once for faster access
         
-        for i in range(len(columns)):
+        for i in range(num_cols):
             column = columns[i]
             # Read length-encoded integer for field length
             length_byte = data[pos]
-            if length_byte == 0xFB:  # NULL
+            if (length_byte <= 0xFB):
+                length = length_byte
                 pos += 1
-                continue
             elif length_byte == 0xFC:
                 length = _STRUCT_H.unpack_from(data, pos + 1)[0]
                 pos += 3
             elif length_byte == 0xFD:
-                length = struct.unpack('<I', data[pos+ 1:pos+4].tobytes() + b'\x00')[0]
+                length = struct.unpack('<I', bytes(data[pos+ 1:pos+4]) + b'\x00')[0]
                 pos += 4
-            elif length_byte == 0xFE:
+            else:
                 length = _STRUCT_Q.unpack_from(data, pos + 1)[0]
                 pos += 9
-            else:
-                length = length_byte
-                pos += 1
             
             col_type = column.type
             if col_type in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
@@ -736,28 +734,27 @@ class BaseClient(ABC):
             
             # Decode based on field type
             field_type = column.type
-            is_unsigned = (column.flags & FIELD_FLAG.UNSIGNED) != 0
             
             if field_type == FIELD_TYPE.TINY:
-                if is_unsigned:
+                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
                     row_values[i] = data[pos]
                 else:
                     row_values[i] = _STRUCT_b.unpack_from(data, pos)[0]
                 pos += 1
             elif field_type in (FIELD_TYPE.SHORT, FIELD_TYPE.YEAR):
-                if is_unsigned:
+                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
                     row_values[i] = _STRUCT_H.unpack_from(data, pos)[0]
                 else:
                     row_values[i] = _STRUCT_h.unpack_from(data, pos)[0]
                 pos += 2
             elif field_type in (FIELD_TYPE.LONG, FIELD_TYPE.INT24):
-                if is_unsigned:
+                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
                     row_values[i] = _STRUCT_I.unpack_from(data, pos)[0]
                 else:
                     row_values[i] = _STRUCT_i.unpack_from(data, pos)[0]
                 pos += 4
             elif field_type == FIELD_TYPE.LONGLONG:
-                if is_unsigned:
+                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
                     row_values[i] = _STRUCT_Q.unpack_from(data, pos)[0]
                 else:
                     row_values[i] = _STRUCT_q.unpack_from(data, pos)[0]
@@ -839,7 +836,9 @@ class BaseClient(ABC):
             else:
                 # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
                 length = data[pos]
-                if length == 0xFB:
+                if (length <= 0xFB):
+                    pos += 1
+                elif length == 0xFB:
                     pos += 1
                     continue
                 elif length == 0xFC:
@@ -848,13 +847,11 @@ class BaseClient(ABC):
                 elif length == 0xFD:
                     length = struct.unpack('<I', data[pos+ 1:pos+4].tobytes() + b'\x00')[0]
                     pos += 4
-                elif length == 0xFE:
+                else:
                     length = _STRUCT_Q.unpack_from(data, pos + 1)[0]
                     pos += 9
-                else:
-                    pos += 1
 
-                val = data[pos:pos + length].tobytes()
+                val = bytes(data[pos:pos + length])
                 if column.special_format:
                     if column.ext_type_format == b'json':
                         row_values[i] = val.decode('utf-8')

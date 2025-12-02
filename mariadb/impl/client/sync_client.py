@@ -10,6 +10,7 @@ Uses blocking I/O operations.
 from re import M
 import socket
 import ssl
+import struct
 import copy
 from typing import List, Optional
 
@@ -33,6 +34,8 @@ from ..completion import Completion
 from ...exceptions import OperationalError, DatabaseError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
+
+_STRUCT_PKT_HDR = struct.Struct('<I')
 
 MAX_PACKET_SIZE = 0xFFFFFF
 
@@ -60,6 +63,7 @@ class SyncClient(BaseClient):
         self._default_recv_buf: bytearray = bytearray(8192)
         self._recv_buf: bytearray = self._default_recv_buf
         self._recv_buf_mv = memoryview(self._recv_buf)
+        self._recv_buf_capacity = 8192  # Cache buffer capacity
         self._recv_pos = 0
         self._recv_len = 0
 
@@ -72,10 +76,12 @@ class SyncClient(BaseClient):
         Resize buffer if necessary.
         """
         ALIGN = 16384 
-        if (len(self._recv_buf) - self._recv_len >= needed):
+        if (self._recv_buf_capacity - self._recv_len >= needed):
             return
-        self._recv_buf = self._recv_buf + bytearray((needed + ALIGN - 1) & ~(ALIGN - 1))
+        grow_size = (needed + ALIGN - 1) & ~(ALIGN - 1)
+        self._recv_buf = self._recv_buf + bytearray(grow_size)
         self._recv_buf_mv = memoryview(self._recv_buf)
+        self._recv_buf_capacity += grow_size
                 
 
     def _recv_into_buffer(self, size=0):
@@ -123,16 +129,16 @@ class SyncClient(BaseClient):
         of the buffer
 
         """
-        # for faster local lookup
-        PKT_HDR_SIZE=4
-        MAX_PKT_SIZE=0xFFFFFF
+        # Constants for faster local lookup
+        PKT_HDR_SIZE = 4
+        MAX_PKT_SIZE = 0xFFFFFF
 
         # if everything was read - rewind buffer
         if self._recv_pos >= self._recv_len:
            self._recv_pos = 0
            self._recv_len = 0
 
-        if self._recv_pos > 0 and len(self._recv_buf) - self._recv_len < 1024:
+        if self._recv_pos > 0 and self._recv_buf_capacity - self._recv_len < 1024:
             unread = self._recv_len - self._recv_pos
             if unread > 0:
                 self._recv_buf[:unread] = self._recv_buf[self._recv_pos:self._recv_len]
@@ -154,16 +160,17 @@ class SyncClient(BaseClient):
                     self._recv_len += self._recv_into_buffer(missing)
                     continue
 
-                packet_length = (self._recv_buf[self._recv_pos] |
-                                 (self._recv_buf[self._recv_pos + 1] << 8) |
-                                 (self._recv_buf[self._recv_pos + 2] << 16))
-                sequence = self._recv_buf[self._recv_pos + 3]
+                # Fast packet header parsing using struct
+                header_int = _STRUCT_PKT_HDR.unpack_from(self._recv_buf, self._recv_pos)[0]
+                packet_length = header_int & 0xFFFFFF
+                sequence = (header_int >> 24) & 0xFF
                 self.sequence[0] = sequence
 
                 # check if we have complete packet data
-                if bytes_in_buffer < PKT_HDR_SIZE + packet_length:
+                packet_total = PKT_HDR_SIZE + packet_length
+                if bytes_in_buffer < packet_total:
                     # Need to read more data
-                    missing = PKT_HDR_SIZE + packet_length - bytes_in_buffer
+                    missing = packet_total - bytes_in_buffer
                     # For MAX_PKT_SIZE packets, also try to read next packet header
                     if packet_length == MAX_PKT_SIZE:
                         missing += PKT_HDR_SIZE
@@ -174,31 +181,41 @@ class SyncClient(BaseClient):
                 # We have complete packet (header + payload)
                 packet_count += 1
                 
+                # Fast path: single packet (most common case)
+                if packet_length < MAX_PKT_SIZE:
+                    # Last packet - return payload
+                    if packet_count == 1:
+                        # Single packet fast path - no compaction needed
+                        result_start = self._recv_pos + PKT_HDR_SIZE
+                        result_end = self._recv_pos + packet_total
+                        self._recv_pos = result_end
+                        return self._recv_buf_mv[result_start:result_end]
+                    else:
+                        # Multi-packet last packet
+                        result_start = first_pos + PKT_HDR_SIZE
+                        result_end = first_pos + PKT_HDR_SIZE + total_size + packet_length
+                        self._recv_pos = result_end
+                        return self._recv_buf_mv[result_start:result_end]
+                
+                # Multi-packet handling (MAX_PKT_SIZE)
                 if packet_count > 1:
-                    # Multi-packet: compact by removing intermediate header
-                    # Move this packet's payload immediately after previous payload
+                    # Compact by removing intermediate header
                     payload_src = self._recv_pos + PKT_HDR_SIZE
                     payload_dst = first_pos + PKT_HDR_SIZE + total_size
                     if payload_src != payload_dst:
                         # Calculate how much data is after this packet
-                        data_after_packet = self._recv_len - (self._recv_pos + PKT_HDR_SIZE + packet_length)
+                        data_after_packet = self._recv_len - (self._recv_pos + packet_total)
                         # Move this packet's payload
                         self._recv_buf[payload_dst:payload_dst + packet_length] = \
                             self._recv_buf[payload_src:payload_src + packet_length]
                         # Move any data after this packet
                         if data_after_packet > 0:
                             self._recv_buf[payload_dst + packet_length:payload_dst + packet_length + data_after_packet] = \
-                                self._recv_buf[self._recv_pos + PKT_HDR_SIZE + packet_length:self._recv_len]
+                                self._recv_buf[self._recv_pos + packet_total:self._recv_len]
                         # After compaction, adjust buffer length to account for removed header
                         self._recv_len -= PKT_HDR_SIZE
                 
                 total_size += packet_length
-
-                # Check if this is the last packet
-                if packet_length < MAX_PKT_SIZE:
-                    # Last packet - return accumulated payload
-                    self._recv_pos = first_pos + PKT_HDR_SIZE + total_size
-                    return self._recv_buf_mv[first_pos + PKT_HDR_SIZE:first_pos + PKT_HDR_SIZE + total_size]
 
                 # Multi-packet: advance to next packet header
                 # After compaction, the next header is immediately after current payload
@@ -207,13 +224,14 @@ class SyncClient(BaseClient):
                     self._recv_pos = first_pos + PKT_HDR_SIZE + total_size
                 else:
                     # First packet, no compaction yet
-                    self._recv_pos += PKT_HDR_SIZE + packet_length
+                    self._recv_pos += packet_total
             else:
                 self._recv_len += self._recv_into_buffer()
 
     def reset_buffer(self):
         self._recv_buf = self._default_recv_buf
         self._recv_buf_mv = memoryview(self._recv_buf)
+        self._recv_buf_capacity = len(self._default_recv_buf)
         self._recv_pos = 0
         self._recv_len = 0
 
@@ -312,7 +330,7 @@ class SyncClient(BaseClient):
                     (self.host_address.host, self.host_address.port),
                     timeout=self.connect_timeout if self.connect_timeout else None
                 )
-            
+
             if self.socket_timeout:
                 self.socket.settimeout(self.socket_timeout)
             

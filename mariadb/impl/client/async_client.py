@@ -9,6 +9,7 @@ Uses asyncio for non-blocking I/O operations.
 
 import asyncio
 import ssl
+import struct
 import copy
 from typing import List, Optional
 
@@ -31,6 +32,9 @@ from ..completion import Completion
 from ...exceptions import OperationalError, DatabaseError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
+
+# Pre-compiled struct for packet header parsing (3 bytes length + 1 byte sequence)
+_STRUCT_PKT_HDR = struct.Struct('<I')  # Read as 4-byte int, mask out sequence
 
 
 class AsyncClient(BaseClient):
@@ -57,6 +61,7 @@ class AsyncClient(BaseClient):
         # Read buffer management
         self._readbuf: bytearray = bytearray(8192)
         self._read_view: memoryview = memoryview(self._readbuf)
+        self._readbuf_capacity: int = 8192  # Cache buffer capacity
         self.max_allowed_packet: int = 0xFFFFFF
         self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
         self.auth_plugin: Optional['AuthenticationPlugin'] = None
@@ -67,12 +72,13 @@ class AsyncClient(BaseClient):
     
     def _ensure_read_capacity(self, size: int) -> None:
         """Ensure buffer is large enough, within max_allowed_packet limit"""
-        if size > len(self._readbuf):
-            new_size = min(self.max_allowed_packet + 4, max(size, len(self._readbuf) * 2))
+        if size > self._readbuf_capacity:
+            new_size = min(self.max_allowed_packet + 4, max(size, self._readbuf_capacity * 2))
             new_buf = bytearray(new_size)
-            new_buf[:len(self._readbuf)] = self._readbuf
+            new_buf[:self._readbuf_capacity] = self._readbuf
             self._readbuf = new_buf
             self._read_view = memoryview(self._readbuf)
+            self._readbuf_capacity = new_size
     
     async def read_payload(self) -> memoryview:
         """
@@ -86,8 +92,10 @@ class AsyncClient(BaseClient):
         
         # Read first packet header
         header = await self.reader.readexactly(4)
-        pkt_len = header[0] | (header[1] << 8) | (header[2] << 16)
-        self.sequence[0] = header[3]
+        # Fast packet header parsing using struct
+        header_int = _STRUCT_PKT_HDR.unpack(header)[0]
+        pkt_len = header_int & 0xFFFFFF
+        self.sequence[0] = (header_int >> 24) & 0xFF
         
         # Read first payload chunk
         self._ensure_read_capacity(pkt_len)
@@ -104,8 +112,10 @@ class AsyncClient(BaseClient):
         while True:
             # Read next packet header
             header = await self.reader.readexactly(4)
-            pkt_len = header[0] | (header[1] << 8) | (header[2] << 16)
-            self.sequence[0] = header[3]
+            # Fast packet header parsing using struct
+            header_int = _STRUCT_PKT_HDR.unpack(header)[0]
+            pkt_len = header_int & 0xFFFFFF
+            self.sequence[0] = (header_int >> 24) & 0xFF
             
             # Ensure buffer has space for accumulated result + new chunk
             needed = result_len + pkt_len
