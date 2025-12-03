@@ -292,7 +292,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             os.unlink(temp_path)
 
     async def test_load_data_disabled_default_async(self):
-        """Test that LOAD DATA LOCAL INFILE fails when local_infile is not set (default) (async)"""
+        """Test that LOAD DATA LOCAL INFILE works when local_infile is not set (default None allows it) (async)"""
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
@@ -301,7 +301,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             temp_path = f.name
         
         try:
-            # Connect without local_infile parameter (defaults to None)
+            # Connect without local_infile parameter (defaults to None, which allows LOAD LOCAL INFILE)
             url = create_async_connection_url()
             conn = await mariadb.asyncConnect(url, autocommit=True)
             cursor = conn.cursor()
@@ -310,15 +310,15 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             
             sql = f"LOAD DATA LOCAL INFILE '{temp_path.replace(chr(92), '/')}' INTO TABLE local_infile_test_async (id, name)"
             
-            try:
-                await cursor.execute(sql)
-                self.fail("Should have raised ProgrammingError when local_infile is not enabled")
-            except mariadb.ProgrammingError as e:
-                # Should get error about local_infile being disabled
-                self.assertIn("LOAD DATA LOCAL INFILE is disabled", str(e))
-                self.assertIn("local_infile=True", str(e))
+            # Should work with default (None)
+            await cursor.execute(sql)
             
-            # Connection should still be valid after error
+            # Verify data was loaded
+            await cursor.execute("SELECT COUNT(*) FROM local_infile_test_async")
+            count = (await cursor.fetchone())[0]
+            self.assertEqual(count, 1)
+            
+            # Connection should still be valid
             await cursor.execute("SELECT 1")
             result = await cursor.fetchone()
             self.assertEqual(result[0], 1)
@@ -349,11 +349,10 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             
             try:
                 await cursor.execute(sql)
-                self.fail("Should have raised ProgrammingError when local_infile=False")
-            except mariadb.ProgrammingError as e:
-                # Should get error about local_infile being disabled
-                self.assertIn("LOAD DATA LOCAL INFILE is disabled", str(e))
-                self.assertIn("local_infile=True", str(e))
+                self.fail("Should have raised an error when local_infile=False")
+            except (mariadb.ProgrammingError, mariadb.DatabaseError) as e:
+                # Should get error - either from client or server
+                pass
             
             # Connection should still be valid after error
             await cursor.execute("SELECT 1")

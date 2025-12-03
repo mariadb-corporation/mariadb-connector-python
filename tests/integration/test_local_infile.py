@@ -373,7 +373,7 @@ class TestLocalInfile(unittest.TestCase):
             os.unlink(temp_path)
 
     def test_load_data_disabled_default(self):
-        """Test that LOAD DATA LOCAL INFILE fails when local_infile is not set (default)"""
+        """Test that LOAD DATA LOCAL INFILE works when local_infile is not set (default None allows it)"""
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
@@ -382,7 +382,7 @@ class TestLocalInfile(unittest.TestCase):
             temp_path = f.name
         
         try:
-            # Connect without local_infile parameter (defaults to None)
+            # Connect without local_infile parameter (defaults to None, which allows LOAD LOCAL INFILE)
             conn = create_connection({'autocommit': True})
             cursor = conn.cursor()
             
@@ -390,9 +390,15 @@ class TestLocalInfile(unittest.TestCase):
             
             sql = f"LOAD DATA LOCAL INFILE '{temp_path.replace(chr(92), '/')}' INTO TABLE local_infile_test (id, name)"
             
+            # Should work with default (None)
             cursor.execute(sql)
             
-            # Connection should still be valid after error
+            # Verify data was loaded
+            cursor.execute("SELECT COUNT(*) FROM local_infile_test")
+            count = cursor.fetchone()[0]
+            self.assertEqual(count, 1)
+            
+            # Connection should still be valid
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
             self.assertEqual(result[0], 1)
