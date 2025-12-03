@@ -330,6 +330,7 @@ class SyncClient(BaseClient):
                     (self.host_address.host, self.host_address.port),
                     timeout=self.connect_timeout if self.connect_timeout else None
                 )
+                self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
             if self.socket_timeout:
                 self.socket.settimeout(self.socket_timeout)
