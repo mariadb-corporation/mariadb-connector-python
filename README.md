@@ -155,9 +155,67 @@ with mariadb.connect("mariadb://user:password@localhost/mydb") as conn:
         print(f"User: {row.name}, Email: {row.email}")
 ```
 
+### Async/Await Support
+
+MariaDB Connector/Python supports asynchronous operations using `asyncio`:
+
+```python
+import asyncio
+import mariadb
+
+async def main():
+    # Connect to MariaDB asynchronously using async with
+    async with await mariadb.asyncConnect("mariadb://user:password@localhost:3306/mydb") as conn:
+        async with conn.cursor() as cursor:
+            # Execute queries asynchronously
+            await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
+            
+            # Fetch results
+            row = await cursor.fetchone()
+            print(f"User: {row}")
+            
+            # Fetch multiple rows
+            await cursor.execute("SELECT * FROM users LIMIT 5")
+            async for row in cursor:
+                print(f"User: {row}")
+            
+            # Insert data with transaction
+            await cursor.execute(
+                "INSERT INTO users (name, email) VALUES (?, ?)",
+                ("Jane Doe", "jane@example.com")
+            )
+            await conn.commit()
+
+# Run the async function
+asyncio.run(main())
+```
+
+**Using keyword arguments:**
+
+```python
+import asyncio
+import mariadb
+
+async def main():
+    # Connect using keyword arguments
+    async with await mariadb.asyncConnect(
+        host="localhost",
+        user="root",
+        password="password",
+        database="mydb"
+    ) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT COUNT(*) FROM users")
+            count = (await cursor.fetchone())[0]
+            print(f"Total users: {count}")
+
+asyncio.run(main())
+```
+
 ## Features
 
 - **DB-API 2.0 Compliant**: Full compliance with Python Database API specification
+- **Async/Await Support**: Full asyncio support with `asyncConnect()` and async cursors
 - **High Performance**: C extension for optimal performance
 - **Connection Pooling**: Built-in connection pool management
 - **URI Support**: Connect using connection URIs for clean configuration
@@ -166,6 +224,7 @@ with mariadb.connect("mariadb://user:password@localhost/mydb") as conn:
 - **SSL/TLS Support**: Secure connections with SSL/TLS
 - **Compression**: Optional protocol compression
 - **Transaction Support**: Full transaction management with savepoints
+- **LOAD DATA LOCAL INFILE**: Secure local file loading with `local_infile=True` option
 
 ## License
 
