@@ -18,7 +18,10 @@ def test_select_100_cols_text(benchmark, connection, driver_name):
     
     def select_100_cols():
         cursor = connection.cursor()
-        cursor.execute("SELECT * FROM test100")
+        if driver_name == 'mariadb' or driver_name == 'mariadb_c':
+            cursor.execute("SELECT * FROM test100 WHERE 1 = ?", (1,))
+        else:  # pymysql, mysql_connector
+            cursor.execute("SELECT * FROM test100 WHERE 1 = %s", (1,))
         row = cursor.fetchone()
         cursor.close()
         # Consume all values to ensure fair comparison
@@ -38,7 +41,7 @@ def test_select_100_cols_binary(benchmark, connection, driver_name):
     
     def select_100_cols():
         cursor = connection.cursor(binary=True)
-        cursor.execute("SELECT * FROM test100")
+        cursor.execute("SELECT * FROM test100 WHERE 1 = ?", (1,))
         row = cursor.fetchone()
         cursor.close()
         # Consume all values to ensure fair comparison

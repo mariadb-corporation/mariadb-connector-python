@@ -21,13 +21,16 @@ def test_select_1000_rows_text(benchmark, connection, driver_name):
     # Warmup: ensure seq table is in cache
     for _ in range(500):
         cursor = connection.cursor()
-        cursor.execute(SQL)
+        if driver_name == 'mariadb' or driver_name == 'mariadb_c':
+            cursor.execute(SQL + " WHERE 1 = ?", (1,))
+        else:  # pymysql, mysql_connector
+            cursor.execute(SQL + " WHERE 1 = %s", (1,))
         cursor.fetchall()
         cursor.close()
     
     def select_1000_rows():
         cursor = connection.cursor()
-        cursor.execute(SQL)
+        cursor.execute(SQL, (1,))
         rows = cursor.fetchall()
         cursor.close()
         return len(rows)
@@ -46,13 +49,19 @@ def test_select_1000_rows_binary(benchmark, connection, driver_name):
     # Warmup: ensure seq table is in cache
     cursor = connection.cursor(binary=True)
     for _ in range(500):
-        cursor.execute(SQL)
+        if driver_name == 'mariadb' or driver_name == 'mariadb_c':
+            cursor.execute(SQL + " WHERE 1 = ?", (1,))
+        else:  # pymysql, mysql_connector
+            cursor.execute(SQL + " WHERE 1 = %s", (1,))
         cursor.fetchall()
     cursor.close()
     
     def select_1000_rows():
         cursor = connection.cursor(binary=True)
-        cursor.execute(SQL)
+        if driver_name == 'mariadb' or driver_name == 'mariadb_c':
+            cursor.execute(SQL + " WHERE 1 = ?", (1,))
+        else:  # pymysql, mysql_connector
+            cursor.execute(SQL + " WHERE 1 = %s", (1,))
         rows = cursor.fetchall()
         cursor.close()
         return len(rows)
