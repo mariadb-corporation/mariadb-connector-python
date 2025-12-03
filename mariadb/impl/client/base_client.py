@@ -495,6 +495,10 @@ class BaseClient(ABC):
             constants.CAPABILITY.BULK_UNIT_RESULTS
         )
         
+        # Add LOCAL_FILES capability only if local_infile is explicitly enabled
+        if not (self.configuration.local_infile == False):
+            capabilities |= constants.CAPABILITY.LOCAL_FILES
+        
         # Add database capability if database specified and server supports it
         if self.configuration.database:
             capabilities |= constants.CAPABILITY.CONNECT_WITH_DB
@@ -621,9 +625,12 @@ class BaseClient(ABC):
             column = columns[i]
             # Read length-encoded integer for field length
             length_byte = data[pos]
-            if (length_byte <= 0xFB):
+            if (length_byte < 0xFB):
                 length = length_byte
                 pos += 1
+            elif (length_byte == 0xFB):
+                pos += 1                
+                continue
             elif length_byte == 0xFC:
                 length = _STRUCT_H.unpack_from(data, pos + 1)[0]
                 pos += 3
@@ -836,7 +843,7 @@ class BaseClient(ABC):
             else:
                 # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
                 length = data[pos]
-                if (length <= 0xFB):
+                if (length < 0xFB):
                     pos += 1
                 elif length == 0xFB:
                     pos += 1
@@ -847,7 +854,7 @@ class BaseClient(ABC):
                 elif length == 0xFD:
                     length = struct.unpack('<I', data[pos+ 1:pos+4].tobytes() + b'\x00')[0]
                     pos += 4
-                else:
+                else:  # 0xFE
                     length = _STRUCT_Q.unpack_from(data, pos + 1)[0]
                     pos += 9
 

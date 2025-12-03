@@ -29,3 +29,7 @@ class ClientMessage(ABC):
     def type(self) -> str:
         """indicate message type"""
         return ""
+    
+    def get_sql(self) -> str:
+        """Get SQL string for LOAD LOCAL INFILE validation (optional)"""
+        return None

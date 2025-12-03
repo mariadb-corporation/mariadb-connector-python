@@ -405,16 +405,18 @@ class QueryPacket(ClientMessage):
     - QueryPacket.from_sql(sql_string) for plain SQL
     - QueryPacket.from_payload(payload_bytes) for pre-formatted payload with parameters
     """
-    __slots__ = ('_payload_bytes',)
+    __slots__ = ('_payload_bytes', '_sql')
 
-    def __init__(self, payload_bytes: bytearray):
+    def __init__(self, payload_bytes: bytearray, sql: str = None):
         """
         Initialize COM_QUERY packet with pre-formatted payload
         
         Args:
             payload_bytes: Complete packet payload including header + COM_QUERY + SQL
+            sql: Original SQL string (for LOAD LOCAL INFILE validation)
         """
         self._payload_bytes = payload_bytes
+        self._sql = sql
     
     @staticmethod
     def from_sql(sql: str) -> 'QueryPacket':
@@ -432,7 +434,7 @@ class QueryPacket(ClientMessage):
         payload[0:4] = b'\x00\x00\x00\x00'  # Length placeholder
         payload[4] = 0x03  # COM_QUERY
         payload[5:] = sql_bytes
-        return QueryPacket(payload)
+        return QueryPacket(payload, sql)
 
     
     @staticmethod
@@ -501,6 +503,11 @@ class QueryPacket(ClientMessage):
                     if i > last_copy:
                         result.extend(sql_encoded[last_copy:i])
                     # Substitute parameter (positional only for ?)
+                    if params_list is None:
+                        raise ProgrammingError(
+                            "Positional placeholder '?' used but parameters provided as dict. "
+                            "Use named placeholders like :name or %(name)s instead."
+                        )
                     if param_idx >= len(params_list):
                         raise ProgrammingError(
                             f"Parameter count mismatch: SQL has at least {placeholder_count} placeholders, "
@@ -526,6 +533,11 @@ class QueryPacket(ClientMessage):
                             if i > last_copy:
                                 result.extend(sql_encoded[last_copy:i])
                             # Substitute parameter (positional)
+                            if params_list is None:
+                                raise ProgrammingError(
+                                    "Positional placeholder '%s' or '%d' used but parameters provided as dict. "
+                                    "Use named placeholders like :name or %(name)s instead."
+                                )
                             if param_idx >= len(params_list):
                                 raise ProgrammingError(
                                     f"Parameter count mismatch: SQL has at least {placeholder_count} placeholders, "
@@ -554,6 +566,11 @@ class QueryPacket(ClientMessage):
                                 if i > last_copy:
                                     result.extend(sql_encoded[last_copy:i])
                                 # Substitute parameter (named)
+                                if params_dict is None:
+                                    raise ProgrammingError(
+                                        f"Named placeholder '%({param_name})s' used but parameters provided as tuple/list. "
+                                        "Use positional placeholders like ? or %s instead."
+                                    )
                                 if param_name in params_dict:
                                     param = params_dict[param_name]
                                     param_type = _type(param)
@@ -583,6 +600,11 @@ class QueryPacket(ClientMessage):
                             if i > last_copy:
                                 result.extend(sql_encoded[last_copy:i])
                             # Substitute parameter (named)
+                            if params_dict is None:
+                                raise ProgrammingError(
+                                    f"Named placeholder ':{param_name}' used but parameters provided as tuple/list. "
+                                    "Use positional placeholders like ? or %s instead."
+                                )
                             if param_name in params_dict:
                                 param = params_dict[param_name]
                                 param_type = _type(param)
@@ -653,7 +675,7 @@ class QueryPacket(ClientMessage):
         if last_copy < length:
             result.extend(sql_encoded[last_copy:])
         
-        return QueryPacket(result)
+        return QueryPacket(result, sql)
         
     def payload(self, context: Context) -> bytearray:
         return self._payload_bytes
@@ -663,3 +685,7 @@ class QueryPacket(ClientMessage):
 
     def type(self) -> str:
         return "COM_QUERY"
+    
+    def get_sql(self) -> str:
+        """Get SQL string for LOAD LOCAL INFILE validation"""
+        return self._sql

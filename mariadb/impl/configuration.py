@@ -42,6 +42,7 @@ class Configuration:
     
     # Protocol parameters
     compress: bool = False
+    local_infile: Optional[bool] = None  # Enable LOAD DATA LOCAL INFILE
     
     # Timeouts
     query_timeout: int = 0  # No timeout
@@ -168,6 +169,8 @@ class Configuration:
         # Protocol parameters
         if 'compress' in params:
             config.compress = bool(params['compress'])
+        if 'local_infile' in params:
+            config.local_infile = bool(params['local_infile']) if params['local_infile'] is not None else None
         
         # Timeouts
         if 'query_timeout' in params:
@@ -214,7 +217,7 @@ class Configuration:
             'ssl', 'use_ssl', 'ssl_key', 'ssl_ca', 'ssl_cert', 'ssl_crl',
             'ssl_cipher', 'ssl_capath', 'ssl_crlpath', 'ssl_verify_cert', 'tls_version',
             'autocommit', 'read_only',
-            'compress',
+            'compress', 'local_infile',
             'query_timeout', 'max_allowed_packet',
             'character_encoding', 'charset', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object',
             'cache_prep_stmts', 'prep_stmt_cache_size', 'pipeline'

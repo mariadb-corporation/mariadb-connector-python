@@ -29,7 +29,7 @@ from ..message.client.prepare_packet import PreparePacket
 from ..message.client.change_user_packet import ChangeUserPacket
 from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..completion import Completion
-from ...exceptions import OperationalError, DatabaseError
+from ...exceptions import OperationalError, DatabaseError, ProgrammingError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
 
@@ -478,7 +478,7 @@ class AsyncClient(BaseClient):
             
             try:
                 await self.write_payload(message.payload(self.context), message.type(), True)
-                return await self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet)
+                return await self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet, message.get_sql())
             except DatabaseError as e:
                 raise e    
             except Exception as e:
@@ -573,7 +573,7 @@ class AsyncClient(BaseClient):
 
 
 
-    async def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
+    async def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None, sql: str = None) -> List[Completion]:
         # Move imports outside hot path
         from ..result import AsyncStreamingResult, AsyncCompleteResult
         
@@ -581,6 +581,7 @@ class AsyncClient(BaseClient):
         context = self.context
         ok_packet = self.OK_PACKET
         error_packet = self.ERROR_PACKET
+        local_infile_packet = self.LOCAL_INFILE_PACKET
         more_results_mask = STATUS.MORE_RESULTS_EXIST
         
         while True:
@@ -593,6 +594,13 @@ class AsyncClient(BaseClient):
                 continue
             elif packet_type == error_packet:
                 raise ErrorPacket.decode(packet, context).toError(self.exception_factory)
+            elif packet_type == local_infile_packet:
+                # LOAD DATA LOCAL INFILE request from server
+                completion = await self._handle_local_infile(packet, sql)
+                results.append(completion)
+                if (context.server_status & more_results_mask) == 0:
+                    break                
+                continue
             
             """Parse result set with column definitions and row data"""
             # Parse column count from first packet
@@ -673,6 +681,94 @@ class AsyncClient(BaseClient):
             if (context.server_status & more_results_mask) == 0:
                 break
         return results
+
+    async def _handle_local_infile(self, packet: memoryview, sql: str = None) -> Completion:
+        """Handle LOAD DATA LOCAL INFILE request from server (async)"""
+        import os
+        import re
+        
+
+        # Read filename from packet (skip 0xFB header)
+        parser = PayloadReader(packet)
+        parser.skip(1)  # Skip 0xFB
+        filename = parser.read_null_terminated_string()
+        
+        
+        # Check if local_infile is enabled
+        if self.configuration.local_infile == False:
+            # Send empty packet to keep connection state OK
+            await self.write_payload(bytearray(4), reset_sequence=False)
+            raise ProgrammingError(
+                "LOAD DATA LOCAL INFILE is disabled. Set local_infile=True in connection parameters to enable it."
+            )
+
+        # Validate filename matches the SQL query (security check)
+        if sql and not self._validate_local_filename(sql, filename):
+            # Send empty packet to keep connection state OK
+            await self.write_payload(bytearray(4), reset_sequence=False)
+            raise OperationalError(
+                f"LOAD DATA LOCAL INFILE asked for file '{filename}' that doesn't "
+                f"correspond to initial query. Possible malicious proxy changing "
+                f"server answer! Command interrupted"
+            )
+        
+        # Try to open and send the file
+        error = None
+        try:
+            with open(filename, 'rb') as f:
+                # Read and send file in maximum MySQL packet sizes
+                while True:
+                    chunk = f.read(8192)
+                    if not chunk:
+                        break
+                    # Send as MySQL packet (header will be added by write_payload)
+                    payload = bytearray(4 + len(chunk))
+                    payload[4:] = chunk
+                    await self.write_payload(payload, reset_sequence=False)
+        except FileNotFoundError as e:
+            error = OperationalError(f"Could not send file: {e}")
+        except Exception as e:
+            error = OperationalError(f"Error reading file '{filename}': {e}")
+        
+        # Send empty packet to signal end of file transfer
+        await self.write_payload(bytearray(4), reset_sequence=False)
+        
+        # Read server's response (OK or ERR packet)
+        # This is necessary to keep connection state synchronized
+        response = await self.read_payload()
+        
+        if response[0] == 0x00:  # OK packet
+            ok = OkPacket.decode(response, self.context)
+            if error:
+                raise error
+            return ok
+       
+        # Raise error after reading response if file operation failed
+        if error:
+            raise error
+        
+        # Check if server returned an error
+        if response[0] == 0xFF:  # ERR packet
+            from mariadb.impl.message.server import ErrorPacket
+            from mariadb.impl.context import Context
+            context = Context()
+            raise ErrorPacket.decode(response, context).toError(self.exception_factory)
+    
+    def _validate_local_filename(self, sql: str, filename: str) -> bool:
+        """Validate that filename matches LOAD DATA LOCAL INFILE query"""
+        import re
+        
+        # Escape backslashes in filename for regex
+        escaped_filename = re.escape(filename.replace("\\", "\\\\"))
+        
+        # Pattern to match LOAD DATA LOCAL INFILE with the specific filename
+        pattern = (
+            r"^((\s[--]|#).*(\r\n|\r|\n)|\s*/\*([^*]|\*[^/])*\*/|.)*"
+            r"\s*LOAD\s+(DATA|XML)\s+((LOW_PRIORITY|CONCURRENT)\s+)?"
+            r"LOCAL\s+INFILE\s+['\"]" + escaped_filename + r"['\"]"  
+        )
+        
+        return bool(re.search(pattern, sql, re.IGNORECASE))
 
     # =========================================================================
     # Connection Control
