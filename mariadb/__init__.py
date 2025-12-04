@@ -198,7 +198,8 @@ async def asyncConnect(*args, connectionclass=None, **kwargs):
     if AsyncConnection is None:
         raise NotSupportedError(
             "AsyncConnection is not available. "
-            "Async support requires Python 3.7+ and the async implementation to be installed."
+            "This may occur if the pure Python async implementation could not be imported. "
+            "Ensure Python 3.7+ is installed and the mariadb package is properly installed."
         )
     
     # Parse URI if provided as first positional argument
