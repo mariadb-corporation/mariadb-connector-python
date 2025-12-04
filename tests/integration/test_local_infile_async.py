@@ -15,10 +15,6 @@ import mariadb
 from ..base_test import is_native
 from ..conftest import get_test_config as conf
 
-# Check if AsyncConnection is available
-HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
-
-
 def create_async_connection_url():
     """Create connection URL from config"""
     default_conf = conf()
@@ -30,7 +26,7 @@ def create_async_connection_url():
     return f"mariadb://{user}:{password}@{host}:{port}/{database}?autocommit=True"
 
 
-@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
+@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
     """Test LOAD DATA LOCAL INFILE functionality (async)"""
 

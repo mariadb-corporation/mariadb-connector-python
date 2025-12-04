@@ -9,10 +9,7 @@ import mariadb
 from ..base_test import create_connection, is_native, is_skysql, is_maxscale, is_mysql, get_host_suffix
 from ..conftest import get_test_config as conf
 
-# Check if AsyncConnection is available
-HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
-
-@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
+@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):

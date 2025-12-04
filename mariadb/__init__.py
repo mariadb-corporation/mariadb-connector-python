@@ -59,7 +59,8 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "OperationalError", "PoolError", "ProgrammingError",
            "Warning", "SyncConnection", "AsyncConnection", "__version__", "__version_type__", "__version_info__",
            "__author__", "SyncCursor", "AsyncCursor", "fieldinfo", "constants",
-           "connect", "asyncConnect", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__"]
+           "connect", "asyncConnect", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
+           "apilevel", "paramstyle", "threadsafety"]
 
 def connect(*args, connectionclass=None, **kwargs):
     """

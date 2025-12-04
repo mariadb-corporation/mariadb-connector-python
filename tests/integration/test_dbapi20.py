@@ -165,13 +165,10 @@ class DatabaseAPI20Test(unittest.TestCase):
             self.fail("Driver doesn't define apilevel")
 
     def test_threadsafety(self):
-        try:
-            # Must exist
-            threadsafety = self.driver.threadsafety
-            # Must be a valid value
-            self.assertTrue(threadsafety in (0, 1, 2, 3))
-        except AttributeError:
-            self.fail("Driver doesn't define threadsafety")
+        # Must exist
+        threadsafety = self.driver.threadsafety
+        # Must be a valid value
+        self.assertTrue(threadsafety in (0, 1, 2, 3))
 
     def test_paramstyle(self):
         try:

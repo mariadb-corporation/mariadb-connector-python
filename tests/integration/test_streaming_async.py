@@ -8,10 +8,7 @@ from ..base_test import is_native
 from ..conftest import get_test_config as conf
 
 
-# Check if AsyncConnection is available
-HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
-
-@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
+@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
     """Test streaming (unbuffered) result sets with async cursors"""
 

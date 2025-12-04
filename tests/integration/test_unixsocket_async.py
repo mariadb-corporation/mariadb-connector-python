@@ -14,6 +14,7 @@ import os
 import unittest
 import platform
 import mariadb
+from tests.base_test import is_native
 from ..conftest import get_test_config
 
 
@@ -31,9 +32,7 @@ def generate_long_text(length):
     """Generate a long text string for testing"""
     return 'a' * length
 
-HAS_ASYNC_CONNECTION = hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None
-
-@unittest.skipIf(not HAS_ASYNC_CONNECTION, "AsyncConnection not available")
+@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class TestAsyncUnixSocket(unittest.IsolatedAsyncioTestCase):
     """Test async Unix socket connections"""
 
