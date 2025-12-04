@@ -50,6 +50,22 @@ def read_qualified_identifiers(data: memoryview, pos: int) -> tuple:
     return out0, out1, out2, out3, out4, out5, pos
 
 
+def read_small_length_encoded_bytes(data: memoryview, pos: int) -> Tuple[bytes, int]:
+    """Read length-encoded bytes and advance position"""
+    length = data[pos]
+    pos += 1
+    
+    # Fast path: most lengths are < 251
+    if length < 251:
+        result = bytes(data[pos:pos+length])
+        return result, pos + length
+    
+    # Slow path: 2-byte length
+    length = _STRUCT_UINT16.unpack_from(data, pos)[0]
+    pos += 2
+    result = bytes(data[pos:pos+length])
+    return result, pos + length
+
 class ColumnDefinitionPacket:
     """
     Column Definition Packet from MariaDB server
