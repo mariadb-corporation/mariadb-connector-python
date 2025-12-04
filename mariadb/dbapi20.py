@@ -15,7 +15,7 @@ from mariadb_shared import constants
 
 apilevel = '2.0'
 paramstyle = 'qmark'
-threadsafety = True
+threadsafety = 3
 
 
 # ==============================================================================
