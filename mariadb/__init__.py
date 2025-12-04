@@ -194,6 +194,13 @@ async def asyncConnect(*args, connectionclass=None, **kwargs):
     
     Note: Pool connections are not supported with asyncConnect.
     """
+    # Check if AsyncConnection is available
+    if AsyncConnection is None:
+        raise NotSupportedError(
+            "AsyncConnection is not available. "
+            "Async support requires Python 3.7+ and the async implementation to be installed."
+        )
+    
     # Parse URI if provided as first positional argument
     if args and len(args) > 0:
         first_arg = args[0]
@@ -230,14 +237,7 @@ async def asyncConnect(*args, connectionclass=None, **kwargs):
     if connectionclass is None:
         connectionclass = AsyncConnection
     
-    # Create connection
-    connection = connectionclass(*args, **kwargs)
-    
-    # Validate that it's a proper AsyncConnection instance
-    if not hasattr(connection, 'cursor') or not hasattr(connection, 'connect'):
-        raise ProgrammingError(f"{connection} is not a valid mariadb AsyncConnection")
-    
-    # Connect asynchronously
+    # Connect asynchronously using the classmethod
     return await connectionclass.connect(*args, **kwargs)
 
 
