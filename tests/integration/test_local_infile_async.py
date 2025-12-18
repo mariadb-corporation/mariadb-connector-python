@@ -101,7 +101,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             self.skipTest("local_infile not enabled on server")
         
         # Create temp file with test data
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             f.write("1\thello\n")
             f.write("2\tworld\n")
             f.write("3\ttest\n")
@@ -135,7 +135,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             temp_path = f.name
         
         try:
@@ -187,7 +187,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             self.skipTest("local_infile not enabled on server")
         
         row_count = 1000
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             for i in range(row_count):
                 f.write(f"{i}\trow_{i}\n")
             temp_path = f.name
@@ -224,7 +224,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', newline='') as f:
             f.write('"a","b"\n')
             f.write('"c","d"\n')
             temp_path = f.name
@@ -261,7 +261,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.xml') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.xml', newline='') as f:
             f.write('<row id="1" name="xml1" />\n')
             f.write('<row id="2" name="xml2" />\n')
             temp_path = f.name
@@ -292,7 +292,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             f.write("1\ttest\n")
             temp_path = f.name
         
@@ -329,7 +329,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             f.write("1\ttest\n")
             temp_path = f.name
         
