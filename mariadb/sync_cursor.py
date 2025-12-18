@@ -228,7 +228,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 completions = [None] * len(data)
                 for i in range(len(data)):
                     params = data[i]
-                    parameters = list(params) if params else []
+                    # Preserve dict for named placeholders, convert to list for positional
+                    parameters = params if isinstance(params, dict) else (list(params) if params else [])
                     # from_substitute() will validate parameter count and raise ProgrammingError if mismatch
                     query_packet = QueryPacket.from_substitute(sql, parameters, no_backslash_escapes)
                     completions[i] = self.connection._client.execute(query_packet, self._config, True, self._stmt)

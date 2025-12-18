@@ -91,7 +91,7 @@ class TestLocalInfile(unittest.TestCase):
             self.skipTest("local_infile not enabled on server")
         
         # Create temp file with test data
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             f.write("1\thello\n")
             f.write("2\tworld\n")
             f.write("3\ttest\n")
@@ -128,8 +128,8 @@ class TestLocalInfile(unittest.TestCase):
             self.skipTest("local_infile not enabled on server")
         
         # Create temp file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
-            f.write("10\twindows\n")
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
+            f.write("10\twindows\n}")
             f.write("20\tpath\n")
             temp_path = f.name
         
@@ -211,7 +211,7 @@ class TestLocalInfile(unittest.TestCase):
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             f.write("100\tcomment\n")
             temp_path = f.name
         
@@ -242,7 +242,7 @@ class TestLocalInfile(unittest.TestCase):
         
         # Create file with 1000 rows
         row_count = 1000
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             for i in range(row_count):
                 f.write(f"{i}\trow_{i}\n")
             temp_path = f.name
@@ -279,7 +279,7 @@ class TestLocalInfile(unittest.TestCase):
             self.skipTest("local_infile not enabled on server")
         
         # Create CSV file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', newline='') as f:
             f.write('"a","b"\n')
             f.write('"c","d"\n')
             temp_path = f.name
@@ -316,7 +316,7 @@ class TestLocalInfile(unittest.TestCase):
             self.skipTest("local_infile not enabled on server")
         
         # Create XML file
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.xml') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.xml', newline='') as f:
             f.write('<row id="1" name="xml1" />\n')
             f.write('<row id="2" name="xml2" />\n')
             temp_path = f.name
@@ -350,7 +350,7 @@ class TestLocalInfile(unittest.TestCase):
         # in the server response, the client will reject it
         # In normal operation, this shouldn't happen, but the validation is there for security
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             f.write("1\ttest\n")
             temp_path = f.name
         
@@ -377,7 +377,7 @@ class TestLocalInfile(unittest.TestCase):
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             f.write("1\ttest\n")
             temp_path = f.name
         
@@ -413,7 +413,7 @@ class TestLocalInfile(unittest.TestCase):
         if not self.local_infile_enabled:
             self.skipTest("local_infile not enabled on server")
         
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as f:
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
             f.write("1\ttest\n")
             temp_path = f.name
         
