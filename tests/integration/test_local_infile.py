@@ -129,7 +129,7 @@ class TestLocalInfile(unittest.TestCase):
         
         # Create temp file
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', newline='') as f:
-            f.write("10\twindows\n}")
+            f.write("10\twindows\n")
             f.write("20\tpath\n")
             temp_path = f.name
         
