@@ -8,6 +8,16 @@ Does NOT perform any I/O - only parses bytes.
 import struct
 from typing import Optional
 
+# Pre-compile all struct operations at module level for performance
+_unpack_H = struct.Struct('<H').unpack_from
+_unpack_h = struct.Struct('<h').unpack_from
+_unpack_I = struct.Struct('<I').unpack_from
+_unpack_i = struct.Struct('<i').unpack_from
+_unpack_Q = struct.Struct('<Q').unpack_from
+_unpack_q = struct.Struct('<q').unpack_from
+_unpack_f = struct.Struct('<f').unpack_from
+_unpack_d = struct.Struct('<d').unpack_from
+
 
 class PayloadReader:
     """
@@ -38,13 +48,13 @@ class PayloadReader:
     
     def read_uint16(self) -> int:
         """Read 2-byte integer (little-endian) and advance position"""
-        value = struct.unpack('<H', self.packet[self.pos:self.pos+2])[0]
+        value = _unpack_H(self.packet, self.pos)[0]
         self.pos += 2
         return value
     
     def read_int16(self) -> int:
         """Read 2-byte integer (little-endian) and advance position"""
-        value = struct.unpack('<h', self.packet[self.pos:self.pos+2])[0]
+        value = _unpack_h(self.packet, self.pos)[0]
         self.pos += 2
         return value
 
@@ -58,37 +68,37 @@ class PayloadReader:
 
     def read_uint32(self) -> int:
         """Read 4-byte integer (little-endian) and advance position"""
-        value = struct.unpack('<I', self.packet[self.pos:self.pos+4])[0]
+        value = _unpack_I(self.packet, self.pos)[0]
         self.pos += 4
         return value
 
     def read_int32(self) -> int:
         """Read 4-byte integer (little-endian) and advance position"""
-        value = struct.unpack('<i', self.packet[self.pos:self.pos+4])[0]
+        value = _unpack_i(self.packet, self.pos)[0]
         self.pos += 4
         return value
     
     def read_uint64(self) -> int:
         """Read 8-byte integer (little-endian) and advance position"""
-        value = struct.unpack('<Q', self.packet[self.pos:self.pos+8])[0]
+        value = _unpack_Q(self.packet, self.pos)[0]
         self.pos += 8
         return value
 
     def read_int64(self) -> int:
         """Read 8-byte integer (little-endian) and advance position"""
-        value = struct.unpack('<q', self.packet[self.pos:self.pos+8])[0]
+        value = _unpack_q(self.packet, self.pos)[0]
         self.pos += 8
         return value
 
     def read_float(self) -> float:
         """Read 4-byte float (little-endian) and advance position"""
-        value = struct.unpack('<f', self.packet[self.pos:self.pos+4])[0]
+        value = _unpack_f(self.packet, self.pos)[0]
         self.pos += 4
         return value
     
     def read_double(self) -> float:
         """Read 8-byte float (little-endian) and advance position"""
-        value = struct.unpack('<d', self.packet[self.pos:self.pos+8])[0]
+        value = _unpack_d(self.packet, self.pos)[0]
         self.pos += 8
         return value
 

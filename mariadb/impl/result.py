@@ -339,7 +339,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         
         # Increment row count
         self._row_count += 1
-        return self.row_parser(row_packet, self.columns, self.config)
+        return self.row_parser(row_packet, self.columns, self.config, self.column_count)
         
     def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
@@ -455,7 +455,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         
         # Increment row count
         self._row_count += 1
-        return self.row_parser(row_packet, self.columns, self.config)
+        return self.row_parser(row_packet, self.columns, self.config, self.column_count)
     
     async def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows (async)"""

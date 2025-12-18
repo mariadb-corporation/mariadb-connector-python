@@ -64,9 +64,9 @@ class AsyncClient(BaseClient):
         self.writer: Optional[asyncio.StreamWriter] = None
         
         # Read buffer management
-        self._readbuf: bytearray = bytearray(8192)
+        self._readbuf: bytearray = bytearray(16384)
         self._read_view: memoryview = memoryview(self._readbuf)
-        self._readbuf_capacity: int = 8192  # Cache buffer capacity
+        self._readbuf_capacity: int = 16384  # Cache buffer capacity
         self.max_allowed_packet: int = 0xFFFFFF
         self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
         self.auth_plugin: Optional['AuthenticationPlugin'] = None
@@ -676,7 +676,7 @@ class AsyncClient(BaseClient):
                 elif packet_first_byte == self.ERROR_PACKET:
                     raise _decode_error_packet(row_packet, self.context).toError(self.exception_factory)
                 
-                rows.append(row_parser(row_packet, columns, config))
+                rows.append(row_parser(row_packet, columns, config, column_count))
 
             if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                 break
@@ -718,7 +718,7 @@ class AsyncClient(BaseClient):
             with open(filename, 'rb') as f:
                 # Read and send file in maximum MySQL packet sizes
                 while True:
-                    chunk = f.read(8192)
+                    chunk = f.read(16384)
                     if not chunk:
                         break
                     # Send as MySQL packet (header will be added by write_payload)

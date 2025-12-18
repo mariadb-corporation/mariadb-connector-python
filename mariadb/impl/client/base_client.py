@@ -512,26 +512,6 @@ class BaseClient(ABC):
     # =========================================================================
     # Result Set Parsing
     # =========================================================================
-        
-    def _is_null_bitmap(self, index: int, null_bitmap: bytes) -> bool:
-        """
-        Check if column is NULL using binary result set NULL bitmap
-        
-        Args:
-            index: Column index
-            null_bitmap: NULL bitmap bytes
-            
-        Returns:
-            True if column is NULL
-        """
-        # Formula from Node.js connector: (nullBitmap[~~((index + 2) / 8)] & (1 << (index + 2) % 8)) > 0
-        byte_pos = (index + 2) // 8
-        bit_pos = (index + 2) % 8
-        
-        if byte_pos >= len(null_bitmap):
-            return False
-        
-        return (null_bitmap[byte_pos] & (1 << bit_pos)) > 0
 
     def get_host_address(self) -> HostAddress:
         """Get host address"""
@@ -613,9 +593,8 @@ class BaseClient(ABC):
     # Row Data Parsing Methods
     # =========================================================================
 
-    def _parse_text_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration') -> tuple:
+    def _parse_text_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', num_cols: int) -> tuple:
         """Parse text protocol row data packet with inlined decoding"""
-        num_cols = len(columns)
         row_values = [None] * num_cols
         pos = 0
         data_bytes = data.tobytes()  # Convert once for faster access
@@ -694,12 +673,12 @@ class BaseClient(ABC):
             elif col_type == FIELD_TYPE.NULL:
                 row_values[i] = None
             elif col_type == FIELD_TYPE.JSON:
-                row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='replace')
+                row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
             else:
                 # String types and others
                 if column.special_format:
                     if column.ext_type_format == b'json':
-                        row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='replace')
+                        row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
                     elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
                         row_values[i] = data_bytes[pos:pos + length].decode('ascii')
                         if config.native_object:
@@ -711,30 +690,27 @@ class BaseClient(ABC):
                 elif column.character_set == 63:  # Binary
                     row_values[i] = data_bytes[pos:pos + length]
                 else:
-                    row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='replace')
+                    row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
             
             pos += length
         
         return tuple(row_values)
 
-    def _parse_binary_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration') -> tuple:
+    def _parse_binary_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', num_cols: int) -> tuple:
         """Parse binary protocol row data packet with inlined decoding"""
         pos = 1  # Skip 0x00 header
         
         # Read NULL bitmap
-        num_columns = len(columns)
-        null_bitmap_length = (num_columns + 9) >> 3
-        null_bitmap = bytes(data[pos:pos + null_bitmap_length])
+        null_bitmap_length = (num_cols + 9) >> 3
+        null_bitmap = data[pos:pos + null_bitmap_length]
         pos += null_bitmap_length
         
         # Parse column values with inlined decoding
-        row_values = [None] * num_columns
+        row_values = [None] * num_cols
         
-        for i in range(num_columns):
+        for i in range(num_cols):
             column = columns[i]
-            byte_pos = (i + 2) >> 3
-            bit_pos = (i + 2) & 7
-            if byte_pos < len(null_bitmap) and (null_bitmap[byte_pos] & (1 << bit_pos)):
+            if null_bitmap[(i + 2) >> 3] & (1 << (i + 2) & 7):
                 row_values[i] = None
                 continue
             
@@ -844,9 +820,6 @@ class BaseClient(ABC):
                 length = data[pos]
                 if (length < 0xFB):
                     pos += 1
-                elif length == 0xFB:
-                    pos += 1
-                    continue
                 elif length == 0xFC:
                     length = _unpack_H(data, pos + 1)[0]
                     pos += 3
@@ -872,7 +845,7 @@ class BaseClient(ABC):
                 elif column.character_set == 63 and field_type != FIELD_TYPE.JSON:  # Binary
                     row_values[i] = val
                 else:
-                    row_values[i] = val.decode('utf-8', errors='replace')
+                    row_values[i] = val.decode('utf-8', errors='ignore')
                 pos += length
         
         return tuple(row_values)
