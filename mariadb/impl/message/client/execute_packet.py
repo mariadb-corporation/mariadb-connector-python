@@ -67,104 +67,111 @@ class ExecutePacket(ClientMessage):
 
         parameters = self.parameters
         if parameters:
-            # Cache locals
             num_params = len(parameters)
-            null_bitmap_length = (num_params + 7) >> 3  # Bit shift instead of division
+            null_bitmap_length = (num_params + 7) >> 3
             null_bitmap = bytearray(null_bitmap_length)
             
-            # Cache type() to avoid global lookup
+            # Pre-allocate type buffer (2 bytes per parameter)
+            type_buffer = bytearray(num_params * 2)
+            
+            # Cache lookups
             _type = type
             type_tbl = PARAM_TYPE_TBL
             write_tbl = PARAM_WRITE_TBL
+            _struct_bb_pack = _STRUCT_BB.pack
             
-            # Build null bitmap
+            # Single pass: build null bitmap, collect types and write functions
+            write_funcs = []
+            
             for i in range(num_params):
                 param = parameters[i]
-                is_null = (param is None or 
+                
+                # Check null
+                if (param is None or 
                           (isinstance(param, array.array) and param.typecode == 'f' and len(param) == 0) or
-                          isinstance(param, MrdbIndicator))
-                if is_null:
-                    null_bitmap[i >> 3] |= (1 << (i & 7))  # Bit operations instead of division/modulo
-            
-            stream.write_bytes(null_bitmap) # Write NULL bitmap
-            stream.write_byte(0x01) # new params bound flag
-            
-            # Write parameter types (2 bytes per parameter)
-            for param in parameters:
+                          isinstance(param, MrdbIndicator)):
+                    null_bitmap[i >> 3] |= (1 << (i & 7))
+                
+                # Get type and write function
                 param_type = _type(param)
                 type_func = type_tbl.get(param_type)
                 if type_func is not None:
-                    field_type, unsigned = type_func(param)
+                    field_type = type_func(param)
                 else:
-                    field_type, unsigned = self._get_parameter_type(param)
-                stream.write_bytes(_STRUCT_BB.pack(field_type, unsigned))
+                    field_type = self._get_parameter_type(param)
+                
+                # Write type to buffer (unsigned flag already 0 from bytearray init)
+                type_buffer[i * 2] = field_type
+                
+                # Cache write function
+                write_funcs.append(write_tbl.get(param_type))
             
-            # Write parameter values
-            for param in parameters:
+            # Write null bitmap and flag
+            stream.write_bytes(null_bitmap)
+            stream.write_byte(0x01)
+            
+            # Write all types at once
+            stream.write_bytes(type_buffer)
+            
+            # Write parameter values using cached write functions
+            for i, param in enumerate(parameters):
                 if param is not None:
-                    param_type = _type(param)
-                    write_func = write_tbl.get(param_type)
+                    write_func = write_funcs[i]
                     if write_func is not None:
                         write_func(self, stream, param)
                     else:
-                        # Fallback for unknown types - convert to string
                         stream.write_length_encoded_string(str(param))
         
         return stream.get_payload()
 
-    def _get_parameter_type(self, param: Any) -> tuple[int, int]:
+    def _get_parameter_type(self, param: Any) -> int:
         """
-        Get MySQL field type and unsigned flag for parameter
+        Get MySQL field type for parameter
         
         Args:
             param: Parameter value
             
         Returns:
-            Tuple of (field_type, unsigned_flag)
+            field_type (unsigned flag is always 0)
         """
         if param is None:
-            return FIELD_TYPE.NULL, 0
+            return FIELD_TYPE.NULL
         elif isinstance(param, bool):
-            return FIELD_TYPE.TINY, 0
+            return FIELD_TYPE.TINY
         elif isinstance(param, int):
             if -128 <= param <= 127:
-                return FIELD_TYPE.TINY, 0
+                return FIELD_TYPE.TINY
             elif -32768 <= param <= 32767:
-                return FIELD_TYPE.SHORT, 0
+                return FIELD_TYPE.SHORT
             elif -2147483648 <= param <= 2147483647:
-                return FIELD_TYPE.LONG, 0
+                return FIELD_TYPE.LONG
             else:
-                return FIELD_TYPE.LONGLONG, 0
+                return FIELD_TYPE.LONGLONG
         elif isinstance(param, float):
-            return FIELD_TYPE.DOUBLE, 0
+            return FIELD_TYPE.DOUBLE
         elif isinstance(param, decimal.Decimal):
-            return FIELD_TYPE.NEWDECIMAL, 0
+            return FIELD_TYPE.NEWDECIMAL
         elif isinstance(param, str):
-            return FIELD_TYPE.VAR_STRING, 0
+            return FIELD_TYPE.VAR_STRING
         elif isinstance(param, (bytes, bytearray)):
-            return FIELD_TYPE.BLOB, 0
+            return FIELD_TYPE.BLOB
         elif isinstance(param, datetime.datetime):
-            return FIELD_TYPE.DATETIME, 0
+            return FIELD_TYPE.DATETIME
         elif isinstance(param, datetime.date):
-            return FIELD_TYPE.DATE, 0
+            return FIELD_TYPE.DATE
         elif isinstance(param, datetime.time):
-            return FIELD_TYPE.TIME, 0
+            return FIELD_TYPE.TIME
         elif isinstance(param, datetime.timedelta):
-            return FIELD_TYPE.TIME, 0
+            return FIELD_TYPE.TIME
         elif isinstance(param, array.array) and param.typecode == 'f':
             # Float array for VECTOR columns
-            return FIELD_TYPE.BLOB, 0
+            return FIELD_TYPE.BLOB
         elif isinstance(param, MrdbIndicator):
             # Handle MariaDB indicator values
-            if param.indicator == 1:  # NULL
-                return FIELD_TYPE.NULL, 0
-            elif param.indicator == 2:  # DEFAULT - treat as string
-                return FIELD_TYPE.NULL, 0
-            else:
-                return FIELD_TYPE.NULL, 0
+            return FIELD_TYPE.NULL
         else:
             # Default to string
-            return FIELD_TYPE.VAR_STRING, 0
+            return FIELD_TYPE.VAR_STRING
     
 
     def is_binary(self) -> bool:
@@ -176,56 +183,64 @@ class ExecutePacket(ClientMessage):
 
 # Optimized type detection functions
 def _get_type_bool(param):
-    return FIELD_TYPE.TINY, 0
+    return FIELD_TYPE.TINY
 
 def _get_type_int(param):
-    if -128 <= param <= 127:
-        return FIELD_TYPE.TINY, 0
-    elif -32768 <= param <= 32767:
-        return FIELD_TYPE.SHORT, 0
-    elif -2147483648 <= param <= 2147483647:
-        return FIELD_TYPE.LONG, 0
+    # Use bit_length for faster type detection (avoids 4 comparisons)
+    if param == 0:
+        return FIELD_TYPE.TINY
+    bits = param.bit_length() + (1 if param < 0 else 0)
+    if bits <= 7:
+        return FIELD_TYPE.TINY
+    elif bits <= 15:
+        return FIELD_TYPE.SHORT
+    elif bits <= 31:
+        return FIELD_TYPE.LONG
     else:
-        return FIELD_TYPE.LONGLONG, 0
+        return FIELD_TYPE.LONGLONG
 
 def _get_type_float(param):
-    return FIELD_TYPE.DOUBLE, 0
+    return FIELD_TYPE.DOUBLE
 
 def _get_type_decimal(param):
-    return FIELD_TYPE.NEWDECIMAL, 0
+    return FIELD_TYPE.NEWDECIMAL
 
 def _get_type_str(param):
-    return FIELD_TYPE.VAR_STRING, 0
+    return FIELD_TYPE.VAR_STRING
 
 def _get_type_bytes(param):
-    return FIELD_TYPE.BLOB, 0
+    return FIELD_TYPE.BLOB
 
 def _get_type_datetime(param):
-    return FIELD_TYPE.DATETIME, 0
+    return FIELD_TYPE.DATETIME
 
 def _get_type_date(param):
-    return FIELD_TYPE.DATE, 0
+    return FIELD_TYPE.DATE
 
 def _get_type_time(param):
-    return FIELD_TYPE.TIME, 0
+    return FIELD_TYPE.TIME
 
 def _get_type_timedelta(param):
-    return FIELD_TYPE.TIME, 0
+    return FIELD_TYPE.TIME
 
 def _get_type_none(param):
-    return FIELD_TYPE.NULL, 0
+    return FIELD_TYPE.NULL
 
 # Optimized write functions
 def _write_bool(self, stream, param):
     stream.write_byte(1 if param else 0)
 
 def _write_int(self, stream, param):
-    # Optimized integer writing with pre-compiled struct formats
-    if -128 <= param <= 127:
+    # Use bit_length for faster size detection
+    if param == 0:
+        stream.write_bytes(_STRUCT_b.pack(0))
+        return
+    bits = param.bit_length() + (1 if param < 0 else 0)
+    if bits <= 7:
         stream.write_bytes(_STRUCT_b.pack(param))
-    elif -32768 <= param <= 32767:
+    elif bits <= 15:
         stream.write_bytes(_STRUCT_h.pack(param))
-    elif -2147483648 <= param <= 2147483647:
+    elif bits <= 31:
         stream.write_bytes(_STRUCT_i.pack(param))
     else:
         stream.write_bytes(_STRUCT_q.pack(param))
@@ -320,12 +335,7 @@ def _write_indicator(self, stream, param):
 
 def _get_type_indicator(param):
     """Get type for MrdbIndicator"""
-    if param.indicator == 1:  # NULL
-        return FIELD_TYPE.NULL, 0
-    elif param.indicator == 2:  # DEFAULT
-        return FIELD_TYPE.NULL, 0
-    else:
-        return FIELD_TYPE.NULL, 0
+    return FIELD_TYPE.NULL
 
 # Populate lookup tables
 PARAM_TYPE_TBL = {

@@ -83,8 +83,8 @@ class SyncClient(BaseClient):
         if (self._recv_buf_capacity - self._recv_len >= needed):
             return
         grow_size = (needed + 16384 - 1) & ~(16384 - 1)
-        # Use extend() for in-place growth - keeps buffer contiguous
-        self._recv_buf.extend(bytearray(grow_size))
+        # Concatenate to create new buffer (avoids BufferError with active memoryview)
+        self._recv_buf = self._recv_buf + bytearray(grow_size)
         self._recv_buf_mv = memoryview(self._recv_buf)
         self._recv_buf_capacity += grow_size
                 
