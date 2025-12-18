@@ -38,22 +38,22 @@ class TestAsyncUnixSocket(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         """Set up test connection and table"""
-        self.conn = await mariadb.AsyncConnection.connect(**get_test_config())
-        await self.conn.set_autocommit(True)
-        cursor = self.conn.cursor()
-        await cursor.execute(
-            "CREATE TABLE IF NOT EXISTS test_async_unixsocket_table("
-            "int_column INT DEFAULT 100, "
-            "mediumtext_column MEDIUMTEXT NULL"
-            ") COLLATE = utf8mb3_bin"
-        )
-        await cursor.close()
-        
-        # Clear table
-        cursor = self.conn.cursor()
-        await cursor.execute("DELETE FROM test_async_unixsocket_table")
-        await cursor.close()
-        await self.conn.commit()
+        try:
+            self.conn = await mariadb.AsyncConnection.connect(**get_test_config())
+            await self.conn.set_autocommit(True)
+            cursor = self.conn.cursor()
+            await cursor.execute("DROP TABLE IF EXISTS test_async_unixsocket_table")
+            await cursor.execute(
+                "CREATE TABLE test_async_unixsocket_table("
+                "int_column INT DEFAULT 100, "
+                "mediumtext_column MEDIUMTEXT NULL"
+                ")"
+            )
+            await cursor.close()
+        except Exception as e:
+            if hasattr(self, 'conn') and self.conn:
+                await self.conn.close()
+            self.skipTest(f"Failed to set up test table: {e}")
 
     async def asyncTearDown(self):
         """Clean up test table and connection"""

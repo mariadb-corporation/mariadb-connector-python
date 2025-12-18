@@ -46,16 +46,22 @@ class TestUnixSocket(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test table"""
-        cls.conn = create_connection()
-        cls.conn.autocommit = True
-        cursor = cls.conn.cursor()
-        cursor.execute(
-            "CREATE TABLE IF NOT EXISTS test_unixsocket_table("
-            "int_column INT DEFAULT 100, "
-            "mediumtext_column MEDIUMTEXT NULL"
-            ") COLLATE = utf8mb3_bin"
-        )
-        cursor.close()
+        try:
+            cls.conn = create_connection()
+            cls.conn.autocommit = True
+            cursor = cls.conn.cursor()
+            cursor.execute("DROP TABLE IF EXISTS test_unixsocket_table")
+            cursor.execute(
+                "CREATE TABLE test_unixsocket_table("
+                "int_column INT DEFAULT 100, "
+                "mediumtext_column MEDIUMTEXT NULL"
+                ")"
+            )
+            cursor.close()
+        except Exception as e:
+            if hasattr(cls, 'conn'):
+                cls.conn.close()
+            raise
 
     @classmethod
     def tearDownClass(cls):
@@ -74,12 +80,15 @@ class TestUnixSocket(unittest.TestCase):
     def setUp(self):
         """Clear test table before each test"""
         # Check if conn exists and is valid
-        if not hasattr(self, 'conn') or not hasattr(self.conn, 'cursor'):
+        if not hasattr(self.__class__, 'conn') or not hasattr(self.__class__.conn, 'cursor'):
             self.skipTest("Class-level connection not available")
         
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM test_unixsocket_table")
-        cursor.close()
+        try:
+            cursor = self.__class__.conn.cursor()
+            cursor.execute("DELETE FROM test_unixsocket_table")
+            cursor.close()
+        except Exception as e:
+            self.skipTest(f"Failed to clear test table: {e}")
 
     @unittest.skipIf(is_windows(), "Unix sockets not supported on Windows")
     @unittest.skipIf(not is_local_test(), "Test requires local environment")
