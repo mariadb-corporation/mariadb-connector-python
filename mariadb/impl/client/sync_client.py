@@ -19,7 +19,7 @@ from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
-from .base_client import BaseClient, MAX_PACKET_SIZE
+from .base_client import BaseClient
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
 from ..message.client_message import ClientMessage
@@ -35,10 +35,13 @@ from ...exceptions import OperationalError, DatabaseError, ProgrammingError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
 
-_STRUCT_PKT_HDR = struct.Struct('<I')
-_unpack_pkt_hdr = _STRUCT_PKT_HDR.unpack_from
+_unpack_pkt_hdr = struct.Struct('<I').unpack_from
+_pack_pkt_hdr = struct.Struct('<I').pack_into
 
-MAX_PACKET_SIZE = 0xFFFFFF
+# Cache packet decode methods for faster access
+_decode_ok_packet = OkPacket.decode
+_decode_error_packet = ErrorPacket.decode
+_decode_eof_packet = EofPacket.decode
 
 class SyncClient(BaseClient):
     """
@@ -62,8 +65,9 @@ class SyncClient(BaseClient):
         
         # Read buffer management
         self._default_recv_buf: bytearray = bytearray(8192)
+        self._default_recv_buf_mv = memoryview(self._default_recv_buf)  # Cache default memoryview
         self._recv_buf: bytearray = self._default_recv_buf
-        self._recv_buf_mv = memoryview(self._recv_buf)
+        self._recv_buf_mv = self._default_recv_buf_mv
         self._recv_buf_capacity = 8192  # Cache buffer capacity
         self._recv_pos = 0
         self._recv_len = 0
@@ -76,10 +80,9 @@ class SyncClient(BaseClient):
         """
         Resize buffer if necessary.
         """
-        ALIGN = 16384 
         if (self._recv_buf_capacity - self._recv_len >= needed):
             return
-        grow_size = (needed + ALIGN - 1) & ~(ALIGN - 1)
+        grow_size = (needed + 16384 - 1) & ~(16384 - 1)
         # Use extend() for in-place growth - keeps buffer contiguous
         self._recv_buf.extend(bytearray(grow_size))
         self._recv_buf_mv = memoryview(self._recv_buf)
@@ -131,10 +134,6 @@ class SyncClient(BaseClient):
         of the buffer
 
         """
-        # Constants for faster local lookup
-        PKT_HDR_SIZE = 4
-        MAX_PKT_SIZE = 0xFFFFFF
-
         # if everything was read - rewind buffer
         if self._recv_pos >= self._recv_len:
            self._recv_pos = 0
@@ -156,8 +155,8 @@ class SyncClient(BaseClient):
 
             if bytes_in_buffer > 0:
                 # buffer must contain at least a packet header
-                if bytes_in_buffer < PKT_HDR_SIZE:
-                    missing = PKT_HDR_SIZE - bytes_in_buffer
+                if bytes_in_buffer < 4:
+                    missing = 4 - bytes_in_buffer
                     self._ensure_space(missing)
                     self._recv_len += self._recv_into_buffer(missing)
                     continue
@@ -168,13 +167,13 @@ class SyncClient(BaseClient):
                 self.sequence[0] = (header_int >> 24) & 0xFF
 
                 # check if we have complete packet data
-                packet_total = PKT_HDR_SIZE + packet_length
+                packet_total = 4 + packet_length
                 if bytes_in_buffer < packet_total:
                     # Need to read more data
                     missing = packet_total - bytes_in_buffer
                     # For MAX_PKT_SIZE packets, also try to read next packet header
-                    if packet_length == MAX_PKT_SIZE:
-                        missing += PKT_HDR_SIZE
+                    if packet_length == 0xFFFFFF:
+                        missing += 4
                     self._ensure_space(missing)
                     self._recv_len += self._recv_into_buffer(missing)
                     continue
@@ -183,9 +182,9 @@ class SyncClient(BaseClient):
                 packet_count += 1
                 
                 # Fast path: single packet (most common case)
-                if packet_length < MAX_PKT_SIZE and packet_count == 1:
+                if packet_length < 0xFFFFFF and packet_count == 1:
                     # Single packet fast path - no compaction needed
-                    result_start = self._recv_pos + PKT_HDR_SIZE
+                    result_start = self._recv_pos + 4
                     result_end = self._recv_pos + packet_total
                     self._recv_pos = result_end
                     return self._recv_buf_mv[result_start:result_end]
@@ -193,8 +192,8 @@ class SyncClient(BaseClient):
                 # Multi-packet handling (MAX_PKT_SIZE)
                 if packet_count > 1:
                     # Compact by removing intermediate header
-                    payload_src = self._recv_pos + PKT_HDR_SIZE
-                    payload_dst = first_pos + PKT_HDR_SIZE + total_size
+                    payload_src = self._recv_pos + 4
+                    payload_dst = first_pos + 4 + total_size
                     if payload_src != payload_dst:
                         # Calculate how much data is after this packet
                         data_after_packet = self._recv_len - (self._recv_pos + packet_total)
@@ -206,23 +205,23 @@ class SyncClient(BaseClient):
                             self._recv_buf[payload_dst + packet_length:payload_dst + packet_length + data_after_packet] = \
                                 self._recv_buf[self._recv_pos + packet_total:self._recv_len]
                         # After compaction, adjust buffer length to account for removed header
-                        self._recv_len -= PKT_HDR_SIZE
+                        self._recv_len -= 4
                 
                 total_size += packet_length
 
                 # Check if this is the last packet
-                if packet_length < MAX_PKT_SIZE:
+                if packet_length < 0xFFFFFF:
                     # Last packet in multi-packet sequence - return complete result
-                    result_start = first_pos + PKT_HDR_SIZE
-                    result_end = first_pos + PKT_HDR_SIZE + total_size
+                    result_start = first_pos + 4
+                    result_end = first_pos + 4 + total_size
                     self._recv_pos = result_end
                     return self._recv_buf_mv[result_start:result_end]
 
                 # Multi-packet: advance to next packet header
                 # After compaction, the next header is immediately after current payload
                 if packet_count > 1:
-                    # After compaction, next header is at: first_pos + PKT_HDR_SIZE + total_size
-                    self._recv_pos = first_pos + PKT_HDR_SIZE + total_size
+                    # After compaction, next header is at: first_pos + 4 + total_size
+                    self._recv_pos = first_pos + 4 + total_size
                 else:
                     # First packet, no compaction yet
                     self._recv_pos += packet_total
@@ -232,8 +231,8 @@ class SyncClient(BaseClient):
 
     def reset_buffer(self):
         self._recv_buf = self._default_recv_buf
-        self._recv_buf_mv = memoryview(self._recv_buf)
-        self._recv_buf_capacity = len(self._default_recv_buf)
+        self._recv_buf_mv = self._default_recv_buf_mv
+        self._recv_buf_capacity = 8192
         self._recv_pos = 0
         self._recv_len = 0
 
@@ -261,22 +260,21 @@ class SyncClient(BaseClient):
         sent = 0  # Handle packet splitting for large payloads
         
         while sent < payload_len:
-            chunk_size = min(MAX_PACKET_SIZE, payload_len - sent)
+            chunk_size = min(0xFFFFFF, payload_len - sent)
             self.sequence[0] = (self.sequence[0] + 1) % 256
             
             chunk_start = data_offset + sent  # Data for this chunk starts at data_offset + sent
             chunk_end = chunk_start + chunk_size
             
-            header_pos = chunk_start - 4  # Write header 4 bytes before the chunk data
-            payload[header_pos] = chunk_size & 0xFF
-            payload[header_pos + 1] = (chunk_size >> 8) & 0xFF
-            payload[header_pos + 2] = (chunk_size >> 16) & 0xFF
-            payload[header_pos + 3] = self.sequence[0]
+            # Write header 4 bytes before the chunk data
+            header_pos = chunk_start - 4
+            header_int = chunk_size | (self.sequence[0] << 24)
+            _pack_pkt_hdr(payload, header_pos, header_int)
             
             self.socket.sendall(payload_view[header_pos:chunk_end])  # Send packet: header + chunk data using memoryview (no copy)
             sent += chunk_size
         
-        if payload_len % MAX_PACKET_SIZE == 0:  # If last packet was exactly MAX_PACKET_SIZE, send empty packet to signal end
+        if payload_len % 0xFFFFFF == 0:  # If last packet was exactly 0xFFFFFF, send empty packet to signal end
             self.sequence[0] = (self.sequence[0] + 1) % 256
             header = b'\x00\x00\x00' + bytes([self.sequence[0]])
             self.socket.sendall(header)
@@ -355,7 +353,7 @@ class SyncClient(BaseClient):
         """Perform initial handshake and authentication with server"""
         handshake_packet = self.read_payload()
         if (handshake_packet[0] == 0xff):
-            raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
+            raise _decode_error_packet(handshake_packet).toError(self.exception_factory)
         self.context = self._parse_handshake(handshake_packet)
 
         client_capabilities = self._calculate_client_capabilities()
@@ -451,11 +449,11 @@ class SyncClient(BaseClient):
         packet_type = packet[0]
         
         if packet_type == self.OK_PACKET:
-            ok_packet = OkPacket.decode(packet, self.context)
+            ok_packet = _decode_ok_packet(packet, self.context)
             # Validate SSL fingerprint if needed
             self.validate_ssl_fingerprint(ok_packet)
         elif packet_type == self.ERROR_PACKET:
-            raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
+            raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
         elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
             # Auth switch - server requests different auth plugin
             self._handle_auth_switch(packet)
@@ -593,27 +591,21 @@ class SyncClient(BaseClient):
         from ..result import SyncStreamingResult, SyncCompleteResult
         
         results = []
-        # Cache locals for faster access
-        context = self.context
-        ok_packet = self.OK_PACKET
-        error_packet = self.ERROR_PACKET
-        local_infile_packet = self.LOCAL_INFILE_PACKET
-        more_results_mask = STATUS.MORE_RESULTS_EXIST
         
         while True:
             packet = self.read_payload()
             packet_type = packet[0]
-            if packet_type == ok_packet:
-                results.append(OkPacket.decode(packet, context))
-                if (context.server_status & more_results_mask) == 0:
+            if packet_type == self.OK_PACKET:
+                results.append(_decode_ok_packet(packet, self.context))
+                if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                     break
                 continue
-            elif packet_type == error_packet:
-                raise ErrorPacket.decode(packet, context).toError(self.exception_factory)
-            elif packet_type == local_infile_packet:
+            elif packet_type == self.ERROR_PACKET:
+                raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
+            elif packet_type == self.LOCAL_INFILE_PACKET:
                 results.append(self._handle_local_infile(packet, sql))
                 # After sending file, read the actual result
-                if (context.server_status & more_results_mask) == 0:
+                if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                     break                
                 continue
             
@@ -623,17 +615,17 @@ class SyncClient(BaseClient):
             column_count = parser.read_length_encoded_int()
 
             # Cache EOF deprecated flag once
-            eof_deprecated = context.isEofDeprecated()
+            eof_deprecated = self.context.isEofDeprecated()
             
             # Read column definitions
             columns: List[ColumnDefinitionPacket] = [None] * column_count
-            if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+            if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                 # skip metadata
                 columns = prepare_stmt_packet.columns
             else:
                 for i in range(column_count):
                     col_packet = self.read_payload()
-                    columns[i] = ColumnDefinitionPacket.decode(col_packet, context)
+                    columns[i] = ColumnDefinitionPacket.decode(col_packet, self.context)
                 if prepare_stmt_packet is not None:
                     prepare_stmt_packet.columns = columns
             # Read EOF packet after column definitions (if not deprecated)
@@ -646,7 +638,7 @@ class SyncClient(BaseClient):
             # If unbuffered, create streaming result
             if not buffered:
                 streaming_result = SyncStreamingResult(self.read_payload,
-                    context,
+                    self.context,
                     columns,
                     column_count,
                     config,
@@ -672,9 +664,9 @@ class SyncClient(BaseClient):
                 # Check for EOF/OK packet (0xFE with length constraint)
                 if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
                     if eof_deprecated:
-                        completion = OkPacket.decode(row_packet, context)
+                        completion = _decode_ok_packet(row_packet, self.context)
                     else:
-                        completion = EofPacket.decode(row_packet, context)
+                        completion = _decode_eof_packet(row_packet, self.context)
 
                     if config.converter:
                         rows = self._apply_converters_to_rows(rows, columns, config)
@@ -687,12 +679,12 @@ class SyncClient(BaseClient):
                     )
                     results.append(completion)
                     break
-                elif packet_first_byte == error_packet:
-                    raise ErrorPacket.decode(row_packet, context).toError(self.exception_factory)
+                elif packet_first_byte == self.ERROR_PACKET:
+                    raise _decode_error_packet(row_packet, self.context).toError(self.exception_factory)
                 
                 rows.append(row_parser(row_packet, columns, config))
 
-            if (context.server_status & more_results_mask) == 0:
+            if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                 break
 
         return results
@@ -732,7 +724,7 @@ class SyncClient(BaseClient):
             with open(filename, 'rb') as f:
                 # Read and send file in maximum MySQL packet sizes
                 while True:
-                    # Read up to MAX_PACKET_SIZE bytes
+                    # Read file in chunks
                     chunk = f.read(8192)
                     if not chunk:
                         break
@@ -753,7 +745,7 @@ class SyncClient(BaseClient):
         response = self.read_payload()
         
         if response[0] == 0x00:  # OK packet
-            ok = OkPacket.decode(packet, self.context)
+            ok = _decode_ok_packet(packet, self.context)
             if error:
                 raise error
             return ok
@@ -767,7 +759,7 @@ class SyncClient(BaseClient):
             from mariadb.impl.message.server import ErrorPacket
             from mariadb.impl.context import Context
             context = Context()
-            raise ErrorPacket.decode(response, context).toError(self.exception_factory)
+            raise _decode_error_packet(response, context).toError(self.exception_factory)
         
     def _validate_local_filename(self, sql: str, filename: str) -> bool:
         """Validate that filename matches LOAD DATA LOCAL INFILE query"""
@@ -936,7 +928,7 @@ class SyncClient(BaseClient):
             
             return prepare_stmt_packet
         elif packet_type == self.ERROR_PACKET:
-            raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
+            raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
         else:
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
        

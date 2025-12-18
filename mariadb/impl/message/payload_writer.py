@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     pass
 
 # Constants from write_stream
-HEADER_SIZE = 4
 SLASH_BYTE: int = b"\\"[0]
 QUOTE_BYTE: int = b"'"[0]
 DQUOTE_BYTE: int = b"\""[0]

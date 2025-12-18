@@ -51,10 +51,6 @@ from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
 from cachetools import LRUCache
 
-# Write stream constants
-HEADER_SIZE = 4
-MAX_PACKET_SIZE = 0xFFFFFF
-
 class BaseClient(ABC):
     """
     Abstract base client for MariaDB connections

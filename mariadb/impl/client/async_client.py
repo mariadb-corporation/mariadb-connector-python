@@ -18,7 +18,7 @@ from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
-from .base_client import BaseClient, MAX_PACKET_SIZE
+from .base_client import BaseClient
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
 from ..message.client_message import ClientMessage
@@ -35,7 +35,12 @@ from mariadb_shared import constants
 
 # Pre-compiled struct for packet header parsing (3 bytes length + 1 byte sequence)
 _STRUCT_PKT_HDR = struct.Struct('<I')  # Read as 4-byte int, mask out sequence
+_unpack_pkt_hdr = _STRUCT_PKT_HDR.unpack
 
+# Cache packet decode methods for faster access
+_decode_ok_packet = OkPacket.decode
+_decode_error_packet = ErrorPacket.decode
+_decode_eof_packet = EofPacket.decode
 
 class AsyncClient(BaseClient):
     """
@@ -93,7 +98,7 @@ class AsyncClient(BaseClient):
         # Read first packet header
         header = await self.reader.readexactly(4)
         # Fast packet header parsing using struct
-        header_int = _STRUCT_PKT_HDR.unpack(header)[0]
+        header_int = _unpack_pkt_hdr(header)[0]
         pkt_len = header_int & 0xFFFFFF
         self.sequence[0] = (header_int >> 24) & 0xFF
         
@@ -103,7 +108,7 @@ class AsyncClient(BaseClient):
         self._readbuf[0:pkt_len] = payload
                 
         # Fast path: single packet (99.9999% of cases)
-        if pkt_len < MAX_PACKET_SIZE:
+        if pkt_len < 0xFFFFFF:
             return self._read_view[0:pkt_len]
         
         # Slow path: multiple packets (rare)
@@ -113,7 +118,7 @@ class AsyncClient(BaseClient):
             # Read next packet header
             header = await self.reader.readexactly(4)
             # Fast packet header parsing using struct
-            header_int = _STRUCT_PKT_HDR.unpack(header)[0]
+            header_int = _unpack_pkt_hdr(header)[0]
             pkt_len = header_int & 0xFFFFFF
             self.sequence[0] = (header_int >> 24) & 0xFF
             
@@ -128,7 +133,7 @@ class AsyncClient(BaseClient):
             result_len += pkt_len
             
             # Continuation condition
-            if pkt_len < MAX_PACKET_SIZE:
+            if pkt_len < 0xFFFFFF:
                 break
         
         return self._read_view[0:result_len]
@@ -158,7 +163,7 @@ class AsyncClient(BaseClient):
         sent = 0  # Handle packet splitting for large payloads
         
         while sent < payload_len:
-            chunk_size = min(MAX_PACKET_SIZE, payload_len - sent)
+            chunk_size = min(0xFFFFFF, payload_len - sent)
             self.sequence[0] = (self.sequence[0] + 1) % 256
             
             chunk_start = data_offset + sent  # Data for this chunk starts at data_offset + sent
@@ -175,7 +180,7 @@ class AsyncClient(BaseClient):
         
         await self.writer.drain()  # Flush all buffered data
         
-        if payload_len % MAX_PACKET_SIZE == 0:  # If last packet was exactly MAX_PACKET_SIZE, send empty packet to signal end
+        if payload_len % 0xFFFFFF == 0:  # If last packet was exactly 0xFFFFFF, send empty packet to signal end
             self.sequence[0] = (self.sequence[0] + 1) % 256
             header = b'\x00\x00\x00' + bytes([self.sequence[0]])
             self.writer.write(header)
@@ -265,7 +270,7 @@ class AsyncClient(BaseClient):
         # Read initial handshake packet from server
         handshake_packet = await self.read_payload()
         if (handshake_packet[0] == 0xff):
-            raise ErrorPacket.decode(handshake_packet).toError(self.exception_factory)
+            raise _decode_error_packet(handshake_packet).toError(self.exception_factory)
 
         self.context = self._parse_handshake(handshake_packet)
         
@@ -421,12 +426,12 @@ class AsyncClient(BaseClient):
         
         if packet_type == self.OK_PACKET:
             # OK packet - authentication successful with handshake response
-            ok_packet = OkPacket.decode(auth_result, self.context)
+            ok_packet = _decode_ok_packet(auth_result, self.context)
             # Validate SSL fingerprint if needed
             self.validate_ssl_fingerprint(ok_packet)
         elif packet_type == self.ERROR_PACKET:
             # Error packet - authentication failed
-            raise ErrorPacket.decode(auth_result, self.context).toError(self.exception_factory)
+            raise _decode_error_packet(auth_result, self.context).toError(self.exception_factory)
         elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
             # Auth switch request - server wants different plugin
             await self._handle_auth_switch(auth_result)
@@ -578,27 +583,22 @@ class AsyncClient(BaseClient):
         from ..result import AsyncStreamingResult, AsyncCompleteResult
         
         results = []
-        context = self.context
-        ok_packet = self.OK_PACKET
-        error_packet = self.ERROR_PACKET
-        local_infile_packet = self.LOCAL_INFILE_PACKET
-        more_results_mask = STATUS.MORE_RESULTS_EXIST
         
         while True:
             packet = await self.read_payload()
             packet_type = packet[0]
-            if packet_type == ok_packet:
-                results.append(OkPacket.decode(packet, context))
-                if (context.server_status & more_results_mask) == 0:
+            if packet_type == self.OK_PACKET:
+                results.append(_decode_ok_packet(packet, self.context))
+                if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                     break
                 continue
-            elif packet_type == error_packet:
-                raise ErrorPacket.decode(packet, context).toError(self.exception_factory)
-            elif packet_type == local_infile_packet:
+            elif packet_type == self.ERROR_PACKET:
+                raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
+            elif packet_type == self.LOCAL_INFILE_PACKET:
                 # LOAD DATA LOCAL INFILE request from server
                 completion = await self._handle_local_infile(packet, sql)
                 results.append(completion)
-                if (context.server_status & more_results_mask) == 0:
+                if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                     break                
                 continue
             
@@ -608,17 +608,17 @@ class AsyncClient(BaseClient):
             column_count = parser.read_length_encoded_int()
 
             # Cache EOF deprecated flag once
-            eof_deprecated = context.isEofDeprecated()
+            eof_deprecated = self.context.isEofDeprecated()
             
             # Read column definitions
             columns: List[ColumnDefinitionPacket] = [None] * column_count
-            if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+            if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                 # skip metadata
                 columns = prepare_stmt_packet.columns
             else:
                 for i in range(column_count):
                     col_packet = await self.read_payload()
-                    columns[i] = ColumnDefinitionPacket.decode(col_packet, context)
+                    columns[i] = ColumnDefinitionPacket.decode(col_packet, self.context)
                 if prepare_stmt_packet is not None:
                     prepare_stmt_packet.columns = columns
             # Read EOF packet after column definitions (if not deprecated)
@@ -631,7 +631,7 @@ class AsyncClient(BaseClient):
             # If unbuffered, create streaming result
             if not buffered:
                 streaming_result = AsyncStreamingResult(self.read_payload,
-                    context,
+                    self.context,
                     columns,
                     column_count,
                     config,
@@ -657,9 +657,9 @@ class AsyncClient(BaseClient):
                 # Check for EOF/OK packet (0xFE with length constraint)
                 if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
                     if eof_deprecated:
-                        completion = OkPacket.decode(row_packet, context)
+                        completion = _decode_ok_packet(row_packet, self.context)
                     else:
-                        completion = EofPacket.decode(row_packet, context)
+                        completion = _decode_eof_packet(row_packet, self.context)
 
                     # Apply converters to all rows at once
                     if config.converter:
@@ -673,12 +673,12 @@ class AsyncClient(BaseClient):
                     )
                     results.append(completion)
                     break
-                elif packet_first_byte == error_packet:
-                    raise ErrorPacket.decode(row_packet, context).toError(self.exception_factory)
+                elif packet_first_byte == self.ERROR_PACKET:
+                    raise _decode_error_packet(row_packet, self.context).toError(self.exception_factory)
                 
                 rows.append(row_parser(row_packet, columns, config))
 
-            if (context.server_status & more_results_mask) == 0:
+            if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                 break
         return results
 
@@ -738,7 +738,7 @@ class AsyncClient(BaseClient):
         response = await self.read_payload()
         
         if response[0] == 0x00:  # OK packet
-            ok = OkPacket.decode(response, self.context)
+            ok = _decode_ok_packet(response, self.context)
             if error:
                 raise error
             return ok
@@ -752,7 +752,7 @@ class AsyncClient(BaseClient):
             from mariadb.impl.message.server import ErrorPacket
             from mariadb.impl.context import Context
             context = Context()
-            raise ErrorPacket.decode(response, context).toError(self.exception_factory)
+            raise _decode_error_packet(response, context).toError(self.exception_factory)
     
     def _validate_local_filename(self, sql: str, filename: str) -> bool:
         """Validate that filename matches LOAD DATA LOCAL INFILE query"""
@@ -898,7 +898,7 @@ class AsyncClient(BaseClient):
             return prepare_stmt_packet
         elif packet_type == self.ERROR_PACKET:
             # Error packet
-            raise ErrorPacket.decode(packet, self.context).toError(self.exception_factory)
+            raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
         else:
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
     
