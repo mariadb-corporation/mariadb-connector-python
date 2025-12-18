@@ -17,7 +17,7 @@ class SslRequestPacket(ClientMessage):
         """Initialize SSL request packet with client capabilities"""
         self.client_capabilities: int = client_capabilities
 
-    def payload(self, context: Context) -> bytearray:
+    def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
         # Pack SSL request packet: header (4) + client_capabilities (4) + max_packet_size (4) + charset (1) + reserved (19) + extended_capabilities (4) = 36 bytes
         return bytearray(struct.pack(
             '<4sIIB19sI',  # Little-endian: 4 bytes header, uint32, uint32, byte, 19 bytes, uint32

@@ -22,9 +22,10 @@ class HandshakeResponse(ClientMessage):
         self.configuration = configuration
         self.context = context
         
-    def payload(self, context: Context) -> bytearray:
+    def payload(self, context: Context, writer: PayloadWriter) -> bytearray:
         """Generate handshake response payload as bytes"""
-        stream = PayloadWriter()
+        writer.reset()
+        stream = writer
         # Client capabilities (4 bytes)
         stream.write_uint32(context.client_capabilities & 0xFFFFFFFF)
         

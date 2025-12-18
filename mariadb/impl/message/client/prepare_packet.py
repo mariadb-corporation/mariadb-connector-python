@@ -18,7 +18,7 @@ class PreparePacket(ClientMessage):
         """Initialize COM_STMT_PREPARE packet with SQL statement"""
         self.sql = sql
         
-    def payload(self, context: Context) -> bytearray:
+    def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
         result = bytearray(b'\0\0\0\0\x16')
         result.extend(self.sql.encode('utf-8'))
         return result

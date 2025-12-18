@@ -291,7 +291,7 @@ class AsyncClient(BaseClient):
 
         # Create and send handshake response
         message = HandshakeResponse(self.configuration, self.context)
-        await self.write_payload(message.payload(self.context), message.type(), False)
+        await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), False)
 
         # Handle authentication (may involve multiple rounds)
         auth_result = await self.read_payload()
@@ -330,7 +330,7 @@ class AsyncClient(BaseClient):
         
         # Send SSL request packet
         message = SslRequestPacket(client_capabilities)
-        await self.write_payload(message.payload(self.context), message.type(), False)
+        await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), False)
 
         try:
             # Import SSL utility
@@ -401,7 +401,7 @@ class AsyncClient(BaseClient):
             self.configuration = new_conf
 
             message = ChangeUserPacket(new_conf.user, new_conf.password, new_conf.database)
-            await self.write_payload(message.payload(self.context), message.type(), True)
+            await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
 
             # Read initial authentication result
             auth_result = await self.read_payload()
@@ -482,7 +482,7 @@ class AsyncClient(BaseClient):
                 raise OperationalError("Connection is closed")
             
             try:
-                await self.write_payload(message.payload(self.context), message.type(), True)
+                await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                 return await self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet, message.get_sql())
             except DatabaseError as e:
                 raise e    
@@ -506,7 +506,7 @@ class AsyncClient(BaseClient):
                         all_completions = []
                         for message in messages:
                             message.statement_id = cached_stmt.statement_id
-                            await self.write_payload(message.payload(self.context), message.type(), True)
+                            await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                             completions = await self._read_result(message.is_binary(), config, buffered, cached_stmt)
                             all_completions.append(completions)                        
                         return all_completions
@@ -526,10 +526,10 @@ class AsyncClient(BaseClient):
                 try:
                     if use_pipeline:
                         # Pipeline mode: write prepare and all execute messages before reading
-                        await self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
+                        await self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
                         
                         for message in messages:
-                            await self.write_payload(message.payload(self.context), message.type(), True)
+                            await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                         
                         try:
                             prepareResult = await self._parse_prepare_response(await self.read_payload(), sql)
@@ -546,14 +546,14 @@ class AsyncClient(BaseClient):
                                     first_error = e
                     else:
                         # Non-pipeline mode: read prepare response before writing execute messages
-                        await self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
+                        await self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
                         
                         prepareResult = await self._parse_prepare_response(await self.read_payload(), sql)
                         
                         # Now write and read execute messages
                         for message in messages:
                             message.statement_id = prepareResult.statement_id
-                            await self.write_payload(message.payload(self.context), message.type(), True)
+                            await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                             try:
                                 completions = await self._read_result(message.is_binary(), config, buffered, prepareResult)
                                 all_completions.append(completions)
@@ -791,7 +791,7 @@ class AsyncClient(BaseClient):
             if self.connected and self.writer:
                 try:
                     message = QuitPacket()
-                    await self.write_payload(message.payload(self.context), message.type(), True)
+                    await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
 
                     await self.writer.drain()
                 except Exception:
@@ -922,7 +922,7 @@ class AsyncClient(BaseClient):
             if not self.closed:
                 from ..message.client.stmt_close_packet import StmtClosePacket
                 message = StmtClosePacket(stmt.statement_id)
-                await self.write_payload(message.payload(self.context), message.type(), True)
+                await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
         except:
             # Ignore errors when closing
             pass

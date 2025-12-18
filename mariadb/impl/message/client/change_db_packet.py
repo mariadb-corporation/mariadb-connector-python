@@ -17,7 +17,7 @@ class ChangeDbPacket(ClientMessage):
         """Initialize COM_INIT_DB packet with database name"""
         self.database = database
         
-    def payload(self, context: Context) -> bytearray:
+    def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
         result = bytearray(b'\0\0\0\0\2')
         result.extend(self.database.encode('utf-8'))
         return result

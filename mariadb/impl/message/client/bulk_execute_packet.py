@@ -71,8 +71,9 @@ class BulkExecutePacket(ClientMessage):
         self.parameter_writers: List = []  # Write functions for each parameter
         self._determine_parameter_types()
 
-    def payload(self, context: Context) -> bytearray:
-        stream = PayloadWriter()
+    def payload(self, context: Context, writer: PayloadWriter) -> bytearray:
+        writer.reset()
+        stream = writer
         stream.write_byte(self.COM_STMT_BULK_EXECUTE)
         stream.write_bytes(_STRUCT_I.pack(self.statement_id) if self.statement_id is not None else b'\xFF\xFF\xFF\xFF')
         

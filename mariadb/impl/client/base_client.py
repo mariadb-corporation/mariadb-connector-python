@@ -99,6 +99,10 @@ class BaseClient(ABC):
         self.lock = threading.Lock()
         self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
         self.auth_plugin: Optional['AuthenticationPlugin'] = None
+        
+        # Cached payload writer for packet generation (reused to avoid allocations)
+        from ..message.payload_writer import PayloadWriter
+        self._payload_writer = PayloadWriter()
 
         # Connection state
         self.connected = False

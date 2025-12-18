@@ -38,10 +38,6 @@ from ..client_message import ClientMessage
 from ..payload_writer import PayloadWriter
 from ....exceptions import NotSupportedError
 
-# Type dispatch tables for parameter handling
-PARAM_TYPE_TBL = {}
-PARAM_WRITE_TBL = {}
-
 class ExecutePacket(ClientMessage):
     """
     Execute packet for prepared statement execution (COM_STMT_EXECUTE)
@@ -58,8 +54,9 @@ class ExecutePacket(ClientMessage):
         self.parameters = parameters or []
         self.sql = sql
 
-    def payload(self, context: Context) -> bytearray:
-        stream = PayloadWriter()
+    def payload(self, context: Context, writer: PayloadWriter) -> bytearray:
+        writer.reset()
+        stream = writer
         stream.write_byte(self.COM_STMT_EXECUTE)
         stream.write_bytes(_STRUCT_I.pack(self.statement_id) if self.statement_id is not None else b'\xFF\xFF\xFF\xFF')
         stream.write_byte(0x00) # Write flags  
@@ -78,10 +75,9 @@ class ExecutePacket(ClientMessage):
             _type = type
             type_tbl = PARAM_TYPE_TBL
             write_tbl = PARAM_WRITE_TBL
-            _struct_bb_pack = _STRUCT_BB.pack
             
             # Single pass: build null bitmap, collect types and write functions
-            write_funcs = []
+            write_funcs = [None] * num_params
             
             for i in range(num_params):
                 param = parameters[i]
@@ -104,7 +100,7 @@ class ExecutePacket(ClientMessage):
                 type_buffer[i * 2] = field_type
                 
                 # Cache write function
-                write_funcs.append(write_tbl.get(param_type))
+                write_funcs[i] = write_tbl.get(param_type)
             
             # Write null bitmap and flag
             stream.write_bytes(null_bitmap)

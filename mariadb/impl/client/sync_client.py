@@ -370,7 +370,7 @@ class SyncClient(BaseClient):
         self.auth_plugin = NativePasswordPlugin(self.configuration.password, self.context.auth_data)
 
         message = HandshakeResponse(self.configuration, self.context)
-        self.write_payload(message.payload(self.context), message.type(), False)
+        self.write_payload(message.payload(self.context, self._payload_writer), message.type(), False)
         self._handle_authentication(self.read_payload())
         
         self.connected = True
@@ -409,7 +409,7 @@ class SyncClient(BaseClient):
         
         # Send SSL request packet
         message = SslRequestPacket(client_capabilities)
-        self.write_payload(message.payload(self.context), message.type(), False)
+        self.write_payload(message.payload(self.context, self._payload_writer), message.type(), False)
         
         try:
             # Import SSL utility
@@ -489,7 +489,7 @@ class SyncClient(BaseClient):
                 raise OperationalError("Connection is closed")
             
             try:
-                self.write_payload(message.payload(self.context), message.type(), True)
+                self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                 self.reset_buffer()
                 return self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet, message.get_sql())
             except DatabaseError as e:
@@ -513,7 +513,7 @@ class SyncClient(BaseClient):
                         all_completions = []
                         for message in messages:
                             message.statement_id = cached_stmt.statement_id
-                            self.write_payload(message.payload(self.context), message.type(), True)
+                            self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                             self.reset_buffer()
                             completions = self._read_result(message.is_binary(), config, buffered, cached_stmt)
                             all_completions.append(completions)                        
@@ -534,10 +534,10 @@ class SyncClient(BaseClient):
                 try:
                     if use_pipeline:
                         # Pipeline mode: write prepare and all execute messages before reading
-                        self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
+                        self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
                         
                         for message in messages:
-                            self.write_payload(message.payload(self.context), message.type(), True)
+                            self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                         self.reset_buffer()
                         
                         try:
@@ -555,7 +555,7 @@ class SyncClient(BaseClient):
                                     first_error = e
                     else:
                         # Non-pipeline mode: read prepare response before writing execute messages
-                        self.write_payload(prepare_message.payload(self.context), prepare_message.type(), True)
+                        self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
                         self.reset_buffer()
                         
                         prepareResult = self._parse_prepare_response(self.read_payload(), sql)
@@ -563,7 +563,7 @@ class SyncClient(BaseClient):
                         # Now write and read execute messages
                         for message in messages:
                             message.statement_id = prepareResult.statement_id
-                            self.write_payload(message.payload(self.context), message.type(), True)
+                            self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                             self.reset_buffer()
                             try:
                                 completions = self._read_result(message.is_binary(), config, buffered, prepareResult)
@@ -798,7 +798,7 @@ class SyncClient(BaseClient):
             self.configuration = new_conf
 
             message = ChangeUserPacket(new_conf.user, new_conf.password, new_conf.database)
-            self.write_payload(message.payload(self.context), message.type(), True)
+            self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
             self._handle_authentication(self.read_payload())
         except DatabaseError as e:
             self.configuration = old_conf
@@ -820,7 +820,7 @@ class SyncClient(BaseClient):
             if self.connected and self.socket:
                 try:
                     message = QuitPacket()
-                    self.write_payload(message.payload(self.context), message.type(), True)
+                    self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                 except Exception:
                     # Ignore errors when sending quit - connection may already be broken
                     pass

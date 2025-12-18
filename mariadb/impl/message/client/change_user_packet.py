@@ -36,8 +36,9 @@ class ChangeUserPacket(ClientMessage):
         self.charset_collation = charset_collation
         self.connect_attrs = connect_attrs or {}
     
-    def payload(self, context: Context) -> bytearray:
-        stream = PayloadWriter()
+    def payload(self, context: Context, writer: PayloadWriter) -> bytearray:
+        writer.reset()
+        stream = writer
         # Command byte
         stream.write_byte(0x11)  # COM_CHANGE_USER
         

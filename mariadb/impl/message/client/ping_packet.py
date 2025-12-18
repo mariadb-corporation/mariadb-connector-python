@@ -11,7 +11,7 @@ class PingPacket(ClientMessage):
     """
     __slots__ = ()
         
-    def payload(self, context: Context) -> bytearray:
+    def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
         return bytearray(b'\0\0\0\0\x0e')
 
     def is_binary(self) -> bool:

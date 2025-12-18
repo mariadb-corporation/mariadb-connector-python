@@ -677,7 +677,7 @@ class QueryPacket(ClientMessage):
         
         return QueryPacket(result, sql)
         
-    def payload(self, context: Context) -> bytearray:
+    def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
         return self._payload_bytes
 
     def is_binary(self) -> bool:

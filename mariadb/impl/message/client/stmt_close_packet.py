@@ -25,7 +25,7 @@ class StmtClosePacket(ClientMessage):
         """Initialize COM_STMT_CLOSE packet with statement ID"""
         self.statement_id = statement_id
 
-    def payload(self, context: Context) -> bytearray:
+    def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
         result = bytearray(b'\0\0\0\0\x19')
         result.extend(struct.pack('<I', self.statement_id))
         return result

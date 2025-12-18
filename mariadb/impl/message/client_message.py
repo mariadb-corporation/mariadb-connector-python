@@ -2,12 +2,13 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from ..client.context import Context
 
 if TYPE_CHECKING:
     from ..client.socket.stream import SyncStream
+    from .payload_writer import PayloadWriter
 
 class ClientMessage(ABC):
     """
@@ -16,7 +17,7 @@ class ClientMessage(ABC):
     __slots__ = ()
 
     @abstractmethod
-    def payload(self, context: Context) -> bytearray:
+    def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
         """Generate message payload as bytearray (without packet header)."""
         ...
 
