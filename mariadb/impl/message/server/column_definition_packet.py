@@ -24,26 +24,58 @@ def read_qualified_identifiers(data: memoryview, pos: int) -> tuple:
     Note: An empty qualifier is represented as None.
     """
 
-    out0 = out1 = out2 = out3 = out4 = out5 = None
+    out0 = "def"
+    out1 = out2 = out3 = out4 = out5 = None
 
-    for _idx in range(6):
-        length = data[pos]
-        pos += 1
+    
+    length = data[pos]
+    pos += 1
+    pos += length
 
+    length = data[pos]
+    pos += 1
+    if length > 0:
         if length >= 251:
             length = _UNPACK_UINT16(data, pos)[0]
             pos += 2
-        if length > 0:
-           chunk= data[pos:pos+length].tobytes()
+        out1= data[pos:pos+length].tobytes()
         pos += length
 
-        if length > 0:
-            if _idx == 0: out0 = chunk
-            elif _idx == 1: out1 = chunk
-            elif _idx == 2: out2 = chunk
-            elif _idx == 3: out3 = chunk
-            elif _idx == 4: out4 = chunk
-            elif _idx == 5: out5 = chunk
+    length = data[pos]
+    pos += 1
+    if length > 0:
+        if length >= 251:
+            length = _UNPACK_UINT16(data, pos)[0]
+            pos += 2
+        out2= data[pos:pos+length].tobytes()
+        pos += length
+
+    length = data[pos]
+    pos += 1
+    if length > 0:
+        if length >= 251:
+            length = _UNPACK_UINT16(data, pos)[0]
+            pos += 2
+        out3= data[pos:pos+length].tobytes()
+        pos += length
+
+    length = data[pos]
+    pos += 1
+    if length > 0:
+        if length >= 251:
+            length = _UNPACK_UINT16(data, pos)[0]
+            pos += 2
+        out4= data[pos:pos+length].tobytes()
+        pos += length
+
+    length = data[pos]
+    pos += 1
+    if length > 0:
+        if length >= 251:
+            length = _UNPACK_UINT16(data, pos)[0]
+            pos += 2
+        out5= data[pos:pos+length].tobytes()
+        pos += length
 
     return out0, out1, out2, out3, out4, out5, pos
 
