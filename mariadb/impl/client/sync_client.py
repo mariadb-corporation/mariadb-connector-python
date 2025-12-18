@@ -36,6 +36,7 @@ from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
 
 _STRUCT_PKT_HDR = struct.Struct('<I')
+_unpack_pkt_hdr = _STRUCT_PKT_HDR.unpack_from
 
 MAX_PACKET_SIZE = 0xFFFFFF
 
@@ -79,7 +80,8 @@ class SyncClient(BaseClient):
         if (self._recv_buf_capacity - self._recv_len >= needed):
             return
         grow_size = (needed + ALIGN - 1) & ~(ALIGN - 1)
-        self._recv_buf = self._recv_buf + bytearray(grow_size)
+        # Use extend() for in-place growth - keeps buffer contiguous
+        self._recv_buf.extend(bytearray(grow_size))
         self._recv_buf_mv = memoryview(self._recv_buf)
         self._recv_buf_capacity += grow_size
                 
@@ -161,10 +163,9 @@ class SyncClient(BaseClient):
                     continue
 
                 # Fast packet header parsing using struct
-                header_int = _STRUCT_PKT_HDR.unpack_from(self._recv_buf, self._recv_pos)[0]
+                header_int = _unpack_pkt_hdr(self._recv_buf, self._recv_pos)[0]
                 packet_length = header_int & 0xFFFFFF
-                sequence = (header_int >> 24) & 0xFF
-                self.sequence[0] = sequence
+                self.sequence[0] = (header_int >> 24) & 0xFF
 
                 # check if we have complete packet data
                 packet_total = PKT_HDR_SIZE + packet_length

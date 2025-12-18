@@ -16,24 +16,23 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import List, Optional, Callable
 
-# Pre-compiled struct formats for row parsing performance
-_STRUCT_H = struct.Struct('<H')  # unsigned short (2 bytes)
-_STRUCT_I = struct.Struct('<I')  # unsigned int (4 bytes)
-_STRUCT_Q = struct.Struct('<Q')  # unsigned long long (8 bytes)
-_STRUCT_b = struct.Struct('<b')  # signed byte
-_STRUCT_h = struct.Struct('<h')  # signed short
-_STRUCT_i = struct.Struct('<i')  # signed int
-_STRUCT_q = struct.Struct('<q')  # signed long long
-_STRUCT_f = struct.Struct('<f')  # float
-_STRUCT_d = struct.Struct('<d')  # double
-_STRUCT_HBB = struct.Struct('<HBB')  # year, month, day for date
-_STRUCT_HBBBBB = struct.Struct('<HBBBBB')  # year, month, day, hour, min, sec for datetime (no micro)
-_STRUCT_HBBBBBI = struct.Struct('<HBBBBBI')  # year, month, day, hour, min, sec, microsec for datetime
-_STRUCT_BIBBB = struct.Struct('<BIBBB')  # negative, days, hour, min, sec for time (no micro)
-_STRUCT_BIBBBI = struct.Struct('<BIBBBI')  # negative, days, hour, min, sec, microsec for time
-# Struct formats for text protocol date/datetime parsing (YYYY-MM-DD format)
-_STRUCT_DATE_TEXT = struct.Struct('4s1s2s1s2s')  # year(4), dash, month(2), dash, day(2)
-_STRUCT_DATETIME_TEXT = struct.Struct('4s1s2s1s2s1s2s1s2s1s2s')  # YYYY-MM-DD HH:MM:SS
+# Cached unpack_from methods for row parsing performance (avoids attribute lookup overhead)
+_unpack_H = struct.Struct('<H').unpack_from  # unsigned short (2 bytes)
+_unpack_I = struct.Struct('<I').unpack_from  # unsigned int (4 bytes)
+_unpack_Q = struct.Struct('<Q').unpack_from  # unsigned long long (8 bytes)
+_unpack_b = struct.Struct('<b').unpack_from  # signed byte
+_unpack_h = struct.Struct('<h').unpack_from  # signed short
+_unpack_i = struct.Struct('<i').unpack_from  # signed int
+_unpack_q = struct.Struct('<q').unpack_from  # signed long long
+_unpack_f = struct.Struct('<f').unpack_from  # float
+_unpack_d = struct.Struct('<d').unpack_from  # double
+_unpack_HBB = struct.Struct('<HBB').unpack_from  # year, month, day for date
+_unpack_HBBBBB = struct.Struct('<HBBBBB').unpack_from  # year, month, day, hour, min, sec for datetime (no micro)
+_unpack_HBBBBBI = struct.Struct('<HBBBBBI').unpack_from  # year, month, day, hour, min, sec, microsec for datetime
+_unpack_BIBBB = struct.Struct('<BIBBB').unpack_from  # negative, days, hour, min, sec for time (no micro)
+_unpack_BIBBBI = struct.Struct('<BIBBBI').unpack_from  # negative, days, hour, min, sec, microsec for time
+_unpack_DATE_TEXT = struct.Struct('4s1s2s1s2s').unpack_from  # YYYY-MM-DD text protocol
+_unpack_DATETIME_TEXT = struct.Struct('4s1s2s1s2s1s2s1s2s1s2s').unpack_from  # YYYY-MM-DD HH:MM:SS text protocol
 
 # No longer need PacketBuffer import
 
@@ -632,13 +631,13 @@ class BaseClient(ABC):
                 pos += 1                
                 continue
             elif length_byte == 0xFC:
-                length = _STRUCT_H.unpack_from(data, pos + 1)[0]
+                length = _unpack_H(data, pos + 1)[0]
                 pos += 3
             elif length_byte == 0xFD:
                 length = struct.unpack('<I', bytes(data[pos+ 1:pos+4]) + b'\x00')[0]
                 pos += 4
             else:
-                length = _STRUCT_Q.unpack_from(data, pos + 1)[0]
+                length = _unpack_Q(data, pos + 1)[0]
                 pos += 9
             
             col_type = column.type
@@ -652,7 +651,7 @@ class BaseClient(ABC):
                 # Fast date parsing: YYYY-MM-DD using struct
                 if length == 10:
                     try:
-                        year_b, _, month_b, _, day_b = _STRUCT_DATE_TEXT.unpack_from(data_bytes, pos)
+                        year_b, _, month_b, _, day_b = _unpack_DATE_TEXT(data_bytes, pos)
                         row_values[i] = datetime.date(int(year_b), int(month_b), int(day_b))
                     except (ValueError, struct.error):
                         row_values[i] = None
@@ -678,7 +677,7 @@ class BaseClient(ABC):
                 # Fast datetime parsing: YYYY-MM-DD HH:MM:SS[.ffffff] using struct
                 if length >= 19:
                     try:
-                        year_b, _, month_b, _, day_b, _, hour_b, _, min_b, _, sec_b = _STRUCT_DATETIME_TEXT.unpack_from(data_bytes, pos)
+                        year_b, _, month_b, _, day_b, _, hour_b, _, min_b, _, sec_b = _unpack_DATETIME_TEXT(data_bytes, pos)
                         # Check for microseconds
                         if length > 19 and data_bytes[pos+19] == 46:  # '.'
                             microseconds = int(data_bytes[pos+20:pos+length].ljust(6, b'0'))
@@ -746,31 +745,31 @@ class BaseClient(ABC):
                 if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
                     row_values[i] = data[pos]
                 else:
-                    row_values[i] = _STRUCT_b.unpack_from(data, pos)[0]
+                    row_values[i] = _unpack_b(data, pos)[0]
                 pos += 1
             elif field_type in (FIELD_TYPE.SHORT, FIELD_TYPE.YEAR):
                 if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
-                    row_values[i] = _STRUCT_H.unpack_from(data, pos)[0]
+                    row_values[i] = _unpack_H(data, pos)[0]
                 else:
-                    row_values[i] = _STRUCT_h.unpack_from(data, pos)[0]
+                    row_values[i] = _unpack_h(data, pos)[0]
                 pos += 2
             elif field_type in (FIELD_TYPE.LONG, FIELD_TYPE.INT24):
                 if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
-                    row_values[i] = _STRUCT_I.unpack_from(data, pos)[0]
+                    row_values[i] = _unpack_I(data, pos)[0]
                 else:
-                    row_values[i] = _STRUCT_i.unpack_from(data, pos)[0]
+                    row_values[i] = _unpack_i(data, pos)[0]
                 pos += 4
             elif field_type == FIELD_TYPE.LONGLONG:
                 if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
-                    row_values[i] = _STRUCT_Q.unpack_from(data, pos)[0]
+                    row_values[i] = _unpack_Q(data, pos)[0]
                 else:
-                    row_values[i] = _STRUCT_q.unpack_from(data, pos)[0]
+                    row_values[i] = _unpack_q(data, pos)[0]
                 pos += 8
             elif field_type == FIELD_TYPE.FLOAT:
-                row_values[i] = _STRUCT_f.unpack_from(data, pos)[0]
+                row_values[i] = _unpack_f(data, pos)[0]
                 pos += 4
             elif field_type == FIELD_TYPE.DOUBLE:
-                row_values[i] = _STRUCT_d.unpack_from(data, pos)[0]
+                row_values[i] = _unpack_d(data, pos)[0]
                 pos += 8
             elif field_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
                 # Decimal as length-encoded string
@@ -785,7 +784,7 @@ class BaseClient(ABC):
                 length_byte = data[pos]
                 pos += 1
                 if length_byte >= 4:
-                    year, month, day = _STRUCT_HBB.unpack_from(data, pos)
+                    year, month, day = _unpack_HBB(data, pos)
                     try:
                         row_values[i] = datetime.date(year, month, day)
                     except (ValueError):
@@ -798,14 +797,14 @@ class BaseClient(ABC):
                 pos += 1
                 if length_byte == 12:
                     # Time with microseconds
-                    negative, days, hours, minutes, seconds, microseconds = _STRUCT_BIBBBI.unpack_from(data, pos)
+                    negative, days, hours, minutes, seconds, microseconds = _unpack_BIBBBI(data, pos)
                     pos += 12
                     total_hours = days * 24 + hours
                     td = datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
                     row_values[i] = -td if negative else td
                 elif length_byte == 8:
                     # Time without microseconds
-                    negative, days, hours, minutes, seconds = _STRUCT_BIBBB.unpack_from(data, pos)
+                    negative, days, hours, minutes, seconds = _unpack_BIBBB(data, pos)
                     pos += 8
                     total_hours = days * 24 + hours
                     row_values[i] = -datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds) if negative else datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds)
@@ -816,7 +815,7 @@ class BaseClient(ABC):
                 pos += 1
                 if length_byte == 11:
                     # Datetime with microseconds
-                    year, month, day, hours, minutes, seconds, microseconds = _STRUCT_HBBBBBI.unpack_from(data, pos)
+                    year, month, day, hours, minutes, seconds, microseconds = _unpack_HBBBBBI(data, pos)
                     pos += 11
                     try:
                         row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
@@ -824,7 +823,7 @@ class BaseClient(ABC):
                         row_values[i] = None
                 elif length_byte == 7:
                     # Datetime without microseconds
-                    year, month, day, hours, minutes, seconds = _STRUCT_HBBBBB.unpack_from(data, pos)
+                    year, month, day, hours, minutes, seconds = _unpack_HBBBBB(data, pos)
                     pos += 7
                     try:
                         row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, 0)
@@ -832,7 +831,7 @@ class BaseClient(ABC):
                         row_values[i] = None
                 elif length_byte == 4:
                     # Date only
-                    year, month, day = _STRUCT_HBB.unpack_from(data, pos)
+                    year, month, day = _unpack_HBB(data, pos)
                     pos += 4
                     try:
                         row_values[i] = datetime.datetime(year, month, day, 0, 0, 0, 0)
@@ -849,13 +848,13 @@ class BaseClient(ABC):
                     pos += 1
                     continue
                 elif length == 0xFC:
-                    length = _STRUCT_H.unpack_from(data, pos + 1)[0]
+                    length = _unpack_H(data, pos + 1)[0]
                     pos += 3
                 elif length == 0xFD:
                     length = struct.unpack('<I', data[pos+ 1:pos+4].tobytes() + b'\x00')[0]
                     pos += 4
                 else:  # 0xFE
-                    length = _STRUCT_Q.unpack_from(data, pos + 1)[0]
+                    length = _unpack_Q(data, pos + 1)[0]
                     pos += 9
 
                 val = bytes(data[pos:pos + length])
