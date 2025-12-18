@@ -66,19 +66,23 @@ class ExecutePacket(ClientMessage):
         if parameters:
             num_params = len(parameters)
             null_bitmap_length = (num_params + 7) >> 3
-            null_bitmap = bytearray(null_bitmap_length)
             
-            # Pre-allocate type buffer (2 bytes per parameter)
-            type_buffer = bytearray(num_params * 2)
+            # Combined buffer: null_bitmap + flag (1 byte) + type_buffer
+            combined_length = null_bitmap_length + 1 + (num_params * 2)
+            combined_buffer = bytearray(combined_length)
+            
+            # Set flag byte at position null_bitmap_length
+            combined_buffer[null_bitmap_length] = 0x01
             
             # Cache lookups
             _type = type
             type_tbl = PARAM_TYPE_TBL
             write_tbl = PARAM_WRITE_TBL
             
-            # Single pass: build null bitmap, collect types and write functions
-            write_funcs = [None] * num_params
-            
+            # Type buffer starts after null_bitmap + flag
+            type_offset = null_bitmap_length + 1
+            stream.write_bytes(combined_buffer)
+            # Single loop: build null bitmap, types, and write parameter values
             for i in range(num_params):
                 param = parameters[i]
                 
@@ -86,39 +90,33 @@ class ExecutePacket(ClientMessage):
                 if (param is None or 
                           (isinstance(param, array.array) and param.typecode == 'f' and len(param) == 0) or
                           isinstance(param, MrdbIndicator)):
-                    null_bitmap[i >> 3] |= (1 << (i & 7))
-                
-                # Get type and write function
-                param_type = _type(param)
-                type_func = type_tbl.get(param_type)
-                if type_func is not None:
-                    field_type = type_func(param)
+                    combined_buffer[i >> 3] |= (1 << (i & 7))
                 else:
-                    field_type = self._get_parameter_type(param)
-                
-                # Write type to buffer (unsigned flag already 0 from bytearray init)
-                type_buffer[i * 2] = field_type
-                
-                # Cache write function
-                write_funcs[i] = write_tbl.get(param_type)
-            
-            # Write null bitmap and flag
-            stream.write_bytes(null_bitmap)
-            stream.write_byte(0x01)
-            
-            # Write all types at once
-            stream.write_bytes(type_buffer)
-            
-            # Write parameter values using cached write functions
-            for i, param in enumerate(parameters):
-                if param is not None:
-                    write_func = write_funcs[i]
+                    # Get type
+                    param_type = _type(param)
+                    type_func = type_tbl.get(param_type)
+                    if type_func is not None:
+                        field_type = type_func(param)
+                    else:
+                        field_type = self._get_parameter_type(param)
+                    
+                    # Write type to combined buffer (unsigned flag already 0 from bytearray init)
+                    combined_buffer[type_offset + i * 2] = field_type
+                    
+                    # Write parameter value immediately
+                    write_func = write_tbl.get(param_type)
                     if write_func is not None:
                         write_func(self, stream, param)
                     else:
                         stream.write_length_encoded_string(str(param))
+            
+            # Get payload and insert combined buffer at position 4
+            payload = stream.get_payload()
+            payload[14:14 + combined_length] = combined_buffer
+        else:
+            payload = stream.get_payload()
         
-        return stream.get_payload()
+        return payload
 
     def _get_parameter_type(self, param: Any) -> int:
         """

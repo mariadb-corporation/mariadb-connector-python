@@ -13,9 +13,8 @@ from typing import TYPE_CHECKING, Optional, Tuple
 if TYPE_CHECKING:
     from ...client.context import Context
 
-# Pre-compile struct formats for faster unpacking
-_STRUCT_UINT16 = struct.Struct('<H')
-_STRUCT_FIXED_FIELDS = struct.Struct('<HIBHB')  # charset(H), column_length(I), type(B), flags(H), decimals(B)
+_UNPACK_UINT16 = struct.Struct('<H').unpack_from
+_UNPACK_FIXED_FIELDS = struct.Struct('<HIBHB').unpack_from  # charset(H), column_length(I), type(B), flags(H), decimals(B)
 
 def read_qualified_identifiers(data: memoryview, pos: int) -> tuple:
     """
@@ -25,7 +24,6 @@ def read_qualified_identifiers(data: memoryview, pos: int) -> tuple:
     Note: An empty qualifier is represented as None.
     """
 
-    _unpack16 = _STRUCT_UINT16.unpack_from
     out0 = out1 = out2 = out3 = out4 = out5 = None
 
     for _idx in range(6):
@@ -33,7 +31,7 @@ def read_qualified_identifiers(data: memoryview, pos: int) -> tuple:
         pos += 1
 
         if length >= 251:
-            length = _unpack16(data, pos)[0]
+            length = _UNPACK_UINT16(data, pos)[0]
             pos += 2
         if length > 0:
            chunk= data[pos:pos+length].tobytes()
@@ -61,7 +59,7 @@ def read_small_length_encoded_bytes(data: memoryview, pos: int) -> Tuple[bytes, 
         return result, pos + length
     
     # Slow path: 2-byte length
-    length = _STRUCT_UINT16.unpack_from(data, pos)[0]
+    length = _UNPACK_UINT16(data, pos)[0]
     pos += 2
     result = bytes(data[pos:pos+length])
     return result, pos + length
@@ -207,7 +205,7 @@ class ColumnDefinitionPacket:
 
         # Skip length field (0x0C) and unpack fixed fields using pre-compiled struct
         pos += 1
-        charset, column_length, type, flags, decimals = _STRUCT_FIXED_FIELDS.unpack_from(data, pos)
+        charset, column_length, type, flags, decimals = _UNPACK_FIXED_FIELDS(data, pos)
 
         return ColumnDefinitionPacket(
             catalog_bytes,
