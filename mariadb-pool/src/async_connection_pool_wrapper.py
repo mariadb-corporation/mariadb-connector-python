@@ -6,7 +6,9 @@ Async compatibility wrapper for mariadb_pool.AsyncConnectionPool
 Matches the 1.1 C extension API for connection pooling (async version).
 """
 
-from typing import Callable, Any, Dict, Optional
+from typing import Callable, Any, Dict, Optional, TYPE_CHECKING
+
+from mariadb import AsyncConnection
 from .pool import AsyncConnectionPool as _AsyncPoolImpl, PoolConfig
 
 # Import PoolError from shared exceptions
@@ -15,6 +17,11 @@ try:
 except ImportError:
     # Fallback - import from pool module
     from .pool import PoolError
+if TYPE_CHECKING:
+    try:
+        from mariadb.async_connection import AsyncConnection
+    except ImportError:
+        AsyncConnection = Any
 
 MAX_POOL_SIZE = 64
 
@@ -40,7 +47,7 @@ class AsyncConnectionPoolWrapper:
     # Class-level registry for pools
     _registry: Dict[str, 'AsyncConnectionPoolWrapper'] = {}
     
-    def __init__(self, connection_factory: Callable, pool_name: str = None, **kwargs):
+    def __init__(self, connection_factory: Callable, pool_name: Optional[str] = None, **kwargs: Any) -> None:
         """
         Initialize async connection pool
         
@@ -61,7 +68,7 @@ class AsyncConnectionPoolWrapper:
         # Separate pool config from connection params
         pool_config_keys = {
             'pool_size', 'pool_reset_connection', 'pool_validation_interval',
-            'min_size', 'max_size', 'acquire_timeout'
+            'min_size', 'max_size', 'acquire_timeout', 'ping_threshold'
         }
         pool_kwargs = {}
         conn_kwargs = {}
@@ -98,6 +105,8 @@ class AsyncConnectionPoolWrapper:
             config.acquire_timeout = pool_kwargs['acquire_timeout']
         if 'pool_validation_interval' in pool_kwargs:
             config.validation_interval = pool_kwargs['pool_validation_interval']
+        if 'ping_threshold' in pool_kwargs:
+            config.ping_threshold = pool_kwargs['ping_threshold']
 
         if (config.max_size >= MAX_POOL_SIZE):
             config.max_size = MAX_POOL_SIZE
@@ -117,11 +126,11 @@ class AsyncConnectionPoolWrapper:
         if pool_name is not None:
             self._registry[pool_name] = self
     
-    async def open(self):
+    async def open(self) -> None:
         """Open the pool and establish initial connections"""
         await self._pool.open()
     
-    async def get_connection(self):
+    async def get_connection(self) -> AsyncConnection:
         """
         Get a connection from the pool
         
@@ -143,10 +152,10 @@ class AsyncConnectionPoolWrapper:
         Returns:
             Connection from the pool
         """
-        pooled_conn = await self._pool.acquire()
+        pooled_conn = await self._pool._acquire()
         return pooled_conn.connection
     
-    async def add_connection(self, connection: Optional[Any] = None):
+    async def add_connection(self, connection: Optional[AsyncConnection] = None) -> None:
         """Add a connection to the pool
         
         Args:
@@ -156,7 +165,7 @@ class AsyncConnectionPoolWrapper:
         """
         from .pool import AsyncPooledConnection
         
-        async with self._pool._lock:
+        async with self._pool._cond:
             # Check if pool is at max size
             if len(self._pool._all_connections) >= self._pool.config.max_size:
                 raise PoolError(f"Pool has reached maximum size of {self._pool.config.max_size}")
@@ -173,9 +182,10 @@ class AsyncConnectionPoolWrapper:
 
             self._pool._all_connections.append(pooled_conn)
             pooled_conn.mark_idle()
-            await self._pool._pool.put(pooled_conn)
+            self._pool._free.append(pooled_conn)
+            self._pool._cond.notify()
     
-    def set_config(self, **kwargs):
+    def set_config(self, **kwargs: Any) -> None:
         """
         Set pool configuration
         
@@ -185,7 +195,7 @@ class AsyncConnectionPoolWrapper:
         # Update connection parameters
         self._pool.connection_params.update(kwargs)
 
-    async def close(self):
+    async def close(self) -> None:
         """Close the pool and all connections"""
         await self._pool.close()
         # Unregister from class-level registry
@@ -193,27 +203,27 @@ class AsyncConnectionPoolWrapper:
             del self._registry[self.pool_name]
     
     @property
-    def connection_count(self):
+    def connection_count(self) -> int:
         """Get total number of connections (used + idle)"""
         return len(self._pool._all_connections)
     
     @property
-    def pool_reset_connection(self):
+    def pool_reset_connection(self) -> bool:
         """Get reset_connection value"""
         return self._pool.config.reset_connection
 
     @property
-    def pool_size(self):
+    def pool_size(self) -> int:
         """Get maximum pool size"""
         return self._pool.config.max_size
     
     @property
-    def max_size(self):
+    def max_size(self) -> int:
         """Get maximum pool size (alias for pool_size)"""
         return self._pool.config.max_size
     
     @classmethod
-    def get_pool(cls, pool_name: str) -> 'AsyncConnectionPoolWrapper':
+    def get_pool(cls, pool_name: str) -> Optional['AsyncConnectionPoolWrapper']:
         """Get a pool by name from the registry"""
         return cls._registry.get(pool_name)
     
@@ -223,16 +233,16 @@ class AsyncConnectionPoolWrapper:
         return cls._registry.copy()
     
     @classmethod
-    def clear_registry(cls):
+    def clear_registry(cls) -> None:
         """Clear the pool registry (for testing)"""
         cls._registry.clear()
     
-    async def __aenter__(self):
+    async def __aenter__(self) -> 'AsyncConnectionPoolWrapper':
         """Enter async context manager"""
         await self.open()
         return self
     
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
         """Exit async context manager and close pool"""
         await self.close()
         return False

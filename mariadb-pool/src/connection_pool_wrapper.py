@@ -6,7 +6,7 @@ Compatibility wrapper for mariadb_pool.ConnectionPool
 Matches the C extension API for connection pooling.
 """
 
-from typing import Callable, Any, Dict, Optional
+from typing import Callable, Any, Dict, Optional, TYPE_CHECKING, Union
 from .pool import ConnectionPool as _PoolImpl, PoolConfig
 
 # Import PoolError from shared exceptions
@@ -16,6 +16,17 @@ except ImportError:
     # Fallback - import from pool module
     from .pool import PoolError
 
+# Type hints for connection types
+if TYPE_CHECKING:
+    try:
+        from mariadb.sync_connection import SyncConnection
+    except ImportError:
+        SyncConnection = Any
+    
+    try:
+        from mariadb_c import Connection as CConnection
+    except ImportError:
+        CConnection = Any
 MAX_POOL_SIZE = 64
 
 class ConnectionPoolWrapper:
@@ -27,7 +38,7 @@ class ConnectionPoolWrapper:
     # Class-level registry for pools
     _registry: Dict[str, 'ConnectionPoolWrapper'] = {}
     
-    def __init__(self, connection_factory: Callable, pool_name: str = None, **kwargs):
+    def __init__(self, connection_factory: Callable, pool_name: Optional[str] = None, **kwargs: Any) -> None:
         """
         Initialize connection pool
         
@@ -48,7 +59,7 @@ class ConnectionPoolWrapper:
         # Separate pool config from connection params
         pool_config_keys = {
             'pool_size', 'pool_reset_connection', 'pool_validation_interval',
-            'min_size', 'max_size', 'acquire_timeout'
+            'min_size', 'max_size', 'acquire_timeout', 'ping_threshold'
         }
         pool_kwargs = {}
         conn_kwargs = {}
@@ -85,6 +96,8 @@ class ConnectionPoolWrapper:
             config.acquire_timeout = pool_kwargs['acquire_timeout']
         if 'pool_validation_interval' in pool_kwargs:
             config.validation_interval = pool_kwargs['pool_validation_interval']
+        if 'ping_threshold' in pool_kwargs:
+            config.ping_threshold = pool_kwargs['ping_threshold']
 
         if (config.max_size >= MAX_POOL_SIZE):
             config.max_size = MAX_POOL_SIZE
@@ -104,12 +117,12 @@ class ConnectionPoolWrapper:
         if pool_name is not None:
             self._registry[pool_name] = self
     
-    def get_connection(self):
+    def get_connection(self) -> Union['SyncConnection', 'CConnection']:
         """Get a connection from the pool"""
-        pool_conn = self._pool.acquire()
+        pool_conn = self._pool._acquire()
         return pool_conn.connection
     
-    def add_connection(self, connection: Optional[Any] = None):
+    def add_connection(self, connection: Optional[Union['SyncConnection', 'CConnection']] = None) -> None:
         """Add a connection to the pool
         
         Args:
@@ -119,7 +132,7 @@ class ConnectionPoolWrapper:
         """
         from .pool import PooledConnection
         
-        with self._pool._lock:
+        with self._pool._cond:
             # Check if pool is at max size
             if len(self._pool._all_connections) >= self._pool.config.max_size:
                 raise PoolError(f"Pool has reached maximum size of {self._pool.config.max_size}")
@@ -136,9 +149,10 @@ class ConnectionPoolWrapper:
 
             self._pool._all_connections.append(pooled_conn)
             pooled_conn.mark_idle()
-            self._pool._pool.put_nowait(pooled_conn)
+            self._pool._free.append(pooled_conn)
+            self._pool._cond.notify()
     
-    def set_config(self, **kwargs):
+    def set_config(self, **kwargs: Any) -> None:
         """
         Set pool configuration
         
@@ -148,7 +162,7 @@ class ConnectionPoolWrapper:
         # Update connection parameters
         self._pool._set_config(**kwargs)        
 
-    def close(self):
+    def close(self) -> None:
         """Close the pool and all connections"""
         self._pool.close()
         # Unregister from class-level registry
@@ -156,28 +170,28 @@ class ConnectionPoolWrapper:
             del self._registry[self.pool_name]
     
     @property
-    def connection_count(self):
+    def connection_count(self) -> int:
         """Get total number of connections (used + idle)"""
         return len(self._pool._all_connections)
     
     @property
-    def pool_reset_connection(self):
+    def pool_reset_connection(self) -> bool:
         """Get reset_connection value"""
         return self._pool.config.reset_connection
 
 
     @property
-    def pool_size(self):
+    def pool_size(self) -> int:
         """Get maximum pool size"""
         return self._pool.config.max_size
     
     @property
-    def max_size(self):
+    def max_size(self) -> int:
         """Get maximum pool size (alias for pool_size)"""
         return self._pool.config.max_size
     
     @classmethod
-    def get_pool(cls, pool_name: str) -> 'ConnectionPoolWrapper':
+    def get_pool(cls, pool_name: str) -> Optional['ConnectionPoolWrapper']:
         """Get a pool by name from the registry"""
         return cls._registry.get(pool_name)
     
@@ -187,15 +201,15 @@ class ConnectionPoolWrapper:
         return cls._registry.copy()
     
     @classmethod
-    def clear_registry(cls):
+    def clear_registry(cls) -> None:
         """Clear the pool registry (for testing)"""
         cls._registry.clear()
     
-    def __enter__(self):
+    def __enter__(self) -> 'ConnectionPoolWrapper':
         """Enter context manager"""
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
         """Exit context manager and close pool"""
         self.close()
         return False

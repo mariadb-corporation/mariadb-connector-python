@@ -107,6 +107,7 @@ class TestPooling(unittest.TestCase):
                                         pool_reset_connection=False,
                                         pool_validation_interval=0,
                                         acquire_timeout=1,
+                                        ping_threshold=0,
                                         **default_conf)
 
         # service connection
@@ -248,14 +249,18 @@ class TestPooling(unittest.TestCase):
 
     def test_connection_pool_maxconn(self):
         default_conf = conf()
+        print("DIEGO")
         pool = mariadb.ConnectionPool(pool_name="test_max_size", pool_size=6, acquire_timeout=1,
                                         **default_conf)
+        print(pool.pool_size)
         connections = []
         for i in range(0, 6):
+            print(i)
             connections.append(pool.get_connection())
         self.assertRaises(mariadb.PoolError, lambda:pool.get_connection())
 
         for c in connections:
+            print(c.connection_id)
             c.close()
         pool.close()
 
@@ -430,6 +435,46 @@ class TestPooling(unittest.TestCase):
             self.assertNotEqual(c in connections, True)
             connections.append(c)
 
+        pool.close()
+
+    def test_create_pool(self):
+        """Test mariadb.create_pool() function with clean parameter separation"""
+        default_conf = conf()
+        
+        # Create pool using create_pool function
+        pool = mariadb.create_pool(
+            host=default_conf.get('host', 'localhost'),
+            port=default_conf.get('port', 3306),
+            user=default_conf.get('user', 'root'),
+            password=default_conf.get('password', ''),
+            database=default_conf.get('database', 'test'),
+            min_size=5,
+            max_size=10,
+            ping_threshold=0.25,
+            max_idle_time=300.0
+        )
+        
+        # Verify pool configuration
+        self.assertEqual(pool.config.min_size, 5)
+        self.assertEqual(pool.config.max_size, 10)
+        self.assertEqual(pool.config.ping_threshold, 0.25)
+        self.assertEqual(pool.config.max_idle_time, 300.0)
+        
+        # Test getting a connection
+        conn = pool.acquire()
+        self.assertIsNotNone(conn)
+        
+        # Test executing a query
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 as test")
+        result = cursor.fetchone()
+        self.assertEqual(result[0], 1)
+        cursor.close()
+        
+        # Return connection to pool
+        conn.close()
+        
+        # Clean up
         pool.close()
 
 if __name__ == '__main__':

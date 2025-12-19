@@ -93,6 +93,8 @@ class AsyncClient(BaseClient):
             memoryview of the packet payload
             
         IMPORTANT: Data must be consumed before next read_payload() call
+        
+        Optimized to minimize buffer allocations and copies.
         """
         
         # Read first packet header
@@ -102,16 +104,17 @@ class AsyncClient(BaseClient):
         pkt_len = header_int & 0xFFFFFF
         self.sequence[0] = (header_int >> 24) & 0xFF
         
-        # Read first payload chunk
+        # Fast path: single packet (99.9999% of cases)
+        # For small packets, avoid buffer copy by returning bytes directly as memoryview
+        if pkt_len < 0xFFFFFF:
+            payload = await self.reader.readexactly(pkt_len)
+            # Return memoryview directly from bytes (no copy)
+            return memoryview(payload)
+        
+        # Slow path: multiple packets (rare) - use buffer accumulation
         self._ensure_read_capacity(pkt_len)
         payload = await self.reader.readexactly(pkt_len)
         self._readbuf[0:pkt_len] = payload
-                
-        # Fast path: single packet (99.9999% of cases)
-        if pkt_len < 0xFFFFFF:
-            return self._read_view[0:pkt_len]
-        
-        # Slow path: multiple packets (rare)
         result_len = pkt_len
         
         while True:

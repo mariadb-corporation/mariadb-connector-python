@@ -114,6 +114,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
                                         pool_reset_connection=False,
                                         pool_validation_interval=0,
                                         acquire_timeout=1,
+                                        ping_threshold=0,
                                         **default_conf)
         await pool.open()
 
@@ -525,6 +526,46 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("test_url_pool2", mariadb._ASYNC_CONNECTION_POOLS)
         
         self.assertNotIn("test_url_pool3", mariadb._ASYNC_CONNECTION_POOLS)
+
+    async def test_create_async_pool(self):
+        """Test mariadb.create_async_pool() function with clean parameter separation"""
+        default_conf = conf()
+        
+        # Create pool using create_async_pool function (automatically calls pool.open())
+        pool = await mariadb.create_async_pool(
+            host=default_conf.get('host', 'localhost'),
+            port=default_conf.get('port', 3306),
+            user=default_conf.get('user', 'root'),
+            password=default_conf.get('password', ''),
+            database=default_conf.get('database', 'test'),
+            min_size=5,
+            max_size=10,
+            ping_threshold=0.25,
+            max_idle_time=300.0
+        )
+        
+        # Verify pool configuration
+        self.assertEqual(pool.config.min_size, 5)
+        self.assertEqual(pool.config.max_size, 10)
+        self.assertEqual(pool.config.ping_threshold, 0.25)
+        self.assertEqual(pool.config.max_idle_time, 300.0)
+        
+        # Test getting a connection
+        conn = await pool.acquire()
+        self.assertIsNotNone(conn)
+        
+        # Test executing a query
+        cursor = conn.cursor()
+        await cursor.execute("SELECT 1 as test")
+        result = await cursor.fetchone()
+        self.assertEqual(result[0], 1)
+        await cursor.close()
+        
+        # Return connection to pool
+        await conn.close()
+        
+        # Clean up
+        await pool.close()
 
 if __name__ == '__main__':
     unittest.main()

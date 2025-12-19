@@ -30,20 +30,29 @@ pip install mariadb-pool
 
 ### Synchronous Connection Pool
 
-#### Using Connection URI
+#### Using create_pool() (Recommended)
 
-The simplest way to create a connection pool:
+The cleanest way to create a connection pool with separated pool and connection parameters:
 
 ```python
 import mariadb
 
-# Create pool with URI
-pool = mariadb.ConnectionPool(
-    "mariadb://user:password@localhost:3306/mydb?pool_name=mypool&max_size=10"
+# Create pool with clean parameter separation
+pool = mariadb.create_pool(
+    host="localhost",
+    port=3306,
+    user="root",
+    password="password",
+    database="mydb",
+    min_size=5,
+    max_size=10,
+    ping_threshold=0.25,  # Only ping connections idle > 250ms
+    max_idle_time=600.0,
+    reset_connection=True
 )
 
-# Use context manager to ensure connection is returned to pool
-with pool.connection() as conn:
+# Get connection from pool
+with pool.acquire() as conn:
     with conn.cursor() as cursor:
         cursor.execute("SELECT * FROM users")
         results = cursor.fetchall()
@@ -52,9 +61,9 @@ with pool.connection() as conn:
 pool.close()
 ```
 
-#### Using Connection Parameters
+#### Using ConnectionPool Constructor
 
-Create a pool with traditional connection parameters:
+Alternatively, use the traditional constructor:
 
 ```python
 import mariadb
@@ -72,7 +81,7 @@ pool = mariadb.ConnectionPool(
 )
 
 # Use context manager to ensure connection is returned to pool
-with pool.connection() as conn:
+with pool.get_connection() as conn:
     with conn.cursor() as cursor:
         cursor.execute("SELECT * FROM users")
         results = cursor.fetchall()
@@ -82,68 +91,42 @@ pool.close()
 
 ### Asynchronous Connection Pool
 
-#### Using Connection URI
+#### Using create_async_pool() (Recommended)
 
-Create an async pool with URI:
-
-```python
-import mariadb
-import asyncio
-
-async def main():
-    # Create async pool with URI
-    pool = mariadb.AsyncConnectionPool(
-        "mariadb://user:password@localhost:3306/mydb?pool_name=async_pool&max_size=10"
-    )
-    
-    # Must call open() to establish connections
-    await pool.open()
-    
-    # Get connection from pool
-    with await pool.get_connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute("SELECT * FROM users")
-            results = await cursor.fetchall()
-    
-    # Close pool when done
-    await pool.close()
-
-asyncio.run(main())
-```
-
-#### Using Connection Parameters
-
-Create an async pool with traditional parameters:
+The cleanest way to create an async pool - automatically pre-filled and ready to use:
 
 ```python
 import mariadb
 import asyncio
 
 async def main():
-    # Create async pool with connection parameters
-    pool = mariadb.AsyncConnectionPool(
-        pool_name="async_pool",
+    # Create async pool with clean parameter separation
+    # Pool is automatically opened and pre-filled with connections
+    pool = await mariadb.create_async_pool(
         host="localhost",
         port=3306,
         user="root",
         password="password",
         database="mydb",
-        max_size=10,
-        pool_reset_connection=True
+        min_size=5,
+        max_size=20,
+        ping_threshold=0.25,  # Only ping connections idle > 250ms
+        max_idle_time=600.0,
+        reset_connection=True
     )
     
-    # Must call open() to establish connections
-    await pool.open()
-    
-    with await pool.get_connection() as conn:
+    # Acquire connection from pool
+    async with await pool.acquire() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT * FROM users")
             results = await cursor.fetchall()
     
+    # Close pool if unneeded anymore
     await pool.close()
 
 asyncio.run(main())
 ```
+
 
 ## Pool Configuration Options
 
@@ -161,6 +144,9 @@ The pool accepts the following configuration parameters:
 | `acquire_timeout` | float | 30.0 | Timeout (seconds) when acquiring a connection |
 | `enable_health_check` | bool | True | Enable periodic health checks on idle connections |
 | `reset_connection` | bool | False | Reset connection state when returned to pool |
+| `ping_threshold` | float | 0.25 | Only ping connections idle > threshold seconds (0 = always ping) |
+
+**Performance Tip:** The `ping_threshold` option significantly improves performance by avoiding unnecessary database pings. Connections that have been idle for less than the threshold (default: 250ms) are assumed healthy and returned immediately. Only connections idle longer than the threshold are verified with a ping. Set to `0` to ensure checking connection states.
 
 **Note:** If you set only `min_size` or only `max_size` (without setting the other), both will be set to the same value to create a fixed-size pool.
 

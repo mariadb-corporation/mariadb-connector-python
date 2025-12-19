@@ -699,7 +699,6 @@ class BaseClient(ABC):
     def _parse_binary_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', num_cols: int) -> tuple:
         """Parse binary protocol row data packet with inlined decoding"""
         pos = 1  # Skip 0x00 header
-        
         # Read NULL bitmap
         null_bitmap_length = (num_cols + 9) >> 3
         null_bitmap = data[pos:pos + null_bitmap_length]
@@ -710,10 +709,11 @@ class BaseClient(ABC):
         
         for i in range(num_cols):
             column = columns[i]
-            if null_bitmap[(i + 2) >> 3] & (1 << (i + 2) & 7):
+
+            if null_bitmap[(i + 2) // 8] & (1 << ((i + 2) % 8)):
                 row_values[i] = None
                 continue
-            
+
             # Decode based on field type
             field_type = column.type
             
@@ -818,6 +818,7 @@ class BaseClient(ABC):
             else:
                 # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
                 length = data[pos]
+
                 if (length < 0xFB):
                     pos += 1
                 elif length == 0xFC:

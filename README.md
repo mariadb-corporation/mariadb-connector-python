@@ -90,13 +90,20 @@ Connection pools improve performance by reusing connections:
 ```python
 import mariadb
 
-# Create a connection pool
-pool = mariadb.ConnectionPool(
-    "mariadb://user:password@localhost:3306/mydb?pool_name=mypool&pool_size=10"
+# Create a connection pool with clean parameter separation
+pool = mariadb.create_pool(
+    host="localhost",
+    port=3306,
+    user="user",
+    password="password",
+    database="mydb",
+    min_size=5,
+    max_size=10,
+    ping_threshold=0.25  # only check health of idle connections after 0.25 seconds of inactivity
 )
 
 # Get connection from pool
-with pool.connection() as conn:
+with pool.acquire() as conn:
     with conn.cursor() as cursor:
         # Insert data
         cursor.execute("INSERT INTO users (name, email) VALUES (?, ?)", 
@@ -107,10 +114,7 @@ with pool.connection() as conn:
         cursor.execute("SELECT * FROM users WHERE name = ?", ("John Doe",))
         for row in cursor.fetchall():
             print(f"User: {row}")
-# Connection automatically returned to pool
 
-# Close pool when done
-pool.close()
 ```
 
 ### Named Pools with mariadb.connect()
@@ -209,6 +213,45 @@ async def main():
             count = (await cursor.fetchone())[0]
             print(f"Total users: {count}")
 
+asyncio.run(main())
+```
+
+### Async Connection Pools
+
+For high-performance async applications, use async connection pools:
+
+```python
+import asyncio
+import mariadb
+
+async def main():
+    # Create an async connection pool (automatically pre-filled)
+    pool = await mariadb.create_async_pool(
+        host="localhost",
+        port=3306,
+        user="user",
+        password="password",
+        database="mydb",
+        min_size=5,
+        max_size=20,
+        ping_threshold=0.25  # Selective health check for idle connections
+    )
+    
+    # Get connection from pool
+    async with await pool.acquire() as conn:
+        async with conn.cursor() as cursor:
+            # Execute queries
+            await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
+            row = await cursor.fetchone()
+            print(f"User: {row}")
+        
+            # Insert data
+            await cursor.execute(
+                "INSERT INTO users (name, email) VALUES (?, ?)",
+                ("Alice", "alice@example.com")
+            )
+            await conn.commit()
+    
 asyncio.run(main())
 ```
 

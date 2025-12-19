@@ -7,6 +7,8 @@ This is a pure Python implementation. For better performance, install the
 optional C extension: pip install mariadb-python[c-extension]
 '''
 
+from typing import Any, Optional, Union, TYPE_CHECKING
+
 # Import exceptions from shared package to avoid circular dependencies
 from mariadb_shared.exceptions import (
     DataError, DatabaseError, Error, IntegrityError,
@@ -35,6 +37,19 @@ from mariadb_shared import constants
 # Import implementation selector early
 from . import impl_selector  # noqa: F401 import early to stabilize side effects
 
+if TYPE_CHECKING:
+    try:
+        from mariadb_c import Connection as CConnection
+    except ImportError:
+        CConnection = Any
+    try:
+        from mariadb_pool import ConnectionPoolWrapper, AsyncConnectionPoolWrapper
+    except ImportError:
+        ConnectionPoolWrapper = Any
+        AsyncConnectionPoolWrapper = Any
+
+
+
 # Re-export the selected implementation classes and implementation info
 # Handle both pure Python (has SyncConnection) and C extension (has Connection)
 if hasattr(impl_selector.sync_connection, 'SyncConnection'):
@@ -59,10 +74,10 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "OperationalError", "PoolError", "ProgrammingError",
            "Warning", "SyncConnection", "AsyncConnection", "__version__", "__version_type__", "__version_info__",
            "__author__", "SyncCursor", "AsyncCursor", "fieldinfo", "constants",
-           "connect", "asyncConnect", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
+           "connect", "asyncConnect", "create_pool", "create_async_pool", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
            "apilevel", "paramstyle", "threadsafety"]
 
-def connect(*args, connectionclass=None, **kwargs):
+def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> Union['SyncConnection', 'CConnection']:
     """
     Creates a MariaDB Connection object (synchronous).
 
@@ -161,7 +176,7 @@ def connect(*args, connectionclass=None, **kwargs):
     return connection
 
 
-async def asyncConnect(*args, connectionclass=None, **kwargs):
+async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> 'AsyncConnection':
     """
     Creates a MariaDB AsyncConnection object and connects asynchronously.
 
@@ -378,7 +393,176 @@ def _get_current_version_info():
     return version_tuple
 
 
-def _get_connection_pool_class():
+def create_pool(
+    min_size: int = 10,
+    max_size: int = 10,
+    max_idle_time: float = 600.0,
+    max_lifetime: float = 3600.0,
+    validation_interval: float = 30.0,
+    acquire_timeout: float = 30.0,
+    enable_health_check: bool = True,
+    reset_connection: bool = False,
+    ping_threshold: float = 0.25,
+    **connection_params: Any
+) -> Any:
+    """
+    Create a synchronous connection pool with clean separation of pool and connection options.
+    
+    Pool Configuration Parameters:
+        min_size (int): Minimum number of connections in the pool (default: 10)
+        max_size (int): Maximum number of connections in the pool (default: 10)
+        max_idle_time (float): Maximum time (seconds) a connection can be idle (default: 600.0)
+        max_lifetime (float): Maximum lifetime (seconds) of a connection (default: 3600.0)
+        validation_interval (float): Interval (seconds) between health checks (default: 30.0)
+        acquire_timeout (float): Timeout (seconds) when acquiring a connection (default: 30.0)
+        enable_health_check (bool): Enable periodic health checks (default: True)
+        reset_connection (bool): Reset connection state on release (default: False)
+        ping_threshold (float): Ping if connection idle > threshold seconds (default: 0.25, 0 = disabled)
+    
+    Connection Parameters:
+        **connection_params: Additional connection parameters (ssl_ca, ssl_cert, etc.)
+    
+    Returns:
+        ConnectionPool: A configured connection pool
+    
+    Example:
+        pool = mariadb.create_pool(
+            host='localhost',
+            user='root',
+            password='secret',
+            database='test',
+            min_size=5,
+            max_size=20,
+            ping_threshold=0.25
+        )
+        
+        with pool.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            result = cursor.fetchone()
+        
+        pool.close()
+    """
+    try:
+        from mariadb_pool import ConnectionPool, PoolConfig
+    except ImportError:
+        raise ImportError(
+            "Connection pooling is not available. "
+            "Install mariadb-pool: pip install mariadb[pool]"
+        )
+    
+    # Build PoolConfig from pool-specific parameters
+    pool_config = PoolConfig(
+        min_size=min_size,
+        max_size=max_size,
+        max_idle_time=max_idle_time,
+        max_lifetime=max_lifetime,
+        validation_interval=validation_interval,
+        acquire_timeout=acquire_timeout,
+        enable_health_check=enable_health_check,
+        reset_connection=reset_connection,
+        ping_threshold=ping_threshold
+    )
+    
+    # Create pool with mariadb.connect as factory
+    return ConnectionPool(
+        connection_factory=connect,
+        config=pool_config,
+        **connection_params
+    )
+
+
+async def create_async_pool(
+    min_size: int = 10,
+    max_size: int = 10,
+    max_idle_time: float = 600.0,
+    max_lifetime: float = 3600.0,
+    validation_interval: float = 30.0,
+    acquire_timeout: float = 30.0,
+    enable_health_check: bool = True,
+    reset_connection: bool = False,
+    ping_threshold: float = 0.25,
+    **connection_params: Any
+) -> Any:
+    """
+    Create an asynchronous connection pool with clean separation of pool and connection options.
+    
+    This function automatically calls pool.open() to pre-fill the pool with connections.
+    
+    Pool Configuration Parameters:
+        min_size (int): Minimum number of connections in the pool (default: 10)
+        max_size (int): Maximum number of connections in the pool (default: 10)
+        max_idle_time (float): Maximum time (seconds) a connection can be idle (default: 600.0)
+        max_lifetime (float): Maximum lifetime (seconds) of a connection (default: 3600.0)
+        validation_interval (float): Interval (seconds) between health checks (default: 30.0)
+        acquire_timeout (float): Timeout (seconds) when acquiring a connection (default: 30.0)
+        enable_health_check (bool): Enable periodic health checks (default: True)
+        reset_connection (bool): Reset connection state on release (default: False)
+        ping_threshold (float): Ping if connection idle > threshold seconds (default: 0.25, 0 = disabled)
+    
+    Connection Parameters:
+        **connection_params: Additional connection parameters (ssl_ca, ssl_cert, etc.)
+    
+    Returns:
+        AsyncConnectionPool: A configured and opened async connection pool
+    
+    Example:
+        async def main():
+            pool = await mariadb.create_async_pool(
+                host='localhost',
+                user='root',
+                password='secret',
+                database='test',
+                min_size=5,
+                max_size=20,
+                ping_threshold=0.25
+            )
+            
+            conn = await pool.get_connection()
+            cursor = conn.cursor()
+            await cursor.execute("SELECT 1")
+            result = await cursor.fetchone()
+            await conn.close()
+            
+            await pool.close()
+        
+        asyncio.run(main())
+    """
+    try:
+        from mariadb_pool import AsyncConnectionPool, PoolConfig
+    except ImportError:
+        raise ImportError(
+            "Async connection pooling is not available. "
+            "Install mariadb-pool: pip install mariadb[pool]"
+        )
+    
+    # Build PoolConfig from pool-specific parameters
+    pool_config = PoolConfig(
+        min_size=min_size,
+        max_size=max_size,
+        max_idle_time=max_idle_time,
+        max_lifetime=max_lifetime,
+        validation_interval=validation_interval,
+        acquire_timeout=acquire_timeout,
+        enable_health_check=enable_health_check,
+        reset_connection=reset_connection,
+        ping_threshold=ping_threshold
+    )
+    
+    # Create pool with mariadb.asyncConnect as factory
+    pool = AsyncConnectionPool(
+        connection_factory=asyncConnect,
+        config=pool_config,
+        **connection_params
+    )
+    
+    # Pre-fill the pool with connections
+    await pool.open()
+    
+    return pool
+
+
+def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
     """
     Get ConnectionPool class from mariadb_pool package.
     """
@@ -471,7 +655,7 @@ def _get_connection_pool_class():
     return ConnectionPool
 
 
-def _get_async_connection_pool_class():
+def _get_async_connection_pool_class() -> type['AsyncConnectionPoolWrapper']:
     """
     Get AsyncConnectionPool class from mariadb_pool package.
     """
