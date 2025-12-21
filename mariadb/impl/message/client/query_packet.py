@@ -197,6 +197,24 @@ PARAM_CONVERT_TBL = {
   tuple: tuple_to_bytes,
 }
 
+_type_cache = {cls: func for cls, func in PARAM_CONVERT_TBL.items()}
+
+# get cached conversion function
+def get_converter(val):
+    tbl = PARAM_CONVERT_TBL  # local reference
+    t = type(val)
+    if t in _type_cache:
+        return _type_cache[t]
+
+    for base in t.__mro__:
+        if base in tbl:
+            conv_func = tbl[base]
+            _type_cache[t] = conv_func
+            return conv_func
+
+    _type_cache[t] = None
+    return None
+
 # ============================================================================
 # Pre-computed lookup tables for SQL parsing optimization
 # ============================================================================
@@ -470,13 +488,14 @@ class QueryPacket(ClientMessage):
         
         # Cache frequently used functions and lookup tables
         _type = type
-        converter = PARAM_CONVERT_TBL
+        _converter = get_converter
         is_identifier_start = _IS_IDENTIFIER_START
         is_identifier_char = _IS_IDENTIFIER_CHAR
         is_special = _IS_SPECIAL_CHAR
         
         # Build result directly - start with header
         result = bytearray(b'\x00\x00\x00\x00\x03')
+        _result_extend = result.extend
         
         state = 0  # 0=NORMAL, 1=STRING, 2=ESCAPE, 3=BACKTICK, 4=EOL, 5=COMMENT
         single_quotes = False
@@ -501,7 +520,7 @@ class QueryPacket(ClientMessage):
                     placeholder_count += 1
                     # Copy SQL before placeholder
                     if i > last_copy:
-                        result.extend(sql_encoded[last_copy:i])
+                        _result_extend(sql_encoded[last_copy:i])
                     # Substitute parameter (positional only for ?)
                     if params_list is None:
                         raise ProgrammingError(
@@ -514,11 +533,11 @@ class QueryPacket(ClientMessage):
                             f"but only {len(params_list)} parameters provided"
                         )
                     param = params_list[param_idx]
-                    conv_func = converter.get(_type(param))
+                    conv_func = _converter(_type(param))
                     if conv_func is not None:
-                        result.extend(conv_func(param, no_backslash_escapes))
+                        _result_extend(conv_func(param, no_backslash_escapes))
                     else:
-                        result.extend(str(param).encode('utf8'))
+                        _result_extend(str(param).encode('utf8'))
                     param_idx += 1
                     last_copy = i + 1
                     i += 1
@@ -531,7 +550,7 @@ class QueryPacket(ClientMessage):
                             placeholder_count += 1
                             # Copy SQL before placeholder
                             if i > last_copy:
-                                result.extend(sql_encoded[last_copy:i])
+                                _result_extend(sql_encoded[last_copy:i])
                             # Substitute parameter (positional)
                             if params_list is None:
                                 raise ProgrammingError(
@@ -545,11 +564,11 @@ class QueryPacket(ClientMessage):
                                 )
                             param = params_list[param_idx]
                             param_type = _type(param)
-                            conv_func = converter.get(param_type)
+                            conv_func = _converter(param_type)
                             if conv_func is not None:
-                                result.extend(conv_func(param, no_backslash_escapes))
+                                _result_extend(conv_func(param, no_backslash_escapes))
                             else:
-                                result.extend(str(param).encode('utf8'))
+                                _result_extend(str(param).encode('utf8'))
                             param_idx += 1
                             last_copy = i + 2
                             i += 2
@@ -564,7 +583,7 @@ class QueryPacket(ClientMessage):
                                 param_name = sql_encoded[i+2:j].decode('utf-8')
                                 # Copy SQL before placeholder
                                 if i > last_copy:
-                                    result.extend(sql_encoded[last_copy:i])
+                                    _result_extend(sql_encoded[last_copy:i])
                                 # Substitute parameter (named)
                                 if params_dict is None:
                                     raise ProgrammingError(
@@ -574,13 +593,13 @@ class QueryPacket(ClientMessage):
                                 if param_name in params_dict:
                                     param = params_dict[param_name]
                                     param_type = _type(param)
-                                    conv_func = converter.get(param_type)
+                                    conv_func = _converter(param_type)
                                     if conv_func is not None:
-                                        result.extend(conv_func(param, no_backslash_escapes))
+                                        _result_extend(conv_func(param, no_backslash_escapes))
                                     else:
-                                        result.extend(str(param).encode('utf8'))
+                                        _result_extend(str(param).encode('utf8'))
                                 else:
-                                    result.extend(NULL_BYTES)
+                                    _result_extend(NULL_BYTES)
                                 last_copy = j + 2
                                 i = j + 2
                                 continue
@@ -598,7 +617,7 @@ class QueryPacket(ClientMessage):
                             param_name = sql_encoded[i+1:j].decode('utf-8')
                             # Copy SQL before placeholder
                             if i > last_copy:
-                                result.extend(sql_encoded[last_copy:i])
+                                _result_extend(sql_encoded[last_copy:i])
                             # Substitute parameter (named)
                             if params_dict is None:
                                 raise ProgrammingError(
@@ -608,13 +627,13 @@ class QueryPacket(ClientMessage):
                             if param_name in params_dict:
                                 param = params_dict[param_name]
                                 param_type = _type(param)
-                                conv_func = converter.get(param_type)
+                                conv_func = _converter(param_type)
                                 if conv_func is not None:
-                                    result.extend(conv_func(param, no_backslash_escapes))
+                                    _result_extend(conv_func(param, no_backslash_escapes))
                                 else:
-                                    result.extend(str(param).encode('utf8'))
+                                    _result_extend(str(param).encode('utf8'))
                             else:
-                                result.extend(NULL_BYTES)
+                                _result_extend(NULL_BYTES)
                             last_copy = j
                             i = j
                             continue
@@ -673,7 +692,7 @@ class QueryPacket(ClientMessage):
         
         # Copy remaining SQL
         if last_copy < length:
-            result.extend(sql_encoded[last_copy:])
+            _result_extend(sql_encoded[last_copy:])
         
         return QueryPacket(result, sql)
         
