@@ -40,9 +40,31 @@ MariaDB Connector/Python supports optional dependencies for enhanced functionali
 pip install mariadb[binary,pool]
 ```
 
+## Synchronous and Asynchronous APIs
+
+MariaDB Connector/Python provides **two complete implementations** for different use cases:
+
+### Synchronous API
+The traditional blocking API using `mariadb.connect()` for standard Python applications:
+- Simple and straightforward to use
+- Compatible with existing synchronous code
+- Ideal for scripts, CLI tools, and traditional web frameworks
+
+### Asynchronous API
+Native async/await support using `mariadb.asyncConnect()` for modern async Python applications:
+- Non-blocking I/O operations
+- Efficient handling of concurrent database operations
+
+Both APIs provide:
+- Full DB-API 2.0 compliance
+- Connection pooling support
+- Prepared statement caching
+- SSL/TLS support
+- Transaction management
+
 ## Quick Start
 
-### Basic Connection and Query
+### Basic Connection and Query (Synchronous)
 
 ```python
 import mariadb
@@ -83,7 +105,39 @@ with mariadb.connect(
         print(f"MariaDB version: {version[0]}")
 ```
 
-### Using Connection Pools
+### Basic Connection and Query (Asynchronous)
+
+```python
+import mariadb
+import asyncio
+
+async def main():
+    # Connect to MariaDB using async API
+    conn = await mariadb.asyncConnect(
+        host="localhost",
+        port=3306,
+        user="root",
+        password="password",
+        database="mydb"
+    )
+    
+    cursor = conn.cursor()
+    
+    # Execute query
+    await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
+    
+    # Fetch results
+    async for row in cursor:
+        print(row)
+    
+    await cursor.close()
+    await conn.close()
+
+# Run async function
+asyncio.run(main())
+```
+
+### Using Connection Pools (Synchronous)
 
 Connection pools improve performance by reusing connections:
 
@@ -159,20 +213,31 @@ with mariadb.connect("mariadb://user:password@localhost/mydb") as conn:
         print(f"User: {row.name}, Email: {row.email}")
 ```
 
-### Async/Await Support
+### Using Connection Pools (Asynchronous)
 
-MariaDB Connector/Python supports asynchronous operations using `asyncio`:
+Async connection pools for high-performance async applications:
 
 ```python
 import asyncio
 import mariadb
 
 async def main():
-    # Connect to MariaDB asynchronously using async with
-    async with await mariadb.asyncConnect("mariadb://user:password@localhost:3306/mydb") as conn:
-        async with conn.cursor() as cursor:
-            # Execute queries asynchronously
-            await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
+    # Create async connection pool
+    pool = await mariadb.create_async_pool(
+        host="localhost",
+        user="user",
+        password="password",
+        database="mydb",
+        min_size=5,
+        max_size=10
+    )
+    
+    # Get connection from pool
+    conn = await pool.get_connection()
+    cursor = conn.cursor()
+    
+    # Execute queries asynchronously
+    await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
             
             # Fetch results
             row = await cursor.fetchone()
