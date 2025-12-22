@@ -487,7 +487,6 @@ class QueryPacket(ClientMessage):
             params_list = list(parameters) if not isinstance(parameters, list) else parameters
         
         # Cache frequently used functions and lookup tables
-        _type = type
         _converter = get_converter
         is_identifier_start = _IS_IDENTIFIER_START
         is_identifier_char = _IS_IDENTIFIER_CHAR
@@ -533,7 +532,7 @@ class QueryPacket(ClientMessage):
                             f"but only {len(params_list)} parameters provided"
                         )
                     param = params_list[param_idx]
-                    conv_func = _converter(_type(param))
+                    conv_func = _converter(param)
                     if conv_func is not None:
                         _result_extend(conv_func(param, no_backslash_escapes))
                     else:
@@ -563,8 +562,7 @@ class QueryPacket(ClientMessage):
                                     f"but only {len(params_list)} parameters provided"
                                 )
                             param = params_list[param_idx]
-                            param_type = _type(param)
-                            conv_func = _converter(param_type)
+                            conv_func = _converter(param)
                             if conv_func is not None:
                                 _result_extend(conv_func(param, no_backslash_escapes))
                             else:
@@ -592,8 +590,7 @@ class QueryPacket(ClientMessage):
                                     )
                                 if param_name in params_dict:
                                     param = params_dict[param_name]
-                                    param_type = _type(param)
-                                    conv_func = _converter(param_type)
+                                    conv_func = _converter(param)
                                     if conv_func is not None:
                                         _result_extend(conv_func(param, no_backslash_escapes))
                                     else:
@@ -626,8 +623,7 @@ class QueryPacket(ClientMessage):
                                 )
                             if param_name in params_dict:
                                 param = params_dict[param_name]
-                                param_type = _type(param)
-                                conv_func = _converter(param_type)
+                                conv_func = _converter(param)
                                 if conv_func is not None:
                                     _result_extend(conv_func(param, no_backslash_escapes))
                                 else:
