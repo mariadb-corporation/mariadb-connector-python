@@ -296,6 +296,7 @@ class ConnectionPool:
                     pooled_conn = PooledConnection(conn, self)
                     conn._set_pooled_connection(pooled_conn)
                     self._all_connections.append(pooled_conn)
+                    pooled_conn.mark_idle()
                     self._free.append(pooled_conn)
                     self._cond.notify()
                 except Exception:
@@ -313,6 +314,7 @@ class ConnectionPool:
                 pooled_conn = PooledConnection(conn, self)
                 conn._set_pooled_connection(pooled_conn)
                 self._all_connections.append(pooled_conn)
+                pooled_conn.mark_idle()
                 self._free.append(pooled_conn)
                 self._cond.notify()
             except Exception:
@@ -619,6 +621,7 @@ class AsyncConnectionPool:
                     pooled_conn = AsyncPooledConnection(conn, self)
                     conn._set_pooled_connection(pooled_conn)
                     self._all_connections.append(pooled_conn)
+                    pooled_conn.mark_idle()
                     self._free.append(pooled_conn)
                     self._cond.notify()
                 except Exception:
@@ -636,6 +639,7 @@ class AsyncConnectionPool:
                 pooled_conn = AsyncPooledConnection(conn, self)
                 conn._set_pooled_connection(pooled_conn)
                 self._all_connections.append(pooled_conn)
+                pooled_conn.mark_idle()
                 self._free.append(pooled_conn)
                 self._cond.notify()
             except Exception:
