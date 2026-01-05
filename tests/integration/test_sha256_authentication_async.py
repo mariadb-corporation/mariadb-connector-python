@@ -74,6 +74,14 @@ class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
         self.connection = create_connection()
         self.cursor = self.connection.cursor()
         
+        # Check if strict password validation is enabled
+        try:
+            self.cursor.execute("SELECT @@global.strict_password_validation")
+            result = self.cursor.fetchone()
+            self.strict_password_validation = bool(result[0]) if result else False
+        except mariadb.Error:
+            self.strict_password_validation = False
+        
         # Create test users
         password = "!Passw0rd3Works"
         is_mariadb = self.connection.server_mariadb
@@ -90,18 +98,19 @@ class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
         )
         self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256UserAsync'{get_host_suffix()}")
         
-        # User 2: User with empty password
-        try:
-            self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256UserAsync2'{get_host_suffix()}")
-        except:
-            pass
-        keyword = "VIA" if is_mariadb else "WITH"
-        password_clause = "USING PASSWORD('')" if is_mariadb else "BY ''"
-        self.cursor.execute(
-            f"CREATE USER 'cachingSha256UserAsync2'{get_host_suffix()} "
-            f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
-        )
-        self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256UserAsync2'{get_host_suffix()}")
+        # User 2: User with empty password (only if strict validation is disabled)
+        if not self.strict_password_validation:
+            try:
+                self.cursor.execute(f"DROP USER IF EXISTS 'cachingSha256UserAsync2'{get_host_suffix()}")
+            except:
+                pass
+            keyword = "VIA" if is_mariadb else "WITH"
+            password_clause = "USING PASSWORD('')" if is_mariadb else "BY ''"
+            self.cursor.execute(
+                f"CREATE USER 'cachingSha256UserAsync2'{get_host_suffix()} "
+                f"IDENTIFIED {keyword} caching_sha2_password {password_clause}"
+            )
+            self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'cachingSha256UserAsync2'{get_host_suffix()}")
         
         # User 3: Another standard user
         try:
@@ -144,6 +153,10 @@ class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
         # Skip on Windows
         if platform.system() == "Windows":
             self.skipTest("Skipping on Windows")
+        
+        # Skip if strict password validation is enabled
+        if self.strict_password_validation:
+            self.skipTest("Strict password validation is enabled - empty passwords not allowed")
         
         self.cursor.execute("FLUSH PRIVILEGES")  # Reset cache
         

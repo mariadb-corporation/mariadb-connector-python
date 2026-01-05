@@ -42,6 +42,15 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         config = get_test_config()
         self.connection = await mariadb.AsyncConnection.connect(**config)
         self.cursor = self.connection.cursor()
+        
+        # Check if strict password validation is enabled
+        try:
+            await self.cursor.execute("SELECT @@global.strict_password_validation")
+            result = await self.cursor.fetchone()
+            self.strict_password_validation = bool(result[0]) if result else False
+        except mariadb.Error:
+            self.strict_password_validation = False
+        
         try:
             await self.cursor.execute("INSTALL SONAME 'auth_parsec'")
         except:
@@ -98,6 +107,10 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
     
     async def test_parsec_empty_password(self):
         """Test PARSEC authentication with empty password"""
+        # Skip if strict password validation is enabled
+        if self.strict_password_validation:
+            self.skipTest("Strict password validation is enabled - empty passwords not allowed")
+        
         await self.cursor.execute(f"DROP USER IF EXISTS 'parsec_empty_pwd'{get_host_suffix()}")
         await self.cursor.execute(
             f"CREATE USER 'parsec_empty_pwd'{get_host_suffix()} "
@@ -209,6 +222,10 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
     
     async def test_parsec_long_password(self):
         """Test PARSEC authentication with very long password"""
+        # Skip if strict password validation is enabled
+        if self.strict_password_validation:
+            self.skipTest("Strict password validation is enabled - simple passwords not allowed")
+        
         # 256 character password
         test_password = "a" * 256
         

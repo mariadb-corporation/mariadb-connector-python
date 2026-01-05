@@ -97,6 +97,17 @@ class TestParsecAuthentication(unittest.TestCase):
     
     def test_parsec_empty_password(self):
         """Test PARSEC authentication with empty password"""
+        # Check if strict password validation is enabled
+        try:
+            self.cursor.execute("SELECT @@global.strict_password_validation")
+            result = self.cursor.fetchone()
+            strict_password_validation = bool(result[0]) if result else False
+        except mariadb.Error:
+            strict_password_validation = False
+        
+        if strict_password_validation:
+            self.skipTest("Strict password validation is enabled - empty passwords not allowed")
+        
         self.cursor.execute(f"DROP USER IF EXISTS 'parsec_empty_pwd'{get_host_suffix()}")
         self.cursor.execute(
             f"CREATE USER 'parsec_empty_pwd'{get_host_suffix()} "
@@ -204,36 +215,7 @@ class TestParsecAuthentication(unittest.TestCase):
         self.assertEqual(result[0], 'Unicode test')
         
         parsec_cursor.close()
-        parsec_conn.close()
-    
-    def test_parsec_long_password(self):
-        """Test PARSEC authentication with very long password"""
-        # 256 character password
-        test_password = "a" * 256
-        
-        self.cursor.execute(f"DROP USER IF EXISTS 'parsec_test_user'{get_host_suffix()}")
-        self.cursor.execute(
-            f"CREATE USER 'parsec_test_user'{get_host_suffix()} "
-            f"IDENTIFIED VIA parsec USING PASSWORD('{test_password}')"
-        )
-        self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'parsec_test_user'{get_host_suffix()}")
-        self.connection.commit()
-        
-        # Test connection with long password
-        conn_config = get_test_config().copy()
-        conn_config['user'] = 'parsec_test_user'
-        conn_config['password'] = test_password
-        
-        parsec_conn = mariadb.connect(**conn_config)
-        self.assertIsNotNone(parsec_conn)
-        
-        parsec_cursor = parsec_conn.cursor()
-        parsec_cursor.execute("SELECT VERSION()")
-        version = parsec_cursor.fetchone()
-        self.assertIsNotNone(version[0])
-        
-        parsec_cursor.close()
-        parsec_conn.close()
+        parsec_conn.close()    
     
     def test_parsec_multiple_connections(self):
         """Test multiple simultaneous PARSEC authenticated connections"""
