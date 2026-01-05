@@ -411,11 +411,11 @@ class ConnectionPool:
         if self._closed:
             return
         
-        # Remove from used set
-        if pool_conn in self._used:
-            self._used.remove(pool_conn)
-        
-        pool_conn.mark_idle()
+        # Mark idle and remove from used set under lock to ensure atomicity
+        with self._cond:
+            if pool_conn in self._used:
+                self._used.remove(pool_conn)
+            pool_conn.mark_idle()
         
         # Reset or rollback connection before returning to pool
         try:
@@ -435,15 +435,14 @@ class ConnectionPool:
                     self._all_connections.remove(pool_conn)
             return
         
-        # Check if connection should be kept
-        if pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
-            pool_conn.closeSilently()
-            with self._cond:
+        # Check if connection should be kept and return to pool under lock
+        with self._cond:
+            if pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
+                pool_conn.closeSilently()
                 if pool_conn in self._all_connections:
                     self._all_connections.remove(pool_conn)
-        else:
-            # Return to free pool and notify waiters
-            with self._cond:
+            else:
+                # Return to free pool and notify waiters
                 self._free.append(pool_conn)
                 self._cond.notify()
                         
@@ -739,11 +738,11 @@ class AsyncConnectionPool:
         if self._closed:
             return
         
-        # Remove from used set
-        if pool_conn in self._used:
-            self._used.remove(pool_conn)
-        
-        pool_conn.mark_idle()
+        # Mark idle and remove from used set under lock to ensure atomicity
+        async with self._cond:
+            if pool_conn in self._used:
+                self._used.remove(pool_conn)
+            pool_conn.mark_idle()
         
         # Reset or rollback connection before returning to pool
         try:
@@ -763,15 +762,14 @@ class AsyncConnectionPool:
                     self._all_connections.remove(pool_conn)
             return
         
-        # Check if connection should be kept
-        if pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
-            await pool_conn.closeSilently()
-            async with self._cond:
+        # Check if connection should be kept and return to pool under lock
+        async with self._cond:
+            if pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
+                await pool_conn.closeSilently()
                 if pool_conn in self._all_connections:
                     self._all_connections.remove(pool_conn)
-        else:
-            # Return to free pool and notify waiters
-            async with self._cond:
+            else:
+                # Return to free pool and notify waiters
                 self._free.append(pool_conn)
                 self._cond.notify()
                         
