@@ -59,6 +59,9 @@ class AsyncClient(BaseClient):
         """Initialize asynchronous client with configuration and host address"""
         super().__init__(configuration)
         
+        # Override threading.Lock with asyncio.Lock for async operations
+        self.lock : asyncio.Lock = asyncio.Lock()
+        
         # Async-specific attributes
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
@@ -480,7 +483,7 @@ class AsyncClient(BaseClient):
 
     async def execute(self, message: ClientMessage, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         """Execute command and return list of completion results"""
-        with self.lock:
+        async with self.lock:
             if self.closed:
                 raise OperationalError("Connection is closed")
             
@@ -495,7 +498,7 @@ class AsyncClient(BaseClient):
 
     async def execute_stmt(self, sql: str, messages: List[ClientMessage], config: 'Configuration' = None, buffered: bool = True):
         """Execute SQL with prepared statements (with caching), handles prepare if needed"""
-        with self.lock:
+        async with self.lock:
             if self.closed:
                 raise OperationalError("Connection is closed")
 
@@ -784,7 +787,7 @@ class AsyncClient(BaseClient):
     
     async def close(self) -> None:
         """Close connection and cleanup resources asynchronously"""
-        with self.lock:
+        async with self.lock:
             if self.closed:
                 return
             

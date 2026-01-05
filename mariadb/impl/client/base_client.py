@@ -9,12 +9,11 @@ Contains all common logic shared between AsyncClient and SyncClient.
 
 import decimal
 import datetime
-import threading
 import struct
 import ipaddress
 import uuid
 from abc import ABC, abstractmethod
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Dict, Tuple
 
 # Cached unpack_from methods for row parsing performance (avoids attribute lookup overhead)
 _unpack_H = struct.Struct('<H').unpack_from  # unsigned short (2 bytes)
@@ -96,7 +95,6 @@ class BaseClient(ABC):
         self.closed = False
         self.socket_timeout = configuration.socket_timeout
         self.connect_timeout = configuration.connect_timeout
-        self.lock = threading.Lock()
         self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
         self.auth_plugin: Optional['AuthenticationPlugin'] = None
         

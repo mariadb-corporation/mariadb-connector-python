@@ -13,6 +13,7 @@ import ssl
 import struct
 import copy
 from typing import List, Optional
+import threading
 
 from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
@@ -59,7 +60,8 @@ class SyncClient(BaseClient):
     def __init__(self, configuration: Configuration) -> None:
         """Initialize synchronous client with configuration and host address"""
         super().__init__(configuration)
-        
+        self.lock: threading.Lock = threading.Lock()
+
         # Sync-specific attributes
         self.socket: Optional[socket.socket] = None
         
