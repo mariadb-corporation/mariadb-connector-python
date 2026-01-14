@@ -30,7 +30,10 @@ def test_select_1000_rows_text(benchmark, connection, driver_name):
     
     def select_1000_rows():
         cursor = connection.cursor()
-        cursor.execute(SQL, (1,))
+        if driver_name == 'mariadb' or driver_name == 'mariadb_c':
+            cursor.execute(SQL + " WHERE 1 = ?", (1,))
+        else:  # pymysql, mysql_connector
+            cursor.execute(SQL + " WHERE 1 = %s", (1,))
         rows = cursor.fetchall()
         cursor.close()
         return len(rows)
