@@ -278,13 +278,16 @@ def normalize_to_qmark(sql: str) -> Tuple[str, Optional[List[str]]]:
         - normalized_sql: SQL with all placeholders converted to ?
         - param_names: List of parameter names in order (for named/pyformat), or None for positional
     """
-    sql_encoded = sql.encode('utf-8')
-    length = len(sql_encoded)
-    result = bytearray()
+    _sql = sql.encode('utf-8')
+    length = len(_sql)
+    
+    # Use list for fragments (Faster than bytearray.append in Python)
+    result_list = []
+    _append = result_list.append
     param_names: List[str] = []
     has_named_params = False
     
-    # Cache lookup tables
+    # Localize lookup tables for speed
     is_identifier_start = _IS_IDENTIFIER_START
     is_identifier_char = _IS_IDENTIFIER_CHAR
     is_special = _IS_SPECIAL_CHAR
@@ -292,67 +295,73 @@ def normalize_to_qmark(sql: str) -> Tuple[str, Optional[List[str]]]:
     state = 0  # 0=NORMAL, 1=STRING, 2=ESCAPE, 3=BACKTICK, 4=EOL, 5=COMMENT
     single_quotes = False
     last_char = 0
+    last_copy = 0
     i = 0
 
     while i < length:
-        c = sql_encoded[i]
+        c = _sql[i]
         
         if state == 0:  # NORMAL - most common case, check first
             # Fast path: skip regular characters
             if not is_special[c]:
-                result.append(c)
                 last_char = c
                 i += 1
                 continue
             
             # Check for parameter placeholders - inline code for each case
             if c == 63:  # '?' - qmark style (already normalized)
-                result.append(c)
+                last_char = c
                 i += 1
                 continue
                 
             elif c == 37 and last_char != 92:  # '%' not escaped - format/pyformat style
                 if i + 1 < length:
-                    next_c = sql_encoded[i + 1]
+                    next_c = _sql[i + 1]
                     if next_c == 115 or next_c == 100:  # 's' or 'd' - format style %s or %d
-                        # Inline: replace with ?
-                        result.append(63)
+                        # Copy up to placeholder, then append ?
+                        if i > last_copy:
+                            _append(_sql[last_copy:i])
+                        _append(b'?')
                         i += 2
+                        last_copy = i
                         last_char = 63
                         continue
                     elif next_c == 40:  # '(' - pyformat style %(name)s
                         # Find closing )s
                         j = i + 2
-                        while j < length and sql_encoded[j] != 41:  # ')'
+                        while j < length and _sql[j] != 41:  # ')'
                             j += 1
-                        if j + 1 < length and sql_encoded[j + 1] == 115:  # 's'
-                            # Inline: replace with ? and track param name
-                            result.append(63)
-                            param_names.append(sql_encoded[i+2:j].decode('utf-8'))
+                        if j + 1 < length and _sql[j + 1] == 115:  # 's'
+                            # Copy up to placeholder, append ?, track param name
+                            if i > last_copy:
+                                _append(_sql[last_copy:i])
+                            _append(b'?')
+                            param_names.append(_sql[i+2:j].decode('utf-8'))
                             has_named_params = True
-                            i += j + 2 - i
+                            i = j + 2
+                            last_copy = i
                             last_char = 63
                             continue
                             
             elif c == 58 and last_char != 92:  # ':' not escaped - named style :name
                 if i + 1 < length:
-                    next_c = sql_encoded[i + 1]
+                    next_c = _sql[i + 1]
                     # Use lookup table for identifier start
                     if is_identifier_start[next_c]:
                         j = i + 1
                         # Use lookup table for identifier continuation
-                        while j < length and is_identifier_char[sql_encoded[j]]:
+                        while j < length and is_identifier_char[_sql[j]]:
                             j += 1
-                        # Inline: replace with ? and track param name
-                        result.append(63)
-                        param_names.append(sql_encoded[i+1:j].decode('utf-8'))
+                        # Copy up to placeholder, append ?, track param name
+                        if i > last_copy:
+                            _append(_sql[last_copy:i])
+                        _append(b'?')
+                        param_names.append(_sql[i+1:j].decode('utf-8'))
                         has_named_params = True
-                        i += j - i
+                        i = j
+                        last_copy = i
                         last_char = 63
                         continue
-                
-            # Not a placeholder, copy character as-is
-            result.append(c)
             
             # Check for state transitions
             if c == 39:  # "'"
@@ -365,7 +374,7 @@ def normalize_to_qmark(sql: str) -> Tuple[str, Optional[List[str]]]:
                 state = 3
             elif c == 42 and last_char == 47:  # '/*'
                 if i + 1 < length:
-                    next_c = sql_encoded[i + 1]
+                    next_c = _sql[i + 1]
                     if next_c not in (33, 77):  # not '!' or 'M'
                         state = 5
                 else:
@@ -381,7 +390,6 @@ def normalize_to_qmark(sql: str) -> Tuple[str, Optional[List[str]]]:
                 state = 4
 
         elif state == 1:  # STRING
-            result.append(c)
             if c == 92:  # '\'
                 state = 2
             elif (c == 39 and single_quotes) or (c == 34 and not single_quotes):
@@ -389,30 +397,30 @@ def normalize_to_qmark(sql: str) -> Tuple[str, Optional[List[str]]]:
         
         elif state == 2:  # ESCAPE - rare case, check after common states
             state = 1
-            result.append(c)
             last_char = c
             i += 1
             continue
 
         elif state == 3:  # BACKTICK
-            result.append(c)
             if c == 96:
                 state = 0
 
         elif state == 4:  # EOL
-            result.append(c)
             if c == 10:  # '\n'
                 state = 0
 
         elif state == 5:  # COMMENT
-            result.append(c)
             if last_char == 42 and c == 47:  # '*/'
                 state = 0
 
         last_char = c
         i += 1
 
-    normalized_sql = result.decode('utf-8')
+    # Append remaining SQL
+    if last_copy < length:
+        _append(_sql[last_copy:])
+
+    normalized_sql = b"".join(result_list).decode('utf-8')
     return normalized_sql, (param_names if has_named_params else None)
 
 
@@ -456,8 +464,8 @@ class QueryPacket(ClientMessage):
 
     @staticmethod
     def from_substitute(sql: str, parameters: Any, no_backslash_escapes: bool = False) -> 'QueryPacket':
-        sql_encoded = sql.encode('utf-8')
-        length = len(sql_encoded)
+        _sql = sql.encode('utf-8')
+        length = len(_sql)
 
         if isinstance(parameters, dict):
             params_dict = parameters
@@ -471,7 +479,6 @@ class QueryPacket(ClientMessage):
         is_identifier_start = _IS_IDENTIFIER_START
         is_identifier_char = _IS_IDENTIFIER_CHAR
         is_special = _IS_SPECIAL_CHAR
-        _sql = sql_encoded
 
         # Use list for fragments (Faster than bytearray.extend in Python)
         result_list = [b'\x00\x00\x00\x00\x03']
@@ -499,9 +506,18 @@ class QueryPacket(ClientMessage):
 
                 # Check '?'
                 if c == 63:
+                    if params_list is None:
+                        raise ProgrammingError(
+                            "Positional placeholder '?' used but parameters provided as dict. "
+                            "Use named placeholders like :name or %(name)s instead."
+                        )
+                    if param_idx >= len(params_list):
+                        raise ProgrammingError(
+                            f"Parameter count mismatch: SQL has at least {param_idx + 1} placeholders, "
+                            f"but only {len(params_list)} parameters provided"
+                        )
                     if i > last_copy:
                         _append(_sql[last_copy:i])
-
                     param = params_list[param_idx]
                     p_type = type(param)
                     if p_type is not last_param_type:
@@ -551,7 +567,11 @@ class QueryPacket(ClientMessage):
                                 param_name = _sql[i+2:j].decode('utf-8')
                                 if i > last_copy:
                                     _append(_sql[last_copy:i])
-
+                                if params_dict is None:
+                                    raise ProgrammingError(
+                                        f"Named placeholder '%({param_name})s' used but parameters provided as tuple/list. "
+                                        "Use positional placeholders like ? or %s instead."
+                                    )
                                 param = params_dict.get(param_name)
                                 if param is not None:
                                     p_type = type(param)
