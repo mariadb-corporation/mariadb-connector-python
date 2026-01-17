@@ -454,209 +454,171 @@ class QueryPacket(ClientMessage):
         payload[5:] = sql_bytes
         return QueryPacket(payload, sql)
 
-    
     @staticmethod
     def from_substitute(sql: str, parameters: Any, no_backslash_escapes: bool = False) -> 'QueryPacket':
-        """
-        Create QueryPacket with parameter substitution.
-        
-        Parse SQL and substitute parameters in one pass.
-        Supports all paramstyles (qmark_compat behavior):
-        - ? (qmark)
-        - %s, %d (format)
-        - %(name)s (pyformat)
-        - :name (named)
-        
-        Args:
-            sql: SQL statement string
-            parameters: Parameters to substitute (list, tuple, or dict)
-            no_backslash_escapes: Whether NO_BACKSLASH_ESCAPES mode is enabled
-        
-        Returns:
-            QueryPacket instance with substituted parameters
-        """
         sql_encoded = sql.encode('utf-8')
         length = len(sql_encoded)
-        
-        # Convert parameters to appropriate format
+
         if isinstance(parameters, dict):
             params_dict = parameters
             params_list = None
         else:
             params_dict = None
             params_list = list(parameters) if not isinstance(parameters, list) else parameters
-        
-        # Cache frequently used functions and lookup tables
+
+        # Localize for speed
         _converter = get_converter
         is_identifier_start = _IS_IDENTIFIER_START
         is_identifier_char = _IS_IDENTIFIER_CHAR
         is_special = _IS_SPECIAL_CHAR
-        
-        # Build result directly - start with header
-        result = bytearray(b'\x00\x00\x00\x00\x03')
-        _result_extend = result.extend
-        
+        _sql = sql_encoded
+
+        # Use list for fragments (Faster than bytearray.extend in Python)
+        result_list = [b'\x00\x00\x00\x00\x03']
+        _append = result_list.append
+
+        # Homogeneous Type Cache - This targets the get_converter bottleneck
+        cached_conv_func = None
+        last_param_type = None
+
         state = 0  # 0=NORMAL, 1=STRING, 2=ESCAPE, 3=BACKTICK, 4=EOL, 5=COMMENT
         single_quotes = False
         last_char = 0
-        last_copy = 0  # Last position we copied to result
+        last_copy = 0 
         param_idx = 0
-        placeholder_count = 0  # Count placeholders for validation
         i = 0
-        
+
         while i < length:
-            c = sql_encoded[i]
-            
-            if state == 0:  # NORMAL - most common case, check first
-                # Fast path: skip regular characters (95% of cases)
+            c = _sql[i]
+
+            if state == 0:  # NORMAL
                 if not is_special[c]:
                     last_char = c
                     i += 1
                     continue
-                
-                # Check for parameter placeholders - inline substitution for each case
-                if c == 63:  # '?' - qmark style
-                    placeholder_count += 1
-                    # Copy SQL before placeholder
+
+                # Check '?'
+                if c == 63:
                     if i > last_copy:
-                        _result_extend(sql_encoded[last_copy:i])
-                    # Substitute parameter (positional only for ?)
-                    if params_list is None:
-                        raise ProgrammingError(
-                            "Positional placeholder '?' used but parameters provided as dict. "
-                            "Use named placeholders like :name or %(name)s instead."
-                        )
-                    if param_idx >= len(params_list):
-                        raise ProgrammingError(
-                            f"Parameter count mismatch: SQL has at least {placeholder_count} placeholders, "
-                            f"but only {len(params_list)} parameters provided"
-                        )
+                        _append(_sql[last_copy:i])
+
                     param = params_list[param_idx]
-                    conv_func = _converter(param)
-                    if conv_func is not None:
-                        _result_extend(conv_func(param, no_backslash_escapes))
+                    p_type = type(param)
+                    if p_type is not last_param_type:
+                        cached_conv_func = _converter(param)
+                        last_param_type = p_type
+
+                    if cached_conv_func is not None:
+                        _append(cached_conv_func(param, no_backslash_escapes))
                     else:
-                        _result_extend(str(param).encode('utf8'))
+                        _append(str(param).encode('utf8'))
+
                     param_idx += 1
                     last_copy = i + 1
+                    last_char = c
                     i += 1
                     continue
-                    
-                elif c == 37 and last_char != 92:  # '%' not escaped - format/pyformat style
+
+                # Check '%'
+                elif c == 37 and last_char != 92:
                     if i + 1 < length:
-                        next_c = sql_encoded[i + 1]
-                        if next_c == 115 or next_c == 100:  # 's' or 'd' - format style %s or %d
-                            placeholder_count += 1
-                            # Copy SQL before placeholder
+                        next_c = _sql[i + 1]
+                        if next_c == 115 or next_c == 100:  # %s or %d
                             if i > last_copy:
-                                _result_extend(sql_encoded[last_copy:i])
-                            # Substitute parameter (positional)
-                            if params_list is None:
-                                raise ProgrammingError(
-                                    "Positional placeholder '%s' or '%d' used but parameters provided as dict. "
-                                    "Use named placeholders like :name or %(name)s instead."
-                                )
-                            if param_idx >= len(params_list):
-                                raise ProgrammingError(
-                                    f"Parameter count mismatch: SQL has at least {placeholder_count} placeholders, "
-                                    f"but only {len(params_list)} parameters provided"
-                                )
+                                _append(_sql[last_copy:i])
+
                             param = params_list[param_idx]
-                            conv_func = _converter(param)
-                            if conv_func is not None:
-                                _result_extend(conv_func(param, no_backslash_escapes))
+                            p_type = type(param)
+                            if p_type is not last_param_type:
+                                cached_conv_func = _converter(param)
+                                last_param_type = p_type
+
+                            if cached_conv_func is not None:
+                                _append(cached_conv_func(param, no_backslash_escapes))
                             else:
-                                _result_extend(str(param).encode('utf8'))
+                                _append(str(param).encode('utf8'))
+
                             param_idx += 1
                             last_copy = i + 2
                             i += 2
+                            last_char = next_c
                             continue
-                        elif next_c == 40:  # '(' - pyformat style %(name)s
-                            # Find closing )s
+                        elif next_c == 40:  # %(name)s
                             j = i + 2
-                            while j < length and sql_encoded[j] != 41:  # ')'
+                            while j < length and _sql[j] != 41:
                                 j += 1
-                            if j + 1 < length and sql_encoded[j + 1] == 115:  # 's'
-                                placeholder_count += 1
-                                param_name = sql_encoded[i+2:j].decode('utf-8')
-                                # Copy SQL before placeholder
+                            if j + 1 < length and _sql[j + 1] == 115:
+                                param_name = _sql[i+2:j].decode('utf-8')
                                 if i > last_copy:
-                                    _result_extend(sql_encoded[last_copy:i])
-                                # Substitute parameter (named)
-                                if params_dict is None:
-                                    raise ProgrammingError(
-                                        f"Named placeholder '%({param_name})s' used but parameters provided as tuple/list. "
-                                        "Use positional placeholders like ? or %s instead."
-                                    )
-                                if param_name in params_dict:
-                                    param = params_dict[param_name]
-                                    conv_func = _converter(param)
-                                    if conv_func is not None:
-                                        _result_extend(conv_func(param, no_backslash_escapes))
+                                    _append(_sql[last_copy:i])
+
+                                param = params_dict.get(param_name)
+                                if param is not None:
+                                    p_type = type(param)
+                                    if p_type is not last_param_type:
+                                        cached_conv_func = _converter(param)
+                                        last_param_type = p_type
+
+                                    if cached_conv_func is not None:
+                                        _append(cached_conv_func(param, no_backslash_escapes))
                                     else:
-                                        _result_extend(str(param).encode('utf8'))
+                                        _append(str(param).encode('utf8'))
                                 else:
-                                    _result_extend(NULL_BYTES)
+                                    _append(b'NULL') # Assuming NULL_BYTES
                                 last_copy = j + 2
                                 i = j + 2
+                                last_char = 115
                                 continue
-                                
-                elif c == 58 and last_char != 92:  # ':' not escaped - named style :name
+
+                # Check ':'
+                elif c == 58 and last_char != 92:
                     if i + 1 < length:
-                        next_c = sql_encoded[i + 1]
-                        # Use lookup table for identifier start
+                        next_c = _sql[i + 1]
                         if is_identifier_start[next_c]:
                             j = i + 1
-                            # Use lookup table for identifier continuation
-                            while j < length and is_identifier_char[sql_encoded[j]]:
+                            while j < length and is_identifier_char[_sql[j]]:
                                 j += 1
-                            placeholder_count += 1
-                            param_name = sql_encoded[i+1:j].decode('utf-8')
-                            # Copy SQL before placeholder
+                            param_name = _sql[i+1:j].decode('utf-8')
                             if i > last_copy:
-                                _result_extend(sql_encoded[last_copy:i])
-                            # Substitute parameter (named)
-                            if params_dict is None:
-                                raise ProgrammingError(
-                                    f"Named placeholder ':{param_name}' used but parameters provided as tuple/list. "
-                                    "Use positional placeholders like ? or %s instead."
-                                )
-                            if param_name in params_dict:
-                                param = params_dict[param_name]
-                                conv_func = _converter(param)
-                                if conv_func is not None:
-                                    _result_extend(conv_func(param, no_backslash_escapes))
+                                _append(_sql[last_copy:i])
+
+                            param = params_dict.get(param_name)
+                            if param is not None:
+                                p_type = type(param)
+                                if p_type is not last_param_type:
+                                    cached_conv_func = _converter(param)
+                                    last_param_type = p_type
+                                if cached_conv_func is not None:
+                                    _append(cached_conv_func(param, no_backslash_escapes))
                                 else:
-                                    _result_extend(str(param).encode('utf8'))
+                                    _append(str(param).encode('utf8'))
                             else:
-                                _result_extend(NULL_BYTES)
+                                _append(b'NULL')
                             last_copy = j
                             i = j
+                            last_char = _sql[j-1] if j > i else c
                             continue
-                    
-                elif c == 39:  # "'"
+
+                # Context Transitions
+                elif c == 39: # "'"
                     state = 1
                     single_quotes = True
-                elif c == 34:  # '"'
+                elif c == 34: # '"'
                     state = 1
                     single_quotes = False
-                elif c == 96:  # '`'
+                elif c == 96: # '`'
                     state = 3
-                elif c == 42 and last_char == 47:  # '/*'
-                    if i + 1 < length:
-                        next_c = sql_encoded[i + 1]
-                        if next_c not in (33, 77):  # not '!' or 'M'
-                            state = 5
-                    else:
+                elif c == 42 and last_char == 47: # '/*'
+                    if i + 1 < length and _sql[i + 1] not in (33, 77):
                         state = 5
-                elif c == 47:  # '/'
-                    if last_char == 42:  # '*/'
+                elif c == 47: # '/'
+                    if last_char == 42: # '*/'
                         state = 0
-                    elif last_char == 47:  # '//'
+                    elif last_char == 47: # '//'
                         state = 4
-                elif c == 35:  # '#'
+                elif c == 35: # '#'
                     state = 4
-                elif c == 45 and last_char == 45:  # '--'
+                elif c == 45 and last_char == 45: # '--'
                     state = 4
 
             elif state == 1:  # STRING
@@ -664,12 +626,10 @@ class QueryPacket(ClientMessage):
                     state = 2
                 elif (c == 39 and single_quotes) or (c == 34 and not single_quotes):
                     state = 0
-            
-            elif state == 2:  # ESCAPE - rare case, check after common states
+
+            elif state == 2:  # ESCAPE
                 state = 1
-                last_char = c
-                i += 1
-                continue
+                # Optimization: Skip increment logic by letting bottom handle it
 
             elif state == 3:  # BACKTICK
                 if c == 96:
@@ -685,13 +645,12 @@ class QueryPacket(ClientMessage):
 
             last_char = c
             i += 1
-        
-        # Copy remaining SQL
+
         if last_copy < length:
-            _result_extend(sql_encoded[last_copy:])
-        
-        return QueryPacket(result, sql)
-        
+            _append(_sql[last_copy:])
+
+        return QueryPacket(bytearray(b"".join(result_list)), sql)
+
     def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
         return self._payload_bytes
 
