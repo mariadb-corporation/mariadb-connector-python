@@ -81,7 +81,7 @@ jobs:
           allow-prereleases: true
 
       - name: Clone SQLAlchemy
-        if: ${{ startsWith(matrix.python, '3.13') }}
+        if: ${{ matrix.python == '' || matrix.python == '3.13' || startsWith(matrix.python, '3.13') }}
         uses: GuillaumeFalourd/clone-github-repo-action@v2.3
         with:
           branch: main
@@ -89,7 +89,7 @@ jobs:
           repository: 'sqlalchemy'
 
       - name: Run SQLAlchemy tests (Pure Python)
-        if: ${{ startsWith(matrix.python, '3.13') }}
+        if: ${{ matrix.python == '' || matrix.python == '3.13' || startsWith(matrix.python, '3.13') }}
         shell: bash
         run: |
           python --version
@@ -173,7 +173,7 @@ jobs:
           repository: 'mariadb-connector-c'
 
       - name: Clone SQLAlchemy
-        if: ${{ startsWith(matrix.python, '3.13') }}
+        if: ${{ matrix.python == '' || matrix.python == '3.13' || startsWith(matrix.python, '3.13') }}
         uses: GuillaumeFalourd/clone-github-repo-action@v2.3
         with:
           branch: main
@@ -216,7 +216,7 @@ jobs:
           echo "MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL_DIR/lib/mariadb/plugin" >> $env:GITHUB_ENV
 
       - name: Run SQLAlchemy tests
-        if: ${{ startsWith(matrix.python, '3.13') }}
+        if: ${{ matrix.python == '' || matrix.python == '3.13' || startsWith(matrix.python, '3.13') }}
         shell: bash
         run: |
           python --version
