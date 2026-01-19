@@ -80,13 +80,20 @@ jobs:
           python-version: ${{ matrix.python || '3.13' }}
           allow-prereleases: true
 
-      - name: Run SQLAlchemy tests
+      - name: Clone SQLAlchemy
+        if: ${{ startsWith(matrix.python, '3.13') }}
+        uses: GuillaumeFalourd/clone-github-repo-action@v2.3
+        with:
+          branch: main
+          owner: 'sqlalchemy'
+          repository: 'sqlalchemy'
+
+      - name: Run SQLAlchemy tests (Pure Python)
         if: ${{ startsWith(matrix.python, '3.13') }}
         shell: bash
         run: |
           python --version
           python -m pip install .
-          cd mariadb-c && python -m pip install . && cd ..
           cd mariadb-pool && python -m pip install . && cd ..
           python -m pip install pytest typing_extensions
           cd ${{ github.workspace }}/sqlalchemy
