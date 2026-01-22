@@ -162,15 +162,17 @@ class SyncConnectionCommon(ABC):
         
         Discards all changes since the last commit/rollback.
         
+        Note: ROLLBACK is always executed regardless of transaction state
+        because it's needed to release locks (e.g., from SELECT FOR UPDATE)
+        
         Raises:
             ProgrammingError: If called during XA transaction
         """
         self._check_closed()
         if self._xid is not None:
             raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
-        if (self.server_status & STATUS.IN_TRANS) > 0:
-            with self.cursor() as cursor:
-                cursor.execute("ROLLBACK")
+        with self.cursor() as cursor:
+            cursor.execute("ROLLBACK")
 
     def begin(self) -> None:
         """

@@ -162,6 +162,12 @@ class TestPreparedStatementCache(unittest.TestCase):
         """Test that executemany uses cache"""
         if is_mysql():
             self.skipTest("MySQL don't use bulk")
+        
+        # Check if server supports BULK_UNIT_RESULTS (MariaDB 11.5+)
+        from mariadb_shared import constants
+        if not self.conn._client.context.has_capability(constants.CAPABILITY.BULK_UNIT_RESULTS):
+            self.skipTest("Server doesn't support BULK_UNIT_RESULTS (MariaDB < 11.5)")
+        
         cursor = self.conn.cursor()
         
         data = [(10, 'test10'), (11, 'test11'), (12, 'test12')]

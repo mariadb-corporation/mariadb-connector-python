@@ -113,7 +113,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
 
         try:
             # Use provided buffered parameter or fall back to cursor default
-            effective_buffered = buffered if buffered is not None else self._buffered
+            if buffered is not None:
+                self._buffered = buffered
 
             if data:
                 if isinstance(data, (list, tuple)):
@@ -125,21 +126,21 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 else:
                     raise ProgrammingError(f"wrong parameter type")
 
-                if self._force_binary and not isinstance(parameters, dict):
+                if not isinstance(parameters, dict) and (self._force_binary or self._check_text_types(data)):
 
                     from .impl.message.client.execute_packet import ExecutePacket
                     execute_packet = ExecutePacket(None, parameters, sql)
-                    self._completions = self.connection._client.execute_stmt(sql, [execute_packet], self._config, effective_buffered)[0]
-
+                    self._completions = self.connection._client.execute_stmt(sql, [execute_packet], self._config, self._buffered)[0]
                 else:
+                    # Named parameters use text protocol with substitution
                     no_backslash_escapes = (self.connection._client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
                     query_packet = QueryPacket.from_substitute(sql, parameters, no_backslash_escapes)
-                    self._completions = self.connection._client.execute(query_packet, self._config, effective_buffered)
+                    self._completions = self.connection._client.execute(query_packet, self._config, self._buffered)
 
             else:
                 # Use simple query packet
                 query_packet = QueryPacket.from_sql(sql)
-                self._completions = self.connection._client.execute(query_packet, self._config, effective_buffered)
+                self._completions = self.connection._client.execute(query_packet, self._config, self._buffered)
             
             # Process the completions to extract result data
             self._completion_index = 0
@@ -198,7 +199,11 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             # Check if server supports COM_STMT_BULK_EXECUTE
             from mariadb_shared import constants
             context = self.connection._client.context
-            use_bulk = (context.has_capability(constants.CAPABILITY.BULK_OPERATIONS) and 
+            
+            # Use BULK_UNIT_RESULTS capability (MariaDB 11.5+) instead of BULK_OPERATIONS
+            # to avoid MariaDB 10.6-11.4 bug where bulk execute with cached statements
+            # returns error packets with errno=0 and empty messages
+            use_bulk = (context.has_capability(constants.CAPABILITY.BULK_UNIT_RESULTS) and 
                        len(data) > 0 and len(data[0]) > 0)
             
             # Use binary protocol with normalized SQL (always qmark now)

@@ -6,6 +6,7 @@ Base cursor implementation with common functionality for sync and async cursors
 """
 
 import copy
+import datetime
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING, TypeVar, Generic
@@ -49,6 +50,26 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         TResult: The result type (SyncResult or AsyncResult)
         TConnection: The connection type (SyncConnection or AsyncConnection)
     """
+    
+    @staticmethod
+    def _check_text_types(data: Union[list, tuple]) -> bool:
+        """
+        Check if parameters contain types that require binary protocol.
+        
+        Returns True if any parameter is:
+        - bytes or bytearray
+        - datetime.date, datetime.datetime, or datetime.time
+        
+        This matches the C extension behavior to automatically switch
+        to binary protocol for these types to preserve type information.
+        
+        Note: Only called for positional parameters (list/tuple), not dict.
+        """
+        for value in data:
+            if isinstance(value, (bytes, bytearray, datetime.date, datetime.datetime, datetime.time)):
+                return True
+        
+        return False
     
     __slots__ = (
         'connection',
@@ -116,6 +137,11 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     def affected_rows(self) -> int:
         """Alias for rowcount"""
         return int(self.rowcount)
+
+    @property
+    def buffered(self) -> bool:
+        """Return True if cursor is buffered"""
+        return self._buffered
 
     @property
     def closed(self) -> bool:

@@ -69,6 +69,9 @@ class Configuration:
     # Pipeline option
     pipeline: bool = True  # Enable pipelining for prepared statements
     
+    # Client capabilities (for C extension compatibility)
+    client_flag: int = 0  # Additional client capability flags to set
+    
     # Additional options
     non_mapped_options: Dict[str, Any] = field(default_factory=dict)
     
@@ -208,6 +211,10 @@ class Configuration:
         if 'pipeline' in params:
             config.pipeline = bool(params['pipeline'])
         
+        # Client capabilities
+        if 'client_flag' in params:
+            config.client_flag = int(params['client_flag'])
+        
         # Store any unmapped options
         valid_params = {
             'host', 'hostname', 'server', 'user', 'username', 'password', 'passwd',
@@ -220,7 +227,7 @@ class Configuration:
             'compress', 'local_infile',
             'query_timeout', 'max_allowed_packet',
             'character_encoding', 'charset', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object',
-            'cache_prep_stmts', 'prep_stmt_cache_size', 'pipeline'
+            'cache_prep_stmts', 'prep_stmt_cache_size', 'pipeline', 'client_flag'
         }
         
         for key, value in params.items():

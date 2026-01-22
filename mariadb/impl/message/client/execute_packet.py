@@ -18,11 +18,11 @@ _STRUCT_d = struct.Struct('<d')  # double for float
 _STRUCT_BB = struct.Struct('<BB')  # two unsigned bytes for type info
 
 # Composite struct formats for datetime/date/time (pack multiple fields at once)
-_STRUCT_DATETIME_WITH_MICRO = struct.Struct('<BBBBBBBI')  # length + year(H) + 5 bytes + microsecond(I)
-_STRUCT_DATETIME_NO_MICRO = struct.Struct('<BHBBBBB')    # length + year(H) + 5 bytes
-_STRUCT_DATE = struct.Struct('<BHBB')                     # length + year(H) + month + day
-_STRUCT_TIME_WITH_MICRO = struct.Struct('<BBBIBBBI')     # length + negative + days(I) + 3 bytes + microsecond(I)
-_STRUCT_TIME_NO_MICRO = struct.Struct('<BBIBBB')         # length + negative + days(I) + 3 bytes
+_STRUCT_DATETIME_WITH_MICRO = struct.Struct('<BHBBBBBI')  # length(B) + year(H) + month(B) + day(B) + hour(B) + minute(B) + second(B) + microsecond(I)
+_STRUCT_DATETIME_NO_MICRO = struct.Struct('<BHBBBBB')    # length(B) + year(H) + month(B) + day(B) + hour(B) + minute(B) + second(B)
+_STRUCT_DATE = struct.Struct('<BHBB')                     # length(B) + year(H) + month(B) + day(B)
+_STRUCT_TIME_WITH_MICRO = struct.Struct('<BBIBBBI')      # length(B) + negative(B) + days(I) + hour(B) + minute(B) + second(B) + microsecond(I)
+_STRUCT_TIME_NO_MICRO = struct.Struct('<BBIBBB')         # length(B) + negative(B) + days(I) + hour(B) + minute(B) + second(B)
 
 try:
     import numpy

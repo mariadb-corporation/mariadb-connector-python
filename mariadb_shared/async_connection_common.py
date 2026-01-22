@@ -158,6 +158,11 @@ class AsyncConnectionCommon(ABC):
         Rollback the current transaction
         
         Discards all changes since the last commit/rollback.
+        Also releases any locks held by the connection.
+        
+        Note: ROLLBACK is always executed regardless of transaction state
+        because it's needed to release locks (e.g., from SELECT FOR UPDATE)
+        and is idempotent (safe to call even when not in a transaction).
         
         Raises:
             ProgrammingError: If called during XA transaction
@@ -165,9 +170,9 @@ class AsyncConnectionCommon(ABC):
         self._check_closed()
         if self._xid is not None:
             raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
-        if (self.server_status & STATUS.IN_TRANS) > 0:
-            async with self.cursor() as cursor:
-                await cursor.execute("ROLLBACK")
+        # Always execute ROLLBACK - it's needed to release locks and is idempotent
+        async with self.cursor() as cursor:
+            await cursor.execute("ROLLBACK")
 
     async def begin(self) -> None:
         """

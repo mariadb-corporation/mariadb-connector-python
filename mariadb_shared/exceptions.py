@@ -79,9 +79,11 @@ class Error(Exception):
     
     def __str__(self):
         """String representation of error"""
+        # Handle empty error messages from database
+        msg = self._msg if self._msg else "Unknown database error"
         if self._errno:
-            return f"{self._msg} (errno: {self._errno}, sqlstate: {self._sqlstate})"
-        return self._msg
+            return f"{msg} (errno: {self._errno}, sqlstate: {self._sqlstate})"
+        return msg
 
 class InterfaceError(Error):
     """

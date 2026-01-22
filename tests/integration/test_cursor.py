@@ -549,6 +549,23 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[0], 2)
         del cursor
 
+    def test_buffered_property(self):
+        """Test buffered property getter returns correct value"""
+        # Test buffered=True
+        cursor_buffered = self.connection.cursor(buffered=True)
+        self.assertTrue(cursor_buffered.buffered, "buffered property should return True when cursor created with buffered=True")
+        cursor_buffered.close()
+        
+        # Test buffered=False
+        cursor_unbuffered = self.connection.cursor(buffered=False)
+        self.assertFalse(cursor_unbuffered.buffered, "buffered property should return False when cursor created with buffered=False")
+        cursor_unbuffered.close()
+        
+        # Test default (should be True based on implementation)
+        cursor_default = self.connection.cursor()
+        self.assertTrue(cursor_default.buffered, "buffered property should return True by default")
+        cursor_default.close()
+
     def test_ext_field_types(self):
         x = self.connection.server_version_info
         if x < (10, 10, 0) or is_mysql():

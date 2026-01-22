@@ -443,8 +443,9 @@ class ConnectionPool:
                     self._all_connections.remove(pool_conn)
             else:
                 # Return to free pool and notify waiters
-                self._free.append(pool_conn)
-                self._cond.notify()
+                if pool_conn not in self._free:
+                    self._free.append(pool_conn)
+                    self._cond.notify()
                         
     @contextmanager
     def connection(self, timeout: Optional[float] = None):
@@ -770,8 +771,9 @@ class AsyncConnectionPool:
                     self._all_connections.remove(pool_conn)
             else:
                 # Return to free pool and notify waiters
-                self._free.append(pool_conn)
-                self._cond.notify()
+                if pool_conn not in self._free:
+                    self._free.append(pool_conn)
+                    self._cond.notify()
                         
     @asynccontextmanager
     async def connection(self, timeout: Optional[float] = None):

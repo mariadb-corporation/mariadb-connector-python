@@ -488,7 +488,7 @@ class SyncClient(BaseClient):
         """Execute command and return list of completion results"""
         with self.lock:
             if self.closed:
-                raise OperationalError("Connection is closed")
+                raise OperationalError("Invalid connection or not connected")
             
             try:
                 self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
@@ -503,7 +503,7 @@ class SyncClient(BaseClient):
         """Execute SQL with prepared statements (with caching), handles prepare if needed"""
         with self.lock:
             if self.closed:
-                raise OperationalError("Connection is closed")
+                raise OperationalError("Invalid connection or not connected")
 
             try:
                 key = (self.context.database, sql)

@@ -504,6 +504,11 @@ class BaseClient(ABC):
         if self.configuration.ssl:
             capabilities |= constants.CAPABILITY.SSL
         
+        # Apply additional client_flag from configuration (for C extension compatibility)
+        # This allows SQLAlchemy to set FOUND_ROWS and other flags
+        if self.configuration.client_flag:
+            capabilities |= self.configuration.client_flag
+        
         # Only use capabilities that the server supports
         return capabilities & self.context.server_capabilities
     
