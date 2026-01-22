@@ -1779,6 +1779,18 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0], 123)
             cursor.close()
 
+    def test_conpy334(self):
+        with create_connection() as connection:
+            cursor = connection.cursor()
+            placeholder = 'some "quoted" text'
+            cursor.execute("""SELECT LOWER(CONVERT(TRIM(BOTH '"' FROM CONVERT('Some "quoted" text', CHAR)) USING utf8mb4)) LIKE LOWER(?)""", (placeholder,))
+            row= cursor.fetchone()
+            self.assertEqual(row[0], 1)
+            cursor.execute("""SELECT LOWER(CONVERT /* we have a double quote (") inside comment */ (TRIM(BOTH '"' FROM CONVERT('Some "quoted" text', CHAR)) USING utf8mb4)) LIKE LOWER(?)""", (placeholder,))
+            row= cursor.fetchone()
+            self.assertEqual(row[0], 1)
+            cursor.close()
+
     def test_conpy291(self):
         if is_mysql:
             self.skipTest("Skip (MySQL doesn't support batch/indicators)")

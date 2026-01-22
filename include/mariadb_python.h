@@ -221,10 +221,17 @@ typedef struct st_ext_field_type {
   MARIADB_CONST_STRING str;
 } Mrdb_ExtFieldType;
 
+typedef enum {
+    LIT_NONE = 0,
+    LIT_SINGLE_QUOTE,
+    LIT_DOUBLE_QUOTE,
+    LIT_BACKTICK
+} enumLiteral;
+
 typedef struct st_parser {
     MrdbString statement;
     MrdbString *keys;
-    uint8_t in_literal[3];
+    enumLiteral in_literal;
     uint8_t in_comment;
     uint8_t in_values;
     uint8_t is_insert;
