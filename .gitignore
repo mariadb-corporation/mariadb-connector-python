@@ -61,3 +61,6 @@ RelWithDebInfo
 mariadb/release_info.py
 mariadb-c/src/release_info.py
 mariadb_pool/src/release_info.py
+
+sqlalchemy/
+.test_venv/
