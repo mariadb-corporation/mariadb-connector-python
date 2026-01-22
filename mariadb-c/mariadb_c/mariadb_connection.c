@@ -492,6 +492,18 @@ static int MrdbConnection_traverse(
 #if MARIADB_PACKAGE_VERSION_ID > 30301
     Py_VISIT(self->status_callback);
 #endif
+    Py_VISIT(self->dsn);
+    return 0;
+}
+
+static int MrdbConnection_tpclear(MrdbConnection *self)
+{
+    Py_CLEAR(self->last_executed_stmt);
+    Py_CLEAR(self->converter);
+#if MARIADB_PACKAGE_VERSION_ID > 30301
+    Py_CLEAR(self->status_callback);
+#endif
+    Py_CLEAR(self->dsn);
     return 0;
 }
 
@@ -527,6 +539,8 @@ static void MrdbConnection_dealloc(PyObject *obj)
 {
     MrdbConnection *self = (MrdbConnection *)obj;
 
+    PyObject_GC_UnTrack(self);
+    MrdbConnection_tpclear(self);
     if (self && self->mysql)
         ma_connection_close(self);
     Py_TYPE(self)->tp_free((PyObject *)self);
@@ -541,6 +555,7 @@ PyTypeObject MrdbConnection_Type = {
     .tp_doc = connection__doc__,
     .tp_new = PyType_GenericNew,
     .tp_traverse = (traverseproc)MrdbConnection_traverse,
+    .tp_clear = (inquiry)MrdbConnection_tpclear,
     .tp_methods = (struct PyMethodDef *)MrdbConnection_Methods,
     .tp_members = (struct PyMemberDef *)MrdbConnection_Members,
     .tp_getset = MrdbConnection_sets,

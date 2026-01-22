@@ -320,6 +320,24 @@ static int MrdbCursor_traverse(
 {
     Py_VISIT(self->connection);
     Py_VISIT(self->data);
+    Py_VISIT(self->sequence_type);
+    Py_VISIT(self->parseinfo.paramlist);
+    Py_VISIT(self->parseinfo.keys);
+    
+    // Visit all values in the values array
+    if (self->values && self->field_count > 0) {
+        for (uint32_t i = 0; i < self->field_count; i++) {
+            Py_VISIT(self->values[i]);
+        }
+    }
+    
+    // Visit all PyObject values in the MrdbParamValue array
+    if (self->value && self->parseinfo.paramcount > 0) {
+        for (uint32_t i = 0; i < self->parseinfo.paramcount; i++) {
+            Py_VISIT(self->value[i].value);
+        }
+    }
+    
     return 0;
 }
 
@@ -329,6 +347,27 @@ static int MrdbCursor_tpclear(MrdbCursor *self)
         Py_CLEAR(self->connection);
     if (self->data)
         Py_CLEAR(self->data);
+    if (self->sequence_type)
+        Py_CLEAR(self->sequence_type);
+    if (self->parseinfo.paramlist)
+        Py_CLEAR(self->parseinfo.paramlist);
+    if (self->parseinfo.keys)
+        Py_CLEAR(self->parseinfo.keys);
+    
+    // Clear all values in the values array
+    if (self->values && self->field_count > 0) {
+        for (uint32_t i = 0; i < self->field_count; i++) {
+            Py_CLEAR(self->values[i]);
+        }
+    }
+    
+    // Clear all PyObject values in the MrdbParamValue array
+    if (self->value && self->parseinfo.paramcount > 0) {
+        for (uint32_t i = 0; i < self->parseinfo.paramcount; i++) {
+            Py_CLEAR(self->value[i].value);
+        }
+    }
+    
     return 0;
 }
 
@@ -347,6 +386,8 @@ static PyObject *MrdbCursor_repr(MrdbCursor *self)
 static void MrdbCursor_dealloc(PyObject *obj)
 {
   MrdbCursor *self = (MrdbCursor *)obj;
+  PyObject_GC_UnTrack(self);
+  MrdbCursor_tpclear(self);
   ma_cursor_close(self);
   Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -1325,25 +1366,25 @@ MrdbCursor_check_text_types(MrdbCursor *self)
 {
   PyDateTime_IMPORT;
   Py_ssize_t ofs= 0;
+  Py_ssize_t i;
+  PyObject *obj;
 
-  if (!self || !self->data || !self->parseinfo.paramcount)
-  {
+  if (!self->data)
     Py_RETURN_NONE;
-  }
 
-  for (uint32_t i= 0; i < self->parseinfo.paramcount; i++)
+  if (PyDict_Check(self->data))
+    Py_RETURN_NONE;
+
+  for (i=0; i < PySequence_Size(self->data); i++)
   {
-    PyObject *obj;
-
-    if (PyDict_Check(self->data))
-    {
-      PyDict_Next(self->data, &ofs, NULL, &obj);
-    }    
-    else 
+    if (PyTuple_Check(self->data))
+       obj= PyTuple_GetItem(self->data, i);
+    else
        obj= ListOrTuple_GetItem(self->data, i);
     if (PyBytes_Check(obj) ||
         PyByteArray_Check(obj) ||
-        PyDate_Check(obj))
+        PyDate_Check(obj) ||
+        PyTime_Check(obj))
       Py_RETURN_TRUE;
   }
   Py_RETURN_NONE;
