@@ -44,7 +44,7 @@ jobs:
         name: build matrix
         uses: mariadb-corporation/connector-ci-build-matrix@main
         with:
-          additional-matrix: '[{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.10"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.11"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"},{"name": "MariaDB 11.4", "os": "windows-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"}, {"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "pypy3.11", "continue-on-error": true}]'
+          additional-matrix: '[{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.10"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.11"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"},{"name": "MariaDB 11.4 - windows", "os": "windows-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"}, {"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "pypy3.11", "continue-on-error": true}]'
 
   ci-pure-python:
     name: ${{ matrix.name }} (Pure Python) ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
