@@ -53,7 +53,7 @@ jobs:
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.continue-on-error }}
+    continue-on-error: ${{ matrix.continue-on-error || false }}
     steps:
       - uses: actions/checkout@v4
 
@@ -148,7 +148,7 @@ jobs:
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.continue-on-error || contains(matrix.os, 'windows') || true}}
+    continue-on-error: ${{ matrix.continue-on-error || false }}
     steps:
       - uses: actions/checkout@v4
 
