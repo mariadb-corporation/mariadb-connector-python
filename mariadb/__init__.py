@@ -167,12 +167,6 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
         connectionclass = SyncConnection
 
     connection = connectionclass(*args, **kwargs)
-    
-    # Validate that it's a proper Connection instance
-    if not hasattr(connection, 'cursor'):
-        raise ProgrammingError(f"{connection} is not a valid mariadb Connection")
-    
-        
     return connection
 
 

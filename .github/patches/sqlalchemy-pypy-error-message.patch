@@ -1,0 +1,20 @@
+--- a/test/sql/test_resultset.py
++++ b/test/sql/test_resultset.py
+@@ -1895,13 +1895,15 @@ class CursorResultTest(fixtures.TablesTest):
+ 
+         with assertions.expect_raises(
+             TypeError,
+-            "tuple indices must be integers or slices, not str",
++            r"tuple indices must be integers or slices, not '?str'?",
+         ):
+             eq_(row["a"], "av")
+ 
+         with assertions.expect_raises_message(
+             TypeError,
+-            "tuple indices must be integers or slices, not str",
++            # PyPy formats error messages without quotes around 'str'
++            # CPython includes quotes: "not 'str'", PyPy: "not str"
++            r"tuple indices must be integers or slices, not '?str'?",
+         ):
+             eq_(row["count"], "cv")
+ 
