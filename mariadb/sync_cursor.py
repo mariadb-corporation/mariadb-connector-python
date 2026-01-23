@@ -62,10 +62,14 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 self.connection._client.prepared_statement_cache.release(self._stmt)
                 self._stmt = None
 
-            # Consume any remaining streaming results
-            if self._result is not None and self._result.streaming():
+            # Consume any remaining streaming results from this cursor
+            # Only drain if this cursor's result is the active one on the connection
+            if (self._result is not None and 
+                self._result.streaming() and 
+                self.connection._client._active_streaming_result is self._result):
                 try:
                     self._result.fetch_remaining()
+                    self.connection._client._active_streaming_result = None
                 except Exception:
                     pass  # Ignore errors during close
             
@@ -107,10 +111,6 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         if (not sql):
             raise ProgrammingError("Empty SQL statement")
 
-        # Consume any pending streaming results before executing new query
-        if self._result is not None and self._result.streaming():
-            self._result.fetch_remaining()
-
         try:
             # Use provided buffered parameter or fall back to cursor default
             if buffered is not None:
@@ -145,6 +145,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             # Process the completions to extract result data
             self._completion_index = 0
             self._current_completion = self._completions[0]
+                    
         except DatabaseError as e:
             raise e                
         except Exception as e:
@@ -169,9 +170,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         if not isinstance(sql, str):
             raise TypeError("SQL statement must be a string")
         
-        # Consume any pending streaming results before executing new query
-        if self._result is not None and self._result.streaming():
-            self._result.fetch_remaining()
+        # Draining is now handled at client level in execute()
+        # No need to do it here in cursor
 
         # Check if data is None or not an array-like type
         if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):

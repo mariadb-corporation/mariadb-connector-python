@@ -13,7 +13,7 @@ import struct
 import ipaddress
 import uuid
 from abc import ABC, abstractmethod
-from typing import List, Optional, Callable, Dict, Tuple
+from typing import List, Optional, Callable, Dict, Tuple, Any
 
 # Cached unpack_from methods for row parsing performance (avoids attribute lookup overhead)
 _unpack_H = struct.Struct('<H').unpack_from  # unsigned short (2 bytes)
@@ -97,6 +97,10 @@ class BaseClient(ABC):
         self.connect_timeout = configuration.connect_timeout
         self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
         self.auth_plugin: Optional['AuthenticationPlugin'] = None
+        
+        # Track active streaming (unbuffered) result at client level
+        # This prevents "Commands out of sync" when multiple cursors share the same connection
+        self._active_streaming_result: Optional[Any] = None
         
         # Cached payload writer for packet generation (reused to avoid allocations)
         from ..message.payload_writer import PayloadWriter
