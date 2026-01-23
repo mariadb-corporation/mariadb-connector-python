@@ -285,6 +285,35 @@ end:
 #endif
 
 static int
+MrdbConnection_init_fields(MrdbConnection *self)
+{
+    /* Initialize all fields to NULL/0 */
+    self->mysql = NULL;
+    self->open = 0;
+    self->is_buffered = 0;
+    self->is_closed = 0;
+    self->tpc_state = 0;
+    memset(self->xid, 0, sizeof(self->xid));
+    self->dsn = NULL;
+    self->host = NULL;
+    self->inuse = 0;
+    self->status = 0;
+    self->asynchronous = 0;
+    memset(&self->last_used, 0, sizeof(self->last_used));
+    self->server_info = NULL;
+    self->closed = 0;
+#if MARIADB_PACKAGE_VERSION_ID > 30301
+    self->status_callback = NULL;
+#endif
+    self->last_executed_stmt = NULL;
+    self->converter = NULL;
+    self->tls_in_use = 0;
+    self->weakreflist = NULL;
+    self->active_result_cursor = NULL;
+    return 0;
+}
+
+static int
 MrdbConnection_Initialize(MrdbConnection *self,
         PyObject *args,
         PyObject *dsnargs)
@@ -302,6 +331,9 @@ MrdbConnection_Initialize(MrdbConnection *self,
     unsigned int connect_timeout=10, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
     PyObject *status_callback= NULL;
+    
+    /* Initialize all fields first */
+    MrdbConnection_init_fields(self);
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
                 "|zzzzziziiibbzzzzzzzzzzibizzzzOzzz:connect",
@@ -335,7 +367,9 @@ MrdbConnection_Initialize(MrdbConnection *self,
                                                   "(found version %s)", mysql_get_client_info());
     }
 #else
-    self->status_callback= status_callback;
+    /* Store status_callback reference and increment refcount */
+    Py_XINCREF(status_callback);
+    self->status_callback = status_callback;
 #endif
 
     if (!(self->mysql= mysql_init(NULL)))
@@ -520,6 +554,25 @@ static PyObject *MrdbConnection_repr(MrdbConnection *self)
     return PyUnicode_FromString(cobj_repr);
 }
 
+void
+ma_connection_consume_active_result(MrdbConnection *conn, void *requesting_cursor)
+{
+    /* If there's an active unbuffered result, clear it before allowing
+     * any cursor to execute. This prevents "Commands out of sync" when
+     * multiple cursors share the same connection, or when the same cursor
+     * re-executes without finishing its previous result.
+     */
+    if (!conn || !conn->mysql)
+        return;
+
+    if (conn->active_result_cursor == NULL)
+        return;
+
+    /* Clear the active cursor's result (even if it's the same cursor re-executing) */
+    MrdbCursor_clear_result((MrdbCursor *)conn->active_result_cursor);
+    conn->active_result_cursor = NULL;
+}
+
 static void ma_connection_close(MrdbConnection *conn)
 {
     if (conn)
@@ -539,10 +592,30 @@ static void MrdbConnection_dealloc(PyObject *obj)
 {
     MrdbConnection *self = (MrdbConnection *)obj;
 
-    PyObject_GC_UnTrack(self);
-    MrdbConnection_tpclear(self);
+    /* Close MySQL connection if open */
     if (self && self->mysql)
         ma_connection_close(self);
+    
+    /* Clear all Python object references */
+    if (self->converter)
+        Py_XDECREF(self->converter);
+    self->converter = NULL;
+    
+    if (self->last_executed_stmt)
+        Py_XDECREF(self->last_executed_stmt);
+    self->last_executed_stmt = NULL;
+    
+#if MARIADB_PACKAGE_VERSION_ID > 30301
+    if (self->status_callback)
+        Py_XDECREF(self->status_callback);
+    self->status_callback = NULL;
+#endif
+    
+    if (self->dsn)
+        Py_XDECREF(self->dsn);
+    self->dsn = NULL;
+    
+    /* Free the object */
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -554,15 +627,17 @@ PyTypeObject MrdbConnection_Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
     .tp_doc = connection__doc__,
     .tp_new = PyType_GenericNew,
+    .tp_alloc = PyType_GenericAlloc,
     .tp_traverse = (traverseproc)MrdbConnection_traverse,
     .tp_clear = (inquiry)MrdbConnection_tpclear,
     .tp_methods = (struct PyMethodDef *)MrdbConnection_Methods,
     .tp_members = (struct PyMemberDef *)MrdbConnection_Members,
     .tp_getset = MrdbConnection_sets,
     .tp_init = (initproc)MrdbConnection_Initialize,
-    .tp_alloc = PyType_GenericAlloc,
     .tp_dealloc = MrdbConnection_dealloc,
-    .tp_finalize = (destructor)MrdbConnection_finalize
+    .tp_free = PyObject_GC_Del,
+    .tp_finalize = (destructor)MrdbConnection_finalize,
+    .tp_weaklistoffset = 0
 };
 
 PyObject *

@@ -266,6 +266,8 @@ typedef struct {
     PyObject *last_executed_stmt;
     PyObject *converter;
     uint8_t tls_in_use;
+    PyObject *weakreflist;
+    void *active_result_cursor;
 } MrdbConnection;
 
 typedef struct {
@@ -339,6 +341,7 @@ typedef struct {
     uint8_t closed;
     uint8_t reprepare;
     enum enum_paramstyle paramstyle;
+    PyObject *weakreflist;
 } MrdbCursor;
 
 typedef struct
@@ -388,6 +391,10 @@ mariadb_throw_exception(void *handle,
     ...);
 
 Mrdb_ExtFieldType *mariadb_extended_field_type(const MYSQL_FIELD *field);
+
+PyObject *MrdbCursor_clear_result(MrdbCursor *self);
+
+void ma_connection_consume_active_result(MrdbConnection *conn, void *requesting_cursor);
 
 PyObject *
 MrdbConnection_ping(MrdbConnection *self);

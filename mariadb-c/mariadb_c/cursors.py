@@ -67,23 +67,32 @@ class Cursor(CCursor):
         if not connection:
             raise ProgrammingError("Invalid or no connection provided")
 
-        # parse keywords
-        if kwargs:
-            rtype = kwargs.pop("named_tuple", False)
-            if rtype:
-                self._resulttype = RESULT_NAMEDTUPLE
-            else:
-                rtype = kwargs.pop("dictionary", False)
-                if rtype:
-                    self._resulttype = RESULT_DICTIONARY
-            buffered = kwargs.pop("buffered", True)
-            self.buffered = buffered
-            self._prepared = kwargs.pop("prepared", False)
-            self._force_binary = kwargs.pop("binary", False)
-            self._cursor_type = kwargs.pop("cursor_type", 0)
+        named_tuple_val = kwargs.pop("named_tuple", False)
+        dictionary_val = kwargs.pop("dictionary", False)
+        buffered_val = kwargs.pop("buffered", True)
+        prepared_val = kwargs.pop("prepared", False)
+        binary_val = kwargs.pop("binary", False)
+        cursor_type_val = kwargs.pop("cursor_type", 0)
+        
+        # Set Python wrapper attributes
+        if named_tuple_val:
+            self._resulttype = RESULT_NAMEDTUPLE
+        elif dictionary_val:
+            self._resulttype = RESULT_DICTIONARY
+        else:
+            self._resulttype = RESULT_TUPLE
+        self.buffered = buffered_val
+        self._prepared = prepared_val
+        self._force_binary = binary_val
+        self._cursor_type = cursor_type_val
 
-        # call initialization of main class
-        super().__init__(connection, **kwargs)
+        super().__init__(connection,
+                        named_tuple=named_tuple_val,
+                        dictionary=dictionary_val, 
+                        buffered=buffered_val,
+                        prepared=prepared_val,
+                        binary=binary_val,
+                        **kwargs)
 
     def check_closed(self):
         if self._thread_id != self.connection.thread_id:
@@ -403,21 +412,6 @@ class Cursor(CCursor):
             self._execute_bulk()
             self._bulk = 1
 
-    def _fetch_row(self):
-        """
-        Internal use only
-
-        fetches row and converts values, if connection has a converter.
-        """
-        if not self.buffered:
-            self.check_closed()
-
-        # if there is no result set, PEP-249 requires to raise an
-        # exception
-        if not self.field_count:
-            raise ProgrammingError("Cursor doesn't have a result set")
-        return super().fetchone()
-
     def close(self):
         """
         Closes the cursor.
@@ -425,17 +419,16 @@ class Cursor(CCursor):
         If the cursor has pending or unread results, .close() will cancel them
         so that further operations using the same connection can be executed.
 
-        The cursor will be unusable from this point forward; an Error
-        (or subclass) exception will be raised if any operation is attempted
-        with the cursor."
+        After calling .close() the cursor object becomes unusable. Any operation
+        with the cursor will raise a ProgrammingError exception.
         """
+        if self._closed:
+            return
 
         # CONPY-231: fix memory leak
         if self._data:
             del self._data
-
-        if not self.connection._closed:
-            super().close()
+        super().close()
 
         self._closed= True
 
@@ -447,11 +440,16 @@ class Cursor(CCursor):
         An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
-        if not (self.buffered and self._text):
+        if not self.buffered:
             self.check_closed()
+        elif self._closed:
+            raise ProgrammingError("Cursor cannot be used anymore (it was already closed before).")
 
-        row = self._fetch_row()
-        return row
+        # if there is no result set, PEP-249 requires to raise an exception
+        if not self.field_count:
+            raise ProgrammingError("Cursor doesn't have a result set")
+        
+        return super().fetchone()
 
     def fetchmany(self, size: int = 0):
         """
