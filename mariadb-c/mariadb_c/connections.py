@@ -56,7 +56,7 @@ class Connection(CConnection, SyncConnectionCommon):
 
         autocommit = kwargs.pop("autocommit", False)
         reconnect = kwargs.pop("reconnect", False)
-        self._converter = kwargs.pop("converter", None)
+        converter = kwargs.pop("converter", None)
         # Remove debug parameter that C extension doesn't support
         kwargs.pop("debug", None)
 
@@ -72,6 +72,11 @@ class Connection(CConnection, SyncConnectionCommon):
 
         # Initialize using parent C extension class
         super().__init__(*args, **kwargs)
+        
+        # Set converter on C extension's _converter field
+        if converter is not None:
+            self._converter = converter
+        
         self.autocommit = autocommit
         self.auto_reconnect = reconnect
 
