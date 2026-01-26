@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional, Sequence, Union
@@ -134,3 +135,70 @@ class AsyncCursorCommon(ABC):
         """
         ...
     
+    # =========================================================================
+    # Iterator Protocol
+    # =========================================================================
+    
+    def __aiter__(self) -> AsyncCursorCommon:
+        """
+        Return the cursor itself for async iteration
+        
+        Allows using the cursor in async for loops:
+            async for row in cursor:
+                process(row)
+        """
+        return self
+        
+    async def __anext__(self) -> Any:
+        """
+        Return the next row from the result set
+        
+        Raises:
+            StopAsyncIteration: When no more rows are available
+        """
+        row = await self.fetchone()
+        if row is None:
+            raise StopAsyncIteration
+        return row
+        
+    def __next__(self):
+        """
+        Sync iteration not supported for async cursor
+        
+        Raises:
+            TypeError: Always (use 'async for' instead)
+        """
+        raise TypeError("Use 'async for' with asynchronous ursor")
+
+    def __iter__(self):
+        """
+        Sync iteration not supported for async cursor
+        
+        Raises:
+            TypeError: Always (use 'async for' instead)
+        """
+        raise TypeError("Use 'async for' with asynchronous Cursor")
+
+    # =========================================================================
+    # Context Manager
+    # =========================================================================
+
+    
+    async def __aenter__(self) -> AsyncCursorCommon:
+        """Async context manager entry"""
+        return self
+        
+    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> bool:
+        """Async context manager exit"""
+        await self.close()
+        return False
+    
+    # Sync context manager methods raise error
+    def __enter__(self):
+        """Sync context manager not supported for async cursor"""
+        raise TypeError("Use 'async with' with asynchronous Cursor")
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Sync context manager not supported for async cursor"""
+        raise TypeError("Use 'async with' with asynchronous Cursor")
+            

@@ -1,6 +1,15 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+# PyPy compatibility check - prevent loading C extension async on PyPy
+import sys
+if hasattr(sys, 'pypy_version_info'):
+    raise ImportError(
+        "mariadb_c async implementation is not compatible with PyPy due to cpyext limitations. "
+        "Please use the pure Python 'mariadb' package for async operations on PyPy."
+    )
+
+import asyncio
 import datetime
 from numbers import Number
 
@@ -10,7 +19,8 @@ from mariadb_shared.exceptions import (
     ProgrammingError,
     NotSupportedError
 )
-from typing import Sequence
+from mariadb_shared.async_cursor_common import AsyncCursorCommon
+from typing import Sequence, Optional, Any, List, Tuple
 import decimal
 
 PARAMSTYLE_QMARK = 1
@@ -36,13 +46,29 @@ SQL_OTHER = 255
 
 ROWS_EOF = -1
 
+# Wait status flags for non-blocking operations
+MYSQL_WAIT_READ = 1
+MYSQL_WAIT_WRITE = 2
+MYSQL_WAIT_EXCEPT = 4
+MYSQL_WAIT_TIMEOUT = 8
 
 # Import the C cursor base class
 from mariadb_c._mariadb import cursor as CCursor
-class Cursor(CCursor):
+class AsyncCursor(CCursor, AsyncCursorCommon):
     """
-    MariaDB Connector/Python Cursor Object
+    MariaDB Connector/Python Async Cursor Object
     """
+    
+    @property
+    def buffered(self):
+        """Returns the user's buffered preference (not the C cursor's internal state)"""
+        return self._user_buffered
+    
+    @buffered.setter
+    def buffered(self, value):
+        """Set the user's buffered preference"""
+        self._user_buffered = value
+    
     def __init__(self, connection, **kwargs):
         """
         initialization
@@ -58,15 +84,17 @@ class Cursor(CCursor):
         self._prev_stmt = None
         self._force_binary = None
         self._rowcount = 0
-        self.buffered = True
         self._parseinfo = None
         self._data = None
         self._thread_id = connection.thread_id
         self._closed= None
+        self._buffered_rows = None  # For buffered cursors: list of fetched rows
+        self._row_index = 0  # Current position in buffered rows
 
         if not connection:
             raise ProgrammingError("Invalid or no connection provided")
 
+        # Extract parameters (same pattern as sync cursor)
         named_tuple_val = kwargs.pop("named_tuple", False)
         dictionary_val = kwargs.pop("dictionary", False)
         buffered_val = kwargs.pop("buffered", True)
@@ -81,25 +109,51 @@ class Cursor(CCursor):
             self._resulttype = RESULT_DICTIONARY
         else:
             self._resulttype = RESULT_TUPLE
-        self.buffered = buffered_val
         self._prepared = prepared_val
         self._force_binary = binary_val
         self._cursor_type = cursor_type_val
-
+        
+        # Store the user's buffered preference
+        self._user_buffered = buffered_val
+        
+        # Call initialization of C extension cursor
+        # IMPORTANT: Always pass buffered=False to C cursor - we handle buffering in Python
         super().__init__(connection,
                         named_tuple=named_tuple_val,
                         dictionary=dictionary_val, 
-                        buffered=buffered_val,
+                        buffered=False,  # Async always uses unbuffered C cursor
                         prepared=prepared_val,
                         binary=binary_val,
                         **kwargs)
 
     def check_closed(self):
-        if self._thread_id != self.connection.thread_id:
-            raise ProgrammingError(f"Cursor cannot be used anymore (the connection aborted and reconnected).")
-        if self._closed:
+        # Skip thread_id check if auto_reconnect is enabled, since the connection
+        # may have reconnected and thread_id will be updated on next execute()
+        if not self.connection.auto_reconnect:
+            if self._thread_id != self.connection.thread_id:
+                raise ProgrammingError(f"Cursor cannot be used anymore (the connection aborted and reconnected).")
+        # Check both Python-level _closed and C cursor's closed attribute
+        if self._closed or super(AsyncCursor, self).closed:
             raise ProgrammingError("Cursor cannot be used anymore (it was already closed before).")
         self._connection._check_closed()
+    
+    @property
+    def rownumber(self):
+        """Return the current row number (0-indexed position)"""
+        # Return None if there's no result set
+        if self.field_count == 0:
+            return None
+        
+        # For buffered cursors, return current index
+        if self._user_buffered and self._buffered_rows is not None:
+            return self._row_index
+        
+        # For unbuffered cursors or before first fetch, return None
+        if self._buffered_rows is None:
+            return None
+            
+        # Otherwise return the current row index
+        return self._row_index
 
     def _substitute_parameters(self):
         """
@@ -201,7 +255,7 @@ class Cursor(CCursor):
                 if isinstance(val, float) or isinstance(val, decimal.Decimal):
                     self._check_decimal_parameter(val)
 
-    def callproc(self, sp: str, data: Sequence = ()):
+    async def callproc(self, sp: str, data: Sequence = ()):
         """
         Executes a stored procedure sp. The data sequence must contain an
         entry for each parameter the procedure expects.
@@ -227,7 +281,7 @@ class Cursor(CCursor):
             params = ("?," * len(data))[:-1]
         statement = "CALL %s(%s)" % (sp, params)
         self._rowcount = 0
-        self.execute(statement, data)
+        await self.execute(statement, data)
 
     def _parse_execute(self, statement: str, data=(), is_bulk=False):
         """
@@ -263,11 +317,23 @@ class Cursor(CCursor):
         """
 
         self.check_closed()
-        return super()._nextset()
+        
+        # Clear buffered rows from previous result set
+        self._buffered_rows = None
+        self._row_index = 0
+        
+        # Move to next result set
+        result = super()._nextset()
+        
+        # If buffered mode and there's a new result set, we need to buffer it
+        # However, nextset() is synchronous, so we can't await here
+        # The buffering will need to happen on first fetch
+        
+        return result
 
-    def execute(self, statement: str, data: Sequence = (), buffered=None):
+    async def execute(self, statement: str, data: Sequence = (), buffered=None):
         """
-        Prepare and execute a SQL statement.
+        Prepare and execute a SQL statement asynchronously.
 
         Parameters may be provided as sequence or mapping and will be bound
         to variables in the operation. Variables are specified as question
@@ -293,69 +359,122 @@ class Cursor(CCursor):
         if not self._prepared:
             self._reset()
 
+        # Clear buffered rows from previous execute
+        self._buffered_rows = None
+        self._row_index = 0
+
         self.connection._last_executed_statement = statement
 
         # Parse statement
         do_parse = True
         self._rowcount = 0
 
+        # Update Python-level buffering flag if specified
+        # Note: C extension stays in unbuffered mode (set in __init__)
         if buffered is not None:
-            self.buffered = buffered
+            self._user_buffered = buffered
 
-        # clear pending result sets
-        if self.field_count:
-            self._clear_result()
+        # Consume any remaining rows from other cursors to avoid "Commands out of sync"
+        await self._consume_active_result()
+        
+        # Mark this cursor as the active one on the connection ONLY if unbuffered
+        if not self._user_buffered:
+            self.connection._active_async_cursor = self
 
-        # if we have a prepared cursor, we have to set statement
-        # to previous statement and don't need to parse
         if self._prepared and self.statement:
             statement = self.statement
             do_parse = False
 
-        # parse statement and check param style
         if do_parse:
             self._parse_execute(statement, (data))
 
         self._description = None
 
-        # CONPY-218: Allow None as replacement for empty tuple
         data = data or ()
 
         if len(data):
             self._data = data
         else:
             self._data = None
-            # If statement doesn't contain parameters we force to run in text
-            # mode, unless a server side cursor or stored procedure will be
-            # executed.
             if self._command != SQL_CALL and self._cursor_type == 0:
                 self._text = True
 
         if self._force_binary:
             self._text = False
 
-        # if one of the provided parameters has byte or datetime value,
-        # we don't use text protocol
         if data and self._check_text_types() == True:
             self._text = False
 
         if self._text:
-            # in text mode we need to substitute parameters
-            # and store transformed statement
             if (self.paramcount > 0):
                 self._transformed_statement = self._substitute_parameters()
             else:
                 self._transformed_statement = self.statement
-            self._sync_execute_text(self._transformed_statement)
-            self._sync_readresponse()
+            await self._execute_text_async(self._transformed_statement)
         else:
             self._data = data
-            self._execute_binary()
+            await self._execute_binary_async()
 
         self._initresult()
         self._bulk = 0
+        
+        if self._user_buffered and self.field_count > 0:
+            await self._buffer_all_rows()
+    
+    async def _buffer_all_rows(self):
+        """Fetch all rows into memory for buffered cursor"""
+        self._buffered_rows = []
+        self._row_index = 0
+        
+        while True:
+            row = await self._fetch_row()
+            if row is None:
+                break
+            self._buffered_rows.append(row)
+        
+        # Set rowcount to the number of fetched rows
+        self._rowcount = len(self._buffered_rows)
+    
+    async def _execute_text_async(self, statement: str):
+        """Execute text query using async non-blocking API"""
+        # Start non-blocking query execution
+        wait_status = self.connection._async_real_query_start(statement)
+        
+        # Wait for query to complete
+        while wait_status:
+            actual_status = await self.connection._wait_for_status(wait_status)
+            wait_status = self.connection._async_real_query_cont(actual_status)
+        
+        # Set field_count from connection so _initresult() can work properly
+        self._set_field_count_from_connection()
+        
+        # Ensure parseinfo.is_text is set to 1 for text protocol
+        # This is needed so Mrdb_GetFieldInfo() knows to call mysql_use_result()
+        self._text = True
 
-    def executemany(self, statement, parameters):
+    async def _execute_binary_async(self):
+        """Execute binary query using async prepared statement protocol
+        
+        LIMITATION: mysql_stmt_prepare() is synchronous (no async version in MariaDB C API).
+        This means statement preparation will block the event loop briefly.
+        
+        However, statement execution and fetching are fully async, which is where
+        most of the network I/O happens.
+        """
+        # Prepare statement (synchronous - blocks event loop, but typically fast)
+        # This includes stmt init, parameter binding, and mysql_stmt_prepare()
+        self._prepare_stmt_only()
+        
+        # Execute statement asynchronously (network I/O)
+        wait_status = self._async_stmt_execute_start()
+        
+        while wait_status:
+            actual_status = await self.connection._wait_for_status(wait_status)
+            wait_status = self._async_stmt_execute_cont(actual_status)
+        
+        # Field count is already set by the C extension after stmt execution
+
+    async def executemany(self, statement, parameters):
         """
         Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE
         statement) and execute it against all parameter found in sequence.
@@ -374,6 +493,10 @@ class Cursor(CCursor):
 
         self.check_closed()
         self._reset()
+        
+        # Reset buffered cursor state
+        self._buffered_rows = None
+        self._row_index = 0
 
         # Check if parameters is None or not an array-like type
         if parameters is None or not hasattr(parameters, '__iter__') or isinstance(parameters, (str, bytes)):
@@ -381,9 +504,12 @@ class Cursor(CCursor):
 
         self.connection._last_executed_statement = statement
 
-        # clear pending results
-        if self.field_count:
-            self._clear_result()
+        # Consume any remaining rows from other cursors to avoid "Commands out of sync"
+        await self._consume_active_result()
+        
+        # Mark this cursor as the active one on the connection ONLY if unbuffered
+        if not self._user_buffered:
+            self.connection._active_async_cursor = self
 
         # If parameters is an empty list/tuple, return early with rowcount=0
         if not len(parameters):
@@ -395,14 +521,36 @@ class Cursor(CCursor):
         # by looping
         # TODO: insert/replace statements are not optimized yet
         #       rowcount updating
+        
+        # Check if all parameter sets are empty (no parameters)
+        # If so, use non-bulk execution to avoid parameter binding errors
+        has_parameters = any(len(row) > 0 if hasattr(row, '__len__') else True for row in parameters)
 
         if not (self.connection.extended_server_capabilities &
-                (CAPABILITY.BULK_OPERATIONS >> 32)):
+                (CAPABILITY.BULK_OPERATIONS >> 32)) or not has_parameters:
             count = 0
-            for row in parameters:
-                self.execute(statement, row)
+            accumulated_results = []
+            
+            for i, row in enumerate(parameters):
+                await self.execute(statement, row)
                 count += self.rowcount
+                
+                # If this statement has a RETURNING clause, accumulate buffered results
+                # BEFORE the next execute() clears them
+                if self.field_count > 0 and self._buffered_rows is not None:
+                    accumulated_results.extend(self._buffered_rows)
+            
             self._rowcount = count
+            
+            # If we accumulated results from RETURNING, restore them
+            if accumulated_results:
+                self._buffered_rows = accumulated_results
+                self._row_index = 0
+                self._user_buffered = True
+            else:
+                # No results accumulated - this is expected for non-RETURNING statements
+                # but for RETURNING statements, this indicates an issue
+                pass
         else:
             # parse statement
             self._parse_execute(statement, parameters[0], is_bulk=True)
@@ -412,27 +560,93 @@ class Cursor(CCursor):
             self._execute_bulk()
             self._bulk = 1
 
-    def close(self):
+    async def _consume_active_result(self):
+        """
+        Consume any remaining rows from the active cursor on this connection.
+        
+        This prevents "Commands out of sync" errors when executing a new query
+        while there are still pending results. This handles both cases:
+        - Another cursor has pending results on this connection
+        - This same cursor is re-executing before finishing previous results
+        """
+        if self.connection._active_async_cursor is not None:
+            active_cursor = self.connection._active_async_cursor
+            try:
+                if (not active_cursor._closed and 
+                    active_cursor.field_count > 0):
+                    # Drain all remaining rows asynchronously
+                    try:
+                        while True:
+                            row = await active_cursor._fetch_row()
+                            if row is None:
+                                break
+                    except:
+                        pass
+            except:
+                pass
+            # Clear using C extension's field (with proper reference counting)
+            self.connection._active_async_cursor = None
+
+    async def _fetch_row(self):
+        """
+        Internal use only
+
+        fetches row and converts values, if connection has a converter.
+        Uses cursor-level fetch_row_start/cont for text protocol (reuses field_fetch_fromtext).
+        Uses stmt_fetch_start/cont for binary protocol (prepared statements).
+        """
+        if not self.buffered and not self.connection.auto_reconnect:
+            self.check_closed()
+
+        if not self.field_count:
+            raise ProgrammingError("Cursor doesn't have a result set")
+        
+        if not self._text:
+            result = self._async_stmt_fetch_start()
+            
+            while isinstance(result, int) and result != 0:
+                actual_status = await self.connection._wait_for_status(result)
+                result = self._async_stmt_fetch_cont(actual_status)
+            
+            if result is None and self.connection._active_async_cursor is self:
+                self.connection._active_async_cursor = None
+            return result
+        else:
+            result = self._async_fetch_row_start()
+            
+            while isinstance(result, int) and result != 0:
+                actual_status = await self.connection._wait_for_status(result)
+                result = self._async_fetch_row_cont(actual_status)
+            
+            if result is None and self.connection._active_async_cursor is self:
+                self.connection._active_async_cursor = None
+            return result
+
+    async def close(self):
         """
         Closes the cursor.
 
         If the cursor has pending or unread results, .close() will cancel them
         so that further operations using the same connection can be executed.
 
-        After calling .close() the cursor object becomes unusable. Any operation
-        with the cursor will raise a ProgrammingError exception.
+        The cursor will be unusable from this point forward; an Error
+        (or subclass) exception will be raised if any operation is attempted
+        with the cursor."
         """
-        if self._closed:
-            return
 
         # CONPY-231: fix memory leak
         if self._data:
             del self._data
-        super().close()
+
+        if not self.connection._closed:
+            super().close()
+            
+        if self.connection._active_async_cursor is self:
+            self.connection._active_async_cursor = None
 
         self._closed= True
 
-    def fetchone(self):
+    async def fetchone(self):
         """
         Fetch the next row of a query result set, returning a single sequence,
         or None if no more data is available.
@@ -440,18 +654,29 @@ class Cursor(CCursor):
         An exception will be raised if the previous call to execute() didn't
         produce a result set or execute() wasn't called before.
         """
-        if not self.buffered:
+        if not (self.buffered and self._text):
             self.check_closed()
-        elif self._closed:
-            raise ProgrammingError("Cursor cannot be used anymore (it was already closed before).")
 
-        # if there is no result set, PEP-249 requires to raise an exception
-        if not self.field_count:
+        # Check if there's a result set
+        if self.field_count == 0:
             raise ProgrammingError("Cursor doesn't have a result set")
-        
-        return super().fetchone()
 
-    def fetchmany(self, size: int = 0):
+        # Lazy buffering: buffer rows if needed (e.g., after nextset())
+        if self._user_buffered and self._buffered_rows is None and self.field_count > 0:
+            await self._buffer_all_rows()
+
+        # If buffered mode, serve from buffer
+        if self._user_buffered and self._buffered_rows is not None:
+            if self._row_index < len(self._buffered_rows):
+                row = self._buffered_rows[self._row_index]
+                self._row_index += 1
+                return row
+            return None
+        
+        row = await self._fetch_row()
+        return row
+
+    async def fetchmany(self, size: int = 0):
         """
         Fetch the next set of rows of a query result, returning a sequence
         of sequences (e.g. a list of tuples). An empty sequence is returned
@@ -470,12 +695,37 @@ class Cursor(CCursor):
         if not (self.buffered and self._text):
             self.check_closed()
 
+        # Check if there's a result set
+        if self.field_count == 0:
+            raise ProgrammingError("Cursor doesn't have a result set")
+
         if size == 0:
             size = self.arraysize
 
-        return super().fetchrows(size)
+        # Lazy buffering: buffer rows if needed (e.g., after nextset())
+        if self._user_buffered and self._buffered_rows is None and self.field_count > 0:
+            await self._buffer_all_rows()
 
-    def fetchall(self):
+        # If buffered mode, serve from buffer
+        if self._user_buffered and self._buffered_rows is not None:
+            end_index = min(self._row_index + size, len(self._buffered_rows))
+            rows = self._buffered_rows[self._row_index:end_index]
+            self._row_index = end_index
+            return rows
+
+        # For unbuffered cursors, fetch rows and update rowcount cumulatively
+        rows = []
+        for _ in range(size):
+            row = await self._fetch_row()
+            if row is None:
+                break
+            rows.append(row)
+        
+        # Update rowcount cumulatively for unbuffered cursors
+        self._rowcount += len(rows)
+        return rows
+
+    async def fetchall(self):
         """
         Fetch all remaining rows of a query result, returning them as a
         sequence of sequences (e.g. a list of tuples).
@@ -486,12 +736,43 @@ class Cursor(CCursor):
 
         if not (self.buffered and self._text):
             self.check_closed()
-        return super().fetchrows(ROWS_EOF)
+        
+        # Check if there's a result set
+        if self.field_count == 0:
+            raise ProgrammingError("Cursor doesn't have a result set")
+        
+        # Lazy buffering: buffer rows if needed (e.g., after nextset())
+        if self._user_buffered and self._buffered_rows is None and self.field_count > 0:
+            await self._buffer_all_rows()
+        
+        # If buffered mode, serve remaining rows from buffer
+        if self._user_buffered and self._buffered_rows is not None:
+            rows = self._buffered_rows[self._row_index:]
+            self._row_index = len(self._buffered_rows)
+            return rows
+        
+        # For unbuffered cursors, fetch all rows and update rowcount
+        rows = []
+        while True:
+            row = await self._fetch_row()
+            if row is None:
+                break
+            rows.append(row)
+        
+        # Update rowcount for unbuffered cursors
+        self._rowcount = len(rows)
+        return rows
 
-    def __iter__(self):
-        return iter(self.fetchone, None)
+    def __aiter__(self):
+        return self
+    
+    async def __anext__(self):
+        row = await self.fetchone()
+        if row is None:
+            raise StopAsyncIteration
+        return row
 
-    def scroll(self, value: int, mode="relative"):
+    async def scroll(self, value: int, mode="relative"):
         """
         Scroll the cursor in the result set to a new position according to
         mode.
@@ -506,7 +787,7 @@ class Cursor(CCursor):
         if self.field_count == 0:
             raise ProgrammingError("Cursor doesn't have a result set")
 
-        if not self.buffered:
+        if not self._user_buffered:
             raise ProgrammingError("This method is available only "
                                            "for cursors with a buffered "
                                            "result set.")
@@ -518,20 +799,17 @@ class Cursor(CCursor):
         if value == 0 and mode == "relative":
             return
 
+        # For buffered cursors, use _row_index instead of rownumber
         if mode == "relative":
-            if self.rownumber + value < 0 or \
-               self.rownumber + value > self.rowcount:
-                raise ProgrammingError("Position value "
-                                               "is out of range.")
-            new_pos = self.rownumber + value
+            new_pos = self._row_index + value
         else:
-            if value < 0 or value >= self.rowcount:
-                raise ProgrammingError("Position value "
-                                               "is out of range.")
             new_pos = value
 
-        self._seek(new_pos)
-        self._rownumber = new_pos
+        # Validate position
+        if new_pos < 0 or new_pos > len(self._buffered_rows):
+            raise ProgrammingError("Position value is out of range.")
+
+        self._row_index = new_pos
 
     def setinputsizes(self, size: int):
         """
@@ -547,14 +825,14 @@ class Cursor(CCursor):
 
         return
 
-    def __enter__(self):
+    async def __aenter__(self):
         """Returns a copy of the cursor."""
 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Closes cursor."""
-        self.close()
+        await self.close()
 
     @property
     def rowcount(self):
@@ -570,13 +848,17 @@ class Cursor(CCursor):
         # Even if PEP-249 permits operations on a closed cursor, we don't
         # raise an exception if the cursor or the underlying connection
         # was closed (See CONPY-269), instead we will return -1
-        if not self.buffered:
-            try:
-                self.check_closed()
-            except ProgrammingError:
-                return -1
+        try:
+            self.check_closed()
+        except ProgrammingError:
+            return -1
 
-        if self._rowcount > 0:
+        # For buffered SELECT statements, return the number of buffered rows
+        if self._user_buffered and self._buffered_rows is not None:
+            return len(self._buffered_rows)
+        
+        # For executemany() aggregation, return accumulated rowcount
+        if hasattr(self, '_rowcount') and self._rowcount > 0:
             return self._rowcount
         return super().rowcount
 

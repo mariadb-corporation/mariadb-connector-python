@@ -35,7 +35,6 @@ conversions = {
     **{FIELD_TYPE.LONGLONG: long_minus},
 }
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class AsyncTestConversion(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):

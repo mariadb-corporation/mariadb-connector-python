@@ -53,6 +53,7 @@ class Connection(CConnection, SyncConnectionCommon):
         self.tpc_state = TPC_STATE.NONE
         self._xid = None
         self._pooled_connection = None  # PooledConnection wrapper for pooled connections
+        self._active_streaming_result = None  # Python-level tracking for unbuffered cursors
 
         autocommit = kwargs.pop("autocommit", False)
         reconnect = kwargs.pop("reconnect", False)
@@ -338,6 +339,19 @@ class Connection(CConnection, SyncConnectionCommon):
         elif fno != self._socket.fileno():
             self._socket = socket.socket(fileno=fno)
         return self._socket
+
+    def ping(self):
+        """
+        Check if the connection to the server is alive
+        
+        Sends a ping command to the server. If auto_reconnect is enabled
+        and the connection is lost, it will attempt to reconnect.
+        
+        Raises:
+            OperationalError: If connection is not alive and reconnect fails
+        """
+        self._check_closed()
+        return self._sync_ping()
 
     @property
     def open(self):

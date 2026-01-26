@@ -24,18 +24,27 @@ def _select_implementation() -> None:
     Select the best MariaDB implementation available.
     
     Uses MARIADB_PYTHON_CONNECTOR environment variable:
-    - 'c' or 'mariadb_c': Force C extension for sync (uses pure Python for async)
-    - 'binary' or 'mariadb_binary': Force binary wheel for sync (uses pure Python for async)
+    - 'c' or 'mariadb_c': Force C extension (tries C async, falls back to Python async)
+    - 'binary' or 'mariadb_binary': Force binary wheel (tries binary async, falls back to Python async)
     - 'python' or 'mariadb': Force pure Python for both sync and async
     - Not set: Try binary first, then C extension, fallback to pure Python
     
-    Note: C extension and binary wheel use pure Python async implementation
-    since async is not yet implemented in C/binary.
+    Both C extension and binary wheel will try their native async implementations first,
+    with graceful fallback to pure Python async if not available.
+    
+    Note: PyPy automatically uses pure Python implementation due to cpyext stack overflow
+    issues with C extensions in PyPy 3.11+.
     """
     global __impl__, sync_connection, async_connection, Cursor, SyncCursor, AsyncCursor
     
     impl = os.environ.get("MARIADB_PYTHON_CONNECTOR", "").lower()
     attempts = []
+    
+    # PyPy 3.11+ has cpyext stack overflow issues with C extension async operations
+    # Automatically use pure Python implementation on PyPy unless explicitly overridden
+    is_pypy = hasattr(sys, 'pypy_version_info')
+    if is_pypy and not impl:
+        impl = "python"
     
     def handle_error(name: str, e: Exception) -> None:
         if not impl:
@@ -51,22 +60,29 @@ def _select_implementation() -> None:
         try:
             import mariadb_c.connections
             import mariadb_c.cursors
-            # C extension for sync, but use pure Python for async (not yet implemented in C)
+            # C extension for sync
             sync_connection = mariadb_c.connections
             Cursor = mariadb_c.cursors.Cursor
             SyncCursor = mariadb_c.cursors.Cursor
             __impl__ = "c"
             
-            # Try to import pure Python async implementation
+            # Try to import C extension async implementation first
             try:
-                from . import async_connection as async_conn_module
-                from .async_cursor import AsyncCursor as PythonAsyncCursor
-                async_connection = async_conn_module
-                AsyncCursor = PythonAsyncCursor
+                import mariadb_c.async_connections
+                import mariadb_c.async_cursors
+                async_connection = mariadb_c.async_connections
+                AsyncCursor = mariadb_c.async_cursors.AsyncCursor
             except Exception:
-                # If async import fails, set to None
-                async_connection = None
-                AsyncCursor = None
+                # Fall back to pure Python async implementation
+                try:
+                    from . import async_connection as async_conn_module
+                    from .async_cursor import AsyncCursor as PythonAsyncCursor
+                    async_connection = async_conn_module
+                    AsyncCursor = PythonAsyncCursor
+                except Exception:
+                    # If both fail, set to None
+                    async_connection = None
+                    AsyncCursor = None
             return
         except Exception as e:
             handle_error("c", e)
@@ -76,22 +92,29 @@ def _select_implementation() -> None:
         try:
             import mariadb_binary.connections
             import mariadb_binary.cursors
-            # Binary wheel for sync, but use pure Python for async (not yet implemented in binary)
+            # Binary wheel for sync
             sync_connection = mariadb_binary.connections
             Cursor = mariadb_binary.cursors.Cursor
             SyncCursor = mariadb_binary.cursors.Cursor
             __impl__ = "binary"
             
-            # Try to import pure Python async implementation
+            # Try to import binary async implementation first
             try:
-                from . import async_connection as async_conn_module
-                from .async_cursor import AsyncCursor as PythonAsyncCursor
-                async_connection = async_conn_module
-                AsyncCursor = PythonAsyncCursor
+                import mariadb_binary.async_connections
+                import mariadb_binary.async_cursors
+                async_connection = mariadb_binary.async_connections
+                AsyncCursor = mariadb_binary.async_cursors.AsyncCursor
             except Exception:
-                # If async import fails, set to None
-                async_connection = None
-                AsyncCursor = None
+                # Fall back to pure Python async implementation
+                try:
+                    from . import async_connection as async_conn_module
+                    from .async_cursor import AsyncCursor as PythonAsyncCursor
+                    async_connection = async_conn_module
+                    AsyncCursor = PythonAsyncCursor
+                except Exception:
+                    # If both fail, set to None
+                    async_connection = None
+                    AsyncCursor = None
             return
         except Exception as e:
             handle_error("binary", e)

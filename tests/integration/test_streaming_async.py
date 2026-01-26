@@ -3,12 +3,11 @@
 
 import unittest
 import mariadb
-from ..base_test import is_native
+from ..base_test import is_native, is_async_native
 
 from ..conftest import get_test_config as conf
 
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
     """Test streaming (unbuffered) result sets with async cursors"""
 
@@ -164,7 +163,7 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row[0], 1)
         
         # Scroll forward 5 rows (skips rows 2-6)
-        if is_native():
+        if is_async_native():
             await cursor.scroll(5, mode='relative')
             row = await cursor.fetchone()
             self.assertEqual(row[0], 7)
@@ -189,7 +188,7 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         # Absolute mode should raise ValueError
         with self.assertRaises(mariadb.ProgrammingError) as cm:
             await cursor.scroll(5, mode='absolute')
-        if (is_native()):
+        if (is_async_native()):
             self.assertIn("Streaming cursors only support relative scroll mode", str(cm.exception))
         else:
             self.assertIn("This method is available only for cursors with a buffered result set", str(cm.exception))

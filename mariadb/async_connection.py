@@ -113,7 +113,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
             OperationalError: If close fails
         """
         if self._pooled_connection:
-            self._pooled_connection.return_to_pool()
+            await self._pooled_connection.return_to_pool()
             return
         
         if not self._closed:

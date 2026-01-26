@@ -98,9 +98,9 @@ setup(
             'mariadb_c._mariadb',
             [
                 'mariadb_c/mariadb.c',
-                'mariadb_c/mariadb_codecs.c',
                 'mariadb_c/mariadb_connection.c',
                 'mariadb_c/mariadb_cursor.c',
+                'mariadb_c/mariadb_codecs.c',
                 'mariadb_c/mariadb_exception.c',
                 'mariadb_c/mariadb_parser.c',
             ],

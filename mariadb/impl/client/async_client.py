@@ -487,6 +487,14 @@ class AsyncClient(BaseClient):
             if self.closed:
                 raise OperationalError("Invalid connection or not connected")
             
+            # Drain any active streaming result before executing new command
+            if self._active_streaming_result is not None:
+                try:
+                    await self._active_streaming_result.fetch_remaining()
+                except Exception:
+                    pass  # Ignore errors during draining
+                self._active_streaming_result = None
+            
             try:
                 await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                 return await self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet, message.get_sql())
@@ -643,6 +651,9 @@ class AsyncClient(BaseClient):
                     config,
                     row_parser
                 )
+                
+                # Register streaming result with client for tracking
+                self._active_streaming_result = streaming_result
                 
                 # Create completion with streaming result
                 completion = OkPacket(0,0,0,0,b'')

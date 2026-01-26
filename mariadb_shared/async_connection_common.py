@@ -224,6 +224,18 @@ class AsyncConnectionCommon(ABC):
             async with self.cursor() as cursor:
                 await cursor.execute(f"SET autocommit={1 if bool(value) else 0}")
 
+    async def set_auto_reconnect(self, value: bool) -> None:
+        """
+        Set auto reconnect status
+        
+        Args:
+            value: True to enable auto reconnect, False to disable
+        """
+        self._check_closed()
+        # Call the C extension's auto_reconnect setter
+        # Note: This is synchronous at the C level
+        object.__setattr__(self, 'auto_reconnect', value)
+
     @property
     def database(self) -> Optional[str]:
         """Get current database name"""

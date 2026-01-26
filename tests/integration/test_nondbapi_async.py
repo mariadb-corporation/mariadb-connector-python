@@ -6,10 +6,9 @@ import os
 import unittest
 import mariadb
 
-from ..base_test import create_connection, is_native, is_skysql, is_maxscale, is_mysql, get_host_suffix
+from ..base_test import create_connection, is_skysql, is_maxscale, is_mysql, is_native, is_async_native, get_host_suffix
 from ..conftest import get_test_config as conf
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
@@ -30,8 +29,8 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
         except (mariadb.InterfaceError, mariadb.DatabaseError):
             pass
         await new_conn.close()
-        # is native connector doesn't implement auto_reconnect
-        if not is_native():
+        # Pure Python (native) doesn't implement auto_reconnect
+        if not is_native() and not is_async_native():
             new_conn = await mariadb.AsyncConnection.connect(**conf())
             new_conn.auto_reconnect = True
             id = new_conn.connection_id
@@ -96,6 +95,8 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
     async def test_reconnect(self):
         if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
+        if is_async_native():
+            self.skipTest("Pure Python (native) doesn't support reconnect")
         new_conn = await mariadb.AsyncConnection.connect(**conf())
         conn1_id = new_conn.connection_id
         await self.connection.kill(conn1_id)
@@ -108,6 +109,8 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
     async def test_reconnect_not_closed(self):
         if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
+        if is_async_native():
+            self.skipTest("Pure Python (native) doesn't support reconnect")
         new_conn = await mariadb.AsyncConnection.connect(**conf())
         conn1_id = new_conn.connection_id
         await new_conn.reconnect()

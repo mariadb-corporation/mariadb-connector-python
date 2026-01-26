@@ -17,8 +17,24 @@ from mariadb_shared.exceptions import (
     IntegrityError,
     DataError
 )
-from .cursors import Cursor
-from .connections import Connection
+# Import implementation selector
+from . import impl_selector
+
+# Get selected implementations
+SyncConnection = impl_selector.sync_connection.Connection if impl_selector.sync_connection else None
+if impl_selector.async_connection:
+    AsyncConnection = impl_selector.async_connection.AsyncConnection
+else:
+    AsyncConnection = None
+
+SyncCursor = impl_selector.SyncCursor
+AsyncCursor = impl_selector.AsyncCursor
+__impl__ = impl_selector.__impl__
+
+# For backward compatibility
+Connection = SyncConnection
+Cursor = SyncCursor
+
 # disable for now, until tests are in place
 # from mariadb_c.pooling import *
 
@@ -99,8 +115,11 @@ client_version = version_numeric
 __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "InterfaceError", "InternalError", "NotSupportedError",
            "OperationalError", "ProgrammingError",
-           "Warning", "Connection", "__version__", "__version_type__", "__version_info__",
-           "__author__", "Cursor", "fieldinfo", "_have_asan", "connect"]
+           "Warning", "SyncConnection", "AsyncConnection", "__version__", "__version_type__", "__version_info__",
+           "__author__", "SyncCursor", "AsyncCursor", "fieldinfo", "_have_asan", 
+           "connect", "asyncConnect", "__impl__",
+           # Backward compatibility
+           "Connection", "Cursor"]
 
 
 def connect(*args, connectionclass=Connection, **kwargs):
@@ -170,6 +189,55 @@ def connect(*args, connectionclass=Connection, **kwargs):
     if not isinstance(connection, Connection):
         raise ProgrammingError("%s is not an instance of "
                                        "mariadb_c.Connection" % connection)
+    return connection
+
+
+async def asyncConnect(*args, connectionclass=None, **kwargs):
+    """
+    Creates an async MariaDB Connection object.
+    
+    This function creates and connects an async connection using the C extension's
+    non-blocking API if available.
+    
+    Parameters are the same as connect().
+    
+    Returns:
+        Connected AsyncConnection instance
+        
+    Raises:
+        ImportError: If async implementation is not available
+        
+    Example:
+        conn = await asyncConnect(host='localhost', user='root', database='test')
+        cursor = await conn.cursor()
+        await cursor.execute("SELECT 1")
+        await conn.close()
+    """
+    if AsyncConnection is None:
+        raise ImportError(
+            "Async implementation not available. "
+            "Make sure mariadb_c is compiled with async support."
+        )
+    
+    if connectionclass is None:
+        connectionclass = AsyncConnection
+    
+    # Parse URI if provided as first positional argument
+    if args and len(args) > 0:
+        first_arg = args[0]
+        if isinstance(first_arg, str):
+            from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
+            if is_connection_uri(first_arg):
+                # Parse URI into parameters
+                uri_params = parse_connection_uri(first_arg)
+                # Merge with kwargs, giving priority to kwargs
+                uri_params.update(kwargs)
+                kwargs = uri_params
+                # Remove the URI from args
+                args = args[1:]
+    
+    # Use classmethod connect() which creates and connects
+    connection = await connectionclass.connect(*args, **kwargs)
     return connection
 
 

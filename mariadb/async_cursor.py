@@ -3,6 +3,8 @@
 
 from collections import namedtuple
 from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING
+import asyncio
+import warnings
 
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
 
@@ -29,6 +31,47 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     """
     
     __slots__ = ()  # No additional attributes beyond BaseCursor
+    
+    def __del__(self):
+        """
+        Cleanup when cursor is garbage collected.
+        
+        If the cursor has unconsumed streaming results, schedule async cleanup
+        to consume remaining data and prevent connection state corruption.
+        """
+        if not self._closed and self._result is not None and self._result.streaming():
+            # Cursor has unconsumed streaming results - need to clean up
+            try:
+                # Try to get the current event loop
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Schedule async cleanup task
+                    asyncio.create_task(self._async_cleanup())
+                else:
+                    # No running loop - warn about potential connection state issue
+                    warnings.warn(
+                        "AsyncCursor with unconsumed results was deleted without proper cleanup. "
+                        "This may leave the connection in a bad state. "
+                        "Always call 'await cursor.close()' explicitly.",
+                        ResourceWarning,
+                        stacklevel=2
+                    )
+            except RuntimeError:
+                # No event loop available
+                warnings.warn(
+                    "AsyncCursor with unconsumed results was deleted outside of async context. "
+                    "This may leave the connection in a bad state.",
+                    ResourceWarning,
+                    stacklevel=2
+                )
+    
+    async def _async_cleanup(self):
+        """Internal async cleanup method called from __del__"""
+        try:
+            await self.close()
+        except Exception:
+            # Ignore errors during cleanup from __del__
+            pass
     
     # =========================================================================
     # Initialization and Lifecycle
@@ -118,9 +161,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         if (not sql):
             raise ProgrammingError("Empty SQL statement")
 
-        # Consume any pending streaming results before executing new query
-        if self._result is not None and self._result.streaming():
-            await self._result.fetch_remaining()
+        # Note: The client already handles draining active streaming results
+        # before executing new commands (see AsyncClient.execute())
 
         try:
             # Use provided buffered parameter or fall back to cursor default
@@ -154,6 +196,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             
             self._completion_index = 0
             self._current_completion = self._completions[0]
+                
         except DatabaseError as e:
             raise e                
         except Exception as e:
@@ -212,8 +255,10 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             # Use BULK_UNIT_RESULTS capability (MariaDB 11.5+) instead of BULK_OPERATIONS
             # to avoid MariaDB 10.6-11.4 bug where bulk execute with cached statements
             # returns error packets with errno=0 and empty messages
+            # Don't use bulk if all parameter sets are empty (no parameters)
+            has_parameters = len(data) > 0 and any(len(params) > 0 for params in data)
             use_bulk = (context.has_capability(constants.CAPABILITY.BULK_UNIT_RESULTS) and 
-                       len(data) > 0 and len(data[0]) > 0)
+                       has_parameters)
             
             # Use binary protocol with normalized SQL (always qmark now)
             if use_bulk or self._force_binary:
@@ -469,76 +514,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 errno=2013,
                 sql_state='HY000'
             )
-    
-    # =========================================================================
-    # Iterator Protocol
-    # =========================================================================
-    
-    def __aiter__(self) -> 'AsyncCursor':
-        """
-        Return the cursor itself for async iteration
         
-        Allows using the cursor in async for loops:
-            async for row in cursor:
-                process(row)
-        """
-        """Return async iterator for cursor"""
-        return self
-        
-    async def __anext__(self) -> Any:
-        """
-        Return the next row from the result set
-        
-        Raises:
-            StopAsyncIteration: When no more rows are available
-        """
-        row = await self.fetchone()
-        if row is None:
-            raise StopAsyncIteration
-        return row
-    
-    # Sync iterator methods raise error
-    def __iter__(self):
-        """
-        Sync iteration not supported for async cursor
-        
-        Raises:
-            TypeError: Always (use 'async for' instead)
-        """
-        raise TypeError("Use 'async for' with AsyncCursor")
-        
-    def __next__(self):
-        """
-        Sync iteration not supported for async cursor
-        
-        Raises:
-            TypeError: Always (use 'async for' instead)
-        """
-        raise TypeError("Use 'async for' with AsyncCursor")
-    
-    # =========================================================================
-    # Context Manager
-    # =========================================================================
 
-    
-    async def __aenter__(self) -> 'AsyncCursor':
-        """Async context manager entry"""
-        return self
-        
-    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> bool:
-        """Async context manager exit"""
-        await self.close()
-        return False
-    
-    # Sync context manager methods raise error
-    def __enter__(self):
-        """Sync context manager not supported for async cursor"""
-        raise TypeError("Use 'async with' with AsyncCursor")
-        
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Sync context manager not supported for async cursor"""
-        raise TypeError("Use 'async with' with AsyncCursor")
-    
     # =========================================================================
     # Result Creation
     # =========================================================================

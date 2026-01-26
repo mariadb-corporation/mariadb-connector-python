@@ -36,6 +36,7 @@ jobs:
       github.ref == 'refs/heads/1.1' ||
       startsWith(github.ref, 'refs/heads/2.0')
     outputs:
+      fail-fast: false
       matrix: ${{ steps.set-matrix.outputs.final-matrix }}
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +81,7 @@ jobs:
           allow-prereleases: true
 
       - name: Run SQLAlchemy tests (Pure Python)
-        if: ${{ matrix.db-type != 'mysql' }}
+        if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
         shell: bash
         run: |
           git clone https://github.com/sqlalchemy/sqlalchemy.git
@@ -106,6 +107,36 @@ jobs:
             DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or (TimeTest and test_select_direct))"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN"
+        env:
+          TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
+          TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
+          TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
+          TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
+          TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
+          TEST_DB: ${{ env.MYSQL_TEST_DB }}
+          MARIADB_PYTHON_CONNECTOR: python
+
+      - name: Run SQLAlchemy async tests (Pure Python)
+        if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE/sqlalchemy"
+          DIALECT_PREFIX="${{ matrix.db-type == 'mysql' && 'mysql' || 'mariadb' }}"
+          # URL-encode password to handle special characters
+          ENCODED_PASSWORD=$(python -c "import urllib.parse; print(urllib.parse.quote('$TEST_DB_PASSWORD', safe=''))")
+          DBURI="${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
+          echo "Testing async with dburi: ${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
+          # Install greenlet for async support
+          python -m pip install greenlet
+          # Run async tests using mariadb connector's native async support
+          # Exclude JSON decimal tests as they are "unexpected successes" (passing but marked as expected to fail)
+          # Exclude ServerSideCursorsTest as it requires SQLAlchemy test suite modifications we can't ship
+          # Exclude CTETest as it has teardown issues with foreign key constraints
+          DESELECT_PATTERN="Async and not ((TimeTest and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+          if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
+            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or (TimeTest and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+          fi
+          python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN" test/dialect/test_suite.py
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
           TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
@@ -217,7 +248,7 @@ jobs:
           echo "MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL_DIR/lib/mariadb/plugin" >> $env:GITHUB_ENV
 
       - name: Run SQLAlchemy tests (C extension)
-        if: ${{ matrix.db-type != 'mysql' }}
+        if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
         shell: bash
         run: |
           git clone https://github.com/sqlalchemy/sqlalchemy.git
@@ -252,6 +283,36 @@ jobs:
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
           TEST_DB: ${{ env.MYSQL_TEST_DB }}
 
+      - name: Run SQLAlchemy async tests (C extension)
+        if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
+        shell: bash
+        run: |
+          cd "$GITHUB_WORKSPACE/sqlalchemy"
+          DIALECT_PREFIX="${{ matrix.db-type == 'mysql' && 'mysql' || 'mariadb' }}"
+          # URL-encode password to handle special characters
+          ENCODED_PASSWORD=$(python -c "import urllib.parse; print(urllib.parse.quote('$TEST_DB_PASSWORD', safe=''))")
+          DBURI="${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
+          echo "Testing async with dburi: ${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
+          # Install greenlet for async support
+          python -m pip install greenlet
+          # Run async tests using mariadb_c connector's native async support
+          # Exclude JSON decimal tests as they are "unexpected successes" (passing but marked as expected to fail)
+          # Exclude ServerSideCursorsTest as it requires SQLAlchemy test suite modifications we can't ship
+          # Exclude CTETest as it has teardown issues with foreign key constraints
+          DESELECT_PATTERN="Async and not ((TimeTest and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+          if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
+            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or (TimeTest and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+          fi
+          python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN" test/dialect/test_suite.py
+        env:
+          TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
+          TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
+          TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
+          TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
+          TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
+          TEST_DB: ${{ env.MYSQL_TEST_DB }}
+          MARIADB_PYTHON_CONNECTOR: mariadb_c
+
       - name: Enable core dumps (Linux)
         if: ${{ startsWith(matrix.os, 'ubuntu') }}
         shell: bash
@@ -269,7 +330,7 @@ jobs:
         shell: bash
         run: |
           python --version
-          python -m pip install pytest pytest-cov typing_extensions
+          python -m pip install pytest pytest-cov typing_extensions cryptography
           # Install with dependencies (cryptography, packaging, etc.)
           python -m pip install .[test]
           cd mariadb-c && python -m pip install . && cd ..

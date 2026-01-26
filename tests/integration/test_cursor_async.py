@@ -14,7 +14,7 @@ import mariadb
 from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CAPABILITY as CLIENT
 from tests.integration.test_pooling_async import create_async_connection
 
-from ..base_test import is_maxscale, is_mysql, is_native
+from ..base_test import is_maxscale, is_mysql, is_native, is_async_native
 from ..conftest import get_test_config as conf
 
 server_indicator_version = 100206
@@ -23,7 +23,6 @@ server_indicator_version = 100206
 class foo(int):
     def bar(self): pass
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
@@ -52,15 +51,15 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
     async def test_conpy306(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as conn:
             cursor=conn.cursor(binary=False)
-            await cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
             try:
+                await cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
                 await cursor.fetchone()
             except Exception:
                 pass
             await cursor.close()
             cursor=conn.cursor(binary=True)
-            await cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
             try:
+                await cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
                 await cursor.fetchone()
             except Exception:
                 pass
@@ -87,7 +86,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.close()
 
     async def test_cursor_reconnect(self):
-        if is_native():
+        if is_async_native():
             self.skipTest("skip test for native not supprting deprecated reconnect")
         if is_maxscale():
             self.skipTest("skip test for maxscale")
@@ -712,7 +711,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                            params)
         await cursor.execute("SELECT * FROM test_named_tuple ORDER BY id")
         row = await cursor.fetchone()
-        if not is_native():
+        if not is_async_native():
             self.assertEqual(cursor.statement,
                          "SELECT * FROM test_named_tuple ORDER BY id")
         self.assertEqual(row.id, 1)
@@ -721,7 +720,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         del cursor
 
     async def test_laststatement(self):
-        if is_native():
+        if is_async_native():
             self.skipTest("Native doesn't support statement property")
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
@@ -1284,7 +1283,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             row = await cursor.fetchone()
             self.assertEqual(row[0], 1)
             
-            if is_native():
+            if is_async_native():
                 # would have thrown Parameter count mismatch is not passing other
                 await cursor.execute("SELECT ?, ?, ?", ('foo', 'bar', 'baz'))
             else:
@@ -1369,7 +1368,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cursor
             cursor = con.cursor()
             # not set with native, since will result in OUT or INOUT argument variable missing
-            if not is_native():
+            if not is_async_native():
                 await cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
                 self.assertEqual(cursor.sp_outparams, True)
                 row = await cursor.fetchone()
@@ -1934,7 +1933,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cursor
 
     async def test_unicode_parsing_named(self):
-        if is_native():
+        if is_async_native():
             self.skipTest("Skip (Native doesn't support named parameters)")
         async with await mariadb.AsyncConnection.connect(**conf()) as conn:
             cursor = conn.cursor()
@@ -1951,7 +1950,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cursor
 
     async def test_conpy209(self):
-        if is_native():
+        if is_async_native():
             self.skipTest("Skip (Native)")
 
         async with await mariadb.AsyncConnection.connect(**conf()) as conn:
@@ -2249,8 +2248,8 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await conn.close()
 
-        await cursor4.fetchone()
         with self.assertRaises((mariadb.ProgrammingError, RuntimeError)):
+            await cursor4.fetchone()
             await cursor5.fetchone()
 
     def test_cursor_class(self):
@@ -2545,6 +2544,40 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         async with self.connection.cursor(binary=True) as cursor:
             with self.assertRaises(mariadb.ProgrammingError):
                 await cursor.execute("CANNOT BE PREPARED WHERE 1=?", (1,))
+
+    async def test_executemany_empty_parameters(self):
+        """Test executemany with empty parameter tuples (no parameters)"""
+        cursor = self.connection.cursor()
+        
+        # Create test table with auto-increment
+        await cursor.execute("DROP TABLE IF EXISTS test_empty_params")
+        await cursor.execute("""
+            CREATE TABLE test_empty_params (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                data VARCHAR(50) DEFAULT 'default_value'
+            )
+        """)
+        
+        # Execute multiple inserts with empty parameters (should use DEFAULT values)
+        await cursor.executemany(
+            "INSERT INTO test_empty_params (id, data) VALUES (DEFAULT, DEFAULT)",
+            [(), (), ()]
+        )
+        
+        # Verify 3 rows were inserted
+        await cursor.execute("SELECT COUNT(*) FROM test_empty_params")
+        count = await cursor.fetchone()
+        self.assertEqual(count[0], 3)
+        
+        # Verify default values were used
+        await cursor.execute("SELECT data FROM test_empty_params")
+        rows = await cursor.fetchall()
+        for row in rows:
+            self.assertEqual(row[0], 'default_value')
+        
+        await cursor.execute("DROP TABLE test_empty_params")
+        await cursor.close()
+
 
 if __name__ == '__main__':
     unittest.main()

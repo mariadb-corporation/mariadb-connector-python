@@ -26,7 +26,6 @@ def create_async_connection_url():
     return f"mariadb://{user}:{password}@{host}:{port}/{database}?autocommit=True"
 
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
     """Test LOAD DATA LOCAL INFILE functionality (async)"""
 

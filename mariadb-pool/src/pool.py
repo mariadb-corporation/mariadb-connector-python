@@ -44,6 +44,7 @@ class PoolConfig:
     """
     Configuration for connection pool
     
+
     Attributes:
         min_size: Minimum number of connections in the pool
         max_size: Maximum number of connections in the pool
@@ -154,9 +155,9 @@ class AsyncPooledConnection(BasePooledConnection):
         except Exception:
             return False
     
-    def return_to_pool(self):
+    async def return_to_pool(self):
         """Return this connection to the pool"""
-        asyncio.create_task(self.pool.release(self))
+        await self.pool.release(self)
 
     async def closeSilently(self):
         try:

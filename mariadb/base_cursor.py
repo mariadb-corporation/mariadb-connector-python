@@ -381,20 +381,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         return True
 
     # =========================================================================
-    # Iterator Protocol
-    # =========================================================================
-
-    @abstractmethod
-    def __iter__(self):
-        """Return iterator for cursor"""
-        ...
-
-    @abstractmethod
-    def __next__(self) -> Any:
-        """Return next row"""
-        ...
-
-    # =========================================================================
     # Helper Methods (Data Transformation)
     # =========================================================================
     def _can_use_bulk_execute(self, parameter_sets: list) -> bool:

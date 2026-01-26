@@ -30,6 +30,26 @@ def is_maxscale():
 def is_native():
     return mariadb.__version_type__ == 'native'
 
+def is_async_native():
+    """
+    Check if pure Python implementation is being used for async operations.
+    
+    Returns True if using pure Python async (mariadb.async_connection).
+    Returns False if using C extension async (mariadb_c.async_connections).
+    
+    On PyPy 3.11+, the pure Python implementation is used for async operations
+    even when mariadb-c is installed, so we need to check the actual implementation.
+    """
+    # Check if AsyncConnection is from pure Python or C extension
+    if hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None:
+        module = mariadb.AsyncConnection.__module__
+        # Pure Python async: mariadb.async_connection
+        # C extension async: mariadb_c.async_connections
+        return 'mariadb.async_connection' in module
+    
+    # If no AsyncConnection, fall back to general is_native() check
+    return is_native()
+
 def is_mysql():
     mysql_server = 1
     conn = create_connection()

@@ -81,6 +81,9 @@ Changelog = "https://github.com/mariadb-corporation/mariadb-connector-python/blo
 [project.scripts]
 mariadb-test = "mariadb.testing:main"
 
+[project.entry-points."sqlalchemy.dialects"]
+"mariadb.mariadbconnector_async" = "mariadb.sqlalchemy_mariadb_async:dialect"
+
 [tool.setuptools]
 include-package-data = true
 

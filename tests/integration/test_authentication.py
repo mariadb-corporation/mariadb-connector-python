@@ -37,7 +37,7 @@ class TestParsecAuthentication(unittest.TestCase):
     def setUp(self):
         """Set up test case"""
         if not self.has_cryptography and is_native():
-            self.skipTest("cryptography library not available for PARSEC authentication")
+            self.skipTest("cryptography library required for pure Python PARSEC authentication")
         
         self.connection = create_connection()
         self.cursor = self.connection.cursor()
@@ -314,7 +314,7 @@ class TestAuthenticationPluginFactory(unittest.TestCase):
             has_cryptography = False
         
         if not has_cryptography and is_native():
-            self.skipTest("cryptography library not available")
+            self.skipTest("cryptography library required for pure Python PARSEC authentication")
         
         from mariadb.impl.plugin.authentication.parsec_password_plugin_factory import ParsecPasswordPluginFactory
         
@@ -331,7 +331,7 @@ class TestAuthenticationPluginFactory(unittest.TestCase):
             has_cryptography = False
         
         if not has_cryptography and is_native():
-            self.skipTest("cryptography library not available")
+            self.skipTest("cryptography library required for pure Python PARSEC authentication")
         
         from mariadb.impl.plugin.authentication.parsec_password_plugin_factory import ParsecPasswordPluginFactory
         

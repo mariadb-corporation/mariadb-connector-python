@@ -6,6 +6,7 @@ import unittest
 import platform
 import traceback
 import sys
+import asyncio
 from pathlib import Path
 
 # Add the mariadb source module to the path BEFORE importing
@@ -18,10 +19,9 @@ STATUS = mariadb.constants.STATUS
 from packaging.version import parse as parse_version
 from packaging import version
 
-from ..base_test import is_skysql, is_maxscale, is_native, get_host_suffix
+from ..base_test import is_skysql, is_maxscale, is_native, is_async_native, get_host_suffix
 from ..conftest import get_test_config as conf
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
@@ -60,7 +60,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             pass
 
     async def test_connection_default_file(self):
-        if is_native():
+        if is_async_native():
             self.skipTest("default file not supported on native yet")
         if os.path.exists("client.cnf"):
             os.remove("client.cnf")
@@ -147,7 +147,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         cursor = new_conn.cursor()
         await cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
         row = await cursor.fetchone()
-        if is_maxscale() or is_native():
+        if is_maxscale() or is_async_native():
             self.assertEqual(row[1], "OFF")
         else:
             self.assertEqual(row[1], "ON")
@@ -177,20 +177,21 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
         config = conf()
-        async with await mariadb.AsyncConnection.connect(**config) as conn:
-            cursor = conn.cursor()
-            oldid = conn.connection_id
+        conn = await mariadb.AsyncConnection.connect(**config)
+        cursor = conn.cursor()
+        oldid = conn.connection_id
 
-            try:
-                await cursor.execute("KILL {id}".format(id=oldid))
-            except (mariadb.Error, mariadb.OperationalError):
-                pass
-            await cursor.close()
-            
-            try:
-                await conn.ping()
-            except (mariadb.InterfaceError, mariadb.DatabaseError):
-                pass
+        try:
+            await cursor.execute("KILL {id}".format(id=oldid))
+        except (mariadb.Error, mariadb.OperationalError):
+            pass
+        await cursor.close()
+        
+        try:
+            await conn.ping()
+        except (mariadb.InterfaceError, mariadb.DatabaseError):
+            pass
+        await conn.close()
 
     async def test_open(self):
         """Test connection.open property"""
@@ -221,7 +222,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 pass
 
     async def test_ed25519(self):
-        if is_native():
+        if is_async_native():
             self.skipTest("Ed25519 not supported on native")
         if is_skysql():
             self.skipTest("Test fail on SkySQL")
@@ -423,7 +424,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
     async def test_conpy278(self):
         if is_maxscale():
             self.skipTest("MAXSCALE bug MXS-4961")
-        if is_native():
+        if is_async_native():
             self.skipTest("reconnect doesn't work with native connector")
         
         config = conf()
@@ -725,6 +726,9 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         if is_maxscale():
             self.skipTest("Skipping for MaxScale")
         
+        if not is_native():
+            self.skipTest("Skipping for C implementation - root user bypasses max_connections")
+        
         exception = None
         max_connections = 0
         
@@ -735,23 +739,35 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         max_connections = result[0]
         await cursor.close()
         
+        # Close self.connection to free up a slot before testing
+        await self.connection.close()
+        
         # Skip if max_connections is too high (would take too long)
         if max_connections >= 1000:
             self.skipTest(f"max_connections too high ({max_connections}), skipping test")
         
         connections = []
         try:
-            # Try to create max_connections connections
-            for i in range(max_connections + 1):
+            # Try to create max_connections + 2 connections to exceed the limit
+            # Note: max_connections reserves 1 extra slot for SUPER/CONNECTION_ADMIN users
+            for i in range(max_connections + 20):
                 try:
                     conn = await mariadb.AsyncConnection.connect(**conf())
+                    # Execute a simple query to verify connection is actually working
+                    cursor = conn.cursor()
+                    await cursor.execute(f"SELECT {i}")
+                    result = await cursor.fetchone()
+                    if result[0] != i:
+                        raise RuntimeError(f"Query returned {result[0]}, expected {i}")
+                    await cursor.close()
                     connections.append(conn)
-                except mariadb.DatabaseError as e:
+                    await asyncio.sleep(0.001)
+                except Exception as e:
                     exception = e
                     break
             
             # Should have gotten an exception
-            self.assertIsNotNone(exception, "Expected exception when reaching max_connections")
+            self.assertIsNotNone(exception, f"Expected exception when reaching max_connections (created {len(connections)} connections, max={max_connections})")
             
             # Check error message contains "Too many"
             error_msg = str(exception)

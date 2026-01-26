@@ -42,6 +42,8 @@ def build_uri(config, scheme='mariadb', database=None, query_params=None):
     return uri
 
 
+@unittest.skipIf(not HAS_MARIADB_POOL,
+                 "mariadb_pool package not installed")
 class TestURIPool(unittest.TestCase):
     """Test URI-based connection pools"""
     

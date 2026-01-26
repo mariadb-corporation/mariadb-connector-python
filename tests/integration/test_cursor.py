@@ -56,15 +56,15 @@ class TestCursor(unittest.TestCase):
     def test_conpy306(self):
         with create_connection() as conn:
             cursor=conn.cursor(binary=False)
-            cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
             try:
+                cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
                 cursor.fetchone()
             except Exception:
                 pass
             cursor.close()
             cursor=conn.cursor(binary=True)
-            cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
             try:
+                cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
                 cursor.fetchone()
             except Exception:
                 pass

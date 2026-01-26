@@ -22,7 +22,6 @@ async def create_async_connection(additional_conf=None):
             additional_conf.items()))}
     return await mariadb.AsyncConnection.connect(**c)
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class AsyncTestException(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):

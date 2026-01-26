@@ -32,7 +32,6 @@ def generate_long_text(length):
     """Generate a long text string for testing"""
     return 'a' * length
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class TestAsyncUnixSocket(unittest.IsolatedAsyncioTestCase):
     """Test async Unix socket connections"""
 

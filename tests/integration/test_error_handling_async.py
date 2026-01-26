@@ -11,7 +11,6 @@ import mariadb
 from ..base_test import is_native
 from ..conftest import get_test_config
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class AsyncErrorHandlingTest(unittest.IsolatedAsyncioTestCase):
     """Test async error handling and edge cases"""
 
@@ -192,6 +191,9 @@ class AsyncErrorHandlingTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_connection_invalid_host_none(self):
         """Test connection with invalid host"""
+        if not is_native():
+            self.skipTest("only native test, mariadb C with no host behavior vary")
+        
         config = get_test_config()
         config['host'] = None
         config['connect_timeout'] = 2

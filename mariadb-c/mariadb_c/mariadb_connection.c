@@ -5,6 +5,9 @@
 #include "docs/connection.h"
 #include "docs/exception.h"
 #include <datetime.h>
+#ifndef _WIN32
+#include <poll.h>
+#endif
 
 #define MADB_SET_OPTION(m,o,v)\
 if (mysql_optionsv((m), (o), (v)))\
@@ -71,6 +74,31 @@ MrdbConnection_readresponse(MrdbConnection *self);
 static PyObject
 *MrdbConnection_socket(MrdbConnection *self);
 
+/* Non-blocking API forward declarations */
+static PyObject *
+MrdbConnection_set_nonblock_option(MrdbConnection *self, PyObject *args);
+
+static PyObject *
+MrdbConnection_get_timeout_value(MrdbConnection *self, PyObject *args);
+
+/* Sync methods */
+PyObject *MrdbConnection_sync_ping(MrdbConnection *self);
+
+/* Async methods and helpers are now defined at the end of this file */
+static PyObject *MrdbConnection_init_fields_only(MrdbConnection *self);
+static PyObject *MrdbConnection_set_active_cursor(MrdbConnection *self, PyObject *cursor);
+static PyObject *MrdbConnection_async_real_query_start(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_async_real_query_cont(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_async_ping_start(MrdbConnection *self);
+static PyObject *MrdbConnection_async_ping_cont(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_async_close_start(MrdbConnection *self);
+static PyObject *MrdbConnection_async_close_cont(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_async_change_user_start(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_async_change_user_cont(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_async_reset_start(MrdbConnection *self);
+static PyObject *MrdbConnection_async_reset_cont(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args);
+
 static PyGetSetDef
 MrdbConnection_sets[]=
 {
@@ -105,8 +133,8 @@ MrdbConnection_Methods[] =
         METH_VARARGS | METH_KEYWORDS,
         connection_connect__doc__},
     /* additional methods */
-    { "ping",
-        (PyCFunction)MrdbConnection_ping,
+    { "_sync_ping",
+        (PyCFunction)MrdbConnection_sync_ping,
         METH_NOARGS,
         connection_ping__doc__
     },
@@ -149,6 +177,55 @@ MrdbConnection_Methods[] =
     {"_get_socket", (PyCFunction)MrdbConnection_socket,
       METH_NOARGS,
       "For internal use only"},
+    /* Non-blocking API methods for async support */
+    {"_init_fields_only", (PyCFunction)MrdbConnection_init_fields_only,
+      METH_NOARGS,
+      "Initialize C struct fields without connecting (for async)"},
+    {"_set_active_cursor", (PyCFunction)MrdbConnection_set_active_cursor,
+      METH_O,
+      "Set active result cursor (for async cursor management)"},
+    {"set_nonblock_option", (PyCFunction)MrdbConnection_set_nonblock_option,
+      METH_NOARGS,
+      "Enable non-blocking mode"},
+    {"get_socket", (PyCFunction)MrdbConnection_socket,
+      METH_NOARGS,
+      "Get socket file descriptor"},
+    {"get_timeout_value", (PyCFunction)MrdbConnection_get_timeout_value,
+      METH_NOARGS,
+      "Get timeout value in seconds"},
+    {"_async_real_query_start", (PyCFunction)MrdbConnection_async_real_query_start,
+      METH_VARARGS,
+      "Start non-blocking query"},
+    {"_async_real_query_cont", (PyCFunction)MrdbConnection_async_real_query_cont,
+      METH_VARARGS,
+      "Continue non-blocking query"},
+    {"_async_ping_start", (PyCFunction)MrdbConnection_async_ping_start,
+      METH_NOARGS,
+      "Start non-blocking ping"},
+    {"_async_ping_cont", (PyCFunction)MrdbConnection_async_ping_cont,
+      METH_VARARGS,
+      "Continue non-blocking ping"},
+    {"_async_close_start", (PyCFunction)MrdbConnection_async_close_start,
+      METH_NOARGS,
+      "Start non-blocking close"},
+    {"_async_close_cont", (PyCFunction)MrdbConnection_async_close_cont,
+      METH_VARARGS,
+      "Continue non-blocking close"},
+    {"_async_change_user_start", (PyCFunction)MrdbConnection_async_change_user_start,
+      METH_VARARGS,
+      "Start non-blocking change_user"},
+    {"_async_change_user_cont", (PyCFunction)MrdbConnection_async_change_user_cont,
+      METH_VARARGS,
+      "Continue non-blocking change_user"},
+    {"_async_reset_start", (PyCFunction)MrdbConnection_async_reset_start,
+      METH_NOARGS,
+      "Start non-blocking reset"},
+    {"_async_reset_cont", (PyCFunction)MrdbConnection_async_reset_cont,
+      METH_VARARGS,
+      "Continue non-blocking reset"},
+    {"_check_socket_ready", (PyCFunction)MrdbConnection_check_socket_ready,
+      METH_VARARGS,
+      "Check if socket is ready for I/O (non-blocking)"},
     {NULL} /* always last */
 };
 
@@ -527,6 +604,8 @@ static int MrdbConnection_traverse(
     Py_VISIT(self->status_callback);
 #endif
     Py_VISIT(self->dsn);
+    /* Note: active_result_cursor is managed entirely by cursor code with its own refcounting */
+    /* Don't visit it here to avoid GC interference with cursor's lifecycle management */
     return 0;
 }
 
@@ -538,6 +617,7 @@ static int MrdbConnection_tpclear(MrdbConnection *self)
     Py_CLEAR(self->status_callback);
 #endif
     Py_CLEAR(self->dsn);
+    /* Note: active_result_cursor is managed by cursor code - don't touch it here */
     return 0;
 }
 
@@ -559,18 +639,27 @@ ma_connection_consume_active_result(MrdbConnection *conn, void *requesting_curso
 {
     /* If there's an active unbuffered result, clear it before allowing
      * any cursor to execute. This prevents "Commands out of sync" when
-     * multiple cursors share the same connection, or when the same cursor
-     * re-executes without finishing its previous result.
+     * switching between cursors or re-executing on the same cursor.
+     * 
+     * Note: We clear even if the requesting cursor is the same as the active one,
+     * because re-executing a cursor should consume its previous result.
      */
-    if (!conn || !conn->mysql)
+    
+    /* Try to get Python-level active cursor tracking */
+    PyObject *active = PyObject_GetAttrString((PyObject *)conn, "_active_streaming_result");
+    if (!active || PyErr_Occurred()) {
+        PyErr_Clear();
+        active = PyObject_GetAttrString((PyObject *)conn, "_active_async_cursor");
+    }
+    
+    if (!active || active == Py_None) {
+        Py_XDECREF(active);
         return;
-
-    if (conn->active_result_cursor == NULL)
-        return;
-
+    }
+    
     /* Clear the active cursor's result (even if it's the same cursor re-executing) */
-    MrdbCursor_clear_result((MrdbCursor *)conn->active_result_cursor);
-    conn->active_result_cursor = NULL;
+    MrdbCursor_clear_result((MrdbCursor *)active);
+    Py_DECREF(active);
 }
 
 static void ma_connection_close(MrdbConnection *conn)
@@ -614,6 +703,9 @@ static void MrdbConnection_dealloc(PyObject *obj)
     if (self->dsn)
         Py_XDECREF(self->dsn);
     self->dsn = NULL;
+    
+    /* Note: active_result_cursor is managed by cursor code - don't touch it in dealloc */
+    /* The cursor should have already cleared itself before connection dealloc */
     
     /* Free the object */
     Py_TYPE(self)->tp_free((PyObject *)self);
@@ -708,7 +800,7 @@ MrdbConnection_exception(PyObject *self, void *closure)
 }
 
 /* {{{ MrdbConnection_ping */
-PyObject *MrdbConnection_ping(MrdbConnection *self)
+PyObject *MrdbConnection_sync_ping(MrdbConnection *self)
 {
     int rc;
 
@@ -1073,6 +1165,463 @@ static PyObject *MrdbConnection_socket(MrdbConnection *self)
     return PyLong_FromLong((unsigned long)mysql_get_socket(self->mysql));
 }
 
+/* ========================================================================
+ * Non-Blocking API Functions for Async Support
+ * ======================================================================== */
+
+static PyObject *
+MrdbConnection_init_fields_only(MrdbConnection *self)
+{
+    /* Initialize C struct fields without establishing connection.
+     * This is used by async connections which need the struct fields
+     * (like active_result_cursor) to exist before the actual async
+     * connection is established. */
+    MrdbConnection_init_fields(self);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+MrdbConnection_set_active_cursor(MrdbConnection *self, PyObject *cursor)
+{
+    /* Set the active result cursor with proper reference counting.
+     * Pass None to clear, or a cursor object to set. */
+    
+    if (cursor == Py_None) {
+        cursor = NULL;
+    }
+    
+    /* Clear old cursor if exists */
+    if (self->active_result_cursor != NULL) {
+        PyObject *old = (PyObject *)self->active_result_cursor;
+        self->active_result_cursor = NULL;
+        Py_DECREF(old);
+    }
+    
+    /* Set new cursor */
+    if (cursor != NULL) {
+        Py_INCREF(cursor);
+        self->active_result_cursor = cursor;
+    }
+    
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+MrdbConnection_set_nonblock_option(MrdbConnection *self, PyObject *args)
+{
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    if (mysql_optionsv(self->mysql, MYSQL_OPT_NONBLOCK, (void *)0))
+    {
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        return NULL;
+    }
+    
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+MrdbConnection_get_timeout_value(MrdbConnection *self, PyObject *args)
+{
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    unsigned int timeout = mysql_get_timeout_value(self->mysql);
+    return PyFloat_FromDouble((double)timeout);
+}
+
+
+/* Async query execution methods */
+
+static PyObject *
+MrdbConnection_async_real_query_start(MrdbConnection *self, PyObject *args)
+{
+    char *statement;
+    Py_ssize_t statement_len;
+    int status;
+    int rc;
+    
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    if (!PyArg_ParseTuple(args, "s#", &statement, &statement_len))
+        return NULL;
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_real_query_start(&rc, self->mysql, statement, (unsigned long)statement_len);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && rc != 0) {
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        return NULL;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbConnection_async_real_query_cont(MrdbConnection *self, PyObject *args)
+{
+    int wait_status;
+    int status;
+    int rc;
+    
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_real_query_cont(&rc, self->mysql, wait_status);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && rc != 0) {
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        return NULL;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+/* Async ping methods */
+
+static PyObject *
+MrdbConnection_async_ping_start(MrdbConnection *self)
+{
+    int status;
+    int rc;
+    
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_ping_start(&rc, self->mysql);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && rc != 0) {
+        mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+        return NULL;
+    }
+    
+    if (status == 0) {
+        /* Completed immediately */
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbConnection_async_ping_cont(MrdbConnection *self, PyObject *args)
+{
+    int wait_status;
+    int status;
+    int rc;
+    
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_ping_cont(&rc, self->mysql, wait_status);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && rc != 0) {
+        mariadb_throw_exception(self->mysql, Mariadb_InterfaceError, 0, NULL);
+        return NULL;
+    }
+    
+    if (status == 0) {
+        /* Completed */
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+/* Async close methods */
+
+static PyObject *
+MrdbConnection_async_close_start(MrdbConnection *self)
+{
+    int status;
+    
+    if (self->closed || !self->mysql) {
+        /* Already closed */
+        Py_RETURN_NONE;
+    }
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_close_start(self->mysql);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0) {
+        /* Completed immediately */
+        self->mysql = NULL;
+        self->closed = 1;
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbConnection_async_close_cont(MrdbConnection *self, PyObject *args)
+{
+    int wait_status;
+    int status;
+    
+    if (self->closed || !self->mysql) {
+        /* Already closed */
+        Py_RETURN_NONE;
+    }
+    
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_close_cont(self->mysql, wait_status);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0) {
+        /* Completed */
+        self->mysql = NULL;
+        self->closed = 1;
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+/* Async change_user methods */
+
+static PyObject *
+MrdbConnection_async_change_user_start(MrdbConnection *self, PyObject *args)
+{
+    char *user = NULL;
+    char *password = NULL;
+    char *database = NULL;
+    my_bool ret;
+    int status;
+    
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    if (!PyArg_ParseTuple(args, "zz|z", &user, &password, &database))
+        return NULL;
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_change_user_start(&ret, self->mysql, user, password, database);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && ret != 0) {
+        mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 0, NULL);
+        return NULL;
+    }
+    
+    if (status == 0) {
+        /* Completed immediately */
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbConnection_async_change_user_cont(MrdbConnection *self, PyObject *args)
+{
+    int wait_status;
+    int status;
+    my_bool ret;
+    
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_change_user_cont(&ret, self->mysql, wait_status);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && ret != 0) {
+        mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 0, NULL);
+        return NULL;
+    }
+    
+    if (status == 0) {
+        /* Completed */
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+/* Async reset methods */
+
+static PyObject *
+MrdbConnection_async_reset_start(MrdbConnection *self)
+{
+    int ret;
+    int status;
+    
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_reset_connection_start(&ret, self->mysql);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && ret != 0) {
+        mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 0, NULL);
+        return NULL;
+    }
+    
+    if (status == 0) {
+        /* Completed immediately */
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbConnection_async_reset_cont(MrdbConnection *self, PyObject *args)
+{
+    int wait_status;
+    int status;
+    int ret;
+    
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_reset_connection_cont(&ret, self->mysql, wait_status);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && ret != 0) {
+        mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 0, NULL);
+        return NULL;
+    }
+    
+    if (status == 0) {
+        /* Completed */
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+/* Check socket readiness (non-blocking) */
+
+static PyObject *
+MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args)
+{
+    int wait_status;
+    int ready_status = 0;
+    
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+    
+    if (wait_status == 0) {
+        return PyLong_FromLong(0);
+    }
+    
+#ifdef _WIN32
+    /* Windows: Use select() with 0 timeout for non-blocking check */
+    fd_set readfds, writefds, exceptfds;
+    struct timeval tv;
+    my_socket sock;
+    int result;
+    
+    sock = mysql_get_socket(self->mysql);
+    
+    /* Check if socket is valid */
+    if (sock == INVALID_SOCKET || sock < 0) {
+        /* Invalid socket - return expected status */
+        return PyLong_FromLong(wait_status & MYSQL_WAIT_READ ? MYSQL_WAIT_READ : MYSQL_WAIT_WRITE);
+    }
+    
+    FD_ZERO(&readfds);
+    FD_ZERO(&writefds);
+    FD_ZERO(&exceptfds);
+    
+    if (wait_status & MYSQL_WAIT_READ)
+        FD_SET(sock, &readfds);
+    if (wait_status & MYSQL_WAIT_WRITE)
+        FD_SET(sock, &writefds);
+    FD_SET(sock, &exceptfds);
+    
+    tv.tv_sec = 0;
+    tv.tv_usec = 1000;  /* 1ms timeout */
+    
+    Py_BEGIN_ALLOW_THREADS;
+    result = select((int)(sock + 1), &readfds, &writefds, &exceptfds, &tv);
+    Py_END_ALLOW_THREADS;
+    
+    if (result < 0) {
+        /* Error - return expected status to let caller handle it */
+        return PyLong_FromLong(wait_status & MYSQL_WAIT_READ ? MYSQL_WAIT_READ : MYSQL_WAIT_WRITE);
+    }
+    
+    if (result == 0) {
+        /* Timeout - socket not ready yet */
+        return PyLong_FromLong(0);
+    }
+    
+    /* result > 0: Socket has activity */
+    if (FD_ISSET(sock, &exceptfds)) {
+        /* Error on socket - return expected status */
+        return PyLong_FromLong(wait_status & MYSQL_WAIT_READ ? MYSQL_WAIT_READ : MYSQL_WAIT_WRITE);
+    }
+    if (FD_ISSET(sock, &readfds))
+        ready_status |= MYSQL_WAIT_READ;
+    if (FD_ISSET(sock, &writefds))
+        ready_status |= MYSQL_WAIT_WRITE;
+#else
+    /* Unix/Linux: This shouldn't be called, but provide fallback using poll() */
+    struct pollfd pfd;
+    int result;
+    
+    pfd.fd = mysql_get_socket(self->mysql);
+    pfd.events = 0;
+    pfd.revents = 0;
+    
+    if (wait_status & MYSQL_WAIT_READ)
+        pfd.events |= POLLIN;
+    if (wait_status & MYSQL_WAIT_WRITE)
+        pfd.events |= POLLOUT;
+    
+    Py_BEGIN_ALLOW_THREADS;
+    result = poll(&pfd, 1, 1);  /* 1ms timeout */
+    Py_END_ALLOW_THREADS;
+    
+    if (result < 0) {
+        /* Error */
+        return PyLong_FromLong(wait_status & MYSQL_WAIT_READ ? MYSQL_WAIT_READ : MYSQL_WAIT_WRITE);
+    }
+    
+    if (result == 0) {
+        /* Timeout - socket not ready yet */
+        return PyLong_FromLong(0);
+    }
+    
+    /* result > 0: Socket has activity */
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        /* Error on socket */
+        return PyLong_FromLong(wait_status & MYSQL_WAIT_READ ? MYSQL_WAIT_READ : MYSQL_WAIT_WRITE);
+    }
+    if (pfd.revents & POLLIN)
+        ready_status |= MYSQL_WAIT_READ;
+    if (pfd.revents & POLLOUT)
+        ready_status |= MYSQL_WAIT_WRITE;
+#endif
+    
+    return PyLong_FromLong(ready_status);
+}
+
+/* Note: Cursor-level fetch methods (MrdbCursor_fetch_row_start/cont in mariadb_cursor.c)
+ * are used by async cursors. They properly use field_fetch_fromtext for type conversion.
+ * Connection-level fetch methods are not needed. */
 /* vim: set tabstop=4 */
 /* vim: set shiftwidth=4 */
 /* vim: set expandtab */

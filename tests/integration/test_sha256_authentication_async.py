@@ -21,11 +21,10 @@ import asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import mariadb
-from tests.base_test import create_connection, is_native, get_host_suffix
+from tests.base_test import create_connection, get_host_suffix
 from tests.conftest import get_test_config
 
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
     """Async test cases for caching_sha2_password authentication plugin"""
     

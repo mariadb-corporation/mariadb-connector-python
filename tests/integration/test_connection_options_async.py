@@ -7,10 +7,8 @@ Async integration tests for connection options and configuration
 
 import unittest
 import mariadb
-from tests.base_test import is_native
 from ..conftest import get_test_config
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
     """Async test connection options and configuration"""
 

@@ -19,9 +19,8 @@ import mariadb
 import datetime
 
 from ..conftest import get_test_config as conf
-from ..base_test import is_maxscale, is_native
+from ..base_test import is_maxscale
 
-@unittest.skipIf(not is_native(), "AsyncConnection not available")
 class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
     ''' Test a database driver for DB API 2.0 compatibility - Async version.
         Adapted from the standard DB-API 2.0 compliance test suite.
