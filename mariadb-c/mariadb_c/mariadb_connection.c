@@ -9,6 +9,16 @@
 #include <poll.h>
 #endif
 
+/* Check if MariaDB Connector/C has ma_tls_has_buffered_data() function.
+ * to properly handle SSL/TLS buffered data in async operations. */
+#ifdef HAVE_TLS
+/* Try to include ma_tls.h if available */
+#if __has_include(<ma_tls.h>)
+#include <ma_tls.h>
+#define HAVE_MA_TLS_HAS_BUFFERED_DATA 1
+#endif
+#endif
+
 #define MADB_SET_OPTION(m,o,v)\
 if (mysql_optionsv((m), (o), (v)))\
 {\
@@ -97,6 +107,9 @@ static PyObject *MrdbConnection_async_change_user_start(MrdbConnection *self, Py
 static PyObject *MrdbConnection_async_change_user_cont(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_async_reset_start(MrdbConnection *self);
 static PyObject *MrdbConnection_async_reset_cont(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_prepare_async_connect(MrdbConnection *self, PyObject *args, PyObject *kwargs);
+static PyObject *MrdbConnection_async_connect_start(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_async_connect_cont(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args);
 
 static PyGetSetDef
@@ -223,6 +236,15 @@ MrdbConnection_Methods[] =
     {"_async_reset_cont", (PyCFunction)MrdbConnection_async_reset_cont,
       METH_VARARGS,
       "Continue non-blocking reset"},
+    {"_prepare_async_connect", (PyCFunction)MrdbConnection_prepare_async_connect,
+      METH_VARARGS | METH_KEYWORDS,
+      "Prepare connection options for async connect (sets MYSQL_OPT_NONBLOCK)"},
+    {"_async_connect_start", (PyCFunction)MrdbConnection_async_connect_start,
+      METH_VARARGS,
+      "Start non-blocking connection"},
+    {"_async_connect_cont", (PyCFunction)MrdbConnection_async_connect_cont,
+      METH_VARARGS,
+      "Continue non-blocking connection"},
     {"_check_socket_ready", (PyCFunction)MrdbConnection_check_socket_ready,
       METH_VARARGS,
       "Check if socket is ready for I/O (non-blocking)"},
@@ -1509,6 +1531,307 @@ MrdbConnection_async_reset_cont(MrdbConnection *self, PyObject *args)
     return PyLong_FromLong(status);
 }
 
+/* Async connection methods */
+
+static PyObject *
+MrdbConnection_prepare_async_connect(MrdbConnection *self, PyObject *args, PyObject *kwargs)
+{
+    /* This method initializes the MYSQL handle and sets all connection options
+     * including MYSQL_OPT_NONBLOCK, but does NOT call mysql_real_connect().
+     * This allows async connections to use mysql_real_connect_start/cont for
+     * true async SSL/TLS support.
+     */
+    char *dsn= NULL, *host=NULL, *user= NULL, *password= NULL, *schema= NULL,
+         *socket= NULL, *init_command= NULL, *default_file= NULL,
+         *default_group= NULL,
+         *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
+         *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
+         *plugin_dir= NULL, *tls_version= NULL, *tls_fp= NULL, *tls_fp_list= NULL;
+    uint8_t ssl_enforce= 0;
+    unsigned int client_flags= 0, port= 0;
+    unsigned int local_infile= 0xFF;
+    unsigned int connect_timeout=10, read_timeout=0, write_timeout=0,
+                 compress= 0, ssl_verify_cert= 0;
+    PyObject *status_callback= NULL;
+    
+    /* Initialize all fields first */
+    MrdbConnection_init_fields(self);
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs,
+                "|zzzzziziiibbzzzzzzzzzzibizzzzOzzz:prepare_async_connect",
+                dsn_keys,
+                &dsn, &host, &user, &password, &schema, &port, &socket,
+                &connect_timeout, &read_timeout, &write_timeout,
+                &local_infile, &compress, &init_command,
+                &default_file, &default_group,
+                &ssl_key, &ssl_ca, &ssl_cert, &ssl_crl,
+                &ssl_cipher, &ssl_capath, &ssl_crlpath,
+                &ssl_verify_cert, &ssl_enforce,
+                &client_flags, &plugin_dir,
+                &user, &schema, &password, &status_callback,
+                &tls_version, &tls_fp, &tls_fp_list))
+    {
+        return NULL;
+    }
+
+    if (dsn)
+    {
+        PyErr_SetString(Mariadb_ProgrammingError, "dsn keyword is not supported");
+        return NULL;
+    }
+
+#if MARIADB_PACKAGE_VERSION_ID < 30302
+    if (status_callback)
+    {
+        PyErr_WarnFormat(PyExc_RuntimeWarning, 1, "status_callback support requires MariaDB Connector/C >= 3.3.2 (found version %s)", mysql_get_client_info());
+    }
+#else
+    Py_XINCREF(status_callback);
+    self->status_callback = status_callback;
+#endif
+
+    if (!(self->mysql= mysql_init(NULL)))
+    {
+        PyErr_SetString(Mariadb_OperationalError, "Can't allocate memory for connection");
+        return NULL;
+    }
+
+#if MARIADB_PACKAGE_VERSION_ID > 30301
+   if (mysql_optionsv(self->mysql, MARIADB_OPT_STATUS_CALLBACK, MrdbConnection_process_status_info, self))
+   {
+      PyErr_WarnFormat(PyExc_RuntimeWarning, 1, "MariaDB Connector/Python was build with MariaDB Connector/C version %s but loaded Connector/C library has version %s", MARIADB_PACKAGE_VERSION, mysql_get_client_info());
+   }
+#endif
+
+    /* Set MYSQL_OPT_NONBLOCK BEFORE setting other options and connecting.
+     * This enables true async SSL/TLS support on all platforms including Windows.
+     */
+    if (mysql_options(self->mysql, MYSQL_OPT_NONBLOCK, 0))
+    {
+        PyErr_SetString(Mariadb_OperationalError, "Failed to set MYSQL_OPT_NONBLOCK");
+        return NULL;
+    }
+
+    if (mysql_options(self->mysql, MYSQL_SET_CHARSET_NAME, mariadb_default_charset))
+    {
+        PyErr_SetString(Mariadb_OperationalError, "Failed to set charset");
+        return NULL;
+    }
+
+    if (local_infile != 0xFF)
+    {
+        if (mysql_options(self->mysql, MYSQL_OPT_LOCAL_INFILE, &local_infile))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set local_infile");
+            return NULL;
+        }
+    }
+
+    if (compress)
+    {
+        if (mysql_options(self->mysql, MYSQL_OPT_COMPRESS, "1"))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set compress");
+            return NULL;
+        }
+    }
+
+    if (init_command)
+    {
+        if (mysql_options(self->mysql, MYSQL_INIT_COMMAND, init_command))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set init_command");
+            return NULL;
+        }
+    }
+
+    if (plugin_dir) {
+        if (mysql_options(self->mysql, MYSQL_PLUGIN_DIR, plugin_dir))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set plugin_dir");
+            return NULL;
+        }
+    } else {
+#if defined(DEFAULT_PLUGINS_SUBDIR)
+      if (mysql_options(self->mysql, MYSQL_PLUGIN_DIR, DEFAULT_PLUGINS_SUBDIR))
+      {
+          PyErr_SetString(Mariadb_OperationalError, "Failed to set default plugin_dir");
+          return NULL;
+      }
+#endif
+    }
+
+    if (default_file)
+    {
+        if (mysql_options(self->mysql, MYSQL_READ_DEFAULT_FILE, default_file))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set default_file");
+            return NULL;
+        }
+    }
+    if (default_group)
+    {
+        if (mysql_options(self->mysql, MYSQL_READ_DEFAULT_GROUP, default_group))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set default_group");
+            return NULL;
+        }
+    }
+
+    if (connect_timeout)
+    {
+        if (mysql_options(self->mysql, MYSQL_OPT_CONNECT_TIMEOUT, &connect_timeout))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set connect_timeout");
+            return NULL;
+        }
+    }
+    if (read_timeout)
+    {
+        if (mysql_options(self->mysql, MYSQL_OPT_READ_TIMEOUT, &read_timeout))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set read_timeout");
+            return NULL;
+        }
+    }
+    if (write_timeout)
+    {
+        if (mysql_options(self->mysql, MYSQL_OPT_WRITE_TIMEOUT, &write_timeout))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set write_timeout");
+            return NULL;
+        }
+    }
+
+    if (ssl_enforce || ssl_key || ssl_ca || ssl_cert || ssl_capath || ssl_cipher || tls_version ||
+        tls_fp || tls_fp_list)
+        mysql_ssl_set(self->mysql, (const char *)ssl_key,
+                (const char *)ssl_cert,
+                (const char *)ssl_ca,
+                (const char *)ssl_capath,
+                (const char *)ssl_cipher);
+    if (ssl_crl)
+    {
+        if (mysql_options(self->mysql, MYSQL_OPT_SSL_CRL, ssl_crl))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set ssl_crl");
+            return NULL;
+        }
+    }
+    if (ssl_crlpath)
+    {
+        if (mysql_options(self->mysql, MYSQL_OPT_SSL_CRLPATH, ssl_crlpath))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set ssl_crlpath");
+            return NULL;
+        }
+    }
+    if (mysql_options(self->mysql, MYSQL_OPT_SSL_VERIFY_SERVER_CERT, (unsigned char *) &ssl_verify_cert))
+    {
+        PyErr_SetString(Mariadb_OperationalError, "Failed to set ssl_verify_cert");
+        return NULL;
+    }
+    if (tls_version)
+    {
+        if (mysql_options(self->mysql, MARIADB_OPT_TLS_VERSION, tls_version))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set tls_version");
+            return NULL;
+        }
+    }
+    if (tls_fp)
+    {
+        if (mysql_options(self->mysql, MARIADB_OPT_SSL_FP, tls_fp))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set tls_fp");
+            return NULL;
+        }
+    }
+    if (tls_fp_list)
+    {
+        if (mysql_options(self->mysql, MARIADB_OPT_SSL_FP_LIST, tls_fp_list))
+        {
+            PyErr_SetString(Mariadb_OperationalError, "Failed to set tls_fp_list");
+            return NULL;
+        }
+    }
+
+    /* Store connection parameters for later use in _async_connect_start */
+    /* We return a tuple of (host, user, password, schema, port, socket, client_flags) */
+    return Py_BuildValue("(zzzzizi)", host, user, password, schema, port, socket, client_flags);
+}
+
+static PyObject *
+MrdbConnection_async_connect_start(MrdbConnection *self, PyObject *args)
+{
+    char *host=NULL, *user=NULL, *password=NULL, *schema=NULL, *socket=NULL;
+    unsigned int port=0, client_flags=0;
+    MYSQL *ret;
+    int status;
+    
+    if (!PyArg_ParseTuple(args, "zzzzizi", &host, &user, &password, &schema, &port, &socket, &client_flags))
+        return NULL;
+    
+    if (!self->mysql) {
+        PyErr_SetString(PyExc_RuntimeError, "MYSQL handle not initialized");
+        return NULL;
+    }
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_real_connect_start(&ret, self->mysql, host, user, password, schema, port, socket, client_flags);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && !ret) {
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        return NULL;
+    }
+    
+    if (status == 0) {
+        /* Connection completed immediately */
+        if (mysql_get_ssl_cipher(self->mysql))
+            self->tls_in_use = 1;
+        mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbConnection_async_connect_cont(MrdbConnection *self, PyObject *args)
+{
+    int wait_status;
+    int status;
+    MYSQL *ret;
+    
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+    
+    if (!self->mysql) {
+        PyErr_SetString(PyExc_RuntimeError, "MYSQL handle not initialized");
+        return NULL;
+    }
+    
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_real_connect_cont(&ret, self->mysql, wait_status);
+    Py_END_ALLOW_THREADS;
+    
+    if (status == 0 && !ret) {
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        return NULL;
+    }
+    
+    if (status == 0) {
+        /* Connection completed */
+        if (mysql_get_ssl_cipher(self->mysql))
+            self->tls_in_use = 1;
+        mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
+        Py_RETURN_NONE;
+    }
+    
+    return PyLong_FromLong(status);
+}
+
 /* Check socket readiness (non-blocking) */
 
 static PyObject *
@@ -1526,8 +1849,37 @@ MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args)
         return PyLong_FromLong(0);
     }
     
+    /* SSL optimization: All SSL implementations (OpenSSL, GnuTLS, SCHANNEL) buffer
+     * decrypted data internally that select() cannot detect. Check buffered data
+     * first to avoid unnecessary syscalls and event loop iterations.
+     */
+#ifdef HAVE_MA_TLS_HAS_BUFFERED_DATA
+    if (self->tls_in_use && (wait_status & MYSQL_WAIT_READ) && 
+        self->mysql->net.pvio && 
+        self->mysql->net.pvio->ctls &&
+        ma_tls_has_buffered_data(self->mysql->net.pvio->ctls)) {
+        /* Buffered data available - return immediately to process it */
+        return PyLong_FromLong(MYSQL_WAIT_READ);
+    }
+#endif
+    
 #ifdef _WIN32
-    /* Windows: Use select() with 0 timeout for non-blocking check */
+    /* Windows-specific: SCHANNEL requires special handling.
+     * If SSL is in use but no buffered data, add a small sleep to prevent busy loop.
+     */
+    if (self->tls_in_use) {
+        struct timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 1000;  /* 1ms sleep */
+        
+        Py_BEGIN_ALLOW_THREADS;
+        select(0, NULL, NULL, NULL, &tv);
+        Py_END_ALLOW_THREADS;
+        
+        return PyLong_FromLong(wait_status);
+    }
+    
+    /* Non-SSL Windows: Use select() for socket polling */
     fd_set readfds, writefds, exceptfds;
     struct timeval tv;
     my_socket sock;
@@ -1552,10 +1904,10 @@ MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args)
     FD_SET(sock, &exceptfds);
     
     tv.tv_sec = 0;
-    tv.tv_usec = 1000;  /* 1ms timeout */
+    tv.tv_usec = 0;  /* 0 timeout - just check if ready, don't wait */
     
     Py_BEGIN_ALLOW_THREADS;
-    result = select((int)(sock + 1), &readfds, &writefds, &exceptfds, &tv);
+    result = select(0, &readfds, &writefds, &exceptfds, &tv);  /* Windows: first param must be 0 */
     Py_END_ALLOW_THREADS;
     
     if (result < 0) {

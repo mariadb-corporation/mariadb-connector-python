@@ -123,6 +123,9 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         
         This is the recommended way to create async connections.
         
+        Note: On Windows with SSL, the pure Python async implementation is recommended
+        due to SCHANNEL buffering issues. Set MARIADB_PYTHON_CONNECTOR=python to use it.
+        
         Args:
             **kwargs: Connection parameters
             
@@ -135,24 +138,41 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
     
     async def _connect(self):
         """
-        Internal method to establish async connection.
+        Internal method to establish async connection using mysql_real_connect_start/cont.
         
-        Uses mysql_real_connect_start() and mysql_real_connect_cont()
-        for non-blocking connection.
+        Sets MYSQL_OPT_NONBLOCK BEFORE connecting to enable true async SSL/TLS support.
+        This allows the SSL layer to use async I/O functions (ma_tls_read_async/ma_tls_write_async)
+        instead of blocking I/O with polling (ma_tls_read/ma_tls_write).
         """
-        # Now initialize the C connection (this will establish the connection)
-        super(AsyncConnection, self).__init__(*self._args, **self._kwargs)
+        # Step 1: Prepare connection - initializes MYSQL handle and sets all options including MYSQL_OPT_NONBLOCK
+        # The C object was initialized by _init_fields_only in __init__, so we can call instance methods
+        conn_params = self._prepare_async_connect(*self._args, **self._kwargs)
+        
+        # conn_params is a tuple: (host, user, password, schema, port, socket, client_flags)
+        
+        # Step 2: Start async connection using mysql_real_connect_start
+        wait_status = self._async_connect_start(*conn_params)
+        
+        # Step 3: Loop until connection is complete
+        # During connection, we use C-based polling since socket FD and event loop aren't set up yet
+        while wait_status is not None:
+            # Wait for socket to be ready using C extension's _check_socket_ready
+            ready_status = self._check_socket_ready(wait_status)
+            
+            if ready_status != 0:
+                # Socket is ready, continue connection
+                wait_status = self._async_connect_cont(ready_status)
+            else:
+                # Socket not ready, yield to event loop briefly
+                await asyncio.sleep(0)
+        
+        # Connection is now established with MYSQL_OPT_NONBLOCK already set!
         
         # Set converter on C extension's _converter field
         if self._converter_param is not None:
             self._converter = self._converter_param
         
-        # Enable non-blocking mode
-        self.set_nonblock_option()
-        
         # Select platform-specific wait implementation at initialization
-        # Check once at connection time instead of on every call
-        # On Windows, add_reader exists but raises NotImplementedError, so we test it
         loop = asyncio.get_event_loop()
         supports_add_reader = False
         
@@ -162,7 +182,6 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         if hasattr(loop, 'add_reader'):
             # Test if add_reader actually works (Windows ProactorEventLoop has it but raises NotImplementedError)
             try:
-                # Try adding a dummy reader to test if it's supported
                 def dummy_callback():
                     pass
                 loop.add_reader(self._socket_fd, dummy_callback)
@@ -179,8 +198,6 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             self._wait_for_status = self._wait_for_status_c_poll
         
         # Set autocommit and reconnect after connection using async methods
-        # Use values stored in __init__
-        # Default to False for DB-API 2.0 compliance if not specified
         if self._autocommit is None:
             self._autocommit = False
         await self.set_autocommit(self._autocommit)
@@ -239,8 +256,9 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         """
         Wait for socket events using C-based polling (Windows ProactorEventLoop).
         
-        Uses C extension's _check_socket_ready which calls select() directly
-        without needing Python socket objects.
+        For SSL connections, the C extension bypasses select() and returns immediately,
+        letting the SSL layer (SCHANNEL) handle buffering and I/O directly.
+        For non-SSL, uses select() to check socket readiness.
         """
         if wait_status == 0:
             return 0
@@ -249,7 +267,9 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         start_time = asyncio.get_event_loop().time() if timeout is not None else None
         
         while True:
-            # C extension checks socket readiness (1ms timeout in C)
+            # C extension checks socket readiness
+            # For SSL on Windows, this returns immediately (no select() call)
+            # For non-SSL, this uses select() with 0 timeout
             ready_status = self._check_socket_ready(wait_status)
             
             if ready_status != 0:
@@ -262,7 +282,8 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
                     return MYSQL_WAIT_TIMEOUT
             
             # Yield to event loop
-            await asyncio.sleep(0.0001)
+            # Use 0 sleep since C extension now handles SSL efficiently
+            await asyncio.sleep(0)
 
     def cursor(self, cursorclass=None, **kwargs):
         """

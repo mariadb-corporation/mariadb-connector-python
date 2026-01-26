@@ -146,13 +146,12 @@ jobs:
           TEST_DB: ${{ env.MYSQL_TEST_DB }}
           MARIADB_PYTHON_CONNECTOR: python
 
-      - name: Run test suite (Pure Python)
+      - name: Run tests (Pure Python)
         shell: bash
         run: |
           python --version
-          python -m pip install .
+          python -m pip install .[test]
           cd mariadb-pool && python -m pip install . && cd ..
-          python -m pip install pytest pytest-cov typing_extensions cryptography
           python -m pytest tests -v -s --cov=mariadb --cov=mariadb_pool --cov=mariadb_shared --cov-branch --cov-report=xml
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
@@ -241,7 +240,7 @@ jobs:
         run: |
           cd ${{ github.workspace }}/mariadb-connector-c
           $MARIADB_CC_INSTALL_DIR = "$env:USERPROFILE/conc"
-          cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_CURL=ON -DCMAKE_INSTALL_PREFIX="$MARIADB_CC_INSTALL_DIR"
+          cmake . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DWITH_CURL=ON -DWITH_NONBLOCK=ON -DCMAKE_INSTALL_PREFIX="$MARIADB_CC_INSTALL_DIR"
           cmake --build . --config RelWithDebInfo
           cmake --install . --config RelWithDebInfo
           echo "MARIADB_CC_INSTALL_DIR=$MARIADB_CC_INSTALL_DIR" >> $env:GITHUB_ENV
@@ -330,8 +329,7 @@ jobs:
         shell: bash
         run: |
           python --version
-          python -m pip install pytest pytest-cov typing_extensions cryptography
-          # Install with dependencies (cryptography, packaging, etc.)
+          # Install with dependencies (cryptography, packaging, pytest, etc.)
           python -m pip install .[test]
           cd mariadb-c && python -m pip install . && cd ..
           cd mariadb-pool && python -m pip install . && cd ..

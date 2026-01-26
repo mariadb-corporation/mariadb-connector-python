@@ -212,6 +212,16 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
             "Ensure Python 3.7+ is installed and the mariadb package is properly installed."
         )
     
+    # Windows + SSL: Force pure Python async due to SCHANNEL buffering issues
+    import platform
+    if platform.system() == "Windows" and __impl__ != "python":
+        # Check if SSL is enabled in kwargs
+        ssl_enabled = kwargs.get('ssl', False) or kwargs.get('ssl_ca') or kwargs.get('ssl_cert')
+        if ssl_enabled:
+            # Import pure Python async implementation
+            from . import async_connection as async_conn_module
+            AsyncConnection = async_conn_module.AsyncConnection
+    
     # Parse URI if provided as first positional argument
     if args and len(args) > 0:
         first_arg = args[0]
