@@ -98,20 +98,15 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             # Set ssl to True to enable SSL
             kwargs['ssl'] = True
         
-        # Store args/kwargs for later connection (after modifications)
-        self._args = args
-        self._kwargs = kwargs
-        
         # Validate host parameter (same as sync)
         if "host" in kwargs:
             host = kwargs.get("host")
             if version.Version(mariadbapi_version) < version.Version('3.3.0') and ',' in host:
                 raise ProgrammingError("Host failover list requires MariaDB Connector/C 3.3.0 or newer")
         
-        # NOTE: We do NOT call super().__init__() here because the C extension's
-        # __init__ tries to establish a synchronous connection, which won't work for async.
-        # Instead, we initialize just the C struct fields so active_result_cursor exists,
-        # and we'll call full __init__ in _connect() when we're ready to connect.
+        # Store args/kwargs for later connection
+        self._args = args
+        self._kwargs = kwargs
         
         # Initialize C struct fields without connecting (makes active_result_cursor available)
         CConnection._init_fields_only(self)
@@ -123,8 +118,8 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         
         This is the recommended way to create async connections.
         
-        Note: On Windows with SSL, the pure Python async implementation is recommended
-        due to SCHANNEL buffering issues. Set MARIADB_PYTHON_CONNECTOR=python to use it.
+        Note: On Windows with SSL, the pure Python async implementation is automatically
+        used due to SCHANNEL buffering issues with the C extension.
         
         Args:
             **kwargs: Connection parameters
@@ -132,53 +127,51 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         Returns:
             Connected AsyncConnection instance
         """
-        instance = cls(*args, **kwargs)
+        # Windows + SSL workaround: Use pure Python async implementation
+        # This is needed until MariaDB Connector/C properly supports async SSL on Windows
+        import platform
+        actual_class = cls
+        if platform.system() == "Windows" and cls.__module__ == 'mariadb_c.async_connections':
+            # Check if SSL is enabled in kwargs
+            ssl_enabled = kwargs.get('ssl', False) or kwargs.get('ssl_ca') or kwargs.get('ssl_cert')
+            if ssl_enabled:
+                # Import and use pure Python async implementation instead
+                try:
+                    from mariadb import async_connection as async_conn_module
+                    actual_class = async_conn_module.AsyncConnection
+                except ImportError:
+                    # If pure Python not available, continue with C implementation
+                    pass
+        
+        instance = actual_class(*args, **kwargs)
         await instance._connect()
         return instance
     
     async def _connect(self):
         """
-        Internal method to establish async connection using mysql_real_connect_start/cont.
+        Internal method to establish async connection.
         
-        Sets MYSQL_OPT_NONBLOCK BEFORE connecting to enable true async SSL/TLS support.
-        This allows the SSL layer to use async I/O functions (ma_tls_read_async/ma_tls_write_async)
-        instead of blocking I/O with polling (ma_tls_read/ma_tls_write).
+        Uses standard blocking mysql_real_connect() for initial connection (including SSL handshake),
+        then sets MYSQL_OPT_NONBLOCK afterward. This avoids SSL/TLS issues on Windows with SCHANNEL
+        buffering and simplifies the code.
         """
-        # Step 1: Prepare connection - initializes MYSQL handle and sets all options including MYSQL_OPT_NONBLOCK
-        # The C object was initialized by _init_fields_only in __init__, so we can call instance methods
-        conn_params = self._prepare_async_connect(*self._args, **self._kwargs)
+        # Call the C extension's __init__ which does mysql_real_connect() synchronously
+        CConnection.__init__(self, *self._args, **self._kwargs)
         
-        # conn_params is a tuple: (host, user, password, schema, port, socket, client_flags)
+        # Connection is now fully established (including SSL handshake)
+        # NOW set MYSQL_OPT_NONBLOCK for async operations
+        self.set_nonblock_option()
         
-        # Step 2: Start async connection using mysql_real_connect_start
-        wait_status = self._async_connect_start(*conn_params)
-        
-        # Step 3: Loop until connection is complete
-        # During connection, we use C-based polling since socket FD and event loop aren't set up yet
-        while wait_status is not None:
-            # Wait for socket to be ready using C extension's _check_socket_ready
-            ready_status = self._check_socket_ready(wait_status)
-            
-            if ready_status != 0:
-                # Socket is ready, continue connection
-                wait_status = self._async_connect_cont(ready_status)
-            else:
-                # Socket not ready, yield to event loop briefly
-                await asyncio.sleep(0)
-        
-        # Connection is now established with MYSQL_OPT_NONBLOCK already set!
-        
-        # Set converter on C extension's _converter field
+        # Set converter on C extension's _converter field (same as sync)
         if self._converter_param is not None:
             self._converter = self._converter_param
         
-        # Select platform-specific wait implementation at initialization
-        loop = asyncio.get_event_loop()
-        supports_add_reader = False
-        
-        # Get socket FD after connection is fully established (including SSL handshake)
+        # Get socket FD after connection is fully established
         self._socket_fd = self.get_socket()
         
+        # Select platform-specific wait implementation BEFORE calling async methods
+        loop = asyncio.get_event_loop()
+        supports_add_reader = False
         if hasattr(loop, 'add_reader'):
             # Test if add_reader actually works (Windows ProactorEventLoop has it but raises NotImplementedError)
             try:
@@ -197,11 +190,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             # Windows: Use C-based polling
             self._wait_for_status = self._wait_for_status_c_poll
         
-        # Set autocommit and reconnect after connection using async methods
-        if self._autocommit is None:
-            self._autocommit = False
         await self.set_autocommit(self._autocommit)
-        
         if self._reconnect is not None:
             await self.set_auto_reconnect(self._reconnect)
     

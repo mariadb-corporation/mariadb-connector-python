@@ -37,7 +37,7 @@ def _select_implementation() -> None:
     """
     global __impl__, sync_connection, async_connection, Cursor, SyncCursor, AsyncCursor
     
-    impl = os.environ.get("MARIADB_PYTHON_CONNECTOR", "").lower()
+    impl = os.environ.get("MARIADB_PYTHON_CONNECTOR", "").strip().lower()
     attempts = []
     
     # PyPy 3.11+ has cpyext stack overflow issues with C extension async operations
