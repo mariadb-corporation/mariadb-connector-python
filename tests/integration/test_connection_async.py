@@ -60,6 +60,8 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             pass
 
     async def test_connection_default_file(self):
+        if platform.system() == "Windows":
+            self.skipTest("default_file not supported on Windows (uses pure Python async with SSL)")
         if is_async_native():
             self.skipTest("default file not supported on native yet")
         if os.path.exists("client.cnf"):
