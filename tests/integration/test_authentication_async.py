@@ -335,6 +335,53 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await cursor3.fetchone())[0], 3)
         await cursor3.close()
         await conn3.close()
+    
+    async def test_parsec_ssl_connection(self):
+        """Test PARSEC authentication over SSL connection"""
+        # First check if SSL is enabled on the server
+        await self.cursor.execute("SHOW VARIABLES LIKE 'have_ssl'")
+        row = await self.cursor.fetchone()
+        if not row or row[1].upper() != 'YES':
+            self.skipTest("SSL is not enabled on the server (have_ssl != YES)")
+        
+        test_password = "ssl_parsec_test_789"
+        
+        await self.cursor.execute(f"DROP USER IF EXISTS 'parsec_test_user'{get_host_suffix()}")
+        await self.cursor.execute(
+            f"CREATE USER 'parsec_test_user'{get_host_suffix()} "
+            f"IDENTIFIED VIA parsec USING PASSWORD('{test_password}')"
+        )
+        await self.cursor.execute(f"GRANT ALL PRIVILEGES ON *.* TO 'parsec_test_user'{get_host_suffix()}")
+        await self.connection.commit()
+        
+        # Test connection with SSL enabled
+        conn_config = get_test_config().copy()
+        conn_config['user'] = 'parsec_test_user'
+        conn_config['password'] = test_password
+        conn_config['ssl'] = True
+        
+        parsec_ssl_conn = await mariadb.AsyncConnection.connect(**conn_config)
+        self.assertIsNotNone(parsec_ssl_conn)
+        
+        # Verify SSL is actually being used
+        parsec_cursor = parsec_ssl_conn.cursor()
+        await parsec_cursor.execute("SHOW STATUS LIKE 'Ssl_cipher'")
+        ssl_row = await parsec_cursor.fetchone()
+        self.assertIsNotNone(ssl_row, "Ssl_cipher status should be available")
+        self.assertNotEqual(ssl_row[1], '', "Ssl_cipher should not be empty when SSL is enabled")
+        
+        # Verify PARSEC authentication worked
+        await parsec_cursor.execute("SELECT USER()")
+        user_result = await parsec_cursor.fetchone()
+        self.assertIn('parsec_test_user', user_result[0])
+        
+        # Execute a query to ensure connection is fully functional
+        await parsec_cursor.execute("SELECT 'SSL + PARSEC test'")
+        result = await parsec_cursor.fetchone()
+        self.assertEqual(result[0], 'SSL + PARSEC test')
+        
+        await parsec_cursor.close()
+        await parsec_ssl_conn.close()
 
 
 class TestAuthenticationPluginFactory(unittest.TestCase):

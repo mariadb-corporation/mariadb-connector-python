@@ -388,6 +388,15 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         default_conf["ssl"] = True
         conn = await mariadb.AsyncConnection.connect(**default_conf)
         self.assertNotEqual(conn._tls_verify_status, None)
+        
+        # Verify SSL is actually being used after connection
+        cursor = conn.cursor()
+        await cursor.execute("SHOW STATUS LIKE 'Ssl_cipher'")
+        row = await cursor.fetchone()
+        await cursor.close()
+        self.assertIsNotNone(row, "Ssl_cipher status should be available")
+        self.assertNotEqual(row[1], '', "Ssl_cipher should not be empty when SSL is enabled")
+        
         await conn.close()
 
     async def test_tls_fp(self):
