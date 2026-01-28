@@ -258,7 +258,7 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
 
     # Use AsyncConnection if no custom class specified
     if connectionclass is None:
-        connectionclass = AsyncConnection
+        connectionclass = connection_class  # Use the class selected by Windows+SSL workaround
     
     # Connect asynchronously using the classmethod
     return await connectionclass.connect(*args, **kwargs)

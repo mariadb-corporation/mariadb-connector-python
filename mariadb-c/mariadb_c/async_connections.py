@@ -130,7 +130,6 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         # Windows + SSL workaround: Use pure Python async implementation
         # This is needed until MariaDB Connector/C properly supports async SSL on Windows
         import platform
-        actual_class = cls
         if platform.system() == "Windows" and cls.__module__ == 'mariadb_c.async_connections':
             # Check if SSL is enabled in kwargs
             ssl_enabled = kwargs.get('ssl', False) or kwargs.get('ssl_ca') or kwargs.get('ssl_cert')
@@ -138,12 +137,14 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
                 # Import and use pure Python async implementation instead
                 try:
                     from mariadb import async_connection as async_conn_module
-                    actual_class = async_conn_module.AsyncConnection
+                    # Call pure Python's connect() classmethod directly
+                    return await async_conn_module.AsyncConnection.connect(*args, **kwargs)
                 except ImportError:
                     # If pure Python not available, continue with C implementation
                     pass
         
-        instance = actual_class(*args, **kwargs)
+        # Use C extension implementation
+        instance = cls(*args, **kwargs)
         await instance._connect()
         return instance
     
