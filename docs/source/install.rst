@@ -40,6 +40,51 @@ the recent version of |MCP|.
    Installing collected packages: mariadb
    Successfully installed mariadb-1.1.5
 
+Linux
+-----
+
+On Linux systems, |MCP| requires MariaDB Connector/C to be installed, including shared library and development headers.
+
+For Debian / Ubuntu (after configuring MariaDB’s package repository):
+
+.. code-block:: console
+
+   sudo apt update
+   sudo apt install libmariadb3 libmariadb-dev python3-dev
+
+For CentOS / RHEL / Rocky Linux:
+
+.. code-block:: console
+
+   sudo yum install MariaDB-shared MariaDB-devel python3-devel
+
+After Connector/C + Python dev tools are installed, run:
+
+.. code-block:: console
+
+   pip3 install mariadb
+
+macOS
+-----
+
+On macOS, you need to install |MCC|. The recommended way is to use Homebrew:
+
+.. code-block:: console
+
+   brew install mariadb-connector-c
+
+Afterwards, verify that the installation directory is on your PATH. For example:
+
+.. code-block:: console
+
+   export PATH="/usr/local/opt/mariadb-connector-c/bin:$PATH"
+
+Then install |MCP| with:
+
+.. code-block:: console
+
+   pip3 install mariadb
+
 Installation from Source
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
