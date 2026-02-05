@@ -242,9 +242,6 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         if wait_status == 0:
             return 0
         
-        self._read_event.clear()
-        self._write_event.clear()
-        
         timeout = None
         if wait_status & MYSQL_WAIT_TIMEOUT:
             timeout = self.get_timeout_value()
@@ -253,10 +250,14 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         
         try:
             if wait_status & MYSQL_WAIT_READ:
-                await asyncio.wait_for(self._read_event.wait(), timeout=timeout)
+                if not self._read_event.is_set():
+                    await asyncio.wait_for(self._read_event.wait(), timeout=timeout)
+                self._read_event.clear()
                 return MYSQL_WAIT_READ
             elif wait_status & MYSQL_WAIT_WRITE:
-                await asyncio.wait_for(self._write_event.wait(), timeout=timeout)
+                if not self._write_event.is_set():
+                    await asyncio.wait_for(self._write_event.wait(), timeout=timeout)
+                self._write_event.clear()
                 return MYSQL_WAIT_WRITE
             else:
                 # No read or write requested
