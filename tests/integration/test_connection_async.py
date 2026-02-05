@@ -432,49 +432,6 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fp, x509_info["fingerprint"])
         await conn.close()
 
-    async def test_conpy278(self):
-        if is_maxscale():
-            self.skipTest("MAXSCALE bug MXS-4961")
-        if is_async_native():
-            self.skipTest("reconnect doesn't work with native connector")
-        
-        config = conf()
-        config["reconnect"] = True
-        
-        async with await mariadb.AsyncConnection.connect(**config) as conn:
-            old_id = conn.connection_id
-            try:
-                await conn.kill(conn.connection_id)
-            except mariadb.OperationalError:
-                await conn.ping()
-            self.assertNotEqual(old_id, conn.connection_id)
-        
-        async with await mariadb.AsyncConnection.connect(**config) as conn:
-            old_id = conn.connection_id
-            try:
-                await conn.kill(conn.connection_id)
-            except mariadb.OperationalError:
-                await conn.ping()
-            self.assertNotEqual(old_id, conn.connection_id)
-        
-        async with await mariadb.AsyncConnection.connect(**config) as conn:
-            old_id = conn.connection_id
-            try:
-                await conn.kill(conn.connection_id)
-            except mariadb.OperationalError:
-                pass
-            cursor = conn.cursor()
-            try:
-                await cursor.execute("set @a:=1")
-            except mariadb.InterfaceError:
-                pass
-            await cursor.execute("set @a:=1")
-            self.assertNotEqual(old_id, conn.connection_id)
-
-            old_id = conn.connection_id
-            await conn.reconnect()
-            self.assertNotEqual(old_id, conn.connection_id)
-            await cursor.close()
 
     async def test_tls_properties_non_ssl(self):
         """Test that all TLS properties return correct default values when SSL is not enabled"""

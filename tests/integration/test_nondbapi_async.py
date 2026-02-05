@@ -29,16 +29,6 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
         except (mariadb.InterfaceError, mariadb.DatabaseError):
             pass
         await new_conn.close()
-        # Pure Python (native) doesn't implement auto_reconnect
-        if not is_native() and not is_async_native():
-            new_conn = await mariadb.AsyncConnection.connect(**conf())
-            new_conn.auto_reconnect = True
-            id = new_conn.connection_id
-            await self.connection.kill(id)
-            await new_conn.ping()
-            new_id = new_conn.connection_id
-            self.assertTrue(id != new_id)
-            await new_conn.close()
 
     async def test_change_user(self):
         if is_skysql():

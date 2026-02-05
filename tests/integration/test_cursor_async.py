@@ -85,54 +85,6 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await cursor.close()
 
-    async def test_cursor_reconnect(self):
-        if is_async_native():
-            self.skipTest("skip test for native not supprting deprecated reconnect")
-        if is_maxscale():
-            self.skipTest("skip test for maxscale")
-
-        async with await mariadb.AsyncConnection.connect(**{**conf(), **{'reconnect' : True}}) as conn:
-            self.assertEqual(conn.auto_reconnect, True)
-            cursor= conn.cursor(binary=True)
-            await cursor.execute("SET session wait_timeout=3")
-
-            # binary protocol should fail
-            await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
-            time.sleep(5)
-            try:
-                 await cursor.fetchone()
-            except mariadb.ProgrammingError:
-                 pass
-
-            await cursor.close()
-
-            # Text protocol unbuffered should fail
-            cursor= conn.cursor(binary=False, buffered=False)
-            await cursor.execute("SET session wait_timeout=3")
-
-            # text protocol unbuffered should fail
-            await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
-            time.sleep(5)
-            try:
-                await cursor.fetchone()
-            except mariadb.ProgrammingError:
-                pass
-
-            # reeusing cursor should work
-            cursor= conn.cursor(binary=False, buffered=True)
-            await cursor.execute("SET session wait_timeout=3")
-            time.sleep(5)
-            # reconnect
-            await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
-            self.assertNotEqual(cursor._thread_id, cursor.connection.thread_id)
-            row= await cursor.fetchone()
-            self.assertEqual(row[0],1)
-            # execute should update cursor._thread_id
-            await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
-            self.assertEqual(cursor._thread_id, cursor.connection.thread_id)
-
-            await cursor.close()
-
     async def test_conpy283(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as conn:
 

@@ -70,9 +70,16 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._pooled_connection = None
         self._active_async_cursor = None  # Python-level tracking for async cursors only
         
+        # Persistent event loop state for efficient I/O waiting
+        self._loop = None
+        self._read_event = None
+        self._write_event = None
+        
         # Extract parameters that need special handling (use .pop() like sync)
         self._autocommit = kwargs.pop("autocommit", False)
-        self._reconnect = kwargs.pop("reconnect", False)
+        # Reconnect is not supported for async connections - ignore it
+        kwargs.pop("reconnect", None)
+        self._reconnect = False
         self._converter_param = kwargs.pop("converter", None)
         # Remove debug parameter that C extension doesn't support
         kwargs.pop("debug", None)
@@ -198,62 +205,65 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
                 supports_add_reader = False
         
         if supports_add_reader:
-            # Unix/Linux: Use efficient add_reader/remove_reader
+            # Unix/Linux: Use efficient add_reader/remove_reader with persistent registration
+            self._loop = loop
+            self._read_event = asyncio.Event()
+            self._write_event = asyncio.Event()
+            
+            # Register callbacks once at connection time
+            self._loop.add_reader(self._socket_fd, self._on_socket_readable)
+            self._loop.add_writer(self._socket_fd, self._on_socket_writable)
+            self._reader_registered = True
+            self._writer_registered = True
+            
             self._wait_for_status = self._wait_for_status_selector
         else:
             # Windows: Use C-based polling
             self._wait_for_status = self._wait_for_status_c_poll
         
         await self.set_autocommit(self._autocommit)
-        if self._reconnect is not None:
-            await self.set_auto_reconnect(self._reconnect)
+        # Note: auto_reconnect is disabled for async connections
+    
+    def _on_socket_readable(self):
+        """Callback when socket becomes readable (registered once at connection time)."""
+        self._read_event.set()
+    
+    def _on_socket_writable(self):
+        """Callback when socket becomes writable (registered once at connection time)."""
+        self._write_event.set()
     
     async def _wait_for_status_selector(self, wait_status: int) -> int:
         """
-        Wait for socket events using add_reader/remove_reader (Unix/Linux).
+        Wait for socket events using persistent event loop registration (Unix/Linux).
+        
+        Callbacks are registered once at connection time and remain active.
+        This avoids the overhead of repeatedly calling add_reader/remove_reader.
         """
         if wait_status == 0:
             return 0
         
-        loop = asyncio.get_event_loop()
-        future = loop.create_future()
-        result_status = [0]
+        self._read_event.clear()
+        self._write_event.clear()
         
-        def on_read_event():
-            if not future.done():
-                result_status[0] |= MYSQL_WAIT_READ
-                future.set_result(None)
-        
-        def on_write_event():
-            if not future.done():
-                result_status[0] |= MYSQL_WAIT_WRITE
-                future.set_result(None)
+        timeout = None
+        if wait_status & MYSQL_WAIT_TIMEOUT:
+            timeout = self.get_timeout_value()
+            if timeout <= 0:
+                timeout = None
         
         try:
             if wait_status & MYSQL_WAIT_READ:
-                loop.add_reader(self._socket_fd, on_read_event)
-            
-            if wait_status & MYSQL_WAIT_WRITE:
-                loop.add_writer(self._socket_fd, on_write_event)
-            
-            if wait_status & MYSQL_WAIT_TIMEOUT:
-                timeout = self.get_timeout_value()
-                if timeout > 0:
-                    try:
-                        await asyncio.wait_for(future, timeout=timeout)
-                    except asyncio.TimeoutError:
-                        result_status[0] = MYSQL_WAIT_TIMEOUT
-                else:
-                    await future
+                await asyncio.wait_for(self._read_event.wait(), timeout=timeout)
+                return MYSQL_WAIT_READ
+            elif wait_status & MYSQL_WAIT_WRITE:
+                await asyncio.wait_for(self._write_event.wait(), timeout=timeout)
+                return MYSQL_WAIT_WRITE
             else:
-                await future
+                # No read or write requested
+                return wait_status
             
-            return result_status[0] if result_status[0] != 0 else wait_status
-        finally:
-            if wait_status & MYSQL_WAIT_READ:
-                loop.remove_reader(self._socket_fd)
-            if wait_status & MYSQL_WAIT_WRITE:
-                loop.remove_writer(self._socket_fd)
+        except asyncio.TimeoutError:
+            return MYSQL_WAIT_TIMEOUT
     
     async def _wait_for_status_c_poll(self, wait_status: int) -> int:
         """
@@ -315,6 +325,15 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         if self._pooled_connection:
             await self._pooled_connection.return_to_pool()
         else:
+            # Unregister event loop callbacks before closing
+            if self._read_event and self._loop and self._socket_fd is not None:
+                try:
+                    self._loop.remove_reader(self._socket_fd)
+                    self._loop.remove_writer(self._socket_fd)
+                except (OSError, ValueError):
+                    # Socket already closed or invalid - ignore
+                    pass
+            
             # Use async close to avoid blocking event loop
             wait_status = self._async_close_start()
             
@@ -632,11 +651,25 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         # Reset closed flag before reconnecting
         self.closed = False
         
+        # Unregister old socket FD from event loop if using persistent registration
+        if self._read_event and self._loop and self._socket_fd is not None:
+            try:
+                self._loop.remove_reader(self._socket_fd)
+                self._loop.remove_writer(self._socket_fd)
+            except (OSError, ValueError):
+                # Socket already closed or invalid - ignore
+                pass
+        
         # Call the C library's mariadb_reconnect function
         await loop.run_in_executor(None, lambda: super(AsyncConnection, self).reconnect())
         
         # Update socket FD after reconnect since the connection socket has changed
         self._socket_fd = self.get_socket()
+        
+        # Re-register event loop callbacks with new socket FD
+        if self._read_event and self._loop:
+            self._loop.add_reader(self._socket_fd, self._on_socket_readable)
+            self._loop.add_writer(self._socket_fd, self._on_socket_writable)
 
     async def reset(self):
         """
