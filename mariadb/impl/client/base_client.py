@@ -605,7 +605,7 @@ class BaseClient(ABC):
         row_values = [None] * num_cols
         pos = 0
         data_bytes = data.tobytes()  # Convert once for faster access
-        
+
         for i in range(num_cols):
             column = columns[i]
             # Read length-encoded integer for field length
@@ -614,7 +614,7 @@ class BaseClient(ABC):
                 length = length_byte
                 pos += 1
             elif (length_byte == 0xFB):
-                pos += 1                
+                pos += 1
                 continue
             elif length_byte == 0xFC:
                 length = _unpack_H(data, pos + 1)[0]
@@ -625,10 +625,29 @@ class BaseClient(ABC):
             else:
                 length = _unpack_Q(data, pos + 1)[0]
                 pos += 9
-            
+
             col_type = column.type
             if col_type in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
                 row_values[i] = int(data_bytes[pos:pos + length])
+            elif col_type in (FIELD_TYPE.VARCHAR, FIELD_TYPE.BIT, FIELD_TYPE.ENUM, FIELD_TYPE.SET, \
+                              FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.VAR_STRING, \
+                              FIELD_TYPE.STRING, FIELD_TYPE.GEOMETRY):
+                # String types and others
+                if column.special_format:
+                    if column.ext_type_format == b'json':
+                        row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
+                    elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
+                        row_values[i] = data_bytes[pos:pos + length].decode('ascii')
+                        if config.native_object:
+                            row_values[i] = ipaddress.ip_address(row_values[i])
+                    elif column.ext_type_name == b'uuid':
+                        row_values[i] = data_bytes[pos:pos + length].decode('ascii')
+                        if config.native_object:
+                            row_values[i] = uuid.UUID(row_values[i])
+                elif column.character_set == 63:  # Binary
+                    row_values[i] = data_bytes[pos:pos + length]
+                else:
+                    row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
             elif col_type in (FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE):
                 row_values[i] = float(data_bytes[pos:pos + length].decode('ascii'))
             elif col_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
@@ -681,26 +700,9 @@ class BaseClient(ABC):
                 row_values[i] = None
             elif col_type == FIELD_TYPE.JSON:
                 row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
-            else:
-                # String types and others
-                if column.special_format:
-                    if column.ext_type_format == b'json':
-                        row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
-                    elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
-                        row_values[i] = data_bytes[pos:pos + length].decode('ascii')
-                        if config.native_object:
-                            row_values[i] = ipaddress.ip_address(row_values[i])
-                    elif column.ext_type_name == b'uuid':
-                        row_values[i] = data_bytes[pos:pos + length].decode('ascii')
-                        if config.native_object:
-                            row_values[i] = uuid.UUID(row_values[i])
-                elif column.character_set == 63:  # Binary
-                    row_values[i] = data_bytes[pos:pos + length]
-                else:
-                    row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
-            
+
             pos += length
-        
+
         return tuple(row_values)
 
     def _parse_binary_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', num_cols: int) -> tuple:
@@ -717,26 +719,12 @@ class BaseClient(ABC):
         for i in range(num_cols):
             column = columns[i]
 
-            if null_bitmap[(i + 2) // 8] & (1 << ((i + 2) % 8)):
-                row_values[i] = None
+            if null_bitmap[(i + 2) >> 3] & (1 << ((i + 2) & 7)):
                 continue
 
             # Decode based on field type
             field_type = column.type
-            
-            if field_type == FIELD_TYPE.TINY:
-                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
-                    row_values[i] = data[pos]
-                else:
-                    row_values[i] = _unpack_b(data, pos)[0]
-                pos += 1
-            elif field_type in (FIELD_TYPE.SHORT, FIELD_TYPE.YEAR):
-                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
-                    row_values[i] = _unpack_H(data, pos)[0]
-                else:
-                    row_values[i] = _unpack_h(data, pos)[0]
-                pos += 2
-            elif field_type in (FIELD_TYPE.LONG, FIELD_TYPE.INT24):
+            if field_type in (FIELD_TYPE.LONG, FIELD_TYPE.INT24):
                 if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
                     row_values[i] = _unpack_I(data, pos)[0]
                 else:
@@ -748,6 +736,54 @@ class BaseClient(ABC):
                 else:
                     row_values[i] = _unpack_q(data, pos)[0]
                 pos += 8
+            elif field_type in (FIELD_TYPE.VARCHAR, FIELD_TYPE.BIT, FIELD_TYPE.ENUM, FIELD_TYPE.SET, \
+                                FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.VAR_STRING, \
+                                FIELD_TYPE.STRING, FIELD_TYPE.GEOMETRY):
+                # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
+                length = data[pos]
+
+                if (length < 0xFB):
+                    pos += 1
+                elif length == 0xFC:
+                    length = _unpack_H(data, pos + 1)[0]
+                    pos += 3
+                elif length == 0xFD:
+                    length = struct.unpack('<I', data[pos+ 1:pos+4].tobytes() + b'\x00')[0]
+                    pos += 4
+                else:  # 0xFE
+                    length = _unpack_Q(data, pos + 1)[0]
+                    pos += 9
+
+                val = bytes(data[pos:pos + length])
+                if column.special_format:
+                    if column.ext_type_format == b'json':
+                        row_values[i] = val.decode('utf-8')
+                    elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
+                        row_values[i] = val.decode('ascii')
+                        if config.native_object:
+                            row_values[i] = ipaddress.ip_address(row_values[i])
+                    elif column.ext_type_name == b'uuid':
+                        row_values[i] = val.decode('ascii')
+                        if config.native_object:
+                            row_values[i] = uuid.UUID(row_values[i])
+                elif column.character_set == 63 and field_type != FIELD_TYPE.JSON:  # Binary
+                    row_values[i] = val
+                else:
+                    row_values[i] = val.decode('utf-8', errors='ignore')
+                pos += length
+
+            elif field_type == FIELD_TYPE.TINY:
+                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
+                    row_values[i] = data[pos]
+                else:
+                    row_values[i] = _unpack_b(data, pos)[0]
+                pos += 1
+            elif field_type in (FIELD_TYPE.SHORT, FIELD_TYPE.YEAR):
+                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
+                    row_values[i] = _unpack_H(data, pos)[0]
+                else:
+                    row_values[i] = _unpack_h(data, pos)[0]
+                pos += 2
             elif field_type == FIELD_TYPE.FLOAT:
                 row_values[i] = _unpack_f(data, pos)[0]
                 pos += 4
@@ -822,40 +858,7 @@ class BaseClient(ABC):
                         row_values[i] = None
                 else:
                     row_values[i] = None
-            else:
-                # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
-                length = data[pos]
 
-                if (length < 0xFB):
-                    pos += 1
-                elif length == 0xFC:
-                    length = _unpack_H(data, pos + 1)[0]
-                    pos += 3
-                elif length == 0xFD:
-                    length = struct.unpack('<I', data[pos+ 1:pos+4].tobytes() + b'\x00')[0]
-                    pos += 4
-                else:  # 0xFE
-                    length = _unpack_Q(data, pos + 1)[0]
-                    pos += 9
-
-                val = bytes(data[pos:pos + length])
-                if column.special_format:
-                    if column.ext_type_format == b'json':
-                        row_values[i] = val.decode('utf-8')
-                    elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
-                        row_values[i] = val.decode('ascii')
-                        if config.native_object:
-                            row_values[i] = ipaddress.ip_address(row_values[i])
-                    elif column.ext_type_name == b'uuid':
-                        row_values[i] = val.decode('ascii')
-                        if config.native_object:
-                            row_values[i] = uuid.UUID(row_values[i])
-                elif column.character_set == 63 and field_type != FIELD_TYPE.JSON:  # Binary
-                    row_values[i] = val
-                else:
-                    row_values[i] = val.decode('utf-8', errors='ignore')
-                pos += length
-        
         return tuple(row_values)
 
         
