@@ -56,7 +56,7 @@ class SyncClient(BaseClient):
     # =========================================================================
     # Initialization
     # =========================================================================
-    
+
     def __init__(self, configuration: Configuration) -> None:
         """Initialize synchronous client with configuration"""
         super().__init__(configuration)
@@ -64,7 +64,7 @@ class SyncClient(BaseClient):
 
         # Sync-specific attributes
         self.socket: Optional[socket.socket] = None
-        
+
         # Read buffer management
         self._default_recv_buf: bytearray = bytearray(16384)
         self._default_recv_buf_mv = memoryview(self._default_recv_buf)  # Cache default memoryview
@@ -73,6 +73,7 @@ class SyncClient(BaseClient):
         self._recv_buf_capacity = 16384  # Cache buffer capacity
         self._recv_pos = 0
         self._recv_len = 0
+        self._last_payload= None
 
 
     # =========================================================================
@@ -89,7 +90,7 @@ class SyncClient(BaseClient):
         self._recv_buf = self._recv_buf + bytearray(grow_size)
         self._recv_buf_mv = memoryview(self._recv_buf)
         self._recv_buf_capacity += grow_size
-                
+
 
     def _recv_into_buffer(self, size=0):
         """
@@ -100,19 +101,18 @@ class SyncClient(BaseClient):
 
         Returns the number of bytes read.
         """
-        
 
         received = 0
 
         # Keep trying to read until we have enough data or there's nothing left
         try:
             if size == 0:
-                n = self.socket.recv_into(self._recv_buf_mv[self._recv_len + received:])
+                n = self.socket.recv_into(self._recv_buf_mv[self._recv_len:])
                 if n == 0:
                     raise ConnectionError("Connection reset by peer")
                 return n
             while received < size:
-                n = self.socket.recv_into(self._recv_buf_mv[self._recv_len + received:], size - received)
+                n = self.socket.recv_into(self._recv_buf_mv[self._recv_len + received:])
                 if n == 0:
                     raise ConnectionError("Connection reset by peer")
                 received += n
@@ -128,108 +128,118 @@ class SyncClient(BaseClient):
             # Generic socket error (broken pipe, network down, etc.)
             raise ConnectionError(f"Socket error: {e}") from e
 
-    def read_payload(self):
+    def read_payload(self, packet_count: int = 1):
         """
-        Reads and returns a full packet from database server
+        Reads one or more complete packets from database server.
 
-        Returns a tuple which contains packet size and first offset
-        of the buffer
-
+        Returns:
+            packet_count == 1: memoryview
+            packet_count > 1 or -1: list of (start, end) tuples
         """
-        # if everything was read - rewind buffer
+        # --- 1. Top-Level Buffer Maintenance ---
+        # Shift data ONLY at the start of the call to protect caller references.
         if self._recv_pos >= self._recv_len:
-           self._recv_pos = 0
-           self._recv_len = 0
-
-        if self._recv_pos > 0 and self._recv_buf_capacity - self._recv_len < 1024:
+            self._recv_pos = 0
+            self._recv_len = 0
+        elif self._recv_pos > 0 and (packet_count != 1 or self._recv_buf_capacity - self._recv_len < 1024):
             unread = self._recv_len - self._recv_pos
             if unread > 0:
                 self._recv_buf[:unread] = self._recv_buf[self._recv_pos:self._recv_len]
             self._recv_len = unread
             self._recv_pos = 0
 
-        first_pos = self._recv_pos
-        total_size = 0
-        packet_count = 0
+        is_multi = (packet_count != 1)
+        results = [] if is_multi else None
 
         while True:
-            bytes_in_buffer = self._recv_len - self._recv_pos
+            first_pos = self._recv_pos
+            total_size = 0
+            pkt_seen = 0
 
-            if bytes_in_buffer > 0:
-                # buffer must contain at least a packet header
+            # --- 2. Primary Packet Assembly ---
+            while True:
+                bytes_in_buffer = self._recv_len - self._recv_pos
+
                 if bytes_in_buffer < 4:
-                    missing = 4 - bytes_in_buffer
-                    self._ensure_space(missing)
-                    self._recv_len += self._recv_into_buffer(missing)
-                    continue
+                    if self._recv_len == self._recv_buf_capacity:
+                        self._ensure_space(4)
+                    
+                    got = self._recv_into_buffer(4 - bytes_in_buffer)
+                    if got == 0: # Connection lost
+                        return results if is_multi else None
+                    self._recv_len += got
+                    bytes_in_buffer = self._recv_len - self._recv_pos
 
-                # Fast packet header parsing using struct
                 header_int = _unpack_pkt_hdr(self._recv_buf, self._recv_pos)[0]
                 packet_length = header_int & 0xFFFFFF
                 self.sequence[0] = (header_int >> 24) & 0xFF
-
-                # check if we have complete packet data
                 packet_total = 4 + packet_length
+
                 if bytes_in_buffer < packet_total:
-                    # Need to read more data
                     missing = packet_total - bytes_in_buffer
-                    # For MAX_PKT_SIZE packets, also try to read next packet header
                     if packet_length == 0xFFFFFF:
                         missing += 4
-                    self._ensure_space(missing)
-                    self._recv_len += self._recv_into_buffer(missing)
-                    continue
+                    
+                    if self._recv_len + missing > self._recv_buf_capacity:
+                        self._ensure_space(missing)
+                        
+                    got = self._recv_into_buffer(missing)
+                    if got == 0:
+                        return results if is_multi else None
+                    self._recv_len += got
+                    bytes_in_buffer = self._recv_len - self._recv_pos
 
-                # We have complete packet (header + payload)
-                packet_count += 1
-                
-                # Fast path: single packet (most common case)
-                if packet_length < 0xFFFFFF and packet_count == 1:
-                    # Single packet fast path - no compaction needed
-                    result_start = self._recv_pos + 4
-                    result_end = self._recv_pos + packet_total
-                    self._recv_pos = result_end
-                    return self._recv_buf_mv[result_start:result_end]
-                
-                # Multi-packet handling (MAX_PKT_SIZE)
-                if packet_count > 1:
-                    # Compact by removing intermediate header
+                pkt_seen += 1
+
+                # Chained Fragment Compaction logic (> 16MB)
+                if pkt_seen > 1:
                     payload_src = self._recv_pos + 4
                     payload_dst = first_pos + 4 + total_size
                     if payload_src != payload_dst:
-                        # Calculate how much data is after this packet
-                        data_after_packet = self._recv_len - (self._recv_pos + packet_total)
-                        # Move this packet's payload
+                        data_after = self._recv_len - (self._recv_pos + packet_total)
                         self._recv_buf[payload_dst:payload_dst + packet_length] = \
                             self._recv_buf[payload_src:payload_src + packet_length]
-                        # Move any data after this packet
-                        if data_after_packet > 0:
-                            self._recv_buf[payload_dst + packet_length:payload_dst + packet_length + data_after_packet] = \
-                                self._recv_buf[self._recv_pos + packet_total:self._recv_len]
-                        # After compaction, adjust buffer length to account for removed header
+                        if data_after > 0:
+                            # Avoid overlap issues using a temporary slice
+                            tmp = self._recv_buf[self._recv_pos + packet_total:self._recv_len]
+                            self._recv_buf[payload_dst + packet_length:
+                                           payload_dst + packet_length + data_after] = tmp
                         self._recv_len -= 4
-                
+
                 total_size += packet_length
 
-                # Check if this is the last packet
-                if packet_length < 0xFFFFFF:
-                    # Last packet in multi-packet sequence - return complete result
-                    result_start = first_pos + 4
-                    result_end = first_pos + 4 + total_size
-                    self._recv_pos = result_end
-                    return self._recv_buf_mv[result_start:result_end]
-
-                # Multi-packet: advance to next packet header
-                # After compaction, the next header is immediately after current payload
-                if packet_count > 1:
-                    # After compaction, next header is at: first_pos + 4 + total_size
+                if packet_length < 0xFFFFFF: # Final fragment seen
+                    p_start = first_pos + 4
+                    p_end = p_start + total_size
+                    self._recv_pos = p_end
+                    break
+                
+                # Move to next fragment header
+                if pkt_seen > 1:
                     self._recv_pos = first_pos + 4 + total_size
                 else:
-                    # First packet, no compaction yet
                     self._recv_pos += packet_total
-            else:
-                # No data in buffer, read more
-                self._recv_len += self._recv_into_buffer(0)
+
+            # --- 3. Result Handling ---
+            if not is_multi:
+                return self._recv_buf_mv[p_start : p_end]
+
+            # Store the (start, end) tuple
+            results.append((p_start, p_end))
+
+            # Terminator Logic (0xFE = EOF, 0xFF = ERR)
+            first_byte = self._recv_buf[p_start]
+            if first_byte >= 0xFE:
+                if first_byte == 0xFF or (p_end - p_start) < 9:
+                    return results
+
+            # Reached requested count
+            if packet_count > 0 and len(results) >= packet_count:
+                return results
+
+            # Stop if buffer exhausted and not in slurp mode
+            if self._recv_pos >= self._recv_len and packet_count != -1:
+                return results
 
     def reset_buffer(self):
         self._recv_buf = self._default_recv_buf
@@ -599,9 +609,9 @@ class SyncClient(BaseClient):
 
     def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None, sql: str = None) -> List[Completion]:
         from ..result import SyncStreamingResult, SyncCompleteResult
-        
+
         results = []
-        
+
         while True:
             packet = self.read_payload()
             packet_type = packet[0]
@@ -616,9 +626,9 @@ class SyncClient(BaseClient):
                 results.append(self._handle_local_infile(packet, sql))
                 # After sending file, read the actual result
                 if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
-                    break                
+                    break
                 continue
-            
+
             """Parse result set with column definitions and row data"""
             # Parse column count from first packet
             parser = PayloadReader(packet)
@@ -626,22 +636,33 @@ class SyncClient(BaseClient):
 
             # Cache EOF deprecated flag once
             eof_deprecated = self.context.isEofDeprecated()
-            
+
             # Read column definitions
             columns: List[ColumnDefinitionPacket] = [None] * column_count
             if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                 # skip metadata
                 columns = prepare_stmt_packet.columns
             else:
-                for i in range(column_count):
+                if column_count < 2:
                     col_packet = self.read_payload()
-                    columns[i] = ColumnDefinitionPacket.decode(col_packet, self.context)
-                if prepare_stmt_packet is not None:
-                    prepare_stmt_packet.columns = columns
+                    columns= [ColumnDefinitionPacket.decode(col_packet, self.context)]
+                else:
+                    idx = 0
+                    packets = []
+                    while idx < column_count:
+                        packets.extend(self.read_payload(column_count - idx))
+
+                        while idx < len(packets):
+                            start, end= packets[idx]
+                            columns[idx] = ColumnDefinitionPacket.decode(self._recv_buf_mv[start:end], self.context)
+                            idx += 1
+
+                    if prepare_stmt_packet is not None:
+                        prepare_stmt_packet.columns = columns
             # Read EOF packet after column definitions (if not deprecated)
             if not eof_deprecated:
                 self.read_payload()  # Skip EOF packet
-            
+
             # Select appropriate row parser based on protocol
             row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
 
@@ -654,48 +675,60 @@ class SyncClient(BaseClient):
                     config,
                     row_parser
                 )
-                
+
                 # Register streaming result with client for tracking
                 self._active_streaming_result = streaming_result
-                
+
                 # Create completion with streaming result
                 completion = OkPacket(0,0,0,0,b'')
                 completion.result_set = streaming_result
                 results.append(completion)
                 return results
-            
+
             # Read rows
             rows: List[tuple] = []
-            
+
             # Pre-compute EOF/OK length threshold
             eof_length_threshold = 16777215 if eof_deprecated else 8
-            
+
             while True:
-                row_packet = self.read_payload()
-                packet_first_byte = row_packet[0]
-                
-                # Check for EOF/OK packet (0xFE with length constraint)
-                if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
-                    if eof_deprecated:
-                        completion = _decode_ok_packet(row_packet, self.context)
-                    else:
-                        completion = _decode_eof_packet(row_packet, self.context)
+                packets = self.read_payload(-1)
 
-                    if config.converter:
-                        rows = self._apply_converters_to_rows(rows, columns, config)
+                # Loop through the batch of packets
+                finish_result = False
+                for p in packets:
+                    row_packet= self._recv_buf_mv[p[0]:p[1]]
+                    packet_first_byte = row_packet[0]
 
-                    completion.result_set = SyncCompleteResult(
-                        columns,
-                        column_count,
-                        config,
-                        rows
-                    )
-                    results.append(completion)
+                    # Check for EOF/OK packet terminator
+                    if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
+                        if eof_deprecated:
+                            completion = _decode_ok_packet(row_packet, self.context)
+                        else:
+                            completion = _decode_eof_packet(row_packet, self.context)
+
+                        if config.converter:
+                            rows = self._apply_converters_to_rows(rows, columns, config)
+
+                        completion.result_set = SyncCompleteResult(
+                            columns,
+                            column_count,
+                            config,
+                            rows
+                        )
+                        results.append(completion)
+                        finish_result = True
+                        break
+
+                    # Check for Error packet
+                    elif packet_first_byte == self.ERROR_PACKET:
+                        raise _decode_error_packet(row_packet, self.context).toError(self.exception_factory)
+
+                    # Regular data row
+                    rows.append(row_parser(row_packet, columns, config, column_count))
+
+                if finish_result:
                     break
-                elif packet_first_byte == self.ERROR_PACKET:
-                    raise _decode_error_packet(row_packet, self.context).toError(self.exception_factory)
-                
-                rows.append(row_parser(row_packet, columns, config, column_count))
 
             if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                 break
