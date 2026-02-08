@@ -641,6 +641,7 @@ class AsyncClient(BaseClient):
             
             # Select appropriate row parser based on protocol
             row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+            self._set_txt_converters(columns, config)
 
             # If unbuffered, create streaming result
             if not buffered:

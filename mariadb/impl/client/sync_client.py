@@ -19,7 +19,7 @@ from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
-from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
+from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket, ColumnsDefinitionPacket
 from .base_client import BaseClient
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
@@ -665,6 +665,7 @@ class SyncClient(BaseClient):
 
             # Select appropriate row parser based on protocol
             row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+            self._set_txt_converters(columns, config)
 
             # If unbuffered, create streaming result
             if not buffered:

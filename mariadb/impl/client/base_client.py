@@ -50,11 +50,134 @@ from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
 from cachetools import LRUCache
 
+# text conversion functions 
+def parse_date_text(s: bytes):
+    # YYYY-MM-DD
+    _int = int
+    parts = _unpack_DATE_TEXT(s, 0)  # returns 5-tuple: year_b, sep1, month_b, sep2, day_b
+    # convert numeric positions to int, skip separators
+    year, month, day = (_int(parts[i]) for i in (0, 2, 4))
+
+    if year == 0 or month == 0 or day == 0:
+        return None
+    return datetime.date(int(year), int(month), int(day))
+
+def parse_time_text(s: bytes):
+    _int = int
+    negative = s[0] == 45  # ord('-')
+    if negative:
+        s = s[1:]
+    parts = s.split(b':')
+    if len(parts) != 3:
+        return None
+    hours = _int(parts[0])
+    minutes = _int(parts[1])
+    sec_parts = parts[2].split(b'.')
+    seconds = _int(sec_parts[0])
+    microseconds = _int(sec_parts[1].ljust(6, b'0')) if len(sec_parts) > 1 else 0
+    td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
+    return -td if negative else td
+
+def parse_datetime_text(s: bytes):
+    """Convert YYYY-MM-DD HH:MM:SS[.ffffff] bytes to datetime.datetime, None for zero dates."""
+    if len(s) < 19:
+        return None
+
+    _int = int
+
+    parts = _unpack_DATETIME_TEXT(s, 0)  # 11 elements: y, _, m, _, d, _, h, _, mi, _, s
+    year, month, day, hour, minute, second = (_int(parts[i]) for i in (0, 2, 4, 6, 8, 10))
+
+    if year == 0 or month == 0 or day == 0:
+        return None
+
+    microseconds = 0
+    if len(s) > 19 and s[19] == ord('.'):
+        frac = s[20:]
+        l = len(frac)
+        if l >= 6:
+            microseconds = _int(frac[:6])
+        else:
+            microseconds = _int(frac) * (10 ** (6 - l))
+
+    return datetime.datetime(year, month, day, hour, minute, second, microseconds)
+
+def parse_uuid_bytes(s: bytes):
+    return uuid.UUID(s.decode('ascii'))
+
+def parse_ip_bytes(s: bytes):
+    return ipaddress.ip_address(s.decode('ascii'))
+
+def parse_json_bytes(s: bytes):
+    return s.decode('utf-8', errors='ignore')
+
+def parse_string_bytes(s: bytes):
+    return s.decode('utf-8', errors='ignore')
+
+def parse_decimal_bytes(s: bytes):
+    return decimal.Decimal(s.decode('ascii'))
+
+def parse_null(_):
+    return None
+
+def txt_conversion_table(columns, config):
+    table = []
+    for col in columns:
+        t = col.type
+        charset = getattr(col, 'character_set', None)
+        ext_type_name = getattr(col, 'ext_type_name', None)
+        ext_type_format = getattr(col, 'ext_type_format', None)
+
+        if t in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG,
+                 FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
+            table.append(int)
+
+        elif t in (FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE):
+            table.append(float)
+
+        elif t in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
+            table.append(parse_decimal_bytes)
+
+        elif t in (FIELD_TYPE.VARCHAR, FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING, FIELD_TYPE.GEOMETRY,
+                   FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.BLOB):
+
+            # special formats first
+            if ext_type_format == b'json':
+                table.append(parse_json_bytes)
+            elif ext_type_name in (b'inet4', b'inet6'):
+                table.append(parse_ip_bytes if getattr(config, 'native_object', False) else parse_string_bytes)
+            elif ext_type_name == b'uuid':
+                table.append(parse_uuid_bytes if getattr(config, 'native_object', False) else parse_string_bytes)
+            # binary check
+            elif charset == 63:
+                table.append(bytes)
+            # fallback text
+            else:
+                table.append(parse_string_bytes)
+
+        elif t in (FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE):
+            table.append(parse_date_text)
+
+        elif t == FIELD_TYPE.TIME:
+            table.append(parse_time_text)
+
+        elif t in (FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP):
+            table.append(parse_datetime_text)
+
+        elif t == FIELD_TYPE.NULL:
+            table.append(parse_null)
+
+        else:
+            table.append(parse_string_bytes)
+
+    return table
+
+
 class BaseClient(ABC):
     """
     Abstract base client for MariaDB connections
     
-    Contains all common logic shared between async and sync implementations.    
+    Contains all common logic shared between async and sync implementations.
     """
     
     # =========================================================================
@@ -97,6 +220,7 @@ class BaseClient(ABC):
         self.connect_timeout = configuration.connect_timeout
         self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
         self.auth_plugin: Optional['AuthenticationPlugin'] = None
+        self.txt_conversion_table = None
         
         # Track active streaming (unbuffered) result at client level
         # This prevents "Commands out of sync" when multiple cursors share the same connection
@@ -596,6 +720,9 @@ class BaseClient(ABC):
 
         return converted_rows
 
+    def _set_txt_converters(self, columns, config):
+        self.txt_conversion_table= txt_conversion_table(columns, config)
+
     # =========================================================================
     # Row Data Parsing Methods
     # =========================================================================
@@ -606,9 +733,10 @@ class BaseClient(ABC):
         pos = 0
         data_bytes = data.tobytes()  # Convert once for faster access
 
-        for i in range(num_cols):
-            column = columns[i]
+        converters = self.txt_conversion_table
+
             # Read length-encoded integer for field length
+        for i in range(num_cols):
             length_byte = data[pos]
             if (length_byte < 0xFB):
                 length = length_byte
@@ -626,82 +754,10 @@ class BaseClient(ABC):
                 length = _unpack_Q(data, pos + 1)[0]
                 pos += 9
 
-            col_type = column.type
-            if col_type in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
-                row_values[i] = int(data_bytes[pos:pos + length])
-            elif col_type in (FIELD_TYPE.VARCHAR, FIELD_TYPE.BIT, FIELD_TYPE.ENUM, FIELD_TYPE.SET, \
-                              FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.VAR_STRING, \
-                              FIELD_TYPE.STRING, FIELD_TYPE.GEOMETRY):
-                # String types and others
-                if column.special_format:
-                    if column.ext_type_format == b'json':
-                        row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
-                    elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
-                        row_values[i] = data_bytes[pos:pos + length].decode('ascii')
-                        if config.native_object:
-                            row_values[i] = ipaddress.ip_address(row_values[i])
-                    elif column.ext_type_name == b'uuid':
-                        row_values[i] = data_bytes[pos:pos + length].decode('ascii')
-                        if config.native_object:
-                            row_values[i] = uuid.UUID(row_values[i])
-                elif column.character_set == 63:  # Binary
-                    row_values[i] = data_bytes[pos:pos + length]
-                else:
-                    row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
-            elif col_type in (FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE):
-                row_values[i] = float(data_bytes[pos:pos + length].decode('ascii'))
-            elif col_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
-                row_values[i] = decimal.Decimal(data_bytes[pos:pos + length].decode('ascii'))
-            elif col_type in (FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE):
-                # Fast date parsing: YYYY-MM-DD using struct
-                if length == 10:
-                    try:
-                        year_b, _, month_b, _, day_b = _unpack_DATE_TEXT(data_bytes, pos)
-                        row_values[i] = datetime.date(int(year_b), int(month_b), int(day_b))
-                    except (ValueError, struct.error):
-                        row_values[i] = None
-                else:
-                    row_values[i] = None
-            elif col_type == FIELD_TYPE.TIME:
-                time_str = data_bytes[pos:pos + length].decode('ascii')
-                negative = time_str[0] == '-'
-                if negative:
-                    time_str = time_str[1:]
-                parts = time_str.split(':')
-                if len(parts) == 3:
-                    hours = int(parts[0])
-                    minutes = int(parts[1])
-                    sec_parts = parts[2].split('.')
-                    seconds = int(sec_parts[0])
-                    microseconds = int(sec_parts[1].ljust(6, '0')) if len(sec_parts) > 1 else 0
-                    td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
-                    row_values[i] = -td if negative else td
-                else:
-                    row_values[i] = None
-            elif col_type in (FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP):
-                # Fast datetime parsing: YYYY-MM-DD HH:MM:SS[.ffffff] using struct
-                if length >= 19:
-                    try:
-                        year_b, _, month_b, _, day_b, _, hour_b, _, min_b, _, sec_b = _unpack_DATETIME_TEXT(data_bytes, pos)
-                        # Check for microseconds
-                        if length > 19 and data_bytes[pos+19] == 46:  # '.'
-                            microseconds = int(data_bytes[pos+20:pos+length].ljust(6, b'0'))
-                        else:
-                            microseconds = 0
-                        row_values[i] = datetime.datetime(
-                            int(year_b), int(month_b), int(day_b),
-                            int(hour_b), int(min_b), int(sec_b), microseconds
-                        )
-                    except (ValueError, struct.error):
-                        row_values[i] = None
-                else:
-                    row_values[i] = None
-            elif col_type == FIELD_TYPE.NULL:
-                row_values[i] = None
-            elif col_type == FIELD_TYPE.JSON:
-                row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
-
+            field_bytes = data_bytes[pos:pos+length]
             pos += length
+
+            row_values[i] = converters[i](field_bytes)
 
         return tuple(row_values)
 
