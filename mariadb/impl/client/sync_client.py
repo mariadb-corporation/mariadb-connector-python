@@ -238,10 +238,10 @@ class SyncClient(BaseClient):
             # Store the (start, end) tuple
             results.append((p_start, p_end))
 
-            # Terminator Logic (0xFE = EOF, 0xFF = ERR)
+            # Terminator Logic (0xFE = EOF/OK, 0xFF = ERR)
             first_byte = self._recv_buf[p_start]
             if first_byte >= 0xFE:
-                if first_byte == 0xFF or (p_end - p_start) < 9:
+                if first_byte == 0xFF or (p_end - p_start) < 0xFFFFFF:
                     return results
 
             # Reached requested count
