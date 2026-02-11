@@ -36,7 +36,6 @@ jobs:
       github.ref == 'refs/heads/1.1' ||
       startsWith(github.ref, 'refs/heads/2.0')
     outputs:
-      fail-fast: false
       matrix: ${{ steps.set-matrix.outputs.final-matrix }}
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +50,7 @@ jobs:
     needs: setup
     timeout-minutes: 50
     strategy:
+      fail-fast: false
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
@@ -175,6 +175,7 @@ jobs:
     needs: setup
     timeout-minutes: 50
     strategy:
+      fail-fast: false
       matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
