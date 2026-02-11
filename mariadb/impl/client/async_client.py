@@ -34,8 +34,8 @@ from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
 
 # Pre-compiled struct for packet header parsing (3 bytes length + 1 byte sequence)
-_STRUCT_PKT_HDR = struct.Struct('<I')  # Read as 4-byte int, mask out sequence
-_unpack_pkt_hdr = _STRUCT_PKT_HDR.unpack
+_unpack_pkt_hdr = struct.Struct('<I').unpack_from
+_pack_pkt_hdr = struct.Struct('<I').pack_into
 
 # Cache packet decode methods for faster access
 _decode_ok_packet = OkPacket.decode
@@ -67,9 +67,13 @@ class AsyncClient(BaseClient):
         self.writer: Optional[asyncio.StreamWriter] = None
         
         # Read buffer management
-        self._readbuf: bytearray = bytearray(16384)
-        self._read_view: memoryview = memoryview(self._readbuf)
-        self._readbuf_capacity: int = 16384  # Cache buffer capacity
+        self._recv_buf: bytearray = bytearray(16384)
+        self._default_recv_buf: bytearray = self._recv_buf
+        self._recv_buf_mv: memoryview = memoryview(self._recv_buf)
+        self._default_recv_buf_mv: memoryview = self._recv_buf_mv
+        self._recv_buf_capacity: int = 16384
+        self._recv_pos: int = 0  # Current read position in buffer
+        self._recv_len: int = 0  # Amount of valid data in buffer
         self.max_allowed_packet: int = 0xFFFFFF
         self.cert_fingerprint_validator: Optional['SSLFingerprintValidator'] = None
         self.auth_plugin: Optional['AuthenticationPlugin'] = None
@@ -78,71 +82,167 @@ class AsyncClient(BaseClient):
     # Packet Reading
     # =========================================================================
     
-    def _ensure_read_capacity(self, size: int) -> None:
-        """Ensure buffer is large enough, within max_allowed_packet limit"""
-        if size > self._readbuf_capacity:
-            new_size = min(self.max_allowed_packet + 4, max(size, self._readbuf_capacity * 2))
-            new_buf = bytearray(new_size)
-            new_buf[:self._readbuf_capacity] = self._readbuf
-            self._readbuf = new_buf
-            self._read_view = memoryview(self._readbuf)
-            self._readbuf_capacity = new_size
+    def _ensure_space(self, needed: int) -> None:
+        """Ensure buffer has space for additional data"""
+        required = self._recv_len + needed
+        if required > self._recv_buf_capacity:
+            new_capacity = min(self.max_allowed_packet + 4, max(required, self._recv_buf_capacity * 2))
+            new_buf = bytearray(new_capacity)
+            new_buf[:self._recv_len] = self._recv_buf[:self._recv_len]
+            self._recv_buf = new_buf
+            self._recv_buf_mv = memoryview(self._recv_buf)
+            self._recv_buf_capacity = new_capacity
     
-    async def read_payload(self) -> memoryview:
+    async def _recv_into_buffer(self, min_bytes: int) -> int:
+        """Read at least min_bytes into buffer, return actual bytes read"""
+        received = 0
+        # Keep reading until we have at least min_bytes
+        while received < min_bytes:
+            remaining = min_bytes - received
+            # Try to read exactly the remaining bytes needed
+            try:
+                data = await self.reader.readexactly(remaining)
+                data_len = len(data)
+                self._recv_buf[self._recv_len + received:self._recv_len + received + data_len] = data
+                received += data_len
+            except asyncio.IncompleteReadError as e:
+                # Partial data available - use what we got and continue
+                if e.partial:
+                    data_len = len(e.partial)
+                    self._recv_buf[self._recv_len + received:self._recv_len + received + data_len] = e.partial
+                    received += data_len
+                else:
+                    # Connection closed with no data
+                    return received
+        return received
+
+    async def read_payload(self, packet_count: int = None):
         """
-        Read one complete MariaDB logical packet (may consist of multiple sub-packets)
-        
+        Reads one or more complete packets from database server.
+
+        Args:
+            packet_count: Number of packets to read
+                None (default): Read 1 packet, return as memoryview
+                >= 1 or -1: Read multiple packets, return as list of (start, end) tuples
+
         Returns:
-            memoryview of the packet payload
-            
-        IMPORTANT: Data must be consumed before next read_payload() call
-        
-        Optimized to minimize buffer allocations and copies.
+            packet_count == None: memoryview
+            packet_count >= 1 or -1: list of (start, end) tuples
         """
-        
-        # Read first packet header
-        header = await self.reader.readexactly(4)
-        # Fast packet header parsing using struct
-        header_int = _unpack_pkt_hdr(header)[0]
-        pkt_len = header_int & 0xFFFFFF
-        self.sequence[0] = (header_int >> 24) & 0xFF
-        
-        # Fast path: single packet (99.9999% of cases)
-        # For small packets, avoid buffer copy by returning bytes directly as memoryview
-        if pkt_len < 0xFFFFFF:
-            payload = await self.reader.readexactly(pkt_len)
-            # Return memoryview directly from bytes (no copy)
-            return memoryview(payload)
-        
-        # Slow path: multiple packets (rare) - use buffer accumulation
-        self._ensure_read_capacity(pkt_len)
-        payload = await self.reader.readexactly(pkt_len)
-        self._readbuf[0:pkt_len] = payload
-        result_len = pkt_len
-        
+        # --- 1. Top-Level Buffer Maintenance ---
+        # Shift data ONLY at the start of the call to protect caller references.
+        is_multi = (packet_count is not None)
+        if self._recv_pos >= self._recv_len:
+            self._recv_pos = 0
+            self._recv_len = 0
+        elif self._recv_pos > 0 and (is_multi or self._recv_buf_capacity - self._recv_len < 1024):
+            unread = self._recv_len - self._recv_pos
+            if unread > 0:
+                self._recv_buf[:unread] = self._recv_buf[self._recv_pos:self._recv_len]
+            self._recv_len = unread
+            self._recv_pos = 0
+
+        results = [] if is_multi else None
+        # Convert None to 1 for packet reading logic
+        if packet_count is None:
+            packet_count = 1
+
         while True:
-            # Read next packet header
-            header = await self.reader.readexactly(4)
-            # Fast packet header parsing using struct
-            header_int = _unpack_pkt_hdr(header)[0]
-            pkt_len = header_int & 0xFFFFFF
-            self.sequence[0] = (header_int >> 24) & 0xFF
-            
-            # Ensure buffer has space for accumulated result + new chunk
-            needed = result_len + pkt_len
-            self._ensure_read_capacity(needed)
-            
-            # Read payload chunk directly after accumulated data
-            payload = await self.reader.readexactly(pkt_len)
-            self._readbuf[result_len:result_len + pkt_len] = payload
+            first_pos = self._recv_pos
+            total_size = 0
+            pkt_seen = 0
+
+            # --- 2. Primary Packet Assembly ---
+            while True:
+                bytes_in_buffer = self._recv_len - self._recv_pos
+
+                if bytes_in_buffer < 4:
+                    if self._recv_len == self._recv_buf_capacity:
+                        self._ensure_space(4)
+                    
+                    got = await self._recv_into_buffer(4 - bytes_in_buffer)
+                    if got == 0: # Connection lost
+                        return results if is_multi else None
+                    self._recv_len += got
+                    bytes_in_buffer = self._recv_len - self._recv_pos
+
+                header_int = _unpack_pkt_hdr(self._recv_buf, self._recv_pos)[0]
+                packet_length = header_int & 0xFFFFFF
+                self.sequence[0] = (header_int >> 24) & 0xFF
+                packet_total = 4 + packet_length
+
+                if bytes_in_buffer < packet_total:
+                    missing = packet_total - bytes_in_buffer
+                    if packet_length == 0xFFFFFF:
+                        missing += 4
+                    
+                    if self._recv_len + missing > self._recv_buf_capacity:
+                        self._ensure_space(missing)
                         
-            result_len += pkt_len
-            
-            # Continuation condition
-            if pkt_len < 0xFFFFFF:
-                break
-        
-        return self._read_view[0:result_len]
+                    got = await self._recv_into_buffer(missing)
+                    if got == 0:
+                        return results if is_multi else None
+                    self._recv_len += got
+                    bytes_in_buffer = self._recv_len - self._recv_pos
+
+                pkt_seen += 1
+
+                # Chained Fragment Compaction logic (> 16MB)
+                if pkt_seen > 1:
+                    payload_src = self._recv_pos + 4
+                    payload_dst = first_pos + 4 + total_size
+                    if payload_src != payload_dst:
+                        data_after = self._recv_len - (self._recv_pos + packet_total)
+                        self._recv_buf[payload_dst:payload_dst + packet_length] = \
+                            self._recv_buf[payload_src:payload_src + packet_length]
+                        if data_after > 0:
+                            # Avoid overlap issues using a temporary slice
+                            tmp = self._recv_buf[self._recv_pos + packet_total:self._recv_len]
+                            self._recv_buf[payload_dst + packet_length:
+                                           payload_dst + packet_length + data_after] = tmp
+                        self._recv_len -= 4
+
+                total_size += packet_length
+
+                if packet_length < 0xFFFFFF: # Final fragment seen
+                    p_start = first_pos + 4
+                    p_end = p_start + total_size
+                    self._recv_pos = p_end
+                    break
+                
+                # Move to next fragment header
+                if pkt_seen > 1:
+                    self._recv_pos = first_pos + 4 + total_size
+                else:
+                    self._recv_pos += packet_total
+
+            # --- 3. Result Handling ---
+            if not is_multi:
+                return self._recv_buf_mv[p_start : p_end]
+
+            # Store the (start, end) tuple
+            results.append((p_start, p_end))
+
+            # Terminator Logic (0xFE = EOF, 0xFF = ERR)
+            first_byte = self._recv_buf[p_start]
+            if first_byte >= 0xFE:
+                if first_byte == 0xFF or (p_end - p_start) < 9:
+                    return results
+
+            # Reached requested count
+            if packet_count > 0 and len(results) >= packet_count:
+                return results
+
+            # Stop if buffer exhausted and not in slurp mode
+            if self._recv_pos >= self._recv_len and packet_count != -1:
+                return results
+
+    def reset_buffer(self):
+        self._recv_buf = self._default_recv_buf
+        self._recv_buf_mv = self._default_recv_buf_mv
+        self._recv_buf_capacity = 16384
+        self._recv_pos = 0
+        self._recv_len = 0
     
     # =========================================================================
     # Packet Writing
@@ -175,11 +275,10 @@ class AsyncClient(BaseClient):
             chunk_start = data_offset + sent  # Data for this chunk starts at data_offset + sent
             chunk_end = chunk_start + chunk_size
             
-            header_pos = chunk_start - 4  # Write header directly into payload at chunk_start - 4
-            payload[header_pos] = chunk_size & 0xFF
-            payload[header_pos + 1] = (chunk_size >> 8) & 0xFF
-            payload[header_pos + 2] = (chunk_size >> 16) & 0xFF
-            payload[header_pos + 3] = self.sequence[0]
+            # Write header 4 bytes before the chunk data
+            header_pos = chunk_start - 4
+            header_int = chunk_size | (self.sequence[0] << 24)
+            _pack_pkt_hdr(payload, header_pos, header_int)
             
             self.writer.write(payload_view[header_pos:chunk_end])  # Send packet: header + chunk data using memoryview (no copy)
             sent += chunk_size
@@ -497,6 +596,7 @@ class AsyncClient(BaseClient):
             
             try:
                 await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                self.reset_buffer()
                 return await self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet, message.get_sql())
             except DatabaseError as e:
                 raise e    
@@ -521,6 +621,7 @@ class AsyncClient(BaseClient):
                         for message in messages:
                             message.statement_id = cached_stmt.statement_id
                             await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                            self.reset_buffer()
                             completions = await self._read_result(message.is_binary(), config, buffered, cached_stmt)
                             all_completions.append(completions)                        
                         return all_completions
@@ -544,6 +645,7 @@ class AsyncClient(BaseClient):
                         
                         for message in messages:
                             await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                        self.reset_buffer()
                         
                         try:
                             prepareResult = await self._parse_prepare_response(await self.read_payload(), sql)
@@ -561,6 +663,7 @@ class AsyncClient(BaseClient):
                     else:
                         # Non-pipeline mode: read prepare response before writing execute messages
                         await self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
+                        self.reset_buffer()
                         
                         prepareResult = await self._parse_prepare_response(await self.read_payload(), sql)
                         
@@ -568,6 +671,7 @@ class AsyncClient(BaseClient):
                         for message in messages:
                             message.statement_id = prepareResult.statement_id
                             await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                            self.reset_buffer()
                             try:
                                 completions = await self._read_result(message.is_binary(), config, buffered, prepareResult)
                                 all_completions.append(completions)
@@ -597,9 +701,16 @@ class AsyncClient(BaseClient):
         from ..result import AsyncStreamingResult, AsyncCompleteResult
         
         results = []
+        packets = None
         
         while True:
-            packet = await self.read_payload()
+            # Use packets from previous resultset if available
+            if packets:
+                packet = self._recv_buf_mv[packets[0][0]:packets[0][1]]
+                packets = packets[1:] if len(packets) > 1 else None
+            else:
+                packet = await self.read_payload()
+            
             packet_type = packet[0]
             if packet_type == self.OK_PACKET:
                 results.append(_decode_ok_packet(packet, self.context))
@@ -610,7 +721,7 @@ class AsyncClient(BaseClient):
                 raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
             elif packet_type == self.LOCAL_INFILE_PACKET:
                 # LOAD DATA LOCAL INFILE request from server
-                completion = await self._handle_local_infile(packet, sql)
+                completion, packets = await self._handle_local_infile(packet, sql, packets)
                 results.append(completion)
                 if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                     break                
@@ -630,14 +741,30 @@ class AsyncClient(BaseClient):
                 # skip metadata
                 columns = prepare_stmt_packet.columns
             else:
-                for i in range(column_count):
-                    col_packet = await self.read_payload()
-                    columns[i] = ColumnDefinitionPacket.decode(col_packet, self.context)
+                col_idx = 0
+                if not packets:
+                    packets = await self.read_payload(column_count)
+                
+                while col_idx < column_count:
+                    # If we've consumed all packets, read more
+                    if col_idx >= len(packets):
+                        packets.extend(await self.read_payload(column_count - col_idx))
+                    
+                    start, end = packets[col_idx]
+                    columns[col_idx] = ColumnDefinitionPacket.decode(self._recv_buf_mv[start:end], self.context)
+                    col_idx += 1
+                
+                packets = packets[col_idx:] if len(packets) > col_idx else None
+                
                 if prepare_stmt_packet is not None:
                     prepare_stmt_packet.columns = columns
+
             # Read EOF packet after column definitions (if not deprecated)
             if not eof_deprecated:
-                await self.read_payload()  # Skip EOF packet
+                if packets:
+                    packets = packets[1:] if len(packets) > 1 else None
+                else:
+                    await self.read_payload()  # Skip EOF packet
             
             # Select appropriate row parser based on protocol
             row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
@@ -667,44 +794,66 @@ class AsyncClient(BaseClient):
             # Pre-compute EOF/OK length threshold
             eof_length_threshold = 16777215 if eof_deprecated else 8
             
+            packets = None
             while True:
-                row_packet = await self.read_payload()
-                packet_first_byte = row_packet[0]
-                
-                # Check for EOF/OK packet (0xFE with length constraint)
-                if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
-                    if eof_deprecated:
-                        completion = _decode_ok_packet(row_packet, self.context)
-                    else:
-                        completion = _decode_eof_packet(row_packet, self.context)
+                packets = packets if packets else await self.read_payload(-1)
 
-                    # Apply converters to all rows at once
-                    if config.converter:
-                        rows = self._apply_converters_to_rows(rows, columns, config)
+                # Loop through the batch of packets
+                finish_result = False
+                packet_idx = 0
+                for packet_idx, p in enumerate(packets):
+                    row_packet = self._recv_buf_mv[p[0]:p[1]]
+                    packet_first_byte = row_packet[0]
 
-                    completion.result_set = AsyncCompleteResult(
-                        columns,
-                        column_count,
-                        config,
-                        rows
-                    )
-                    results.append(completion)
+                    # Check for EOF/OK packet terminator
+                    if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
+                        if eof_deprecated:
+                            completion = _decode_ok_packet(row_packet, self.context)
+                        else:
+                            completion = _decode_eof_packet(row_packet, self.context)
+
+                        if config.converter:
+                            rows = self._apply_converters_to_rows(rows, columns, config)
+
+                        completion.result_set = AsyncCompleteResult(
+                            columns,
+                            column_count,
+                            config,
+                            rows
+                        )
+                        results.append(completion)
+                        finish_result = True
+                        
+                        # Save any remaining packets for next result set
+                        if packet_idx + 1 < len(packets):
+                            packets = packets[packet_idx + 1:]
+                        else:
+                            packets = None
+                        break
+
+                    # Check for Error packet
+                    elif packet_first_byte == self.ERROR_PACKET:
+                        raise _decode_error_packet(row_packet, self.context).toError(self.exception_factory)
+
+                    # Regular data row
+                    rows.append(row_parser(row_packet, columns, config, column_count))
+
+                if finish_result:
                     break
-                elif packet_first_byte == self.ERROR_PACKET:
-                    raise _decode_error_packet(row_packet, self.context).toError(self.exception_factory)
-                
-                rows.append(row_parser(row_packet, columns, config, column_count))
 
             if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                 break
         return results
 
-    async def _handle_local_infile(self, packet: memoryview, sql: str = None) -> Completion:
-        """Handle LOAD DATA LOCAL INFILE request from server (async)"""
+    async def _handle_local_infile(self, packet: memoryview, sql: str, remaining_packets):
+        """Handle LOAD DATA LOCAL INFILE request from server (async)
+        
+        Returns:
+            tuple: (Completion, remaining_packets)
+        """
         import os
         import re
         
-
         # Read filename from packet (skip 0xFB header)
         parser = PayloadReader(packet)
         parser.skip(1)  # Skip 0xFB
@@ -752,13 +901,17 @@ class AsyncClient(BaseClient):
         
         # Read server's response (OK or ERR packet)
         # This is necessary to keep connection state synchronized
-        response = await self.read_payload()
+        if remaining_packets:
+            response = self._recv_buf_mv[remaining_packets[0][0]:remaining_packets[0][1]]
+            remaining_packets = remaining_packets[1:] if len(remaining_packets) > 1 else None
+        else:
+            response = await self.read_payload()
         
         if response[0] == 0x00:  # OK packet
             ok = _decode_ok_packet(response, self.context)
             if error:
                 raise error
-            return ok
+            return ok, remaining_packets
        
         # Raise error after reading response if file operation failed
         if error:

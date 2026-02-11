@@ -128,28 +128,37 @@ class SyncClient(BaseClient):
             # Generic socket error (broken pipe, network down, etc.)
             raise ConnectionError(f"Socket error: {e}") from e
 
-    def read_payload(self, packet_count: int = 1):
+    def read_payload(self, packet_count: int = None):
         """
         Reads one or more complete packets from database server.
 
+        Args:
+            packet_count: Number of packets to read
+                None (default): Read 1 packet, return as memoryview
+                1: Read 1 packet, return as list of (start, end) tuples
+                > 1 or -1: Read multiple packets, return as list of (start, end) tuples
+
         Returns:
-            packet_count == 1: memoryview
-            packet_count > 1 or -1: list of (start, end) tuples
+            packet_count == None: memoryview
+            packet_count >= 1 or -1: list of (start, end) tuples
         """
         # --- 1. Top-Level Buffer Maintenance ---
         # Shift data ONLY at the start of the call to protect caller references.
+        is_multi = (packet_count is not None)
         if self._recv_pos >= self._recv_len:
             self._recv_pos = 0
             self._recv_len = 0
-        elif self._recv_pos > 0 and (packet_count != 1 or self._recv_buf_capacity - self._recv_len < 1024):
+        elif self._recv_pos > 0 and (is_multi or self._recv_buf_capacity - self._recv_len < 1024):
             unread = self._recv_len - self._recv_pos
             if unread > 0:
                 self._recv_buf[:unread] = self._recv_buf[self._recv_pos:self._recv_len]
             self._recv_len = unread
             self._recv_pos = 0
 
-        is_multi = (packet_count != 1)
         results = [] if is_multi else None
+        # Convert None to 1 for packet reading logic
+        if packet_count is None:
+            packet_count = 1
 
         while True:
             first_pos = self._recv_pos
@@ -611,9 +620,16 @@ class SyncClient(BaseClient):
         from ..result import SyncStreamingResult, SyncCompleteResult
 
         results = []
+        packets = None
 
         while True:
-            packet = self.read_payload()
+            # Use packets from previous resultset if available
+            if packets:
+                packet = self._recv_buf_mv[packets[0][0]:packets[0][1]]
+                packets = packets[1:] if len(packets) > 1 else None
+            else:
+                packet = self.read_payload()
+            
             packet_type = packet[0]
             if packet_type == self.OK_PACKET:
                 results.append(_decode_ok_packet(packet, self.context))
@@ -623,7 +639,8 @@ class SyncClient(BaseClient):
             elif packet_type == self.ERROR_PACKET:
                 raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
             elif packet_type == self.LOCAL_INFILE_PACKET:
-                results.append(self._handle_local_infile(packet, sql))
+                completion, packets = self._handle_local_infile(packet, sql, packets)
+                results.append(completion)
                 # After sending file, read the actual result
                 if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
                     break
@@ -643,25 +660,31 @@ class SyncClient(BaseClient):
                 # skip metadata
                 columns = prepare_stmt_packet.columns
             else:
-                if column_count < 2:
-                    col_packet = self.read_payload()
-                    columns= [ColumnDefinitionPacket.decode(col_packet, self.context)]
-                else:
-                    idx = 0
-                    packets = []
-                    while idx < column_count:
-                        packets.extend(self.read_payload(column_count - idx))
+                col_idx = 0
+                if not packets:
+                    packets = self.read_payload(column_count)
+                
+                while col_idx < column_count:
+                    # If we've consumed all packets, read more
+                    if col_idx >= len(packets):
+                        packets.extend(self.read_payload(column_count - col_idx))
+                    
+                    start, end = packets[col_idx]
+                    columns[col_idx] = ColumnDefinitionPacket.decode(self._recv_buf_mv[start:end], self.context)
+                    col_idx += 1
+                
+                packets = packets[col_idx:] if len(packets) > col_idx else None
+                
+                if prepare_stmt_packet is not None:
+                    prepare_stmt_packet.columns = columns
 
-                        while idx < len(packets):
-                            start, end= packets[idx]
-                            columns[idx] = ColumnDefinitionPacket.decode(self._recv_buf_mv[start:end], self.context)
-                            idx += 1
 
-                    if prepare_stmt_packet is not None:
-                        prepare_stmt_packet.columns = columns
             # Read EOF packet after column definitions (if not deprecated)
             if not eof_deprecated:
-                self.read_payload()  # Skip EOF packet
+                if packets:
+                    packets = packets[1:] if len(packets) > 1 else None
+                else:
+                    self.read_payload()  # Skip EOF packet
 
             # Select appropriate row parser based on protocol
             row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
@@ -692,11 +715,12 @@ class SyncClient(BaseClient):
             eof_length_threshold = 16777215 if eof_deprecated else 8
 
             while True:
-                packets = self.read_payload(-1)
+                packets = packets if packets else self.read_payload(-1)
 
                 # Loop through the batch of packets
                 finish_result = False
-                for p in packets:
+                packet_idx = 0
+                for packet_idx, p in enumerate(packets):
                     row_packet= self._recv_buf_mv[p[0]:p[1]]
                     packet_first_byte = row_packet[0]
 
@@ -718,6 +742,12 @@ class SyncClient(BaseClient):
                         )
                         results.append(completion)
                         finish_result = True
+                        
+                        # Save any remaining packets for next result set
+                        if packet_idx + 1 < len(packets):
+                            packets = packets[packet_idx + 1:]
+                        else:
+                            packets = None
                         break
 
                     # Check for Error packet
@@ -736,8 +766,12 @@ class SyncClient(BaseClient):
         return results
 
 
-    def _handle_local_infile(self, packet: memoryview, sql: str = None) -> Completion:
-        """Handle LOAD DATA LOCAL INFILE request from server"""
+    def _handle_local_infile(self, packet: memoryview, sql: str, remaining_packets):
+        """Handle LOAD DATA LOCAL INFILE request from server
+        
+        Returns:
+            tuple: (Completion, remaining_packets)
+        """
         import os
         import re
         
@@ -788,13 +822,17 @@ class SyncClient(BaseClient):
         
         # Read server's response (OK or ERR packet)
         # This is necessary to keep connection state synchronized
-        response = self.read_payload()
+        if remaining_packets:
+            response = self._recv_buf_mv[remaining_packets[0][0]:remaining_packets[0][1]]
+            remaining_packets = remaining_packets[1:] if len(remaining_packets) > 1 else None
+        else:
+            response = self.read_payload()
         
         if response[0] == 0x00:  # OK packet
-            ok = _decode_ok_packet(packet, self.context)
+            ok = _decode_ok_packet(response, self.context)
             if error:
                 raise error
-            return ok
+            return ok, remaining_packets
        
         # Raise error after reading response if file operation failed
         if error:
