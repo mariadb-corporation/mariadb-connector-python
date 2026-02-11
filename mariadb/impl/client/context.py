@@ -73,7 +73,7 @@ class Context:
         self.collation: str = ""
         
         # Server status
-        self._server_status: int = server_status
+        self.server_status: int = server_status
         self.warning_count: int = 0
         
         # Authentication
@@ -157,15 +157,6 @@ class Context:
     # Properties
     # =========================================================================
 
-    @property
-    def server_status(self) -> int:
-        """Get current server_status"""
-        return self._server_status
-    
-    @server_status.setter
-    def server_status(self, value: int) -> None:
-        self._server_status = value
-   
     def get_property(self, key: str, default: Any = None) -> Any:
         """Get context property by key with optional default"""
         return self.properties.get(key, default)

@@ -738,7 +738,7 @@ class BaseClient(ABC):
                 pos += 8
             elif field_type in (FIELD_TYPE.VARCHAR, FIELD_TYPE.BIT, FIELD_TYPE.ENUM, FIELD_TYPE.SET, \
                                 FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.VAR_STRING, \
-                                FIELD_TYPE.STRING, FIELD_TYPE.GEOMETRY):
+                                FIELD_TYPE.STRING, FIELD_TYPE.GEOMETRY, FIELD_TYPE.JSON):
                 # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
                 length = data[pos]
 

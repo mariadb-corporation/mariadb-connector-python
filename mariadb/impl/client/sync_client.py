@@ -32,6 +32,7 @@ from ..message.client.prepare_packet import PreparePacket
 from ..message.client.change_user_packet import ChangeUserPacket
 from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..completion import Completion
+from ..result import SyncStreamingResult, SyncCompleteResult
 from ...exceptions import OperationalError, DatabaseError, ProgrammingError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
@@ -43,6 +44,7 @@ _pack_pkt_hdr = struct.Struct('<I').pack_into
 _decode_ok_packet = OkPacket.decode
 _decode_error_packet = ErrorPacket.decode
 _decode_eof_packet = EofPacket.decode
+_MORE_RESULTS_EXIST = STATUS.MORE_RESULTS_EXIST
 
 class SyncClient(BaseClient):
     """
@@ -251,9 +253,10 @@ class SyncClient(BaseClient):
                 return results
 
     def reset_buffer(self):
-        self._recv_buf = self._default_recv_buf
-        self._recv_buf_mv = self._default_recv_buf_mv
-        self._recv_buf_capacity = 16384
+        if self._recv_buf is not self._default_recv_buf:
+            self._recv_buf = self._default_recv_buf
+            self._recv_buf_mv = self._default_recv_buf_mv
+            self._recv_buf_capacity = 16384
         self._recv_pos = 0
         self._recv_len = 0
 
@@ -267,7 +270,6 @@ class SyncClient(BaseClient):
             self.sequence[0] = -1
         
         payload_len = len(payload) - 4  # Payload has 4 bytes reserved at start for header
-        data_offset = 4  # Data starts after reserved header space
         
         if payload_len == 0:  # Handle empty payload - still need to send header
             self.sequence[0] = (self.sequence[0] + 1) % 256
@@ -277,25 +279,33 @@ class SyncClient(BaseClient):
             self.socket.sendall(payload[0:4])
             return
         
-        payload_view = memoryview(payload)  # Use memoryview to avoid buffer copies when slicing
-        sent = 0  # Handle packet splitting for large payloads
+        # Fast path: single packet (< 16MB) - avoids memoryview, min(), loop overhead
+        if payload_len < 0xFFFFFF:
+            self.sequence[0] = (self.sequence[0] + 1) % 256
+            _pack_pkt_hdr(payload, 0, payload_len | (self.sequence[0] << 24))
+            self.socket.sendall(payload)
+            return
+        
+        # Slow path: large payload requiring packet splitting
+        data_offset = 4
+        payload_view = memoryview(payload)
+        sent = 0
         
         while sent < payload_len:
             chunk_size = min(0xFFFFFF, payload_len - sent)
             self.sequence[0] = (self.sequence[0] + 1) % 256
             
-            chunk_start = data_offset + sent  # Data for this chunk starts at data_offset + sent
+            chunk_start = data_offset + sent
             chunk_end = chunk_start + chunk_size
             
-            # Write header 4 bytes before the chunk data
             header_pos = chunk_start - 4
             header_int = chunk_size | (self.sequence[0] << 24)
             _pack_pkt_hdr(payload, header_pos, header_int)
             
-            self.socket.sendall(payload_view[header_pos:chunk_end])  # Send packet: header + chunk data using memoryview (no copy)
+            self.socket.sendall(payload_view[header_pos:chunk_end])
             sent += chunk_size
         
-        if payload_len % 0xFFFFFF == 0:  # If last packet was exactly 0xFFFFFF, send empty packet to signal end
+        if payload_len % 0xFFFFFF == 0:
             self.sequence[0] = (self.sequence[0] + 1) % 256
             header = b'\x00\x00\x00' + bytes([self.sequence[0]])
             self.socket.sendall(header)
@@ -518,7 +528,7 @@ class SyncClient(BaseClient):
                 self._active_streaming_result = None
             
             try:
-                self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                self.write_payload(message.payload(self.context, self._payload_writer))
                 self.reset_buffer()
                 return self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet, message.get_sql())
             except DatabaseError as e:
@@ -617,8 +627,6 @@ class SyncClient(BaseClient):
                 raise OperationalError(f"Execution failed: {e}")
 
     def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None, sql: str = None) -> List[Completion]:
-        from ..result import SyncStreamingResult, SyncCompleteResult
-
         results = []
         packets = None
 
@@ -633,7 +641,7 @@ class SyncClient(BaseClient):
             packet_type = packet[0]
             if packet_type == self.OK_PACKET:
                 results.append(_decode_ok_packet(packet, self.context))
-                if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
+                if (self.context.server_status & _MORE_RESULTS_EXIST) == 0:
                     break
                 continue
             elif packet_type == self.ERROR_PACKET:
@@ -642,7 +650,7 @@ class SyncClient(BaseClient):
                 completion, packets = self._handle_local_infile(packet, sql, packets)
                 results.append(completion)
                 # After sending file, read the actual result
-                if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
+                if (self.context.server_status & _MORE_RESULTS_EXIST) == 0:
                     break
                 continue
 
@@ -760,7 +768,7 @@ class SyncClient(BaseClient):
                 if finish_result:
                     break
 
-            if (self.context.server_status & STATUS.MORE_RESULTS_EXIST) == 0:
+            if (self.context.server_status & _MORE_RESULTS_EXIST) == 0:
                 break
 
         return results

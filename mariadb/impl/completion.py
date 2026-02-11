@@ -3,13 +3,11 @@
 
 from abc import ABC, abstractmethod
 from typing import Optional, Any, List, Dict, TYPE_CHECKING
-from dataclasses import dataclass
 
 if TYPE_CHECKING:
     from .result import Result
 
 
-@dataclass
 class Completion(ABC):
     """
     Query completion result

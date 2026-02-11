@@ -27,6 +27,8 @@ from mariadb_shared.constants.FIELD_TYPE import (
 )
 from mariadb_shared.constants.FIELD_FLAG import NUMERIC as NUM_FLAG
 
+_BINARY_PROTOCOL_TYPES = frozenset({bytes, bytearray, datetime.date, datetime.datetime, datetime.time})
+
 if TYPE_CHECKING:
     from .base_connection import BaseConnection
 
@@ -65,11 +67,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         Note: Only called for positional parameters (list/tuple), not dict.
         """
-        for value in data:
-            if isinstance(value, (bytes, bytearray, datetime.date, datetime.datetime, datetime.time)):
-                return True
-        
-        return False
+        return bool(set(map(type, data)) & _BINARY_PROTOCOL_TYPES)
     
     __slots__ = (
         'connection',

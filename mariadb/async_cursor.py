@@ -170,8 +170,9 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 self._buffered = buffered
 
             if data:
-                if isinstance(data, (list, tuple)):
-                    # Positional parameters
+                if isinstance(data, list):
+                    parameters = data
+                elif isinstance(data, tuple):
                     parameters = list(data)
                 elif isinstance(data, dict):
                     # Named parameters
