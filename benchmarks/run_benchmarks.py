@@ -42,7 +42,7 @@ BENCHMARKS = [
     'test_bench_insert_batch.py',
 ]
 
-DRIVERS = ['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector']
+DRIVERS = ['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector', 'mysql_connector_pure']
 
 
 def run_pytest_benchmark(benchmark_file=None, driver=None, output_json=None):
@@ -62,9 +62,11 @@ def run_pytest_benchmark(benchmark_file=None, driver=None, output_json=None):
         cmd.extend([f for f in BENCHMARKS])
     
     if driver:
-        # Use exact match to avoid 'mariadb' matching 'mariadb_c'
+        # Use exact match to avoid partial name matches
         if driver == 'mariadb':
             cmd.extend(['-k', 'mariadb and not mariadb_c'])
+        elif driver == 'mysql_connector':
+            cmd.extend(['-k', 'mysql_connector and not mysql_connector_pure'])
         else:
             cmd.extend(['-k', driver])
     

@@ -36,21 +36,22 @@ def get_driver_module(driver_name):
     elif driver_name == 'pymysql':
         import pymysql
         return pymysql
-    elif driver_name == 'mysql_connector':
+    elif driver_name in ['mysql_connector', 'mysql_connector_pure']:
         global _mysql_connector_impl
         import mysql.connector
-        # Detect if using C extension or pure Python implementation
-        # The C extension module is _mysql_connector
-        try:
-            import _mysql_connector
-            from mysql.connector.connection_cext import CMySQLConnection
-            _mysql_connector_impl = "C"
-            impl_type = "C extension (CMySQLConnection)"
-        except ImportError:
-            _mysql_connector_impl = "Python"
-            impl_type = "pure Python (MySQLConnection)"
-        print(f"\n{driver_name} using implementation: {impl_type}")
-        print(f"Note: mysql-connector-python C extension is slower than mariadb-connector-python C implementation")
+        if driver_name == 'mysql_connector_pure':
+            print(f"\n{driver_name} using implementation: pure Python (use_pure=True)")
+        else:
+            # Detect if using C extension or pure Python implementation
+            try:
+                import _mysql_connector
+                from mysql.connector.connection_cext import CMySQLConnection
+                _mysql_connector_impl = "C"
+                impl_type = "C extension (CMySQLConnection)"
+            except ImportError:
+                _mysql_connector_impl = "Python"
+                impl_type = "pure Python (MySQLConnection)"
+            print(f"\n{driver_name} using implementation: {impl_type}")
         return mysql.connector
     else:
         raise ValueError(f"Unknown driver: {driver_name}")
@@ -87,11 +88,12 @@ def _get_driver_ids():
         ids.append(f'mysql_connector ({_mysql_connector_impl})')
     else:
         ids.append('mysql_connector')
+    ids.append('mysql_connector_pure')
     
     return ids
 
 
-@pytest.fixture(scope='session', params=['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector'], ids=_get_driver_ids())
+@pytest.fixture(scope='session', params=['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector', 'mysql_connector_pure'], ids=_get_driver_ids())
 def driver_name(request):
     """Parametrize tests across all drivers."""
     return request.param
@@ -108,12 +110,15 @@ def driver(driver_name):
 _driver_warmed_up = {}
 
 @pytest.fixture(scope='session', autouse=True)
-def warmup_session(driver):
+def warmup_session(driver, driver_name):
     """Warm up the database and driver once per session, automatically before any tests run."""
-    driver_key = id(driver)
+    driver_key = driver_name
     if driver_key not in _driver_warmed_up:
         # Create a temporary connection just for warmup
-        warmup_conn = driver.connect(**DB_CONFIG)
+        if driver_name == 'mysql_connector_pure':
+            warmup_conn = driver.connect(**DB_CONFIG, use_pure=True)
+        else:
+            warmup_conn = driver.connect(**DB_CONFIG)
         warmup_cursor = warmup_conn.cursor()
         
         # Warm up with simple queries (simulates running test_do_1 first)
@@ -133,10 +138,13 @@ def warmup_session(driver):
 
 
 @pytest.fixture(scope='function')
-def connection(driver):
+def connection(driver, driver_name):
     """Create a database connection for each test."""
     # Now create the actual test connection
-    conn = driver.connect(**DB_CONFIG)
+    if driver_name == 'mysql_connector_pure':
+        conn = driver.connect(**DB_CONFIG, use_pure=True)
+    else:
+        conn = driver.connect(**DB_CONFIG)
     yield conn
     try:
         conn.close()

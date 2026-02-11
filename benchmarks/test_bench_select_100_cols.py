@@ -16,16 +16,30 @@ import pytest
 def test_select_100_cols_text(benchmark, connection, driver_name):
     """Benchmark SELECT 100 columns using text protocol."""
     
-    def select_100_cols():
-        cursor = connection.cursor()
-        if driver_name == 'mariadb' or driver_name == 'mariadb_c':
+    if driver_name == 'mariadb':
+        # Pure Python driver: int params use text protocol by default
+        def select_100_cols():
+            cursor = connection.cursor()
             cursor.execute("SELECT * FROM test100 WHERE 1 = ?", (1,))
-        else:  # pymysql, mysql_connector
+            row = cursor.fetchone()
+            cursor.close()
+            return sum(row)
+    elif driver_name == 'mariadb_c':
+        # C driver: force text protocol (SELECT defaults to binary in C parser)
+        def select_100_cols():
+            cursor = connection.cursor()
+            cursor.execute("SELECT * FROM test100 WHERE 1 = ?", (1,), force_text=True)
+            row = cursor.fetchone()
+            cursor.close()
+            return sum(row)
+    else:
+        # pymysql / mysql_connector: always text protocol
+        def select_100_cols():
+            cursor = connection.cursor()
             cursor.execute("SELECT * FROM test100 WHERE 1 = %s", (1,))
-        row = cursor.fetchone()
-        cursor.close()
-        # Consume all values to ensure fair comparison
-        return sum(row)
+            row = cursor.fetchone()
+            cursor.close()
+            return sum(row)
     
     result = benchmark(select_100_cols)
     print(f"\n{driver_name} (text): {result}")
@@ -36,17 +50,33 @@ def test_select_100_cols_binary(benchmark, connection, driver_name):
     """Benchmark SELECT 100 columns using binary protocol (prepared statement)."""
     
     # Skip for drivers that don't support binary protocol
-    if driver_name in ['pymysql', 'mysql_connector']:
-        pytest.skip(f"{driver_name} doesn't support binary protocol")
+    if 'pymysql' in driver_name:
+        pytest.skip("pymysql does not support binary protocol")
     
-    def select_100_cols():
-        cursor = connection.cursor(binary=True)
-        cursor.execute("SELECT * FROM test100 WHERE 1 = ?", (1,))
-        row = cursor.fetchone()
-        cursor.close()
-        # Consume all values to ensure fair comparison
-        total = sum(row)
-        return total
+    if driver_name == 'mariadb':
+        # Pure Python driver: use binary=True to force binary protocol
+        def select_100_cols():
+            cursor = connection.cursor(binary=True)
+            cursor.execute("SELECT * FROM test100 WHERE 1 = ?", (1,))
+            row = cursor.fetchone()
+            cursor.close()
+            return sum(row)
+    elif driver_name == 'mariadb_c':
+        # C driver: SELECT with int params uses binary protocol by default
+        def select_100_cols():
+            cursor = connection.cursor()
+            cursor.execute("SELECT * FROM test100 WHERE 1 = ?", (1,))
+            row = cursor.fetchone()
+            cursor.close()
+            return sum(row)
+    else:
+        # mysql_connector: use prepared=True for binary protocol
+        def select_100_cols():
+            cursor = connection.cursor(prepared=True)
+            cursor.execute("SELECT * FROM test100 WHERE 1 = %s", (1,))
+            row = cursor.fetchone()
+            cursor.close()
+            return sum(row)
     
     result = benchmark(select_100_cols)
     print(f"\n{driver_name} (binary): {result}")
