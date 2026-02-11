@@ -13,6 +13,9 @@ from mariadb_shared.exceptions import (
 from typing import Sequence
 import decimal
 
+# Concrete numeric types for fast 'type(val) in' checks (O(1) hash lookup)
+_NUMERIC_TYPES = frozenset((bool, int, float, complex, decimal.Decimal))
+
 PARAMSTYLE_QMARK = 1
 PARAMSTYLE_FORMAT = 2
 PARAMSTYLE_PYFORMAT = 3
@@ -112,40 +115,49 @@ class Cursor(CCursor):
         will be used.
         """
 
-        new_stmt = self.statement.encode("utf8")
-        replace_diff = 0
-        if self._paramlist:
-            for i in range(0, len(self._paramlist)):
-                extra_bytes = 0
-                if self._paramstyle == PARAMSTYLE_PYFORMAT:
-                    val = self._data[self._keys[i]]
-                else:
-                    val = self._data[i]
-                if val is None:
-                    replace = "NULL"
-                else:
-                    if isinstance(val, INDICATOR.MrdbIndicator):
-                        if val == INDICATOR.NULL:
-                            replace = "NULL"
-                        if val == INDICATOR.DEFAULT:
-                            replace = "DEFAULT"
-                    elif isinstance(val, Number):
-                        replace = val.__str__()
-                    else:
-                        if isinstance(val, (bytes, bytearray)):
-                            replace = "'%s'" % self.connection.escape_string(
-                                val.decode(encoding='latin1'))
-                        else:
-                            replace = "'%s'" % self.connection.escape_string(
-                                val.__str__())
-                            extra_bytes = len(replace.encode("utf-8")) -\
-                                len(replace)
-                ofs = self._paramlist[i] + replace_diff
+        if not self._paramlist:
+            return self.statement.encode("utf8")
 
-                new_stmt = new_stmt[:ofs] + replace.__str__().encode("utf8") +\
-                    new_stmt[ofs+1:]
-                replace_diff += len(replace) - 1 + extra_bytes
-        return new_stmt
+        stmt = self.statement.encode("utf8")
+        paramlist = self._paramlist
+        n = len(paramlist)
+        is_pyformat = self._paramstyle == PARAMSTYLE_PYFORMAT
+
+        # Split statement into fragments between placeholders (O(n))
+        # result = fragment[0] + converted[0] + fragment[1] + ... + fragment[n]
+        result = [None] * (2 * n + 1)
+        prev = 0
+        for i in range(n):
+            ofs = paramlist[i]
+            result[2 * i] = stmt[prev:ofs]
+            prev = ofs + 1
+
+            if is_pyformat:
+                val = self._data[self._keys[i]]
+            else:
+                val = self._data[i]
+
+            vtype = type(val)
+            if val is None:
+                result[2 * i + 1] = b"NULL"
+            elif vtype is INDICATOR.MrdbIndicator:
+                if val == INDICATOR.NULL:
+                    result[2 * i + 1] = b"NULL"
+                elif val == INDICATOR.DEFAULT:
+                    result[2 * i + 1] = b"DEFAULT"
+                else:
+                    result[2 * i + 1] = b"NULL"
+            elif vtype in _NUMERIC_TYPES:
+                result[2 * i + 1] = val.__str__().encode("utf8")
+            elif vtype is bytes or vtype is bytearray:
+                result[2 * i + 1] = ("'%s'" % self.connection.escape_string(
+                    val.decode(encoding='latin1'))).encode("utf8")
+            else:
+                result[2 * i + 1] = ("'%s'" % self.connection.escape_string(
+                    val.__str__())).encode("utf8")
+
+        result[2 * n] = stmt[prev:]
+        return b"".join(result)
 
     def _check_decimal_parameter(self, val):
         """
@@ -196,10 +208,12 @@ class Cursor(CCursor):
                     " (%s)." % (len(self._paramlist), len(self._data)))
 
         # CONPY-313: Check if parameter types are supported
-        if len(values):
+        if values:
+            _check = self._check_decimal_parameter
             for val in values:
-                if isinstance(val, float) or isinstance(val, decimal.Decimal):
-                    self._check_decimal_parameter(val)
+                t = type(val)
+                if t is float or t is decimal.Decimal:
+                    _check(val)
 
     def callproc(self, sp: str, data: Sequence = ()):
         """
@@ -265,7 +279,7 @@ class Cursor(CCursor):
         self.check_closed()
         return super()._nextset()
 
-    def execute(self, statement: str, data: Sequence = (), buffered=None):
+    def execute(self, statement: str, data: Sequence = (), buffered=None, force_text=False):
         """
         Prepare and execute a SQL statement.
 
@@ -338,6 +352,9 @@ class Cursor(CCursor):
         # we don't use text protocol
         if data and self._check_text_types() == True:
             self._text = False
+
+        if force_text:
+            self._text = True
 
         if self._text:
             # in text mode we need to substitute parameters
