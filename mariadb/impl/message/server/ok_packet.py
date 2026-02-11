@@ -7,10 +7,13 @@ OK Packet parser for MariaDB protocol
 Based on MySQL/MariaDB protocol OK packet structure.
 """
 
+import struct
 from typing import TYPE_CHECKING, Optional
 from ..payload_reader import PayloadReader
 from ...completion import Completion
 from mariadb_shared import constants
+
+_unpack_hh = struct.Struct('<hh').unpack_from
 
 if TYPE_CHECKING:
     from ...client.context import Context
@@ -58,13 +61,12 @@ class OkPacket(Completion):
     
     @staticmethod
     def decode(data: memoryview, context: 'Context') -> 'OkPacket':
-        parser = PayloadReader(data)
-        
-        parser.skip(1)
+
+        parser = PayloadReader(data, 1)
         affected_rows = parser.read_length_encoded_int()
         insert_id = parser.read_length_encoded_int()
-        server_status = parser.read_int16()
-        warning_count = parser.read_int16()
+        server_status, warning_count = _unpack_hh(data, parser.pos)
+        parser.pos += 4
         
         context.server_status = server_status
         context.warning_count = warning_count

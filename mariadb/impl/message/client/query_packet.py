@@ -156,7 +156,7 @@ def indicator_val(v, ctx=None):
 
 # Optimized converter functions (avoid lambda overhead)
 def _int_to_bytes(v, ctx=None):
-    return str(v).encode('ascii')
+    return b'%d' % v
 
 def _bool_to_bytes(v, ctx=None):
     return TRUE_BYTES if v else FALSE_BYTES
@@ -455,11 +455,7 @@ class QueryPacket(ClientMessage):
         Returns:
             QueryPacket instance
         """
-        sql_bytes = sql.encode('utf-8')
-        payload = bytearray(5 + len(sql_bytes))
-        payload[0:4] = b'\x00\x00\x00\x00'  # Length placeholder
-        payload[4] = 0x03  # COM_QUERY
-        payload[5:] = sql_bytes
+        payload = bytearray(b'\x00\x00\x00\x00\x03' + sql.encode('utf-8'))
         return QueryPacket(payload, sql)
 
     @staticmethod
@@ -470,9 +466,51 @@ class QueryPacket(ClientMessage):
         if isinstance(parameters, dict):
             params_dict = parameters
             params_list = None
+            params_len = 0
         else:
             params_dict = None
             params_list = list(parameters) if not isinstance(parameters, list) else parameters
+            params_len = len(params_list)
+
+        # Fast path: positional params with no quotes/comments in SQL
+        # bytes.split(b'?') is safe when there are no string literals or comments
+        # that could contain literal '?' characters
+        if params_list is not None and params_len >= 2 and 63 in _sql:
+            # Check if SQL is "simple" - no quotes, backticks, or comment markers
+            if not (39 in _sql or 34 in _sql or 96 in _sql or 35 in _sql
+                    or b'--' in _sql or b'/*' in _sql):
+                parts = _sql.split(b'?')
+                n_placeholders = len(parts) - 1
+                if n_placeholders != params_len:
+                    raise ProgrammingError(
+                        f"Parameter count mismatch: SQL has {n_placeholders} placeholders, "
+                        f"but {params_len} parameters provided"
+                    )
+                # Batch-convert parameters
+                _converter = get_converter
+                cached_conv_func = None
+                last_param_type = None
+                converted = [None] * n_placeholders
+                for i in range(n_placeholders):
+                    param = params_list[i]
+                    p_type = type(param)
+                    if p_type is not last_param_type:
+                        cached_conv_func = _converter(param)
+                        last_param_type = p_type
+                    if cached_conv_func is not None:
+                        converted[i] = cached_conv_func(param, no_backslash_escapes)
+                    else:
+                        converted[i] = str(param).encode('utf8')
+                # Interleave SQL parts and converted params (pre-allocated)
+                result_list = [None] * (2 * n_placeholders + 2)
+                result_list[0] = b'\x00\x00\x00\x00\x03'
+                j = 1
+                for i in range(n_placeholders):
+                    result_list[j] = parts[i]
+                    result_list[j + 1] = converted[i]
+                    j += 2
+                result_list[j] = parts[n_placeholders]
+                return QueryPacket(bytearray(b''.join(result_list)), sql)
 
         # Localize for speed
         _converter = get_converter
@@ -511,10 +549,10 @@ class QueryPacket(ClientMessage):
                             "Positional placeholder '?' used but parameters provided as dict. "
                             "Use named placeholders like :name or %(name)s instead."
                         )
-                    if param_idx >= len(params_list):
+                    if param_idx >= params_len:
                         raise ProgrammingError(
                             f"Parameter count mismatch: SQL has at least {param_idx + 1} placeholders, "
-                            f"but only {len(params_list)} parameters provided"
+                            f"but only {params_len} parameters provided"
                         )
                     if i > last_copy:
                         _append(_sql[last_copy:i])
