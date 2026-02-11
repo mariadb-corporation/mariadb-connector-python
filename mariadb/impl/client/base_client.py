@@ -50,6 +50,34 @@ from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
 from cachetools import LRUCache
 
+# Frozenset type constants for O(1) lookup in row parsers (text protocol)
+_TEXT_INT_TYPES = frozenset((
+    FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG,
+    FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR,
+))
+_TEXT_STRING_TYPES = frozenset((
+    FIELD_TYPE.VARCHAR, FIELD_TYPE.BIT, FIELD_TYPE.ENUM, FIELD_TYPE.SET,
+    FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB,
+    FIELD_TYPE.BLOB, FIELD_TYPE.VAR_STRING, FIELD_TYPE.STRING, FIELD_TYPE.GEOMETRY,
+))
+_TEXT_FLOAT_TYPES = frozenset((FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE))
+_TEXT_DECIMAL_TYPES = frozenset((FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL))
+_TEXT_DATE_TYPES = frozenset((FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE))
+_TEXT_DATETIME_TYPES = frozenset((FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP))
+
+# Frozenset type constants for O(1) lookup in row parsers (binary protocol)
+_BIN_INT32_TYPES = frozenset((FIELD_TYPE.LONG, FIELD_TYPE.INT24))
+_BIN_STRING_TYPES = frozenset((
+    FIELD_TYPE.VARCHAR, FIELD_TYPE.BIT, FIELD_TYPE.ENUM, FIELD_TYPE.SET,
+    FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB,
+    FIELD_TYPE.BLOB, FIELD_TYPE.VAR_STRING, FIELD_TYPE.STRING,
+    FIELD_TYPE.GEOMETRY, FIELD_TYPE.JSON,
+))
+_BIN_SHORT_TYPES = frozenset((FIELD_TYPE.SHORT, FIELD_TYPE.YEAR))
+_BIN_DECIMAL_TYPES = frozenset((FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL))
+_BIN_DATE_TYPES = frozenset((FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE))
+_BIN_DATETIME_TYPES = frozenset((FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP))
+
 class BaseClient(ABC):
     """
     Abstract base client for MariaDB connections
@@ -627,11 +655,9 @@ class BaseClient(ABC):
                 pos += 9
 
             col_type = column.type
-            if col_type in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
+            if col_type in _TEXT_INT_TYPES:
                 row_values[i] = int(data_bytes[pos:pos + length])
-            elif col_type in (FIELD_TYPE.VARCHAR, FIELD_TYPE.BIT, FIELD_TYPE.ENUM, FIELD_TYPE.SET, \
-                              FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.VAR_STRING, \
-                              FIELD_TYPE.STRING, FIELD_TYPE.GEOMETRY):
+            elif col_type in _TEXT_STRING_TYPES:
                 # String types and others
                 if column.special_format:
                     if column.ext_type_format == b'json':
@@ -648,11 +674,11 @@ class BaseClient(ABC):
                     row_values[i] = data_bytes[pos:pos + length]
                 else:
                     row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
-            elif col_type in (FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE):
+            elif col_type in _TEXT_FLOAT_TYPES:
                 row_values[i] = float(data_bytes[pos:pos + length].decode('ascii'))
-            elif col_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
+            elif col_type in _TEXT_DECIMAL_TYPES:
                 row_values[i] = decimal.Decimal(data_bytes[pos:pos + length].decode('ascii'))
-            elif col_type in (FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE):
+            elif col_type in _TEXT_DATE_TYPES:
                 # Fast date parsing: YYYY-MM-DD using struct
                 if length == 10:
                     try:
@@ -678,7 +704,7 @@ class BaseClient(ABC):
                     row_values[i] = -td if negative else td
                 else:
                     row_values[i] = None
-            elif col_type in (FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP):
+            elif col_type in _TEXT_DATETIME_TYPES:
                 # Fast datetime parsing: YYYY-MM-DD HH:MM:SS[.ffffff] using struct
                 if length >= 19:
                     try:
@@ -724,7 +750,7 @@ class BaseClient(ABC):
 
             # Decode based on field type
             field_type = column.type
-            if field_type in (FIELD_TYPE.LONG, FIELD_TYPE.INT24):
+            if field_type in _BIN_INT32_TYPES:
                 if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
                     row_values[i] = _unpack_I(data, pos)[0]
                 else:
@@ -736,9 +762,7 @@ class BaseClient(ABC):
                 else:
                     row_values[i] = _unpack_q(data, pos)[0]
                 pos += 8
-            elif field_type in (FIELD_TYPE.VARCHAR, FIELD_TYPE.BIT, FIELD_TYPE.ENUM, FIELD_TYPE.SET, \
-                                FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.VAR_STRING, \
-                                FIELD_TYPE.STRING, FIELD_TYPE.GEOMETRY, FIELD_TYPE.JSON):
+            elif field_type in _BIN_STRING_TYPES:
                 # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
                 length = data[pos]
 
@@ -778,7 +802,7 @@ class BaseClient(ABC):
                 else:
                     row_values[i] = _unpack_b(data, pos)[0]
                 pos += 1
-            elif field_type in (FIELD_TYPE.SHORT, FIELD_TYPE.YEAR):
+            elif field_type in _BIN_SHORT_TYPES:
                 if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
                     row_values[i] = _unpack_H(data, pos)[0]
                 else:
@@ -790,7 +814,7 @@ class BaseClient(ABC):
             elif field_type == FIELD_TYPE.DOUBLE:
                 row_values[i] = _unpack_d(data, pos)[0]
                 pos += 8
-            elif field_type in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL):
+            elif field_type in _BIN_DECIMAL_TYPES:
                 # Decimal as length-encoded string
                 length = data[pos]
                 pos += 1
@@ -799,7 +823,7 @@ class BaseClient(ABC):
                     pos += length
                 else:
                     row_values[i] = decimal.Decimal('0')
-            elif field_type in (FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE):
+            elif field_type in _BIN_DATE_TYPES:
                 length_byte = data[pos]
                 pos += 1
                 if length_byte >= 4:
@@ -829,7 +853,7 @@ class BaseClient(ABC):
                     row_values[i] = -datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds) if negative else datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds)
                 else:
                     row_values[i] = None
-            elif field_type in (FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP):
+            elif field_type in _BIN_DATETIME_TYPES:
                 length_byte = data[pos]
                 pos += 1
                 if length_byte == 11:
