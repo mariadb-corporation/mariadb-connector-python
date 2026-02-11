@@ -2,7 +2,7 @@
 # Copyright (c) 2012-2014 Monty Program Ab
 # Copyright (c) 2015-2025 MariaDB Corporation Ab
 
-.PHONY: help install bench bench-all bench-mariadb bench-mariadb-c bench-pymysql bench-mysql-connector compare clean
+.PHONY: help install bench bench-all bench-fast bench-mariadb bench-mariadb-c bench-pymysql bench-mysql-connector bench-mysql-connector-pure compare clean
 
 help:
 	@echo "MariaDB Python Connector Benchmarks"
@@ -11,10 +11,12 @@ help:
 	@echo "  install             - Install benchmark dependencies"
 	@echo "  bench               - Run all benchmarks for all drivers"
 	@echo "  bench-all           - Run all benchmarks and generate report"
+	@echo "  bench-fast          - Run all benchmarks except mysql_connector_pure"
 	@echo "  bench-mariadb       - Run benchmarks for mariadb (pure Python)"
 	@echo "  bench-mariadb-c     - Run benchmarks for mariadb_c (C extension)"
 	@echo "  bench-pymysql       - Run benchmarks for pymysql"
-	@echo "  bench-mysql-connector - Run benchmarks for mysql-connector-python"
+	@echo "  bench-mysql-connector - Run benchmarks for mysql-connector-python (C)"
+	@echo "  bench-mysql-connector-pure - Run benchmarks for mysql-connector-python (pure Python)"
 	@echo "  compare             - Generate comparison report from existing results"
 	@echo "  clean               - Remove benchmark results"
 	@echo ""
@@ -34,6 +36,9 @@ bench:
 bench-all:
 	python run_all_benchmarks.py
 
+bench-fast:
+	python run_all_benchmarks.py --skip mysql_connector_pure
+
 bench-mariadb:
 	python run_benchmarks.py --driver mariadb --json benchmark_mariadb.json
 
@@ -45,6 +50,9 @@ bench-pymysql:
 
 bench-mysql-connector:
 	python run_benchmarks.py --driver mysql_connector --json benchmark_mysql_connector.json
+
+bench-mysql-connector-pure:
+	python run_benchmarks.py --driver mysql_connector_pure --json benchmark_mysql_connector_pure.json
 
 compare:
 	python run_benchmarks.py --compare

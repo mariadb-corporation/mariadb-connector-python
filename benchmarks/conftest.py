@@ -122,12 +122,12 @@ def warmup_session(driver, driver_name):
         warmup_cursor = warmup_conn.cursor()
         
         # Warm up with simple queries (simulates running test_do_1 first)
-        for _ in range(6000):
+        for _ in range(1000):
             warmup_cursor.execute("DO 1")
         
         # Also warm up cursor creation/destruction pattern
         warmup_cursor.close()
-        for _ in range(6000):
+        for _ in range(1000):
             warmup_cursor = warmup_conn.cursor()
             warmup_cursor.execute("SELECT seq, 'abcdefghijabcdefghijabcdefghijaa' FROM seq_1_to_1000")
             warmup_cursor.fetchall()

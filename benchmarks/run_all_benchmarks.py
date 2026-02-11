@@ -16,6 +16,7 @@ Steps performed:
 - Generate a comparison report from the JSON results
 """
 
+import argparse
 import os
 import sys
 import subprocess
@@ -23,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-DRIVERS = ["mariadb", "mariadb_c", "pymysql", "mysql_connector"]
+DRIVERS = ["mariadb", "mariadb_c", "pymysql", "mysql_connector", "mysql_connector_pure"]
 
 
 def check_database_connection() -> bool:
@@ -81,10 +82,14 @@ def check_database_connection() -> bool:
     return True
 
 
-def run_driver_benchmarks(results_dir: Path) -> None:
+def run_driver_benchmarks(results_dir: Path, skip: list = None) -> None:
     """Run benchmarks for each driver and store JSON results in ``results_dir``."""
 
     for driver in DRIVERS:
+        if skip and driver in skip:
+            print(f"Skipping {driver} (excluded via --skip)")
+            print("")
+            continue
         print("=" * 42)
         print(f"Running benchmarks for: {driver}")
         print("=" * 42)
@@ -144,6 +149,10 @@ def generate_comparison_report(results_dir: Path) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Run all benchmarks")
+    parser.add_argument('--skip', nargs='+', help='Drivers to skip', default=[])
+    args = parser.parse_args()
+
     print("=" * 42)
     print("MariaDB Python Connector Benchmark Suite")
     print("=" * 42)
@@ -161,7 +170,7 @@ def main() -> int:
     print("")
 
     # Run benchmarks per driver
-    run_driver_benchmarks(results_dir)
+    run_driver_benchmarks(results_dir, skip=args.skip)
 
     # Generate comparison report
     generate_comparison_report(results_dir)

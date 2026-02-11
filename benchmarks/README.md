@@ -1,6 +1,6 @@
 # MariaDB Python Connector Benchmarks
 
-Comprehensive benchmark suite comparing **mariadb** (pure Python), **mariadb_c** (C extension), and **pymysql**.
+Comprehensive benchmark suite comparing **mariadb** (pure Python), **mariadb_c** (C extension), **pymysql**, **mysql_connector** (C extension), and **mysql_connector_pure** (pure Python).
 
 ## Quick Start
 
@@ -18,11 +18,15 @@ export TEST_DB_DATABASE=testp
 # Run all benchmarks
 make bench-all
 
+# Run all benchmarks except mysql_connector_pure (faster)
+make bench-fast
+
 # Or run individually
 python run_benchmarks.py --driver mariadb --json benchmark_mariadb.json
 python run_benchmarks.py --driver mariadb_c --json benchmark_mariadb_c.json
 python run_benchmarks.py --driver pymysql --json benchmark_pymysql.json
 python run_benchmarks.py --driver mysql_connector --json benchmark_mysql_connector.json
+python run_benchmarks.py --driver mysql_connector_pure --json benchmark_mysql_connector_pure.json
 
 # Generate comparison report
 python run_benchmarks.py --compare
