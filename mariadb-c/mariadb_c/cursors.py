@@ -13,8 +13,8 @@ from mariadb_shared.exceptions import (
 from typing import Sequence
 import decimal
 
-# Concrete numeric types for fast 'type(val) in' checks (O(1) hash lookup)
-_NUMERIC_TYPES = frozenset((bool, int, float, complex, decimal.Decimal))
+# Concrete numeric types - tuple for isinstance (must support subclasses)
+_NUMERIC_TYPES = (int, float, complex, decimal.Decimal)
 
 PARAMSTYLE_QMARK = 1
 PARAMSTYLE_FORMAT = 2
@@ -147,7 +147,7 @@ class Cursor(CCursor):
                     result[2 * i + 1] = b"DEFAULT"
                 else:
                     result[2 * i + 1] = b"NULL"
-            elif vtype in _NUMERIC_TYPES:
+            elif isinstance(val, _NUMERIC_TYPES):
                 result[2 * i + 1] = val.__str__().encode("utf8")
             elif vtype is bytes or vtype is bytearray:
                 result[2 * i + 1] = ("'%s'" % self.connection.escape_string(
