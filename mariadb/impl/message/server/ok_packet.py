@@ -13,6 +13,8 @@ from ..payload_reader import PayloadReader
 from ...completion import Completion
 from mariadb_shared import constants
 
+_unpack_H = struct.Struct('<H').unpack_from
+_unpack_Q = struct.Struct('<Q').unpack_from
 _unpack_hh = struct.Struct('<hh').unpack_from
 
 if TYPE_CHECKING:
@@ -61,20 +63,42 @@ class OkPacket(Completion):
     
     @staticmethod
     def decode(data: memoryview, context: 'Context') -> 'OkPacket':
+        pos = 1  # skip 0x00/0xFE header
 
-        parser = PayloadReader(data, 1)
-        affected_rows = parser.read_length_encoded_int()
-        insert_id = parser.read_length_encoded_int()
-        server_status, warning_count = _unpack_hh(data, parser.pos)
-        parser.pos += 4
+        # Read affected_rows (length-encoded int)
+        b = data[pos]; pos += 1
+        if b < 251:
+            affected_rows = b
+        elif b == 252:
+            affected_rows = _unpack_H(data, pos)[0]; pos += 2
+        elif b == 253:
+            affected_rows = (data[pos] | (data[pos+1] << 8) | (data[pos+2] << 16)); pos += 3
+        else:
+            affected_rows = _unpack_Q(data, pos)[0]; pos += 8
+
+        # Read insert_id (length-encoded int)
+        b = data[pos]; pos += 1
+        if b < 251:
+            insert_id = b
+        elif b == 252:
+            insert_id = _unpack_H(data, pos)[0]; pos += 2
+        elif b == 253:
+            insert_id = (data[pos] | (data[pos+1] << 8) | (data[pos+2] << 16)); pos += 3
+        else:
+            insert_id = _unpack_Q(data, pos)[0]; pos += 8
+
+        server_status, warning_count = _unpack_hh(data, pos)
+        pos += 4
         
         context.server_status = server_status
         context.warning_count = warning_count
         
         # Fast path: no info/tracking (most common case)
-        if not parser.has_remaining():
+        if pos >= len(data):
             return OkPacket(affected_rows, insert_id, server_status, warning_count, b'')
         
+        # Slow path: use PayloadReader for remaining complex parsing
+        parser = PayloadReader(data, pos)
         info = b''
         info_length = parser.read_length_encoded_int()
         if info_length > 0:

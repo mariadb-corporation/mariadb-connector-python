@@ -710,6 +710,9 @@ class AsyncClient(BaseClient):
     async def _read_result(self, is_binary: bool, config: 'Configuration' = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None, sql: str = None) -> List[Completion]:
         results = []
         packets = None
+        # Cache frequently accessed attributes as locals
+        context = self.context
+        read_payload = self.read_payload
         
         while True:
             # Use packets from previous resultset if available
@@ -717,21 +720,21 @@ class AsyncClient(BaseClient):
                 packet = self._recv_buf_mv[packets[0][0]:packets[0][1]]
                 packets = packets[1:] if len(packets) > 1 else None
             else:
-                packet = await self.read_payload()
+                packet = await read_payload()
             
             packet_type = packet[0]
             if packet_type == self.OK_PACKET:
-                results.append(_decode_ok_packet(packet, self.context))
-                if (self.context.server_status & _MORE_RESULTS_EXIST) == 0:
+                results.append(_decode_ok_packet(packet, context))
+                if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                     break
                 continue
             elif packet_type == self.ERROR_PACKET:
-                raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
+                raise _decode_error_packet(packet, context).toError(self.exception_factory)
             elif packet_type == self.LOCAL_INFILE_PACKET:
                 # LOAD DATA LOCAL INFILE request from server
                 completion, packets = await self._handle_local_infile(packet, sql, packets)
                 results.append(completion)
-                if (self.context.server_status & _MORE_RESULTS_EXIST) == 0:
+                if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                     break                
                 continue
             
@@ -741,25 +744,25 @@ class AsyncClient(BaseClient):
             column_count = parser.read_length_encoded_int()
 
             # Cache EOF deprecated flag once
-            eof_deprecated = self.context.isEofDeprecated()
+            eof_deprecated = context.isEofDeprecated()
             
             # Read column definitions
             columns: List[ColumnDefinitionPacket] = [None] * column_count
-            if self.context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+            if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                 # skip metadata
                 columns = prepare_stmt_packet.columns
             else:
                 col_idx = 0
                 if not packets:
-                    packets = await self.read_payload(column_count)
+                    packets = await read_payload(column_count)
                 
                 while col_idx < column_count:
                     # If we've consumed all packets, read more
                     if col_idx >= len(packets):
-                        packets.extend(await self.read_payload(column_count - col_idx))
+                        packets.extend(await read_payload(column_count - col_idx))
                     
                     start, end = packets[col_idx]
-                    columns[col_idx] = ColumnDefinitionPacket.decode(self._recv_buf_mv[start:end], self.context)
+                    columns[col_idx] = ColumnDefinitionPacket.decode(self._recv_buf_mv[start:end], context)
                     col_idx += 1
                 
                 packets = packets[col_idx:] if len(packets) > col_idx else None
@@ -772,15 +775,15 @@ class AsyncClient(BaseClient):
                 if packets:
                     packets = packets[1:] if len(packets) > 1 else None
                 else:
-                    await self.read_payload()  # Skip EOF packet
+                    await read_payload()  # Skip EOF packet
             
             # Select appropriate row parser based on protocol
             row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
 
             # If unbuffered, create streaming result
             if not buffered:
-                streaming_result = AsyncStreamingResult(self.read_payload,
-                    self.context,
+                streaming_result = AsyncStreamingResult(read_payload,
+                    context,
                     columns,
                     column_count,
                     config,
@@ -804,7 +807,7 @@ class AsyncClient(BaseClient):
             
             packets = None
             while True:
-                packets = packets if packets else await self.read_payload(-1)
+                packets = packets if packets else await read_payload(-1)
 
                 # Loop through the batch of packets
                 finish_result = False
@@ -816,9 +819,9 @@ class AsyncClient(BaseClient):
                     # Check for EOF/OK packet terminator
                     if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
                         if eof_deprecated:
-                            completion = _decode_ok_packet(row_packet, self.context)
+                            completion = _decode_ok_packet(row_packet, context)
                         else:
-                            completion = _decode_eof_packet(row_packet, self.context)
+                            completion = _decode_eof_packet(row_packet, context)
 
                         if config.converter:
                             rows = self._apply_converters_to_rows(rows, columns, config)
@@ -841,7 +844,7 @@ class AsyncClient(BaseClient):
 
                     # Check for Error packet
                     elif packet_first_byte == self.ERROR_PACKET:
-                        raise _decode_error_packet(row_packet, self.context).toError(self.exception_factory)
+                        raise _decode_error_packet(row_packet, context).toError(self.exception_factory)
 
                     # Regular data row
                     rows.append(row_parser(row_packet, columns, config, column_count))
@@ -849,7 +852,7 @@ class AsyncClient(BaseClient):
                 if finish_result:
                     break
 
-            if (self.context.server_status & _MORE_RESULTS_EXIST) == 0:
+            if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                 break
         return results
 

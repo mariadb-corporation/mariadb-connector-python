@@ -165,7 +165,11 @@ class BaseCompleteResult(Result):
             config: Configuration for parsing
             rows: All row data (already parsed)
         """
-        super().__init__(columns, column_count, config)
+        self.columns: List[ColumnDefinitionPacket] = columns
+        self.column_count: int = column_count
+        self.config: 'Configuration' = config
+        self.warning_count: int = 0
+        self.is_output_parameters: bool = False
         self.rows: List[tuple] = rows
         self.data_size: int = len(rows)
         self.loaded: bool = True

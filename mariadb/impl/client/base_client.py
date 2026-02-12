@@ -635,7 +635,6 @@ class BaseClient(ABC):
         data_bytes = data.tobytes()  # Convert once for faster access
 
         for i in range(num_cols):
-            column = columns[i]
             # Read length-encoded integer for field length
             length_byte = data[pos]
             if (length_byte < 0xFB):
@@ -654,26 +653,30 @@ class BaseClient(ABC):
                 length = _unpack_Q(data, pos + 1)[0]
                 pos += 9
 
+            column = columns[i]
             col_type = column.type
             if col_type in _TEXT_INT_TYPES:
                 row_values[i] = int(data_bytes[pos:pos + length])
             elif col_type in _TEXT_STRING_TYPES:
-                # String types and others
+                val = data_bytes[pos:pos + length]
                 if column.special_format:
-                    if column.ext_type_format == b'json':
-                        row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
-                    elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
-                        row_values[i] = data_bytes[pos:pos + length].decode('ascii')
-                        if config.native_object:
-                            row_values[i] = ipaddress.ip_address(row_values[i])
-                    elif column.ext_type_name == b'uuid':
-                        row_values[i] = data_bytes[pos:pos + length].decode('ascii')
-                        if config.native_object:
-                            row_values[i] = uuid.UUID(row_values[i])
+                    ext_fmt = column.ext_type_format
+                    if ext_fmt == b'json':
+                        row_values[i] = val.decode('utf-8', errors='ignore')
+                    else:
+                        ext_name = column.ext_type_name
+                        if ext_name == b'inet6' or ext_name == b'inet4':
+                            row_values[i] = val.decode('ascii')
+                            if config.native_object:
+                                row_values[i] = ipaddress.ip_address(row_values[i])
+                        elif ext_name == b'uuid':
+                            row_values[i] = val.decode('ascii')
+                            if config.native_object:
+                                row_values[i] = uuid.UUID(row_values[i])
                 elif column.character_set == 63:  # Binary
-                    row_values[i] = data_bytes[pos:pos + length]
+                    row_values[i] = val
                 else:
-                    row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
+                    row_values[i] = val.decode('utf-8', errors='ignore')
             elif col_type in _TEXT_FLOAT_TYPES:
                 row_values[i] = float(data_bytes[pos:pos + length].decode('ascii'))
             elif col_type in _TEXT_DECIMAL_TYPES:

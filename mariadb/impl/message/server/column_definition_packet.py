@@ -244,17 +244,60 @@ class ColumnDefinitionPacket:
         """Decode column definition packet"""
 
         pos = 0
+        start_pos = 0
 
-        # Get single bytes object with position offsets for all 6 fields
-        (data_bytes, pos,
-         cat_begin, cat_end,
-         sch_begin, sch_end,
-         tbl_begin, tbl_end,
-         org_tbl_begin, org_tbl_end,
-         name_begin, name_end,
-         org_name_begin, org_name_end) = read_qualified_identifiers(data, pos)
+        # Field 0 (catalog): skip
+        length = data[pos]; pos += 1; pos += length
 
-        # Fast path: no extended metadata (most common case)
+        # Field 1 (schema)
+        length = data[pos]; pos += 1
+        if length > 0:
+            if length >= 251:
+                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+            sch_begin = pos - start_pos; sch_end = sch_begin + length; pos += length
+        else:
+            sch_begin = sch_end = 0
+
+        # Field 2 (table)
+        length = data[pos]; pos += 1
+        if length > 0:
+            if length >= 251:
+                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+            tbl_begin = pos - start_pos; tbl_end = tbl_begin + length; pos += length
+        else:
+            tbl_begin = tbl_end = 0
+
+        # Field 3 (org_table)
+        length = data[pos]; pos += 1
+        if length > 0:
+            if length >= 251:
+                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+            org_tbl_begin = pos - start_pos; org_tbl_end = org_tbl_begin + length; pos += length
+        else:
+            org_tbl_begin = org_tbl_end = 0
+
+        # Field 4 (name)
+        length = data[pos]; pos += 1
+        if length > 0:
+            if length >= 251:
+                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+            name_begin = pos - start_pos; name_end = name_begin + length; pos += length
+        else:
+            name_begin = name_end = 0
+
+        # Field 5 (org_name)
+        length = data[pos]; pos += 1
+        if length > 0:
+            if length >= 251:
+                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+            org_name_begin = pos - start_pos; org_name_end = org_name_begin + length; pos += length
+        else:
+            org_name_begin = org_name_end = 0
+
+        # Single bytes copy for all identifier data
+        data_bytes = data[start_pos:pos].tobytes()
+
+        # ---- Extended metadata ----
         ext_type_name = None
         ext_type_format = None
         special_format = False
@@ -276,12 +319,10 @@ class ColumnDefinitionPacket:
                     elif ext_type == 1:
                         ext_type_format, pos = read_small_length_encoded_bytes(data, pos)
                     else:
-                        # Skip unknown extended data
                         _, pos = read_small_length_encoded_bytes(data, pos)
 
-        # Skip length field (0x0C) and unpack fixed fields using pre-compiled struct
         pos += 1
-        charset, column_length, type, flags, decimals = _UNPACK_FIXED_FIELDS(data, pos)
+        charset, column_length, col_type, col_flags, col_decimals = _UNPACK_FIXED_FIELDS(data, pos)
 
         return ColumnDefinitionPacket(
             data_bytes,
@@ -292,9 +333,9 @@ class ColumnDefinitionPacket:
             org_name_begin, org_name_end,
             charset,
             column_length,
-            type,
-            flags,
-            decimals,
+            col_type,
+            col_flags,
+            col_decimals,
             special_format,
             ext_type_name,
             ext_type_format
