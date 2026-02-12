@@ -6,139 +6,217 @@ SQLAlchemy Async Dialect for MariaDB Connector/Python
 
 Provides async support for SQLAlchemy using mariadb-connector-python's
 native AsyncConnection implementation.
+
+Uses lightweight wrapper objects that adapt the async DBAPI cursor/connection
+to SQLAlchemy's sync-style interface via await_only(). Works with both the
+pure Python (mariadb) and C extension (mariadb_c) async backends.
+
+Optimizations over a naive wrapper:
+  - No __getattr__: explicit slots/properties for all accessed attributes
+  - No double-buffering: execute + fetchall combined in a single await_only
+  - list + index instead of deque for row storage
 """
 
-from collections import deque
-from sqlalchemy.dialects.mysql.mariadbconnector import MySQLDialect_mariadbconnector, MySQLExecutionContext_mariadbconnector
+from sqlalchemy.dialects.mysql.mariadbconnector import (
+    MySQLDialect_mariadbconnector,
+    MySQLExecutionContext_mariadbconnector,
+)
 from sqlalchemy import pool
 from sqlalchemy.util.concurrency import await_only
 from sqlalchemy.engine import AdaptedConnection
 
 
+async def _execute_and_buffer(cursor, query, params):
+    """Execute query and fetch all rows in a single async call.
+
+    Combines execute + fetchall into one coroutine so that SQLAlchemy
+    only needs a single greenlet switch (await_only) instead of two.
+    """
+    if params is not None:
+        await cursor.execute(query, params)
+    else:
+        await cursor.execute(query)
+
+    if cursor.field_count > 0:
+        return await cursor.fetchall()
+    return None
+
+
 class AsyncAdapt_mariadb_cursor:
-    """Adapter for mariadb AsyncCursor to work with SQLAlchemy's sync-style API"""
-    
-    __slots__ = ("_cursor", "await_", "_rows", "server_side")
-    
-    def __init__(self, cursor, await_):
+    """Sync-style cursor wrapper for SQLAlchemy.
+
+    Wraps an async cursor from either mariadb or mariadb_c backend.
+    Uses explicit __slots__ and properties instead of __getattr__.
+    Rows are stored as a flat list with an integer index (no deque).
+    """
+
+    __slots__ = ("_cursor", "_rows", "_row_idx", "server_side")
+
+    def __init__(self, cursor):
         self._cursor = cursor
-        self.await_ = await_
-        self._rows = deque()
-        # Server-side cursors use unbuffered mode
+        self._rows = None
+        self._row_idx = 0
         self.server_side = not cursor.buffered
-    
-    def __getattr__(self, name):
-        return getattr(self._cursor, name)
-    
+
+    @property
+    def description(self):
+        return self._cursor.description
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    @property
+    def lastrowid(self):
+        return self._cursor.lastrowid
+
     @property
     def arraysize(self):
         return self._cursor.arraysize
-    
+
     @arraysize.setter
     def arraysize(self, value):
         self._cursor.arraysize = value
-    
-    async def _async_soft_close(self):
-        """Async soft close for SQLAlchemy result handling"""
-        pass
-    
-    def close(self):
-        self._rows.clear()
-        self.await_(self._cursor.close())
-    
+
     def execute(self, query, params=None, **kw):
-        """Execute query and cache all results immediately"""
-        self.await_(self._cursor.execute(query, params, **kw))
-        
-        # If there's a result set, fetch all rows and cache them
-        # This is necessary because SQLAlchemy's result is not async
-        if self._cursor.description:
-            rows = self.await_(self._cursor.fetchall())
-            self._rows = deque(rows)
-        
+        rows = await_only(_execute_and_buffer(self._cursor, query, params))
+        if rows is not None:
+            self._rows = rows
+            self._row_idx = 0
+        else:
+            self._rows = None
+            self._row_idx = 0
         return self
-    
+
     def executemany(self, query, params_seq):
-        return self.await_(self._cursor.executemany(query, params_seq))
-    
-    def __iter__(self):
-        while self._rows:
-            yield self._rows.popleft()
-    
+        await_only(self._cursor.executemany(query, params_seq))
+
     def fetchone(self):
-        if self._rows:
-            return self._rows.popleft()
-        return None
-    
+        rows = self._rows
+        if rows is None:
+            return None
+        idx = self._row_idx
+        if idx >= len(rows):
+            return None
+        self._row_idx = idx + 1
+        return rows[idx]
+
     def fetchmany(self, size=None):
+        rows = self._rows
+        if rows is None:
+            return []
         if size is None:
             size = self._cursor.arraysize
-        
-        result = [self._rows.popleft() for _ in range(min(size, len(self._rows)))]
-        return result
-    
+        idx = self._row_idx
+        end = min(idx + size, len(rows))
+        self._row_idx = end
+        return rows[idx:end]
+
     def fetchall(self):
-        result = list(self._rows)
-        self._rows.clear()
-        return result
-    
+        rows = self._rows
+        if rows is None:
+            return []
+        idx = self._row_idx
+        self._row_idx = len(rows)
+        if idx == 0:
+            return rows
+        return rows[idx:]
+
+    def close(self):
+        self._rows = None
+        self._row_idx = 0
+
+    async def _async_soft_close(self):
+        pass
+
     def setinputsizes(self, sizes):
         pass
-    
+
     def setoutputsize(self, size, column=None):
         pass
 
 
+class AsyncAdapt_mariadb_ss_cursor(AsyncAdapt_mariadb_cursor):
+    """Server-side (unbuffered/streaming) cursor wrapper.
+
+    Unlike the buffered cursor, fetch methods use await_only on each call
+    since rows arrive from the server on demand.
+    """
+
+    __slots__ = ()
+
+    def __init__(self, cursor):
+        super().__init__(cursor)
+        self.server_side = True
+
+    def execute(self, query, params=None, **kw):
+        if params is not None:
+            await_only(self._cursor.execute(query, params))
+        else:
+            await_only(self._cursor.execute(query))
+        return self
+
+    def fetchone(self):
+        return await_only(self._cursor.fetchone())
+
+    def fetchmany(self, size=None):
+        if size is None:
+            size = self._cursor.arraysize
+        return await_only(self._cursor.fetchmany(size))
+
+    def fetchall(self):
+        return await_only(self._cursor.fetchall())
+
+    def close(self):
+        await_only(self._cursor.close())
+
+
 class AsyncAdapt_mariadb_connection(AdaptedConnection):
-    """Adapter for mariadb AsyncConnection to work with SQLAlchemy's sync-style API"""
-    
+    """Sync-style connection wrapper for SQLAlchemy.
+
+    Wraps an async connection from either mariadb or mariadb_c backend.
+    Uses explicit methods instead of __getattr__.
+    """
+
     __slots__ = ("dbapi", "_connection")
-    
-    await_ = staticmethod(await_only)
-    
+
     def __init__(self, dbapi, connection):
         self.dbapi = dbapi
         self._connection = connection
-    
-    def __getattr__(self, name):
-        return getattr(self._connection, name)
-    
+
+    def cursor(self, **kwargs):
+        cursor = self._connection.cursor(**kwargs)
+        if kwargs.get("buffered", True):
+            return AsyncAdapt_mariadb_cursor(cursor)
+        return AsyncAdapt_mariadb_ss_cursor(cursor)
+
     @property
     def autocommit(self):
-        """Get autocommit status"""
         return self._connection.autocommit
-    
+
     @autocommit.setter
     def autocommit(self, value):
-        """Set autocommit mode using async method"""
-        self.await_(self._connection.set_autocommit(value))
-    
-    def cursor(self, **kwargs):
-        """Return wrapped async cursor"""
-        cursor = self._connection.cursor(**kwargs)
-        return AsyncAdapt_mariadb_cursor(cursor, self.await_)
-    
+        await_only(self._connection.set_autocommit(value))
+
     def commit(self):
-        self.await_(self._connection.commit())
-    
+        await_only(self._connection.commit())
+
     def rollback(self):
-        self.await_(self._connection.rollback())
-    
+        await_only(self._connection.rollback())
+
     def close(self):
-        self.await_(self._connection.close())
+        await_only(self._connection.close())
 
 
 class AsyncAdapt_mariadb_dbapi:
+    """Minimal DBAPI module facade for SQLAlchemy.
+
+    Provides exception classes, type constructors, and a connect() method
+    that returns an AsyncAdapt_mariadb_connection wrapper.
     """
-    DBAPI wrapper to handle async connect() and wrap connections.
-    
-    Wraps mariadb AsyncConnection and AsyncCursor with adapters that provide
-    sync-style methods for SQLAlchemy's greenlet-based async execution.
-    """
-    
+
     def __init__(self, mariadb_asyncio):
         self.mariadb_asyncio = mariadb_asyncio
-        # Copy exception classes and constants from mariadb.asyncio
         for name in (
             'Error', 'Warning', 'InterfaceError', 'DatabaseError',
             'InternalError', 'OperationalError', 'ProgrammingError',
@@ -147,8 +225,7 @@ class AsyncAdapt_mariadb_dbapi:
         ):
             if hasattr(mariadb_asyncio, name):
                 setattr(self, name, getattr(mariadb_asyncio, name))
-        
-        # Import type constructors from main mariadb module
+
         import mariadb
         for name in (
             'Binary', 'Date', 'Time', 'Timestamp', 'DateFromTicks',
@@ -157,71 +234,56 @@ class AsyncAdapt_mariadb_dbapi:
         ):
             if hasattr(mariadb, name):
                 setattr(self, name, getattr(mariadb, name))
-    
+
     def connect(self, *args, **kwargs):
-        """Handle async connect and return wrapped AsyncConnection"""
-        # Get the async connection coroutine and await it
-        async_conn_coro = self.mariadb_asyncio.connect(*args, **kwargs)
-        connection = await_only(async_conn_coro)
-        
-        # Wrap the connection with AsyncAdapt adapter
+        connection = await_only(self.mariadb_asyncio.connect(*args, **kwargs))
         return AsyncAdapt_mariadb_connection(self, connection)
 
 
-class MySQLExecutionContext_mariadbconnector_async(MySQLExecutionContext_mariadbconnector):
-    """Execution context for async mariadb connector with server-side cursor support"""
-    
+class MySQLExecutionContext_mariadbconnector_async(
+    MySQLExecutionContext_mariadbconnector
+):
     def create_server_side_cursor(self):
-        """Create unbuffered cursor for server-side (streaming) results"""
         return self._dbapi_connection.cursor(buffered=False)
-    
+
     def create_default_cursor(self):
-        """Create buffered cursor for default (client-side) results"""
         return self._dbapi_connection.cursor(buffered=True)
 
 
 class MySQLDialect_mariadbconnector_async(MySQLDialect_mariadbconnector):
     """
     Async dialect for MariaDB Connector/Python.
-    
-    Uses AsyncAdapt wrappers to integrate mariadb-connector-python's AsyncConnection
-    with SQLAlchemy's greenlet-based async execution model.
-    
+
+    Uses lightweight wrapper objects that adapt the async DBAPI to
+    SQLAlchemy's sync-style interface via await_only(). Works with
+    both mariadb (pure Python) and mariadb_c (C extension) backends.
+
     Usage:
         from sqlalchemy.ext.asyncio import create_async_engine
-        
+
         engine = create_async_engine(
             "mariadb+mariadbconnector_async://user:pass@host/db"
         )
     """
-    
+
     driver = "mariadbconnector_async"
     supports_statement_cache = True
     supports_server_side_cursors = True
     is_async = True
-    
+
     execution_ctx_cls = MySQLExecutionContext_mariadbconnector_async
-    
+
     @classmethod
     def import_dbapi(cls):
-        """Import the async DBAPI module with minimal wrapper"""
         import mariadb.asyncio
         return AsyncAdapt_mariadb_dbapi(mariadb.asyncio)
-    
+
     @classmethod
     def get_pool_class(cls, url):
-        """Use AsyncAdaptedQueuePool for async connections"""
         return pool.AsyncAdaptedQueuePool
-    
+
     @classmethod
     def load_provisioning(cls):
-        """Load provisioning hooks for SQLAlchemy test suite.
-        
-        This ensures that MySQL/MariaDB provisioning hooks (like temp_table_keyword_args)
-        are available when running SQLAlchemy tests with the async dialect.
-        """
-        # Explicitly import SQLAlchemy's MySQL provision module to register
-        # handlers for the "mariadb" backend (which is what get_backend_name() returns)
         try:
             from sqlalchemy.dialects.mysql import provision  # noqa: F401
         except ImportError:

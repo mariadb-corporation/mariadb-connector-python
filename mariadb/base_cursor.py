@@ -147,6 +147,14 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         return self._closed or self.connection._closed
 
     @property
+    def field_count(self) -> int:
+        """Number of columns in the current result set, or 0 if none."""
+        result = self._result
+        if result is not None:
+            return result.column_count
+        return 0
+
+    @property
     def description(self) -> Optional[tuple]:
         """Get cursor description (computed on-demand from result set columns)"""
         if not self._result or not hasattr(self._result, 'columns'):
