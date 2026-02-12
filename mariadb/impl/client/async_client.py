@@ -96,26 +96,20 @@ class AsyncClient(BaseClient):
             self._recv_buf_capacity = new_capacity
     
     async def _recv_into_buffer(self, min_bytes: int) -> int:
-        """Read at least min_bytes into buffer, return actual bytes read"""
+        """Read at least min_bytes into buffer, return actual bytes read."""
         received = 0
-        # Keep reading until we have at least min_bytes
+        write_pos = self._recv_len
+        buf = self._recv_buf
+        capacity = self._recv_buf_capacity
         while received < min_bytes:
-            remaining = min_bytes - received
-            # Try to read exactly the remaining bytes needed
-            try:
-                data = await self.reader.readexactly(remaining)
-                data_len = len(data)
-                self._recv_buf[self._recv_len + received:self._recv_len + received + data_len] = data
-                received += data_len
-            except asyncio.IncompleteReadError as e:
-                # Partial data available - use what we got and continue
-                if e.partial:
-                    data_len = len(e.partial)
-                    self._recv_buf[self._recv_len + received:self._recv_len + received + data_len] = e.partial
-                    received += data_len
-                else:
-                    # Connection closed with no data
-                    return received
+            # Read as much as the buffer can hold, but at least min_bytes
+            max_read = max(capacity - write_pos - received, min_bytes - received)
+            data = await self.reader.read(max_read)
+            data_len = len(data)
+            if data_len == 0:
+                return received
+            buf[write_pos + received:write_pos + received + data_len] = data
+            received += data_len
         return received
 
     async def read_payload(self, packet_count: int = None):
