@@ -42,7 +42,7 @@ from ..host_address import HostAddress
 from ..message.client_message import ClientMessage
 from ..message.server.prepare_stmt_packet import PrepareStmtPacket
 from ..completion import Completion
-from ..message.server.column_definition_packet import ColumnDefinitionPacket
+from ..message.server.column_definition_packet import ColumnsDefinition
 from .exception_factory import ExceptionFactory
 from ...exceptions import OperationalError
 from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
@@ -567,7 +567,7 @@ class BaseClient(ABC):
         # This would need more sophisticated handling for multi-round auth
         OkPacket.decode(packet, self.context)
 
-    def _apply_converters_to_rows(self, rows: List[tuple], columns: List[ColumnDefinitionPacket], config: 'Configuration') -> List[tuple]:
+    def _apply_converters_to_rows(self, rows: List[tuple], columns: 'ColumnsDefinition', config: 'Configuration') -> List[tuple]:
         """
         Apply converters to all rows at once
         
@@ -586,8 +586,9 @@ class BaseClient(ABC):
         converter_indices = []
         converter_funcs = []
         
+        col_types = columns.types
         for i in range(num_cols):
-            col_type = columns[i].type
+            col_type = col_types[i]
             if col_type in converter_map:
                 converter_indices.append(i)
                 converter_funcs.append(converter_map[col_type])
@@ -628,11 +629,22 @@ class BaseClient(ABC):
     # Row Data Parsing Methods
     # =========================================================================
 
-    def _parse_text_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', num_cols: int) -> tuple:
-        """Parse text protocol row data packet with inlined decoding"""
+    def _parse_text_row_data(self, data: memoryview, columns: 'ColumnsDefinition', config: 'Configuration', num_cols: int) -> tuple:
+        """Parse text protocol row data using parallel arrays from ColumnsDefinition.
+
+        Uses columns.types[], columns.charsets[], columns.special_formats[] etc.
+        directly from arrays — no per-column object attribute lookups.
+        """
         row_values = [None] * num_cols
         pos = 0
         data_bytes = data.tobytes()  # Convert once for faster access
+
+        # Local references to parallel arrays
+        col_types = columns.types
+        col_charsets = columns.charsets
+        col_special_formats = columns.special_formats
+        col_ext_type_formats = columns.ext_type_formats
+        col_ext_type_names = columns.ext_type_names
 
         for i in range(num_cols):
             # Read length-encoded integer for field length
@@ -653,18 +665,17 @@ class BaseClient(ABC):
                 length = _unpack_Q(data, pos + 1)[0]
                 pos += 9
 
-            column = columns[i]
-            col_type = column.type
+            col_type = col_types[i]
             if col_type in _TEXT_INT_TYPES:
                 row_values[i] = int(data_bytes[pos:pos + length])
             elif col_type in _TEXT_STRING_TYPES:
                 val = data_bytes[pos:pos + length]
-                if column.special_format:
-                    ext_fmt = column.ext_type_format
+                if col_special_formats[i]:
+                    ext_fmt = col_ext_type_formats[i]
                     if ext_fmt == b'json':
                         row_values[i] = val.decode('utf-8', errors='ignore')
                     else:
-                        ext_name = column.ext_type_name
+                        ext_name = col_ext_type_names[i]
                         if ext_name == b'inet6' or ext_name == b'inet4':
                             row_values[i] = val.decode('ascii')
                             if config.native_object:
@@ -673,7 +684,7 @@ class BaseClient(ABC):
                             row_values[i] = val.decode('ascii')
                             if config.native_object:
                                 row_values[i] = uuid.UUID(row_values[i])
-                elif column.character_set == 63:  # Binary
+                elif col_charsets[i] == 63:  # Binary
                     row_values[i] = val
                 else:
                     row_values[i] = val.decode('utf-8', errors='ignore')
@@ -682,7 +693,6 @@ class BaseClient(ABC):
             elif col_type in _TEXT_DECIMAL_TYPES:
                 row_values[i] = decimal.Decimal(data_bytes[pos:pos + length].decode('ascii'))
             elif col_type in _TEXT_DATE_TYPES:
-                # Fast date parsing: YYYY-MM-DD using struct
                 if length == 10:
                     try:
                         year_b, _, month_b, _, day_b = _unpack_DATE_TEXT(data_bytes, pos)
@@ -708,11 +718,9 @@ class BaseClient(ABC):
                 else:
                     row_values[i] = None
             elif col_type in _TEXT_DATETIME_TYPES:
-                # Fast datetime parsing: YYYY-MM-DD HH:MM:SS[.ffffff] using struct
                 if length >= 19:
                     try:
                         year_b, _, month_b, _, day_b, _, hour_b, _, min_b, _, sec_b = _unpack_DATETIME_TEXT(data_bytes, pos)
-                        # Check for microseconds
                         if length > 19 and data_bytes[pos+19] == 46:  # '.'
                             microseconds = int(data_bytes[pos+20:pos+length].ljust(6, b'0'))
                         else:
@@ -734,33 +742,44 @@ class BaseClient(ABC):
 
         return tuple(row_values)
 
-    def _parse_binary_row_data(self, data: memoryview, columns: List[ColumnDefinitionPacket], config: 'Configuration', num_cols: int) -> tuple:
-        """Parse binary protocol row data packet with inlined decoding"""
+    def _parse_binary_row_data(self, data: memoryview, columns: 'ColumnsDefinition', config: 'Configuration', num_cols: int) -> tuple:
+        """Parse binary protocol row data using parallel arrays from ColumnsDefinition.
+
+        Uses columns.types[], columns.flags[], columns.charsets[] etc.
+        directly from arrays — no per-column object attribute lookups.
+        """
         pos = 1  # Skip 0x00 header
         # Read NULL bitmap
         null_bitmap_length = (num_cols + 9) >> 3
         null_bitmap = data[pos:pos + null_bitmap_length]
         pos += null_bitmap_length
         
+        # Local references to parallel arrays
+        col_types = columns.types
+        col_flags = columns.flags
+        col_charsets = columns.charsets
+        col_special_formats = columns.special_formats
+        col_ext_type_formats = columns.ext_type_formats
+        col_ext_type_names = columns.ext_type_names
+        _UNSIGNED = FIELD_FLAG.UNSIGNED
+
         # Parse column values with inlined decoding
         row_values = [None] * num_cols
         
         for i in range(num_cols):
-            column = columns[i]
-
             if null_bitmap[(i + 2) >> 3] & (1 << ((i + 2) & 7)):
                 continue
 
             # Decode based on field type
-            field_type = column.type
+            field_type = col_types[i]
             if field_type in _BIN_INT32_TYPES:
-                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
+                if (col_flags[i] & _UNSIGNED) != 0:
                     row_values[i] = _unpack_I(data, pos)[0]
                 else:
                     row_values[i] = _unpack_i(data, pos)[0]
                 pos += 4
             elif field_type == FIELD_TYPE.LONGLONG:
-                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
+                if (col_flags[i] & _UNSIGNED) != 0:
                     row_values[i] = _unpack_Q(data, pos)[0]
                 else:
                     row_values[i] = _unpack_q(data, pos)[0]
@@ -782,31 +801,31 @@ class BaseClient(ABC):
                     pos += 9
 
                 val = bytes(data[pos:pos + length])
-                if column.special_format:
-                    if column.ext_type_format == b'json':
+                if col_special_formats[i]:
+                    if col_ext_type_formats[i] == b'json':
                         row_values[i] = val.decode('utf-8')
-                    elif column.ext_type_name == b'inet6' or column.ext_type_name == b'inet4':
+                    elif col_ext_type_names[i] == b'inet6' or col_ext_type_names[i] == b'inet4':
                         row_values[i] = val.decode('ascii')
                         if config.native_object:
                             row_values[i] = ipaddress.ip_address(row_values[i])
-                    elif column.ext_type_name == b'uuid':
+                    elif col_ext_type_names[i] == b'uuid':
                         row_values[i] = val.decode('ascii')
                         if config.native_object:
                             row_values[i] = uuid.UUID(row_values[i])
-                elif column.character_set == 63 and field_type != FIELD_TYPE.JSON:  # Binary
+                elif col_charsets[i] == 63 and field_type != FIELD_TYPE.JSON:  # Binary
                     row_values[i] = val
                 else:
                     row_values[i] = val.decode('utf-8', errors='ignore')
                 pos += length
 
             elif field_type == FIELD_TYPE.TINY:
-                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
+                if (col_flags[i] & _UNSIGNED) != 0:
                     row_values[i] = data[pos]
                 else:
                     row_values[i] = _unpack_b(data, pos)[0]
                 pos += 1
             elif field_type in _BIN_SHORT_TYPES:
-                if (column.flags & FIELD_FLAG.UNSIGNED) != 0:
+                if (col_flags[i] & _UNSIGNED) != 0:
                     row_values[i] = _unpack_H(data, pos)[0]
                 else:
                     row_values[i] = _unpack_h(data, pos)[0]

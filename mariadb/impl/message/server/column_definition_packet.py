@@ -2,13 +2,14 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 """
-Column Definition Packet parser for MariaDB protocol
+Column Definition parser for MariaDB protocol (CONPY-335).
 
-Based on MySQL/MariaDB protocol column definition structure.
+Stores all column metadata as parallel arrays (object-of-arrays) for
+cache-friendly access during row parsing. No per-column objects are created.
 """
 
 import struct
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, List
 
 if TYPE_CHECKING:
     from ...client.context import Context
@@ -16,236 +17,79 @@ if TYPE_CHECKING:
 _UNPACK_UINT16 = struct.Struct('<H').unpack_from
 _UNPACK_FIXED_FIELDS = struct.Struct('<HIBHB').unpack_from  # charset(H), column_length(I), type(B), flags(H), decimals(B)
 
-def read_qualified_identifiers(data: memoryview, pos: int) -> tuple:
-    """
-    Reads the 6 qualified length encoded identifiers from metadata.
 
-    Returns: (data_bytes, pos, out0_begin, out0_end, out1_begin, out1_end, ...)
-    Creates a single bytes object and returns position offsets for each field.
-    """
+def _read_length_encoded_int(data, pos):
+    """Read a length-encoded integer, return (value, new_pos)."""
+    b = data[pos]
+    if b < 251:
+        return b, pos + 1
+    if b == 0xFC:
+        return _UNPACK_UINT16(data, pos + 1)[0], pos + 3
+    if b == 0xFD:
+        return struct.unpack('<I', bytes(data[pos + 1:pos + 4]) + b'\x00')[0], pos + 4
+    # 0xFE
+    return struct.Struct('<Q').unpack_from(data, pos + 1)[0], pos + 9
 
-    start_pos = pos
-    
-    # Field 0 (catalog): Skip, will use hardcoded "def"
+
+def _read_small_length_encoded_bytes(data, pos):
+    """Read length-encoded bytes, return (bytes, new_pos)."""
     length = data[pos]
     pos += 1
-    out0_begin = out0_end = 0
-    pos += length
-
-    # Field 1 (schema)
-    length = data[pos]
-    pos += 1
-    if length > 0:
-        if length >= 251:
-            length = _UNPACK_UINT16(data, pos)[0]
-            pos += 2
-        out1_begin = pos - start_pos
-        out1_end = out1_begin + length
-        pos += length
-    else:
-        out1_begin = out1_end = 0
-
-    # Field 2 (table)
-    length = data[pos]
-    pos += 1
-    if length > 0:
-        if length >= 251:
-            length = _UNPACK_UINT16(data, pos)[0]
-            pos += 2
-        out2_begin = pos - start_pos
-        out2_end = out2_begin + length
-        pos += length
-    else:
-        out2_begin = out2_end = 0
-
-    # Field 3 (org_table)
-    length = data[pos]
-    pos += 1
-    if length > 0:
-        if length >= 251:
-            length = _UNPACK_UINT16(data, pos)[0]
-            pos += 2
-        out3_begin = pos - start_pos
-        out3_end = out3_begin + length
-        pos += length
-    else:
-        out3_begin = out3_end = 0
-
-    # Field 4 (name)
-    length = data[pos]
-    pos += 1
-    if length > 0:
-        if length >= 251:
-            length = _UNPACK_UINT16(data, pos)[0]
-            pos += 2
-        out4_begin = pos - start_pos
-        out4_end = out4_begin + length
-        pos += length
-    else:
-        out4_begin = out4_end = 0
-
-    # Field 5 (org_name)
-    length = data[pos]
-    pos += 1
-    if length > 0:
-        if length >= 251:
-            length = _UNPACK_UINT16(data, pos)[0]
-            pos += 2
-        out5_begin = pos - start_pos
-        out5_end = out5_begin + length
-        pos += length
-    else:
-        out5_begin = out5_end = 0
-    
-    # Create single bytes object from start to current position
-    data_bytes = data[start_pos:pos].tobytes()
-    
-    return (data_bytes, pos, 
-            out0_begin, out0_end,
-            out1_begin, out1_end,
-            out2_begin, out2_end,
-            out3_begin, out3_end,
-            out4_begin, out4_end,
-            out5_begin, out5_end)
-
-
-def read_small_length_encoded_bytes(data: memoryview, pos: int) -> Tuple[bytes, int]:
-    """Read length-encoded bytes and advance position"""
-    length = data[pos]
-    pos += 1
-    
-    # Fast path: most lengths are < 251
     if length < 251:
-        result = bytes(data[pos:pos+length])
-        return result, pos + length
-    
-    # Slow path: 2-byte length
+        return bytes(data[pos:pos + length]), pos + length
     length = _UNPACK_UINT16(data, pos)[0]
     pos += 2
-    result = bytes(data[pos:pos+length])
-    return result, pos + length
+    return bytes(data[pos:pos + length]), pos + length
 
-class ColumnDefinitionPacket:
+
+class ColumnsDefinition:
     """
-    Column Definition Packet from MariaDB server
+    Object-of-arrays representation of column metadata (CONPY-335).
 
-    Structure:
-    - length-encoded string: catalog
-    - length-encoded string: schema
-    - length-encoded string: table
-    - length-encoded string: org_table (original table name)
-    - length-encoded string: name (column name)
-    - length-encoded string: org_name (original column name)
-    - [optional] extended metadata (if EXTENDED_METADATA capability enabled)
-    - 1 byte: length of fixed fields (always 0x0C = 12)
-    - 2 bytes: character_set (little-endian)
-    - 4 bytes: column_length (little-endian)
-    - 1 byte: type (field type)
-    - 2 bytes: flags (little-endian)
-    - 1 byte: decimals
-    - 2 bytes: reserved (0x00 0x00)
+    Decodes column definition packets directly into parallel arrays.
+    No intermediate per-column objects are created.
+
+    Hot-path arrays (indexed by column number in row parsers):
+        types, flags, charsets, special_formats, ext_type_names, ext_type_formats
+
+    Cold-path arrays (decoded lazily for cursor.description / _build_metadata):
+        _data_blobs, _sch_ranges, _tbl_ranges, _org_tbl_ranges,
+        _name_ranges, _org_name_ranges, column_lengths, decimals_arr
     """
     __slots__ = (
-        '_data_bytes',
-        '_sch_begin', '_sch_end',
-        '_tbl_begin', '_tbl_end',
-        '_org_tbl_begin', '_org_tbl_end',
-        '_name_begin', '_name_end',
-        '_org_name_begin', '_org_name_end',
-        'character_set',
-        'column_length',
-        'type',
+        'count',
+        # Hot-path: numeric arrays for row parsing
+        'types',
         'flags',
-        'decimals',
-        'special_format',
-        'ext_type_name',
-        'ext_type_format',
+        'charsets',
+        'special_formats',
+        'ext_type_names',
+        'ext_type_formats',
+        # Cold-path: single list for metadata / description
+        '_meta',             # list[tuple] per column: (data_blob, sch_b, sch_e, tbl_b, tbl_e, org_tbl_b, org_tbl_e, name_b, name_e, org_name_b, org_name_e)
+        'column_lengths',
+        'decimals_arr',
     )
-    def __init__(
-        self,
-        data_bytes: bytes,
-        sch_begin: int, sch_end: int,
-        tbl_begin: int, tbl_end: int,
-        org_tbl_begin: int, org_tbl_end: int,
-        name_begin: int, name_end: int,
-        org_name_begin: int, org_name_end: int,
-        character_set: int,
-        column_length: int,
-        type: int,
-        flags: int,
-        decimals: int,
-        special_format: bool,
-        ext_type_name: Optional[bytes] = None,
-        ext_type_format: Optional[bytes] = None
-    ):
-        """Initialize column definition with single bytes object and field positions"""
-        self._data_bytes = data_bytes
-        self._sch_begin = sch_begin
-        self._sch_end = sch_end
-        self._tbl_begin = tbl_begin
-        self._tbl_end = tbl_end
-        self._org_tbl_begin = org_tbl_begin
-        self._org_tbl_end = org_tbl_end
-        self._name_begin = name_begin
-        self._name_end = name_end
-        self._org_name_begin = org_name_begin
-        self._org_name_end = org_name_end
-        self.character_set = character_set
-        self.column_length = column_length
-        self.type = type
-        self.flags = flags
-        self.decimals = decimals
-        self.special_format = special_format
-        self.ext_type_name = ext_type_name
-        self.ext_type_format = ext_type_format
 
-    @property
-    def catalog(self) -> str:
-        """Lazily decode catalog name"""
-        return 'def'  # Hardcoded catalog
+    def __init__(self, count: int):
+        self.count = count
+        _zero = [0] * count
+        self.types = _zero[:]
+        self.flags = _zero[:]
+        self.charsets = _zero[:]
+        self.special_formats = _zero[:]
+        self.column_lengths = _zero[:]
+        self.decimals_arr = _zero  # last use — no copy needed
+        self.ext_type_names = [None] * count
+        self.ext_type_formats = [None] * count
+        self._meta = [None] * count
 
-    @property
-    def schema(self) -> str:
-        """Lazily decode schema name from positions"""
-        if self._sch_end > self._sch_begin:
-            return self._data_bytes[self._sch_begin:self._sch_end].decode('utf-8', errors='replace')
-        return ''
-
-    @property
-    def table(self) -> str:
-        """Lazily decode table name from positions"""
-        if self._tbl_end > self._tbl_begin:
-            return self._data_bytes[self._tbl_begin:self._tbl_end].decode('utf-8', errors='replace')
-        return ''
-
-    @property
-    def org_table(self) -> str:
-        """Lazily decode original table name from positions"""
-        if self._org_tbl_end > self._org_tbl_begin:
-            return self._data_bytes[self._org_tbl_begin:self._org_tbl_end].decode('utf-8', errors='replace')
-        return ''
-
-    @property
-    def name(self) -> str:
-        """Lazily decode column name from positions"""
-        if self._name_end > self._name_begin:
-            return self._data_bytes[self._name_begin:self._name_end].decode('utf-8', errors='replace')
-        return ''
-
-    @property
-    def org_name(self) -> str:
-        """Lazily decode original column name from positions"""
-        if self._org_name_end > self._org_name_begin:
-            return self._data_bytes[self._org_name_begin:self._org_name_end].decode('utf-8', errors='replace')
-        return ''
-
-    @staticmethod
-    def decode(data: memoryview, context: 'Context') -> 'ColumnDefinitionPacket':
-        """Decode column definition packet"""
-
+    def decode_column(self, index: int, data: memoryview, context: 'Context') -> None:
+        """Decode a single column definition packet directly into parallel arrays."""
         pos = 0
         start_pos = 0
 
+        # ---- Read 6 length-encoded string identifiers ----
         # Field 0 (catalog): skip
         length = data[pos]; pos += 1; pos += length
 
@@ -294,50 +138,99 @@ class ColumnDefinitionPacket:
         else:
             org_name_begin = org_name_end = 0
 
-        # Single bytes copy for all identifier data
-        data_bytes = data[start_pos:pos].tobytes()
-
-        # ---- Extended metadata ----
-        ext_type_name = None
-        ext_type_format = None
-        special_format = False
-
-        if context.hasExtendedMetadata():
-            ext_length = data[pos]
-            pos += 1
-
-            if ext_length > 0:
-                special_format = True
-                ext_end = pos + ext_length
-
-                while pos < ext_end:
-                    ext_type = data[pos]
-                    pos += 1
-
-                    if ext_type == 0:
-                        ext_type_name, pos = read_small_length_encoded_bytes(data, pos)
-                    elif ext_type == 1:
-                        ext_type_format, pos = read_small_length_encoded_bytes(data, pos)
-                    else:
-                        _, pos = read_small_length_encoded_bytes(data, pos)
-
-        pos += 1
-        charset, column_length, col_type, col_flags, col_decimals = _UNPACK_FIXED_FIELDS(data, pos)
-
-        return ColumnDefinitionPacket(
-            data_bytes,
+        # Save raw identifier bytes + all ranges as a single tuple
+        self._meta[index] = (
+            data[start_pos:pos].tobytes(),
             sch_begin, sch_end,
             tbl_begin, tbl_end,
             org_tbl_begin, org_tbl_end,
             name_begin, name_end,
             org_name_begin, org_name_end,
-            charset,
-            column_length,
-            col_type,
-            col_flags,
-            col_decimals,
-            special_format,
-            ext_type_name,
-            ext_type_format
         )
+
+        # ---- Extended metadata ----
+        ext_type_name = None
+        ext_type_format = None
+        special_format = 0
+
+        if context.hasExtendedMetadata():
+            ext_length = data[pos]; pos += 1
+            if ext_length > 0:
+                special_format = 1
+                ext_end = pos + ext_length
+                while pos < ext_end:
+                    ext_type = data[pos]; pos += 1
+                    if ext_type == 0:
+                        ext_type_name, pos = _read_small_length_encoded_bytes(data, pos)
+                    elif ext_type == 1:
+                        ext_type_format, pos = _read_small_length_encoded_bytes(data, pos)
+                    else:
+                        _, pos = _read_small_length_encoded_bytes(data, pos)
+
+        # ---- Fixed fields ----
+        pos += 1  # skip 0x0C length byte
+        charset, column_length, col_type, col_flags, col_decimals = _UNPACK_FIXED_FIELDS(data, pos)
+
+        # ---- Store into pre-allocated arrays by index ----
+        self.types[index] = col_type
+        self.flags[index] = col_flags
+        self.charsets[index] = charset
+        self.special_formats[index] = special_format
+        self.ext_type_names[index] = ext_type_name
+        self.ext_type_formats[index] = ext_type_format
+        self.column_lengths[index] = column_length
+        self.decimals_arr[index] = col_decimals
+
+    # =========================================================================
+    # String accessors (lazy decode — cold path only)
+    # =========================================================================
+
+    def _decode_str(self, i: int, begin_idx: int) -> str:
+        m = self._meta[i]
+        b = m[begin_idx]
+        e = m[begin_idx + 1]
+        if e > b:
+            return m[0][b:e].decode('utf-8', errors='replace')
+        return ''
+
+    def get_name(self, i: int) -> str:
+        return self._decode_str(i, 7)  # name_begin, name_end
+
+    def get_org_name(self, i: int) -> str:
+        return self._decode_str(i, 9)  # org_name_begin, org_name_end
+
+    def get_schema(self, i: int) -> str:
+        return self._decode_str(i, 1)  # sch_begin, sch_end
+
+    def get_table(self, i: int) -> str:
+        return self._decode_str(i, 3)  # tbl_begin, tbl_end
+
+    def get_org_table(self, i: int) -> str:
+        return self._decode_str(i, 5)  # org_tbl_begin, org_tbl_end
+
+    def get_catalog(self, i: int) -> str:
+        return 'def'
+
+    # =========================================================================
+    # Protocol helpers
+    # =========================================================================
+
+    def __len__(self):
+        return self.count
+
+    @staticmethod
+    def decode_all(packets, buf_mv, count: int, context: 'Context') -> 'ColumnsDefinition':
+        """Decode a list of (start, end) packet positions into a ColumnsDefinition.
+
+        Args:
+            packets: list of (start, end) tuples into buf_mv
+            buf_mv: memoryview of the receive buffer
+            count: number of columns
+            context: connection context
+        """
+        cols = ColumnsDefinition(count)
+        for i in range(count):
+            start, end = packets[i]
+            cols.decode_column(i, buf_mv[start:end], context)
+        return cols
 

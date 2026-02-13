@@ -8,7 +8,7 @@ Server message packets for MariaDB protocol
 from .ok_packet import OkPacket
 from .error_packet import ErrorPacket
 from .eof_packet import EofPacket
-from .column_definition_packet import ColumnDefinitionPacket    
+from .column_definition_packet import ColumnsDefinition    
 from .prepare_stmt_packet import PrepareStmtPacket
 
-__all__ = ['OkPacket', 'ErrorPacket', 'EofPacket', 'ColumnDefinitionPacket', 'PrepareStmtPacket']
+__all__ = ['OkPacket', 'ErrorPacket', 'EofPacket', 'ColumnsDefinition', 'PrepareStmtPacket']

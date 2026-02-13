@@ -14,7 +14,7 @@ from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING, Ty
 from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 
 from .impl.completion import Completion
-from .impl.message.server.column_definition_packet import ColumnDefinitionPacket
+from .impl.message.server.column_definition_packet import ColumnsDefinition
 
 from .exceptions import ProgrammingError
 from .impl.client.exception_factory import ExceptionFactory
@@ -188,24 +188,26 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         completion = self._current_completion
         
         result_set = completion.result_set
-        columns: List[ColumnDefinitionPacket] = result_set.columns if hasattr(result_set, 'columns') else []
+        columns: 'ColumnsDefinition' = result_set.columns if hasattr(result_set, 'columns') else None
         
-        if not columns:
+        if not columns or columns.count == 0:
             return None
         
-        # Build metadata tuples
-        catalog_tuple = tuple(col.catalog for col in columns)
-        schema_tuple = tuple(col.schema for col in columns)  
-        field_tuple = tuple(col.name for col in columns)
-        org_field_tuple = tuple(col.org_name for col in columns)
-        table_tuple = tuple(col.table for col in columns)
-        org_table_tuple = tuple(col.org_table for col in columns)
-        type_tuple = tuple(col.type for col in columns)
-        charset_tuple = tuple(col.character_set for col in columns)
-        length_tuple = tuple(col.column_length for col in columns)
-        max_length_tuple = tuple(col.column_length for col in columns)
-        decimals_tuple = tuple(col.decimals for col in columns)
-        flags_tuple = tuple(col.flags for col in columns)
+        n = columns.count
+        
+        # Build metadata tuples from parallel arrays
+        catalog_tuple = tuple(columns.get_catalog(i) for i in range(n))
+        schema_tuple = tuple(columns.get_schema(i) for i in range(n))
+        field_tuple = tuple(columns.get_name(i) for i in range(n))
+        org_field_tuple = tuple(columns.get_org_name(i) for i in range(n))
+        table_tuple = tuple(columns.get_table(i) for i in range(n))
+        org_table_tuple = tuple(columns.get_org_table(i) for i in range(n))
+        type_tuple = tuple(columns.types)
+        charset_tuple = tuple(columns.charsets)
+        length_tuple = tuple(columns.column_lengths)
+        max_length_tuple = length_tuple
+        decimals_tuple = tuple(columns.decimals_arr)
+        flags_tuple = tuple(columns.flags)
         
         # Calculate extended field type - use dict lookup for performance
         ext_type_name_map = {
@@ -223,12 +225,14 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         }
         
         ext_type_list = []
-        for col in columns:
+        for i in range(n):
             ext_field_type = EXT_FIELD_TYPE.NONE
-            if col.ext_type_format and col.ext_type_format.lower() == b'json':
+            etf = columns.ext_type_formats[i]
+            etn = columns.ext_type_names[i]
+            if etf and etf.lower() == b'json':
                 ext_field_type = EXT_FIELD_TYPE.JSON
-            elif col.ext_type_name:
-                ext_field_type = ext_type_name_map.get(col.ext_type_name.lower(), EXT_FIELD_TYPE.NONE)
+            elif etn:
+                ext_field_type = ext_type_name_map.get(etn.lower(), EXT_FIELD_TYPE.NONE)
             
             ext_type_list.append(ext_field_type)
         
@@ -473,54 +477,64 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._completions = firstCompletion
         self._completion_index = 0
     
-    def _build_description(self, columns: List[ColumnDefinitionPacket]) -> Optional[tuple]:
+    def _build_description(self, columns: 'ColumnsDefinition') -> Optional[tuple]:
         """Build cursor description tuple from column definitions"""
-        if not columns:
+        if not columns or columns.count == 0:
             return None
         
+        n = columns.count
+        col_types = columns.types
+        col_flags_arr = columns.flags
+        col_charsets = columns.charsets
+        col_lengths = columns.column_lengths
+        col_decimals = columns.decimals_arr
+        col_ext_type_formats = columns.ext_type_formats
+        
         description = []
-        for col in columns:
+        for i in range(n):
             # Determine column type (override for JSON)
-            col_type = JSON if col.ext_type_format == b'json' else col.type
+            col_type = JSON if col_ext_type_formats[i] == b'json' else col_types[i]
             
             # Add NUM_FLAG for numeric types
-            col_flags = col.flags
-            if (col_type <= INT24 and (col_type != TIMESTAMP or col.column_length in (14, 8)) or 
+            col_flags = col_flags_arr[i]
+            col_len = col_lengths[i]
+            if (col_type <= INT24 and (col_type != TIMESTAMP or col_len in (14, 8)) or 
                 col_type in (YEAR, NEWDECIMAL, DECIMAL)):
                 col_flags |= NUM_FLAG
             
             # Calculate display_length and packed_len
-            max_char_len = self._get_charset_max_length(col.character_set)
+            max_char_len = self._get_charset_max_length(col_charsets[i])
             if max_char_len and max_char_len > 1:
-                packed_len = col.column_length
-                display_length = col.column_length // max_char_len
+                packed_len = col_len
+                display_length = col_len // max_char_len
             else:
                 packed_len = -1
-                display_length = col.column_length
+                display_length = col_len
             
             # Handle decimal fields special case
-            if col.decimals and col.decimals < 31:
-                precision = col.column_length
-                decimals = col.decimals
+            dec = col_decimals[i]
+            if dec and dec < 31:
+                precision = col_len
+                decimals = dec
                 display_length = precision + 1
             else:
                 precision = 0
-                decimals = col.decimals
+                decimals = dec
             
             description.append((
-                col.name, col_type, display_length, packed_len,
+                columns.get_name(i), col_type, display_length, packed_len,
                 precision, decimals, not (col_flags & 1), col_flags,
-                col.table, col.org_name, col.org_table
+                columns.get_table(i), columns.get_org_name(i), columns.get_org_table(i)
             ))
         
         return tuple(description)
     
-    def _create_named_tuple_class(self, columns: List[ColumnDefinitionPacket]) -> type:
+    def _create_named_tuple_class(self, columns: 'ColumnsDefinition') -> type:
         """Create a namedtuple class from column definitions"""
         
         field_names = []
-        for column in columns:
-            name = column.name or column.org_name
+        for i in range(columns.count):
+            name = columns.get_name(i) or columns.get_org_name(i)
             if not name or not name.isidentifier():
                 name = f'column_{len(field_names)}'
             original_name = name
@@ -532,16 +546,16 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         return namedtuple('Row', field_names)
     
-    def _convert_rows_to_named_tuples(self, rows: List[tuple], columns: List[ColumnDefinitionPacket]) -> List[Any]:
+    def _convert_rows_to_named_tuples(self, rows: List[tuple], columns: 'ColumnsDefinition') -> List[Any]:
         """Convert regular tuples to named tuples"""
         RowClass = self._create_named_tuple_class(columns)
         return [RowClass(*row) for row in rows]
     
-    def _convert_rows_to_dictionaries(self, rows: List[tuple], columns: List[ColumnDefinitionPacket]) -> List[Dict]:
+    def _convert_rows_to_dictionaries(self, rows: List[tuple], columns: 'ColumnsDefinition') -> List[Dict]:
         """Convert regular tuples to dictionaries"""
         field_names = []
-        for column in columns:
-            name = column.name or column.org_name
+        for i in range(columns.count):
+            name = columns.get_name(i) or columns.get_org_name(i)
             if not name:
                 name = f'column_{len(field_names)}'
             field_names.append(name)

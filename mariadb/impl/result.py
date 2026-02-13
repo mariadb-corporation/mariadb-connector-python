@@ -9,7 +9,7 @@ from typing import List, Optional, Any, TYPE_CHECKING, Callable, Tuple
 from abc import ABC, abstractmethod
 from .message.server.eof_packet import EofPacket
 from .message.server.ok_packet import OkPacket
-from .message.server.column_definition_packet import ColumnDefinitionPacket
+from .message.server.column_definition_packet import ColumnsDefinition
 
 if TYPE_CHECKING:
     from .client.context import Context
@@ -24,7 +24,7 @@ class Result(ABC):
     
     def __init__(
         self,
-        columns: List[ColumnDefinitionPacket],
+        columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration'
     ):
@@ -36,7 +36,7 @@ class Result(ABC):
             column_count: Number of columns
             config: Configuration for parsing
         """
-        self.columns: List[ColumnDefinitionPacket] = columns
+        self.columns: 'ColumnsDefinition' = columns
         self.column_count: int = column_count
         self.config: 'Configuration' = config
         self.loaded: bool = False  # All rows loaded flag
@@ -79,7 +79,7 @@ class SyncResult(Result):
     
     def __init__(
         self,
-        columns: List[ColumnDefinitionPacket],
+        columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration'
     ):
@@ -112,7 +112,7 @@ class AsyncResult(Result):
     
     def __init__(
         self,
-        columns: List[ColumnDefinitionPacket],
+        columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration'
     ):
@@ -151,7 +151,7 @@ class BaseCompleteResult(Result):
     
     def __init__(
         self,
-        columns: List[ColumnDefinitionPacket],
+        columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration',
         rows: List[tuple]
@@ -285,10 +285,10 @@ class BaseStreamingResult(Result):
         self,
         read_payload_func: Callable[[], memoryview],
         context: 'Context',
-        columns: List[ColumnDefinitionPacket],
+        columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration',
-        row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration'], Tuple] = None,
+        row_parser: Callable = None,
     ):
         """
         Initialize streaming result
@@ -304,7 +304,7 @@ class BaseStreamingResult(Result):
         super().__init__(columns, column_count, config)
         self.read_payload_func: Callable[[], memoryview] = read_payload_func
         self.context: Context = context
-        self.row_parser: Callable[['BaseConnection', bytes, List['ColumnDefinitionPacket'], 'Configuration'], Tuple] = row_parser
+        self.row_parser: Callable = row_parser
         self.loaded: bool = False
         self._row_count: int = 0  # Track number of rows fetched
         

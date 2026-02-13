@@ -19,7 +19,7 @@ from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
-from mariadb.impl.message.server.column_definition_packet import ColumnDefinitionPacket
+from mariadb.impl.message.server.column_definition_packet import ColumnsDefinition
 from .base_client import BaseClient
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
@@ -666,25 +666,25 @@ class SyncClient(BaseClient):
             eof_deprecated = context.isEofDeprecated()
 
             # Read column definitions
-            columns: List[ColumnDefinitionPacket] = [None] * column_count
             if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
-                # skip metadata
+                # skip metadata - use cached ColumnsDefinition
                 columns = prepare_stmt_packet.columns
             else:
                 col_idx = 0
                 if not packets:
                     packets = read_payload(column_count)
                 
+                # Decode columns inside collection loop to avoid buffer
+                # invalidation when read_payload is called multiple times
+                columns = ColumnsDefinition(column_count)
                 while col_idx < column_count:
-                    # If we've consumed all packets, read more
                     if col_idx >= len(packets):
                         packets.extend(read_payload(column_count - col_idx))
-                    
                     start, end = packets[col_idx]
-                    columns[col_idx] = ColumnDefinitionPacket.decode(self._recv_buf_mv[start:end], context)
+                    columns.decode_column(col_idx, self._recv_buf_mv[start:end], context)
                     col_idx += 1
                 
-                packets = packets[col_idx:] if len(packets) > col_idx else None
+                packets = packets[column_count:] if len(packets) > column_count else None
                 
                 if prepare_stmt_packet is not None:
                     prepare_stmt_packet.columns = columns
@@ -1015,8 +1015,11 @@ class SyncClient(BaseClient):
             
             # Read column metadata if present
             if prepare_stmt_packet.column_count > 0:
-                for _ in range(prepare_stmt_packet.column_count):
-                    prepare_stmt_packet.columns.append(ColumnDefinitionPacket.decode(self.read_payload(), self.context))
+                col_count = prepare_stmt_packet.column_count
+                columns = ColumnsDefinition(col_count)
+                for i in range(col_count):
+                    columns.decode_column(i, self.read_payload(), self.context)
+                prepare_stmt_packet.columns = columns
                 
                 if not self.context.isEofDeprecated():
                     self.read_payload()  # Skip EOF packet

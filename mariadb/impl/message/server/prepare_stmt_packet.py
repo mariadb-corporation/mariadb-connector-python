@@ -12,7 +12,7 @@ import threading
 import asyncio
 from typing import TYPE_CHECKING, List, Optional, Callable
 
-from .column_definition_packet import ColumnDefinitionPacket
+from .column_definition_packet import ColumnsDefinition
 
 if TYPE_CHECKING:
     from ...client.context import Context
@@ -69,8 +69,8 @@ class PrepareStmtPacket:
         self.warning_count = warning_count
         self.sql = sql
         self.database = database
-        self.columns: List[ColumnDefinitionPacket] = []
-        self.parameters: List[ColumnDefinitionPacket] = []
+        self.columns = None   # ColumnsDefinition, set by _read_result or _parse_prepare_response
+        self.parameters = None  # ColumnsDefinition, set by _parse_prepare_response
         self.closed = False
         self.close_callback = close_callback
     
