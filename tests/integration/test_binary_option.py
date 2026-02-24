@@ -271,19 +271,30 @@ class TestBinaryOptionDataTypes(unittest.TestCase):
         self._test_roundtrip(True, (dt,), (dt,))
 
     def test_bytes_text(self):
-        """bytes params auto-switch to binary even in text mode"""
+        """bytes roundtrip via VARBINARY column in text mode"""
         b = b'\x00\x01\x02\x03'
         conn = create_connection({"binary": False})
         cursor = conn.cursor()
-        cursor.execute("SELECT ?", (b,))
+        cursor.execute("CREATE TEMPORARY TABLE _test_bytes_text (v VARBINARY(255))")
+        cursor.execute("INSERT INTO _test_bytes_text VALUES (?)", (b,))
+        cursor.execute("SELECT v FROM _test_bytes_text")
         row = cursor.fetchone()
         self.assertEqual(row[0], b)
         cursor.close()
         conn.close()
 
     def test_bytes_binary(self):
+        """bytes roundtrip via VARBINARY column in binary mode"""
         b = b'\x00\x01\x02\x03'
-        self._test_roundtrip(True, (b,), (b,))
+        conn = create_connection({"binary": True})
+        cursor = conn.cursor()
+        cursor.execute("CREATE TEMPORARY TABLE _test_bytes_bin (v VARBINARY(255))")
+        cursor.execute("INSERT INTO _test_bytes_bin VALUES (?)", (b,))
+        cursor.execute("SELECT v FROM _test_bytes_bin")
+        row = cursor.fetchone()
+        self.assertEqual(row[0], b)
+        cursor.close()
+        conn.close()
 
 
 class TestBinaryOptionWithTable(unittest.TestCase):

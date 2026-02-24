@@ -593,7 +593,7 @@ class BaseClient(ABC):
                             row_values[i] = val.decode('ascii')
                             if config.native_object:
                                 row_values[i] = uuid.UUID(row_values[i])
-                elif col_charsets[i] == 63:  # Binary
+                elif col_charsets[i] == 63:  # Binary charset
                     row_values[i] = val
                 else:
                     row_values[i] = val.decode('utf-8', errors='ignore')
@@ -721,7 +721,7 @@ class BaseClient(ABC):
                         row_values[i] = val.decode('ascii')
                         if config.native_object:
                             row_values[i] = uuid.UUID(row_values[i])
-                elif col_charsets[i] == 63 and field_type != FIELD_TYPE.JSON:  # Binary
+                elif field_type != FIELD_TYPE.JSON and col_charsets[i] == 63:  # Binary charset
                     row_values[i] = val
                 else:
                     row_values[i] = val.decode('utf-8', errors='ignore')
