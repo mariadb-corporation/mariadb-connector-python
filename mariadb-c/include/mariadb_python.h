@@ -466,7 +466,7 @@ void
 MrdbParser_end(MrdbParser *p);
 
 uint8_t
-MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_len);
+MrdbParser_parse(MrdbParser *p, uint8_t is_batch, uint8_t skip_command, char *errmsg, size_t errmsg_len);
 
 /* Global defines */
 

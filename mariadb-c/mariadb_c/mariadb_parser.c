@@ -108,7 +108,7 @@ parser_error(char *errmsg, size_t errmsg_len, const char *errstr)
 #define isutf8(c) (((c)&0xC0)!=0x80)
 
 uint8_t
-MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
+MrdbParser_parse(MrdbParser *p, uint8_t is_batch, uint8_t skip_command,
                  char *errmsg, size_t errmsg_len)
 {
     char *a, *end;
@@ -368,8 +368,8 @@ cont:
             }
         } 
         else {
-          /* determine SQL command */
-          if (p->command == SQL_NONE)
+          /* determine SQL command (skip when text mode is known) */
+          if (!skip_command && p->command == SQL_NONE)
           {
             for (uint8_t i=0; binary_command[i].str.str; i++)
             {

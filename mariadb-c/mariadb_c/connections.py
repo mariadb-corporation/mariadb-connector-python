@@ -58,6 +58,7 @@ class Connection(CConnection, SyncConnectionCommon):
         autocommit = kwargs.pop("autocommit", False)
         reconnect = kwargs.pop("reconnect", False)
         converter = kwargs.pop("converter", None)
+        self._binary = bool(kwargs.pop("binary", False))
         # Remove debug parameter that C extension doesn't support
         kwargs.pop("debug", None)
 

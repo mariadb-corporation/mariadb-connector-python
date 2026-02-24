@@ -81,6 +81,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         kwargs.pop("reconnect", None)
         self._reconnect = False
         self._converter_param = kwargs.pop("converter", None)
+        self._binary = bool(kwargs.pop("binary", False))
         # Remove debug parameter that C extension doesn't support
         kwargs.pop("debug", None)
         

@@ -33,7 +33,10 @@ static PyObject *
 MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows);
 
 static PyObject *
-MrdbCursor_parse(MrdbCursor *self, PyObject *stmt);
+MrdbCursor_parse(MrdbCursor *self, PyObject *args);
+
+static PyObject *
+MrdbCursor_set_statement(MrdbCursor *self, PyObject *args);
 
 static PyObject *
 MrdbCursor_description(MrdbCursor *self);
@@ -190,7 +193,10 @@ static PyMethodDef MrdbCursor_Methods[] =
         METH_VARARGS,
         "Continue non-blocking prepared statement fetch"},
     {"_parse", (PyCFunction)MrdbCursor_parse,
-        METH_O,
+        METH_VARARGS,
+        NULL},
+    {"_set_statement", (PyCFunction)MrdbCursor_set_statement,
+        METH_VARARGS,
         NULL},
     {"_sync_readresponse", (PyCFunction)MrdbCursor_readresponse,
         METH_NOARGS,
@@ -1285,14 +1291,64 @@ static PyObject
     Py_RETURN_FALSE;
 }
 
+/* Lightweight statement setter for binary protocol.
+   Stores the statement string and param count without parsing. */
 static PyObject *
-MrdbCursor_parse(MrdbCursor *self, PyObject *stmt)
+MrdbCursor_set_statement(MrdbCursor *self, PyObject *args)
 {
+    PyObject *stmt;
+    uint32_t paramcount = 0;
+    const char *statement = NULL;
+    Py_ssize_t statement_len = 0;
+
+    if (!PyArg_ParseTuple(args, "O|I", &stmt, &paramcount))
+        return NULL;
+
+    statement = (char *)PyUnicode_AsUTF8AndSize(stmt, &statement_len);
+    if (!statement)
+        return NULL;
+
+    if (self->parseinfo.statement)
+    {
+        uint32_t old_paramcount = self->parseinfo.paramcount;
+        MrdbCursor_clearparseinfo(&self->parseinfo);
+        if (paramcount != old_paramcount)
+        {
+            MARIADB_FREE_MEM(self->params);
+            MrdbCursor_FreeValues(self);
+            MrdbCursor_FreeResultValues(self);
+            MARIADB_FREE_MEM(self->bind);
+        }
+    }
+
+    self->parseinfo.statement = PyMem_RawCalloc(statement_len + 1, 1);
+    if (!self->parseinfo.statement)
+        return PyErr_NoMemory();
+    memcpy(self->parseinfo.statement, statement, statement_len);
+    self->parseinfo.statement_len = statement_len;
+    self->parseinfo.paramcount = paramcount;
+    self->parseinfo.is_text = 0;
+    self->parseinfo.paramstyle = QMARK;
+    self->parseinfo.command = SQL_NONE;
+    self->parseinfo.paramlist = NULL;
+    self->parseinfo.keys = NULL;
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+MrdbCursor_parse(MrdbCursor *self, PyObject *args)
+{
+    PyObject *stmt;
+    int skip_command= 0;
     const char *statement= NULL;
     Py_ssize_t statement_len= 0;
     MrdbParser *parser= NULL;
     char errmsg[128];
     uint32_t old_paramcount= 0;
+
+    if (!PyArg_ParseTuple(args, "O|p", &stmt, &skip_command))
+        return NULL;
 
     if (self->parseinfo.statement)
     {
@@ -1309,7 +1365,7 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *stmt)
         return NULL;
     }
 
-    if (MrdbParser_parse(parser, 0, errmsg, 128))
+    if (MrdbParser_parse(parser, 0, (uint8_t)skip_command, errmsg, 128))
     {
         MrdbParser_end(parser);
         PyErr_SetString(Mariadb_ProgrammingError, errmsg);
@@ -1333,7 +1389,11 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *stmt)
     self->parseinfo.statement_len= parser->statement.length;
     self->parseinfo.paramlist= parser->param_list;
     parser->param_list= NULL;
-    self->parseinfo.is_text= (parser->command == SQL_NONE || parser->command == SQL_OTHER);
+    /* When skip_command is set, we already know it's text mode */
+    if (skip_command)
+        self->parseinfo.is_text= 1;
+    else
+        self->parseinfo.is_text= (parser->command == SQL_NONE || parser->command == SQL_OTHER);
     self->parseinfo.command= parser->command;
 
     if (parser->paramstyle == PYFORMAT && parser->keys)
@@ -1625,6 +1685,12 @@ MrdbCursor_check_text_types(MrdbCursor *self)
         PyDate_Check(obj) ||
         PyTime_Check(obj))
       Py_RETURN_TRUE;
+    /* Check for array.array (buffer objects that aren't bytes/bytearray) */
+    {
+      const char *tp_name = Py_TYPE(obj)->tp_name;
+      if (tp_name && strcmp(tp_name, "array.array") == 0)
+        Py_RETURN_TRUE;
+    }
   }
   Py_RETURN_NONE;
 }
