@@ -1,13 +1,20 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 """
 Reset connection packet for MariaDB connection reset
 
 Resets the connection state without re-authenticating.
 """
+from typing import TYPE_CHECKING
+
 from ...client.context import Context
 from ..client_message import ClientMessage
+
+if TYPE_CHECKING:
+    from ..payload_writer import PayloadWriter
 
 class ResetConnectionPacket(ClientMessage):
     """

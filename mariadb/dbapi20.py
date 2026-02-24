@@ -6,6 +6,7 @@ This module defines the types and utility functions required by PEP 249
 """
 import datetime
 import time
+from typing import Any
 
 from mariadb_shared import constants
 
@@ -46,7 +47,7 @@ class DbApiType(frozenset):
         False
     """
 
-    def __eq__(self, field_type):
+    def __eq__(self, field_type: object) -> bool:
         """
         Compare this type set with a field type or another DbApiType.
 
@@ -109,7 +110,7 @@ ROWID = DbApiType()
 # Constructor Functions
 # ==============================================================================
 
-def Binary(obj):
+def Binary(obj: Any) -> bytes:
     """
     Construct an object capable of holding a binary value.
 
@@ -122,7 +123,7 @@ def Binary(obj):
     return bytes(obj)
 
 
-def Date(year, month, day):
+def Date(year: int, month: int, day: int) -> datetime.date:
     """
     Construct an object holding a date value.
 
@@ -137,7 +138,7 @@ def Date(year, month, day):
     return datetime.date(year, month, day)
 
 
-def Time(hour, minute, second):
+def Time(hour: int, minute: int, second: int) -> datetime.time:
     """
     Construct an object holding a time value.
 
@@ -152,7 +153,7 @@ def Time(hour, minute, second):
     return datetime.time(hour, minute, second)
 
 
-def Timestamp(year, month, day, hour, minute, second):
+def Timestamp(year: int, month: int, day: int, hour: int, minute: int, second: int) -> datetime.datetime:
     """
     Construct an object holding a datetime value.
 
@@ -174,7 +175,7 @@ def Timestamp(year, month, day, hour, minute, second):
 # Time-based Constructor Functions
 # ==============================================================================
 
-def DateFromTicks(ticks):
+def DateFromTicks(ticks: float) -> datetime.date:
     """
     Construct a date object from the given ticks value.
 
@@ -194,7 +195,7 @@ def DateFromTicks(ticks):
     return Date(*time.localtime(ticks)[:3])
 
 
-def TimeFromTicks(ticks):
+def TimeFromTicks(ticks: float) -> datetime.time:
     """
     Construct a time object from the given ticks value.
 
@@ -214,7 +215,7 @@ def TimeFromTicks(ticks):
     return Time(*time.localtime(ticks)[3:6])
 
 
-def TimestampFromTicks(ticks):
+def TimestampFromTicks(ticks: float) -> datetime.datetime:
     """
     Construct a datetime object from the given ticks value.
 

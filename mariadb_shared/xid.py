@@ -20,7 +20,7 @@ class Xid(tuple):
     The combined length of transaction_id and branch_qualifier
     is limited to 64 characters.
     """
-    def __new__(cls, format_id: int, transaction_id: str, branch_qualifier: str):
+    def __new__(cls, format_id: int, transaction_id: str, branch_qualifier: str) -> 'Xid':
         if not isinstance(format_id, int):
             raise ProgrammingError("argument 1 must be int, not %s",
                                             type(format_id).__name__)

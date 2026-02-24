@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 """
 Query packet for SQL execution with parameter substitution.
 
@@ -17,7 +19,7 @@ import datetime
 import decimal
 import ipaddress
 import uuid
-from typing import TYPE_CHECKING, Any, List, Tuple, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Optional
 import struct
 import re
 try:
@@ -48,12 +50,12 @@ BINARY_QUOTE_PREFIX: bytes = b"_binary'"
 # Parameter Conversion Functions
 # ============================================================================
 
-def float2bytes(value: float, ctx=None) -> bytes:
+def float2bytes(value: float, ctx: Any = None) -> bytes:
     if repr(value) in ("nan", "inf", "-inf"):
         raise NotSupportedError(f"Float value '{repr(value)}' is not supported.")
     return str(value).encode('ascii')
 
-def decimal2bytes(value: float, ctx=None) -> bytes:
+def decimal2bytes(value: decimal.Decimal, ctx: Any = None) -> bytes:
     if value.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
         raise NotSupportedError(f"Decimal value '{value.__str__()}' is not supported.")
     return str(value).encode('ascii')
@@ -88,7 +90,7 @@ def escape_str(string: str, no_backslash_escapes: bool = False) -> bytearray:
     result[-1] = 39  # Single quote '
     return result
 
-def timedelta(val: datetime.timedelta, ctx=None) -> bytes:
+def timedelta(val: datetime.timedelta, ctx: Any = None) -> bytes:
     total_seconds = int(val.total_seconds())
     is_negative = total_seconds < 0
     
@@ -105,7 +107,7 @@ def timedelta(val: datetime.timedelta, ctx=None) -> bytes:
 _ESCAPE_BYTES_REGEX = re.compile(rb'[\\\'"\0]')
 _ESCAPE_BYTES_MAP = {b'\\': b'\\\\', b"'": b"\\'", b'"': b'\\"', b'\0': b'\\0'}
 
-def escape_bytes(b : bytes, no_backslash_escapes: bool = False) -> bytearray:
+def escape_bytes(b: bytes, no_backslash_escapes: bool = False) -> bytearray:
     """
     Escape bytes for SQL statements
     """
@@ -124,7 +126,7 @@ def escape_bytes(b : bytes, no_backslash_escapes: bool = False) -> bytearray:
             escaped = _ESCAPE_BYTES_REGEX.sub(lambda m: _ESCAPE_BYTES_MAP[m.group(0)], b)
 
     # Avoid multiple allocations with concatenation
-    result = bytearray(len(BINARY_QUOTE_PREFIX) + len(escaped) + 9)
+    result = bytearray(len(escaped) + 9)
     result[0:8] = BINARY_QUOTE_PREFIX
     result[8:-1] = escaped
     result[-1:] = QUOTE_BYTES
@@ -144,7 +146,7 @@ def tuple_to_bytes(t: tuple, no_backslash_escapes: bool = False) -> bytes:
     """Convert tuple to bytes - raises error as tuples are not directly supported"""
     raise NotSupportedError("Tuple parameters are not supported. Use individual values or convert to a supported type.")
 
-def indicator_val(v, ctx=None):
+def indicator_val(v: Any, ctx: Any = None) -> bytes:
    indicator = v.indicator
    if indicator == 1:
        return NULL_BYTES
@@ -155,25 +157,25 @@ def indicator_val(v, ctx=None):
 
 
 # Optimized converter functions (avoid lambda overhead)
-def _int_to_bytes(v, ctx=None):
+def _int_to_bytes(v: Any, ctx: Any = None) -> bytes:
     return b'%d' % v
 
-def _bool_to_bytes(v, ctx=None):
+def _bool_to_bytes(v: Any, ctx: Any = None) -> bytes:
     return TRUE_BYTES if v else FALSE_BYTES
 
-def _none_to_bytes(v, ctx=None):
+def _none_to_bytes(v: Any, ctx: Any = None) -> bytes:
     return NULL_BYTES
 
-def _date_to_bytes(v, ctx=None):
+def _date_to_bytes(v: Any, ctx: Any = None) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
-def _ipv4_to_bytes(v, ctx=None):
+def _ipv4_to_bytes(v: Any, ctx: Any = None) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
-def _ipv6_to_bytes(v, ctx=None):
+def _ipv6_to_bytes(v: Any, ctx: Any = None) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
-def _uuid_to_bytes(v, ctx=None):
+def _uuid_to_bytes(v: Any, ctx: Any = None) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
 PARAM_CONVERT_TBL = {
@@ -200,7 +202,7 @@ PARAM_CONVERT_TBL = {
 _type_cache = {cls: func for cls, func in PARAM_CONVERT_TBL.items()}
 
 # get cached conversion function
-def get_converter(val):
+def get_converter(val: Any) -> Any:
     tbl = PARAM_CONVERT_TBL  # local reference
     t = type(val)
     if t in _type_cache:
@@ -212,7 +214,7 @@ def get_converter(val):
             _type_cache[t] = conv_func
             return conv_func
 
-    _type_cache[t] = None
+    _type_cache[t] = None  # type: ignore[assignment]
     return None
 
 # ============================================================================
@@ -282,7 +284,7 @@ def normalize_to_qmark(sql: str) -> Tuple[str, Optional[List[str]]]:
     length = len(_sql)
     
     # Use list for fragments (Faster than bytearray.append in Python)
-    result_list = []
+    result_list: list[bytes] = []
     _append = result_list.append
     param_names: List[str] = []
     has_named_params = False
@@ -433,7 +435,7 @@ class QueryPacket(ClientMessage):
     """
     __slots__ = ('_payload_bytes', '_sql')
 
-    def __init__(self, payload_bytes: bytearray, sql: str = None):
+    def __init__(self, payload_bytes: bytearray, sql: Optional[str] = None):
         """
         Initialize COM_QUERY packet with pre-formatted payload
         
@@ -490,7 +492,7 @@ class QueryPacket(ClientMessage):
                 _converter = get_converter
                 cached_conv_func = None
                 last_param_type = None
-                converted = [None] * n_placeholders
+                converted: list[Any] = [None] * n_placeholders
                 for i in range(n_placeholders):
                     param = params_list[i]
                     p_type = type(param)
@@ -502,7 +504,7 @@ class QueryPacket(ClientMessage):
                     else:
                         converted[i] = str(param).encode('utf8')
                 # Interleave SQL parts and converted params (pre-allocated)
-                result_list = [None] * (2 * n_placeholders + 2)
+                result_list: list[Any] = [None] * (2 * n_placeholders + 2)
                 result_list[0] = b'\x00\x00\x00\x00\x03'
                 j = 1
                 for i in range(n_placeholders):
@@ -581,7 +583,7 @@ class QueryPacket(ClientMessage):
                             if i > last_copy:
                                 _append(_sql[last_copy:i])
 
-                            param = params_list[param_idx]
+                            param = params_list[param_idx]  # type: ignore[index]
                             p_type = type(param)
                             if p_type is not last_param_type:
                                 cached_conv_func = _converter(param)
@@ -640,7 +642,7 @@ class QueryPacket(ClientMessage):
                             if i > last_copy:
                                 _append(_sql[last_copy:i])
 
-                            param = params_dict.get(param_name)
+                            param = params_dict.get(param_name)  # type: ignore[union-attr]
                             if param is not None:
                                 p_type = type(param)
                                 if p_type is not last_param_type:
@@ -709,7 +711,7 @@ class QueryPacket(ClientMessage):
 
         return QueryPacket(bytearray(b"".join(result_list)), sql)
 
-    def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
+    def payload(self, context: Context, writer: Any) -> bytearray:
         return self._payload_bytes
 
     def is_binary(self) -> bool:
@@ -718,6 +720,6 @@ class QueryPacket(ClientMessage):
     def type(self) -> str:
         return "COM_QUERY"
     
-    def get_sql(self) -> str:
+    def get_sql(self) -> Optional[str]:
         """Get SQL string for LOAD LOCAL INFILE validation"""
         return self._sql

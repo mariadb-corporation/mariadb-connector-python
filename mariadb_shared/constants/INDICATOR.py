@@ -12,7 +12,7 @@ indicate special values.
 class MrdbIndicator():
     indicator = 0
 
-    def __init__(self, indicator):
+    def __init__(self, indicator: int) -> None:
         self.indicator = indicator
 
 

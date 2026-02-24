@@ -15,6 +15,8 @@ Usage with SQLAlchemy:
     )
 """
 
+from typing import Any
+
 # Import exception classes from main module
 from mariadb_shared.exceptions import (
     Error,
@@ -35,7 +37,7 @@ threadsafety = 1  # Threads may share the module, but not connections
 paramstyle = "qmark"
 
 
-async def connect(*args, **kwargs):
+async def connect(*args: Any, **kwargs: Any) -> Any:
     """
     Create an async database connection.
     

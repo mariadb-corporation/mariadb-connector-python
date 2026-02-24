@@ -41,7 +41,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     def encrypt_password(password: Optional[str], seed: bytes) -> bytearray:
         """Send an SHA-2 encrypted password: XOR(SHA256(password), SHA256(seed, SHA256(SHA256(password))))"""
         if password is None or password == "":
-            return b''
+            return bytearray(b'')
         
         # Convert password to bytes
         password_bytes = password.encode('utf-8')
@@ -93,7 +93,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                 )
                 return encrypted
             else:
-                return [0x00]
+                return bytes([0x00])
         except Exception as e:
             raise OperationalError(f"RSA authentication failed: {e}")
     
@@ -109,7 +109,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         encrypted = self.encrypt_password(self.authentication_data, truncated_seed)
         payload = bytearray(b'\0\0\0\0')
         payload.extend(encrypted)
-        await write_payload_func(payload, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", reset_sequence=False)
+        await write_payload_func(payload, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", False)
         
         # Read response packet
         response = await read_payload_func()
@@ -129,7 +129,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                         payload.append(0)
                     else:
                         payload = bytearray(b'\0\0\0\0\0')  # Null terminator
-                    await write_payload_func(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", reset_sequence=False)
+                    await write_payload_func(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", False)
                     return await read_payload_func()
                 else:
                     # SSL not available - try RSA public key encryption
@@ -139,7 +139,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                         )
                     
                     # Request public key from server
-                    await write_payload_func(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
+                    await write_payload_func(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", False)
                     
                     # Read public key response
                     key_response = await read_payload_func()
@@ -153,7 +153,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     encrypted_pwd = self._get_rsa_encrytped_pwd(public_key_pem.decode('utf-8'))
                     payload = bytearray(b'\0\0\0\0')
                     payload.extend(encrypted_pwd)
-                    await write_payload_func(payload, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", reset_sequence=False)
+                    await write_payload_func(payload, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", False)
 
                     return await read_payload_func()
             else:
@@ -175,7 +175,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
         encrypted = self.encrypt_password(self.authentication_data, truncated_seed)
         payload = bytearray(b'\0\0\0\0')
         payload.extend(encrypted)
-        write_payload_func(payload, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", reset_sequence=False)
+        write_payload_func(payload, "CACHING_SHA2_PASSWORD ENCRYPTED PWD", False)
         
         # Read response packet
         response = read_payload_func()
@@ -195,7 +195,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                         payload.append(0)
                     else:
                         payload = bytearray(b'\0\0\0\0\0')  # Null terminator
-                    write_payload_func(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", reset_sequence=False)
+                    write_payload_func(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", False)
                     return read_payload_func()
                 else:
                     # SSL not available - try RSA public key encryption
@@ -206,7 +206,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                         )
                     
                     # Request RSA public key from server
-                    write_payload_func(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", reset_sequence=False)
+                    write_payload_func(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", False)
                     
                     # Read public key response
                     key_response = read_payload_func()
@@ -220,7 +220,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     encrypted_pwd = self._get_rsa_encrytped_pwd(public_key_pem)
                     payload = bytearray(b'\0\0\0\0')
                     payload.extend(encrypted_pwd)
-                    write_payload_func(payload, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", reset_sequence=False)
+                    write_payload_func(payload, "CACHING_SHA2_PASSWORD RSA ENCRYPTED PWD", False)
 
                     return read_payload_func()
             else:

@@ -165,7 +165,7 @@ class BaseCompleteResult(Result):
             config: Configuration for parsing
             rows: All row data (already parsed)
         """
-        self.columns: List[ColumnDefinitionPacket] = columns
+        self.columns = columns
         self.column_count: int = column_count
         self.config: 'Configuration' = config
         self.warning_count: int = 0
@@ -266,7 +266,7 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
             return remaining
         return []  # After last - return empty
     
-    async def scroll(self, value: int, mode: str = "relative") -> None:
+    async def scroll(self, value: int, mode: str = "relative") -> None:  # type: ignore[override]
         super().scroll(value, mode)
 
 class BaseStreamingResult(Result):
@@ -288,7 +288,7 @@ class BaseStreamingResult(Result):
         columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration',
-        row_parser: Callable = None,
+        row_parser: Optional[Callable] = None,
     ):
         """
         Initialize streaming result
@@ -304,7 +304,7 @@ class BaseStreamingResult(Result):
         super().__init__(columns, column_count, config)
         self.read_payload_func: Callable[[], memoryview] = read_payload_func
         self.context: Context = context
-        self.row_parser: Callable = row_parser
+        self.row_parser: Callable = row_parser  # type: ignore[assignment]
         self.loaded: bool = False
         self._row_count: int = 0  # Track number of rows fetched
         
@@ -343,7 +343,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         
         # Increment row count
         self._row_count += 1
-        return self.row_parser(row_packet, self.columns, self.config, self.column_count)
+        return self.row_parser(row_packet, self.columns, self.config, self.column_count)  # type: ignore[no-any-return]
         
     def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
@@ -420,10 +420,10 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
     """
     __slots__ = ()
     
-    async def _read_next_row_packet(self) -> Optional[memoryview]:
+    async def _read_next_row_packet(self) -> Optional[memoryview]:  # type: ignore[override]
         """Read next row packet from network (asynchronous). Returns row packet memoryview, or None if no more rows."""
         try:
-            row_packet = await self.read_payload_func()
+            row_packet = await self.read_payload_func()  # type: ignore[misc]
             packet_type = row_packet[0]
             
             if packet_type == 0xFE:  # Check for EOF/OK packet
@@ -442,7 +442,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
                 self.loaded = True
                 raise Exception("Error packet received during streaming")
             
-            return row_packet  # Regular row data packet
+            return row_packet  # type: ignore[no-any-return]  # Regular row data packet
             
         except Exception:
             self.loaded = True
@@ -459,7 +459,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         
         # Increment row count
         self._row_count += 1
-        return self.row_parser(row_packet, self.columns, self.config, self.column_count)
+        return self.row_parser(row_packet, self.columns, self.config, self.column_count)  # type: ignore[no-any-return]
     
     async def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows (async)"""

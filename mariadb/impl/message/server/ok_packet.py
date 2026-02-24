@@ -101,7 +101,7 @@ class OkPacket(Completion):
         parser = PayloadReader(data, pos)
         info = b''
         info_length = parser.read_length_encoded_int()
-        if info_length > 0:
+        if info_length is not None and info_length > 0:
             info = parser.read_bytes(info_length)
         
         # Session tracking check
@@ -125,24 +125,24 @@ def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None
         data_length = parser.read_length_encoded_int()
         
         if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
-            end_pos = start_pos + total_length
+            end_pos = start_pos + total_length  # type: ignore[operator]
             while parser.pos < end_pos:
                 var_name_len = parser.read_length_encoded_int()
-                var_name = parser.read_bytes(var_name_len).decode('utf-8')
+                var_name = parser.read_bytes(var_name_len).decode('utf-8')  # type: ignore[arg-type]
                 var_value_len = parser.read_length_encoded_int()
                 if (var_name == 'character_set_client'):
-                    var_value = parser.read_bytes(var_value_len).decode('utf-8')
+                    var_value = parser.read_bytes(var_value_len).decode('utf-8')  # type: ignore[arg-type]
                     context.charset = var_value
                 else:
-                    parser.skip(var_value_len)    
+                    parser.skip(var_value_len)  # type: ignore[arg-type]
                     
         elif tracking_type == constants.SESSION_TRACK.SCHEMA:
             schema_len = parser.read_length_encoded_int()
-            context.database = parser.read_bytes(schema_len).decode('utf-8')
+            context.database = parser.read_bytes(schema_len).decode('utf-8')  # type: ignore[arg-type]
     
         else:
-            parser.skip(data_length)
+            parser.skip(data_length)  # type: ignore[arg-type]
         
-        expected_pos = start_pos + total_length
+        expected_pos = start_pos + total_length  # type: ignore[operator]
         if parser.pos < expected_pos:
             parser.skip(expected_pos - parser.pos)

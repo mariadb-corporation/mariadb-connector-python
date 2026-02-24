@@ -49,7 +49,7 @@ def parse_connection_uri(uri: str) -> Dict[str, Any]:
     
     # Extract port
     if parsed.port:
-        params['port'] = parsed.port
+        params['port'] = parsed.port  # type: ignore[assignment]
     
     # Extract database
     if parsed.path and len(parsed.path) > 1:
@@ -65,12 +65,12 @@ def parse_connection_uri(uri: str) -> Dict[str, Any]:
             
             # Convert boolean strings
             if value.lower() in ('true', '1', 'yes', 'on'):
-                params[key] = True
+                params[key] = True  # type: ignore[assignment]
             elif value.lower() in ('false', '0', 'no', 'off'):
-                params[key] = False
+                params[key] = False  # type: ignore[assignment]
             # Convert numeric strings
             elif value.isdigit():
-                params[key] = int(value)
+                params[key] = int(value)  # type: ignore[assignment]
             else:
                 params[key] = unquote(value)
     
@@ -88,6 +88,6 @@ def is_connection_uri(value: str) -> bool:
         True if the string appears to be a connection URI
     """
     if not isinstance(value, str):
-        return False
+        return False  # type: ignore[unreachable]
     
     return value.startswith('mariadb://') or value.startswith('mysql://')

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
 
 from collections import namedtuple
 from typing import Sequence, Optional, List, Any, Union, TYPE_CHECKING
@@ -35,7 +36,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # Initialization and Lifecycle
     # =========================================================================
 
-    def __init__(self, connection: 'BaseConnection', **kwargs):
+    def __init__(self, connection: 'SyncConnection', **kwargs: Any) -> None:
         """
         Initialize synchronous cursor with a connection
         
@@ -56,20 +57,20 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         After closing, the cursor cannot be used anymore.
         """
         if not self._closed:
-
+            client = self.connection._client
             if self._stmt:
                 # Release cached statement reference
-                self.connection._client.prepared_statement_cache.release(self._stmt)
+                client.prepared_statement_cache.release(self._stmt)
                 self._stmt = None
 
             # Consume any remaining streaming results from this cursor
             # Only drain if this cursor's result is the active one on the connection
             if (self._result is not None and 
                 self._result.streaming() and 
-                self.connection._client._active_streaming_result is self._result):
+                client._active_streaming_result is self._result):
                 try:
-                    self._result.fetch_remaining()
-                    self.connection._client._active_streaming_result = None
+                    self._result.fetch_remaining()  # type: ignore[attr-defined]
+                    client._active_streaming_result = None
                 except Exception:
                     pass  # Ignore errors during close
             
@@ -123,32 +124,36 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                     parameters = list(data)
                 elif isinstance(data, dict):
                     # Named parameters
-                    parameters = data
+                    parameters = data  # type: ignore[assignment]
                 else:
-                    raise ProgrammingError(f"wrong parameter type")
+                    raise ProgrammingError("Unsupported parameter type: expected list, tuple, or dict")
 
-                if not isinstance(parameters, dict) and (self._force_binary or self._check_text_types(data)):
+                client = self.connection._client
+                config = self._config or self.connection._configuration
+                if not isinstance(parameters, dict) and (self._use_binary or self._check_text_types(data)):  # type: ignore[arg-type, unreachable]
 
                     from .impl.message.client.execute_packet import ExecutePacket
-                    execute_packet = ExecutePacket(None, parameters, sql)
-                    self._completions = self.connection._client.execute_stmt(sql, [execute_packet], self._config, self._buffered)[0]
+                    execute_packet = ExecutePacket(None, parameters, sql)  # type: ignore[arg-type]
+                    self._completions = client.execute_stmt(sql, [execute_packet], config, self._buffered)[0]
                 else:
                     # Named parameters use text protocol with substitution
-                    no_backslash_escapes = (self.connection._client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
+                    no_backslash_escapes = (client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
                     query_packet = QueryPacket.from_substitute(sql, parameters, no_backslash_escapes)
-                    self._completions = self.connection._client.execute(query_packet, self._config, self._buffered)
+                    self._completions = client.execute(query_packet, config, self._buffered)
 
             else:
+                client = self.connection._client
+                config = self._config or self.connection._configuration
                 # Use simple query packet
                 query_packet = QueryPacket.from_sql(sql)
-                self._completions = self.connection._client.execute(query_packet, self._config, self._buffered)
+                self._completions = client.execute(query_packet, config, self._buffered)
             
             # Process the completions to extract result data
             self._completion_index = 0
             self._current_completion = self._completions[0]
                     
-        except DatabaseError as e:
-            raise e                
+        except DatabaseError:
+            raise
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"Execute failed: {e}",
@@ -180,7 +185,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         
         try:
             if data and len(data) > 0 and not isinstance(data, (list, tuple)):
-                raise ProgrammingError(f"wrong parameter type")
+                raise ProgrammingError("Unsupported parameter type: expected list or tuple")
 
             # Normalize SQL to qmark style and get parameter mapping
             normalized_sql, param_names = normalize_to_qmark(sql)
@@ -199,7 +204,9 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             
             # Check if server supports COM_STMT_BULK_EXECUTE
             from mariadb_shared import constants
-            context = self.connection._client.context
+            client = self.connection._client
+            config = self._config or self.connection._configuration
+            context = client.context
             
             # Use BULK_UNIT_RESULTS capability (MariaDB 11.5+) instead of BULK_OPERATIONS
             # to avoid MariaDB 10.6-11.4 bug where bulk execute with cached statements
@@ -208,28 +215,28 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                        len(data) > 0 and len(data[0]) > 0)
             
             # Use binary protocol with normalized SQL (always qmark now)
-            if use_bulk or self._force_binary:
-                if use_bulk and self._can_use_bulk_execute(data):
+            if use_bulk or self._use_binary:
+                if use_bulk and self._can_use_bulk_execute(data):  # type: ignore[arg-type]
                     # Use COM_STMT_BULK_EXECUTE for efficient bulk execution
                     from .impl.message.client.bulk_execute_packet import BulkExecutePacket
-                    bulk_packet = BulkExecutePacket(None, data, normalized_sql)
-                    self._completions = self.connection._client.execute_stmt(normalized_sql, [bulk_packet], self._config, True)[0]
+                    bulk_packet = BulkExecutePacket(None, data, normalized_sql)  # type: ignore[arg-type]
+                    self._completions = client.execute_stmt(normalized_sql, [bulk_packet], config, True)[0]
                     self._completion_index = 0
                 else: 
                     # Fallback to individual COM_STMT_EXECUTE packets (when bulk not available but binary forced)
                     from .impl.message.client.execute_packet import ExecutePacket
                     
                     # Create all execute packets
-                    execute_packets = [ExecutePacket(None, params, normalized_sql) for params in data]
+                    execute_packets = [ExecutePacket(None, params, normalized_sql) for params in data]  # type: ignore[arg-type]
                     
                     # Execute all at once with single prepare
-                    completions = self.connection._client.execute_stmt(normalized_sql, execute_packets, self._config, True)
+                    completions = client.execute_stmt(normalized_sql, execute_packets, config, True)  # type: ignore[arg-type]
 
                     self._process_executemany_completions(completions)   
             else:
                 # Text protocol fallback (when bulk not available and binary not forced)
                 # Get NO_BACKSLASH_ESCAPES status from connection
-                no_backslash_escapes = (self.connection._client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
+                no_backslash_escapes = (client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
                 
                 completions = [None] * len(data)
                 for i in range(len(data)):
@@ -237,14 +244,14 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                     parameters = list(params) if params else []
                     # Use normalized_sql (qmark style) since parameters are already reordered
                     query_packet = QueryPacket.from_substitute(normalized_sql, parameters, no_backslash_escapes)
-                    completions[i] = self.connection._client.execute(query_packet, self._config, True, self._stmt)
+                    completions[i] = client.execute(query_packet, config, True, self._stmt)
 
                 self._process_executemany_completions(completions)
-                self._current_completion = self._completions[0] if self._completions else None
-            self._current_completion = self._completions[0]
+            if self._completions:
+                self._current_completion = self._completions[0]
 
-        except DatabaseError as e:
-            raise e            
+        except DatabaseError:
+            raise
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"ExecuteMany failed: {e}",
@@ -274,11 +281,10 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             raise ProgrammingError("No result set to fetch from")
         result = self._current_completion.result_set
         
-        if self.connection._closed and result.streaming():
+        if self.connection._closed and result.streaming():  # type: ignore[union-attr]
             raise ProgrammingError("Cursor is closed")
         
-        row = result.fetch_one()
-        self._rowcount = result.get_row_count()
+        row = result.fetch_one()  # type: ignore[union-attr]
         if row is not None:
             # Apply row formatting
             row = self._apply_row_formatting([row])[0]
@@ -295,7 +301,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             raise ProgrammingError("No result set to fetch from")
         result = self._current_completion.result_set
         
-        if self.connection._closed and result.streaming():
+        if self.connection._closed and result.streaming():  # type: ignore[union-attr]
             raise ProgrammingError("Cursor is closed")
         
         if size is None:
@@ -304,13 +310,12 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         # Optimize: fetch rows directly instead of calling fetchone repeatedly
         rows = []
         for _ in range(size):
-            row = result.fetch_one()
+            row = result.fetch_one()  # type: ignore[union-attr]
             if row is None:
                 break
             rows.append(row)
         
         if rows:
-            self._rowcount = result.get_row_count()
             return self._apply_row_formatting(rows)
         return []
         
@@ -325,12 +330,11 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             raise ProgrammingError("No result set to fetch from")
         result = self._current_completion.result_set
         
-        if self.connection._closed and result.streaming():
+        if self.connection._closed and result.streaming():  # type: ignore[union-attr]
             raise ProgrammingError("Cursor is closed")
         
         # Delegate to Result object
-        rows = result.fetch_all()
-        self._rowcount = result.get_row_count()
+        rows = result.fetch_all()  # type: ignore[union-attr]
         return self._apply_row_formatting(rows)
     
     def scroll(self, value: int, mode: str = "relative") -> None:
@@ -377,7 +381,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # Stored Procedures
     # =========================================================================
     
-    def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:
+    def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:  # type: ignore[override]
         """
         Call a stored procedure
         
@@ -407,13 +411,15 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             
             # Use execute_stmt which handles prepared statement caching internally
             from .impl.message.client.execute_packet import ExecutePacket
-            execute_packet = ExecutePacket(None, list(args), call_sql)  # None = will be filled by execute_stmt
-            self._completions = self.connection._client.execute_stmt(call_sql, [execute_packet], self._config)[0]
+            execute_packet = ExecutePacket(None, list(args), call_sql)  # type: ignore[arg-type]
+            client = self.connection._client
+            config = self._config or self.connection._configuration
+            self._completions = client.execute_stmt(call_sql, [execute_packet], config)[0]
             self._completion_index = 0
             self._current_completion = self._completions[0]
-            return None  # Match C extension behavior
-        except DatabaseError as e:
-            raise e
+            return None  # type: ignore[return-value]  # Match C extension behavior
+        except DatabaseError:
+            raise
         except Exception as e:
             raise self._exception_factory.create_exception(
                 f"CallProc failed: {e}",
@@ -455,22 +461,21 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         """Context manager entry"""
         return self
         
-    def __exit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> bool:
+    def __exit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
         """Context manager exit"""
         self.close()
-        return False
     
     # =========================================================================
     # Result Creation
     # =========================================================================
     
-    def _create_complete_result(self, columns: List[Any], column_count: int, 
-                               rows: List[tuple]):
+    def _create_complete_result(self, columns: Any, column_count: int, 
+                               rows: List[tuple]) -> Any:
         """Create a synchronous complete result"""
         from .impl.result import SyncCompleteResult
         return SyncCompleteResult(
             columns=columns,
             column_count=column_count,
-            config=self._config,
+            config=self._config,  # type: ignore[arg-type]
             rows=rows
         )

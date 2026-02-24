@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Callable, Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
 from .host_address import HostAddress
 
@@ -42,6 +42,7 @@ class Configuration:
     
     # Protocol parameters
     compress: bool = False
+    binary: bool = False  # Use binary protocol (prepared statements) by default
     local_infile: Optional[bool] = None  # Enable LOAD DATA LOCAL INFILE
     
     # Timeouts
@@ -55,7 +56,7 @@ class Configuration:
     init_command: Optional[str] = None
     
     # Type conversion options
-    converter: Optional[Dict[int, callable]] = None
+    converter: Optional[Dict[int, Callable]] = None
     
     # Result format options
     named_tuple: bool = False
@@ -82,7 +83,7 @@ class Configuration:
         
         # Split by comma for multiple hosts
         if (host_string is None):
-            return hosts
+            return hosts  # type: ignore[unreachable]
         host_parts = [h.strip() for h in host_string.split(',') if h.strip()]
         
         for host_part in host_parts:
@@ -172,6 +173,8 @@ class Configuration:
         # Protocol parameters
         if 'compress' in params:
             config.compress = bool(params['compress'])
+        if 'binary' in params:
+            config.binary = bool(params['binary'])
         if 'local_infile' in params:
             config.local_infile = bool(params['local_infile']) if params['local_infile'] is not None else None
         
@@ -224,7 +227,7 @@ class Configuration:
             'ssl', 'use_ssl', 'ssl_key', 'ssl_ca', 'ssl_cert', 'ssl_crl',
             'ssl_cipher', 'ssl_capath', 'ssl_crlpath', 'ssl_verify_cert', 'tls_version',
             'autocommit', 'read_only',
-            'compress', 'local_infile',
+            'compress', 'binary', 'local_infile',
             'query_timeout', 'max_allowed_packet',
             'character_encoding', 'charset', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object',
             'cache_prep_stmts', 'prep_stmt_cache_size', 'pipeline', 'client_flag'

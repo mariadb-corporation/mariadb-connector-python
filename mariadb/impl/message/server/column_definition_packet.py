@@ -18,7 +18,7 @@ _UNPACK_UINT16 = struct.Struct('<H').unpack_from
 _UNPACK_FIXED_FIELDS = struct.Struct('<HIBHB').unpack_from  # charset(H), column_length(I), type(B), flags(H), decimals(B)
 
 
-def _read_length_encoded_int(data, pos):
+def _read_length_encoded_int(data: memoryview, pos: int) -> tuple[int, int]:
     """Read a length-encoded integer, return (value, new_pos)."""
     b = data[pos]
     if b < 251:
@@ -31,7 +31,7 @@ def _read_length_encoded_int(data, pos):
     return struct.Struct('<Q').unpack_from(data, pos + 1)[0], pos + 9
 
 
-def _read_small_length_encoded_bytes(data, pos):
+def _read_small_length_encoded_bytes(data: memoryview, pos: int) -> tuple[bytes, int]:
     """Read length-encoded bytes, return (bytes, new_pos)."""
     length = data[pos]
     pos += 1
@@ -139,7 +139,7 @@ class ColumnsDefinition:
             org_name_begin = org_name_end = 0
 
         # Save raw identifier bytes + all ranges as a single tuple
-        self._meta[index] = (
+        self._meta[index] = (  # type: ignore[call-overload]
             data[start_pos:pos].tobytes(),
             sch_begin, sch_end,
             tbl_begin, tbl_end,
@@ -176,8 +176,8 @@ class ColumnsDefinition:
         self.flags[index] = col_flags
         self.charsets[index] = charset
         self.special_formats[index] = special_format
-        self.ext_type_names[index] = ext_type_name
-        self.ext_type_formats[index] = ext_type_format
+        self.ext_type_names[index] = ext_type_name  # type: ignore[assignment]
+        self.ext_type_formats[index] = ext_type_format  # type: ignore[assignment]
         self.column_lengths[index] = column_length
         self.decimals_arr[index] = col_decimals
 
@@ -187,10 +187,10 @@ class ColumnsDefinition:
 
     def _decode_str(self, i: int, begin_idx: int) -> str:
         m = self._meta[i]
-        b = m[begin_idx]
-        e = m[begin_idx + 1]
+        b = m[begin_idx]  # type: ignore[index]
+        e = m[begin_idx + 1]  # type: ignore[index]
         if e > b:
-            return m[0][b:e].decode('utf-8', errors='replace')
+            return m[0][b:e].decode('utf-8', errors='replace')  # type: ignore[index, no-any-return]
         return ''
 
     def get_name(self, i: int) -> str:
@@ -215,11 +215,11 @@ class ColumnsDefinition:
     # Protocol helpers
     # =========================================================================
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.count
 
     @staticmethod
-    def decode_all(packets, buf_mv, count: int, context: 'Context') -> 'ColumnsDefinition':
+    def decode_all(packets: list, buf_mv: memoryview, count: int, context: 'Context') -> 'ColumnsDefinition':
         """Decode a list of (start, end) packet positions into a ColumnsDefinition.
 
         Args:

@@ -32,7 +32,7 @@ class PayloadReader:
         self.packet: memoryview = packet
         self.pos: int = pos  # Current read position
     
-    def set_buffer(self, packet: memoryview, pos: int = 0):
+    def set_buffer(self, packet: memoryview, pos: int = 0) -> None:
         self.packet = packet
         self.pos = pos
     
@@ -48,13 +48,13 @@ class PayloadReader:
     
     def read_uint16(self) -> int:
         """Read 2-byte integer (little-endian) and advance position"""
-        value = _unpack_H(self.packet, self.pos)[0]
+        value: int = _unpack_H(self.packet, self.pos)[0]
         self.pos += 2
         return value
     
     def read_int16(self) -> int:
         """Read 2-byte integer (little-endian) and advance position"""
-        value = _unpack_h(self.packet, self.pos)[0]
+        value: int = _unpack_h(self.packet, self.pos)[0]
         self.pos += 2
         return value
 
@@ -68,37 +68,37 @@ class PayloadReader:
 
     def read_uint32(self) -> int:
         """Read 4-byte integer (little-endian) and advance position"""
-        value = _unpack_I(self.packet, self.pos)[0]
+        value: int = _unpack_I(self.packet, self.pos)[0]
         self.pos += 4
         return value
 
     def read_int32(self) -> int:
         """Read 4-byte integer (little-endian) and advance position"""
-        value = _unpack_i(self.packet, self.pos)[0]
+        value: int = _unpack_i(self.packet, self.pos)[0]
         self.pos += 4
         return value
     
     def read_uint64(self) -> int:
         """Read 8-byte integer (little-endian) and advance position"""
-        value = _unpack_Q(self.packet, self.pos)[0]
+        value: int = _unpack_Q(self.packet, self.pos)[0]
         self.pos += 8
         return value
 
     def read_int64(self) -> int:
         """Read 8-byte integer (little-endian) and advance position"""
-        value = _unpack_q(self.packet, self.pos)[0]
+        value: int = _unpack_q(self.packet, self.pos)[0]
         self.pos += 8
         return value
 
     def read_float(self) -> float:
         """Read 4-byte float (little-endian) and advance position"""
-        value = _unpack_f(self.packet, self.pos)[0]
+        value: float = _unpack_f(self.packet, self.pos)[0]
         self.pos += 4
         return value
     
     def read_double(self) -> float:
         """Read 8-byte float (little-endian) and advance position"""
-        value = _unpack_d(self.packet, self.pos)[0]
+        value: float = _unpack_d(self.packet, self.pos)[0]
         self.pos += 8
         return value
 

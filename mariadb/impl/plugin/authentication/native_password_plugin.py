@@ -28,7 +28,7 @@ class NativePasswordPlugin(AuthenticationPlugin):
     def encrypt_password(password: Optional[str], seed: bytes) -> bytearray:
         """Encrypts a password using MySQL native password algorithm"""
         if password is None or password == "":
-            return b''
+            return bytearray(b'')
         
         password_bytes = password.encode('utf-8')
         stage1 = hashlib.sha1(password_bytes).digest()

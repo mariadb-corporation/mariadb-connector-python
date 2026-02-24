@@ -13,7 +13,7 @@ from .caching_sha2_password_plugin_factory import CachingSha2PasswordPluginFacto
 from .parsec_password_plugin_factory import ParsecPasswordPluginFactory
 
 
-def register_builtin_plugins():
+def register_builtin_plugins() -> None:
     """
     Register all built-in authentication plugins
     

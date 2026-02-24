@@ -8,6 +8,8 @@ This module defines the exception hierarchy used by both the pure Python
 and C extension implementations of MariaDB Connector/Python.
 """
 
+from typing import Any
+
 # Standard exception hierarchy following PEP 249 (DB API 2.0)
 
 class Warning(UserWarning):
@@ -23,7 +25,7 @@ class Error(Exception):
     You can use this to catch all errors with one single except statement.
     """
     
-    def __init__(self, msg=None, errno=None, sqlstate=None):
+    def __init__(self, msg: object = None, errno: object = None, sqlstate: object = None) -> None:
         """
         Initialize error with message, error number, and SQL state.
         
@@ -33,57 +35,57 @@ class Error(Exception):
             sqlstate: SQL state code (5 characters)
         """
         super().__init__(msg)
-        self._msg = msg or ""
-        self._errno = errno or 0
-        self._sqlstate = sqlstate or "HY000"
+        self._msg: Any = msg or ""
+        self._errno: Any = errno or 0
+        self._sqlstate: Any = sqlstate or "HY000"
     
     @property
-    def errmsg(self):
+    def errmsg(self) -> Any:
         """Get error message"""
         return self._msg
     
     @errmsg.setter
-    def errmsg(self, value):
+    def errmsg(self, value: str) -> None:
         """Set error message"""
         self._msg = value
     
     @property
-    def msg(self):
+    def msg(self) -> Any:
         """Get error message (alias for errmsg)"""
         return self._msg
     
     @msg.setter
-    def msg(self, value):
+    def msg(self, value: str) -> None:
         """Set error message"""
         self._msg = value
     
     @property
-    def errno(self):
+    def errno(self) -> Any:
         """Get error number"""
         return self._errno
     
     @errno.setter
-    def errno(self, value):
+    def errno(self, value: object) -> None:
         """Set error number"""
         self._errno = value if value is not None else 0
     
     @property
-    def sqlstate(self):
+    def sqlstate(self) -> Any:
         """Get SQL state"""
         return self._sqlstate
     
     @sqlstate.setter
-    def sqlstate(self, value):
+    def sqlstate(self, value: object) -> None:
         """Set SQL state"""
         self._sqlstate = value if value is not None else "HY000"
     
-    def __str__(self):
+    def __str__(self) -> str:
         """String representation of error"""
         # Handle empty error messages from database
         msg = self._msg if self._msg else "Unknown database error"
         if self._errno:
             return f"{msg} (errno: {self._errno}, sqlstate: {self._sqlstate})"
-        return msg
+        return str(msg)
 
 class InterfaceError(Error):
     """

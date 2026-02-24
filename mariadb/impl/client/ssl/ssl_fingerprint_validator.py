@@ -22,7 +22,7 @@ class SSLFingerprintValidator:
     validation fails, allowing later validation using server-provided hash.
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize fingerprint validator"""
         self.fingerprint: Optional[bytes] = None
         self.cert_der: Optional[bytes] = None

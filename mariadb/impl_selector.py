@@ -7,16 +7,16 @@ implementations
 
 import os
 import sys
-from typing import Any, Type
+from typing import Any, Optional, Type
 
 
 # Global variables to store the selected implementation
 __impl__: str = ""
 sync_connection: Any = None
 async_connection: Any = None
-Cursor: Type[Any] = None
-SyncCursor: Type[Any] = None
-AsyncCursor: Type[Any] = None
+Cursor: Optional[Type[Any]] = None
+SyncCursor: Optional[Type[Any]] = None
+AsyncCursor: Optional[Type[Any]] = None
 
 
 def _select_implementation() -> None:

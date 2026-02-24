@@ -90,7 +90,7 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
     Connection parameters can be provided as:
     1. A URI string: mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=value2]
     2. A set of keyword arguments (see below)
-    
+
     When using a URI string, keyword arguments can still be provided and will take priority over
     values in the URI.
 
@@ -143,7 +143,7 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
                 kwargs = uri_params
                 # Remove the URI from args
                 args = args[1:]
-    
+
     # Compatibility feature: if SSL is provided as a dictionary,
     # map its content to ssl_* parameters (mariadb-c compatibility)
     if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
@@ -152,7 +152,7 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
             if key in ssl:
                 kwargs["ssl_%s" % key] = ssl[key]
         kwargs["ssl"] = True
-    
+
     # Check if pool_name is specified
     pool_name = kwargs.get('pool_name')
     if pool_name:
@@ -161,7 +161,7 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
         else:
             pool = _get_connection_pool_class()(**kwargs)
         return pool.get_connection()
-    
+
     # Use SyncConnection if no custom class specified
     if connectionclass is None:
         connectionclass = SyncConnection
@@ -183,10 +183,10 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
     Connection parameters can be provided as:
     1. A URI string: mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=value2]
     2. A set of keyword arguments (same as connect() function)
-    
+
     Returns:
         AsyncConnection: A connected async connection object
-        
+
     Example:
         async def main():
             conn = await mariadb.asyncConnect(
@@ -199,9 +199,9 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
             await cursor.execute("SELECT 1")
             result = await cursor.fetchone()
             await conn.close()
-        
+
         asyncio.run(main())
-    
+
     Note: Pool connections are not supported with asyncConnect.
     """
     # Check if AsyncConnection is available
@@ -211,7 +211,7 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
             "This may occur if the pure Python async implementation could not be imported. "
             "Ensure Python 3.7+ is installed and the mariadb package is properly installed."
         )
-    
+
     # Windows + SSL: Force pure Python async due to SCHANNEL buffering issues
     # This workaround is needed until MariaDB Connector/C properly supports async SSL on Windows
     import platform
@@ -220,9 +220,9 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
         # Check if SSL is enabled in kwargs (check all SSL-related parameters)
         ssl_param = kwargs.get('ssl', False)
         ssl_enabled = (
-            ssl_param is True or 
+            ssl_param is True or
             isinstance(ssl_param, dict) or
-            kwargs.get('ssl_ca') or 
+            kwargs.get('ssl_ca') or
             kwargs.get('ssl_cert') or
             kwargs.get('ssl_key') or
             kwargs.get('ssl_capath') or
@@ -236,7 +236,7 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
             # Import pure Python async implementation
             from . import async_connection as async_conn_module
             connection_class = async_conn_module.AsyncConnection
-    
+
     # Parse URI if provided as first positional argument
     if args and len(args) > 0:
         first_arg = args[0]
@@ -250,7 +250,7 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
                 kwargs = uri_params
                 # Remove the URI from args
                 args = args[1:]
-    
+
     # Compatibility feature: if SSL is provided as a dictionary,
     # map its content to ssl_* parameters (mariadb-c compatibility)
     if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
@@ -259,7 +259,7 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
             if key in ssl:
                 kwargs["ssl_%s" % key] = ssl[key]
         kwargs["ssl"] = True
-    
+
     # Check if pool_name is specified
     pool_name = kwargs.get('pool_name')
     if pool_name:
@@ -272,27 +272,27 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
     # Use AsyncConnection if no custom class specified
     if connectionclass is None:
         connectionclass = connection_class  # Use the class selected by Windows+SSL workaround
-    
+
     # Connect asynchronously using the classmethod
-    return await connectionclass.connect(*args, **kwargs)
+    return await connectionclass.connect(*args, **kwargs)  # type: ignore[union-attr]
 
 
 # Stub for ASAN detection
 _have_asan = False
 
 # Version information for the connector
-def _parse_version_info(version_string):
+def _parse_version_info(version_string: str) -> tuple:
     """
     Parse version string into numeric format
-    
+
     Args:
         version_string: Version like "1.2.3-dev", "2.0.0.dev", or "2.0.0-ga"
-        
+
     Returns:
         Tuple of (major, minor, patch[, suffix]) and numeric version (MMMMPP format)
     """
     import re
-    
+
     # Extract major.minor.patch and optional suffix from version string
     # Handle formats like "1.2.3", "1.2.3-dev", "1.2.3.dev", "1.2.3-ga", etc.
     match = re.match(r'^(\d+)\.(\d+)\.(\d+)(?:[.-](.+))?$', version_string)
@@ -301,16 +301,16 @@ def _parse_version_info(version_string):
         minor = int(match.group(2))
         patch = int(match.group(3))
         suffix = match.group(4)  # Optional suffix (dev, ga, etc.)
-        
+
         # Convert to tuple format - include suffix if present
         if suffix:
             version_tuple = (major, minor, patch, suffix)
         else:
-            version_tuple = (major, minor, patch)
-        
+            version_tuple = (major, minor, patch)  # type: ignore[assignment]
+
         # Convert to 6-digit format: MMMMPP (2 digits each)
         version_numeric = major * 10000 + minor * 100 + patch
-        
+
         return version_tuple, version_numeric
     else:
         # Fallback for invalid version strings
@@ -328,8 +328,8 @@ except ImportError:
         _base_version = version('mariadb')
     except ImportError:
         try:
-            from importlib_metadata import version
-            _base_version = version('mariadb')
+            from importlib_metadata import version as version_func
+            _base_version = version_func('mariadb')
         except ImportError:
             # Final fallback
             _base_version = "2.0.0.dev"
@@ -352,13 +352,13 @@ _ConnectionPoolClass = None
 _AsyncConnectionPoolClass = None
 
 # Dynamic version properties that reflect the actual implementation being used
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     """
     Dynamic attribute access for version info and optional pooling support.
     Returns version information based on the actual implementation being used.
     """
     global _ConnectionPoolClass, _AsyncConnectionPoolClass
-    
+
     if name == '__version__':
         return _get_current_version()
     elif name == '__version_type__':
@@ -378,27 +378,27 @@ def __getattr__(name):
     else:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
-def _get_current_version():
+def _get_current_version() -> str:
     """Get version based on current implementation selection"""
     if __impl__ == 'c':
         # C extension is selected
         try:
             import mariadb_c
-            return mariadb_c.__version__
+            return mariadb_c.__version__  # type: ignore[no-any-return]
         except (ImportError, AttributeError):
             return _base_version + "+c"
     elif __impl__ == 'binary':
         # Binary wheel is selected
         try:
             import mariadb_binary
-            return mariadb_binary.__version__
+            return mariadb_binary.__version__  # type: ignore[no-any-return]
         except (ImportError, AttributeError):
             return _base_version + "+binary"
     else:
         # Pure Python implementation
         return _base_version + "+native"
 
-def _get_current_version_type():
+def _get_current_version_type() -> str:
     """Get version type based on current implementation selection"""
     if __impl__ == 'c':
         return "c"
@@ -407,9 +407,9 @@ def _get_current_version_type():
     else:
         return "native"
 
-def _get_current_version_info():
+def _get_current_version_info() -> tuple:
     """Get version info based on current implementation selection"""
-    return version_tuple
+    return version_tuple  # type: ignore[no-any-return]
 
 
 def create_pool(
@@ -426,7 +426,7 @@ def create_pool(
 ) -> Any:
     """
     Create a synchronous connection pool with clean separation of pool and connection options.
-    
+
     Pool Configuration Parameters:
         min_size (int): Minimum number of connections in the pool (default: 10)
         max_size (int): Maximum number of connections in the pool (default: 10)
@@ -437,13 +437,13 @@ def create_pool(
         enable_health_check (bool): Enable periodic health checks (default: True)
         reset_connection (bool): Reset connection state on release (default: False)
         ping_threshold (float): Ping if connection idle > threshold seconds (default: 0.25, 0 = disabled)
-    
+
     Connection Parameters:
         **connection_params: Additional connection parameters (ssl_ca, ssl_cert, etc.)
-    
+
     Returns:
         ConnectionPool: A configured connection pool
-    
+
     Example:
         pool = mariadb.create_pool(
             host='localhost',
@@ -454,12 +454,12 @@ def create_pool(
             max_size=20,
             ping_threshold=0.25
         )
-        
+
         with pool.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
-        
+
         pool.close()
     """
     try:
@@ -469,7 +469,7 @@ def create_pool(
             "Connection pooling is not available. "
             "Install mariadb-pool: pip install mariadb[pool]"
         )
-    
+
     # Build PoolConfig from pool-specific parameters
     pool_config = PoolConfig(
         min_size=min_size,
@@ -482,7 +482,7 @@ def create_pool(
         reset_connection=reset_connection,
         ping_threshold=ping_threshold
     )
-    
+
     # Create pool with mariadb.connect as factory
     return ConnectionPool(
         connection_factory=connect,
@@ -505,9 +505,9 @@ async def create_async_pool(
 ) -> Any:
     """
     Create an asynchronous connection pool with clean separation of pool and connection options.
-    
+
     This function automatically calls pool.open() to pre-fill the pool with connections.
-    
+
     Pool Configuration Parameters:
         min_size (int): Minimum number of connections in the pool (default: 10)
         max_size (int): Maximum number of connections in the pool (default: 10)
@@ -518,13 +518,13 @@ async def create_async_pool(
         enable_health_check (bool): Enable periodic health checks (default: True)
         reset_connection (bool): Reset connection state on release (default: False)
         ping_threshold (float): Ping if connection idle > threshold seconds (default: 0.25, 0 = disabled)
-    
+
     Connection Parameters:
         **connection_params: Additional connection parameters (ssl_ca, ssl_cert, etc.)
-    
+
     Returns:
         AsyncConnectionPool: A configured and opened async connection pool
-    
+
     Example:
         async def main():
             pool = await mariadb.create_async_pool(
@@ -536,15 +536,15 @@ async def create_async_pool(
                 max_size=20,
                 ping_threshold=0.25
             )
-            
+
             conn = await pool.get_connection()
             cursor = conn.cursor()
             await cursor.execute("SELECT 1")
             result = await cursor.fetchone()
             await conn.close()
-            
+
             await pool.close()
-        
+
         asyncio.run(main())
     """
     try:
@@ -554,7 +554,7 @@ async def create_async_pool(
             "Async connection pooling is not available. "
             "Install mariadb-pool: pip install mariadb[pool]"
         )
-    
+
     # Build PoolConfig from pool-specific parameters
     pool_config = PoolConfig(
         min_size=min_size,
@@ -567,17 +567,17 @@ async def create_async_pool(
         reset_connection=reset_connection,
         ping_threshold=ping_threshold
     )
-    
+
     # Create pool with mariadb.asyncConnect as factory
     pool = AsyncConnectionPool(
         connection_factory=asyncConnect,
         config=pool_config,
         **connection_params
     )
-    
+
     # Pre-fill the pool with connections
     await pool.open()
-    
+
     return pool
 
 
@@ -592,31 +592,31 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
             "ConnectionPool is not available. "
             "Install mariadb-pool: pip install mariadb[pool]"
         )
-    
+
     # Create a wrapper class that injects mariadb.connect and manages _CONNECTION_POOLS
     class ConnectionPool(ConnectionPoolWrapper):
         """
         Wrapper around ConnectionPoolWrapper that automatically uses mariadb.connect
-        
+
         Supports URI format: mariadb://[user[:password]@][host][:port][/database][?options]
         """
-        
-        def __init__(self, uri_or_pool_name=None, uri=None, pool_name=None, **kwargs):
+
+        def __init__(self, uri_or_pool_name: Any = None, uri: Any = None, pool_name: Any = None, **kwargs: Any) -> None:
             """Initialize with mariadb.connect as factory and register in _CONNECTION_POOLS
-            
+
             Args:
                 uri_or_pool_name: Either a URI string or pool_name (first positional argument)
                 uri: Optional URI string for connection parameters (deprecated, use first arg)
                 pool_name: Name of the pool (can be in URI query params or as kwarg)
                 **kwargs: Connection parameters and pool configuration
-                
+
             Examples:
                 # URI with pool_name in query params
                 pool = ConnectionPool("mariadb://user:pass@host/db?pool_name=mypool")
-                
+
                 # Traditional style
                 pool = ConnectionPool(pool_name="mypool", uri="mariadb://user:pass@host/db")
-                
+
                 # pool_name as first arg, connection params as kwargs
                 pool = ConnectionPool("mypool", host="localhost", user="root", database="test")
             """
@@ -636,7 +636,7 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
                     # First arg is pool_name
                     if pool_name is None:
                         pool_name = uri_or_pool_name
-            
+
             # Parse URI parameter if provided (backward compatibility)
             if uri is not None:
                 from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
@@ -648,29 +648,29 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
                     # Merge with kwargs, giving priority to kwargs
                     uri_params.update(kwargs)
                     kwargs = uri_params
-                
+
             # pool_name is optional - if not provided, pool can be used directly
             # but won't be registered in _CONNECTION_POOLS
             if pool_name is not None:
                 if pool_name in _CONNECTION_POOLS:
                     raise PoolError(f"Pool '{pool_name}' already exists")
-            
+
             # Remove pool_name from kwargs if present (to avoid duplicate argument)
             kwargs.pop('pool_name', None)
-            
+
             super().__init__(connection_factory=connect, pool_name=pool_name, **kwargs)
-            
+
             # Only register named pools
             if pool_name is not None:
                 _CONNECTION_POOLS[pool_name] = self
-        
-        def close(self):
+
+        def close(self) -> None:
             """Close and unregister from _CONNECTION_POOLS"""
             pool_name = self.pool_name
             super().close()
             if pool_name in _CONNECTION_POOLS:
                 del _CONNECTION_POOLS[pool_name]
-    
+
     return ConnectionPool
 
 
@@ -685,31 +685,31 @@ def _get_async_connection_pool_class() -> type['AsyncConnectionPoolWrapper']:
             "AsyncConnectionPool is not available. "
             "Install mariadb-pool: pip install mariadb[pool]"
         )
-    
+
     # Create a wrapper class that injects mariadb.asyncConnect and manages _CONNECTION_POOLS
     class AsyncConnectionPool(AsyncConnectionPoolWrapper):
         """
         Wrapper around AsyncConnectionPoolWrapper that automatically uses mariadb.asyncConnect
-        
+
         Supports pool_name for registry in mariadb._CONNECTION_POOLS
         """
-        
-        def __init__(self, uri_or_pool_name=None, uri=None, pool_name=None, **kwargs):
+
+        def __init__(self, uri_or_pool_name: Any = None, uri: Any = None, pool_name: Any = None, **kwargs: Any) -> None:
             """Initialize with mariadb.asyncConnect as factory and register in _CONNECTION_POOLS
-            
+
             Args:
                 uri_or_pool_name: Either a URI string or pool_name (first positional argument)
                 uri: Optional URI string for connection parameters (deprecated, use first arg)
                 pool_name: Name of the pool (can be in URI query params or as kwarg)
                 **kwargs: Connection parameters and pool configuration
-                
+
             Examples:
                 # URI with pool_name in query params
                 pool = AsyncConnectionPool("mariadb://user:pass@host/db?pool_name=mypool")
-                
+
                 # Traditional style
                 pool = AsyncConnectionPool(pool_name="mypool", uri="mariadb://user:pass@host/db")
-                
+
                 # pool_name as first arg, connection params as kwargs
                 pool = AsyncConnectionPool("mypool", host="localhost", user="root", database="test")
             """
@@ -729,7 +729,7 @@ def _get_async_connection_pool_class() -> type['AsyncConnectionPoolWrapper']:
                     # First arg is pool_name
                     if pool_name is None:
                         pool_name = uri_or_pool_name
-            
+
             # Parse URI parameter if provided (backward compatibility)
             if uri is not None:
                 from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
@@ -741,29 +741,29 @@ def _get_async_connection_pool_class() -> type['AsyncConnectionPoolWrapper']:
                     # Merge with kwargs, giving priority to kwargs
                     uri_params.update(kwargs)
                     kwargs = uri_params
-                
+
             # pool_name is optional - if not provided, pool can be used directly
             # but won't be registered in _CONNECTION_POOLS
             if pool_name is not None:
                 if pool_name in _ASYNC_CONNECTION_POOLS:
                     raise PoolError(f"Pool '{pool_name}' already exists")
-            
+
             # Remove pool_name from kwargs if present (to avoid duplicate argument)
             kwargs.pop('pool_name', None)
-            
+
             super().__init__(connection_factory=asyncConnect, pool_name=pool_name, **kwargs)
-            
+
             # Only register named pools
             if pool_name is not None:
                 _ASYNC_CONNECTION_POOLS[pool_name] = self
-        
-        async def close(self):
+
+        async def close(self) -> None:
             """Close and unregister from _CONNECTION_POOLS"""
             pool_name = self.pool_name
             await super().close()
             if pool_name in _ASYNC_CONNECTION_POOLS:
                 del _ASYNC_CONNECTION_POOLS[pool_name]
-    
+
     return AsyncConnectionPool
 
 

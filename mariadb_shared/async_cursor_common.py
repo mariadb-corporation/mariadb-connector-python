@@ -161,7 +161,7 @@ class AsyncCursorCommon(ABC):
             raise StopAsyncIteration
         return row
         
-    def __next__(self):
+    def __next__(self) -> None:
         """
         Sync iteration not supported for async cursor
         
@@ -170,7 +170,7 @@ class AsyncCursorCommon(ABC):
         """
         raise TypeError("Use 'async for' with asynchronous ursor")
 
-    def __iter__(self):
+    def __iter__(self) -> None:
         """
         Sync iteration not supported for async cursor
         
@@ -194,11 +194,11 @@ class AsyncCursorCommon(ABC):
         return False
     
     # Sync context manager methods raise error
-    def __enter__(self):
+    def __enter__(self) -> None:
         """Sync context manager not supported for async cursor"""
         raise TypeError("Use 'async with' with asynchronous Cursor")
         
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Sync context manager not supported for async cursor"""
         raise TypeError("Use 'async with' with asynchronous Cursor")
             

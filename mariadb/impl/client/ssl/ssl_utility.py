@@ -8,7 +8,7 @@ Provides SSL/TLS socket creation utilities for database connections.
 """
 
 import ssl
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 from ...configuration import Configuration
 from ....exceptions import OperationalError
 
@@ -54,7 +54,7 @@ class SSLUtility:
             
             if configuration.ssl_crl:
                 # Load CRL if specified
-                context.load_verify_locations(crlfile=configuration.ssl_crl)
+                context.load_verify_locations(crlfile=configuration.ssl_crl)  # type: ignore[call-arg]
                 context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
             
             if configuration.ssl_cipher:
@@ -106,7 +106,7 @@ class SSLUtility:
         }
         
         # Parse comma-separated TLS versions
-        tls_versions_str = configuration.tls_version.strip()
+        tls_versions_str = configuration.tls_version.strip()  # type: ignore[union-attr]
         if ',' in tls_versions_str:
             # Multiple versions specified - find min and max
             version_list = [v.strip().upper().replace('.', '_') for v in tls_versions_str.split(',')]
@@ -141,8 +141,8 @@ class SSLUtility:
     @staticmethod
     def prepare_ssl_context(
         configuration: Configuration,
-        context
-    ) -> Tuple[ssl.SSLContext, Optional['SSLFingerprintValidator']]:
+        context: Any
+    ) -> Tuple[ssl.SSLContext, Optional[Any]]:
         """
         Prepare SSL context with optional fingerprint validation support.
         

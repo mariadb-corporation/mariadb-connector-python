@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 """
 Provides common logic that can be shared between mariadb (pure Python) and mariadb_c (C extension)
 connection implementations.
@@ -28,7 +30,7 @@ class AsyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    def cursor(self, cursor_class=None, **kwargs) -> AsyncCursorCommon:
+    def cursor(self, cursor_class: Any = None, **kwargs: Any) -> AsyncCursorCommon:
         """
         Create a new cursor object for executing queries
         
@@ -59,7 +61,7 @@ class AsyncConnectionCommon(ABC):
         ...
         
     @abstractmethod
-    async def ping(self):
+    async def ping(self) -> None:
         """
         Check if the connection to the server is alive
         
@@ -71,7 +73,7 @@ class AsyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    async def reconnect(self):
+    async def reconnect(self) -> None:
         """
         Reconnect to the database server
         
@@ -80,7 +82,7 @@ class AsyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    async def reset(self):
+    async def reset(self) -> None:
         """
         Reset the connection state
         
@@ -89,7 +91,7 @@ class AsyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None):
+    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
         """
         Change the user and database of the current connection
         
@@ -104,7 +106,7 @@ class AsyncConnectionCommon(ABC):
     # Utility Methods
     # =========================================================================
 
-    def _set_pooled_connection(self, pooled_connection: 'PooledConnection') -> None:
+    def _set_pooled_connection(self, pooled_connection: Any) -> None:
         """
         Set the PooledConnection wrapper (internal use only)
         
@@ -149,7 +151,7 @@ class AsyncConnectionCommon(ABC):
         self._check_closed()
         if self._xid is not None:
             raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
-        if (self.server_status & STATUS.IN_TRANS) > 0:
+        if (self.server_status & STATUS.IN_TRANS) > 0:  # type: ignore[unreachable]
             async with self.cursor() as cursor:
                 await cursor.execute("COMMIT")
 
@@ -171,7 +173,7 @@ class AsyncConnectionCommon(ABC):
         if self._xid is not None:
             raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
         # Always execute ROLLBACK - it's needed to release locks and is idempotent
-        async with self.cursor() as cursor:
+        async with self.cursor() as cursor:  # type: ignore[unreachable]
             await cursor.execute("ROLLBACK")
 
     async def begin(self) -> None:
@@ -253,7 +255,7 @@ class AsyncConnectionCommon(ABC):
         """
         raise NotImplementedError("Use await connection.select_db(database) for async connections")
 
-    async def show_warnings(self) -> Optional[List[tuple]]:
+    async def show_warnings(self) -> Optional[List[tuple]]:  # type: ignore[return]
         """
         Get warnings from the last executed command
         
@@ -261,7 +263,7 @@ class AsyncConnectionCommon(ABC):
             List of warning tuples (level, code, message), or None if no warnings
         """
         self._check_closed()
-        if not self.warnings:
+        if not self.warnings:  # type: ignore[attr-defined]
             return None
         async with self.cursor() as cursor:
             await cursor.execute("SHOW WARNINGS")
@@ -324,7 +326,7 @@ class AsyncConnectionCommon(ABC):
         self.tpc_state = TPC_STATE.XID
         self._xid = xid
 
-    async def tpc_commit(self, xid: Xid=None) -> None:
+    async def tpc_commit(self, xid: Optional[Xid] = None) -> None:
         """
         Optional parameter:
 
@@ -367,7 +369,7 @@ class AsyncConnectionCommon(ABC):
                 else:
                     await cursor.execute("XA COMMIT '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             finally:
-                self._xid = None
+                self._xid = None  # type: ignore[assignment]
                 self.tpc_state = TPC_STATE.NONE
 
     async def tpc_prepare(self) -> None:
@@ -393,12 +395,12 @@ class AsyncConnectionCommon(ABC):
                 await cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
                 await cursor.execute("XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
-                self._xid = None
+                self._xid = None  # type: ignore[assignment]
                 self.tpc_state = TPC_STATE.NONE
                 raise
         self.tpc_state = TPC_STATE.PREPARE
 
-    async def tpc_rollback(self, xid: Xid=None) -> None:
+    async def tpc_rollback(self, xid: Optional[Xid] = None) -> None:
         """
         Parameter:
            xid: xid object which was created by .xid() method of connection
@@ -428,13 +430,13 @@ class AsyncConnectionCommon(ABC):
                     await cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
                 await cursor.execute("XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
-                self._xid = None
+                self._xid = None  # type: ignore[assignment]
                 self.tpc_state = TPC_STATE.NONE
                 raise
-        self._xid = None
+        self._xid = None  # type: ignore[assignment]
         self.tpc_state = TPC_STATE.NONE
 
-    async def tpc_recover(self) -> List[tuple]:
+    async def tpc_recover(self) -> List[tuple]:  # type: ignore[return]
         """
         Returns a list of pending transaction IDs suitable for use with
         tpc_commit(xid) or .tpc_rollback(xid).

@@ -48,12 +48,12 @@ field_flags = {constants.FIELD_FLAG.NOT_NULL: "NOT_NULL",
 
 class fieldinfo():
 
-    def type(self, description):
+    def type(self, description: tuple) -> object:
         if description[1] in field_types:
             return field_types[description[1]]
         return None
 
-    def flag(self, description):
+    def flag(self, description: tuple) -> str:
         flags = [field_flags[f] for f in field_flags.keys()
                  if description[7] & f]
         return " | ".join(flags)

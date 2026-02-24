@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 """
 Statement Close packet for closing prepared statements
 
@@ -8,8 +10,13 @@ Sends COM_STMT_CLOSE command to the server to deallocate a prepared statement.
 """
 
 import struct
+from typing import TYPE_CHECKING
+
 from ...client.context import Context
 from ..client_message import ClientMessage
+
+if TYPE_CHECKING:
+    from ..payload_writer import PayloadWriter
 
 class StmtClosePacket(ClientMessage):
     """

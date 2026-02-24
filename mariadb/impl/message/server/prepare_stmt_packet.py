@@ -9,8 +9,7 @@ Based on MySQL/MariaDB protocol COM_STMT_PREPARE response structure.
 
 import struct
 import threading
-import asyncio
-from typing import TYPE_CHECKING, List, Optional, Callable
+from typing import TYPE_CHECKING, Any, List, Optional, Callable
 
 from .column_definition_packet import ColumnsDefinition
 
@@ -137,7 +136,7 @@ class CachedPrepareStmtPacket(PrepareStmtPacket):
         close_callback: Callable[['CachedPrepareStmtPacket'], None]
     ):
         """Initialize cached prepare statement packet"""
-        super().__init__(statement_id, column_count, parameter_count, warning_count, sql, database, close_callback)
+        super().__init__(statement_id, column_count, parameter_count, warning_count, sql, database, close_callback)  # type: ignore[arg-type]
         self.ref_count = 1
         self.lock = threading.Lock()
         self.in_cache = True
@@ -179,10 +178,9 @@ class CachedPrepareStmtPacket(PrepareStmtPacket):
         """Enter context manager"""
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Exit context manager and release cache reference"""
         self.close()
-        return False
     
     @staticmethod
     def decode(data: memoryview, context: 'Context', sql: Optional[str], close_callback: Callable[['CachedPrepareStmtPacket'], None]) -> 'CachedPrepareStmtPacket':

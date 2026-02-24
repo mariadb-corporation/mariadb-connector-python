@@ -17,6 +17,8 @@ Optimizations over a naive wrapper:
   - list + index instead of deque for row storage
 """
 
+from typing import Any, List, Optional, Sequence, Tuple
+
 from sqlalchemy.dialects.mysql.mariadbconnector import (
     MySQLDialect_mariadbconnector,
     MySQLExecutionContext_mariadbconnector,
@@ -26,7 +28,7 @@ from sqlalchemy.util.concurrency import await_only
 from sqlalchemy.engine import AdaptedConnection
 
 
-async def _execute_and_buffer(cursor, query, params):
+async def _execute_and_buffer(cursor: Any, query: str, params: Any) -> Optional[List[Any]]:
     """Execute query and fetch all rows in a single async call.
 
     Combines execute + fetchall into one coroutine so that SQLAlchemy
@@ -38,7 +40,7 @@ async def _execute_and_buffer(cursor, query, params):
         await cursor.execute(query)
 
     if cursor.field_count > 0:
-        return await cursor.fetchall()
+        return await cursor.fetchall()  # type: ignore[no-any-return]
     return None
 
 
@@ -52,87 +54,87 @@ class AsyncAdapt_mariadb_cursor:
 
     __slots__ = ("_cursor", "_rows", "_row_idx", "server_side")
 
-    def __init__(self, cursor):
+    def __init__(self, cursor: Any) -> None:
         self._cursor = cursor
         self._rows = None
         self._row_idx = 0
         self.server_side = not cursor.buffered
 
     @property
-    def description(self):
+    def description(self) -> Any:
         return self._cursor.description
 
     @property
-    def rowcount(self):
-        return self._cursor.rowcount
+    def rowcount(self) -> int:
+        return self._cursor.rowcount  # type: ignore[no-any-return]
 
     @property
-    def lastrowid(self):
+    def lastrowid(self) -> Any:
         return self._cursor.lastrowid
 
     @property
-    def arraysize(self):
-        return self._cursor.arraysize
+    def arraysize(self) -> int:
+        return self._cursor.arraysize  # type: ignore[no-any-return]
 
     @arraysize.setter
-    def arraysize(self, value):
+    def arraysize(self, value: int) -> None:
         self._cursor.arraysize = value
 
-    def execute(self, query, params=None, **kw):
+    def execute(self, query: str, params: Any = None, **kw: Any) -> 'AsyncAdapt_mariadb_cursor':
         rows = await_only(_execute_and_buffer(self._cursor, query, params))
         if rows is not None:
-            self._rows = rows
+            self._rows = rows  # type: ignore[assignment]
             self._row_idx = 0
         else:
             self._rows = None
             self._row_idx = 0
         return self
 
-    def executemany(self, query, params_seq):
+    def executemany(self, query: str, params_seq: Sequence[Any]) -> None:
         await_only(self._cursor.executemany(query, params_seq))
 
-    def fetchone(self):
+    def fetchone(self) -> Optional[Any]:
         rows = self._rows
         if rows is None:
             return None
-        idx = self._row_idx
+        idx = self._row_idx  # type: ignore[unreachable]
         if idx >= len(rows):
             return None
         self._row_idx = idx + 1
         return rows[idx]
 
-    def fetchmany(self, size=None):
+    def fetchmany(self, size: Optional[int] = None) -> List[Any]:
         rows = self._rows
         if rows is None:
             return []
-        if size is None:
+        if size is None:  # type: ignore[unreachable]
             size = self._cursor.arraysize
         idx = self._row_idx
         end = min(idx + size, len(rows))
         self._row_idx = end
         return rows[idx:end]
 
-    def fetchall(self):
+    def fetchall(self) -> List[Any]:
         rows = self._rows
         if rows is None:
             return []
-        idx = self._row_idx
+        idx = self._row_idx  # type: ignore[unreachable]
         self._row_idx = len(rows)
         if idx == 0:
             return rows
         return rows[idx:]
 
-    def close(self):
+    def close(self) -> None:
         self._rows = None
         self._row_idx = 0
 
-    async def _async_soft_close(self):
+    async def _async_soft_close(self) -> None:
         pass
 
-    def setinputsizes(self, sizes):
+    def setinputsizes(self, sizes: Any) -> None:
         pass
 
-    def setoutputsize(self, size, column=None):
+    def setoutputsize(self, size: int, column: Optional[int] = None) -> None:
         pass
 
 
@@ -145,29 +147,29 @@ class AsyncAdapt_mariadb_ss_cursor(AsyncAdapt_mariadb_cursor):
 
     __slots__ = ()
 
-    def __init__(self, cursor):
+    def __init__(self, cursor: Any) -> None:
         super().__init__(cursor)
         self.server_side = True
 
-    def execute(self, query, params=None, **kw):
+    def execute(self, query: str, params: Any = None, **kw: Any) -> 'AsyncAdapt_mariadb_ss_cursor':
         if params is not None:
             await_only(self._cursor.execute(query, params))
         else:
             await_only(self._cursor.execute(query))
         return self
 
-    def fetchone(self):
+    def fetchone(self) -> Optional[Any]:
         return await_only(self._cursor.fetchone())
 
-    def fetchmany(self, size=None):
+    def fetchmany(self, size: Optional[int] = None) -> List[Any]:
         if size is None:
             size = self._cursor.arraysize
         return await_only(self._cursor.fetchmany(size))
 
-    def fetchall(self):
+    def fetchall(self) -> List[Any]:
         return await_only(self._cursor.fetchall())
 
-    def close(self):
+    def close(self) -> None:
         await_only(self._cursor.close())
 
 
@@ -180,31 +182,31 @@ class AsyncAdapt_mariadb_connection(AdaptedConnection):
 
     __slots__ = ("dbapi", "_connection")
 
-    def __init__(self, dbapi, connection):
+    def __init__(self, dbapi: Any, connection: Any) -> None:
         self.dbapi = dbapi
         self._connection = connection
 
-    def cursor(self, **kwargs):
+    def cursor(self, **kwargs: Any) -> AsyncAdapt_mariadb_cursor:
         cursor = self._connection.cursor(**kwargs)
         if kwargs.get("buffered", True):
             return AsyncAdapt_mariadb_cursor(cursor)
         return AsyncAdapt_mariadb_ss_cursor(cursor)
 
     @property
-    def autocommit(self):
-        return self._connection.autocommit
+    def autocommit(self) -> bool:
+        return self._connection.autocommit  # type: ignore[no-any-return]
 
     @autocommit.setter
-    def autocommit(self, value):
+    def autocommit(self, value: bool) -> None:
         await_only(self._connection.set_autocommit(value))
 
-    def commit(self):
+    def commit(self) -> None:
         await_only(self._connection.commit())
 
-    def rollback(self):
+    def rollback(self) -> None:
         await_only(self._connection.rollback())
 
-    def close(self):
+    def close(self) -> None:
         await_only(self._connection.close())
 
 
@@ -215,7 +217,7 @@ class AsyncAdapt_mariadb_dbapi:
     that returns an AsyncAdapt_mariadb_connection wrapper.
     """
 
-    def __init__(self, mariadb_asyncio):
+    def __init__(self, mariadb_asyncio: Any) -> None:
         self.mariadb_asyncio = mariadb_asyncio
         for name in (
             'Error', 'Warning', 'InterfaceError', 'DatabaseError',
@@ -235,7 +237,7 @@ class AsyncAdapt_mariadb_dbapi:
             if hasattr(mariadb, name):
                 setattr(self, name, getattr(mariadb, name))
 
-    def connect(self, *args, **kwargs):
+    def connect(self, *args: Any, **kwargs: Any) -> AsyncAdapt_mariadb_connection:
         connection = await_only(self.mariadb_asyncio.connect(*args, **kwargs))
         return AsyncAdapt_mariadb_connection(self, connection)
 
@@ -243,10 +245,10 @@ class AsyncAdapt_mariadb_dbapi:
 class MySQLExecutionContext_mariadbconnector_async(
     MySQLExecutionContext_mariadbconnector
 ):
-    def create_server_side_cursor(self):
+    def create_server_side_cursor(self) -> Any:
         return self._dbapi_connection.cursor(buffered=False)
 
-    def create_default_cursor(self):
+    def create_default_cursor(self) -> Any:
         return self._dbapi_connection.cursor(buffered=True)
 
 
@@ -274,16 +276,16 @@ class MySQLDialect_mariadbconnector_async(MySQLDialect_mariadbconnector):
     execution_ctx_cls = MySQLExecutionContext_mariadbconnector_async
 
     @classmethod
-    def import_dbapi(cls):
+    def import_dbapi(cls) -> Any:
         import mariadb.asyncio
         return AsyncAdapt_mariadb_dbapi(mariadb.asyncio)
 
     @classmethod
-    def get_pool_class(cls, url):
+    def get_pool_class(cls, url: Any) -> Any:
         return pool.AsyncAdaptedQueuePool
 
     @classmethod
-    def load_provisioning(cls):
+    def load_provisioning(cls) -> None:
         try:
             from sqlalchemy.dialects.mysql import provision  # noqa: F401
         except ImportError:

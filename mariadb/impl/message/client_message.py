@@ -31,6 +31,6 @@ class ClientMessage(ABC):
         """indicate message type"""
         return ""
     
-    def get_sql(self) -> str:
+    def get_sql(self) -> Optional[str]:
         """Get SQL string for LOAD LOCAL INFILE validation (optional)"""
         return None

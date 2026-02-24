@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional, Sequence, Union
@@ -20,6 +21,12 @@ class SyncCursorCommon(ABC):
         After closing, the cursor cannot be used anymore.
         """
         ...
+
+    def __enter__(self) -> SyncCursorCommon:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
     
     # =========================================================================
     # Query Execution Methods

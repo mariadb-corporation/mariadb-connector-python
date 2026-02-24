@@ -1,14 +1,21 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 """
 Quit packet for graceful connection closure
 
 Sends COM_QUIT command to the server before closing the connection.
 """
 
+from typing import TYPE_CHECKING
+
 from ...client.context import Context
 from ..client_message import ClientMessage
+
+if TYPE_CHECKING:
+    from ..payload_writer import PayloadWriter
 
 class QuitPacket(ClientMessage):
     """

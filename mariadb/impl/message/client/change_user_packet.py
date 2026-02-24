@@ -48,7 +48,7 @@ class ChangeUserPacket(ClientMessage):
 
         # Authentication response
         from ...plugin.authentication.native_password_plugin import NativePasswordPlugin
-        auth_response = NativePasswordPlugin.encrypt_password(self.password, context.auth_data)        
+        auth_response = NativePasswordPlugin.encrypt_password(self.password, context.auth_data)  # type: ignore[arg-type]
         if auth_response:
             if context.client_capabilities & CAPABILITY.SECURE_CONNECTION:
                 # Length-encoded auth response

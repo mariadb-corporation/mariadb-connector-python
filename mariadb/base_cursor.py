@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 """
 Base cursor implementation with common functionality for sync and async cursors
 """
@@ -79,11 +81,11 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         '_config',
         '_exception_factory',
         '_buffered',
-        '_force_binary',
+        '_use_binary',
         '_stmt',
     )
 
-    def __init__(self, connection: TConnection, **kwargs):
+    def __init__(self, connection: TConnection, **kwargs: Any) -> None:
         """
         Initialize cursor with a connection
         
@@ -100,7 +102,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._config = None
         self._exception_factory = ExceptionFactory()
         self._buffered: bool = bool(kwargs.pop('buffered', True))
-        self._force_binary: bool = False
+        self._use_binary: bool = connection._configuration.binary
         self._stmt: Optional[PrepareStmtPacket] = None
         if kwargs:
             self._config = copy.copy(self.connection._configuration)
@@ -114,7 +116,8 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                     self._config.dictionary = rtype
             
             self._config.native_object = bool(kwargs.pop("native_object", self._config.native_object))
-            self._force_binary = bool(kwargs.pop("binary", False))
+            if "binary" in kwargs:
+                self._use_binary = bool(kwargs.pop("binary"))
         else:
             self._config = self.connection._configuration        
 
@@ -188,7 +191,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         completion = self._current_completion
         
         result_set = completion.result_set
-        columns: 'ColumnsDefinition' = result_set.columns if hasattr(result_set, 'columns') else None
+        columns: Any = result_set.columns if hasattr(result_set, 'columns') else None  # type: ignore[union-attr]
         
         if not columns or columns.count == 0:
             return None
@@ -261,7 +264,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         if self._current_completion:
             # For result sets, return the current row count from the result set
             if self._current_completion.has_result_set():
-                return self._current_completion.result_set.get_row_count()
+                return self._current_completion.result_set.get_row_count()  # type: ignore[union-attr]
             # For non-result operations (INSERT/UPDATE/DELETE), return affected_rows
             return self._current_completion.affected_rows
         # No completions yet
@@ -272,7 +275,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         """Current row number (1-based, DB-API style)"""
         # Use cached _current_completion for performance
         if self._current_completion and self._current_completion.has_result_set():
-            return self._current_completion.result_set.row_number()
+            return self._current_completion.result_set.row_number()  # type: ignore[union-attr]
         return None
 
     @property
@@ -307,13 +310,13 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         """Get the current result set (for backward compatibility)"""
         completion = self._completion
         if completion and completion.has_result_set():
-            return completion.result_set
+            return completion.result_set  # type: ignore[return-value]
         return None
 
     @property
     def _resulttype(self) -> int:
         """Current result type"""
-        config = self._config
+        config = self._config or self.connection._configuration
         if config.named_tuple:
             return RESULT_NAMEDTUPLE
         elif config.dictionary:
@@ -330,17 +333,17 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         ...
 
     @abstractmethod
-    def close(self):
+    def close(self) -> None:
         """Close the cursor"""
         ...
 
     @abstractmethod
-    def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None):
+    def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None) -> None:
         """Execute a database query or command"""
         ...
 
     @abstractmethod
-    def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None):
+    def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None) -> None:
         """Execute a statement multiple times"""
         ...
 
@@ -423,7 +426,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         for param_set in parameter_sets:
             if len(param_set) != expected_count:
                 # Parameter count mismatch - this is always an error
-                from mariadb import ProgrammingError
                 raise ProgrammingError(
                     f"Parameter count mismatch: expected {expected_count} parameters, "
                     f"but got {len(param_set)} parameters in one of the parameter sets"
@@ -465,15 +467,18 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         if not firstCompletion:
             return
 
+        first_len = len(firstCompletion)
         for u in range(1, len(completions)):
             unit_completions = completions[u]
             for i, c in enumerate(unit_completions):
+                if i >= first_len:
+                    break
                 if c.affected_rows >= 0:
                     firstCompletion[i].affected_rows += c.affected_rows
                 if c.insert_id is not None and c.insert_id > 0:
                     firstCompletion[i].insert_id = c.insert_id
                 if c.has_result_set():
-                    firstCompletion[i].result_set.rows.extend(c.result_set.rows)
+                    firstCompletion[i].result_set.rows.extend(c.result_set.rows)  # type: ignore[union-attr]
         self._completions = firstCompletion
         self._completion_index = 0
     
@@ -532,7 +537,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     def _create_named_tuple_class(self, columns: 'ColumnsDefinition') -> type:
         """Create a namedtuple class from column definitions"""
         
-        field_names = []
+        field_names: list[str] = []
         for i in range(columns.count):
             name = columns.get_name(i) or columns.get_org_name(i)
             if not name or not name.isidentifier():
@@ -553,7 +558,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     
     def _convert_rows_to_dictionaries(self, rows: List[tuple], columns: 'ColumnsDefinition') -> List[Dict]:
         """Convert regular tuples to dictionaries"""
-        field_names = []
+        field_names: list[str] = []
         for i in range(columns.count):
             name = columns.get_name(i) or columns.get_org_name(i)
             if not name:
@@ -565,10 +570,10 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     def _apply_row_formatting(self, rows: List[Any]) -> List[Any]:
         """Apply row formatting (named_tuple or dictionary) based on configuration"""
         # Use cached _current_completion for performance
-        if self._config.named_tuple or self._config.dictionary:
+        if self._config and (self._config.named_tuple or self._config.dictionary):
             if self._current_completion and self._current_completion.has_result_set():
                 result = self._current_completion.result_set
-                columns = result.columns
+                columns = result.columns  # type: ignore[union-attr]
                 if columns:
                     # Inline config checks for performance
                     if self._config.named_tuple:
@@ -578,7 +583,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         return rows
     
-    def _get_charset_max_length(self, charset_id: int) -> int:
+    def _get_charset_max_length(self, charset_id: int) -> Optional[int]:
         """Get maximum character length for a charset ID"""
         charset_max_lengths = {
             1: 2, 8: 1, 28: 2, 33: 3, 45: 4, 46: 4, 63: 1, 77: 1, 

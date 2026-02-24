@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 import array
 import datetime
 import decimal
@@ -230,42 +232,42 @@ class BulkExecutePacket(ClientMessage):
     # Type-specific write methods
     # =========================================================================
     
-    def _write_tiny(self, stream: PayloadWriter, param: Any):
+    def _write_tiny(self, stream: PayloadWriter, param: Any) -> None:
         """Write TINY (1 byte signed integer)"""
         if isinstance(param, bool):
             stream.write_byte(1 if param else 0)
         else:
             stream.write_bytes(_STRUCT_b.pack(param))
     
-    def _write_short(self, stream: PayloadWriter, param: Any):
+    def _write_short(self, stream: PayloadWriter, param: Any) -> None:
         """Write SHORT (2 byte signed integer)"""
         stream.write_bytes(_STRUCT_h.pack(param))
     
-    def _write_long(self, stream: PayloadWriter, param: Any):
+    def _write_long(self, stream: PayloadWriter, param: Any) -> None:
         """Write LONG (4 byte signed integer)"""
         stream.write_bytes(_STRUCT_i.pack(param))
     
-    def _write_longlong(self, stream: PayloadWriter, param: Any):
+    def _write_longlong(self, stream: PayloadWriter, param: Any) -> None:
         """Write LONGLONG (8 byte signed integer)"""
         stream.write_bytes(_STRUCT_q.pack(param))
     
-    def _write_double(self, stream: PayloadWriter, param: Any):
+    def _write_double(self, stream: PayloadWriter, param: Any) -> None:
         """Write DOUBLE (8 byte float)"""
         if repr(param) in ("nan", "inf", "-inf"):
             raise NotSupportedError(f"Float value '{repr(param)}' is not supported.")
         stream.write_bytes(_STRUCT_d.pack(param))
     
-    def _write_decimal(self, stream: PayloadWriter, param: Any):
+    def _write_decimal(self, stream: PayloadWriter, param: Any) -> None:
         """Write DECIMAL as length-encoded string"""
         if param.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
             raise NotSupportedError(f"Decimal value '{param.__str__()}' is not supported.")
         stream.write_length_encoded_string(str(param))
     
-    def _write_string(self, stream: PayloadWriter, param: Any):
+    def _write_string(self, stream: PayloadWriter, param: Any) -> None:
         """Write VAR_STRING as length-encoded string"""
         stream.write_length_encoded_string(param)
     
-    def _write_blob(self, stream: PayloadWriter, param: Any):
+    def _write_blob(self, stream: PayloadWriter, param: Any) -> None:
         """Write BLOB as length-encoded bytes"""
         if isinstance(param, array.array) and param.typecode == 'f':
             if len(param) == 0:
@@ -278,7 +280,7 @@ class BulkExecutePacket(ClientMessage):
         else:
             stream.write_length_encoded_bytes(param)
     
-    def _write_datetime(self, stream: PayloadWriter, param: Any):
+    def _write_datetime(self, stream: PayloadWriter, param: Any) -> None:
         """Write DATETIME in MySQL binary format"""
         if param.microsecond:
             stream.write_bytes(_STRUCT_DATETIME_WITH_MICRO.pack(
@@ -291,11 +293,11 @@ class BulkExecutePacket(ClientMessage):
                 param.hour, param.minute, param.second
             ))
     
-    def _write_date(self, stream: PayloadWriter, param: Any):
+    def _write_date(self, stream: PayloadWriter, param: Any) -> None:
         """Write DATE in MySQL binary format"""
         stream.write_bytes(_STRUCT_DATE.pack(4, param.year, param.month, param.day))
     
-    def _write_time(self, stream: PayloadWriter, param: Any):
+    def _write_time(self, stream: PayloadWriter, param: Any) -> None:
         """Write TIME in MySQL binary format"""
         if isinstance(param, datetime.timedelta):
             total_seconds = int(param.total_seconds())

@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 """
 Provides common logic that can be shared between mariadb (pure Python) and mariadb_c (C extension)
 connection implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import Any, List, Optional, TYPE_CHECKING
 
 from .sync_cursor_common import SyncCursorCommon
 from .constants import STATUS, TPC_STATE
@@ -27,7 +29,7 @@ class SyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    def cursor(self, cursor_class=None, **kwargs) -> SyncCursorCommon:
+    def cursor(self, cursor_class: Any = None, **kwargs: Any) -> SyncCursorCommon:
         """
         Create a new cursor object for executing queries
         
@@ -103,7 +105,7 @@ class SyncConnectionCommon(ABC):
     # Utility Methods
     # =========================================================================
     
-    def _set_pooled_connection(self, pooled_connection: 'PooledConnection') -> None:
+    def _set_pooled_connection(self, pooled_connection: Any) -> None:
         """
         Set the PooledConnection wrapper (internal use only)
         
@@ -112,7 +114,7 @@ class SyncConnectionCommon(ABC):
         """
         self._pooled_connection = pooled_connection
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """
         Context manager exit
         
@@ -152,7 +154,7 @@ class SyncConnectionCommon(ABC):
         self._check_closed()
         if self._xid is not None:
             raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
-        if (self.server_status & STATUS.IN_TRANS) > 0:
+        if (self.server_status & STATUS.IN_TRANS) > 0:  # type: ignore[unreachable]
             with self.cursor() as cursor:
                 cursor.execute("COMMIT")
 
@@ -171,7 +173,7 @@ class SyncConnectionCommon(ABC):
         self._check_closed()
         if self._xid is not None:
             raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
-        with self.cursor() as cursor:
+        with self.cursor() as cursor:  # type: ignore[unreachable]
             cursor.execute("ROLLBACK")
 
     def begin(self) -> None:
@@ -231,7 +233,7 @@ class SyncConnectionCommon(ABC):
             List of warning tuples (level, code, message), or None if no warnings
         """
         self._check_closed()
-        if not self.warnings:
+        if not self.warnings:  # type: ignore[attr-defined]
             return None
         with self.cursor() as cursor:
             cursor.execute("SHOW WARNINGS")
@@ -295,7 +297,7 @@ class SyncConnectionCommon(ABC):
         self.tpc_state = TPC_STATE.XID
         self._xid = xid
 
-    def tpc_commit(self, xid: Xid=None) -> None:
+    def tpc_commit(self, xid: Optional[Xid] = None) -> None:
         """
         Optional parameter:
 
@@ -338,7 +340,7 @@ class SyncConnectionCommon(ABC):
                 else:
                     cursor.execute("XA COMMIT '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             finally:
-                self._xid = None
+                self._xid = None  # type: ignore[assignment]
                 self.tpc_state = TPC_STATE.NONE
 
     def tpc_prepare(self) -> None:
@@ -364,12 +366,12 @@ class SyncConnectionCommon(ABC):
                 cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
                 cursor.execute("XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
-                self._xid = None
+                self._xid = None  # type: ignore[assignment]
                 self.tpc_state = TPC_STATE.NONE
                 raise
         self.tpc_state = TPC_STATE.PREPARE
 
-    def tpc_rollback(self, xid: Xid=None) -> None:
+    def tpc_rollback(self, xid: Optional[Xid] = None) -> None:
         """
         Parameter:
            xid: xid object which was created by .xid() method of connection
@@ -400,10 +402,10 @@ class SyncConnectionCommon(ABC):
                     cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
                 cursor.execute("XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
-                self._xid = None
+                self._xid = None  # type: ignore[assignment]
                 self.tpc_state = TPC_STATE.NONE
                 raise
-        self._xid = None
+        self._xid = None  # type: ignore[assignment]
         self.tpc_state = TPC_STATE.NONE
 
     def tpc_recover(self) -> List[tuple]:

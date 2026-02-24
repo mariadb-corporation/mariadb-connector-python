@@ -291,8 +291,8 @@ class TestPreparedStatementCache(unittest.TestCase):
         # Cache should be cleared (connection is closed, can't check directly)
         # This test mainly ensures no errors on close
     
-    def test_cache_with_force_binary(self):
-        """Test cache works with force_binary cursors"""
+    def test_cache_with_use_binary(self):
+        """Test cache works with binary cursors"""
         cursor = self.conn.cursor(binary=True)
         
         # Execute same query multiple times

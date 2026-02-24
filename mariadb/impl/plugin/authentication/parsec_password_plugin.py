@@ -70,7 +70,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         )
         
         # Create hash for credential storage
-        self._hash = self._combine_arrays([
+        self._hash = self._combine_arrays([  # type: ignore[assignment]
             bytes([0x50, iterations_exp]),  # 'P' + iterations
             salt,
             raw_public_key
@@ -99,7 +99,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        await write_payload_func(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", reset_sequence=False)
+        await write_payload_func(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", False)
 
         # Step 2: Read server response with salt and parameters
         response = await read_payload_func()
@@ -129,7 +129,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         payload = bytearray(b'\0\0\0\0')
         payload.extend(client_scramble)
         payload.extend(signature)
-        await write_payload_func(payload, "PARSEC_AUTH", reset_sequence=False)
+        await write_payload_func(payload, "PARSEC_AUTH", False)
 
         # Read final response
         return await read_payload_func()
@@ -148,7 +148,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             )
         
         # Step 1: Request extended salt from server (empty payload)
-        write_payload_func(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", reset_sequence=False)
+        write_payload_func(bytearray(b'\0\0\0\0'), "PARSEC_REQUEST_SALT", False)
         
         # Step 2: Read server response with salt and parameters
         response = read_payload_func()
@@ -176,7 +176,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         payload = bytearray(b'\0\0\0\0')
         payload.extend(client_scramble)
         payload.extend(signature)
-        write_payload_func(payload, "PARSEC_AUTH", reset_sequence=False)
+        write_payload_func(payload, "PARSEC_AUTH", False)
         
         # Read final response
         return read_payload_func()

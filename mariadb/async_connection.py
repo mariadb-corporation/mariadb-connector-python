@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 """
 Asynchronous connection implementation
 
@@ -9,6 +11,9 @@ Provides a native async API directly using the async Client.
 
 from typing import Optional, Any, TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from .async_cursor import AsyncCursor
+
 from mariadb_shared.constants import CAPABILITY
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
 from .base_connection import BaseConnection
@@ -16,16 +21,16 @@ from .base_connection import BaseConnection
 from .impl.client.async_client import AsyncClient
 
 
-class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
+class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # type: ignore[misc, override]
     """
     Asynchronous MariaDB connection
-    
+
     Provides a native async API using the async Client directly.
     All I/O operations are async and use await.
-    
+
     Type Parameters:
         _client: AsyncClient
-    
+
     Example:
         async def main():
             conn = await mariadb.asyncConnect(user='root', database='test')
@@ -34,37 +39,37 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
             results = await cursor.fetchall()
             await conn.close()
     """
-    
+
     # =========================================================================
     # Initialization and Context Managers
     # =========================================================================
-    
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Initialize asynchronous connection (does not connect)
-        
+
         Use AsyncConnection.connect() or asyncConnect() to connect.
-        
+
         Args:
             **kwargs: Connection parameters (host, user, password, database, etc.)
         """
         super().__init__(*args, **kwargs)
         # Create async client
         self._client = AsyncClient(self._configuration)
-    
+
     @classmethod
     async def connect(cls, *args: Any, **kwargs: Any) -> 'AsyncConnection':
         """
         Create and connect an async connection
-        
+
         This is the recommended way to create async connections.
-        
+
         Args:
             **kwargs: Connection parameters
-            
+
         Returns:
             Connected AsyncConnection instance
-            
+
         Raises:
             OperationalError: If connection fails
         """
@@ -81,41 +86,41 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
     # =========================================================================
     # Core Connection Methods
     # =========================================================================
-    
-    def cursor(self, cursor_class=None, **kwargs) -> 'AsyncCursor':
+
+    def cursor(self, cursor_class: Optional[type] = None, **kwargs: Any) -> AsyncCursor:
         """
         Create a new async cursor for executing queries
-        
+
         Args:
             **kwargs: Additional cursor parameters:
                 - named_tuple: Return rows as named tuples
                 - dictionary: Return rows as dictionaries
                 - buffered: Buffer all results immediately
-            
+
         Returns:
             AsyncCursor object
-            
+
         Raises:
             ProgrammingError: If connection is closed
         """
         # Import here to avoid circular dependency
         from .async_cursor import AsyncCursor
         return AsyncCursor(self, **kwargs)
-    
+
     async def close(self) -> None:
         """
         Close the database connection asynchronously
-        
+
         If this is a pooled connection, returns it to the pool.
         Otherwise, closes the underlying socket connection.
-        
+
         Raises:
             OperationalError: If close fails
         """
         if self._pooled_connection:
             await self._pooled_connection.return_to_pool()
             return
-        
+
         if not self._closed:
             try:
                 await self._client.close()
@@ -123,13 +128,13 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
                 pass
             finally:
                 self._closed = True
-    
+
     async def ping(self) -> None:
         """
         Check if the connection to the server is alive
-        
+
         Sends a ping command to verify the connection is active.
-        
+
         Raises:
             OperationalError: If ping fails or connection is dead
         """
@@ -142,20 +147,20 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
                 errno=2013,
                 sql_state='HY000'
             )
-    
-    async def reconnect(self) -> None:
+
+    async def reconnect(self) -> None:  # type: ignore[override]
         """
         Reconnect to the database server
-        
+
         Closes the current connection and establishes a new one
         with the same parameters.
-        
+
         Raises:
             OperationalError: If reconnection fails
         """
         if not self._closed:
             await self.close()
-        
+
         self._closed = False
         try:
             self._client = AsyncClient(self._configuration)
@@ -167,14 +172,14 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
                 errno=2013,
                 sql_state='08S01'
             )
-    
-    async def reset(self) -> None:
+
+    async def reset(self) -> None:  # type: ignore[override]
         """
         Reset the connection state
-        
+
         Clears session variables, temporary tables, and prepared statements
         without reconnecting.
-        
+
         Raises:
             OperationalError: If reset fails
         """
@@ -188,16 +193,16 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
                 errno=2013,
                 sql_state='HY000'
             )
-    
-    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
+
+    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:  # type: ignore[override]
         """
         Change the user and database of the current connection
-        
+
         Args:
             user: New username (None = keep current)
             password: New password (None = keep current)
             database: New database (None = keep current)
-            
+
         Raises:
             OperationalError: If change user fails
         """
@@ -216,33 +221,34 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):
                 errno=2013,
                 sql_state='HY000'
             )
-    
+
     # =========================================================================
     # Utility Methods
     # =========================================================================
-    
-    async def select_db(self, database: str) -> None:
+
+    async def select_db(self, database: str) -> None:  # type: ignore[override]
         """
         Change the default database
-        
+
         Args:
             database: Database name to select
         """
         self._check_closed()
-        context_db = self._client.context.database
+        client = self._client
+        context_db = client.context.database
         if context_db != database:
             from .impl.message.client.change_db_packet import ChangeDbPacket
-            await self._client.execute(ChangeDbPacket(database), self._configuration)
+            await client.execute(ChangeDbPacket(database), self._configuration)
         self._database = database
-        if not self._client.context.has_capability(CAPABILITY.SESSION_TRACKING):
-            self._client.context.database = database
+        if not client.context.has_capability(CAPABILITY.SESSION_TRACKING):
+            client.context.database = database
 
 
     # Async context manager
     async def __aenter__(self) -> 'AsyncConnection':
         """Async context manager entry"""
         return self
-    
+
     @property
     def server_status(self) -> int:
         """

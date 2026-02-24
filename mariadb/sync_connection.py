@@ -1,13 +1,18 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 """
 Synchronous connection implementation
 
 Provides a blocking API using the sync Client.
 """
 
-from typing import Optional, Any
+from typing import Optional, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .sync_cursor import SyncCursor
 from mariadb_shared.constants import CAPABILITY
 from mariadb_shared.sync_connection_common import SyncConnectionCommon
 from .base_connection import BaseConnection
@@ -15,7 +20,7 @@ from .base_connection import BaseConnection
 from .impl.client.sync_client import SyncClient
 
 
-class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):
+class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # type: ignore[misc]
     """
     Synchronous MariaDB connection
     
@@ -63,7 +68,7 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):
     # Core Connection Methods
     # =========================================================================
 
-    def cursor(self, **kwargs) -> 'SyncCursor':
+    def cursor(self, cursor_class: Optional[type] = None, **kwargs: Any) -> SyncCursor:
         """
         Create a new cursor for executing queries
         
@@ -100,7 +105,7 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):
         if not self._closed:
             try:
                 self._client.close()
-            except Exception as e:
+            except Exception:
                 pass
             finally:
                 self._closed = True
@@ -202,7 +207,7 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):
     # Properties and Setters
     # =========================================================================
     
-    @BaseConnection.database.setter
+    @BaseConnection.database.setter  # type: ignore[attr-defined, untyped-decorator]
     def database(self, value: Optional[str]) -> None:
         """
         Set database name
@@ -211,13 +216,14 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):
             value: Database name to select
         """
         self._check_closed()
-        context_db = self._client.context.database
+        client = self._client
+        context_db = client.context.database
         if context_db != value:
             from .impl.message.client.change_db_packet import ChangeDbPacket
-            self._client.execute(ChangeDbPacket(value), self._configuration)
+            client.execute(ChangeDbPacket(value or ''), self._configuration)
         self._database = value
-        if not self._client.context.has_capability(CAPABILITY.SESSION_TRACKING):
-            self._client.context.database = value
+        if not client.context.has_capability(CAPABILITY.SESSION_TRACKING):
+            client.context.database = value or ''
 
     # =========================================================================
     # Utility Methods

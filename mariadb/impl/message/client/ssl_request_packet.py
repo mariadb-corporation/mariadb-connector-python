@@ -1,9 +1,16 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 import struct
+from typing import TYPE_CHECKING
+
 from mariadb.impl.client.context import Context
 from ..client_message import ClientMessage
+
+if TYPE_CHECKING:
+    from ..payload_writer import PayloadWriter
 
 class SslRequestPacket(ClientMessage):
     """
