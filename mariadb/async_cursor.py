@@ -284,7 +284,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 # Get NO_BACKSLASH_ESCAPES status from connection
                 no_backslash_escapes = (client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
                 
-                completions = [None] * len(data)
+                completions = [None] * len(data)  # type: ignore[list-item]
                 for i in range(len(data)):
                     params = data[i]
                     parameters = list(params) if params else []

@@ -148,7 +148,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
                 sql_state='HY000'
             )
 
-    async def reconnect(self) -> None:  # type: ignore[override]
+    async def reconnect(self) -> None:
         """
         Reconnect to the database server
 
@@ -173,7 +173,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
                 sql_state='08S01'
             )
 
-    async def reset(self) -> None:  # type: ignore[override]
+    async def reset(self) -> None:
         """
         Reset the connection state
 
@@ -194,7 +194,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
                 sql_state='HY000'
             )
 
-    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:  # type: ignore[override]
+    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
         """
         Change the user and database of the current connection
 
@@ -226,7 +226,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
     # Utility Methods
     # =========================================================================
 
-    async def select_db(self, database: str) -> None:  # type: ignore[override]
+    async def select_db(self, database: str) -> None:
         """
         Change the default database
 

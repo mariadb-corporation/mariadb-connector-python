@@ -330,7 +330,7 @@ class BaseConnection(ABC, Generic[TClient]):
             True if TLS is active, False otherwise
         """
         self._check_closed()
-        return self._client.get_ssl_version() is not None
+        return self._client.get_ssl_version() is not None  # type: ignore[attr-defined]
 
     @property
     def tls_version(self) -> Optional[str]:
@@ -341,7 +341,7 @@ class BaseConnection(ABC, Generic[TClient]):
             TLS version string (e.g., "TLSv1.3"), or None if not using TLS
         """
         self._check_closed()
-        return self._client.get_ssl_version()
+        return self._client.get_ssl_version()  # type: ignore[attr-defined, no-any-return]
 
     @property
     def tls_cipher(self) -> Optional[str]:
@@ -354,7 +354,7 @@ class BaseConnection(ABC, Generic[TClient]):
         self._check_closed()
         if not self._tls:
             return None
-        cipher = self._client.get_ssl_cipher()
+        cipher = self._client.get_ssl_cipher()  # type: ignore[attr-defined]
         return cipher[0] if cipher else None
 
     @property
@@ -383,4 +383,4 @@ class BaseConnection(ABC, Generic[TClient]):
         self._check_closed()
         if not self._tls:
             return None
-        return self._client.get_peer_certificate()
+        return self._client.get_peer_certificate()  # type: ignore[attr-defined, no-any-return]

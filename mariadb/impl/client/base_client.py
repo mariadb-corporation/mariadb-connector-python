@@ -18,7 +18,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Callable, Dict, Tuple, Any, TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
-    from ..plugin.authentication.base_authentication_plugin import AuthenticationPlugin
+    from ..plugin.authentication_plugin import AuthenticationPlugin
     from .ssl.ssl_fingerprint_validator import SSLFingerprintValidator
 
 # Cached unpack_from methods for row parsing performance (avoids attribute lookup overhead)
@@ -54,7 +54,7 @@ from ...exceptions import OperationalError
 from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
 from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
-from cachetools import LRUCache  # type: ignore[import-untyped]
+from cachetools import LRUCache
 
 # Frozenset type constants for O(1) lookup in row parsers (text protocol)
 _TEXT_INT_TYPES = frozenset((

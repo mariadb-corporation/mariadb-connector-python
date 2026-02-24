@@ -77,7 +77,7 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "connect", "asyncConnect", "create_pool", "create_async_pool", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
            "apilevel", "paramstyle", "threadsafety"]
 
-def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> Union['SyncConnection', 'CConnection']:
+def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> Union['SyncConnection', 'CConnection']:  # type: ignore[valid-type]
     """
     Creates a MariaDB Connection object (synchronous).
 
@@ -170,7 +170,7 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
     return connection
 
 
-async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> 'AsyncConnection':
+async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> 'AsyncConnection':  # type: ignore[valid-type]
     """
     Creates a MariaDB AsyncConnection object and connects asynchronously.
 
@@ -267,14 +267,14 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
             pool = _ASYNC_CONNECTION_POOLS[pool_name]
         else:
             pool = _get_async_connection_pool_class()(**kwargs)
-        return await pool.get_connection()
+        return await pool.get_connection()  # type: ignore[no-any-return]
 
     # Use AsyncConnection if no custom class specified
     if connectionclass is None:
         connectionclass = connection_class  # Use the class selected by Windows+SSL workaround
 
     # Connect asynchronously using the classmethod
-    return await connectionclass.connect(*args, **kwargs)  # type: ignore[union-attr]
+    return await connectionclass.connect(*args, **kwargs)  # type: ignore[union-attr, no-any-return]
 
 
 # Stub for ASAN detection

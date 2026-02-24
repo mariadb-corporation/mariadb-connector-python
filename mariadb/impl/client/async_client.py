@@ -13,7 +13,7 @@ import asyncio
 import ssl
 import struct
 import copy
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Union, overload
 
 from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
@@ -21,6 +21,7 @@ from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnsDefinition
 from .base_client import BaseClient
+from .context import Context
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
 from ..message.client_message import ClientMessage
@@ -112,7 +113,12 @@ class AsyncClient(BaseClient):
             received += data_len
         return received
 
-    async def read_payload(self, packet_count: Optional[int] = None) -> [memoryview,tuple]:
+    @overload
+    async def read_payload(self, packet_count: None = None) -> memoryview: ...
+    @overload
+    async def read_payload(self, packet_count: int) -> list[tuple[int, int]]: ...
+
+    async def read_payload(self, packet_count: Optional[int] = None) -> Union[memoryview, list[tuple[int, int]]]:
         """
         Reads one or more complete packets from database server.
 
@@ -138,7 +144,7 @@ class AsyncClient(BaseClient):
             self._recv_len = unread
             self._recv_pos = 0
 
-        results: Any = [] if is_multi else None  # noqa: E501
+        results: list[tuple[int, int]] = []
         # Convert None to 1 for packet reading logic
         if packet_count is None:
             packet_count = 1
@@ -157,8 +163,8 @@ class AsyncClient(BaseClient):
                         self._ensure_space(4)
 
                     got = await self._recv_into_buffer(4 - bytes_in_buffer)
-                    if got == 0: # Connection lost
-                        return results if is_multi else None
+                    if got == 0:  # Connection lost
+                        raise ConnectionError("Connection lost during read")
                     self._recv_len += got
                     bytes_in_buffer = self._recv_len - self._recv_pos
 
@@ -177,7 +183,7 @@ class AsyncClient(BaseClient):
 
                     got = await self._recv_into_buffer(missing)
                     if got == 0:
-                        return results if is_multi else None
+                        raise ConnectionError("Connection lost during read")
                     self._recv_len += got
                     bytes_in_buffer = self._recv_len - self._recv_pos
 
@@ -583,7 +589,7 @@ class AsyncClient(BaseClient):
             except Exception as e:
                 raise OperationalError(f"Failed to execute init command '{self.configuration.init_command}': {e}")
 
-    async def execute(self, message: ClientMessage, config: Configuration, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:  # type: ignore[override]
+    async def execute(self, message: ClientMessage, config: Configuration, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         """Execute command and return list of completion results"""
         async with self.lock:
             if self.closed:
@@ -607,7 +613,7 @@ class AsyncClient(BaseClient):
                 raise OperationalError(f"Execution failed: {e}")
 
 
-    async def execute_stmt(self, sql: str, messages: List[ClientMessage], config: Configuration, buffered: bool = True) -> Any:  # type: ignore[override]
+    async def execute_stmt(self, sql: str, messages: List[ClientMessage], config: Configuration, buffered: bool = True) -> List[List[Completion]]:
         """Execute SQL with prepared statements (with caching), handles prepare if needed"""
         async with self.lock:
             if self.closed:
@@ -699,11 +705,11 @@ class AsyncClient(BaseClient):
 
 
 
-    async def _read_result(self, is_binary: bool, config: Optional[Configuration] = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None, sql: Optional[str] = None) -> List[Completion]:
-        results = []
-        packets = None
+    async def _read_result(self, is_binary: bool, config: Configuration, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None, sql: Optional[str] = None) -> List[Completion]:
+        results : List[Completion] = []
+        packets : Optional[list[tuple[int, int]]] = None
         # Cache frequently accessed attributes as locals
-        context = self.context
+        context : Context = self.context
         read_payload = self.read_payload
 
         while True:
@@ -734,6 +740,7 @@ class AsyncClient(BaseClient):
             # Parse column count from first packet
             parser = PayloadReader(packet)
             column_count = parser.read_length_encoded_int()
+            assert column_count is not None
 
             # Cache EOF deprecated flag once
             eof_deprecated = context.isEofDeprecated()
@@ -741,7 +748,7 @@ class AsyncClient(BaseClient):
             # Read column definitions
             if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
                 # skip metadata - use cached ColumnsDefinition
-                columns = prepare_stmt_packet.columns  # type: ignore[union-attr]
+                columns: ColumnsDefinition = prepare_stmt_packet.columns  # type: ignore[union-attr, assignment]
             else:
                 col_idx = 0
                 if not packets:
@@ -749,15 +756,15 @@ class AsyncClient(BaseClient):
 
                 # Decode columns inside collection loop to avoid buffer
                 # invalidation when read_payload is called multiple times
-                columns = ColumnsDefinition(column_count)  # type: ignore[arg-type]
-                while col_idx < column_count:  # type: ignore[operator]
+                columns = ColumnsDefinition(column_count)
+                while col_idx < column_count:
                     if col_idx >= len(packets):
-                        packets.extend(await read_payload(column_count - col_idx))  # type: ignore[operator]
+                        packets.extend(await read_payload(column_count - col_idx))
                     start, end = packets[col_idx]
                     columns.decode_column(col_idx, self._recv_buf_mv[start:end], context)
                     col_idx += 1
 
-                packets = packets[column_count:] if len(packets) > column_count else None  # type: ignore[operator]
+                packets = packets[column_count:] if len(packets) > column_count else None
 
                 if prepare_stmt_packet is not None:
                     prepare_stmt_packet.columns = columns  # type: ignore[assignment]
@@ -776,9 +783,9 @@ class AsyncClient(BaseClient):
             if not buffered:
                 streaming_result = AsyncStreamingResult(read_payload,  # type: ignore[arg-type]
                     context,
-                    columns,  # type: ignore[arg-type]
-                    column_count,  # type: ignore[arg-type]
-                    config,  # type: ignore[arg-type]
+                    columns,
+                    column_count,
+                    config,
                     row_parser
                 )
 
@@ -789,7 +796,7 @@ class AsyncClient(BaseClient):
                 completion = OkPacket(0,0,0,0,b'')
                 completion.result_set = streaming_result
                 results.append(completion)
-                return results  # type: ignore[return-value]
+                return results
 
             # Read rows
             rows: List[tuple] = []
@@ -813,15 +820,15 @@ class AsyncClient(BaseClient):
                         if eof_deprecated:
                             completion = _decode_ok_packet(row_packet, context)
                         else:
-                            completion = _decode_eof_packet(row_packet, context)
+                            completion = _decode_eof_packet(row_packet, context)  # type: ignore[assignment]
 
                         if config and config.converter:
-                            rows = self._apply_converters_to_rows(rows, columns, config)  # type: ignore[arg-type]
+                            rows = self._apply_converters_to_rows(rows, columns, config)
 
                         completion.result_set = AsyncCompleteResult(
-                            columns,  # type: ignore[arg-type]
-                            column_count,  # type: ignore[arg-type]
-                            config,  # type: ignore[arg-type]
+                            columns,
+                            column_count,
+                            config,
                             rows
                         )
                         results.append(completion)
@@ -839,16 +846,16 @@ class AsyncClient(BaseClient):
                         raise _decode_error_packet(row_packet, context).toError(self.exception_factory)
 
                     # Regular data row
-                    rows.append(row_parser(row_packet, columns, config, column_count))  # type: ignore[arg-type]
+                    rows.append(row_parser(row_packet, columns, config, column_count))
 
                 if finish_result:
                     break
 
             if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                 break
-        return results  # type: ignore[return-value]
+        return results
 
-    async def _handle_local_infile(self, packet: memoryview, sql: Optional[str], remaining_packets: Any) -> Any:
+    async def _handle_local_infile(self, packet: memoryview, sql: Optional[str], remaining_packets: Optional[list[tuple[int, int]]]) -> tuple[OkPacket, Optional[list[tuple[int, int]]]]:
         """Handle LOAD DATA LOCAL INFILE request from server (async)
 
         Returns:
@@ -922,10 +929,9 @@ class AsyncClient(BaseClient):
 
         # Check if server returned an error
         if response[0] == 0xFF:  # ERR packet
-            from mariadb.impl.message.server import ErrorPacket
-            from mariadb.impl.context import Context
-            context = Context()
-            raise _decode_error_packet(response, context).toError(self.exception_factory)
+            raise _decode_error_packet(response, self.context).toError(self.exception_factory)
+
+        raise OperationalError(f"Unexpected packet type during LOCAL INFILE: 0x{response[0]:02x}")
 
     def _validate_local_filename(self, sql: str, filename: str) -> bool:
         """Validate that filename matches LOAD DATA LOCAL INFILE query"""
@@ -952,7 +958,7 @@ class AsyncClient(BaseClient):
         from ..message.client.ping_packet import PingPacket
         await self.execute(PingPacket(), self.configuration)
 
-    async def close(self) -> None:  # type: ignore[override]
+    async def close(self) -> None:
         """Close connection and cleanup resources asynchronously"""
         async with self.lock:
             if self.closed:
@@ -1017,7 +1023,7 @@ class AsyncClient(BaseClient):
                         return None
         return None
 
-    async def _cleanup_connection(self) -> None:  # type: ignore[override]
+    async def _cleanup_connection(self) -> None:
         """Cleanup socket and stream resources asynchronously"""
         if hasattr(self, 'writer') and self.writer:
             try:

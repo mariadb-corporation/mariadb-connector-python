@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Optional
 from ..client.context import Context
 
 if TYPE_CHECKING:
-    from ..client.socket.stream import SyncStream
     from .payload_writer import PayloadWriter
 
 class ClientMessage(ABC):

@@ -130,7 +130,7 @@ multi_line_output = 3
 line_length = 88
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -143,6 +143,22 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "numpy",
+    "numpy.*",
+    "mariadb_c",
+    "mariadb_c.*",
+    "mariadb_binary",
+    "mariadb_binary.*",
+    "mariadb_pool",
+    "mariadb_pool.*",
+    "importlib_metadata",
+    "cachetools",
+    "cachetools.*",
+]
+ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["mariadb", "mariadb_c", "mariadb_pool", "mariadb_shared"]

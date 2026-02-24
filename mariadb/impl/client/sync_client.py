@@ -13,7 +13,7 @@ import socket
 import ssl
 import struct
 import copy
-from typing import List, Optional, Any, Union
+from typing import List, Optional, Any, Union, overload
 import threading
 
 from mariadb.impl.message.server.ok_packet import OkPacket
@@ -22,6 +22,7 @@ from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnsDefinition
 from .base_client import BaseClient
+from .context import Context
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
 from ..message.client_message import ClientMessage
@@ -131,7 +132,12 @@ class SyncClient(BaseClient):
             # Generic socket error (broken pipe, network down, etc.)
             raise ConnectionError(f"Socket error: {e}") from e
 
-    def read_payload(self, packet_count: Optional[int] = None) -> Any:
+    @overload
+    def read_payload(self, packet_count: None = None) -> memoryview: ...
+    @overload
+    def read_payload(self, packet_count: int) -> list[tuple[int, int]]: ...
+
+    def read_payload(self, packet_count: Optional[int] = None) -> Union[memoryview, list[tuple[int, int]]]:
         """
         Reads one or more complete packets from database server.
 
@@ -158,7 +164,7 @@ class SyncClient(BaseClient):
             self._recv_len = unread
             self._recv_pos = 0
 
-        results: Any = [] if is_multi else None
+        results: list[tuple[int, int]] = []
         # Convert None to 1 for packet reading logic
         if packet_count is None:
             packet_count = 1
@@ -177,8 +183,8 @@ class SyncClient(BaseClient):
                         self._ensure_space(4)
                     
                     got = self._recv_into_buffer(4 - bytes_in_buffer)
-                    if got == 0: # Connection lost
-                        return results if is_multi else None
+                    if got == 0:  # Connection lost
+                        raise ConnectionError("Connection lost during read")
                     self._recv_len += got
                     bytes_in_buffer = self._recv_len - self._recv_pos
 
@@ -197,7 +203,7 @@ class SyncClient(BaseClient):
                         
                     got = self._recv_into_buffer(missing)
                     if got == 0:
-                        return results if is_multi else None
+                        raise ConnectionError("Connection lost during read")
                     self._recv_len += got
                     bytes_in_buffer = self._recv_len - self._recv_pos
 
@@ -473,7 +479,7 @@ class SyncClient(BaseClient):
     # Authentication
     # =========================================================================
 
-    def _handle_authentication(self, packet: memoryview) -> None:  # type: ignore[override]
+    def _handle_authentication(self, packet: memoryview) -> None:
         """Process authentication response from server"""
         if len(packet) == 0:
             raise OperationalError("Empty authentication response")
@@ -492,7 +498,7 @@ class SyncClient(BaseClient):
         else:
             raise OperationalError(f"Unexpected packet during authentication: {packet[0]:02x}")
 
-    def _handle_auth_switch(self, packet: memoryview) -> None:  # type: ignore[override]
+    def _handle_auth_switch(self, packet: memoryview) -> None:
         """Handle authentication plugin switch request"""
         parser = PayloadReader(packet)
         parser.skip(1)  # Skip 0xFE marker
@@ -514,7 +520,7 @@ class SyncClient(BaseClient):
     # Command Execution
     # =========================================================================
 
-    def execute(self, message: ClientMessage, config: Optional[Configuration] = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
+    def execute(self, message: ClientMessage, config: Configuration, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
         """Execute command and return list of completion results"""
         with self.lock:
             if self.closed:
@@ -537,7 +543,7 @@ class SyncClient(BaseClient):
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")
 
-    def execute_stmt(self, sql: str, messages: List[ClientMessage], config: Optional[Configuration] = None, buffered: bool = True) -> Any:
+    def execute_stmt(self, sql: str, messages: List[ClientMessage], config: Configuration, buffered: bool = True) -> List[List[Completion]]:
         """Execute SQL with prepared statements (with caching), handles prepare if needed"""
         with self.lock:
             if self.closed:
@@ -627,11 +633,11 @@ class SyncClient(BaseClient):
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")
 
-    def _read_result(self, is_binary: bool, config: Optional[Configuration] = None, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None, sql: Optional[str] = None) -> List[Completion]:
-        results = []
-        packets = None
+    def _read_result(self, is_binary: bool, config: Configuration, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None, sql: Optional[str] = None) -> List[Completion]:
+        results : List[Completion] = []
+        packets : Optional[list[tuple[int, int]]] = None
         # Cache frequently accessed attributes as locals
-        context = self.context
+        context : Context = self.context
         read_payload = self.read_payload
 
         while True:
@@ -662,6 +668,7 @@ class SyncClient(BaseClient):
             # Parse column count from first packet
             parser = PayloadReader(packet)
             column_count = parser.read_length_encoded_int()
+            assert column_count is not None
 
             # Cache EOF deprecated flag once
             eof_deprecated = context.isEofDeprecated()
@@ -677,15 +684,15 @@ class SyncClient(BaseClient):
                 
                 # Decode columns inside collection loop to avoid buffer
                 # invalidation when read_payload is called multiple times
-                columns = ColumnsDefinition(column_count)  # type: ignore[arg-type]
-                while col_idx < column_count:  # type: ignore[operator]
+                columns = ColumnsDefinition(column_count)
+                while col_idx < column_count:
                     if col_idx >= len(packets):
-                        packets.extend(read_payload(column_count - col_idx))  # type: ignore[operator]
+                        packets.extend(read_payload(column_count - col_idx))
                     start, end = packets[col_idx]
                     columns.decode_column(col_idx, self._recv_buf_mv[start:end], context)
                     col_idx += 1
                 
-                packets = packets[column_count:] if len(packets) > column_count else None  # type: ignore[operator]
+                packets = packets[column_count:] if len(packets) > column_count else None
                 
                 if prepare_stmt_packet is not None:
                     prepare_stmt_packet.columns = columns  # type: ignore[assignment]
@@ -706,8 +713,8 @@ class SyncClient(BaseClient):
                 streaming_result = SyncStreamingResult(read_payload,
                     context,
                     columns,  # type: ignore[arg-type]
-                    column_count,  # type: ignore[arg-type]
-                    config,  # type: ignore[arg-type]
+                    column_count,
+                    config,
                     row_parser
                 )
 
@@ -718,7 +725,7 @@ class SyncClient(BaseClient):
                 completion = OkPacket(0,0,0,0,b'')
                 completion.result_set = streaming_result
                 results.append(completion)
-                return results  # type: ignore[return-value]
+                return results
 
             # Read rows
             rows: List[tuple] = []
@@ -741,15 +748,15 @@ class SyncClient(BaseClient):
                         if eof_deprecated:
                             completion = _decode_ok_packet(row_packet, context)
                         else:
-                            completion = _decode_eof_packet(row_packet, context)
+                            completion = _decode_eof_packet(row_packet, context)  # type: ignore[assignment]
 
                         if config and config.converter:
                             rows = self._apply_converters_to_rows(rows, columns, config)  # type: ignore[arg-type]
 
                         completion.result_set = SyncCompleteResult(
                             columns,  # type: ignore[arg-type]
-                            column_count,  # type: ignore[arg-type]
-                            config,  # type: ignore[arg-type]
+                            column_count,
+                            config,
                             rows
                         )
                         results.append(completion)
@@ -775,10 +782,11 @@ class SyncClient(BaseClient):
             if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                 break
 
-        return results  # type: ignore[return-value]
+        return results
 
 
-    def _handle_local_infile(self, packet: memoryview, sql: Optional[str], remaining_packets: Any) -> Any:
+    def _handle_local_infile(self, packet: memoryview, sql: Optional[str], remaining_packets: Optional[list[tuple[int, int]]]) -> tuple[OkPacket, Optional[list[tuple[int, int]]]]:
+
         """Handle LOAD DATA LOCAL INFILE request from server
         
         Returns:
@@ -852,11 +860,10 @@ class SyncClient(BaseClient):
         
         # Check if server returned an error
         if response[0] == 0xFF:  # ERR packet
-            from mariadb.impl.message.server import ErrorPacket
-            from mariadb.impl.context import Context
-            context = Context()
-            raise _decode_error_packet(response, context).toError(self.exception_factory)
-        
+            raise _decode_error_packet(response, self.context).toError(self.exception_factory)
+
+        raise OperationalError(f"Unexpected packet type during LOCAL INFILE: 0x{response[0]:02x}")
+
     def _validate_local_filename(self, sql: str, filename: str) -> bool:
         """Validate that filename matches LOAD DATA LOCAL INFILE query"""
         import re
@@ -986,7 +993,7 @@ class SyncClient(BaseClient):
         if len(sql_commands) > 0:
             sql_command = 'SET ' + ', '.join(sql_commands)
             query_packet = QueryPacket.from_sql(sql_command)
-            self.execute(query_packet)
+            self.execute(query_packet, self.configuration)
     
     # =========================================================================
     # Prepared Statements
