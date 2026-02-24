@@ -42,4 +42,17 @@ else
     echo "⚠ Patch file not found: $PATCHES_DIR/sqlalchemy-pypy-error-message.patch"
 fi
 
+# Apply MariaDB 12.3 CONNECTION table option removal patch
+if [ -f "$PATCHES_DIR/sqlalchemy-mariadb-12.3-connection-option.patch" ]; then
+    echo "Applying MariaDB 12.3 CONNECTION table option patch..."
+    if patch -p1 --dry-run < "$PATCHES_DIR/sqlalchemy-mariadb-12.3-connection-option.patch" > /dev/null 2>&1; then
+        patch -p1 < "$PATCHES_DIR/sqlalchemy-mariadb-12.3-connection-option.patch"
+        echo "✓ MariaDB 12.3 CONNECTION option patch applied successfully"
+    else
+        echo "⚠ Patch already applied or conflicts detected, skipping..."
+    fi
+else
+    echo "⚠ Patch file not found: $PATCHES_DIR/sqlalchemy-mariadb-12.3-connection-option.patch"
+fi
+
 echo "Patch application complete!"
