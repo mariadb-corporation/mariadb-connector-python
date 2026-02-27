@@ -225,12 +225,15 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         if buffered is not None:
             self._user_buffered = buffered
 
+        # Drain any active streaming result BEFORE cache operations.
+        # Eviction calls db_command(COM_STMT_CLOSE, skip_check=1) which
+        # bypasses mysql->status — pending unbuffered rows corrupt the protocol.
+        # (Sync path handles this in StmtCache.put(); async needs an await here.)
+        await self._consume_active_result()
+
         if not self._text:
             self._save_stmt_to_cache(self.statement)
         self._reset()
-
-        # Consume any remaining rows from other cursors to avoid "Commands out of sync"
-        await self._consume_active_result()
 
         # Mark this cursor as the active one on the connection ONLY if unbuffered
         if not self._user_buffered:
@@ -473,18 +476,20 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
     async def _consume_active_result(self):
         """
         Consume any remaining rows from the active cursor on this connection.
-        
-        This prevents "Commands out of sync" errors when executing a new query
-        while there are still pending results. This handles both cases:
-        - Another cursor has pending results on this connection
-        - This same cursor is re-executing before finishing previous results
+
+        Drains both _active_streaming_result (sync text + binary unbuffered)
+        and _active_async_cursor (async unbuffered) to prevent "Commands out
+        of sync" when executing a new query with pending results.
         """
+        active = getattr(self.connection, "_active_streaming_result", None)
+        if active is not None:
+            active._clear_result()
+
         if self.connection._active_async_cursor is not None:
             active_cursor = self.connection._active_async_cursor
             try:
-                if (not active_cursor._closed and 
-                    active_cursor.field_count > 0):
-                    # Drain all remaining rows asynchronously
+                if (not active_cursor._closed and
+                        active_cursor.field_count > 0):
                     try:
                         while True:
                             row = await active_cursor._fetch_row()
@@ -494,7 +499,6 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
                         pass
             except:
                 pass
-            # Clear using C extension's field (with proper reference counting)
             self.connection._active_async_cursor = None
 
     async def _fetch_row(self):

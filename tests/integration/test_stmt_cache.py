@@ -555,3 +555,126 @@ class TestStmtCacheStress(unittest.TestCase):
         cur.execute(sql, (999,))
         self.assertEqual(cur.fetchone(), (999,))
         cur.close()
+
+
+@_skip_native
+class TestEvictionWithActiveStream(unittest.TestCase):
+    """Regression: eviction must not corrupt the connection when another
+    cursor has a live unbuffered (streaming) result.
+
+    With prep_stmt_cache_size=1, the second execute() on a *different* SQL
+    triggers LRU eviction.  Eviction calls mysql_stmt_close() which sends
+    COM_STMT_CLOSE via db_command(skip_check=1) — that call bypasses
+    mysql->status and was calling net_clear() + resetting pkt_nr, corrupting
+    any in-flight protocol state.  The fix: StmtCache.put() drains the active
+    streaming result before evicting.
+    """
+
+    def setUp(self) -> None:
+        self.conn = _cache_conn(prep_stmt_cache_size=1)
+        self.conn.autocommit = True
+        cur = self.conn.cursor()
+        cur.execute(
+            "CREATE TEMPORARY TABLE t_evict_stream (id INT, val VARCHAR(32))"
+        )
+        for i in range(10):
+            cur.execute(f"INSERT INTO t_evict_stream VALUES ({i}, 'row{i}')")
+        cur.close()
+
+    def tearDown(self) -> None:
+        self.conn.close()
+
+    def test_eviction_during_streaming_binary(self) -> None:
+        """Evicting a cached stmt while cursor A streams binary rows must not
+        raise 'Lost connection' or 'Commands out of sync'."""
+        # sql_a returns multiple rows so the cursor is still streaming after
+        # fetchone() — leave remaining rows pending on the wire.
+        sql_a = "SELECT id, val FROM t_evict_stream WHERE id < ?"
+
+        # Prime the cache with sql_a
+        cur_a = self.conn.cursor(binary=True)
+        cur_a.execute(sql_a, (10,))
+        cur_a.fetchall()
+        cur_a.close()
+
+        # Open cursor A unbuffered — fetch only one row, leave the rest pending
+        cur_a = self.conn.cursor(binary=True, buffered=False)
+        cur_a.execute(sql_a, (10,))
+        _ = cur_a.fetchone()  # partial read — rows still on the wire
+
+        # cursor B uses a DIFFERENT sql to force eviction of sql_a from the
+        # size-1 cache.  Before the fix this sent COM_STMT_CLOSE via
+        # db_command(skip_check=1) while rows were still pending, corrupting
+        # the protocol.
+        sql_b = "SELECT id + 1 AS id2, val FROM t_evict_stream WHERE id < ?"
+        cur_b = self.conn.cursor(binary=True)
+        cur_b.execute(sql_b, (3,))
+        row = cur_b.fetchone()
+        self.assertIsNotNone(row)
+        cur_b.close()
+
+        # Connection must still be usable
+        cur_check = self.conn.cursor()
+        cur_check.execute("SELECT 1")
+        self.assertEqual(cur_check.fetchone(), (1,))
+        cur_check.close()
+
+        cur_a.close()
+
+    def test_eviction_during_streaming_text(self) -> None:
+        """Same scenario but cursor A uses text protocol."""
+        sql_a = "SELECT id, val FROM t_evict_stream"
+
+        # Prime the cache with a binary stmt so the cache is not empty
+        prime = self.conn.cursor(binary=True)
+        prime.execute("SELECT ? AS x", (0,))
+        prime.fetchone()
+        prime.close()
+
+        # Cursor A: text protocol, unbuffered
+        cur_a = self.conn.cursor(buffered=False)
+        cur_a.execute(sql_a)
+        _ = cur_a.fetchone()  # partial read
+
+        # Cursor B: new binary stmt → cache is full (size=1) → eviction fires
+        cur_b = self.conn.cursor(binary=True)
+        cur_b.execute("SELECT ? + 1 AS v", (5,))
+        row = cur_b.fetchone()
+        self.assertIsNotNone(row)
+        cur_b.close()
+
+        # Connection must still be usable
+        cur_check = self.conn.cursor()
+        cur_check.execute("SELECT 42")
+        self.assertEqual(cur_check.fetchone(), (42,))
+        cur_check.close()
+
+        cur_a.close()
+
+    def test_cache_disabled_eviction_during_streaming(self) -> None:
+        """With cache size=0, every put() closes immediately — same drain
+        path must protect the streaming cursor."""
+        # Reuse self.conn so the temp table is visible; temporarily set
+        # cache maxsize to 0 to exercise the immediate-close path.
+        conn = self.conn
+        orig_maxsize = conn._stmt_cache._maxsize
+        conn._stmt_cache._maxsize = 0
+        try:
+            cur_a = conn.cursor(binary=True, buffered=False)
+            cur_a.execute("SELECT id FROM t_evict_stream WHERE id < ?", (10,))
+            _ = cur_a.fetchone()  # partial read
+
+            # Any binary execute triggers immediate close (size=0 path)
+            cur_b = conn.cursor(binary=True)
+            cur_b.execute("SELECT ? AS v", (99,))
+            self.assertEqual(cur_b.fetchone(), (99,))
+            cur_b.close()
+
+            cur_check = conn.cursor()
+            cur_check.execute("SELECT 1")
+            self.assertEqual(cur_check.fetchone(), (1,))
+            cur_check.close()
+
+            cur_a.close()
+        finally:
+            conn._stmt_cache._maxsize = orig_maxsize

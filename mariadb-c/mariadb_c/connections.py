@@ -96,14 +96,30 @@ class StmtCache:
         self._cache.move_to_end(sql)
         return entry
 
+    def _drain_active_result(self) -> None:
+        """Drain any active streaming result on the connection before eviction.
+
+        Eviction calls mysql_stmt_close() which sends COM_STMT_CLOSE via
+        db_command(skip_check=1).  That bypasses mysql->status, so if another
+        cursor has pending unbuffered rows the protocol gets corrupted.
+        AsyncConnection does not have _active_streaming_result, so use getattr.
+        """
+        active = getattr(self._connection, "_active_streaming_result", None)
+        if active is not None:
+            active._clear_result()
+
     def put(self, sql: str, capsule: Any) -> None:
         """Store *capsule* under *sql*, evicting the LRU entry if over capacity."""
         if self._maxsize <= 0:
+            self._drain_active_result()
             try:
                 self._connection._close_stmt_capsule(capsule)
             except Exception:
                 pass
             return
+        will_evict = (sql in self._cache) or (len(self._cache) >= self._maxsize)
+        if will_evict:
+            self._drain_active_result()
         if sql in self._cache:
             old = self._cache.pop(sql)
             old.evict(self._connection)

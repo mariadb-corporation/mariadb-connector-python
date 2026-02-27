@@ -169,8 +169,6 @@ class Cursor(CCursor):
         if not self._text:
             self._save_stmt_to_cache(self.statement)
         self._reset()
-        if self.field_count:
-            self._clear_result()
 
         self._rowcount = 0
         self._description = None

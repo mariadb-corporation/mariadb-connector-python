@@ -549,6 +549,22 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
                 mysql_stmt_free_result(self->stmt);
             }
         }
+        /* Clear Python-level active streaming tracking for binary cursors. */
+        if (self->connection)
+        {
+            PyObject *active = PyObject_GetAttrString((PyObject *)self->connection,
+                                                      "_active_streaming_result");
+            if (!active)
+                PyErr_Clear();
+            else
+            {
+                if (active != Py_None && active == (PyObject *)self)
+                    PyObject_SetAttrString((PyObject *)self->connection,
+                                          "_active_streaming_result", Py_None);
+                PyErr_Clear();
+                Py_DECREF(active);
+            }
+        }
     } else if (self->is_text)
     {
         /* free current result - drain remaining rows first if it exists
@@ -577,20 +593,19 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
                 }
             }
 
-            /* Clear Python-level active cursor tracking */
+            /* Clear Python-level active cursor tracking. */
             PyObject *active = PyObject_GetAttrString((PyObject *)self->connection, "_active_streaming_result");
             const char *field_name = "_active_streaming_result";
-            
-            if (!active || PyErr_Occurred()) {
+            if (!active) {
                 PyErr_Clear();
                 active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
                 field_name = "_active_async_cursor";
-                if (!active || PyErr_Occurred())
+                if (!active)
                     PyErr_Clear();
             }
-            
             if (active && active != Py_None && active == (PyObject *)self) {
                 PyObject_SetAttrString((PyObject *)self->connection, field_name, Py_None);
+                PyErr_Clear();
             }
             Py_XDECREF(active);
         }
@@ -628,8 +643,12 @@ static void MrdbCursor_FreeResultValues(MrdbCursor *self)
 static
 void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
 {
-    /* clear pending result sets */
+    /* clear pending result sets, preserving any active Python exception —
+       MrdbCursor_clear_result makes Python API calls that may clear it */
+    PyObject *exc_type, *exc_val, *exc_tb;
+    PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
     MrdbCursor_clear_result(self);
+    PyErr_Restore(exc_type, exc_val, exc_tb);
 
     if (!self->is_text && self->stmt) {
         if (new_stmt)
@@ -696,7 +715,6 @@ void ma_cursor_reset(MrdbCursor *self)
 {
     if (!self->closed)
     {
-        MrdbCursor_clear_result(self);
         if (!self->is_text && self->stmt)
         {
             /* Todo: check if all the cursor stuff is deleted (when using prepared
@@ -725,17 +743,16 @@ void ma_cursor_close(MrdbCursor *self)
     if (self->connection) {
         PyObject *active = PyObject_GetAttrString((PyObject *)self->connection, "_active_streaming_result");
         const char *field_name = "_active_streaming_result";
-        
-        if (!active || PyErr_Occurred()) {
+        if (!active) {
             PyErr_Clear();
             active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
             field_name = "_active_async_cursor";
-            if (!active || PyErr_Occurred())
+            if (!active)
                 PyErr_Clear();
         }
-        
         if (active && active != Py_None && active == (PyObject *)self) {
             PyObject_SetAttrString((PyObject *)self->connection, field_name, Py_None);
+            PyErr_Clear();
         }
         Py_XDECREF(active);
     }
@@ -819,6 +836,16 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
                 mariadb_throw_exception(self->stmt, NULL, 1, NULL);
                 return 1;
             }
+        }
+        else
+        {
+            /* Binary unbuffered: track as active streaming result so that
+               ma_connection_consume_active_result() and StmtCache.put()
+               can drain pending rows before any new execute or eviction. */
+            if (PyObject_SetAttrString((PyObject *)self->connection,
+                                       "_active_streaming_result",
+                                       (PyObject *)self) < 0)
+                return 1;
         }
 
         self->affected_rows= CURSOR_AFFECTED_ROWS(self);
