@@ -24,6 +24,8 @@ from typing import Any, List, Optional, Tuple
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from mariadb_shared.exceptions import NotSupportedError, ProgrammingError
 
+_MISSING: object = object()  # sentinel: distinguishes missing key from explicit None
+
 try:
     import numpy
     HAS_NUMPY = True
@@ -442,6 +444,10 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
                                 else:
                                     _append(str(param).encode('utf8'))
                             else:
+                                if params_dict.get(param_name, _MISSING) is _MISSING:
+                                    raise ProgrammingError(
+                                        f"Dictionary doesn't contain key '{param_name}'"
+                                    )
                                 _append(b'NULL')
                             last_copy = j + 2
                             i = j + 2
@@ -471,6 +477,10 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
                             else:
                                 _append(str(param).encode('utf8'))
                         else:
+                            if params_dict.get(param_name, _MISSING) is _MISSING:  # type: ignore[union-attr]
+                                raise ProgrammingError(
+                                    f"Dictionary doesn't contain key '{param_name}'"
+                                )
                             _append(b'NULL')
                         last_copy = j
                         i = j
