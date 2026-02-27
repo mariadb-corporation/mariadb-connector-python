@@ -109,7 +109,7 @@ def driver(driver_name):
 
 _driver_warmed_up = {}
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope='session')
 def warmup_session(driver, driver_name):
     """Warm up the database and driver once per session, automatically before any tests run."""
     driver_key = driver_name
@@ -138,7 +138,7 @@ def warmup_session(driver, driver_name):
 
 
 @pytest.fixture(scope='function')
-def connection(driver, driver_name):
+def connection(driver, driver_name, warmup_session):
     """Create a database connection for each test."""
     # Now create the actual test connection
     if driver_name == 'mysql_connector_pure':
