@@ -531,44 +531,58 @@ static void MrdbCursor_clearstmt(MrdbCursor *self)
 /* {{{ MrdbCursor_clear_result(MrdbCursor *self)
    clear pending result sets
 */
+/* Clear Python-level active-cursor tracking attributes on the connection.
+   Tries _active_streaming_result first (sync text + binary), then
+   _active_async_cursor.  Exception-neutral: saves/restores any pending
+   Python exception so callers in error paths are unaffected. */
+static void
+ma_cursor_clear_tracking(MrdbCursor *self)
+{
+    if (!self->connection)
+        return;
+
+    PyObject *exc_type, *exc_val, *exc_tb;
+    PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
+
+    PyObject *active = PyObject_GetAttrString(
+        (PyObject *)self->connection, "_active_streaming_result");
+    const char *field_name = "_active_streaming_result";
+    if (!active) {
+        PyErr_Clear();
+        active = PyObject_GetAttrString(
+            (PyObject *)self->connection, "_active_async_cursor");
+        field_name = "_active_async_cursor";
+        if (!active)
+            PyErr_Clear();
+    }
+    if (active && active != Py_None && active == (PyObject *)self) {
+        PyObject_SetAttrString(
+            (PyObject *)self->connection, field_name, Py_None);
+        PyErr_Clear();
+    }
+    Py_XDECREF(active);
+
+    PyErr_Restore(exc_type, exc_val, exc_tb);
+}
+
 PyObject *MrdbCursor_clear_result(MrdbCursor *self)
 {
-    if (!self->is_text &&
-        self->stmt)
+    if (!self->is_text && self->stmt)
     {
         /* free current result */
         if (mysql_stmt_field_count(self->stmt))
-        {
             mysql_stmt_free_result(self->stmt);
-        }
-        /* check if there are more pending result sets */
+        /* drain any additional result sets */
         while (mysql_stmt_next_result(self->stmt) == 0)
         {
             if (mysql_stmt_field_count(self->stmt))
-            {
                 mysql_stmt_free_result(self->stmt);
-            }
         }
-        /* Clear Python-level active streaming tracking for binary cursors. */
-        if (self->connection)
-        {
-            PyObject *active = PyObject_GetAttrString((PyObject *)self->connection,
-                                                      "_active_streaming_result");
-            if (!active)
-                PyErr_Clear();
-            else
-            {
-                if (active != Py_None && active == (PyObject *)self)
-                    PyObject_SetAttrString((PyObject *)self->connection,
-                                          "_active_streaming_result", Py_None);
-                PyErr_Clear();
-                Py_DECREF(active);
-            }
-        }
-    } else if (self->is_text)
+        ma_cursor_clear_tracking(self);
+    }
+    else if (self->is_text)
     {
-        /* free current result - drain remaining rows first if it exists
-         * (even if is_buffered is now True, the result might have been created as unbuffered, so we must drain it) */
+        /* drain current result — may be unbuffered even if is_buffered is now True */
         if (self->result)
         {
             while (mysql_fetch_row(self->result))
@@ -576,7 +590,7 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
             }
             mysql_free_result(self->result);
         }
-        /* clear pending result sets */
+        /* drain any additional result sets from a multi-statement */
         if (self->connection && self->connection->mysql)
         {
             while (mysql_more_results(self->connection->mysql))
@@ -592,23 +606,8 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
                     mysql_free_result(res);
                 }
             }
-
-            /* Clear Python-level active cursor tracking. */
-            PyObject *active = PyObject_GetAttrString((PyObject *)self->connection, "_active_streaming_result");
-            const char *field_name = "_active_streaming_result";
-            if (!active) {
-                PyErr_Clear();
-                active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
-                field_name = "_active_async_cursor";
-                if (!active)
-                    PyErr_Clear();
-            }
-            if (active && active != Py_None && active == (PyObject *)self) {
-                PyObject_SetAttrString((PyObject *)self->connection, field_name, Py_None);
-                PyErr_Clear();
-            }
-            Py_XDECREF(active);
         }
+        ma_cursor_clear_tracking(self);
     }
     /* CONPY-52: Avoid possible double free */
     self->result= NULL;
@@ -643,12 +642,9 @@ static void MrdbCursor_FreeResultValues(MrdbCursor *self)
 static
 void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
 {
-    /* clear pending result sets, preserving any active Python exception —
-       MrdbCursor_clear_result makes Python API calls that may clear it */
-    PyObject *exc_type, *exc_val, *exc_tb;
-    PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
+    /* clear pending result sets; ma_cursor_clear_tracking inside
+       MrdbCursor_clear_result is already exception-neutral */
     MrdbCursor_clear_result(self);
-    PyErr_Restore(exc_type, exc_val, exc_tb);
 
     if (!self->is_text && self->stmt) {
         if (new_stmt)
@@ -725,8 +721,6 @@ void ma_cursor_reset(MrdbCursor *self)
             self->stmt= NULL;
         }
         MrdbCursor_clear(self, 0);
-
-        MrdbCursor_clearstmt(self);
     }
 }
 
@@ -737,26 +731,9 @@ void ma_cursor_reset(MrdbCursor *self)
 static
 void ma_cursor_close(MrdbCursor *self)
 {
+    /* ma_cursor_reset → MrdbCursor_clear → MrdbCursor_clear_result already
+       drains the result and calls ma_cursor_clear_tracking. */
     ma_cursor_reset(self);
-
-    /* Clear Python-level active cursor tracking */
-    if (self->connection) {
-        PyObject *active = PyObject_GetAttrString((PyObject *)self->connection, "_active_streaming_result");
-        const char *field_name = "_active_streaming_result";
-        if (!active) {
-            PyErr_Clear();
-            active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
-            field_name = "_active_async_cursor";
-            if (!active)
-                PyErr_Clear();
-        }
-        if (active && active != Py_None && active == (PyObject *)self) {
-            PyObject_SetAttrString((PyObject *)self->connection, field_name, Py_None);
-            PyErr_Clear();
-        }
-        Py_XDECREF(active);
-    }
-
     self->closed= 1;
 }
 
@@ -797,48 +774,12 @@ static void MrdbCursor_finalize(MrdbCursor *self)
 {
     if (!self->closed)
     {
-        /* If this cursor has a pending unbuffered result, drain it now
-           so the connection returns to READY state.
-           Both binary (!is_text) and text (is_text) unbuffered cursors
-           can be the active streaming result. */
-        if (self->connection)
-        {
-            PyObject *active = PyObject_GetAttrString(
-                (PyObject *)self->connection, "_active_streaming_result");
-            if (!active)
-                PyErr_Clear();
-            else
-            {
-                if (active == (PyObject *)self && active != Py_None)
-                {
-                    if (!self->is_text && self->stmt)
-                    {
-                        /* Binary: drain via stmt — read-only, no packet sent */
-                        if (mysql_stmt_field_count(self->stmt))
-                            mysql_stmt_free_result(self->stmt);
-                        while (mysql_stmt_next_result(self->stmt) == 0)
-                        {
-                            if (mysql_stmt_field_count(self->stmt))
-                                mysql_stmt_free_result(self->stmt);
-                        }
-                    }
-                    else if (self->is_text && self->result)
-                    {
-                        /* Text: drain via MYSQL_RES — read-only, no packet sent */
-                        while (mysql_fetch_row(self->result))
-                        {
-                        }
-                        mysql_free_result(self->result);
-                        self->result = NULL;
-                    }
-                    PyObject_SetAttrString(
-                        (PyObject *)self->connection,
-                        "_active_streaming_result", Py_None);
-                    PyErr_Clear();
-                }
-                Py_DECREF(active);
-            }
-        }
+        /* If this cursor IS the active streaming result, drain pending rows
+           so the connection returns to READY state.  MrdbCursor_clear_result
+           performs only reads (mysql_stmt_free_result / mysql_fetch_row) —
+           no command packets are sent, so this is safe during GC.
+           For all other cases we just orphan the MYSQL_STMT*. */
+        MrdbCursor_clear_result(self);
         self->stmt = NULL;
         self->closed = 1;
     }
@@ -862,19 +803,23 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             }
 
             if (!self->is_buffered) {
-                /* Set Python-level active cursor tracking */
-                /* Try sync field first, if it doesn't exist try async field */
-                PyObject *test = PyObject_GetAttrString((PyObject *)self->connection, "_active_streaming_result");
-                if (test || !PyErr_Occurred()) {
-                    Py_XDECREF(test);
-                    if (PyObject_SetAttrString((PyObject *)self->connection, "_active_streaming_result", (PyObject *)self) < 0) {
+                /* Set Python-level active cursor tracking.
+                   Try _active_streaming_result first; fall back to
+                   _active_async_cursor only if the attribute doesn't exist. */
+                PyObject *test = PyObject_GetAttrString(
+                    (PyObject *)self->connection, "_active_streaming_result");
+                if (test) {
+                    Py_DECREF(test);
+                    if (PyObject_SetAttrString((PyObject *)self->connection,
+                                               "_active_streaming_result",
+                                               (PyObject *)self) < 0)
                         return 1;
-                    }
                 } else {
                     PyErr_Clear();
-                    if (PyObject_SetAttrString((PyObject *)self->connection, "_active_async_cursor", (PyObject *)self) < 0) {
+                    if (PyObject_SetAttrString((PyObject *)self->connection,
+                                               "_active_async_cursor",
+                                               (PyObject *)self) < 0)
                         return 1;
-                    }
                 }
             }
         }
