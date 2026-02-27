@@ -29,7 +29,6 @@ from mariadb_shared.constants.FIELD_TYPE import (
 )
 from mariadb_shared.constants.FIELD_FLAG import NUMERIC as NUM_FLAG
 
-_BINARY_PROTOCOL_TYPES = frozenset({bytes, bytearray, datetime.date, datetime.datetime, datetime.time})
 
 if TYPE_CHECKING:
     from .base_connection import BaseConnection
@@ -54,22 +53,6 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         TResult: The result type (SyncResult or AsyncResult)
         TConnection: The connection type (SyncConnection or AsyncConnection)
     """
-    
-    @staticmethod
-    def _check_text_types(data: Union[list, tuple]) -> bool:
-        """
-        Check if parameters contain types that require binary protocol.
-        
-        Returns True if any parameter is:
-        - bytes or bytearray
-        - datetime.date, datetime.datetime, or datetime.time
-        
-        This matches the C extension behavior to automatically switch
-        to binary protocol for these types to preserve type information.
-        
-        Note: Only called for positional parameters (list/tuple), not dict.
-        """
-        return bool(set(map(type, data)) & _BINARY_PROTOCOL_TYPES)
     
     __slots__ = (
         'connection',

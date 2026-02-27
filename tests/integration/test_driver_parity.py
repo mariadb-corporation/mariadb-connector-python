@@ -27,6 +27,19 @@ def _connect_both() -> tuple[Any, Any]:
     return pure_conn, c_conn
 
 
+def _has_sequence_engine(conn: Any) -> bool:
+    """Check if the SEQUENCE engine is available (MariaDB only)."""
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT 1 FROM seq_1_to_1 LIMIT 1")
+        cur.fetchall()
+        return True
+    except Exception:
+        return False
+    finally:
+        cur.close()
+
+
 def _rows_equal(a: Any, b: Any) -> bool:
     """Compare two result values, handling float approximations."""
     if type(a) is float and type(b) is float:
@@ -162,21 +175,29 @@ class TestDriverParity(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_seq_1_to_100_text(self) -> None:
+        if not _has_sequence_engine(self.pure_conn):
+            self.skipTest("SEQUENCE engine not available")
         pure, c = self._run("SELECT seq FROM seq_1_to_100")
         _assert_results_equal(self, pure, c, "seq_1_to_100_text")
         self.assertEqual(len(pure), 100)
 
     def test_seq_1_to_100_binary(self) -> None:
+        if not _has_sequence_engine(self.pure_conn):
+            self.skipTest("SEQUENCE engine not available")
         pure, c = self._run("SELECT seq FROM seq_1_to_100", binary=True)
         _assert_results_equal(self, pure, c, "seq_1_to_100_binary")
         self.assertEqual(len(pure), 100)
 
     def test_seq_with_param_text(self) -> None:
+        if not _has_sequence_engine(self.pure_conn):
+            self.skipTest("SEQUENCE engine not available")
         pure, c = self._run("SELECT seq FROM seq_1_to_100 WHERE seq > ?", (50,), binary=False)
         _assert_results_equal(self, pure, c, "seq_with_param_text")
         self.assertEqual(len(pure), 50)
 
     def test_seq_with_param_binary(self) -> None:
+        if not _has_sequence_engine(self.pure_conn):
+            self.skipTest("SEQUENCE engine not available")
         pure, c = self._run("SELECT seq FROM seq_1_to_100 WHERE seq > ?", (50,), binary=True)
         _assert_results_equal(self, pure, c, "seq_with_param_binary")
         self.assertEqual(len(pure), 50)
@@ -220,6 +241,8 @@ class TestDriverParity(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_repeated_execute_same_sql(self) -> None:
+        if not _has_sequence_engine(self.pure_conn):
+            self.skipTest("SEQUENCE engine not available")
         sql = "SELECT seq FROM seq_1_to_100 WHERE seq = ?"
         for val in (1, 50, 100):
             with self.subTest(val=val):

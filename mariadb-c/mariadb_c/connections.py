@@ -161,6 +161,7 @@ class Connection(CConnection, SyncConnectionCommon):
         self._xid = None
         self._pooled_connection = None  # PooledConnection wrapper for pooled connections
         self._active_streaming_result = None  # Python-level tracking for unbuffered cursors
+        self._active_async_cursor = None
 
         autocommit = kwargs.pop("autocommit", False)
         kwargs.pop("reconnect", None)

@@ -27,9 +27,6 @@ static PyObject *
 MrdbCursor_execute_text(MrdbCursor *self, PyObject *const *args, Py_ssize_t nargs);
 
 static PyObject *
-MrdbCursor_check_text_types(MrdbCursor *self);
-
-static PyObject *
 MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows);
 
 static PyObject *
@@ -155,9 +152,6 @@ static PyMethodDef MrdbCursor_Methods[] =
         METH_NOARGS,
         cursor_next__doc__},
     /* internal helper functions */
-    {"_check_text_types", (PyCFunction) MrdbCursor_check_text_types,
-        METH_NOARGS,
-        NULL},
     {"_reset", (PyCFunction)MrdbCursor_reset,
         METH_NOARGS,
         NULL},
@@ -1644,42 +1638,6 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
     self->row_count = self->row_number;
     return List;
 }
-
-static PyObject *
-MrdbCursor_check_text_types(MrdbCursor *self)
-{
-  PyDateTime_IMPORT;
-  Py_ssize_t ofs= 0;
-  Py_ssize_t i;
-  PyObject *obj;
-
-  if (!self->data)
-    Py_RETURN_NONE;
-
-  if (PyDict_Check(self->data))
-    Py_RETURN_NONE;
-
-  for (i=0; i < PySequence_Size(self->data); i++)
-  {
-    if (PyTuple_Check(self->data))
-       obj= PyTuple_GetItem(self->data, i);
-    else
-       obj= ListOrTuple_GetItem(self->data, i);
-    if (PyBytes_Check(obj) ||
-        PyByteArray_Check(obj) ||
-        PyDate_Check(obj) ||
-        PyTime_Check(obj))
-      Py_RETURN_TRUE;
-    /* Check for array.array (buffer objects that aren't bytes/bytearray) */
-    {
-      const char *tp_name = Py_TYPE(obj)->tp_name;
-      if (tp_name && strcmp(tp_name, "array.array") == 0)
-        Py_RETURN_TRUE;
-    }
-  }
-  Py_RETURN_NONE;
-}
-
 
 /* Forward declarations for functions from mariadb_cursor.c */
 extern PyObject *mariadb_get_sequence_or_tuple(MrdbCursor *self);

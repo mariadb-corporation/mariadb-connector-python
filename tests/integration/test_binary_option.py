@@ -256,13 +256,14 @@ class TestBinaryOptionDataTypes(unittest.TestCase):
         self._test_roundtrip(True, (None,), (None,))
 
     def test_datetime_text(self):
-        """datetime params auto-switch to binary even in text mode"""
+        """Text protocol returns datetime as string (no auto-promotion)"""
         dt = datetime.datetime(2025, 1, 15, 10, 30, 0)
         conn = create_connection({"binary": False})
         cursor = conn.cursor()
         cursor.execute("SELECT ?", (dt,))
         row = cursor.fetchone()
-        self.assertEqual(row[0], dt)
+        self.assertIsInstance(row[0], str)
+        self.assertEqual(row[0], "2025-01-15 10:30:00")
         cursor.close()
         conn.close()
 

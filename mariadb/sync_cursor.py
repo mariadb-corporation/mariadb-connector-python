@@ -130,7 +130,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
 
                 client = self.connection._client
                 config = self._config or self.connection._configuration
-                if not isinstance(parameters, dict) and (self._use_binary or self._check_text_types(data)):  # type: ignore[arg-type, unreachable]
+                if not isinstance(parameters, dict) and self._use_binary:  # type: ignore[arg-type, unreachable]
 
                     from .impl.message.client.execute_packet import ExecutePacket
                     execute_packet = ExecutePacket(None, parameters, sql)  # type: ignore[arg-type]

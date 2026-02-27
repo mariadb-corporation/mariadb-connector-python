@@ -175,7 +175,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
 
                 client = self.connection._client
                 config = self._config or self.connection._configuration
-                if not isinstance(parameters, dict) and (self._use_binary or self._check_text_types(data)):  # type: ignore[arg-type, unreachable]
+                if not isinstance(parameters, dict) and self._use_binary:  # type: ignore[arg-type, unreachable]
                     from .impl.message.client.execute_packet import ExecutePacket
                     execute_packet = ExecutePacket(None, parameters, sql)  # type: ignore[arg-type]
                     self._completions = (await client.execute_stmt(sql, [execute_packet], config, self._buffered))[0]

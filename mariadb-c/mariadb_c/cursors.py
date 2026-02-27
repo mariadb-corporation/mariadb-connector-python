@@ -184,7 +184,7 @@ class Cursor(CCursor):
             # Parameterized query — decide protocol
             use_binary = _force_binary or self._use_binary
 
-            if not isinstance(data, dict) and (use_binary or self._check_text_types()):
+            if not isinstance(data, dict) and use_binary:
                 # Validate unsupported decimal/float values for binary protocol
                 _check = self._check_decimal_parameter
                 for val in (data.values() if isinstance(data, dict) else data):
