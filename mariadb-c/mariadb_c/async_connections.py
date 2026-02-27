@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 # PyPy compatibility check - prevent loading C extension async on PyPy
 import sys
 if hasattr(sys, 'pypy_version_info'):
@@ -12,6 +14,8 @@ if hasattr(sys, 'pypy_version_info'):
 import asyncio
 import socket
 from typing import Optional
+
+from .connections import StmtCache
 
 # Import shared constants and exceptions to avoid circular dependencies
 from mariadb_shared.constants import STATUS, TPC_STATE, INFO
@@ -59,6 +63,9 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         Initialize async connection (does not connect yet).
         Use AsyncConnection.connect() or asyncConnect() to connect.
         """
+        # Pre-initialize _stmt_cache before super().__init__() to avoid AttributeError
+        self._stmt_cache: Optional[StmtCache] = None
+
         # Initialize Python-side attributes first (same order as sync)
         self._socket = None
         self._socket_fd: Optional[int] = None
@@ -77,13 +84,13 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         
         # Extract parameters that need special handling (use .pop() like sync)
         self._autocommit = kwargs.pop("autocommit", False)
-        # Reconnect is not supported for async connections - ignore it
         kwargs.pop("reconnect", None)
-        self._reconnect = False
         self._converter_param = kwargs.pop("converter", None)
         self._binary = bool(kwargs.pop("binary", False))
         # Remove debug parameter that C extension doesn't support
         kwargs.pop("debug", None)
+        self._cache_prep_stmts: bool = bool(kwargs.pop("cache_prep_stmts", True))
+        self._prep_stmt_cache_size: int = int(kwargs.pop("prep_stmt_cache_size", 100))
         
         # Handle SSL dictionary for compatibility (mariadb-c compatibility)
         if 'ssl' in kwargs and isinstance(kwargs['ssl'], dict):
@@ -179,14 +186,17 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         """
         # Call the C extension's __init__ which does mysql_real_connect() synchronously
         CConnection.__init__(self, *self._args, **self._kwargs)
-        
+
         # Connection is now fully established (including SSL handshake)
         # NOW set MYSQL_OPT_NONBLOCK for async operations
         self.set_nonblock_option()
-        
+
         # Set converter on C extension's _converter field (same as sync)
         if self._converter_param is not None:
             self._converter = self._converter_param
+
+        cache_size: int = self._prep_stmt_cache_size if self._cache_prep_stmts else 0
+        self._stmt_cache = StmtCache(self, cache_size)
         
         # Get socket FD after connection is fully established
         self._socket_fd = self.get_socket()
@@ -223,7 +233,6 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             self._wait_for_status = self._wait_for_status_c_poll
         
         await self.set_autocommit(self._autocommit)
-        # Note: auto_reconnect is disabled for async connections
     
     def _on_socket_readable(self):
         """Callback when socket becomes readable (registered once at connection time)."""
@@ -312,7 +321,6 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         - **dictionary** (default: ``False``) - Return fetch values as dictionary when enabled.
         - **named_tuple** (default: ``False``) - Return fetch values as named tuple.
         - **cursor_type** (default: ``CURSOR.NONE``) - If cursor_type is set to CURSOR.READ_ONLY, a cursor is opened for the statement invoked with cursors execute() method.
-        - **prepared** (default: ``False``) - When enabled, the cursor will remain in prepared state after the first execute() method was called.
         - **binary** (default: ``False``) - Always execute statement in MariaDB client/server binary protocol.
         """
         self._check_closed()
@@ -322,11 +330,14 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         cursor = cursorclass(self, **kwargs)
         return cursor
     
-    async def close(self):
+    async def close(self) -> None:
         """Close the async connection"""
         if self._pooled_connection:
             await self._pooled_connection.return_to_pool()
         else:
+            if self._stmt_cache is not None:
+                self._stmt_cache.clear(close=True)
+                self._stmt_cache = None
             # Unregister event loop callbacks before closing
             if self._read_event and self._loop and self._socket_fd is not None:
                 try:

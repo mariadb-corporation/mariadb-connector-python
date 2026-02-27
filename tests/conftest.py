@@ -78,15 +78,6 @@ def binary_cursor(connection):
     yield cursor
     cursor.close()
 
-
-@pytest.fixture
-def prepared_cursor(connection):
-    """Provide a prepared statement cursor for tests"""
-    cursor = connection.cursor(prepared=True)
-    yield cursor
-    cursor.close()
-
-
 # Test markers
 def pytest_configure(config):
     """Configure pytest markers"""

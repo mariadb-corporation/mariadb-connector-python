@@ -90,53 +90,6 @@ class TestCursor(unittest.TestCase):
 
         cursor.close()
 
-    def test_cursor_reconnect(self):
-        if is_native():
-            self.skipTest("skip test for native not supporting deprecated automatic reconnect")
-        if is_maxscale():
-            self.skipTest("skip test for maxscale")
-
-        with create_connection({'reconnect' : True}) as conn:
-            self.assertEqual(conn.auto_reconnect, True)
-            cursor= conn.cursor(binary=True)
-            cursor.execute("SET session wait_timeout=1")
-
-            # binary protocol should fail
-            cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3 WHERE 1 = ?", (1,))
-            time.sleep(1.5)
-            try:
-                 cursor.fetchone()
-            except mariadb.ProgrammingError:
-                 pass
-
-            cursor.close()
-
-            # Text protocol unbuffered should fail
-            cursor= conn.cursor(binary=False, buffered=False)
-            cursor.execute("SET session wait_timeout=1")
-
-            # text protocol unbuffered should fail
-            cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
-            time.sleep(1.5)
-            try:
-                cursor.fetchone()
-            except mariadb.ProgrammingError:
-                pass
-
-            # reeusing cursor should work
-            cursor= conn.cursor(binary=False, buffered=True)
-            cursor.execute("SET session wait_timeout=1")
-            time.sleep(1.5)
-            # reconnect
-            cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
-            self.assertNotEqual(cursor._thread_id, cursor.connection.thread_id)
-            row= cursor.fetchone()
-            self.assertEqual(row[0],1)
-            # execute should update cursor._thread_id
-            cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3")
-            self.assertEqual(cursor._thread_id, cursor.connection.thread_id)
-
-            cursor.close()
 
     def test_conpy283(self):
         with create_connection() as conn:
@@ -1279,23 +1232,6 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0], e)
             del cursor
 
-    def test_conpy27(self):
-        if is_mysql():
-            self.skipTest("Skip (MySQL)")
-        with create_connection() as conn:
-            cursor = conn.cursor(prepared=True, buffered=True)
-            cursor.execute("SELECT ?", (1,))
-            row = cursor.fetchone()
-            self.assertEqual(row[0], 1)
-            
-            if is_native():
-                # would have thrown Parameter count mismatch is not passing other
-                cursor.execute("SELECT ?, ?, ?", ('foo', 'bar', 'baz'))
-            else:
-                cursor.execute("SELECT ?, ?, ?", ('foo',))
-            row = cursor.fetchone()
-            self.assertEqual(row[0], 'foo')
-            del cursor
 
     def test_multiple_cursor(self):
         cursor = self.connection.cursor()
@@ -1371,15 +1307,14 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0], "foobar")
             cursor.nextset()
             del cursor
-            cursor = con.cursor()
-            # not set with native, since will result in OUT or INOUT argument variable missing
-            if not is_native():
-                cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
-                self.assertEqual(cursor.sp_outparams, True)
-                row = cursor.fetchone()
-                self.assertEqual(row[0], "foobar")
-                cursor.execute("DROP PROCEDURE IF EXISTS p2")
-                del cursor
+            
+            cursor = con.cursor(binary=True)
+            cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
+            self.assertEqual(cursor.sp_outparams, True)
+            row = cursor.fetchone()
+            self.assertEqual(row[0], "foobar")
+            cursor.execute("DROP PROCEDURE IF EXISTS p2")
+            del cursor
 
     def test_sp3(self):
         with create_connection() as con:

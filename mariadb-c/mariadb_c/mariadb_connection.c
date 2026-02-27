@@ -117,6 +117,8 @@ static PyObject *MrdbConnection_prepare_async_connect(MrdbConnection *self, PyOb
 static PyObject *MrdbConnection_async_connect_start(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_async_connect_cont(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_close_stmt_capsule(MrdbConnection *self, PyObject *capsule);
+static PyObject *MrdbConnection_send_stmt_close(MrdbConnection *self, PyObject *arg);
 
 static PyGetSetDef
 MrdbConnection_sets[]=
@@ -253,6 +255,14 @@ MrdbConnection_Methods[] =
         (PyCFunction)MrdbConnection_escape_str_mysql,
         METH_O,
         NULL},
+    {"_close_stmt_capsule",
+        (PyCFunction)MrdbConnection_close_stmt_capsule,
+        METH_O,
+        "Close a MYSQL_STMT wrapped in a PyCapsule (for cache eviction)"},
+    {"_send_stmt_close",
+        (PyCFunction)MrdbConnection_send_stmt_close,
+        METH_O,
+        "Send COM_STMT_CLOSE for a given stmt_id (integer)"},
     {NULL} /* always last */
 };
 
@@ -1821,6 +1831,58 @@ MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args)
 #endif
     
     return PyLong_FromLong(ready_status);
+}
+
+/* _close_stmt_capsule(capsule): unwrap MYSQL_STMT* and send COM_STMT_CLOSE.
+ * Used by StmtCache eviction and connection.close() cleanup. */
+static PyObject *
+MrdbConnection_close_stmt_capsule(MrdbConnection *self, PyObject *capsule)
+{
+    MYSQL_STMT *stmt;
+
+    if (!PyCapsule_CheckExact(capsule)) {
+        PyErr_SetString(PyExc_TypeError, "_close_stmt_capsule: expected a PyCapsule");
+        return NULL;
+    }
+
+    stmt = (MYSQL_STMT *)PyCapsule_GetPointer(capsule, "MYSQL_STMT");
+    if (!stmt)
+        return NULL;
+
+    /* Neutralise the capsule destructor so it won't double-free */
+    PyCapsule_SetDestructor(capsule, NULL);
+
+    if (self->mysql) {
+        Py_BEGIN_ALLOW_THREADS;
+        mysql_stmt_close(stmt);
+        Py_END_ALLOW_THREADS;
+    }
+
+    Py_RETURN_NONE;
+}
+
+/* _send_stmt_close(stmt_id): send COM_STMT_CLOSE for a given server-side
+ * statement id.  Used by the ref-counted StmtCache on eviction and
+ * connection.close() cleanup. */
+static PyObject *
+MrdbConnection_send_stmt_close(MrdbConnection *self, PyObject *arg)
+{
+    unsigned long stmt_id;
+    char buff[STMT_ID_LENGTH];
+
+    stmt_id = PyLong_AsUnsignedLong(arg);
+    if (stmt_id == (unsigned long)-1 && PyErr_Occurred())
+        return NULL;
+
+    if (self->mysql) {
+        int4store(buff, stmt_id);
+        Py_BEGIN_ALLOW_THREADS;
+        self->mysql->methods->db_command(self->mysql, COM_STMT_CLOSE,
+                                         buff, sizeof(buff), 1, NULL);
+        Py_END_ALLOW_THREADS;
+    }
+
+    Py_RETURN_NONE;
 }
 
 /* Note: Cursor-level fetch methods (MrdbCursor_fetch_row_start/cont in mariadb_cursor.c)

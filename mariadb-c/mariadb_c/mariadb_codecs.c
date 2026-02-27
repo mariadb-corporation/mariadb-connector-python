@@ -1084,7 +1084,7 @@ mariadb_get_parameter(MrdbCursor *self,
         /* check if row_nr and column_nr are in the range from
            0 to (value - 1) */
         if (row_nr > (self->array_size - 1) ||
-                column_nr > (self->parseinfo.paramcount - 1))
+                column_nr > (self->paramcount - 1))
         {
             mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 0,
                     "Can't access data at row %d, column %d",
@@ -1102,27 +1102,12 @@ mariadb_get_parameter(MrdbCursor *self,
     else
         row= self->data;
 
-    if (self->parseinfo.paramstyle != PYFORMAT)
+    if (!(column= ListOrTuple_GetItem(row, column_nr)))
     {
-        if (!(column= ListOrTuple_GetItem(row, column_nr)))
-        {
-            mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 0,
-                    "Can't access column number %d at row %d",
-                     column_nr + 1, row_nr + 1);
-            goto end;
-        }
-    } else
-    {
-        PyObject *key;
-
-        key= PyTuple_GetItem(self->parseinfo.keys, column_nr);
-        if (!PyDict_Contains(row, key))
-        {
-            mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 0,
-                    "Can't find key in parameter data");
-            goto end;
-        }
-        column= PyDict_GetItem(row, key);
+        mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 0,
+                "Can't access column number %d at row %d",
+                 column_nr + 1, row_nr + 1);
+        goto end;
     }
 
     /* check if an indicator was passed */
@@ -1340,27 +1325,17 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
     for (i=0; i < self->array_size; i++)
     {
         PyObject *obj= ListOrTuple_GetItem(data, i);
-        if (self->parseinfo.paramstyle != PYFORMAT &&
-                (!CHECK_TYPE(obj, &PyTuple_Type) &&
-                 !CHECK_TYPE(obj, &PyList_Type)))
+        if (!CHECK_TYPE(obj, &PyTuple_Type) &&
+                !CHECK_TYPE(obj, &PyList_Type))
         {
             mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                     "Invalid parameter type in row %d. "\
                     " (Row data must be provided as tuple(s))", i+1);
             return 1;
         }
-        if (self->parseinfo.paramstyle == PYFORMAT &&
-                !CHECK_TYPE(obj, &PyDict_Type))
-        {
-            mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
-                    "Invalid parameter type in row %d. "\
-                    " (Row data must be provided as dict)", i+1);
-            return 1;
-        }
 
-        if (!self->parseinfo.paramcount ||
-                (self->parseinfo.paramstyle != PYFORMAT &&
-                 self->parseinfo.paramcount != ListOrTuple_Size(obj)))
+        if (!self->paramcount ||
+                self->paramcount != ListOrTuple_Size(obj))
         {
             mariadb_throw_exception(self->stmt, Mariadb_ProgrammingError, 1,
                     "Invalid number of parameters in row %d", i+1);
@@ -1368,26 +1343,25 @@ mariadb_check_bulk_parameters(MrdbCursor *self,
         }
     }
 
-    if (!self->is_prepared &&
-            !(self->params= PyMem_RawCalloc(self->parseinfo.paramcount,
+    if (!(self->params= PyMem_RawCalloc(self->paramcount,
                                             sizeof(MYSQL_BIND))))
     {
         mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
                 "Not enough memory (tried to allocated %lld bytes)",
-                self->parseinfo.paramcount * sizeof(MYSQL_BIND));
+                self->paramcount * sizeof(MYSQL_BIND));
         goto error;
     }
 
-    if (!(self->value= PyMem_RawCalloc(self->parseinfo.paramcount,
+    if (!(self->value= PyMem_RawCalloc(self->paramcount,
                                        sizeof(MrdbParamValue))))
     {
         mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
                 "Not enough memory (tried to allocated %lld bytes)",
-                self->parseinfo.paramcount * sizeof(MrdbParamValue));
+                self->paramcount * sizeof(MrdbParamValue));
         goto error;
     }
 
-    for (i=0; i < self->parseinfo.paramcount; i++)
+    for (i=0; i < self->paramcount; i++)
     {
         if (mariadb_get_parameter_info(self, &self->params[i], i))
             goto error;
@@ -1405,32 +1379,32 @@ mariadb_check_execute_parameters(MrdbCursor *self,
 {
     uint32_t i;
 
-    if (!self->parseinfo.paramcount)
+    if (!self->paramcount)
     {
         mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
                 "Invalid number of parameters");
-        goto error;
+        return 1;
     }
 
     if (!self->params &&
-            !(self->params= PyMem_RawCalloc(self->parseinfo.paramcount, sizeof(MYSQL_BIND))))
+            !(self->params= PyMem_RawCalloc(self->paramcount, sizeof(MYSQL_BIND))))
     {
         mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
                 "Not enough memory (tried to allocated %lld bytes)",
-                self->parseinfo.paramcount * sizeof(MYSQL_BIND));
+                self->paramcount * sizeof(MYSQL_BIND));
         goto error;
     }
 
     if (!self->value &&
-       !(self->value= PyMem_RawCalloc(self->parseinfo.paramcount, sizeof(MrdbParamValue))))
+       !(self->value= PyMem_RawCalloc(self->paramcount, sizeof(MrdbParamValue))))
     {
         mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
                 "Not enough memory (tried to allocated %lld bytes)",
-                self->parseinfo.paramcount * sizeof(MrdbParamValue));
+                self->paramcount * sizeof(MrdbParamValue));
         goto error;
     }
 
-    for (i=0; i < self->parseinfo.paramcount; i++)
+    for (i=0; i < self->paramcount; i++)
     {
         if (mariadb_get_parameter_info(self, &self->params[i], i))
         {
@@ -1649,7 +1623,7 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     uint32_t i;
     uint8_t rc= 1;
 
-    for (i=0; i < self->parseinfo.paramcount; i++)
+    for (i=0; i < self->paramcount; i++)
     {
         if (mariadb_get_parameter(self, (self->array_size > 0),
                                  row_nr, i, &self->value[i]))

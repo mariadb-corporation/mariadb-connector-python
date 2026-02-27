@@ -15,20 +15,17 @@ from numbers import Number
 
 # Import shared constants and exceptions to avoid circular dependencies
 from mariadb_shared.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
+from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES as _NO_BACKSLASH_ESCAPES
 from mariadb_shared.exceptions import (
     ProgrammingError,
     NotSupportedError
 )
+from mariadb_shared.text_protocol import substitute_params, normalize_to_qmark
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
 from typing import Sequence, Optional, Any, List, Tuple
 import decimal
 
-# Concrete numeric types - tuple for isinstance (must support subclasses)
-_NUMERIC_TYPES = (int, float, complex, decimal.Decimal)
-
-PARAMSTYLE_QMARK = 1
-PARAMSTYLE_FORMAT = 2
-PARAMSTYLE_PYFORMAT = 3
+_Decimal = decimal.Decimal
 
 ROWS_ALL = -1
 
@@ -77,19 +74,13 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         initialization
         """
         self._bulk = False
-        self._dictionary = False
-        self._named_tuple = False
         self._connection = connection
         self._resulttype = RESULT_TUPLE
         self._description = None
-        self._transformed_statement = None
-        self._prepared = False
-        self._prev_stmt = None
         self._use_binary = None
+        self._cache_entry = None
         self._rowcount = 0
-        self._parseinfo = None
         self._data = None
-        self._thread_id = connection.thread_id
         self._closed= None
         self._buffered_rows = None  # For buffered cursors: list of fetched rows
         self._row_index = 0  # Current position in buffered rows
@@ -101,7 +92,6 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         named_tuple_val = kwargs.pop("named_tuple", False)
         dictionary_val = kwargs.pop("dictionary", False)
         buffered_val = kwargs.pop("buffered", True)
-        prepared_val = kwargs.pop("prepared", False)
         # Inherit connection-level binary default; cursor kwarg overrides
         binary_val = kwargs.pop("binary", connection._binary)
         cursor_type_val = kwargs.pop("cursor_type", 0)
@@ -113,7 +103,6 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             self._resulttype = RESULT_DICTIONARY
         else:
             self._resulttype = RESULT_TUPLE
-        self._prepared = prepared_val
         self._use_binary = binary_val
         self._cursor_type = cursor_type_val
         
@@ -124,19 +113,12 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # IMPORTANT: Always pass buffered=False to C cursor - we handle buffering in Python
         super().__init__(connection,
                         named_tuple=named_tuple_val,
-                        dictionary=dictionary_val, 
+                        dictionary=dictionary_val,
                         buffered=False,  # Async always uses unbuffered C cursor
-                        prepared=prepared_val,
                         binary=binary_val,
                         **kwargs)
 
     def check_closed(self):
-        # Skip thread_id check if auto_reconnect is enabled, since the connection
-        # may have reconnected and thread_id will be updated on next execute()
-        if not self.connection.auto_reconnect:
-            if self._thread_id != self.connection.thread_id:
-                raise ProgrammingError(f"Cursor cannot be used anymore (the connection aborted and reconnected).")
-        # Check both Python-level _closed and C cursor's closed attribute
         if self._closed or super(AsyncCursor, self).closed:
             raise ProgrammingError("Cursor cannot be used anymore (it was already closed before).")
         self._connection._check_closed()
@@ -159,60 +141,6 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # Otherwise return the current row index
         return self._row_index
 
-    def _substitute_parameters(self):
-        """
-        Internal use only.
-
-        When running in text protocol, this method will replace placeholders
-        by supplied values.
-
-        For values which aren't numbers, strings or bytes string representation
-        will be used.
-        """
-
-        if not self._paramlist:
-            return self.statement.encode("utf8")
-
-        stmt = self.statement.encode("utf8")
-        paramlist = self._paramlist
-        n = len(paramlist)
-        is_pyformat = self._paramstyle == PARAMSTYLE_PYFORMAT
-
-        # Split statement into fragments between placeholders (O(n))
-        # result = fragment[0] + converted[0] + fragment[1] + ... + fragment[n]
-        result = [None] * (2 * n + 1)
-        prev = 0
-        for i in range(n):
-            ofs = paramlist[i]
-            result[2 * i] = stmt[prev:ofs]
-            prev = ofs + 1
-
-            if is_pyformat:
-                val = self._data[self._keys[i]]
-            else:
-                val = self._data[i]
-
-            vtype = type(val)
-            if val is None:
-                result[2 * i + 1] = b"NULL"
-            elif vtype is INDICATOR.MrdbIndicator:
-                if val == INDICATOR.NULL:
-                    result[2 * i + 1] = b"NULL"
-                elif val == INDICATOR.DEFAULT:
-                    result[2 * i + 1] = b"DEFAULT"
-                else:
-                    result[2 * i + 1] = b"NULL"
-            elif isinstance(val, _NUMERIC_TYPES):
-                result[2 * i + 1] = val.__str__().encode("utf8")
-            elif vtype is bytes or vtype is bytearray:
-                result[2 * i + 1] = ("'%s'" % self.connection.escape_string(
-                    val.decode(encoding='latin1'))).encode("utf8")
-            else:
-                result[2 * i + 1] = ("'%s'" % self.connection.escape_string(
-                    val.__str__())).encode("utf8")
-
-        result[2 * n] = stmt[prev:]
-        return b"".join(result)
 
     def _check_decimal_parameter(self, val):
         """
@@ -248,19 +176,10 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             - data: Optional sequence containing data for placeholder
                     substitution.
         """
-
-        if self.connection.auto_reconnect:
-            self._thread_id= self.connection.thread_id
-        self.check_closed()
-        self._reset()
-
-        # CALL always uses binary protocol for OUT params
         params = ""
         if data and len(data):
             params = ("?," * len(data))[:-1]
-        statement = "CALL %s(%s)" % (sp, params)
-        self._rowcount = 0
-        await self._execute(statement, data, use_binary=True)
+        await self.execute("CALL %s(%s)" % (sp, params), data, _force_binary=True)
 
     def nextset(self):
         """
@@ -283,7 +202,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         
         return result
 
-    async def execute(self, statement: str, data: Sequence = (), buffered=None):
+    async def execute(self, statement: str, data: Sequence = (), buffered=None, _force_binary=False):
         """
         Prepare and execute a SQL statement asynchronously.
 
@@ -295,17 +214,8 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         a statement.
 
         A reference to the operation will be retained by the cursor.
-        If the cursor was created with attribute prepared=True the statement
-        string for following execute operations will be ignored.
-        This is most effective for algorithms where the same operation is used,
-        but different parameters are bound to it (many times).
         """
-        if self.connection.auto_reconnect:
-            self._thread_id= self.connection.thread_id
-
         self.check_closed()
-        if not self._prepared:
-            self._reset()
 
         # Clear buffered rows from previous execute
         self._buffered_rows = None
@@ -315,29 +225,17 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         if buffered is not None:
             self._user_buffered = buffered
 
+        if not self._text:
+            self._save_stmt_to_cache(self.statement)
+        self._reset()
+
         # Consume any remaining rows from other cursors to avoid "Commands out of sync"
         await self._consume_active_result()
-        
+
         # Mark this cursor as the active one on the connection ONLY if unbuffered
         if not self._user_buffered:
             self.connection._active_async_cursor = self
 
-        # Prepared cursor reuses previous statement
-        if self._prepared and self.statement:
-            statement = self.statement
-
-        await self._execute(statement, data, use_binary=self._use_binary)
-
-    async def _execute(self, statement: str, data: Sequence = (), use_binary=False):
-        """
-        Internal execute — shared by execute() and callproc().
-
-        Args:
-            statement: SQL statement
-            data: parameters
-            use_binary: force binary protocol (True for CALL, or from cursor setting)
-        """
-        self.connection._last_executed_statement = statement
         self._rowcount = 0
         self._description = None
 
@@ -347,66 +245,35 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         if data:
             self._data = data
 
-            # Validate unsupported decimal/float values
-            for val in (data.values() if isinstance(data, dict) else data):
-                self._check_decimal_parameter(val)
-
             # Parameterized query — decide protocol
-            # CALL statements always need binary protocol for OUT params
-            if not use_binary and not isinstance(data, dict):
-                first_word = statement.lstrip().split(None, 1)[0].upper() if statement.strip() else ""
-                if first_word == "CALL":
-                    use_binary = True
+            use_binary = _force_binary or self._use_binary
 
             if not isinstance(data, dict) and (use_binary or self._check_text_types()):
+                # Validate unsupported decimal/float values for binary protocol
+                _check = self._check_decimal_parameter
+                for val in (data.values() if isinstance(data, dict) else data):
+                    if type(val) is float or type(val) is _Decimal:
+                        _check(val)
                 # Binary protocol: server parses placeholders during prepare
                 if self.statement != statement:
                     super()._set_statement(statement, len(data))
-                    self._reprepare = True
+                    self._reprepare = not self._restore_stmt_from_cache(statement)
                 else:
                     self._reprepare = False
                 await self._execute_binary_async()
             else:
-                # Text protocol: parse for paramstyle + substitute values
-                if self.statement != statement:
-                    super()._parse(statement, True)
-                    self._reprepare = True
-                else:
-                    self._reprepare = False
-
-                # Validate param style matches data type
-                if isinstance(data, dict):
-                    if self._paramstyle != PARAMSTYLE_PYFORMAT:
-                        raise ProgrammingError("Data argument must be Tuple or List")
-                    # Validate all referenced keys exist in dict
-                    if self._keys:
-                        for key in self._keys:
-                            if key not in data:
-                                raise ProgrammingError(
-                                    "Dictionary doesn't contain key '%s'" % key)
-                else:
-                    if self._paramstyle == PARAMSTYLE_PYFORMAT:
-                        raise ProgrammingError("Data argument must be Dictionary")
-                    if self._paramlist and len(data) != len(self._paramlist):
-                        raise ProgrammingError(
-                            "statement (%s) doesn't match the number of data elements"
-                            " (%s)." % (len(self._paramlist), len(data)))
-
-                self._transformed_statement = self._substitute_parameters()
-                await self._execute_text_async(self._transformed_statement)
+                # Text protocol: shared parser handles placeholder discovery,
+                # validation, and value conversion in a single pass.
+                no_backslash = bool(self.connection.server_status & _NO_BACKSLASH_ESCAPES)
+                self._transformed_statement = b"".join(substitute_params(statement, self._data, no_backslash))
+                await self._execute_text_async(self._transformed_statement, statement)
         else:
             # No parameters — always text protocol
-            if self.statement != statement:
-                super()._set_statement(statement, 0)
-                self._reprepare = True
-            else:
-                self._reprepare = False
-            self._text = True
             await self._execute_text_async(statement)
 
         self._initresult()
         self._bulk = 0
-        
+
         if self._user_buffered and self.field_count > 0:
             await self._buffer_all_rows()
     
@@ -424,10 +291,18 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # Set rowcount to the number of fetched rows
         self._rowcount = len(self._buffered_rows)
     
-    async def _execute_text_async(self, statement: str):
-        """Execute text query using async non-blocking API"""
+    async def _execute_text_async(self, sql_to_send: str, original_statement: Optional[str] = None):
+        """Execute text query using async non-blocking API.
+
+        Also stores the statement for cursor.statement and sets is_text=1.
+        When parameters were substituted, original_statement holds the SQL
+        template while sql_to_send holds the substituted bytes.
+        """
+        # Store statement for cursor.statement and set is_text=1
+        super()._set_text_statement(original_statement or sql_to_send)
+
         # Start non-blocking query execution
-        wait_status = self.connection._async_real_query_start(statement)
+        wait_status = self.connection._async_real_query_start(sql_to_send)
         
         # Wait for query to complete
         while wait_status:
@@ -436,10 +311,66 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         
         # Set field_count from connection so _initresult() can work properly
         self._set_field_count_from_connection()
-        
-        # Ensure parseinfo.is_text is set to 1 for text protocol
-        # This is needed so Mrdb_GetFieldInfo() knows to call mysql_use_result()
-        self._text = True
+
+    def _save_stmt_to_cache(self, sql: str) -> None:
+        """Detach the current MYSQL_STMT and store/return it to the cache."""
+        if not sql:
+            return
+
+        # If we checked out a template, return it to the entry
+        if self._cache_entry is not None:
+            capsule = super()._detach_stmt()
+            if capsule is not None:
+                self._cache_entry.checkin(capsule, self._connection)
+            self._cache_entry = None
+            return
+
+        cache = getattr(self._connection, '_stmt_cache', None)
+        if cache is None:
+            return
+
+        # First prepare for this SQL — detach and create a new cache entry
+        capsule = super()._detach_stmt()
+        if capsule is None:
+            return
+        cache.put(sql, capsule)
+
+    def _restore_stmt_from_cache(self, sql: str) -> bool:
+        """Try to check out a cached template. Returns True on hit."""
+        cache = getattr(self._connection, '_stmt_cache', None)
+        if cache is None:
+            return False
+        entry = cache.get(sql)
+        if entry is None:
+            return False
+        capsule = entry.checkout()
+        if capsule is None:
+            return False
+        super()._attach_stmt(capsule)
+        self._cache_entry = entry
+        return True
+
+    async def close(self) -> None:
+        """
+        Closes the cursor.
+
+        If the cursor has pending or unread results, .close() will cancel them
+        so that further operations using the same connection can be executed.
+
+        After calling .close() the cursor object becomes unusable. Any operation
+        with the cursor will raise a ProgrammingError exception.
+        """
+        if self._closed:
+            return
+
+        if not self._text:
+            self._save_stmt_to_cache(self.statement)
+
+        if self._data:
+            del self._data
+        super().close()
+
+        self._closed = True
 
     async def _execute_binary_async(self):
         """Execute binary query using async prepared statement protocol
@@ -477,12 +408,9 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         RETURNING clause.
         """
 
-        if self.connection.auto_reconnect:
-            self._thread_id= self.connection.thread_id
-
         self.check_closed()
         self._reset()
-        
+
         # Reset buffered cursor state
         self._buffered_rows = None
         self._row_index = 0
@@ -511,17 +439,26 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # TODO: insert/replace statements are not optimized yet
         #       rowcount updating
         
-        # Check if all parameter sets are empty (no parameters)
-        # If so, use non-bulk execution to avoid parameter binding errors
+        normalized_sql, param_names = normalize_to_qmark(statement)
+
+        if param_names is not None:
+            reordered: list = []
+            for row in parameters:
+                if not isinstance(row, dict):
+                    raise ProgrammingError("Named placeholders require dict parameters")
+                reordered.append([row.get(name) for name in param_names])
+            parameters = reordered
+
         has_parameters = any(len(row) > 0 if hasattr(row, '__len__') else True for row in parameters)
+        first_row = parameters[0] if hasattr(parameters, '__getitem__') else next(iter(parameters))
 
         if not (self.connection.extended_server_capabilities &
-                (CAPABILITY.BULK_OPERATIONS >> 32)) or not has_parameters:
+                (CAPABILITY.BULK_OPERATIONS >> 32)) or not has_parameters or isinstance(first_row, dict):
             count = 0
             accumulated_results = []
             
             for i, row in enumerate(parameters):
-                await self.execute(statement, row)
+                await self.execute(normalized_sql, row)
                 count += self.rowcount
                 
                 # If this statement has a RETURNING clause, accumulate buffered results
@@ -541,9 +478,11 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
                 # but for RETURNING statements, this indicates an issue
                 pass
         else:
-            # Bulk execute: always binary, needs full parse for INSERT...VALUES detection
-            if self.statement != statement or not self._bulk:
-                super()._parse(statement, False)
+            # Bulk execute: QMARK/FORMAT rows only.
+            # paramcount from first row — no SQL parse needed.
+            first_row = parameters[0] if hasattr(parameters, '__getitem__') else next(iter(parameters))
+            if self.statement != normalized_sql or not self._bulk:
+                super()._set_statement(normalized_sql, len(first_row))
                 self._reprepare = True
             else:
                 self._reprepare = False
@@ -588,7 +527,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         Uses cursor-level fetch_row_start/cont for text protocol (reuses field_fetch_fromtext).
         Uses stmt_fetch_start/cont for binary protocol (prepared statements).
         """
-        if not self.buffered and not self.connection.auto_reconnect:
+        if not self.buffered:
             self.check_closed()
 
         if not self.field_count:

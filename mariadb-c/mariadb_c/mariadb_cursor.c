@@ -24,7 +24,7 @@ static PyObject *
 MrdbCursor_InitResultSet(MrdbCursor *self);
 
 static PyObject *
-MrdbCursor_execute_text(MrdbCursor *self, PyObject *stmt);
+MrdbCursor_execute_text(MrdbCursor *self, PyObject *const *args, Py_ssize_t nargs);
 
 static PyObject *
 MrdbCursor_check_text_types(MrdbCursor *self);
@@ -33,7 +33,7 @@ static PyObject *
 MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows);
 
 static PyObject *
-MrdbCursor_parse(MrdbCursor *self, PyObject *args);
+MrdbCursor_set_text_statement(MrdbCursor *self, PyObject *stmt);
 
 static PyObject *
 MrdbCursor_set_statement(MrdbCursor *self, PyObject *args);
@@ -58,6 +58,11 @@ static PyObject *MrdbCursor_stmt_fetch_cont(MrdbCursor *self, PyObject *args);
 
 /* Shared fetch function - used by both sync and async cursors */
 int MrdbCursor_fetchinternal(MrdbCursor *self);
+
+/* Prepared statement cache helpers */
+static PyObject *MrdbCursor_detach_stmt(MrdbCursor *self);
+static PyObject *MrdbCursor_attach_stmt(MrdbCursor *self, PyObject *capsule);
+static PyObject *MrdbCursor_close_stmt_no_close(MrdbCursor *self);
 
 static PyObject *
 MrdbCursor_seek(MrdbCursor *self,
@@ -91,19 +96,19 @@ strncpy((a)->statement, (s), (l));\
 (a)->statement[(l)]= 0;
 
 #define CURSOR_FIELD_COUNT(a)\
-    ((a)->parseinfo.is_text ? mysql_field_count((a)->connection->mysql) : (a)->stmt ? mysql_stmt_field_count((a)->stmt) : 0)
+    ((a)->is_text ? mysql_field_count((a)->connection->mysql) : (a)->stmt ? mysql_stmt_field_count((a)->stmt) : 0)
 
 #define CURSOR_WARNING_COUNT(a)\
-    (((a)->parseinfo.is_text) ? (long)mysql_warning_count((a)->connection->mysql) : ((a)->stmt) ? (long)mysql_stmt_warning_count((a)->stmt) : 0L)
+    (((a)->is_text) ? (long)mysql_warning_count((a)->connection->mysql) : ((a)->stmt) ? (long)mysql_stmt_warning_count((a)->stmt) : 0L)
 
 #define CURSOR_AFFECTED_ROWS(a)\
-    (int64_t)((a)->parseinfo.is_text ? mysql_affected_rows((a)->connection->mysql) : (a)->stmt ? mysql_stmt_affected_rows((a)->stmt) : 0)
+    (int64_t)((a)->is_text ? mysql_affected_rows((a)->connection->mysql) : (a)->stmt ? mysql_stmt_affected_rows((a)->stmt) : 0)
 
 #define CURSOR_INSERT_ID(a)\
-    ((a)->parseinfo.is_text ? mysql_insert_id((a)->connection->mysql) : (a)->stmt ? mysql_stmt_insert_id((a)->stmt) : 0)
+    ((a)->is_text ? mysql_insert_id((a)->connection->mysql) : (a)->stmt ? mysql_stmt_insert_id((a)->stmt) : 0)
 
 #define CURSOR_NUM_ROWS(a)\
-    ((a)->parseinfo.is_text ? mysql_num_rows((a)->result) : (a)->stmt ? mysql_stmt_num_rows((a)->stmt) : 0)
+    ((a)->is_text ? mysql_num_rows((a)->result) : (a)->stmt ? mysql_stmt_num_rows((a)->stmt) : 0)
 
 static char *mariadb_named_tuple_name= "mariadb_c.Row";
 static char *mariadb_named_tuple_desc= "Named tupled row";
@@ -192,8 +197,17 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"_async_stmt_fetch_cont", (PyCFunction)MrdbCursor_stmt_fetch_cont,
         METH_VARARGS,
         "Continue non-blocking prepared statement fetch"},
-    {"_parse", (PyCFunction)MrdbCursor_parse,
-        METH_VARARGS,
+    {"_detach_stmt", (PyCFunction)MrdbCursor_detach_stmt,
+        METH_NOARGS,
+        "Detach MYSQL_STMT into a PyCapsule for cache storage"},
+    {"_attach_stmt", (PyCFunction)MrdbCursor_attach_stmt,
+        METH_O,
+        "Attach a cached MYSQL_STMT PyCapsule to this cursor"},
+    {"_close_stmt_no_close", (PyCFunction)MrdbCursor_close_stmt_no_close,
+        METH_NOARGS,
+        "Free local MYSQL_STMT without sending COM_STMT_CLOSE"},
+    {"_set_text_statement", (PyCFunction)MrdbCursor_set_text_statement,
+        METH_O,
         NULL},
     {"_set_statement", (PyCFunction)MrdbCursor_set_statement,
         METH_VARARGS,
@@ -202,7 +216,7 @@ static PyMethodDef MrdbCursor_Methods[] =
         METH_NOARGS,
          NULL},
     {"_sync_execute_text", (PyCFunction)MrdbCursor_execute_text,
-        METH_O,
+        METH_FASTCALL,
         NULL},
     {"_execute_binary", (PyCFunction)MrdbCursor_execute_binary,
         METH_NOARGS,
@@ -220,47 +234,27 @@ static struct PyMemberDef MrdbCursor_Members[] =
 {
     {"statement",
         T_STRING,
-        offsetof(MrdbCursor, parseinfo.statement),
+        offsetof(MrdbCursor, statement),
         READONLY,
         cursor_statement__doc__},
-    {"_paramstyle",
-        T_UINT,
-        offsetof(MrdbCursor, parseinfo.paramstyle),
-        READONLY,
-        MISSING_DOC},
     {"_reprepare",
         T_UINT,
         offsetof(MrdbCursor, reprepare),
         0,
         MISSING_DOC},
-    {"_command",
-        T_BYTE,
-        offsetof(MrdbCursor, parseinfo.command),
-        0,
-        MISSING_DOC},
     {"_text",
         T_BOOL,
-        offsetof(MrdbCursor, parseinfo.is_text),
+        offsetof(MrdbCursor, is_text),
         0,
-        MISSING_DOC},
-    {"_paramlist",
-        T_OBJECT,
-        offsetof(MrdbCursor, parseinfo.paramlist),
-        READONLY,
         MISSING_DOC},
     {"_resulttype",
         T_UINT,
         offsetof(MrdbCursor, result_format),
         0,
         MISSING_DOC},
-    {"_keys",
-        T_OBJECT,
-        offsetof(MrdbCursor, parseinfo.keys),
-        READONLY,
-        MISSING_DOC},
     {"paramcount",
         T_UINT,
-        offsetof(MrdbCursor, parseinfo.paramcount),
+        offsetof(MrdbCursor, paramcount),
         READONLY,
         cursor_paramcount__doc__},
     {"_data",
@@ -334,10 +328,11 @@ MrdbCursor_init_fields(MrdbCursor *self)
     self->fields = NULL;
     self->statement = NULL;
     self->statement_len = 0;
+    self->paramcount = 0;
+    self->is_text = 0;
     self->values = NULL;
     self->sequence_fields = NULL;
     self->sequence_type = NULL;
-    memset(&self->parseinfo, 0, sizeof(self->parseinfo));
     self->prefetch_rows = 0;
     self->cursor_type = 0;
     self->affected_rows = 0;
@@ -346,7 +341,6 @@ MrdbCursor_init_fields(MrdbCursor *self)
     self->lastrow_id = 0;
     self->row_number = 0;
     self->result_format = 0;
-    self->is_prepared = 0;
     self->is_buffered = 0;
     self->fetched = 0;
     self->closed = 0;
@@ -359,13 +353,12 @@ MrdbCursor_init_fields(MrdbCursor *self)
 static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
         PyObject *kwargs)
 {
-    char *key_words[]= {"", "prefetch_size", "cursor_type", 
-                        "prepared", "binary", "named_tuple", "dictionary", "buffered", NULL};
+    char *key_words[]= {"", "prefetch_size", "cursor_type",
+                        "binary", "named_tuple", "dictionary", "buffered", NULL};
     PyObject *connection;
     unsigned long cursor_type= 0,
                   prefetch_rows= 0;
-    int is_prepared= 0,
-        is_binary= 0,
+    int is_binary= 0,
         named_tuple= 0,
         dictionary= 0,
         buffered= 1;
@@ -377,8 +370,8 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
     MrdbCursor_init_fields(self);
 
     if (!PyArg_ParseTupleAndKeywords(args, kwargs,
-                "O!|kkiippp", key_words, &MrdbConnection_Type, &connection,
-                &prefetch_rows, &cursor_type, &is_prepared, &is_binary,
+                "O!|kkippp", key_words, &MrdbConnection_Type, &connection,
+                &prefetch_rows, &cursor_type, &is_binary,
                 &named_tuple, &dictionary, &buffered))
         return -1;
 
@@ -412,8 +405,7 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
     Py_INCREF(connection);
     self->connection = (MrdbConnection *)connection;
 
-    self->is_prepared= is_prepared;
-    self->parseinfo.is_text= 0;
+    self->is_text= 0;
     self->stmt= NULL;
     self->cursor_type = cursor_type;
     self->prefetch_rows= prefetch_rows;
@@ -431,9 +423,6 @@ static int MrdbCursor_traverse(
     Py_VISIT(self->connection);
     Py_VISIT(self->data);
     Py_VISIT(self->sequence_type);
-    Py_VISIT(self->parseinfo.paramlist);
-    Py_VISIT(self->parseinfo.keys);
-
     // Visit all values in the values array
     if (self->values && self->field_count > 0) {
         for (uint32_t i = 0; i < self->field_count; i++) {
@@ -442,8 +431,8 @@ static int MrdbCursor_traverse(
     }
 
     // Visit all PyObject values in the MrdbParamValue array
-    if (self->value && self->parseinfo.paramcount > 0) {
-        for (uint32_t i = 0; i < self->parseinfo.paramcount; i++) {
+    if (self->value && self->paramcount > 0) {
+        for (uint32_t i = 0; i < self->paramcount; i++) {
             Py_VISIT(self->value[i].value);
         }
     }
@@ -459,11 +448,6 @@ static int MrdbCursor_tpclear(MrdbCursor *self)
         Py_CLEAR(self->data);
     if (self->sequence_type)
         Py_CLEAR(self->sequence_type);
-    if (self->parseinfo.paramlist)
-        Py_CLEAR(self->parseinfo.paramlist);
-    if (self->parseinfo.keys)
-        Py_CLEAR(self->parseinfo.keys);
-
     // Clear all values in the values array
     if (self->values && self->field_count > 0) {
         for (uint32_t i = 0; i < self->field_count; i++) {
@@ -472,8 +456,8 @@ static int MrdbCursor_tpclear(MrdbCursor *self)
     }
 
     // Clear all PyObject values in the MrdbParamValue array
-    if (self->value && self->parseinfo.paramcount > 0) {
-        for (uint32_t i = 0; i < self->parseinfo.paramcount; i++) {
+    if (self->value && self->paramcount > 0) {
+        for (uint32_t i = 0; i < self->paramcount; i++) {
             Py_CLEAR(self->value[i].value);
         }
     }
@@ -523,14 +507,14 @@ PyTypeObject MrdbCursor_Type =
     .tp_weaklistoffset = 0
 };
 
-void MrdbCursor_clearparseinfo(MrdbParseInfo *parseinfo)
+static void MrdbCursor_clearstmt(MrdbCursor *self)
 {
-  if (parseinfo->statement)
-    MARIADB_FREE_MEM(parseinfo->statement);
-  Py_XDECREF(parseinfo->keys);
-  if (parseinfo->paramlist)
-    Py_XDECREF(parseinfo->paramlist);
-  memset(parseinfo, 0, sizeof(MrdbParseInfo));
+  if (self->statement)
+    MARIADB_FREE_MEM(self->statement);
+  self->statement = NULL;
+  self->statement_len = 0;
+  self->paramcount = 0;
+  self->is_text = 0;
 }
 
 /* {{{ MrdbCursor_clear_result(MrdbCursor *self)
@@ -538,7 +522,7 @@ void MrdbCursor_clearparseinfo(MrdbParseInfo *parseinfo)
 */
 PyObject *MrdbCursor_clear_result(MrdbCursor *self)
 {
-    if (!self->parseinfo.is_text &&
+    if (!self->is_text &&
         self->stmt)
     {
         /* free current result */
@@ -554,7 +538,7 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
                 mysql_stmt_free_result(self->stmt);
             }
         }
-    } else if (self->parseinfo.is_text)
+    } else if (self->is_text)
     {
         /* free current result - drain remaining rows first if it exists
          * (even if is_buffered is now True, the result might have been created as unbuffered, so we must drain it) */
@@ -608,7 +592,7 @@ static void MrdbCursor_FreeValues(MrdbCursor *self)
   uint32_t i;
   if (!self->value)
     return;
-  for (i= 0; i < self->parseinfo.paramcount; i++)
+  for (i= 0; i < self->paramcount; i++)
     if (self->value[i].free_me)
       MARIADB_FREE_MEM(self->value[i].buffer);
   MARIADB_FREE_MEM(self->value);
@@ -634,7 +618,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     /* clear pending result sets */
     MrdbCursor_clear_result(self);
 
-    if (!self->parseinfo.is_text && self->stmt) {
+    if (!self->is_text && self->stmt) {
         if (new_stmt)
         {
           mysql_stmt_close(self->stmt);
@@ -660,10 +644,9 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     self->row_count= 0;
     self->affected_rows= 0;
     MrdbCursor_FreeValues(self);
-    MrdbCursor_clearparseinfo(&self->parseinfo);
+    MrdbCursor_clearstmt(self);
     MrdbCursor_FreeResultValues(self);
     MARIADB_FREE_MEM(self->bind);
-    MARIADB_FREE_MEM(self->statement);
     MARIADB_FREE_MEM(self->value);
     MARIADB_FREE_MEM(self->params);
 }
@@ -703,7 +686,7 @@ void ma_cursor_reset(MrdbCursor *self)
     if (!self->closed)
     {
         MrdbCursor_clear_result(self);
-        if (!self->parseinfo.is_text && self->stmt)
+        if (!self->is_text && self->stmt)
         {
             /* Todo: check if all the cursor stuff is deleted (when using prepared
                statements this should be handled in mysql_stmt_close) */
@@ -714,7 +697,7 @@ void ma_cursor_reset(MrdbCursor *self)
         }
         MrdbCursor_clear(self, 0);
 
-        MrdbCursor_clearparseinfo(&self->parseinfo);
+        MrdbCursor_clearstmt(self);
     }
 }
 
@@ -775,7 +758,7 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
 
     if (self->field_count)
     {
-        if (self->parseinfo.is_text)
+        if (self->is_text)
         {
             self->result= (self->is_buffered) ? mysql_store_result(self->connection->mysql) :
                 mysql_use_result(self->connection->mysql);
@@ -813,7 +796,7 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
 
         self->affected_rows= CURSOR_AFFECTED_ROWS(self);
 
-        self->fields= (self->parseinfo.is_text) ? mysql_fetch_fields(self->result) :
+        self->fields= (self->is_text) ? mysql_fetch_fields(self->result) :
             mariadb_stmt_fetch_fields(self->stmt);
 
         if (self->result_format == RESULT_NAMED_TUPLE) {
@@ -872,7 +855,7 @@ PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
             PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for cursor values");
             return NULL;
         }
-        if (!self->parseinfo.is_text)
+        if (!self->is_text)
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
 
         self->row_count= CURSOR_NUM_ROWS(self);
@@ -1082,7 +1065,7 @@ int MrdbCursor_fetchinternal(MrdbCursor *self)
 
     self->fetched= 1;
 
-    if (!self->parseinfo.is_text)
+    if (!self->is_text)
     {
         rc= mysql_stmt_fetch(self->stmt);
         if (rc == MYSQL_NO_DATA)
@@ -1185,7 +1168,7 @@ static PyObject *MrdbCursor_seek(MrdbCursor *self, PyObject *pos)
     new_position= (uint64_t)PyLong_AsUnsignedLongLong(pos);
 
     Py_BEGIN_ALLOW_THREADS;
-    if (self->parseinfo.is_text)
+    if (self->is_text)
         mysql_data_seek(self->result, new_position);
     else
         mysql_stmt_data_seek(self->stmt, new_position);
@@ -1219,7 +1202,7 @@ MrdbCursor_nextset(MrdbCursor *self)
         return NULL;
     }
 
-    if (!self->parseinfo.is_text)
+    if (!self->is_text)
     {
         if (!self->stmt)
             Py_RETURN_NONE;
@@ -1259,7 +1242,7 @@ MrdbCursor_nextset(MrdbCursor *self)
 static PyObject *
 Mariadb_row_count(MrdbCursor *self)
 {
-    if (!self->parseinfo.statement)
+    if (!self->statement)
         return PyLong_FromLongLong(-1);
     if (self->field_count)
         return PyLong_FromLongLong(self->row_count);
@@ -1291,6 +1274,34 @@ static PyObject
     Py_RETURN_FALSE;
 }
 
+/* Stores the statement string and sets is_text=1, without sending.
+   Used by the async path which cannot merge into _sync_execute_text. */
+static PyObject *
+MrdbCursor_set_text_statement(MrdbCursor *self, PyObject *stmt)
+{
+    const char *statement;
+    Py_ssize_t statement_len = 0;
+
+    statement = PyUnicode_AsUTF8AndSize(stmt, &statement_len);
+    if (!statement)
+        return NULL;
+
+    if (!(self->statement &&
+          self->statement_len == (size_t)statement_len &&
+          memcmp(self->statement, statement, statement_len) == 0))
+    {
+        if (self->statement)
+            PyMem_RawFree(self->statement);
+        self->statement = PyMem_RawCalloc(statement_len + 1, 1);
+        if (!self->statement)
+            return PyErr_NoMemory();
+        memcpy(self->statement, statement, statement_len);
+        self->statement_len = statement_len;
+    }
+    self->is_text = 1;
+    Py_RETURN_NONE;
+}
+
 /* Lightweight statement setter for binary protocol.
    Stores the statement string and param count without parsing. */
 static PyObject *
@@ -1308,10 +1319,10 @@ MrdbCursor_set_statement(MrdbCursor *self, PyObject *args)
     if (!statement)
         return NULL;
 
-    if (self->parseinfo.statement)
+    if (self->statement)
     {
-        uint32_t old_paramcount = self->parseinfo.paramcount;
-        MrdbCursor_clearparseinfo(&self->parseinfo);
+        uint32_t old_paramcount = self->paramcount;
+        MrdbCursor_clearstmt(self);
         if (paramcount != old_paramcount)
         {
             MARIADB_FREE_MEM(self->params);
@@ -1321,93 +1332,13 @@ MrdbCursor_set_statement(MrdbCursor *self, PyObject *args)
         }
     }
 
-    self->parseinfo.statement = PyMem_RawCalloc(statement_len + 1, 1);
-    if (!self->parseinfo.statement)
+    self->statement = PyMem_RawCalloc(statement_len + 1, 1);
+    if (!self->statement)
         return PyErr_NoMemory();
-    memcpy(self->parseinfo.statement, statement, statement_len);
-    self->parseinfo.statement_len = statement_len;
-    self->parseinfo.paramcount = paramcount;
-    self->parseinfo.is_text = 0;
-    self->parseinfo.paramstyle = QMARK;
-    self->parseinfo.command = SQL_NONE;
-    self->parseinfo.paramlist = NULL;
-    self->parseinfo.keys = NULL;
-
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-MrdbCursor_parse(MrdbCursor *self, PyObject *args)
-{
-    PyObject *stmt;
-    int skip_command= 0;
-    const char *statement= NULL;
-    Py_ssize_t statement_len= 0;
-    MrdbParser *parser= NULL;
-    char errmsg[128];
-    uint32_t old_paramcount= 0;
-
-    if (!PyArg_ParseTuple(args, "O|p", &stmt, &skip_command))
-        return NULL;
-
-    if (self->parseinfo.statement)
-    {
-      old_paramcount= self->parseinfo.paramcount;
-      MrdbCursor_clearparseinfo(&self->parseinfo);
-    }
- 
-    statement = (char *)PyUnicode_AsUTF8AndSize(stmt, (Py_ssize_t *)&statement_len);
-
-    if (!(parser= MrdbParser_init(self->connection->mysql, statement, statement_len)))
-    {
-        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
-                "Can't initialize parser.");
-        return NULL;
-    }
-
-    if (MrdbParser_parse(parser, 0, (uint8_t)skip_command, errmsg, 128))
-    {
-        MrdbParser_end(parser);
-        PyErr_SetString(Mariadb_ProgrammingError, errmsg);
-        return NULL;
-    }
-
-    /* cleanup and save some parser stuff */
-    if (parser->param_count && parser->param_count != old_paramcount)
-    {
-      MARIADB_FREE_MEM(self->params);
-      MrdbCursor_FreeValues(self);
-      MrdbCursor_FreeResultValues(self);
-      MARIADB_FREE_MEM(self->bind);
-    }
-    self->parseinfo.paramcount= parser->param_count;
-    self->parseinfo.paramstyle= parser->paramstyle;
-    if (self->parseinfo.statement)
-        PyMem_RawFree(self->parseinfo.statement);
-    self->parseinfo.statement=  PyMem_RawCalloc(parser->statement.length + 1, 1);
-    memcpy(self->parseinfo.statement, parser->statement.str, parser->statement.length);
-    self->parseinfo.statement_len= parser->statement.length;
-    self->parseinfo.paramlist= parser->param_list;
-    parser->param_list= NULL;
-    /* When skip_command is set, we already know it's text mode */
-    if (skip_command)
-        self->parseinfo.is_text= 1;
-    else
-        self->parseinfo.is_text= (parser->command == SQL_NONE || parser->command == SQL_OTHER);
-    self->parseinfo.command= parser->command;
-
-    if (parser->paramstyle == PYFORMAT && parser->keys)
-    {
-        PyObject *tmp= PyTuple_New(parser->param_count);
-        for (uint32_t i= 0; i < parser->param_count; i++)
-        {
-            PyObject *key;
-            key= PyUnicode_FromString(parser->keys[i].str);
-            PyTuple_SetItem(tmp, i, key);
-        }
-        self->parseinfo.keys= tmp;
-    }
-    MrdbParser_end(parser);
+    memcpy(self->statement, statement, statement_len);
+    self->statement_len = statement_len;
+    self->paramcount = paramcount;
+    self->is_text = 0;
 
     Py_RETURN_NONE;
 }
@@ -1435,7 +1366,7 @@ MrdbCursor_execute_binary(MrdbCursor *self)
     self->array_size= 0;
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &self->array_size);
 
-    if (self->data && self->parseinfo.paramcount)
+    if (self->data && self->paramcount)
     {
         if (mariadb_check_execute_parameters(self, self->data))
             goto error;
@@ -1448,17 +1379,17 @@ MrdbCursor_execute_binary(MrdbCursor *self)
     if (self->reprepare)
     {
         mysql_stmt_attr_set(self->stmt, STMT_ATTR_CURSOR_TYPE, &self->cursor_type);
-        mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->parseinfo.paramcount);
+        mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->paramcount);
         mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
     }
 
-    if (self->parseinfo.paramcount)
+    if (self->paramcount)
         mysql_stmt_bind_param(self->stmt, self->params);
 
     if (!(buf= self->connection->mysql->methods->db_execute_generate_request(self->stmt, &buflen, 1)))
         goto error;
 
-    if ((rc= Mrdb_execute_direct(self, self->parseinfo.statement, self->parseinfo.statement_len)))
+    if ((rc= Mrdb_execute_direct(self, self->statement, self->statement_len)))
     {
         mariadb_throw_exception(self->stmt, NULL, 1, NULL);
         goto error;
@@ -1471,32 +1402,86 @@ error:
     return NULL;
 }
 
+/* _sync_execute_text(sql_to_send [, original_statement])
+   Sends the query AND stores the statement for cursor.statement + sets is_text=1.
+   - sql_to_send: str or bytes — the (possibly substituted) SQL to send over the wire.
+   - original_statement: optional str — the original SQL template for cursor.statement.
+     If omitted (no params case), sql_to_send is used for both. */
 static PyObject *
-MrdbCursor_execute_text(MrdbCursor *self, PyObject *stmt)
+MrdbCursor_execute_text(MrdbCursor *self, PyObject *const *args, Py_ssize_t nargs)
 {
     int rc;
     MYSQL *db;
-    char *statement;
-    size_t statement_len= 0;
+    char *send_buf;
+    Py_ssize_t send_len = 0;
+
+    if (nargs < 1 || nargs > 2)
+    {
+        PyErr_SetString(PyExc_TypeError,
+                        "_sync_execute_text requires 1 or 2 arguments");
+        return NULL;
+    }
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
+    PyObject *stmt = args[0];
     if (Py_TYPE(stmt) == &PyUnicode_Type)
     {
-        statement = (char *)PyUnicode_AsUTF8AndSize(stmt, (Py_ssize_t *)&statement_len);
+        send_buf = (char *)PyUnicode_AsUTF8AndSize(stmt, &send_len);
     } else if (Py_TYPE(stmt) == &PyBytes_Type)
     {
-        PyBytes_AsStringAndSize(stmt, &statement, (Py_ssize_t *)&statement_len);
+        PyBytes_AsStringAndSize(stmt, &send_buf, &send_len);
     }
     else {
-        PyErr_SetString(PyExc_TypeError, "Parameter must be a string or bytes");
+        PyErr_SetString(PyExc_TypeError,
+                        "First argument must be a string or bytes");
         return NULL;
     }
-    db= self->connection->mysql;
+
+    /* Store original statement for cursor.statement property.
+       If a second arg is given use it; otherwise derive from the first. */
+    {
+        const char *store_buf;
+        Py_ssize_t store_len;
+
+        if (nargs == 2)
+        {
+            store_buf = PyUnicode_AsUTF8AndSize(args[1], &store_len);
+            if (!store_buf)
+                return NULL;
+        } else if (Py_TYPE(stmt) == &PyUnicode_Type)
+        {
+            store_buf = send_buf;
+            store_len = send_len;
+        } else {
+            store_buf = NULL;
+            store_len = 0;
+        }
+
+        if (store_buf)
+        {
+            /* Fast path: same statement already stored — skip alloc */
+            if (!(self->statement &&
+                  self->statement_len == (size_t)store_len &&
+                  memcmp(self->statement, store_buf, store_len) == 0))
+            {
+                if (self->statement)
+                    PyMem_RawFree(self->statement);
+                self->statement = PyMem_RawCalloc(store_len + 1, 1);
+                if (!self->statement)
+                    return PyErr_NoMemory();
+                memcpy(self->statement, store_buf, store_len);
+                self->statement_len = store_len;
+            }
+        }
+        self->is_text = 1;
+    }
+
+    db = self->connection->mysql;
     ma_connection_consume_active_result(self->connection, self);
 
     Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_send_query(db, statement, (long)statement_len);
+    rc = mysql_send_query(db, send_buf, (long)send_len);
     Py_END_ALLOW_THREADS;
 
     if (rc)
@@ -1517,7 +1502,7 @@ MrdbCursor_readresponse(MrdbCursor *self)
 
     db= self->connection->mysql;
 
-    if (self->parseinfo.is_text)
+    if (self->is_text)
     {
         Py_BEGIN_ALLOW_THREADS;
         rc= db->methods->db_read_query_result(db);
@@ -1570,7 +1555,7 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
        we need to call a fallback routine */
     if (self->reprepare)
     {
-      mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->parseinfo.paramcount);
+      mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->paramcount);
       mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
       mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, mariadb_param_update);
     }
@@ -1584,7 +1569,7 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
         goto error;
     }
 
-    if ((rc= Mrdb_execute_direct(self, self->parseinfo.statement, self->parseinfo.statement_len)))
+    if ((rc= Mrdb_execute_direct(self, self->statement, self->statement_len)))
     {
          mariadb_throw_exception(self->stmt, NULL, 1, NULL);
          goto error;
@@ -1721,8 +1706,7 @@ MrdbCursor_set_field_count_from_connection(MrdbCursor *self, PyObject *args)
 {
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
-    /* Set parseinfo.is_text = 1 for text protocol queries */
-    self->parseinfo.is_text = 1;
+    self->is_text = 1;
 
     /* Set field_count from connection
        Note: For stored procedures, mysql_field_count() returns 0 because it returns
@@ -1744,7 +1728,7 @@ MrdbCursor_readresponse_start(MrdbCursor *self, PyObject *args)
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
-    if (!self->parseinfo.is_text) {
+    if (!self->is_text) {
         /* Only for text protocol */
         Py_RETURN_NONE;
     }
@@ -1783,7 +1767,7 @@ MrdbCursor_readresponse_cont(MrdbCursor *self, PyObject *args)
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
-    if (!self->parseinfo.is_text) {
+    if (!self->is_text) {
         /* Only for text protocol */
         Py_RETURN_NONE;
     }
@@ -1877,7 +1861,7 @@ MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args)
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &self->array_size);
 
     /* Check and load parameters if present */
-    if (self->data && self->parseinfo.paramcount)
+    if (self->data && self->paramcount)
     {
         if (mariadb_check_execute_parameters(self, self->data))
             return NULL;
@@ -1890,12 +1874,12 @@ MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args)
     if (self->reprepare)
     {
         mysql_stmt_attr_set(self->stmt, STMT_ATTR_CURSOR_TYPE, &self->cursor_type);
-        mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->parseinfo.paramcount);
+        mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->paramcount);
         mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
     }
 
     /* Bind parameters */
-    if (self->parseinfo.paramcount)
+    if (self->paramcount)
         mysql_stmt_bind_param(self->stmt, self->params);
 
     /* Clear pending result sets */
@@ -1912,8 +1896,8 @@ MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args)
      */
     if (self->reprepare)
     {
-        rc = mysql_stmt_prepare(self->stmt, self->parseinfo.statement,
-                                (unsigned long)self->parseinfo.statement_len);
+        rc = mysql_stmt_prepare(self->stmt, self->statement,
+                                (unsigned long)self->statement_len);
         if (rc)
         {
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
@@ -2174,6 +2158,107 @@ MrdbCursor_stmt_fetch_cont(MrdbCursor *self, PyObject *args)
     return PyLong_FromLong(status);
 }
 
+/* Capsule destructor — called only if the capsule is GC'd without being attached */
+static void
+MrdbCursor_stmt_capsule_destructor(PyObject *capsule)
+{
+    MYSQL_STMT *stmt = (MYSQL_STMT *)PyCapsule_GetPointer(capsule, "MYSQL_STMT");
+    if (stmt)
+        mysql_stmt_close(stmt);
+}
+
+/* _detach_stmt(): drain results, wrap self->stmt in a PyCapsule, set stmt=NULL.
+ * Does NOT call mysql_stmt_reset() to avoid a round-trip to the server. */
+static PyObject *
+MrdbCursor_detach_stmt(MrdbCursor *self)
+{
+    PyObject *capsule;
+
+    if (!self->stmt)
+        Py_RETURN_NONE;
+
+    /* Drain any pending result sets to prevent "Commands out of sync" */
+    Py_BEGIN_ALLOW_THREADS;
+    if (mysql_stmt_field_count(self->stmt))
+        mysql_stmt_free_result(self->stmt);
+    while (mysql_stmt_next_result(self->stmt) == 0)
+    {
+        if (mysql_stmt_field_count(self->stmt))
+            mysql_stmt_free_result(self->stmt);
+    }
+    Py_END_ALLOW_THREADS;
+
+    capsule = PyCapsule_New((void *)self->stmt, "MYSQL_STMT",
+                            MrdbCursor_stmt_capsule_destructor);
+    if (!capsule)
+        return NULL;
+
+    self->stmt = NULL;
+    return capsule;
+}
+
+/* _attach_stmt(capsule): unwrap MYSQL_STMT* from capsule, assign to self->stmt.
+ * Always updates STMT_ATTR_CB_USER_DATA so the callback pointer is never stale. */
+static PyObject *
+MrdbCursor_attach_stmt(MrdbCursor *self, PyObject *capsule)
+{
+    MYSQL_STMT *stmt;
+
+    if (!PyCapsule_CheckExact(capsule)) {
+        PyErr_SetString(PyExc_TypeError, "_attach_stmt: expected a PyCapsule");
+        return NULL;
+    }
+
+    stmt = (MYSQL_STMT *)PyCapsule_GetPointer(capsule, "MYSQL_STMT");
+    if (!stmt)
+        return NULL;
+
+    /* Invalidate the destructor so the capsule no longer owns the stmt */
+    if (PyCapsule_SetDestructor(capsule, NULL) < 0)
+        return NULL;
+
+    /* Close any existing stmt on this cursor */
+    if (self->stmt) {
+        Py_BEGIN_ALLOW_THREADS;
+        mysql_stmt_close(self->stmt);
+        Py_END_ALLOW_THREADS;
+    }
+
+    self->stmt = stmt;
+
+    /* Always refresh CB_USER_DATA to prevent stale pointer segfault */
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
+
+    Py_RETURN_NONE;
+}
+
+/* _close_stmt_no_close(): drain pending results, then free the local
+ * MYSQL_STMT* without sending COM_STMT_CLOSE to the server.
+ * Achieved by zeroing stmt_id before mysql_stmt_close(). */
+static PyObject *
+MrdbCursor_close_stmt_no_close(MrdbCursor *self)
+{
+    if (!self->stmt)
+        Py_RETURN_NONE;
+
+    Py_BEGIN_ALLOW_THREADS;
+    /* Drain any pending result sets */
+    if (mysql_stmt_field_count(self->stmt))
+        mysql_stmt_free_result(self->stmt);
+    while (mysql_stmt_next_result(self->stmt) == 0)
+    {
+        if (mysql_stmt_field_count(self->stmt))
+            mysql_stmt_free_result(self->stmt);
+    }
+    /* Zero stmt_id so net_stmt_close() skips COM_STMT_CLOSE */
+    self->stmt->stmt_id = 0;
+    mysql_stmt_close(self->stmt);
+    Py_END_ALLOW_THREADS;
+
+    self->stmt = NULL;
+    Py_RETURN_NONE;
+}
+
 /* Method definitions for async cursor methods */
 PyMethodDef MrdbCursor_AsyncMethods[] = {
     {"_set_field_count_from_connection", (PyCFunction)MrdbCursor_set_field_count_from_connection,
@@ -2203,5 +2288,14 @@ PyMethodDef MrdbCursor_AsyncMethods[] = {
     {"stmt_fetch_cont", (PyCFunction)MrdbCursor_stmt_fetch_cont,
         METH_VARARGS,
         "Continue non-blocking prepared statement fetch"},
+    {"_detach_stmt", (PyCFunction)MrdbCursor_detach_stmt,
+        METH_NOARGS,
+        "Detach MYSQL_STMT into a PyCapsule for cache storage"},
+    {"_attach_stmt", (PyCFunction)MrdbCursor_attach_stmt,
+        METH_O,
+        "Attach a cached MYSQL_STMT PyCapsule to this cursor"},
+    {"_close_stmt_no_close", (PyCFunction)MrdbCursor_close_stmt_no_close,
+        METH_NOARGS,
+        "Free local MYSQL_STMT without sending COM_STMT_CLOSE"},
     {NULL, NULL, 0, NULL}  /* Sentinel */
 };

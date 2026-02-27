@@ -296,17 +296,6 @@ typedef struct {
     MYSQL_TIME tm;
 } MrdbParamValue;
 
-typedef struct {
-    char *statement;
-    Py_ssize_t statement_len;
-    enum enum_paramstyle paramstyle;
-    enum enum_binary_command command;
-    uint32_t paramcount;
-    uint8_t is_text;
-    PyObject *paramlist;
-    PyObject *keys;
-} MrdbParseInfo;
-
 /* PEP-249: Cursor object */
 typedef struct {
     PyObject_HEAD
@@ -322,11 +311,12 @@ typedef struct {
     MYSQL_BIND *bind;
     MYSQL_FIELD *fields;
     char *statement;
-    size_t statement_len;
+    Py_ssize_t statement_len;
+    uint32_t paramcount;
+    uint8_t is_text;
     PyObject **values;
     PyStructSequence_Field *sequence_fields;
     PyTypeObject *sequence_type;
-    MrdbParseInfo parseinfo;
     unsigned long prefetch_rows;
     unsigned long cursor_type;
     int64_t affected_rows;
@@ -335,7 +325,6 @@ typedef struct {
     uint64_t lastrow_id;
     uint64_t row_number;
     enum enum_result_format result_format;
-    uint8_t is_prepared;
     char is_buffered;
     uint8_t fetched;
     uint8_t closed;

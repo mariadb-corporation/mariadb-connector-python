@@ -1226,23 +1226,6 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(row[0], e)
             del cursor
 
-    async def test_conpy27(self):
-        if is_mysql():
-            self.skipTest("Skip (MySQL)")
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
-            cursor = conn.cursor(prepared=True, buffered=True)
-            await cursor.execute("SELECT ?", (1,))
-            row = await cursor.fetchone()
-            self.assertEqual(row[0], 1)
-            
-            if is_async_native():
-                # would have thrown Parameter count mismatch is not passing other
-                await cursor.execute("SELECT ?, ?, ?", ('foo', 'bar', 'baz'))
-            else:
-                await cursor.execute("SELECT ?, ?, ?", ('foo',))
-            row = await cursor.fetchone()
-            self.assertEqual(row[0], 'foo')
-            del cursor
 
     async def test_multiple_cursor(self):
         cursor = self.connection.cursor()
@@ -1318,15 +1301,14 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(row[0], "foobar")
             cursor.nextset()
             del cursor
-            cursor = con.cursor()
-            # not set with native, since will result in OUT or INOUT argument variable missing
-            if not is_async_native():
-                await cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
-                self.assertEqual(cursor.sp_outparams, True)
-                row = await cursor.fetchone()
-                self.assertEqual(row[0], "foobar")
-                await cursor.execute("DROP PROCEDURE IF EXISTS p2")
-                del cursor
+
+            cursor = con.cursor(binary=True)
+            await cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
+            self.assertEqual(cursor.sp_outparams, True)
+            row = await cursor.fetchone()
+            self.assertEqual(row[0], "foobar")
+            await cursor.execute("DROP PROCEDURE IF EXISTS p2")
+            del cursor
 
     async def test_sp3(self):
         async with await mariadb.AsyncConnection.connect(**conf()) as con:

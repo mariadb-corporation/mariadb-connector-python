@@ -201,7 +201,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             raise self._exception_factory.create_exception(
                 f"Execute failed: {e}",
                 errno=2013,
-                sql_state='HY000'
+                sql_state='HY000',
+                sql= sql
             )
         
     async def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None) -> None:  # type: ignore[override]
@@ -302,7 +303,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             raise self._exception_factory.create_exception(
                 f"ExecuteMany failed: {e}",
                 errno=2013,
-                sql_state='HY000'
+                sql_state='HY000',
+                sql= sql
             )
         
     
