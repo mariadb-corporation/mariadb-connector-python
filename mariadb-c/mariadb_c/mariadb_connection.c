@@ -328,7 +328,10 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
       PyDict_SetItem(dict, dict_key, dict_val);
       Py_DECREF(dict_key);
       Py_DECREF(dict_val);
-      PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      PyObject *res= PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      Py_XDECREF(res);
+      Py_DECREF(dict);
+      dict= NULL;
     }
   }
   if (type == SESSION_TRACK_TYPE)
@@ -356,8 +359,12 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
       dict= PyDict_New();
       PyDict_SetItem(dict, dict_key, dict_val);
       Py_DECREF(dict_key);
+      dict_key= NULL;
       Py_DECREF(dict_val);
-      PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      PyObject *res= PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      Py_XDECREF(res);
+      Py_DECREF(dict);
+      dict= NULL;
     }
 
     if (track_type == SESSION_TRACK_SYSTEM_VARIABLES)
@@ -387,7 +394,10 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
         PyDict_SetItem(dict, dict_key, dict_val);
         Py_DECREF(dict_key);
         Py_DECREF(dict_val);
-        PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+        PyObject *res= PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+        Py_XDECREF(res);
+        Py_DECREF(dict);
+        dict= NULL;
       }
     }
   }

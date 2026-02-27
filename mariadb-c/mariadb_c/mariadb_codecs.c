@@ -61,7 +61,9 @@ static char *ma_byteswap(char *buf, size_t itemsize, size_t len)
 long MrdbIndicator_AsLong(PyObject *column)
 {
   PyObject *pyLong= PyObject_GetAttrString(column, "indicator");
-  return PyLong_AsLong(pyLong);
+  long val= PyLong_AsLong(pyLong);
+  Py_XDECREF(pyLong);
+  return val;
 }
 
 int codecs_datetime_init(void)
@@ -474,16 +476,21 @@ static PyObject *ma_convert_value(MrdbCursor *self,
     PyObject *func;
     PyObject *new_value= NULL;
 
-    if (!self->connection->converter)
+    if (!self->connection->converter) {
+        Py_XDECREF(key);
         return NULL;
+    }
 
     if ((func= PyDict_GetItem(self->connection->converter, key)) &&
             PyCallable_Check(func))
     {
         PyObject *arglist= PyTuple_New(1);
+        Py_INCREF(value);
         PyTuple_SetItem(arglist, 0, value);
         new_value= PyObject_CallObject(func, arglist);
+        Py_DECREF(arglist);
     }
+    Py_XDECREF(key);
     return new_value;
 }
 
@@ -654,8 +661,10 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         else
           type= self->fields[column].type;
 
-        if ((val= ma_convert_value(self, type, self->values[column])))
+        if ((val= ma_convert_value(self, type, self->values[column]))) {
+            Py_XDECREF(self->values[column]);
             self->values[column]= val;
+        }
     }
 }
 
@@ -932,8 +941,10 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         else
           type= self->fields[column].type;
 
-        if ((val= ma_convert_value(self, type, self->values[column])))
+        if ((val= ma_convert_value(self, type, self->values[column]))) {
+            Py_XDECREF(self->values[column]);
             self->values[column]= val;
+        }
     }
 
 end:
@@ -1191,7 +1202,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
         if (mariadb_get_parameter(self, 1, i, column_nr, &paramvalue))
             return 1;
         memset(&pinfo, 0, sizeof(MrdbParamInfo));
-        if ((rc= mariadb_get_column_info(paramvalue.value, &pinfo) && !paramvalue.indicator))
+        if ((rc= mariadb_get_column_info(paramvalue.value, &pinfo)) && !paramvalue.indicator)
         {
             if (rc == 1)
             {
@@ -1519,8 +1530,10 @@ mariadb_param_to_bind(MrdbCursor *self,
                if (PyObject_GetBuffer(value->value, &v, PyBUF_CONTIG_RO) < 0)
                  goto end;
 
-               if (!v.len)
+               if (!v.len) {
+                 PyBuffer_Release(&v);
                  goto end;
+               }
 
                bind->buffer_length= (unsigned long)v.len;
 #if PY_BIG_ENDIAN == 0

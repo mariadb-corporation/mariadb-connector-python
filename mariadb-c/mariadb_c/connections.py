@@ -161,7 +161,6 @@ class Connection(CConnection, SyncConnectionCommon):
         self._xid = None
         self._pooled_connection = None
         self._active_streaming_result = None
-        self._active_async_cursor = None
 
         autocommit = kwargs.pop("autocommit", False)
         kwargs.pop("reconnect", None)

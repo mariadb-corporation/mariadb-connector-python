@@ -407,14 +407,15 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
 
     @database.setter
     def database(self, schema):
-        """Set default database."""
-        self._check_closed()
-        # Note: For async, use select_db() method instead
-        # This setter uses synchronous approach for compatibility
-        cursor = self.cursor()
-        import asyncio
-        asyncio.create_task(cursor.execute("USE %s" % str(schema)))
-        asyncio.create_task(cursor.close())
+        """Set default database.
+
+        Property setters cannot be async, so this raises an error.
+        Use ``await conn.select_db(schema)`` instead.
+        """
+        raise ProgrammingError(
+            "Cannot set database synchronously on an async connection. "
+            "Use 'await conn.select_db(schema)' instead."
+        )
 
     @property
     def user(self):

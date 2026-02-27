@@ -141,15 +141,30 @@ void mariadb_throw_exception(void *handle,
   {
     PyErr_SetString(PyExc_RuntimeError,
                     "Failed to create exception");
+    Py_XDECREF(ErrorMsg);
+    Py_XDECREF(ErrorNo);
+    Py_XDECREF(SqlState);
     return;
   }
 
-  PyObject_SetAttr(Exception, PyUnicode_FromString("sqlstate"), SqlState);
-  PyObject_SetAttr(Exception, PyUnicode_FromString("errno"), ErrorNo);
-  PyObject_SetAttr(Exception, PyUnicode_FromString("errmsg"), ErrorMsg);
-  /* For MySQL Connector/Python compatibility */
-  PyObject_SetAttr(Exception, PyUnicode_FromString("msg"), ErrorMsg);
+  {
+    PyObject *attr;
+    attr= PyUnicode_FromString("sqlstate");
+    PyObject_SetAttr(Exception, attr, SqlState);
+    Py_XDECREF(attr);
+    attr= PyUnicode_FromString("errno");
+    PyObject_SetAttr(Exception, attr, ErrorNo);
+    Py_XDECREF(attr);
+    attr= PyUnicode_FromString("errmsg");
+    PyObject_SetAttr(Exception, attr, ErrorMsg);
+    Py_XDECREF(attr);
+    /* For MySQL Connector/Python compatibility */
+    attr= PyUnicode_FromString("msg");
+    PyObject_SetAttr(Exception, attr, ErrorMsg);
+    Py_XDECREF(attr);
+  }
   PyErr_SetObject(exception_type, Exception);
+  Py_XDECREF(Exception);
   Py_XDECREF(ErrorMsg);
   Py_XDECREF(ErrorNo);
   Py_XDECREF(SqlState);

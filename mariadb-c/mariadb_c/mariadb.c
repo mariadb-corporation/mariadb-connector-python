@@ -122,8 +122,16 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     }
 
     /* Import Decimal support (CONPY-49) */
-    if (!(decimal_module= PyImport_ImportModule("decimal")) ||
-        !(decimal_type= PyObject_GetAttr(decimal_module, PyUnicode_FromString("Decimal"))))
+    if (!(decimal_module= PyImport_ImportModule("decimal")))
+    {
+        goto error;
+    }
+    {
+        PyObject *dec_name= PyUnicode_FromString("Decimal");
+        decimal_type= PyObject_GetAttr(decimal_module, dec_name);
+        Py_XDECREF(dec_name);
+    }
+    if (!decimal_type)
     {
         goto error;
     }

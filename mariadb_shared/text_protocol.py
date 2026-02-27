@@ -211,7 +211,7 @@ def get_converter(val: Any) -> Any:
             _type_cache[t] = conv_func
             return conv_func
 
-    _type_cache[t] = None  # type: ignore[assignment]
+    _type_cache[t] = None
     return None
 
 
@@ -325,14 +325,14 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
                 else:
                     converted[i] = str(param).encode('utf8')
             # Interleave SQL parts and converted params (pre-allocated)
-            result_list: list[Any] = [None] * (2 * n_placeholders + 1)
+            interleaved: list[Any] = [None] * (2 * n_placeholders + 1)
             j = 0
             for i in range(n_placeholders):
-                result_list[j] = parts[i]
-                result_list[j + 1] = converted[i]
+                interleaved[j] = parts[i]
+                interleaved[j + 1] = converted[i]
                 j += 2
-            result_list[j] = parts[n_placeholders]
-            return result_list
+            interleaved[j] = parts[n_placeholders]
+            return interleaved
 
     # Localize for speed
     _converter = get_converter

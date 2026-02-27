@@ -436,12 +436,11 @@ static int MrdbCursor_traverse(
 
 static int MrdbCursor_tpclear(MrdbCursor *self)
 {
-    if (self->connection)
-        Py_CLEAR(self->connection);
-    if (self->data)
-        Py_CLEAR(self->data);
-    if (self->sequence_type)
-        Py_CLEAR(self->sequence_type);
+    Py_CLEAR(self->connection);
+    Py_CLEAR(self->data);
+    Py_CLEAR(self->sequence_type);
+    MARIADB_FREE_MEM(self->sequence_fields);
+    self->sequence_fields= NULL;
     // Clear all values in the values array
     if (self->values && self->field_count > 0) {
         for (uint32_t i = 0; i < self->field_count; i++) {
@@ -632,10 +631,8 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     }
     self->fetched= 0;
 
-    if (self->sequence_fields)
-    {
-        MARIADB_FREE_MEM(self->sequence_fields);
-    }
+    Py_CLEAR(self->sequence_type);
+    MARIADB_FREE_MEM(self->sequence_fields);
     self->fields= NULL;
     self->row_count= 0;
     self->affected_rows= 0;
@@ -643,7 +640,6 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     MrdbCursor_clearstmt(self);
     MrdbCursor_FreeResultValues(self);
     MARIADB_FREE_MEM(self->bind);
-    MARIADB_FREE_MEM(self->value);
     MARIADB_FREE_MEM(self->params);
 }
 /* }}} */
@@ -742,11 +738,25 @@ PyObject * MrdbCursor_close(MrdbCursor *self)
 }
 /* }}} */
 
-/* {{{ MrdbCursor_Finalize */
+/* {{{ MrdbCursor_Finalize
+   Called by the cyclic GC before tp_clear/tp_dealloc.
+   We must NOT send any protocol packets here (COM_STMT_CLOSE,
+   COM_STMT_FETCH, …) because the connection may have an in-flight
+   query whose response has not been read yet.  Sending a packet in
+   that state triggers CR_COMMANDS_OUT_OF_SYNC on the MYSQL handle
+   and corrupts the connection ("Lost connection", errno 2013).
+
+   Instead we just orphan the MYSQL_STMT*: it stays on the
+   connection's internal stmt_list and will be properly freed when
+   mysql_close() runs.  MrdbCursor_dealloc (called later) will see
+   self->closed==1 and skip ma_cursor_reset(). */
 static void MrdbCursor_finalize(MrdbCursor *self)
 {
-    if (self->connection && self->connection->mysql)
-        ma_cursor_close(self);
+    if (!self->closed && self->connection && self->connection->mysql)
+    {
+        self->stmt = NULL;
+        self->closed = 1;
+    }
 }
 /* }}} */
 
@@ -833,7 +843,9 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
 
 PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
 {
+    Py_CLEAR(self->sequence_type);
     MARIADB_FREE_MEM(self->sequence_fields);
+    self->sequence_fields= NULL;
     MrdbCursor_FreeResultValues(self);
 
     if (self->result)
@@ -871,15 +883,15 @@ static int Mrdb_execute_direct(MrdbCursor *self,
                                size_t statement_len)
 {
    int rc;
+   long ext_caps;
+
+   /* clear pending result sets — must run with GIL held (calls Python C API) */
+   MrdbCursor_clear_result(self);
 
    Py_BEGIN_ALLOW_THREADS;
-   long ext_caps;
 
    mariadb_get_infov(self->connection->mysql,
                       MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES, &ext_caps);
-   
-   /* clear pending result sets */
-   MrdbCursor_clear_result(self);
 
    /* if stmt is already prepared */
    if (!self->reprepare)
@@ -954,7 +966,12 @@ static PyObject *MrdbCursor_metadata(MrdbCursor *self)
 
     for (i=0; i < 13; i++)
     {
-        if (PyDict_SetItem(dict, PyUnicode_FromString(keys[i]), tuple[i]))
+        PyObject *key= PyUnicode_FromString(keys[i]);
+        if (!key)
+            goto error;
+        int ret= PyDict_SetItem(dict, key, tuple[i]);
+        Py_DECREF(key);
+        if (ret)
             goto error;
         Py_DECREF(tuple[i]);
         tuple[i]= NULL;
@@ -1958,11 +1975,6 @@ MrdbCursor_fetch_row_start(MrdbCursor *self)
     MYSQL_ROW row;
     int status;
     unsigned int i;
-
-    if (!self) {
-        PyErr_SetString(PyExc_RuntimeError, "Cursor object is NULL");
-        return NULL;
-    }
 
     if (!self->connection) {
         PyErr_SetString(PyExc_RuntimeError, "Cursor connection is NULL");
