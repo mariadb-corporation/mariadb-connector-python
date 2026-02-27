@@ -165,10 +165,18 @@ class TestDriverParity(unittest.TestCase):
                 _assert_results_equal(self, pure, c, f"select_time binary={binary}")
 
     def test_select_blob(self) -> None:
+        blob_a = b"\x00\xff\xde\xad"
+        blob_b = b"hello"
+        for conn in (self.pure_conn, self.c_conn):
+            cur = conn.cursor()
+            cur.execute("CREATE TEMPORARY TABLE _t_blob (a BLOB, b BLOB)")
+            cur.execute("INSERT INTO _t_blob VALUES (?, ?)", (blob_a, blob_b))
+            cur.close()
         for binary in (False, True):
             with self.subTest(binary=binary):
-                pure, c = self._run("SELECT ?, ?", (b"\x00\xff\xde\xad", b"hello"), binary=binary)
+                pure, c = self._run("SELECT a, b FROM _t_blob", binary=binary)
                 _assert_results_equal(self, pure, c, f"select_blob binary={binary}")
+                self.assertEqual(pure, [(blob_a, blob_b)])
 
     # ------------------------------------------------------------------
     # Multi-row queries

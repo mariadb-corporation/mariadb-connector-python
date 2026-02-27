@@ -583,7 +583,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             {
                 self->fields[column].max_length= length[column];
             }
-            if (self->fields[column].charsetnr== CHARSET_BINARY)
+            if (self->fields[column].charsetnr == CHARSET_BINARY)
             {
                 self->values[column]=
                        PyBytes_FromStringAndSize((const char *)data,
@@ -622,7 +622,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
         case MYSQL_TYPE_ENUM:
         {
             unsigned long len= 0;
-            if ( self->fields[column].charsetnr == CHARSET_BINARY)
+            if (self->fields[column].charsetnr == CHARSET_BINARY)
             {
                 self->values[column]=
                         PyBytes_FromStringAndSize((const char *)data,
@@ -899,7 +899,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
             unsigned long utf8len;
             length= mysql_net_field_length(row);
 
-            if (self->fields[column].charsetnr== CHARSET_BINARY)
+            if (self->fields[column].charsetnr == CHARSET_BINARY)
             {
                 self->values[column]=
                         PyBytes_FromStringAndSize((const char *)*row,
