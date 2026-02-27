@@ -159,16 +159,14 @@ class Connection(CConnection, SyncConnectionCommon):
         self.__last_used = 0
         self.tpc_state = TPC_STATE.NONE
         self._xid = None
-        self._pooled_connection = None  # PooledConnection wrapper for pooled connections
-        self._active_streaming_result = None  # Python-level tracking for unbuffered cursors
+        self._pooled_connection = None
+        self._active_streaming_result = None
         self._active_async_cursor = None
 
         autocommit = kwargs.pop("autocommit", False)
         kwargs.pop("reconnect", None)
         converter = kwargs.pop("converter", None)
-        self._binary = bool(kwargs.pop("binary", False))
-        # Remove debug parameter that C extension doesn't support
-        kwargs.pop("debug", None)
+        self._binary = bool(kwargs.pop("binary", False))        
         cache_prep_stmts: bool = bool(kwargs.pop("cache_prep_stmts", True))
         prep_stmt_cache_size: int = int(kwargs.pop("prep_stmt_cache_size", 100))
 

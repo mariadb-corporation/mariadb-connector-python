@@ -350,28 +350,6 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         self._cache_entry = entry
         return True
 
-    async def close(self) -> None:
-        """
-        Closes the cursor.
-
-        If the cursor has pending or unread results, .close() will cancel them
-        so that further operations using the same connection can be executed.
-
-        After calling .close() the cursor object becomes unusable. Any operation
-        with the cursor will raise a ProgrammingError exception.
-        """
-        if self._closed:
-            return
-
-        if not self._text:
-            self._save_stmt_to_cache(self.statement)
-
-        if self._data:
-            del self._data
-        super().close()
-
-        self._closed = True
-
     async def _execute_binary_async(self):
         """Execute binary query using async prepared statement protocol
         
@@ -554,7 +532,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
                 self.connection._active_async_cursor = None
             return result
 
-    async def close(self):
+    async def close(self) -> None:
         """
         Closes the cursor.
 
@@ -563,8 +541,13 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
 
         The cursor will be unusable from this point forward; an Error
         (or subclass) exception will be raised if any operation is attempted
-        with the cursor."
+        with the cursor.
         """
+        if self._closed:
+            return
+
+        if not self._text:
+            self._save_stmt_to_cache(self.statement)
 
         # CONPY-231: fix memory leak
         if self._data:
@@ -572,11 +555,11 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
 
         if not self.connection._closed:
             super().close()
-            
+
         if self.connection._active_async_cursor is self:
             self.connection._active_async_cursor = None
 
-        self._closed= True
+        self._closed = True
 
     async def fetchone(self):
         """

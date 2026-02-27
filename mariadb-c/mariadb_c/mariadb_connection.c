@@ -687,6 +687,8 @@ ma_connection_consume_active_result(MrdbConnection *conn, void *requesting_curso
     if (!active || PyErr_Occurred()) {
         PyErr_Clear();
         active = PyObject_GetAttrString((PyObject *)conn, "_active_async_cursor");
+        if (!active || PyErr_Occurred())
+            PyErr_Clear();
     }
     
     if (!active || active == Py_None) {

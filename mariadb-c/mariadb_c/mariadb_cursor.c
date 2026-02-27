@@ -568,6 +568,8 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
                 PyErr_Clear();
                 active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
                 field_name = "_active_async_cursor";
+                if (!active || PyErr_Occurred())
+                    PyErr_Clear();
             }
             
             if (active && active != Py_None && active == (PyObject *)self) {
@@ -713,6 +715,8 @@ void ma_cursor_close(MrdbCursor *self)
             PyErr_Clear();
             active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
             field_name = "_active_async_cursor";
+            if (!active || PyErr_Occurred())
+                PyErr_Clear();
         }
         
         if (active && active != Py_None && active == (PyObject *)self) {
@@ -1080,6 +1084,8 @@ int MrdbCursor_fetchinternal(MrdbCursor *self)
                     PyErr_Clear();
                     active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
                     field_name = "_active_async_cursor";
+                    if (!active || PyErr_Occurred())
+                        PyErr_Clear();
                 }
                 
                 if (active && active != Py_None && active == (PyObject *)self) {
