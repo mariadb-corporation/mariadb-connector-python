@@ -118,6 +118,7 @@ static PyObject *MrdbConnection_async_connect_start(MrdbConnection *self, PyObje
 static PyObject *MrdbConnection_async_connect_cont(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_close_stmt_capsule(MrdbConnection *self, PyObject *capsule);
+static PyObject *MrdbConnection_neutralize_stmt_capsule(MrdbConnection *self, PyObject *capsule);
 static PyObject *MrdbConnection_send_stmt_close(MrdbConnection *self, PyObject *arg);
 
 static PyGetSetDef
@@ -259,6 +260,10 @@ MrdbConnection_Methods[] =
         (PyCFunction)MrdbConnection_close_stmt_capsule,
         METH_O,
         "Close a MYSQL_STMT wrapped in a PyCapsule (for cache eviction)"},
+    {"_neutralize_stmt_capsule",
+        (PyCFunction)MrdbConnection_neutralize_stmt_capsule,
+        METH_O,
+        "Disarm a PyCapsule destructor without sending COM_STMT_CLOSE"},
     {"_send_stmt_close",
         (PyCFunction)MrdbConnection_send_stmt_close,
         METH_O,
@@ -803,6 +808,22 @@ MrdbConnection_connect(
 static
 void MrdbConnection_finalize(MrdbConnection *self)
 {
+    /* Neutralise PyCapsule destructors in the stmt cache BEFORE
+       mysql_close() runs.  clear() disarms each capsule so no
+       COM_STMT_CLOSE is sent — the MYSQL_STMT* objects stay on the
+       connection's internal stmt_list and are freed by mysql_close(). */
+    PyObject *cache = PyObject_GetAttrString((PyObject *)self, "_stmt_cache");
+    if (cache && cache != Py_None)
+    {
+        PyObject *res = PyObject_CallMethod(cache, "clear", NULL);
+        Py_XDECREF(res);
+        /* Break the cycle: Connection → _stmt_cache → StmtCache → _connection */
+        PyObject_SetAttrString((PyObject *)self, "_stmt_cache", Py_None);
+    }
+    if (PyErr_Occurred())
+        PyErr_Clear();
+    Py_XDECREF(cache);
+
     ma_connection_close(self);
 }
 
@@ -1870,6 +1891,23 @@ MrdbConnection_close_stmt_capsule(MrdbConnection *self, PyObject *capsule)
         Py_END_ALLOW_THREADS;
     }
 
+    Py_RETURN_NONE;
+}
+
+/* _neutralize_stmt_capsule(capsule): disarm the PyCapsule destructor so it
+ * won't call mysql_stmt_close() when freed by GC.  The MYSQL_STMT* stays on
+ * the connection's internal stmt_list and is properly freed by mysql_close().
+ * No COM_STMT_CLOSE is sent.  Used during connection teardown. */
+static PyObject *
+MrdbConnection_neutralize_stmt_capsule(MrdbConnection *self, PyObject *capsule)
+{
+    if (!PyCapsule_CheckExact(capsule)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "_neutralize_stmt_capsule: expected a PyCapsule");
+        return NULL;
+    }
+
+    PyCapsule_SetDestructor(capsule, NULL);
     Py_RETURN_NONE;
 }
 

@@ -113,11 +113,20 @@ class StmtCache:
             _, evicted = self._cache.popitem(last=False)
             evicted.evict(self._connection)
 
-    def clear(self, close: bool = True) -> None:
-        """Discard all cached statements, optionally closing each on the server."""
-        if close:
-            for entry in self._cache.values():
-                entry.evict(self._connection)
+    def clear(self) -> None:
+        """Discard all cached statements.
+
+        Neutralises each PyCapsule destructor so no COM_STMT_CLOSE is
+        sent.  The MYSQL_STMT* objects stay on the connection's internal
+        stmt_list and are freed by ``mysql_close()``.
+        """
+        for entry in self._cache.values():
+            if entry.capsule is not None:
+                try:
+                    self._connection._neutralize_stmt_capsule(entry.capsule)
+                except Exception:
+                    pass
+                entry.capsule = None
         self._cache.clear()
 
     def __len__(self) -> int:
@@ -222,7 +231,7 @@ class Connection(CConnection, SyncConnectionCommon):
             self._pooled_connection.return_to_pool()
         else:
             if self._stmt_cache is not None:
-                self._stmt_cache.clear(close=True)
+                self._stmt_cache.clear()
                 self._stmt_cache = None
             super().close()
 

@@ -56,6 +56,10 @@ static PyObject *MrdbCursor_stmt_fetch_cont(MrdbCursor *self, PyObject *args);
 /* Shared fetch function - used by both sync and async cursors */
 int MrdbCursor_fetchinternal(MrdbCursor *self);
 
+/* C-level memory cleanup helpers */
+static void MrdbCursor_FreeValues(MrdbCursor *self);
+static void MrdbCursor_FreeResultValues(MrdbCursor *self);
+
 /* Prepared statement cache helpers */
 static PyObject *MrdbCursor_detach_stmt(MrdbCursor *self);
 static PyObject *MrdbCursor_attach_stmt(MrdbCursor *self, PyObject *capsule);
@@ -448,13 +452,6 @@ static int MrdbCursor_tpclear(MrdbCursor *self)
         }
     }
 
-    // Clear all PyObject values in the MrdbParamValue array
-    if (self->value && self->paramcount > 0) {
-        for (uint32_t i = 0; i < self->paramcount; i++) {
-            Py_CLEAR(self->value[i].value);
-        }
-    }
-
     return 0;
 }
 
@@ -474,6 +471,27 @@ static void MrdbCursor_dealloc(PyObject *obj)
 {
   MrdbCursor *self = (MrdbCursor *)obj;
   ma_cursor_close(self);
+
+  /* Free C-level allocations that ma_cursor_reset may have skipped
+     (e.g. when MrdbCursor_finalize set closed=1).  All of these
+     macros/functions are NULL-safe / idempotent. */
+  MrdbCursor_FreeValues(self);
+  MrdbCursor_FreeResultValues(self);
+  MARIADB_FREE_MEM(self->bind);
+  MARIADB_FREE_MEM(self->value);
+  MARIADB_FREE_MEM(self->params);
+  self->fields = NULL;  /* borrowed pointer into result/stmt metadata */
+  if (self->statement)
+  {
+      PyMem_RawFree(self->statement);
+      self->statement = NULL;
+  }
+  if (self->result)
+  {
+      mysql_free_result(self->result);
+      self->result = NULL;
+  }
+
   MrdbCursor_tpclear(self);
   Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -640,6 +658,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     MrdbCursor_clearstmt(self);
     MrdbCursor_FreeResultValues(self);
     MARIADB_FREE_MEM(self->bind);
+    MARIADB_FREE_MEM(self->value);
     MARIADB_FREE_MEM(self->params);
 }
 /* }}} */
@@ -752,7 +771,7 @@ PyObject * MrdbCursor_close(MrdbCursor *self)
    self->closed==1 and skip ma_cursor_reset(). */
 static void MrdbCursor_finalize(MrdbCursor *self)
 {
-    if (!self->closed && self->connection && self->connection->mysql)
+    if (!self->closed)
     {
         self->stmt = NULL;
         self->closed = 1;
