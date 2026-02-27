@@ -628,6 +628,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     if (mysql_get_ssl_cipher(self->mysql))
         self->tls_in_use= 1;
 
+    self->creation_pid= getpid();
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
 
     has_error= 0;
@@ -808,6 +809,15 @@ MrdbConnection_connect(
 static
 void MrdbConnection_finalize(MrdbConnection *self)
 {
+    /* If we are running in a forked child process, the socket fd is shared
+       with the parent.  Calling mysql_close() here would close that shared
+       fd and destroy the parent's live TCP connection ("Lost connection",
+       errno 2013).  SQLAlchemy's profile_memory() uses multiprocessing.Process
+       (fork) and deliberately avoids disposing the pool in the child — but
+       tp_finalize fires anyway when GC runs in the child.  Skip the close. */
+    if (self->creation_pid && self->creation_pid != getpid())
+        return;
+
     /* Neutralise PyCapsule destructors in the stmt cache BEFORE
        mysql_close() runs.  clear() disarms each capsule so no
        COM_STMT_CLOSE is sent — the MYSQL_STMT* objects stay on the

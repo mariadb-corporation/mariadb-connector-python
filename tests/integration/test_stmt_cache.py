@@ -760,3 +760,129 @@ class TestGCFinalizeWithActiveStream(unittest.TestCase):
         verify.execute("SELECT 1")
         self.assertEqual(verify.fetchone(), (1,))
         verify.close()
+
+    def test_gc_finalize_buffered_cursor_does_not_corrupt(self) -> None:
+        """GC-finalizing a *buffered* binary cursor (not the active streaming
+        result) must not call clear_result and must not corrupt the connection.
+        Regression: finalize was calling MrdbCursor_clear_result
+        unconditionally, which would touch self->result even for buffered
+        cursors where it was already freed by the normal close path."""
+        import gc
+
+        def open_and_abandon():
+            cur = self.conn.cursor(binary=True)  # buffered by default
+            cur.execute("SELECT id, val FROM t_gc_stream")
+            rows = cur.fetchall()  # fully consumed — not the active stream
+            self.assertEqual(len(rows), 10)
+            # Let cur go out of scope without explicit close
+
+        open_and_abandon()
+        gc.collect()
+        gc.collect()
+
+        verify = self.conn.cursor()
+        verify.execute("SELECT 1")
+        self.assertEqual(verify.fetchone(), (1,))
+        verify.close()
+
+    def test_gc_finalize_text_unbuffered_clears_active_result(self) -> None:
+        """GC-finalizing a text-protocol unbuffered cursor that IS the active
+        streaming result must drain rows and clear tracking.  This reproduces
+        the SQLAlchemy test_alias_pathing failure: subqueryload generates a
+        plain-text SELECT (no ?), the cursor is abandoned mid-read, GC fires,
+        and the connection must be reusable for teardown DROP TABLE."""
+        import gc
+
+        def open_and_abandon():
+            # Text protocol: no binary=True, no buffered=False is needed —
+            # use buffered=False to get an unbuffered text cursor.
+            cur = self.conn.cursor(buffered=False)
+            cur.execute("SELECT id, val FROM t_gc_stream")
+            _ = cur.fetchone()  # partial read — rows still pending
+            # cursor goes out of scope here
+
+        open_and_abandon()
+        gc.collect()
+        gc.collect()
+
+        verify = self.conn.cursor()
+        verify.execute("SELECT COUNT(*) FROM t_gc_stream")
+        self.assertEqual(verify.fetchone(), (10,))
+        verify.close()
+
+    def test_gc_finalize_multiple_cursors_sqlalchemy_pattern(self) -> None:
+        """Reproduce the exact SQLAlchemy test_alias_pathing pattern:
+        run a query that produces multiple cursors (like ORM subqueryload),
+        then GC-collect, then verify the connection works for teardown.
+        All cursors here are buffered (fully consumed) — none is the active
+        streaming result — so finalize must do nothing harmful."""
+        import gc
+
+        def one_pass():
+            # Simulate ORM loading: multiple sequential queries, all buffered
+            c1 = self.conn.cursor(binary=True)
+            c1.execute("SELECT id FROM t_gc_stream WHERE id < ?", (5,))
+            _ = c1.fetchall()
+
+            c2 = self.conn.cursor(binary=True)
+            c2.execute(
+                "SELECT id, val FROM t_gc_stream WHERE id >= ?", (5,)
+            )
+            _ = c2.fetchall()
+            # both cursors go out of scope here — neither is active stream
+
+        for _ in range(5):
+            one_pass()
+            gc.collect()
+            gc.collect()
+
+        # Simulate teardown: connection must still accept DDL
+        verify = self.conn.cursor()
+        verify.execute("SELECT COUNT(*) FROM t_gc_stream")
+        self.assertEqual(verify.fetchone(), (10,))
+        verify.close()
+
+    def test_gc_finalize_in_forked_child_does_not_close_parent_socket(
+        self,
+    ) -> None:
+        """Regression: MrdbConnection_finalize must NOT call mysql_close() in
+        a forked child process.
+
+        The socket fd is shared with the parent via fork().  If the child's
+        finalizer closes it, the parent's live TCP connection is destroyed,
+        causing 'Lost connection to server during query (errno: 2013)' on the
+        very next statement — exactly the failure seen in the SQLAlchemy
+        test_alias_pathing teardown, where profile_memory() runs go() inside
+        a multiprocessing.Process (fork) and gc.collect() fires in the child.
+        """
+        import gc
+        import multiprocessing
+        import os
+
+        result_queue: multiprocessing.Queue = multiprocessing.Queue()
+
+        def child(q: multiprocessing.Queue) -> None:
+            # In the child: open a cursor, let it go out of scope, gc-collect.
+            # This used to call mysql_close() via tp_finalize, closing the
+            # shared socket and corrupting the parent's connection.
+            cur = self.conn.cursor(binary=True)
+            cur.execute("SELECT id FROM t_gc_stream")
+            _ = cur.fetchall()
+            del cur
+            gc.collect()
+            gc.collect()
+            q.put("child_done")
+
+        proc = multiprocessing.Process(target=child, args=(result_queue,))
+        proc.start()
+        msg = result_queue.get(timeout=10)
+        proc.join(timeout=10)
+        self.assertEqual(msg, "child_done")
+        self.assertEqual(proc.exitcode, 0)
+
+        # Parent connection must still be alive — the child must NOT have
+        # closed the shared socket.
+        verify = self.conn.cursor()
+        verify.execute("SELECT COUNT(*) FROM t_gc_stream")
+        self.assertEqual(verify.fetchone(), (10,))
+        verify.close()

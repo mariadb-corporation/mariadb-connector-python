@@ -774,12 +774,25 @@ static void MrdbCursor_finalize(MrdbCursor *self)
 {
     if (!self->closed)
     {
-        /* If this cursor IS the active streaming result, drain pending rows
-           so the connection returns to READY state.  MrdbCursor_clear_result
-           performs only reads (mysql_stmt_free_result / mysql_fetch_row) —
-           no command packets are sent, so this is safe during GC.
-           For all other cases we just orphan the MYSQL_STMT*. */
-        MrdbCursor_clear_result(self);
+        /* Only drain if this cursor IS the active streaming result.
+           MrdbCursor_clear_result is safe here: it performs only reads
+           (mysql_stmt_free_result / mysql_fetch_row) — no command packets.
+           For all other cursors (buffered or not the active one) we must
+           NOT call clear_result: self->result may have already been freed,
+           or the rows belong to a different active cursor on the connection. */
+        if (self->connection)
+        {
+            PyObject *active = PyObject_GetAttrString(
+                (PyObject *)self->connection, "_active_streaming_result");
+            if (!active)
+                PyErr_Clear();
+            else
+            {
+                if (active == (PyObject *)self && active != Py_None)
+                    MrdbCursor_clear_result(self);
+                Py_DECREF(active);
+            }
+        }
         self->stmt = NULL;
         self->closed = 1;
     }
