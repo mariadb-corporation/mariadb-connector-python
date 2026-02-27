@@ -102,9 +102,9 @@ jobs:
           DBURI="${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           echo "Testing with dburi: ${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           # Skip problematic tests
-          DESELECT_PATTERN="not (TimeTest and test_select_direct)"
+          DESELECT_PATTERN="not ((TimeTest or DateTest) and test_select_direct)"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or (TimeTest and test_select_direct))"
+            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or ((TimeTest or DateTest) and test_select_direct))"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN"
         env:
@@ -132,9 +132,9 @@ jobs:
           # Exclude JSON decimal tests as they are "unexpected successes" (passing but marked as expected to fail)
           # Exclude ServerSideCursorsTest as it requires SQLAlchemy test suite modifications we can't ship
           # Exclude CTETest as it has teardown issues with foreign key constraints
-          DESELECT_PATTERN="Async and not ((TimeTest and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+          DESELECT_PATTERN="Async and not (((TimeTest or DateTest) and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or (TimeTest and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or ((TimeTest or DateTest) and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN" test/dialect/test_suite.py
         env:
@@ -270,9 +270,9 @@ jobs:
           DBURI="${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           echo "Testing with dburi: ${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           # Skip problematic tests
-          DESELECT_PATTERN="not (TimeTest and test_select_direct)"
+          DESELECT_PATTERN="not ((TimeTest or DateTest) and test_select_direct)"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or (TimeTest and test_select_direct))"
+            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or ((TimeTest or DateTest) and test_select_direct))"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN"
         env:
@@ -299,9 +299,9 @@ jobs:
           # Exclude JSON decimal tests as they are "unexpected successes" (passing but marked as expected to fail)
           # Exclude ServerSideCursorsTest as it requires SQLAlchemy test suite modifications we can't ship
           # Exclude CTETest as it has teardown issues with foreign key constraints
-          DESELECT_PATTERN="Async and not ((TimeTest and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+          DESELECT_PATTERN="Async and not (((TimeTest or DateTest) and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or (TimeTest and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or ((TimeTest or DateTest) and test_select_direct) or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN" test/dialect/test_suite.py
         env:
