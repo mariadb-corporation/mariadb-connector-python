@@ -776,20 +776,69 @@ PyObject * MrdbCursor_close(MrdbCursor *self)
 
 /* {{{ MrdbCursor_Finalize
    Called by the cyclic GC before tp_clear/tp_dealloc.
-   We must NOT send any protocol packets here (COM_STMT_CLOSE,
-   COM_STMT_FETCH, …) because the connection may have an in-flight
-   query whose response has not been read yet.  Sending a packet in
+   We must NOT send any new protocol commands here (COM_STMT_CLOSE,
+   COM_STMT_EXECUTE, …) because the connection may have an in-flight
+   query whose response has not been read yet.  Sending a command in
    that state triggers CR_COMMANDS_OUT_OF_SYNC on the MYSQL handle
    and corrupts the connection ("Lost connection", errno 2013).
 
-   Instead we just orphan the MYSQL_STMT*: it stays on the
-   connection's internal stmt_list and will be properly freed when
-   mysql_close() runs.  MrdbCursor_dealloc (called later) will see
-   self->closed==1 and skip ma_cursor_reset(). */
+   HOWEVER: if this cursor IS the active streaming result, we are the
+   producer — the connection is waiting for us to read rows, not running
+   something else.  mysql_stmt_free_result() is a pure read (it just
+   discards buffered/pending rows from the socket) and does NOT send a
+   command packet, so it is safe to call here.  We must drain it and
+   clear _active_streaming_result on the connection; without this the
+   connection stays in MYSQL_STATUS_STATEMENT_GET_RESULT and the next
+   execute on any cursor gets "Commands out of sync" / "Lost connection".
+
+   For all other cases we orphan the MYSQL_STMT*: it stays on the
+   connection's internal stmt_list and is freed by mysql_close(). */
 static void MrdbCursor_finalize(MrdbCursor *self)
 {
     if (!self->closed)
     {
+        /* If this cursor has a pending unbuffered result, drain it now
+           so the connection returns to READY state.
+           Both binary (!is_text) and text (is_text) unbuffered cursors
+           can be the active streaming result. */
+        if (self->connection)
+        {
+            PyObject *active = PyObject_GetAttrString(
+                (PyObject *)self->connection, "_active_streaming_result");
+            if (!active)
+                PyErr_Clear();
+            else
+            {
+                if (active == (PyObject *)self && active != Py_None)
+                {
+                    if (!self->is_text && self->stmt)
+                    {
+                        /* Binary: drain via stmt — read-only, no packet sent */
+                        if (mysql_stmt_field_count(self->stmt))
+                            mysql_stmt_free_result(self->stmt);
+                        while (mysql_stmt_next_result(self->stmt) == 0)
+                        {
+                            if (mysql_stmt_field_count(self->stmt))
+                                mysql_stmt_free_result(self->stmt);
+                        }
+                    }
+                    else if (self->is_text && self->result)
+                    {
+                        /* Text: drain via MYSQL_RES — read-only, no packet sent */
+                        while (mysql_fetch_row(self->result))
+                        {
+                        }
+                        mysql_free_result(self->result);
+                        self->result = NULL;
+                    }
+                    PyObject_SetAttrString(
+                        (PyObject *)self->connection,
+                        "_active_streaming_result", Py_None);
+                    PyErr_Clear();
+                }
+                Py_DECREF(active);
+            }
+        }
         self->stmt = NULL;
         self->closed = 1;
     }

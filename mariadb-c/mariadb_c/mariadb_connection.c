@@ -699,10 +699,10 @@ ma_connection_consume_active_result(MrdbConnection *conn, void *requesting_curso
     
     /* Try to get Python-level active cursor tracking */
     PyObject *active = PyObject_GetAttrString((PyObject *)conn, "_active_streaming_result");
-    if (!active || PyErr_Occurred()) {
+    if (!active) {
         PyErr_Clear();
         active = PyObject_GetAttrString((PyObject *)conn, "_active_async_cursor");
-        if (!active || PyErr_Occurred())
+        if (!active)
             PyErr_Clear();
     }
     

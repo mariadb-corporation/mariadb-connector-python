@@ -678,3 +678,85 @@ class TestEvictionWithActiveStream(unittest.TestCase):
             cur_a.close()
         finally:
             conn._stmt_cache._maxsize = orig_maxsize
+
+
+@_skip_native
+class TestGCFinalizeWithActiveStream(unittest.TestCase):
+    """Regression: GC-finalizing a cursor that has an active binary unbuffered
+    result must drain the pending rows and clear _active_streaming_result so
+    the connection returns to READY state.  Without the fix, the connection
+    stays in MYSQL_STATUS_STATEMENT_GET_RESULT and the next execute on any
+    cursor gets "Commands out of sync" / "Lost connection" (errno 2013).
+
+    This reproduces the failure seen in SQLAlchemy test_alias_pathing teardown:
+    profile_memory() calls gc.collect() between iterations, which finalizes
+    cursors that hold live unbuffered results.
+    """
+
+    def setUp(self) -> None:
+        self.conn = _cache_conn(prep_stmt_cache_size=5)
+        self.conn.autocommit = True
+        cur = self.conn.cursor()
+        cur.execute(
+            "CREATE TEMPORARY TABLE t_gc_stream (id INT, val VARCHAR(32))"
+        )
+        for i in range(10):
+            cur.execute(
+                "INSERT INTO t_gc_stream VALUES (?, ?)", (i, f"v{i}")
+            )
+        cur.close()
+
+    def tearDown(self) -> None:
+        try:
+            self.conn.cursor().execute("DROP TEMPORARY TABLE IF EXISTS t_gc_stream")
+        except Exception:
+            pass
+        self.conn.close()
+
+    def test_gc_finalize_binary_unbuffered_clears_active_result(self) -> None:
+        """Drop a binary unbuffered cursor ref while rows are pending.
+        After gc.collect(), the connection must still be usable."""
+        import gc
+
+        def open_and_abandon():
+            cur = self.conn.cursor(binary=True, buffered=False)
+            cur.execute(
+                "SELECT id, val FROM t_gc_stream WHERE id < ?", (10,)
+            )
+            _ = cur.fetchone()  # partial read — rows still pending
+            # Let `cur` go out of scope without closing
+
+        open_and_abandon()
+        # Force GC to finalize the abandoned cursor
+        gc.collect()
+        gc.collect()
+
+        # Connection must be back in READY state
+        verify = self.conn.cursor()
+        verify.execute("SELECT COUNT(*) FROM t_gc_stream")
+        row = verify.fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(row[0], 10)
+        verify.close()
+
+    def test_gc_finalize_loop_connection_stays_healthy(self) -> None:
+        """Simulate the profile_memory() pattern: run a query many times,
+        collect GC after each, and verify the connection survives intact."""
+        import gc
+
+        def one_pass():
+            cur = self.conn.cursor(binary=True, buffered=False)
+            cur.execute("SELECT id FROM t_gc_stream")
+            _ = cur.fetchone()  # partial — rows still pending
+            # cursor goes out of scope here
+
+        for _ in range(10):
+            one_pass()
+            gc.collect()
+            gc.collect()
+
+        # After many GC-finalize cycles, connection must still work
+        verify = self.conn.cursor()
+        verify.execute("SELECT 1")
+        self.assertEqual(verify.fetchone(), (1,))
+        verify.close()
