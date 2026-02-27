@@ -11,8 +11,10 @@ import unittest
 from decimal import Decimal
 from typing import Any
 
+import pytest
+
 import mariadb
-import mariadb_c
+mariadb_c = pytest.importorskip("mariadb_c")
 
 from ..conftest import get_test_config as conf
 
