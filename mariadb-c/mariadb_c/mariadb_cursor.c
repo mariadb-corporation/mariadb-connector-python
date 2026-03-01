@@ -1712,6 +1712,8 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
     }
 
     row_count= (uint64_t)PyLong_AsLongLong(rows);
+    if (PyErr_Occurred())
+        return NULL;
 
     if (!(List= PyList_New(0)))
     {
@@ -1723,20 +1725,43 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
         uint32_t j;
         PyObject *Row;
 
+        if (PyErr_Occurred())
+        {
+            Py_DECREF(List);
+            return NULL;
+        }
+
         self->row_number++;
 
         if (!(Row= mariadb_get_sequence_or_tuple(self)))
         {
+            Py_DECREF(List);
             return NULL;
         }
 
         for (j=0; j < field_count; j++)
         {
             ma_set_result_column_value(self, Row, j);
+            if (PyErr_Occurred())
+            {
+                Py_DECREF(Row);
+                Py_DECREF(List);
+                return NULL;
+            }
         }
-        PyList_Append(List, Row);
+        if (PyList_Append(List, Row) < 0)
+        {
+            Py_DECREF(Row);
+            Py_DECREF(List);
+            return NULL;
+        }
         /* CONPY-99: Decrement Row to prevent memory leak */
         Py_DECREF(Row);
+    }
+    if (PyErr_Occurred())
+    {
+        Py_DECREF(List);
+        return NULL;
     }
     self->row_count = self->row_number;
     return List;
