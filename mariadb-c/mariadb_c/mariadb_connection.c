@@ -739,12 +739,14 @@ static void MrdbConnection_dealloc(PyObject *obj)
     /* Close MySQL connection if open */
     if (self && self->mysql)
     {
-        /* Fork safety: suppress COM_QUIT in forked child by marking the
-           connection as already quit.  mysql_close() will then skip the
-           network send but still free all client-side memory.  This is
-           the exact analogue of zeroing stmt_id before mysql_stmt_close(). */
+        /* Fork safety: suppress COM_QUIT in forked child by nulling the
+           VIO handle before mysql_close().  mysql->net.pvio is the first
+           field of the MYSQL struct (offset 0); mysql_close() checks it
+           before attempting the network send, so nulling it makes the
+           close a pure client-side memory free — no bytes on the wire.
+           This works across all libmariadb versions. */
         if (self->creation_pid && self->creation_pid != getpid())
-            self->mysql->status = MYSQL_STATUS_QUIT_SENT;
+            self->mysql->net.pvio = NULL;
         ma_connection_close(self);
     }
     
@@ -831,15 +833,15 @@ void MrdbConnection_finalize(MrdbConnection *self)
         PyErr_Clear();
     Py_XDECREF(cache);
 
-    /* Fork safety: suppress COM_QUIT in forked child by marking the
-       connection as already quit before calling mysql_close().  The fd is
-       shared with the parent via fork() — sending COM_QUIT over it would
-       inject bytes into the parent's TCP stream and cause "Lost connection"
-       (errno 2013) on the parent's next query.  Setting MYSQL_STATUS_QUIT_SENT
-       makes libmariadb skip the network send but still free all client-side
-       memory — the exact analogue of zeroing stmt_id before mysql_stmt_close(). */
+    /* Fork safety: suppress COM_QUIT in forked child by nulling the VIO
+       handle before mysql_close().  The fd is shared with the parent via
+       fork() — sending COM_QUIT over it would inject bytes into the parent's
+       TCP stream and cause "Lost connection" (errno 2013) on the parent's
+       next query.  mysql->net.pvio is the first field of the MYSQL struct
+       (offset 0); mysql_close() checks it before the network send, so
+       nulling it makes the close a pure client-side memory free. */
     if (self->mysql && self->creation_pid && self->creation_pid != getpid())
-        self->mysql->status = MYSQL_STATUS_QUIT_SENT;
+        self->mysql->net.pvio = NULL;
 
     ma_connection_close(self);
 }
@@ -876,7 +878,7 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
            inherited connections in the child (bypassing tp_finalize), so we
            need the guard here too. */
         if (self->mysql && self->creation_pid && self->creation_pid != getpid())
-            self->mysql->status = MYSQL_STATUS_QUIT_SENT;
+            self->mysql->net.pvio = NULL;
         ma_connection_close(self);
         self->closed= 1;
     }
