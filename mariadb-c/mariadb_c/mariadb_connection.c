@@ -738,7 +738,12 @@ static void MrdbConnection_dealloc(PyObject *obj)
 
     /* Close MySQL connection if open */
     if (self && self->mysql)
-        ma_connection_close(self);
+    {
+        if (self->creation_pid && self->creation_pid != getpid())
+            self->mysql = NULL;
+        else
+            ma_connection_close(self);
+    }
     
     /* Clear all Python object references */
     if (self->converter)
@@ -809,19 +814,8 @@ MrdbConnection_connect(
 static
 void MrdbConnection_finalize(MrdbConnection *self)
 {
-    /* If we are running in a forked child process, the socket fd is shared
-       with the parent.  Calling mysql_close() here would close that shared
-       fd and destroy the parent's live TCP connection ("Lost connection",
-       errno 2013).  SQLAlchemy's profile_memory() uses multiprocessing.Process
-       (fork) and deliberately avoids disposing the pool in the child — but
-       tp_finalize fires anyway when GC runs in the child.  Skip the close. */
-    if (self->creation_pid && self->creation_pid != getpid())
-        return;
-
-    /* Neutralise PyCapsule destructors in the stmt cache BEFORE
-       mysql_close() runs.  clear() disarms each capsule so no
-       COM_STMT_CLOSE is sent — the MYSQL_STMT* objects stay on the
-       connection's internal stmt_list and are freed by mysql_close(). */
+    /* Fork safety: neutralize stmt-cache PyCapsule destructors in ALL cases
+       to prevent COM_STMT_CLOSE from being sent by GC in a forked child. */
     PyObject *cache = PyObject_GetAttrString((PyObject *)self, "_stmt_cache");
     if (cache && cache != Py_None)
     {
@@ -833,6 +827,16 @@ void MrdbConnection_finalize(MrdbConnection *self)
     if (PyErr_Occurred())
         PyErr_Clear();
     Py_XDECREF(cache);
+
+    /* If we are running in a forked child process, the socket fd is shared
+       with the parent.  Calling mysql_close() here would close that shared
+       fd and destroy the parent's live TCP connection ("Lost connection",
+       errno 2013).  SQLAlchemy's profile_memory() uses multiprocessing.Process
+       (fork) and deliberately avoids disposing the pool in the child — but
+       tp_finalize fires anyway when GC runs in the child.  After neutralizing
+       stmt-cache capsules, skip the close in the child. */
+    if (self->creation_pid && self->creation_pid != getpid())
+        return;
 
     ma_connection_close(self);
 }
