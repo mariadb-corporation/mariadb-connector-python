@@ -729,26 +729,35 @@ static void ma_connection_close(MrdbConnection *conn)
             conn->mysql= NULL;
         }
     }
+}
 
+/* Like ma_connection_close() but suppresses the COM_QUIT network send by
+   nulling the VIO handle first.  Use this from GC-driven paths (tp_finalize,
+   tp_dealloc) where sending a protocol message is wrong — either because we
+   are in a forked child (shared fd) or simply because GC teardown should
+   never do network I/O.  Only the explicit connection.close() Python call
+   should send COM_QUIT. */
+static void ma_connection_close_no_quit(MrdbConnection *conn)
+{
+    if (conn && conn->mysql)
+    {
+        conn->mysql->net.pvio = NULL;
+        Py_BEGIN_ALLOW_THREADS
+        mysql_close(conn->mysql);
+        Py_END_ALLOW_THREADS
+        conn->mysql = NULL;
+    }
 }
 
 static void MrdbConnection_dealloc(PyObject *obj)
 {
     MrdbConnection *self = (MrdbConnection *)obj;
 
-    /* Close MySQL connection if open */
+    /* Close MySQL connection if open.  Use the no-quit variant: tp_dealloc
+       is GC-driven and must never send a protocol message.  COM_QUIT is only
+       meaningful from an explicit connection.close() call. */
     if (self && self->mysql)
-    {
-        /* Fork safety: suppress COM_QUIT in forked child by nulling the
-           VIO handle before mysql_close().  mysql->net.pvio is the first
-           field of the MYSQL struct (offset 0); mysql_close() checks it
-           before attempting the network send, so nulling it makes the
-           close a pure client-side memory free — no bytes on the wire.
-           This works across all libmariadb versions. */
-        if (self->creation_pid && self->creation_pid != getpid())
-            self->mysql->net.pvio = NULL;
-        ma_connection_close(self);
-    }
+        ma_connection_close_no_quit(self);
     
     /* Clear all Python object references */
     if (self->converter)
@@ -833,17 +842,11 @@ void MrdbConnection_finalize(MrdbConnection *self)
         PyErr_Clear();
     Py_XDECREF(cache);
 
-    /* Fork safety: suppress COM_QUIT in forked child by nulling the VIO
-       handle before mysql_close().  The fd is shared with the parent via
-       fork() — sending COM_QUIT over it would inject bytes into the parent's
-       TCP stream and cause "Lost connection" (errno 2013) on the parent's
-       next query.  mysql->net.pvio is the first field of the MYSQL struct
-       (offset 0); mysql_close() checks it before the network send, so
-       nulling it makes the close a pure client-side memory free. */
-    if (self->mysql && self->creation_pid && self->creation_pid != getpid())
-        self->mysql->net.pvio = NULL;
-
-    ma_connection_close(self);
+    /* tp_finalize is GC-driven: never send COM_QUIT (it is only meaningful
+       from an explicit connection.close()).  Use the no-quit variant which
+       also covers the fork case — the fd is shared with the parent, so any
+       network write from a forked child corrupts the parent's TCP stream. */
+    ma_connection_close_no_quit(self);
 }
 
 static PyObject *
