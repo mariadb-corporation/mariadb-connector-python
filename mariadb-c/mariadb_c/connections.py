@@ -126,6 +126,7 @@ class StmtCache:
     def clear(self) -> None:
         """Discard all cached statements"""
         for entry in self._cache.values():
+            entry.in_cache = False
             if entry.capsule is not None:
                 try:
                     self._connection._neutralize_stmt_capsule(entry.capsule)

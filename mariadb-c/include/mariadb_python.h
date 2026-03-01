@@ -25,7 +25,13 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <mysql.h>
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#include <process.h>
+typedef int pid_t;
+#define getpid _getpid
+#endif
 #include <errmsg.h>
 #include <mysqld_error.h>
 #include <time.h>
