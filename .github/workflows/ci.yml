@@ -102,9 +102,11 @@ jobs:
           DBURI="${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           echo "Testing with dburi: ${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           # Skip problematic tests
-          DESELECT_PATTERN="not ((TimeTest or DateTest) and test_select_direct)"
+          # VersioningTest: MariaDB 12.x raises errno 1020 directly instead of 0 rows affected,
+          # so SQLAlchemy never sees StaleDataError. Server behavior change, not a connector bug.
+          DESELECT_PATTERN="not ((TimeTest or DateTest) and test_select_direct) and not VersioningTest"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or ((TimeTest or DateTest) and test_select_direct))"
+            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or ((TimeTest or DateTest) and test_select_direct)) and not VersioningTest"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN"
         env:
@@ -159,7 +161,7 @@ jobs:
           TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
           TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
-          TEST_DB_SERVER_CERT: ${{ matrix.db-type != 'mysql' && steps.setup-env.outputs.database-type == 'container' && './.github/workflows/certs/ca_server.crt' || '' }}          
+          TEST_DB_SERVER_CERT: ${{ matrix.db-type != 'mysql' && steps.setup-env.outputs.database-type == 'container' && './.github/workflows/certs/ca_server.crt' || '' }}
           LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
           MARIADB_PYTHON_CONNECTOR: mariadb
@@ -169,7 +171,7 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-            
+
   ci-c-extension:
     name: ${{ matrix.name }} (C Extension) ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
     needs: setup
@@ -246,6 +248,7 @@ jobs:
           cmake --install . --config RelWithDebInfo
           echo "MARIADB_CC_INSTALL_DIR=$MARIADB_CC_INSTALL_DIR" >> $env:GITHUB_ENV
           echo "MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL_DIR/lib/mariadb/plugin" >> $env:GITHUB_ENV
+          echo "$MARIADB_CC_INSTALL_DIR/bin" >> $env:GITHUB_PATH
 
       - name: Run SQLAlchemy tests (C extension)
         if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
@@ -270,9 +273,9 @@ jobs:
           DBURI="${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           echo "Testing with dburi: ${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           # Skip problematic tests
-          DESELECT_PATTERN="not ((TimeTest or DateTest) and test_select_direct)"
+          DESELECT_PATTERN="not ((TimeTest or DateTest) and test_select_direct) and not VersioningTest"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or ((TimeTest or DateTest) and test_select_direct))"
+            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or ((TimeTest or DateTest) and test_select_direct)) and not VersioningTest"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN"
         env:
@@ -355,7 +358,7 @@ jobs:
           TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
           TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
-          TEST_DB_SERVER_CERT: ${{ matrix.db-type != 'mysql' && steps.setup-env.outputs.database-type == 'container' && './.github/workflows/certs/ca_server.crt' || '' }}          
+          TEST_DB_SERVER_CERT: ${{ matrix.db-type != 'mysql' && steps.setup-env.outputs.database-type == 'container' && './.github/workflows/certs/ca_server.crt' || '' }}
           LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
           MARIADB_PYTHON_CONNECTOR: mariadb_c
@@ -391,7 +394,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
     needs: [ci-pure-python, ci-c-extension]
-    
+
     steps:
       - uses: actions/checkout@v4
         with:

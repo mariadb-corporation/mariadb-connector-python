@@ -20,6 +20,7 @@ Covers:
 
 from __future__ import annotations
 
+import multiprocessing
 import unittest
 
 import mariadb
@@ -39,6 +40,28 @@ def _cache_conn(**extra: object) -> mariadb.Connection:
         "prep_stmt_cache_size": 10,
         **extra,
     })
+
+
+def _fork_child_gc_test(
+    conn: mariadb.Connection,
+    q: object,
+) -> None:
+    """Target for the forked child in test_gc_finalize_in_forked_child_*.
+
+    Must be at module level so it is importable (required by spawn/forkserver).
+    Under fork it is simply called with the inherited connection object.
+    Opens a cursor, lets it go out of scope, then triggers GC.  This used to
+    call mysql_close() via tp_finalize on the shared fd, corrupting the
+    parent's live TCP connection.
+    """
+    import gc
+    cur = conn.cursor(binary=True)
+    cur.execute("SELECT 1")
+    _ = cur.fetchall()
+    del cur
+    gc.collect()
+    gc.collect()
+    q.put("child_done")
 
 
 @_skip_native
@@ -555,3 +578,328 @@ class TestStmtCacheStress(unittest.TestCase):
         cur.execute(sql, (999,))
         self.assertEqual(cur.fetchone(), (999,))
         cur.close()
+
+
+@_skip_native
+class TestEvictionWithActiveStream(unittest.TestCase):
+    """Regression: eviction must not corrupt the connection when another
+    cursor has a live unbuffered (streaming) result.
+
+    With prep_stmt_cache_size=1, the second execute() on a *different* SQL
+    triggers LRU eviction.  Eviction calls mysql_stmt_close() which sends
+    COM_STMT_CLOSE via db_command(skip_check=1) — that call bypasses
+    mysql->status and was calling net_clear() + resetting pkt_nr, corrupting
+    any in-flight protocol state.  The fix: StmtCache.put() drains the active
+    streaming result before evicting.
+    """
+
+    def setUp(self) -> None:
+        self.conn = _cache_conn(prep_stmt_cache_size=1)
+        self.conn.autocommit = True
+        cur = self.conn.cursor()
+        cur.execute(
+            "CREATE TEMPORARY TABLE t_evict_stream (id INT, val VARCHAR(32))"
+        )
+        for i in range(10):
+            cur.execute(f"INSERT INTO t_evict_stream VALUES ({i}, 'row{i}')")
+        cur.close()
+
+    def tearDown(self) -> None:
+        self.conn.close()
+
+    def test_eviction_during_streaming_binary(self) -> None:
+        """Evicting a cached stmt while cursor A streams binary rows must not
+        raise 'Lost connection' or 'Commands out of sync'."""
+        # sql_a returns multiple rows so the cursor is still streaming after
+        # fetchone() — leave remaining rows pending on the wire.
+        sql_a = "SELECT id, val FROM t_evict_stream WHERE id < ?"
+
+        # Prime the cache with sql_a
+        cur_a = self.conn.cursor(binary=True)
+        cur_a.execute(sql_a, (10,))
+        cur_a.fetchall()
+        cur_a.close()
+
+        # Open cursor A unbuffered — fetch only one row, leave the rest pending
+        cur_a = self.conn.cursor(binary=True, buffered=False)
+        cur_a.execute(sql_a, (10,))
+        _ = cur_a.fetchone()  # partial read — rows still on the wire
+
+        # cursor B uses a DIFFERENT sql to force eviction of sql_a from the
+        # size-1 cache.  Before the fix this sent COM_STMT_CLOSE via
+        # db_command(skip_check=1) while rows were still pending, corrupting
+        # the protocol.
+        sql_b = "SELECT id + 1 AS id2, val FROM t_evict_stream WHERE id < ?"
+        cur_b = self.conn.cursor(binary=True)
+        cur_b.execute(sql_b, (3,))
+        row = cur_b.fetchone()
+        self.assertIsNotNone(row)
+        cur_b.close()
+
+        # Connection must still be usable
+        cur_check = self.conn.cursor()
+        cur_check.execute("SELECT 1")
+        self.assertEqual(cur_check.fetchone(), (1,))
+        cur_check.close()
+
+        cur_a.close()
+
+    def test_eviction_during_streaming_text(self) -> None:
+        """Same scenario but cursor A uses text protocol."""
+        sql_a = "SELECT id, val FROM t_evict_stream"
+
+        # Prime the cache with a binary stmt so the cache is not empty
+        prime = self.conn.cursor(binary=True)
+        prime.execute("SELECT ? AS x", (0,))
+        prime.fetchone()
+        prime.close()
+
+        # Cursor A: text protocol, unbuffered
+        cur_a = self.conn.cursor(buffered=False)
+        cur_a.execute(sql_a)
+        _ = cur_a.fetchone()  # partial read
+
+        # Cursor B: new binary stmt → cache is full (size=1) → eviction fires
+        cur_b = self.conn.cursor(binary=True)
+        cur_b.execute("SELECT ? + 1 AS v", (5,))
+        row = cur_b.fetchone()
+        self.assertIsNotNone(row)
+        cur_b.close()
+
+        # Connection must still be usable
+        cur_check = self.conn.cursor()
+        cur_check.execute("SELECT 42")
+        self.assertEqual(cur_check.fetchone(), (42,))
+        cur_check.close()
+
+        cur_a.close()
+
+    def test_cache_disabled_eviction_during_streaming(self) -> None:
+        """With cache size=0, every put() closes immediately — same drain
+        path must protect the streaming cursor."""
+        # Reuse self.conn so the temp table is visible; temporarily set
+        # cache maxsize to 0 to exercise the immediate-close path.
+        conn = self.conn
+        orig_maxsize = conn._stmt_cache._maxsize
+        conn._stmt_cache._maxsize = 0
+        try:
+            cur_a = conn.cursor(binary=True, buffered=False)
+            cur_a.execute("SELECT id FROM t_evict_stream WHERE id < ?", (10,))
+            _ = cur_a.fetchone()  # partial read
+
+            # Any binary execute triggers immediate close (size=0 path)
+            cur_b = conn.cursor(binary=True)
+            cur_b.execute("SELECT ? AS v", (99,))
+            self.assertEqual(cur_b.fetchone(), (99,))
+            cur_b.close()
+
+            cur_check = conn.cursor()
+            cur_check.execute("SELECT 1")
+            self.assertEqual(cur_check.fetchone(), (1,))
+            cur_check.close()
+
+            cur_a.close()
+        finally:
+            conn._stmt_cache._maxsize = orig_maxsize
+
+
+@_skip_native
+class TestGCFinalizeWithActiveStream(unittest.TestCase):
+    """Regression: GC-finalizing a cursor that has an active binary unbuffered
+    result must drain the pending rows and clear _active_streaming_result so
+    the connection returns to READY state.  Without the fix, the connection
+    stays in MYSQL_STATUS_STATEMENT_GET_RESULT and the next execute on any
+    cursor gets "Commands out of sync" / "Lost connection" (errno 2013).
+
+    This reproduces the failure seen in SQLAlchemy test_alias_pathing teardown:
+    profile_memory() calls gc.collect() between iterations, which finalizes
+    cursors that hold live unbuffered results.
+    """
+
+    def setUp(self) -> None:
+        self.conn = _cache_conn(prep_stmt_cache_size=5)
+        self.conn.autocommit = True
+        cur = self.conn.cursor()
+        cur.execute(
+            "CREATE TEMPORARY TABLE t_gc_stream (id INT, val VARCHAR(32))"
+        )
+        for i in range(10):
+            cur.execute(
+                "INSERT INTO t_gc_stream VALUES (?, ?)", (i, f"v{i}")
+            )
+        cur.close()
+
+    def tearDown(self) -> None:
+        try:
+            self.conn.cursor().execute("DROP TEMPORARY TABLE IF EXISTS t_gc_stream")
+        except Exception:
+            pass
+        self.conn.close()
+
+    def test_gc_finalize_binary_unbuffered_clears_active_result(self) -> None:
+        """Drop a binary unbuffered cursor ref while rows are pending.
+        After gc.collect(), the connection must still be usable."""
+        import gc
+
+        def open_and_abandon():
+            cur = self.conn.cursor(binary=True, buffered=False)
+            cur.execute(
+                "SELECT id, val FROM t_gc_stream WHERE id < ?", (10,)
+            )
+            _ = cur.fetchone()  # partial read — rows still pending
+            # Let `cur` go out of scope without closing
+
+        open_and_abandon()
+        # Force GC to finalize the abandoned cursor
+        gc.collect()
+        gc.collect()
+
+        # Connection must be back in READY state
+        verify = self.conn.cursor()
+        verify.execute("SELECT COUNT(*) FROM t_gc_stream")
+        row = verify.fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(row[0], 10)
+        verify.close()
+
+    def test_gc_finalize_loop_connection_stays_healthy(self) -> None:
+        """Simulate the profile_memory() pattern: run a query many times,
+        collect GC after each, and verify the connection survives intact."""
+        import gc
+
+        def one_pass():
+            cur = self.conn.cursor(binary=True, buffered=False)
+            cur.execute("SELECT id FROM t_gc_stream")
+            _ = cur.fetchone()  # partial — rows still pending
+            # cursor goes out of scope here
+
+        for _ in range(10):
+            one_pass()
+            gc.collect()
+            gc.collect()
+
+        # After many GC-finalize cycles, connection must still work
+        verify = self.conn.cursor()
+        verify.execute("SELECT 1")
+        self.assertEqual(verify.fetchone(), (1,))
+        verify.close()
+
+    def test_gc_finalize_buffered_cursor_does_not_corrupt(self) -> None:
+        """GC-finalizing a *buffered* binary cursor (not the active streaming
+        result) must not call clear_result and must not corrupt the connection.
+        Regression: finalize was calling MrdbCursor_clear_result
+        unconditionally, which would touch self->result even for buffered
+        cursors where it was already freed by the normal close path."""
+        import gc
+
+        def open_and_abandon():
+            cur = self.conn.cursor(binary=True)  # buffered by default
+            cur.execute("SELECT id, val FROM t_gc_stream")
+            rows = cur.fetchall()  # fully consumed — not the active stream
+            self.assertEqual(len(rows), 10)
+            # Let cur go out of scope without explicit close
+
+        open_and_abandon()
+        gc.collect()
+        gc.collect()
+
+        verify = self.conn.cursor()
+        verify.execute("SELECT 1")
+        self.assertEqual(verify.fetchone(), (1,))
+        verify.close()
+
+    def test_gc_finalize_text_unbuffered_clears_active_result(self) -> None:
+        """GC-finalizing a text-protocol unbuffered cursor that IS the active
+        streaming result must drain rows and clear tracking.  This reproduces
+        the SQLAlchemy test_alias_pathing failure: subqueryload generates a
+        plain-text SELECT (no ?), the cursor is abandoned mid-read, GC fires,
+        and the connection must be reusable for teardown DROP TABLE."""
+        import gc
+
+        def open_and_abandon():
+            # Text protocol: no binary=True, no buffered=False is needed —
+            # use buffered=False to get an unbuffered text cursor.
+            cur = self.conn.cursor(buffered=False)
+            cur.execute("SELECT id, val FROM t_gc_stream")
+            _ = cur.fetchone()  # partial read — rows still pending
+            # cursor goes out of scope here
+
+        open_and_abandon()
+        gc.collect()
+        gc.collect()
+
+        verify = self.conn.cursor()
+        verify.execute("SELECT COUNT(*) FROM t_gc_stream")
+        self.assertEqual(verify.fetchone(), (10,))
+        verify.close()
+
+    def test_gc_finalize_multiple_cursors_sqlalchemy_pattern(self) -> None:
+        """Reproduce the exact SQLAlchemy test_alias_pathing pattern:
+        run a query that produces multiple cursors (like ORM subqueryload),
+        then GC-collect, then verify the connection works for teardown.
+        All cursors here are buffered (fully consumed) — none is the active
+        streaming result — so finalize must do nothing harmful."""
+        import gc
+
+        def one_pass():
+            # Simulate ORM loading: multiple sequential queries, all buffered
+            c1 = self.conn.cursor(binary=True)
+            c1.execute("SELECT id FROM t_gc_stream WHERE id < ?", (5,))
+            _ = c1.fetchall()
+
+            c2 = self.conn.cursor(binary=True)
+            c2.execute(
+                "SELECT id, val FROM t_gc_stream WHERE id >= ?", (5,)
+            )
+            _ = c2.fetchall()
+            # both cursors go out of scope here — neither is active stream
+
+        for _ in range(5):
+            one_pass()
+            gc.collect()
+            gc.collect()
+
+        # Simulate teardown: connection must still accept DDL
+        verify = self.conn.cursor()
+        verify.execute("SELECT COUNT(*) FROM t_gc_stream")
+        self.assertEqual(verify.fetchone(), (10,))
+        verify.close()
+
+    def test_gc_finalize_in_forked_child_does_not_close_parent_socket(
+        self,
+    ) -> None:
+        """Regression: MrdbConnection_finalize must NOT call mysql_close() in
+        a forked child process.
+
+        The socket fd is shared with the parent via fork().  If the child's
+        finalizer closes it, the parent's live TCP connection is destroyed,
+        causing 'Lost connection to server during query (errno: 2013)' on the
+        very next statement — exactly the failure seen in the SQLAlchemy
+        test_alias_pathing teardown, where profile_memory() runs go() inside
+        a multiprocessing.Process (fork) and gc.collect() fires in the child.
+
+        This test only makes sense under fork() — spawn creates a fresh process
+        with no shared fd so there is nothing to regress.
+        """
+        try:
+            ctx = multiprocessing.get_context("fork")
+        except ValueError:
+            self.skipTest("fork start method not available on this platform")
+
+        result_queue: multiprocessing.Queue = ctx.Queue()
+        proc = ctx.Process(
+            target=_fork_child_gc_test,
+            args=(self.conn, result_queue),
+        )
+        proc.start()
+        msg = result_queue.get(timeout=10)
+        proc.join(timeout=10)
+        self.assertEqual(msg, "child_done")
+        self.assertEqual(proc.exitcode, 0)
+
+        # Parent connection must still be alive — the child must NOT have
+        # closed the shared socket.
+        verify = self.conn.cursor()
+        verify.execute("SELECT COUNT(*) FROM t_gc_stream")
+        self.assertEqual(verify.fetchone(), (10,))
+        verify.close()

@@ -56,6 +56,10 @@ static PyObject *MrdbCursor_stmt_fetch_cont(MrdbCursor *self, PyObject *args);
 /* Shared fetch function - used by both sync and async cursors */
 int MrdbCursor_fetchinternal(MrdbCursor *self);
 
+/* C-level memory cleanup helpers */
+static void MrdbCursor_FreeValues(MrdbCursor *self);
+static void MrdbCursor_FreeResultValues(MrdbCursor *self);
+
 /* Prepared statement cache helpers */
 static PyObject *MrdbCursor_detach_stmt(MrdbCursor *self);
 static PyObject *MrdbCursor_attach_stmt(MrdbCursor *self, PyObject *capsule);
@@ -448,13 +452,6 @@ static int MrdbCursor_tpclear(MrdbCursor *self)
         }
     }
 
-    // Clear all PyObject values in the MrdbParamValue array
-    if (self->value && self->paramcount > 0) {
-        for (uint32_t i = 0; i < self->paramcount; i++) {
-            Py_CLEAR(self->value[i].value);
-        }
-    }
-
     return 0;
 }
 
@@ -474,6 +471,23 @@ static void MrdbCursor_dealloc(PyObject *obj)
 {
   MrdbCursor *self = (MrdbCursor *)obj;
   ma_cursor_close(self);
+  MrdbCursor_FreeValues(self);
+  MrdbCursor_FreeResultValues(self);
+  MARIADB_FREE_MEM(self->bind);
+  MARIADB_FREE_MEM(self->value);
+  MARIADB_FREE_MEM(self->params);
+  self->fields = NULL;
+  if (self->statement)
+  {
+      PyMem_RawFree(self->statement);
+      self->statement = NULL;
+  }
+  if (self->result)
+  {
+      mysql_free_result(self->result);
+      self->result = NULL;
+  }
+
   MrdbCursor_tpclear(self);
   Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -513,28 +527,57 @@ static void MrdbCursor_clearstmt(MrdbCursor *self)
 /* {{{ MrdbCursor_clear_result(MrdbCursor *self)
    clear pending result sets
 */
+/* Clear Python-level active-cursor tracking attributes on the connection.
+   Tries _active_streaming_result first (sync text + binary), then
+   _active_async_cursor. */
+static void
+ma_cursor_clear_tracking(MrdbCursor *self)
+{
+    if (!self->connection)
+        return;
+
+    PyObject *exc_type, *exc_val, *exc_tb;
+    PyErr_Fetch(&exc_type, &exc_val, &exc_tb);
+
+    PyObject *active = PyObject_GetAttrString(
+        (PyObject *)self->connection, "_active_streaming_result");
+    const char *field_name = "_active_streaming_result";
+    if (!active) {
+        PyErr_Clear();
+        active = PyObject_GetAttrString(
+            (PyObject *)self->connection, "_active_async_cursor");
+        field_name = "_active_async_cursor";
+        if (!active)
+            PyErr_Clear();
+    }
+    if (active && active != Py_None && active == (PyObject *)self) {
+        PyObject_SetAttrString(
+            (PyObject *)self->connection, field_name, Py_None);
+        PyErr_Clear();
+    }
+    Py_XDECREF(active);
+
+    PyErr_Restore(exc_type, exc_val, exc_tb);
+}
+
 PyObject *MrdbCursor_clear_result(MrdbCursor *self)
 {
-    if (!self->is_text &&
-        self->stmt)
+    if (!self->is_text && self->stmt)
     {
         /* free current result */
         if (mysql_stmt_field_count(self->stmt))
-        {
             mysql_stmt_free_result(self->stmt);
-        }
-        /* check if there are more pending result sets */
+        /* drain any additional result sets */
         while (mysql_stmt_next_result(self->stmt) == 0)
         {
             if (mysql_stmt_field_count(self->stmt))
-            {
                 mysql_stmt_free_result(self->stmt);
-            }
         }
-    } else if (self->is_text)
+        ma_cursor_clear_tracking(self);
+    }
+    else if (self->is_text)
     {
-        /* free current result - drain remaining rows first if it exists
-         * (even if is_buffered is now True, the result might have been created as unbuffered, so we must drain it) */
+        /* drain current result — may be unbuffered even if is_buffered is now True */
         if (self->result)
         {
             while (mysql_fetch_row(self->result))
@@ -542,7 +585,7 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
             }
             mysql_free_result(self->result);
         }
-        /* clear pending result sets */
+        /* drain any additional result sets from a multi-statement */
         if (self->connection && self->connection->mysql)
         {
             while (mysql_more_results(self->connection->mysql))
@@ -558,24 +601,8 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
                     mysql_free_result(res);
                 }
             }
-
-            /* Clear Python-level active cursor tracking */
-            PyObject *active = PyObject_GetAttrString((PyObject *)self->connection, "_active_streaming_result");
-            const char *field_name = "_active_streaming_result";
-            
-            if (!active || PyErr_Occurred()) {
-                PyErr_Clear();
-                active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
-                field_name = "_active_async_cursor";
-                if (!active || PyErr_Occurred())
-                    PyErr_Clear();
-            }
-            
-            if (active && active != Py_None && active == (PyObject *)self) {
-                PyObject_SetAttrString((PyObject *)self->connection, field_name, Py_None);
-            }
-            Py_XDECREF(active);
         }
+        ma_cursor_clear_tracking(self);
     }
     /* CONPY-52: Avoid possible double free */
     self->result= NULL;
@@ -610,7 +637,8 @@ static void MrdbCursor_FreeResultValues(MrdbCursor *self)
 static
 void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
 {
-    /* clear pending result sets */
+    /* clear pending result sets; ma_cursor_clear_tracking inside
+       MrdbCursor_clear_result is already exception-neutral */
     MrdbCursor_clear_result(self);
 
     if (!self->is_text && self->stmt) {
@@ -640,6 +668,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     MrdbCursor_clearstmt(self);
     MrdbCursor_FreeResultValues(self);
     MARIADB_FREE_MEM(self->bind);
+    MARIADB_FREE_MEM(self->value);
     MARIADB_FREE_MEM(self->params);
 }
 /* }}} */
@@ -677,7 +706,16 @@ void ma_cursor_reset(MrdbCursor *self)
 {
     if (!self->closed)
     {
-        MrdbCursor_clear_result(self);
+        int is_forked_child = (self->connection &&
+                               self->connection->creation_pid &&
+                               self->connection->creation_pid != getpid());
+
+        if (is_forked_child)
+        {
+            self->stmt = NULL;
+            return;
+        }
+
         if (!self->is_text && self->stmt)
         {
             /* Todo: check if all the cursor stuff is deleted (when using prepared
@@ -688,8 +726,6 @@ void ma_cursor_reset(MrdbCursor *self)
             self->stmt= NULL;
         }
         MrdbCursor_clear(self, 0);
-
-        MrdbCursor_clearstmt(self);
     }
 }
 
@@ -700,27 +736,9 @@ void ma_cursor_reset(MrdbCursor *self)
 static
 void ma_cursor_close(MrdbCursor *self)
 {
+    /* ma_cursor_reset → MrdbCursor_clear → MrdbCursor_clear_result already
+       drains the result and calls ma_cursor_clear_tracking. */
     ma_cursor_reset(self);
-
-    /* Clear Python-level active cursor tracking */
-    if (self->connection) {
-        PyObject *active = PyObject_GetAttrString((PyObject *)self->connection, "_active_streaming_result");
-        const char *field_name = "_active_streaming_result";
-        
-        if (!active || PyErr_Occurred()) {
-            PyErr_Clear();
-            active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
-            field_name = "_active_async_cursor";
-            if (!active || PyErr_Occurred())
-                PyErr_Clear();
-        }
-        
-        if (active && active != Py_None && active == (PyObject *)self) {
-            PyObject_SetAttrString((PyObject *)self->connection, field_name, Py_None);
-        }
-        Py_XDECREF(active);
-    }
-
     self->closed= 1;
 }
 
@@ -740,20 +758,38 @@ PyObject * MrdbCursor_close(MrdbCursor *self)
 
 /* {{{ MrdbCursor_Finalize
    Called by the cyclic GC before tp_clear/tp_dealloc.
-   We must NOT send any protocol packets here (COM_STMT_CLOSE,
-   COM_STMT_FETCH, …) because the connection may have an in-flight
-   query whose response has not been read yet.  Sending a packet in
-   that state triggers CR_COMMANDS_OUT_OF_SYNC on the MYSQL handle
-   and corrupts the connection ("Lost connection", errno 2013).
-
-   Instead we just orphan the MYSQL_STMT*: it stays on the
-   connection's internal stmt_list and will be properly freed when
-   mysql_close() runs.  MrdbCursor_dealloc (called later) will see
-   self->closed==1 and skip ma_cursor_reset(). */
+   We must NOT send any new protocol commands here (COM_STMT_CLOSE,
+   COM_STMT_EXECUTE, …) because the connection may have an in-flight
+   query whose response has not been read yet.
+*/
 static void MrdbCursor_finalize(MrdbCursor *self)
 {
-    if (!self->closed && self->connection && self->connection->mysql)
+    if (!self->closed)
     {
+        /* Fork safety: if we are in a forked child process
+           Skip all socket I/O and just orphan the cursor. */
+        if (self->connection &&
+            self->connection->creation_pid &&
+            self->connection->creation_pid != getpid())
+        {
+            self->stmt = NULL;
+            self->closed = 1;
+            return;
+        }
+
+        if (self->connection)
+        {
+            PyObject *active = PyObject_GetAttrString(
+                (PyObject *)self->connection, "_active_streaming_result");
+            if (!active)
+                PyErr_Clear();
+            else
+            {
+                if (active == (PyObject *)self && active != Py_None)
+                    MrdbCursor_clear_result(self);
+                Py_DECREF(active);
+            }
+        }
         self->stmt = NULL;
         self->closed = 1;
     }
@@ -777,19 +813,20 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             }
 
             if (!self->is_buffered) {
-                /* Set Python-level active cursor tracking */
-                /* Try sync field first, if it doesn't exist try async field */
-                PyObject *test = PyObject_GetAttrString((PyObject *)self->connection, "_active_streaming_result");
-                if (test || !PyErr_Occurred()) {
-                    Py_XDECREF(test);
-                    if (PyObject_SetAttrString((PyObject *)self->connection, "_active_streaming_result", (PyObject *)self) < 0) {
+                PyObject *test = PyObject_GetAttrString(
+                    (PyObject *)self->connection, "_active_streaming_result");
+                if (test) {
+                    Py_DECREF(test);
+                    if (PyObject_SetAttrString((PyObject *)self->connection,
+                                               "_active_streaming_result",
+                                               (PyObject *)self) < 0)
                         return 1;
-                    }
                 } else {
                     PyErr_Clear();
-                    if (PyObject_SetAttrString((PyObject *)self->connection, "_active_async_cursor", (PyObject *)self) < 0) {
+                    if (PyObject_SetAttrString((PyObject *)self->connection,
+                                               "_active_async_cursor",
+                                               (PyObject *)self) < 0)
                         return 1;
-                    }
                 }
             }
         }
@@ -800,6 +837,13 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
                 mariadb_throw_exception(self->stmt, NULL, 1, NULL);
                 return 1;
             }
+        }
+        else
+        {
+            if (PyObject_SetAttrString((PyObject *)self->connection,
+                                       "_active_streaming_result",
+                                       (PyObject *)self) < 0)
+                return 1;
         }
 
         self->affected_rows= CURSOR_AFFECTED_ROWS(self);
@@ -878,7 +922,7 @@ PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
     Py_RETURN_NONE;
 }
 
-static int Mrdb_execute_direct(MrdbCursor *self, 
+static int Mrdb_execute_direct(MrdbCursor *self,
                                const char *statement,
                                size_t statement_len)
 {
@@ -1019,7 +1063,7 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
             PyObject *desc;
             Mrdb_ExtFieldType *ext_field_type= mariadb_extended_field_type(&self->fields[i]);
 
-            display_length= self->fields[i].max_length > self->fields[i].length ? 
+            display_length= self->fields[i].max_length > self->fields[i].length ?
                             self->fields[i].max_length : self->fields[i].length;
             mysql_get_character_set_info(self->connection->mysql, &cs);
             if (cs.mbmaxlen > 1)
@@ -1096,7 +1140,7 @@ int MrdbCursor_fetchinternal(MrdbCursor *self)
             if (self->connection) {
                 PyObject *active = PyObject_GetAttrString((PyObject *)self->connection, "_active_streaming_result");
                 const char *field_name = "_active_streaming_result";
-                
+
                 if (!active || PyErr_Occurred()) {
                     PyErr_Clear();
                     active = PyObject_GetAttrString((PyObject *)self->connection, "_active_async_cursor");
@@ -1104,7 +1148,7 @@ int MrdbCursor_fetchinternal(MrdbCursor *self)
                     if (!active || PyErr_Occurred())
                         PyErr_Clear();
                 }
-                
+
                 if (active && active != Py_None && active == (PyObject *)self) {
                     PyObject_SetAttrString((PyObject *)self->connection, field_name, Py_None);
                 }
@@ -1411,7 +1455,7 @@ MrdbCursor_execute_binary(MrdbCursor *self)
         mariadb_throw_exception(self->stmt, NULL, 1, NULL);
         goto error;
     }
-    
+
     self->field_count= mysql_stmt_field_count(self->stmt);
     Py_RETURN_NONE;
 
@@ -1632,6 +1676,8 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
     }
 
     row_count= (uint64_t)PyLong_AsLongLong(rows);
+    if (PyErr_Occurred())
+        return NULL;
 
     if (!(List= PyList_New(0)))
     {
@@ -1643,20 +1689,43 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
         uint32_t j;
         PyObject *Row;
 
+        if (PyErr_Occurred())
+        {
+            Py_DECREF(List);
+            return NULL;
+        }
+
         self->row_number++;
 
         if (!(Row= mariadb_get_sequence_or_tuple(self)))
         {
+            Py_DECREF(List);
             return NULL;
         }
 
         for (j=0; j < field_count; j++)
         {
             ma_set_result_column_value(self, Row, j);
+            if (PyErr_Occurred())
+            {
+                Py_DECREF(Row);
+                Py_DECREF(List);
+                return NULL;
+            }
         }
-        PyList_Append(List, Row);
+        if (PyList_Append(List, Row) < 0)
+        {
+            Py_DECREF(Row);
+            Py_DECREF(List);
+            return NULL;
+        }
         /* CONPY-99: Decrement Row to prevent memory leak */
         Py_DECREF(Row);
+    }
+    if (PyErr_Occurred())
+    {
+        Py_DECREF(List);
+        return NULL;
     }
     self->row_count = self->row_number;
     return List;
@@ -2139,8 +2208,10 @@ static void
 MrdbCursor_stmt_capsule_destructor(PyObject *capsule)
 {
     MYSQL_STMT *stmt = (MYSQL_STMT *)PyCapsule_GetPointer(capsule, "MYSQL_STMT");
-    if (stmt)
+    if (stmt) {
+        stmt->stmt_id = 0;
         mysql_stmt_close(stmt);
+    }
 }
 
 /* _detach_stmt(): drain results, wrap self->stmt in a PyCapsule, set stmt=NULL.

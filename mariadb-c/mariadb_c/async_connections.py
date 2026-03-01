@@ -336,7 +336,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             await self._pooled_connection.return_to_pool()
         else:
             if self._stmt_cache is not None:
-                self._stmt_cache.clear(close=True)
+                self._stmt_cache.clear()
                 self._stmt_cache = None
             # Unregister event loop callbacks before closing
             if self._read_event and self._loop and self._socket_fd is not None:

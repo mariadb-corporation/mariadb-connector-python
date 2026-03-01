@@ -96,14 +96,24 @@ class StmtCache:
         self._cache.move_to_end(sql)
         return entry
 
+    def _drain_active_result(self) -> None:
+        """Drain any active streaming result on the connection before eviction"""
+        active = getattr(self._connection, "_active_streaming_result", None)
+        if active is not None:
+            active._clear_result()
+
     def put(self, sql: str, capsule: Any) -> None:
         """Store *capsule* under *sql*, evicting the LRU entry if over capacity."""
         if self._maxsize <= 0:
+            self._drain_active_result()
             try:
                 self._connection._close_stmt_capsule(capsule)
             except Exception:
                 pass
             return
+        will_evict = (sql in self._cache) or (len(self._cache) >= self._maxsize)
+        if will_evict:
+            self._drain_active_result()
         if sql in self._cache:
             old = self._cache.pop(sql)
             old.evict(self._connection)
@@ -113,11 +123,15 @@ class StmtCache:
             _, evicted = self._cache.popitem(last=False)
             evicted.evict(self._connection)
 
-    def clear(self, close: bool = True) -> None:
-        """Discard all cached statements, optionally closing each on the server."""
-        if close:
-            for entry in self._cache.values():
-                entry.evict(self._connection)
+    def clear(self) -> None:
+        """Discard all cached statements"""
+        for entry in self._cache.values():
+            if entry.capsule is not None:
+                try:
+                    self._connection._neutralize_stmt_capsule(entry.capsule)
+                except Exception:
+                    pass
+                entry.capsule = None
         self._cache.clear()
 
     def __len__(self) -> int:
@@ -165,7 +179,7 @@ class Connection(CConnection, SyncConnectionCommon):
         autocommit = kwargs.pop("autocommit", False)
         kwargs.pop("reconnect", None)
         converter = kwargs.pop("converter", None)
-        self._binary = bool(kwargs.pop("binary", False))        
+        self._binary = bool(kwargs.pop("binary", False))
         cache_prep_stmts: bool = bool(kwargs.pop("cache_prep_stmts", True))
         prep_stmt_cache_size: int = int(kwargs.pop("prep_stmt_cache_size", 100))
 
@@ -216,13 +230,13 @@ class Connection(CConnection, SyncConnectionCommon):
             cursorclass = _DefaultCursor
         cursor = cursorclass(self, **kwargs)
         return cursor
-    
+
     def close(self) -> None:
         if self._pooled_connection:
             self._pooled_connection.return_to_pool()
         else:
             if self._stmt_cache is not None:
-                self._stmt_cache.clear(close=True)
+                self._stmt_cache.clear()
                 self._stmt_cache = None
             super().close()
 
@@ -338,7 +352,7 @@ class Connection(CConnection, SyncConnectionCommon):
     def server_mariadb(self) -> bool:
         """
         Check if server is MariaDB
-        
+
         Returns:
             True if server is MariaDB, False if MySQL
         """
@@ -454,7 +468,7 @@ class Connection(CConnection, SyncConnectionCommon):
     def ping(self):
         """
         Check if the connection to the server is alive
-        
+
         Sends a ping command to the server.
 
         Raises:
