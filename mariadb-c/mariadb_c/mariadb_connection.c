@@ -739,10 +739,13 @@ static void MrdbConnection_dealloc(PyObject *obj)
     /* Close MySQL connection if open */
     if (self && self->mysql)
     {
+        /* Fork safety: suppress COM_QUIT in forked child by marking the
+           connection as already quit.  mysql_close() will then skip the
+           network send but still free all client-side memory.  This is
+           the exact analogue of zeroing stmt_id before mysql_stmt_close(). */
         if (self->creation_pid && self->creation_pid != getpid())
-            self->mysql = NULL;
-        else
-            ma_connection_close(self);
+            self->mysql->status = MYSQL_STATUS_QUIT_SENT;
+        ma_connection_close(self);
     }
     
     /* Clear all Python object references */
@@ -828,15 +831,15 @@ void MrdbConnection_finalize(MrdbConnection *self)
         PyErr_Clear();
     Py_XDECREF(cache);
 
-    /* If we are running in a forked child process, the socket fd is shared
-       with the parent.  Calling mysql_close() here would close that shared
-       fd and destroy the parent's live TCP connection ("Lost connection",
-       errno 2013).  SQLAlchemy's profile_memory() uses multiprocessing.Process
-       (fork) and deliberately avoids disposing the pool in the child — but
-       tp_finalize fires anyway when GC runs in the child.  After neutralizing
-       stmt-cache capsules, skip the close in the child. */
-    if (self->creation_pid && self->creation_pid != getpid())
-        return;
+    /* Fork safety: suppress COM_QUIT in forked child by marking the
+       connection as already quit before calling mysql_close().  The fd is
+       shared with the parent via fork() — sending COM_QUIT over it would
+       inject bytes into the parent's TCP stream and cause "Lost connection"
+       (errno 2013) on the parent's next query.  Setting MYSQL_STATUS_QUIT_SENT
+       makes libmariadb skip the network send but still free all client-side
+       memory — the exact analogue of zeroing stmt_id before mysql_stmt_close(). */
+    if (self->mysql && self->creation_pid && self->creation_pid != getpid())
+        self->mysql->status = MYSQL_STATUS_QUIT_SENT;
 
     ma_connection_close(self);
 }
@@ -868,18 +871,12 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
 {
     if (!self->closed)
     {
-        /* Fork safety: if called in a forked child process, the socket fd is
-           shared with the parent.  Calling mysql_close() would close that fd
-           and destroy the parent's live TCP connection.  SQLAlchemy's pool
-           finalizers call connection.close() on inherited connections when the
-           old pool object is GC'd in the child — this path bypasses
-           tp_finalize, so we need the same guard here. */
-        if (self->creation_pid && self->creation_pid != getpid())
-        {
-            self->mysql = NULL;
-            self->closed = 1;
-            Py_RETURN_NONE;
-        }
+        /* Fork safety: suppress COM_QUIT in forked child — same pattern as
+           finalize and dealloc.  Pool finalizers call connection.close() on
+           inherited connections in the child (bypassing tp_finalize), so we
+           need the guard here too. */
+        if (self->mysql && self->creation_pid && self->creation_pid != getpid())
+            self->mysql->status = MYSQL_STATUS_QUIT_SENT;
         ma_connection_close(self);
         self->closed= 1;
     }
