@@ -774,6 +774,22 @@ static void MrdbCursor_finalize(MrdbCursor *self)
 {
     if (!self->closed)
     {
+        /* Fork safety: if we are in a forked child process, the socket fd is
+           shared with the parent.  Reading from it here (mysql_stmt_free_result
+           / mysql_fetch_row inside MrdbCursor_clear_result) would consume bytes
+           that belong to the parent's in-flight response, corrupting its
+           protocol state and causing "Lost connection" (errno 2013) on the next
+           query — exactly the failure seen in test_alias_pathing teardown.
+           Skip all socket I/O and just orphan the cursor. */
+        if (self->connection &&
+            self->connection->creation_pid &&
+            self->connection->creation_pid != getpid())
+        {
+            self->stmt = NULL;
+            self->closed = 1;
+            return;
+        }
+
         /* Only drain if this cursor IS the active streaming result.
            MrdbCursor_clear_result is safe here: it performs only reads
            (mysql_stmt_free_result / mysql_fetch_row) — no command packets.
