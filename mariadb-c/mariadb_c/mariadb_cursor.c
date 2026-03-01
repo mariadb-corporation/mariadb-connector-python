@@ -711,6 +711,17 @@ void ma_cursor_reset(MrdbCursor *self)
 {
     if (!self->closed)
     {
+        /* Fork safety: if running in a forked child, do not touch the socket.
+           Finalize usually sets closed=1, but guard here in case dealloc/close
+           runs without finalize first. Orphan stmt and mark closed. */
+        if (self->connection &&
+            self->connection->creation_pid &&
+            self->connection->creation_pid != getpid())
+        {
+            self->stmt = NULL;
+            self->closed = 1;
+            return;
+        }
         if (!self->is_text && self->stmt)
         {
             /* Todo: check if all the cursor stuff is deleted (when using prepared
@@ -2208,8 +2219,11 @@ static void
 MrdbCursor_stmt_capsule_destructor(PyObject *capsule)
 {
     MYSQL_STMT *stmt = (MYSQL_STMT *)PyCapsule_GetPointer(capsule, "MYSQL_STMT");
-    if (stmt)
+    if (stmt) {
+        /* Make mysql_stmt_close() a pure client-side free: avoid COM_STMT_CLOSE */
+        stmt->stmt_id = 0;
         mysql_stmt_close(stmt);
+    }
 }
 
 /* _detach_stmt(): drain results, wrap self->stmt in a PyCapsule, set stmt=NULL.
