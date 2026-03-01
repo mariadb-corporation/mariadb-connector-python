@@ -711,25 +711,28 @@ void ma_cursor_reset(MrdbCursor *self)
 {
     if (!self->closed)
     {
-        /* Fork safety: if running in a forked child, do not touch the socket.
-           Finalize usually sets closed=1, but guard here in case dealloc/close
-           runs without finalize first. Orphan stmt and mark closed. */
-        if (self->connection &&
-            self->connection->creation_pid &&
-            self->connection->creation_pid != getpid())
-        {
-            self->stmt = NULL;
-            self->closed = 1;
-            return;
-        }
+        int is_forked_child = (self->connection &&
+                               self->connection->creation_pid &&
+                               self->connection->creation_pid != getpid());
+
         if (!self->is_text && self->stmt)
         {
-            /* Todo: check if all the cursor stuff is deleted (when using prepared
-               statements this should be handled in mysql_stmt_close) */
-            Py_BEGIN_ALLOW_THREADS;
-            mysql_stmt_close(self->stmt);
-            Py_END_ALLOW_THREADS;
-            self->stmt= NULL;
+            if (is_forked_child)
+            {
+                /* Fork safety: skip mysql_stmt_close() — it sends COM_STMT_CLOSE
+                   over the shared socket fd, corrupting the parent's connection.
+                   The stmt* is owned by the parent's MYSQL handle; just orphan it. */
+                self->stmt = NULL;
+            }
+            else
+            {
+                /* Todo: check if all the cursor stuff is deleted (when using prepared
+                   statements this should be handled in mysql_stmt_close) */
+                Py_BEGIN_ALLOW_THREADS;
+                mysql_stmt_close(self->stmt);
+                Py_END_ALLOW_THREADS;
+                self->stmt= NULL;
+            }
         }
         MrdbCursor_clear(self, 0);
     }

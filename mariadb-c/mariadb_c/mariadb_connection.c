@@ -868,6 +868,18 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
 {
     if (!self->closed)
     {
+        /* Fork safety: if called in a forked child process, the socket fd is
+           shared with the parent.  Calling mysql_close() would close that fd
+           and destroy the parent's live TCP connection.  SQLAlchemy's pool
+           finalizers call connection.close() on inherited connections when the
+           old pool object is GC'd in the child — this path bypasses
+           tp_finalize, so we need the same guard here. */
+        if (self->creation_pid && self->creation_pid != getpid())
+        {
+            self->mysql = NULL;
+            self->closed = 1;
+            Py_RETURN_NONE;
+        }
         ma_connection_close(self);
         self->closed= 1;
     }
