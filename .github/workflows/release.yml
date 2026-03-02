@@ -256,7 +256,7 @@ jobs:
   # Build mariadb-binary (binary wheels) - macOS
   build-mariadb-binary-macos:
     name: Build mariadb-binary (macOS ${{ matrix.arch }} ${{ matrix.pyver }})
-    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13' || 'macos-latest' }}
+    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13-xlarge' || 'macos-latest' }}
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb_binary == 'true')
     strategy:
       fail-fast: false
