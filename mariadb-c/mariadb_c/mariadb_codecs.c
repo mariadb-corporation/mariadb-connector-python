@@ -610,6 +610,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             break;
         }
         case MYSQL_TYPE_JSON:
+        {
             unsigned long len= 0;
             if ((self->values[column]=
                 PyUnicode_FromStringAndSize((const char *)data,
@@ -620,6 +621,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
                 self->fields[column].max_length= len;
             }
             break;
+        }
 
         case MYSQL_TYPE_STRING:
         case MYSQL_TYPE_VAR_STRING:
