@@ -80,8 +80,6 @@ with mariadb.connect("mariadb://root:password@localhost:3306/mydb") as conn:
         for row in cursor.fetchall():
             print(row)
 
-or usi
-
 ```
 
 ### Connection with Parameters
@@ -233,13 +231,10 @@ async def main():
     )
     
     # Get connection from pool
-    conn = await pool.get_connection()
-    cursor = conn.cursor()
-    
-    # Execute queries asynchronously
-    await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
-            
+    async with await pool.acquire() as conn:
+        async with conn.cursor() as cursor:
             # Fetch results
+            await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
             row = await cursor.fetchone()
             print(f"User: {row}")
             
@@ -254,6 +249,8 @@ async def main():
                 ("Jane Doe", "jane@example.com")
             )
             await conn.commit()
+    
+    await pool.close()
 
 # Run the async function
 asyncio.run(main())
@@ -278,45 +275,6 @@ async def main():
             count = (await cursor.fetchone())[0]
             print(f"Total users: {count}")
 
-asyncio.run(main())
-```
-
-### Async Connection Pools
-
-For high-performance async applications, use async connection pools:
-
-```python
-import asyncio
-import mariadb
-
-async def main():
-    # Create an async connection pool (automatically pre-filled)
-    pool = await mariadb.create_async_pool(
-        host="localhost",
-        port=3306,
-        user="user",
-        password="password",
-        database="mydb",
-        min_size=5,
-        max_size=20,
-        ping_threshold=0.25  # Selective health check for idle connections
-    )
-    
-    # Get connection from pool
-    async with await pool.acquire() as conn:
-        async with conn.cursor() as cursor:
-            # Execute queries
-            await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
-            row = await cursor.fetchone()
-            print(f"User: {row}")
-        
-            # Insert data
-            await cursor.execute(
-                "INSERT INTO users (name, email) VALUES (?, ?)",
-                ("Alice", "alice@example.com")
-            )
-            await conn.commit()
-    
 asyncio.run(main())
 ```
 
