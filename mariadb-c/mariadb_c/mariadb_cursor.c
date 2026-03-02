@@ -766,14 +766,15 @@ static void MrdbCursor_finalize(MrdbCursor *self)
 {
     if (!self->closed)
     {
+        self->closed = 1;
+
         /* Fork safety: if we are in a forked child process
-           Skip all socket I/O and just orphan the cursor. */
+           skip all socket I/O and just orphan the cursor. */
         if (self->connection &&
             self->connection->creation_pid &&
             self->connection->creation_pid != getpid())
         {
             self->stmt = NULL;
-            self->closed = 1;
             return;
         }
 
@@ -791,7 +792,6 @@ static void MrdbCursor_finalize(MrdbCursor *self)
             }
         }
         self->stmt = NULL;
-        self->closed = 1;
     }
 }
 /* }}} */
