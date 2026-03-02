@@ -5,7 +5,7 @@ backend-path = ["."]
 
 [project]
 name = "mariadb"
-version = "2.0.0.dev17"
+version = "2.0.0.dev18"
 description = "MariaDB Connector/Python with Java-equivalent implementation"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.8"
@@ -48,11 +48,11 @@ dependencies = [
 [project.optional-dependencies]
 # C extension for better performance (must match mariadb version)
 c = [
-    "mariadb-c==2.0.0.dev17",
+    "mariadb-c==2.0.0.dev18",
 ]
 # Connection pooling (must match mariadb version)
 pool = [
-    "mariadb-pool==2.0.0.dev17",
+    "mariadb-pool==2.0.0.dev18",
 ]
 
 # Development dependencies
