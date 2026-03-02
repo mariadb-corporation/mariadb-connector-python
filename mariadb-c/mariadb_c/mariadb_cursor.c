@@ -1773,7 +1773,7 @@ static PyObject *
 MrdbCursor_readresponse_start(MrdbCursor *self, PyObject *args)
 {
     int status;
-    int rc;
+    my_bool rc;
     MYSQL *db;
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
@@ -1809,7 +1809,7 @@ MrdbCursor_readresponse_cont(MrdbCursor *self, PyObject *args)
 {
     int wait_status;
     int status;
-    int rc;
+    my_bool rc;
     MYSQL *db;
 
     if (!PyArg_ParseTuple(args, "i", &wait_status))
