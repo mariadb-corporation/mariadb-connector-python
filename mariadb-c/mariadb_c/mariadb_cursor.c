@@ -780,6 +780,24 @@ static void MrdbCursor_finalize(MrdbCursor *self)
 
         if (self->connection)
         {
+            /* If this cursor is the active async cursor, the non-blocking
+               state machine is still using self->stmt — do not null it or
+               call clear_result (mysql_fetch_row on an in-flight async
+               operation corrupts state and causes SIGSEGV). */
+            PyObject *async_active = PyObject_GetAttrString(
+                (PyObject *)self->connection, "_active_async_cursor");
+            if (!async_active)
+                PyErr_Clear();
+            else
+            {
+                int is_async = (async_active == (PyObject *)self &&
+                                async_active != Py_None);
+                Py_DECREF(async_active);
+                if (is_async)
+                    return;
+            }
+
+            /* Only drain synchronous streaming results. */
             PyObject *active = PyObject_GetAttrString(
                 (PyObject *)self->connection, "_active_streaming_result");
             if (!active)
