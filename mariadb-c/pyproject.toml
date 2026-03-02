@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mariadb-c"
-version = "2.0.0.dev15"
+version = "2.0.0.dev16"
 description = "Python MariaDB extension"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
