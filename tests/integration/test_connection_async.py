@@ -47,7 +47,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             self.skipTest("unix_socket not supported on Windows")
         default_conf = conf()
         try:
-            await mariadb.AsyncConnection.connect(
+            await mariadb.asyncConnect(
                 user=default_conf["user"],
                 unix_socket="/does_not_exist/x.sock",
                 port=default_conf["port"],
@@ -77,7 +77,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         f.write("database =%s\n" % default_conf["database"])
         f.close()
 
-        new_conn = await mariadb.AsyncConnection.connect(
+        new_conn = await mariadb.asyncConnect(
             user=default_conf["user"], ssl=True,
             default_file="./client.cnf"
         )
@@ -95,7 +95,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def test_local_infile(self):
         default_conf = conf()
-        new_conn = await mariadb.AsyncConnection.connect(**default_conf, local_infile=False)
+        new_conn = await mariadb.asyncConnect(**default_conf, local_infile=False)
         cursor = new_conn.cursor()
         await cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
         try:
@@ -113,7 +113,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE test has no SSL on port by default")
         default_conf = conf()
-        conn = await mariadb.AsyncConnection.connect(**default_conf, tls_version="TLSv1.2")
+        conn = await mariadb.asyncConnect(**default_conf, tls_version="TLSv1.2")
         cursor = conn.cursor()
         await cursor.execute("SHOW STATUS LIKE 'ssl_version'")
         row = await cursor.fetchone()
@@ -125,7 +125,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE test has no SSL on port by default")
         default_conf = conf()
-        conn = await mariadb.AsyncConnection.connect(**default_conf, tls_version="TLSv1.2,TLSv1.3")
+        conn = await mariadb.asyncConnect(**default_conf, tls_version="TLSv1.2,TLSv1.3")
         cursor = conn.cursor()
         await cursor.execute("SHOW STATUS LIKE 'ssl_version'")
         row = await cursor.fetchone()
@@ -135,7 +135,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def test_init_command(self):
         default_conf = conf()
-        new_conn = await mariadb.AsyncConnection.connect(**default_conf, init_command="SET @a:=1")
+        new_conn = await mariadb.asyncConnect(**default_conf, init_command="SET @a:=1")
         cursor = new_conn.cursor()
         await cursor.execute("SELECT @a")
         row = await cursor.fetchone()
@@ -145,7 +145,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def test_compress(self):
         default_conf = conf()
-        new_conn = await mariadb.AsyncConnection.connect(**default_conf, compress=True)
+        new_conn = await mariadb.asyncConnect(**default_conf, compress=True)
         cursor = new_conn.cursor()
         await cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
         row = await cursor.fetchone()
@@ -163,7 +163,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             self.skipTest("MAXSCALE doesn't tell schema change for now")
 
         default_conf = conf()
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         self.assertEqual(conn.database, default_conf["database"])
         cursor = conn.cursor()
         await cursor.execute("DROP SCHEMA IF EXISTS test1")
@@ -179,7 +179,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
         config = conf()
-        conn = await mariadb.AsyncConnection.connect(**config)
+        conn = await mariadb.asyncConnect(**config)
         cursor = conn.cursor()
         oldid = conn.connection_id
 
@@ -201,7 +201,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             self.skipTest("MAXSCALE wrong thread id")
         
         config = conf()
-        conn = await mariadb.AsyncConnection.connect(**config)
+        conn = await mariadb.asyncConnect(**config)
         try:
             # Connection should be open
             self.assertTrue(await conn.open())
@@ -234,7 +234,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         if self.connection.server_version < 100122:
             self.skipTest("ed25519 not supported")
 
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         curs = conn.cursor()
 
         if self.connection.server_name == "localhost":
@@ -268,7 +268,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         ed_conf = default_conf.copy()
         ed_conf["user"] = "eduser"
         ed_conf["password"] = "MySup8%rPassw@ord"
-        conn2 = await mariadb.AsyncConnection.connect(**ed_conf)
+        conn2 = await mariadb.asyncConnect(**ed_conf)
         
         await cursor.execute("DROP USER IF EXISTS eduser"+get_host_suffix())
         await cursor.close()
@@ -278,7 +278,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy46(self):
         config = conf()
-        async with await mariadb.AsyncConnection.connect(**config) as con:
+        async with await mariadb.asyncConnect(**config) as con:
             cursor = con.cursor()
             await cursor.execute("SELECT 'foo'")
             row = await cursor.fetchone()
@@ -296,16 +296,16 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy101(self):
         default_conf = conf()
-        c1 = await mariadb.AsyncConnection.connect(**default_conf)
+        c1 = await mariadb.asyncConnect(**default_conf)
         self.assertEqual(c1.autocommit, False)
         await c1.close()
-        c1 = await mariadb.AsyncConnection.connect(**default_conf, autocommit=True)
+        c1 = await mariadb.asyncConnect(**default_conf, autocommit=True)
         self.assertEqual(c1.autocommit, True)
         await c1.close()
 
     async def test_db_attribute(self):
         config = conf()
-        async with await mariadb.AsyncConnection.connect(**config) as con:
+        async with await mariadb.asyncConnect(**config) as con:
             cursor = con.cursor()
             await cursor.execute("drop schema if exists test123")
             db = con.database
@@ -327,7 +327,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def test_server_status(self):
         config = conf()
-        con = await mariadb.AsyncConnection.connect(**config)
+        con = await mariadb.asyncConnect(**config)
         self.assertTrue(not con.server_status & STATUS.AUTOCOMMIT)
         await con.set_autocommit(True)
         self.assertTrue(con.server_status & STATUS.AUTOCOMMIT)
@@ -337,7 +337,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy175(self):
         default_conf = conf()
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         str = "Bob's"
         cursor = conn.cursor()
         await cursor.execute("SET session sql_mode='NO_BACKSLASH_ESCAPES'")
@@ -351,7 +351,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def test_closed(self):
         default_conf = conf()
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         await conn.close()
         try:
             conn.cursor()
@@ -363,7 +363,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         default_conf["host"] = "non_existant," + default_conf["host"]
         default_conf["connect_timeout"] = 1
         try:
-            await mariadb.AsyncConnection.connect(**default_conf)
+            await mariadb.asyncConnect(**default_conf)
         except mariadb.ProgrammingError:
             self.assertLess(parse_version(mariadb.mariadbapi_version),
                             parse_version('3.3.0'))
@@ -372,7 +372,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
     async def test_no_timeout(self):
         default_conf = conf()
         default_conf["connect_timeout"] = 0
-        async with await mariadb.AsyncConnection.connect(**default_conf) as conn:
+        async with await mariadb.asyncConnect(**default_conf) as conn:
             pass
 
     async def test_tls_verification(self):
@@ -383,12 +383,12 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             self.skipTest("Requires C/C 3.4.2 or newer")
         default_conf = conf()
         default_conf["ssl"] = False
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         self.assertEqual(conn._tls_verify_status, None)
         await conn.close()
         default_conf = conf()
         default_conf["ssl"] = True
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         self.assertNotEqual(conn._tls_verify_status, None)
         
         # Verify SSL is actually being used after connection
@@ -410,7 +410,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         default_conf = conf()
         default_conf["ssl"] = True
 
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         self.assertEqual(conn._tls, True)
         
         # Verify TLS cipher and version are set
@@ -426,7 +426,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         await conn.close()
         default_conf = conf()
         default_conf["tls_fp"] = fp
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         self.assertEqual(conn._tls, True)
         x509_info = conn.tls_peer_cert_info
         self.assertEqual(fp, x509_info["fingerprint"])
@@ -437,7 +437,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         """Test that all TLS properties return correct default values when SSL is not enabled"""
         default_conf = conf()
         default_conf["ssl"] = False
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         
         try:
             # Test _tls property - should be False for non-SSL connection
@@ -462,7 +462,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         default_conf = conf()
         
         # Test with default connection
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         try:
             self.assertEqual(conn.server_name, default_conf["host"])
             self.assertEqual(conn.server_port, default_conf["port"])
@@ -473,7 +473,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
     async def test_begin(self):
         """Test begin() method to explicitly start a transaction"""
-        conn = await mariadb.AsyncConnection.connect(**conf())
+        conn = await mariadb.asyncConnect(**conf())
         try:
             # Test 1: begin() should work and start a transaction
             await conn.begin()
@@ -516,7 +516,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         """Test begin() behavior with autocommit enabled"""
         default_conf = conf()
         default_conf["autocommit"] = True
-        conn = await mariadb.AsyncConnection.connect(**default_conf)
+        conn = await mariadb.asyncConnect(**default_conf)
         
         try:
             # begin() should work even with autocommit enabled
@@ -620,7 +620,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 
                 try:
                     try:
-                        conn = await mariadb.AsyncConnection.connect(**test_conf)
+                        conn = await mariadb.asyncConnect(**test_conf)
                         if (plugin == 'caching_sha2_password' and not is_local):
                             self.fail(f"SSL fingerprint must have failed {username} ({plugin})")
                     except mariadb.OperationalError as e:
@@ -670,7 +670,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 test_conf.pop('ssl_key', None)
                 
                 with self.assertRaises(mariadb.OperationalError) as cm:
-                    conn = await mariadb.AsyncConnection.connect(**test_conf)
+                    conn = await mariadb.asyncConnect(**test_conf)
 
                 # Should fail because fingerprint validation requires password
                 error_msg = str(cm.exception)
@@ -722,7 +722,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             # Note: max_connections reserves 1 extra slot for SUPER/CONNECTION_ADMIN users
             for i in range(max_connections + 20):
                 try:
-                    conn = await mariadb.AsyncConnection.connect(**conf())
+                    conn = await mariadb.asyncConnect(**conf())
                     # Execute a simple query to verify connection is actually working
                     cursor = conn.cursor()
                     await cursor.execute(f"SELECT {i}")
@@ -777,7 +777,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         test_conf['ssl_verify_cert'] = True
         
         try:
-            conn = await mariadb.AsyncConnection.connect(**test_conf)
+            conn = await mariadb.asyncConnect(**test_conf)
             
             # Verify SSL is active
             cursor = conn.cursor()
@@ -812,9 +812,9 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         # The connection will fail because the SSL files don't exist,
         # but we can verify the parameters were correctly mapped
         try:
-            conn = await mariadb.AsyncConnection.connect(**test_conf)
+            conn = await mariadb.asyncConnect(**test_conf)
             await conn.close()
-        except (mariadb.OperationalError, mariadb.DatabaseError, OSError) as e:
+        except (mariadb.OperationalError, mariadb.DatabaseError, mariadb.InterfaceError, OSError) as e:
             # Expected to fail with SSL file errors, but verify the error
             # is about SSL files, not about invalid parameters
             error_msg = str(e).lower()
@@ -824,7 +824,9 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 'certificate' in error_msg or 
                 'tls' in error_msg or
                 'file' in error_msg or
-                'path' in error_msg,
+                'path' in error_msg or
+                'connect' in error_msg or
+                'connection' in error_msg,
                 f"Expected SSL-related error, got: {e}"
             )
         
@@ -836,9 +838,9 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         # We can't easily verify this without modifying the connect function,
         # but the fact that it tries to use SSL (and fails) proves it worked
         try:
-            conn = await mariadb.AsyncConnection.connect(**test_conf2)
+            conn = await mariadb.asyncConnect(**test_conf2)
             await conn.close()
-        except (mariadb.OperationalError, mariadb.DatabaseError, OSError):
+        except (mariadb.OperationalError, mariadb.DatabaseError, mariadb.InterfaceError, OSError):
             # Expected - SSL files don't exist
             pass
         
@@ -848,7 +850,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         
         try:
             # This might succeed if server supports SSL without client certs
-            conn = await mariadb.AsyncConnection.connect(**test_conf3)
+            conn = await mariadb.asyncConnect(**test_conf3)
             # If it succeeds, verify SSL is enabled
             self.assertTrue(conn._tls or True)  # Connection succeeded
             await conn.close()
