@@ -385,7 +385,7 @@ class TestConnection(unittest.TestCase):
     def test_conpy278(self):
         if is_maxscale():
            self.skipTest("MAXSCALE bug MXS-4961")
-        if is_native() or mariadb.__impl__ == 'c':
+        if is_native() or mariadb.__impl__ in ('c', 'binary'):
            self.skipTest("reconnect option not supported")
         with create_connection({"reconnect" : True}) as conn:
             old_id= conn.connection_id
