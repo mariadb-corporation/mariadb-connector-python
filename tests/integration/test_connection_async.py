@@ -676,7 +676,9 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 error_msg = str(cm.exception)
                 self.assertTrue('Failed to upgrade socket to SSL' in error_msg or 
                                'self-signed certificate' in error_msg or
-                               'certificate verify failed' in error_msg)
+                               'self signed certificate' in error_msg or
+                               'certificate verify failed' in error_msg, 
+                               error_msg)
             
         finally:
             # Cleanup: Drop test users

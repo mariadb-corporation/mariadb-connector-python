@@ -766,7 +766,10 @@ class TestConnection(unittest.TestCase):
 
                 # Should fail because fingerprint validation requires password
                 error_msg = str(cm.exception)
-                self.assertTrue('Failed to upgrade socket to SSL' in error_msg or 'self-signed certificate' in error_msg, error_msg)
+                self.assertTrue('Failed to upgrade socket to SSL' in error_msg or 
+                    'self-signed certificate' in error_msg or
+                    'self signed certificate' in error_msg, 
+                    error_msg)
             
         finally:
             # Cleanup: Drop test users
