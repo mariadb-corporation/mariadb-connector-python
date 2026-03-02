@@ -1468,7 +1468,7 @@ mariadb_param_to_bind(MrdbCursor *self,
       if (CHECK_TYPE(value->value, &PyLong_Type))
       {
 #if PY_VERSION_HEX >= 0x030e00a1
-          if (_PyLong_IsNegative((PyLongObject *)value->value))
+          if (PyLong_IsNegative(value->value) > 0)
               is_negative= 1;
 #else
           if (_PyLong_Sign(value->value) < 0)
