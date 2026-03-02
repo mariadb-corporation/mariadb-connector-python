@@ -669,7 +669,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row.id, 1)
         self.assertEqual(row.name, "Jack")
         self.assertEqual(row.city, "Boston")
-        del cursor
+        await cursor.close()
 
     async def test_laststatement(self):
         if is_async_native():
@@ -695,7 +695,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("SELECT * FROM test_laststatement ORDER BY id")
         self.assertEqual(cursor.statement,
                          "SELECT * FROM test_laststatement ORDER BY id")
-        del cursor
+        await cursor.close()
 
     async def test_multi_cursor(self):
         cursor = self.connection.cursor()
@@ -782,7 +782,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         cursor = self.connection.cursor()
         await cursor.execute("SELECT 1 UNION SELECT 2")
         await cursor.execute("SELECT 1 UNION SELECT 2")
-        del cursor
+        await cursor.close()
 
     async def test_fake_pickle(self):
         cursor = self.connection.cursor()
@@ -830,7 +830,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         cursor.nextset()
         row = await cursor.fetchone()
         self.assertEqual(row[0], 2)
-        del cursor
+        await cursor.close()
 
     async def test_conpy298(self):
         import uuid, ipaddress
