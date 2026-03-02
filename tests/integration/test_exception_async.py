@@ -46,7 +46,6 @@ class AsyncTestException(unittest.IsolatedAsyncioTestCase):
             pass
 
         await cursor.close()
-        del cursor
 
     async def test_db_unknown_exception(self):
 

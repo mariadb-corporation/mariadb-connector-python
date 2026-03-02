@@ -54,7 +54,10 @@ from ...exceptions import OperationalError
 from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
 from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
-from cachetools import LRUCache
+try:
+    from cachetools import LRUCache
+except ImportError:
+    LRUCache = None  # type: ignore[assignment]
 
 # Frozenset type constants for O(1) lookup in row parsers (text protocol)
 _TEXT_INT_TYPES = frozenset((
@@ -145,8 +148,9 @@ class BaseClient(ABC):
         self.read_only = configuration.read_only
 
         # Prepared statement cache (LRU cache with eviction callback, configurable)
+        # None means caching disabled
         cache_size = configuration.prep_stmt_cache_size if configuration.cache_prep_stmts else 0
-        if cache_size > 0:
+        if cache_size > 0 and LRUCache is not None:
             # Create LRU cache that calls evicted_from_cache on eviction
             class PreparedStatementLRUCache(LRUCache):
                 def popitem(self) -> tuple[Any, Any]:
@@ -159,7 +163,7 @@ class BaseClient(ABC):
 
             self.prepared_statement_cache: Any = PreparedStatementLRUCache(maxsize=cache_size)
         else:
-            self.prepared_statement_cache = {}
+            self.prepared_statement_cache = None
 
     # =========================================================================
     # Write Stream Methods

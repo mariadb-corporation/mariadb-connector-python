@@ -338,7 +338,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("SELECT 1")
         row = await cursor.fetchone()
         self.assertEqual(row[0], 1)
-        del cursor
+        await cursor.close()
         await pool.close()
         self.assertEqual(mariadb._ASYNC_CONNECTION_POOLS, {})
 

@@ -236,7 +236,7 @@ jobs:
             LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib/mariadb:$LD_LIBRARY_PATH" auditwheel repair -w {dest_dir} {wheel}
           CIBW_BEFORE_TEST_LINUX: >-
             pip install {project}/mariadb-pool
-          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_REQUIRES: pytest cachetools
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
           CIBW_ENVIRONMENT_PASS_LINUX: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION
@@ -328,7 +328,7 @@ jobs:
             delocate-wheel --require-archs {delocate_archs} --require-target-macos-version ${{ matrix.arch == 'arm64' && '15.0' || '13.0' }} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
           CIBW_BEFORE_TEST_MACOS: >-
             pip install {project}/mariadb-pool
-          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_REQUIRES: pytest cachetools
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
           CIBW_ENVIRONMENT_PASS_MACOS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
@@ -410,7 +410,7 @@ jobs:
             delvewheel repair -w {dest_dir} {wheel}
           CIBW_BEFORE_TEST_WINDOWS: >-
             pip install {project}/mariadb-pool
-          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_REQUIRES: pytest cachetools
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
           CIBW_ENVIRONMENT_PASS_WINDOWS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CC_INSTALL_DIR MARIADB_CONNECTOR_C_VERSION

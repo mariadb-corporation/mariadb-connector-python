@@ -234,8 +234,13 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
         )
         if ssl_enabled:
             # Import pure Python async implementation
-            from . import async_connection as async_conn_module
-            connection_class = async_conn_module.AsyncConnection
+            try:
+                from . import async_connection as async_conn_module
+                connection_class = async_conn_module.AsyncConnection
+            except ImportError:
+                # Pure Python implementation unavailable (e.g. cachetools not installed).
+                # Fall back to the C/binary implementation.
+                pass
 
     # Parse URI if provided as first positional argument
     if args and len(args) > 0:

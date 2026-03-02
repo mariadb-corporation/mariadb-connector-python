@@ -26,7 +26,7 @@ class foo(int):
 class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.connection = await mariadb.AsyncConnection.connect(**conf())
+        self.connection = await mariadb.asyncConnect(**conf())
         await self.connection.set_autocommit(False)
 
     async def asyncTearDown(self):
@@ -42,14 +42,14 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
     async def test_multiple_close(self):
         cursor = self.connection.cursor()
         await cursor.close()
-        del cursor
+        await cursor.close()
 
     @unittest.skipIf(
         os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
         "Test skipped for PyPy"
     )
     async def test_conpy306(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor=conn.cursor(binary=False)
             try:
                 await cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
@@ -86,7 +86,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.close()
 
     async def test_conpy283(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
 
             cursor= conn.cursor(named_tuple=True)
             self.assertEqual(cursor._resulttype, 1)
@@ -207,7 +207,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row[3], c4)
         self.assertEqual(row[4], c5)
         self.assertEqual(row[5], c6)
-        del cursor
+        await cursor.close()
 
     async def test_string(self):
         cursor = self.connection.cursor()
@@ -235,7 +235,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row[3], c4)
         self.assertEqual(row[4], c5)
         self.assertEqual(row[5], c6)
-        del cursor
+        await cursor.close()
 
     async def test_blob(self):
         cursor = self.connection.cursor()
@@ -257,7 +257,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row[1], c2)
         self.assertEqual(row[2], c3)
         self.assertEqual(row[3], c4)
-        del cursor
+        await cursor.close()
 
     async def test_inserttuple(self):
         if is_maxscale():
@@ -277,7 +277,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("SELECT name FROM test_inserttuple ORDER BY id DESC")
         row = await cursor.fetchone()
         self.assertEqual("Andrey", row[0])
-        del cursor
+        await cursor.close()
 
     async def test_fetchmany(self):
         if is_maxscale():
@@ -298,7 +298,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(mariadb.Error):
             await cursor.fetchall()
         # b ) if cursor was not executed
-        del cursor
+        await cursor.close()
         cursor = self.connection.cursor(buffered=False)
         with self.assertRaises(mariadb.Error):
             await cursor.fetchall()
@@ -329,12 +329,12 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         row = await cursor.fetchmany()
         self.assertEqual(row, [params[4]])
         self.assertEqual(5, cursor.rowcount)
-        del cursor
+        await cursor.close()
 
     async def test_fetchmany_error(self):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
-        con = await mariadb.AsyncConnection.connect(**conf())
+        con = await mariadb.asyncConnect(**conf())
         cursor = con.cursor()
         await cursor.execute("CREATE TEMPORARY TABLE test_fetchmany2 ("
                        "id int, name varchar(64), "
@@ -363,7 +363,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
     async def test_fetchall_error(self):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
-        con = await mariadb.AsyncConnection.connect(**conf())
+        con = await mariadb.asyncConnect(**conf())
         cursor = con.cursor()
         await cursor.execute("CREATE TEMPORARY TABLE test_fetchmany22 ("
                        "id int, name varchar(64), "
@@ -393,7 +393,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
     async def test_scroll_error(self):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
-        con = await mariadb.AsyncConnection.connect(**conf())
+        con = await mariadb.asyncConnect(**conf())
         cursor = con.cursor()
         await cursor.execute("CREATE TEMPORARY TABLE test_fetchmany3 ("
                        "id int, name varchar(64), "
@@ -447,7 +447,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         cursor.nextset()
         row = await cursor.fetchone()
         self.assertEqual(row[0], 2)
-        del cursor
+        await cursor.close()
 
     async def test_buffered(self):
         cursor = self.connection.cursor(buffered=True)
@@ -456,7 +456,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.scroll(1)
         row = await cursor.fetchone()
         self.assertEqual(row[0], 2)
-        del cursor
+        await cursor.close()
 
     async def test_buffered_property(self):
         """Test buffered property getter returns correct value"""
@@ -576,7 +576,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                              "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT | NUMERIC")
         self.assertEqual(fieldinfo.flag(info[1]), "PART_KEY | NUMERIC")
         self.assertEqual(fieldinfo.flag(info[9]), "BLOB | BINARY")
-        del cursor
+        await cursor.close()
 
     async def test_bulk_delete(self):
         if is_maxscale():
@@ -594,7 +594,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         params = [(1,), (2,)]
         await cursor.executemany("DELETE FROM bulk_delete WHERE id=?", params)
         self.assertEqual(cursor.rowcount, 2)
-        del cursor
+        await cursor.close()
 
     async def test_pyformat(self):
         if is_maxscale():
@@ -640,12 +640,12 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("SELECT 1 as foo")
         rows = await cursor.fetchall()
         self.assertEqual(rows[0].foo, 1)
-        del cursor
+        await cursor.close()
         cursor = self.connection.cursor(dictionary=True)
         await cursor.execute("SELECT 1 as foo")
         rows = await cursor.fetchall()
         self.assertEqual(rows[0]["foo"], 1)
-        del cursor
+        await cursor.close()
 
     async def test_named_tuple(self):
         if is_maxscale():
@@ -705,7 +705,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("CREATE TEMPORARY TABLE test_multi_cursor (a int)")
         await cursor.execute("INSERT INTO test_multi_cursor VALUES "
                        "(1),(2),(3),(4),(5),(6),(7),(8)")
-        del cursor
+        await cursor.close()
 
         await cursor1.execute("SELECT a FROM test_multi_cursor ORDER BY a")
         await cursor2.execute("SELECT a FROM test_multi_cursor ORDER BY a DESC")
@@ -717,13 +717,13 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cursor1.rownumber, cursor2.rownumber)
             self.assertEqual(row1[0] + row2[0], 9)
 
-        del cursor1
-        del cursor2
+        await cursor1.close()
+        await cursor2.close()
 
     async def test_connection_attr(self):
         cursor = self.connection.cursor()
         self.assertEqual(cursor.connection, self.connection)
-        del cursor
+        await cursor.close()
 
     async def test_dbapi_type(self):
         cursor = self.connection.cursor()
@@ -743,7 +743,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.fetchone()
         typecodes = [row[1] for row in cursor.description]
         self.assertEqual(expected_typecodes, typecodes)
-        del cursor
+        await cursor.close()
 
     async def test_tuple(self):
         cursor = self.connection.cursor()
@@ -753,7 +753,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("INSERT INTO dyncol1 VALUES (?)", tpl)
         except mariadb.ProgrammingError:
             pass
-        del cursor
+        await cursor.close()
 
     async def test_indicator(self):
         if is_mysql():
@@ -792,7 +792,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("select * from test_fake_pickle")
         row = await cursor.fetchone()
         self.assertEqual(row[0], k)
-        del cursor
+        await cursor.close()
 
     async def test_no_result(self):
         cursor = self.connection.cursor()
@@ -801,7 +801,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.fetchone()
         except mariadb.ProgrammingError:
             pass
-        del cursor
+        await cursor.close()
 
     async def test_collate(self):
         cursor = self.connection.cursor()
@@ -812,7 +812,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("SET NAMES utf8mb4")
         await cursor.execute("SELECT * FROM `test_collate` WHERE `test` LIKE 'jj' "
                        "COLLATE utf8mb4_unicode_ci")
-        del cursor
+        await cursor.close()
 
     async def test_conpy_8(self):
         cursor = self.connection.cursor()
@@ -952,7 +952,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         # Test native_object at connection level
         from ..base_test import create_connection
         
-        async with await mariadb.AsyncConnection.connect(**{**conf(), **{"native_object": True}}) as conn_native:
+        async with await mariadb.asyncConnect(**{**conf(), **{"native_object": True}}) as conn_native:
             cursor_conn = conn_native.cursor()
             
             await cursor_conn.execute("DROP TABLE IF EXISTS t1")
@@ -1017,7 +1017,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
 
     async def test_conpy34(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             async with conn.cursor() as cursor:
                 await cursor.execute("CREATE TEMPORARY TABLE t1 (a varchar(20),"
                                "b varchar(20))")
@@ -1082,8 +1082,8 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor2.executemany("INSERT INTO test_scroll VALUES (?, ?)", [('a', 'b'), ('c', 'd')])
 
 
-        del cursor
-        del cursor2
+        await cursor.close()
+        await cursor2.close()
 
     async def test_conpy_9(self):
         cursor = self.connection.cursor()
@@ -1100,7 +1100,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(d[1][2], 6)  # length=precision +  1
         self.assertEqual(d[1][4], 5)  # precision
         self.assertEqual(d[1][5], 2)  # scale
-        del cursor
+        await cursor.close()
 
     async def test_conpy_15(self):
         if is_maxscale():
@@ -1127,7 +1127,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         # vals= [(None, "bar"), (None, "foo")]
         # await cursor.executemany("INSERT INTO t1 VALUES (?,?)", vals)
         # self.assertEqual(cursor.lastrowid, 6)
-        del cursor
+        await cursor.close()
 
     async def test_conpy_14(self):
         if is_maxscale():
@@ -1143,7 +1143,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         vals = [(3, "bar"), (4, "this")]
         await cursor.executemany("INSERT INTO test_conpy_14 VALUES (?,?)", vals)
         self.assertEqual(cursor.rowcount, 2)
-        del cursor
+        await cursor.close()
 
     async def test_closed(self):
         cursor = self.connection.cursor()
@@ -1153,7 +1153,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("set @a:=1")
         except mariadb.ProgrammingError:
             pass
-        del cursor
+        await cursor.close()
 
     async def test_emptycursor(self):
         cursor = self.connection.cursor()
@@ -1161,7 +1161,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("")
         except mariadb.ProgrammingError:
             pass
-        del cursor
+        await cursor.close()
 
     async def test_iterator(self):
         cursor = self.connection.cursor()
@@ -1190,7 +1190,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await self.connection.commit()
         self.assertEqual(cursor.rowcount, 1000)
         await self.connection.set_autocommit(True)
-        del cursor
+        await cursor.close()
 
     async def test_multi_execute(self):
         cursor = self.connection.cursor()
@@ -1200,22 +1200,22 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         for i in range(1, 1000):
             await cursor.execute("INSERT INTO test_multi_execute VALUES (?,1)", (i,))
         await self.connection.set_autocommit(True)
-        del cursor
+        await cursor.close()
 
     async def test_conpy21(self):
-        conn = await mariadb.AsyncConnection.connect(**conf())
+        conn = await mariadb.asyncConnect(**conf())
         cursor = conn.cursor()
         self.assertFalse(cursor.closed)
         await conn.close()
         self.assertTrue(cursor.closed)
-        del cursor, conn
+        await cursor.close()
 
     async def test_utf8(self):
         # F0 9F 98 8E 😎 unicode 6 smiling face with sunglasses
         # F0 9F 8C B6 🌶 unicode 7 hot pepper
         # F0 9F 8E A4 🎤 unicode 8 no microphones
         # F0 9F A5 82 🥂 unicode 9 champagne glass
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             await cursor.execute(
                 "CREATE TEMPORARY TABLE `test_utf8` (`test` blob)")
@@ -1224,7 +1224,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             row = await cursor.fetchone()
             e = b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82"
             self.assertEqual(row[0], e)
-            del cursor
+            await cursor.close()
 
 
     async def test_multiple_cursor(self):
@@ -1239,7 +1239,8 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(None, await cursor.fetchone())
         await cursor2.execute("SELECT * FROM test_multiple_cursor LIMIT 1")
         await cursor2.fetchone()
-        del cursor, cursor2
+        await cursor.close()
+        await cursor2.close()
 
     async def test_inaccurate_rownumber(self):
         cursor = self.connection.cursor(buffered=True)
@@ -1272,10 +1273,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.fetchone()
         self.assertEqual(cursor.rownumber, 1)
 
-        del cursor
+        await cursor.close()
 
     async def test_sp1(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             await cursor.execute("DROP PROCEDURE IF EXISTS p1")
             await cursor.execute("CREATE PROCEDURE p1( )\nBEGIN\n SELECT 1;\nEND")
@@ -1285,7 +1286,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("DROP PROCEDURE IF EXISTS p1")
 
     async def test_sp2(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             if con.server_version < 100301:
                 self.skipTest("Not supported in versions < 10.3")
             cursor = con.cursor()
@@ -1300,7 +1301,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             row = await cursor.fetchone()
             self.assertEqual(row[0], "foobar")
             cursor.nextset()
-            del cursor
+            await cursor.close()
 
             cursor = con.cursor(binary=True)
             await cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
@@ -1308,10 +1309,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             row = await cursor.fetchone()
             self.assertEqual(row[0], "foobar")
             await cursor.execute("DROP PROCEDURE IF EXISTS p2")
-            del cursor
+            await cursor.close()
 
     async def test_sp3(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             if con.server_version < 100301:
                 self.skipTest("Not supported in versions < 10.3")
             cursor = con.cursor()
@@ -1333,12 +1334,12 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             row = await cursor.fetchone()
             self.assertEqual(row[0], "foobar")
             await cursor.execute("DROP PROCEDURE IF EXISTS p3")
-            del cursor
+            await cursor.close()
 
     async def test_conpy42(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cursor = con.cursor()
             await cursor.execute("CREATE TEMPORARY TABLE conpy42(a GEOMETRY)")
             await cursor.execute("INSERT INTO conpy42 VALUES "
@@ -1349,10 +1350,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                                    b'\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00',
                                    b'\x00\xf0?'])
             self.assertEqual(row[0], expected)
-            del cursor
+            await cursor.close()
 
     async def test_conpy35(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cursor = con.cursor()
             await cursor.execute("CREATE TEMPORARY table sample ("
                            "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
@@ -1368,10 +1369,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             async for row in cursor:
                 i = i + 1
                 self.assertEqual(row[0], i)
-            del cursor
+            await cursor.close()
 
     async def test_conpy45(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cursor = con.cursor()
             await cursor.execute("CREATE TEMPORARY table t1 (a time(3), b datetime(2))")
             await cursor.execute("INSERT INTO t1 VALUES ('13:12:24.05111', "
@@ -1382,10 +1383,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                              datetime.timedelta(seconds=47544, microseconds=51000))
             self.assertEqual(row[1],
                              datetime.datetime(2020, 10, 10, 14, 12, 24, 120000))
-            del cursor
+            await cursor.close()
 
     async def test_conpy46(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             async with con.cursor() as cursor:
                 await cursor.execute("SELECT 'foo'")
                 row = await cursor.fetchone()
@@ -1396,7 +1397,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                 pass
 
     async def test_conpy47(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cursor = con.cursor(buffered=True)
             await cursor.execute("SELECT ?", (True, ))
             row = await cursor.fetchone()
@@ -1407,7 +1408,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.close()
 
     async def test_conpy48(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor()
             await cur.execute("select %s", [True])
             row = await cur.fetchone()
@@ -1422,7 +1423,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.close()
 
     async def test_conpy51(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor(buffered=True)
             await cur.execute('create temporary table temp (a int unsigned)')
             await cur.execute('insert into temp values (1), (2), (3)')
@@ -1435,7 +1436,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.close()
 
     async def test_conpy52(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor(buffered=True)
             await cur.execute('create temporary table temp (a int unsigned)')
             await cur.execute('insert into temp values (1), (2), (3)')
@@ -1455,7 +1456,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.close()
 
     async def test_conpy49(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor()
             await cur.execute("create temporary table t1 (a decimal(10,2))")
             await cur.execute("insert into t1 values (?)", (Decimal('10.2'),))
@@ -1465,7 +1466,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.close()
 
     async def test_conpy56(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor(dictionary=True)
             await cur.execute("select 'foo' as bar, 'bar' as foo")
             row = await cur.fetchone()
@@ -1474,7 +1475,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.close()
 
     async def test_conpy53(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor()
             await cur.execute("select 1", ())
             row = await cur.fetchone()
@@ -1485,7 +1486,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.close()
 
     async def test_conpy58(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cursor = con.cursor()
             await cursor.execute("SELECT %(val)s", {"val": 3})
             row = await cursor.fetchone()
@@ -1500,7 +1501,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.close()
 
     async def test_conpy59(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cursor = con.cursor()
             await cursor.execute("CREATE TEMPORARY TABLE t1 (a date)")
             await cursor.execute("INSERT INTO t1 VALUES('0000-01-01')")
@@ -1514,7 +1515,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.skipTest("MAXSCALE doesn't support BULK yet")
         if is_mysql():
             self.skipTest("Skip (MySQL)")
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             if self.connection.server_version < server_indicator_version:
                 self.skipTest("Requires server version >= 10.2.6")
             cursor = con.cursor()
@@ -1538,10 +1539,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(row[0], None)
             self.assertEqual(row[1], 2)
             self.assertEqual(row[2], None)
-            del cursor
+            await cursor.close()
 
     async def test_conpy62(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor()
             query = "select round(.75 * (? / 3), 2) as val"
             await cur.execute(query, [5])
@@ -1550,7 +1551,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cur
 
     async def test_conpy67(self):
-         async with await mariadb.AsyncConnection.connect(**conf()) as con:
+         async with await mariadb.asyncConnect(**conf()) as con:
             async with con.cursor(buffered=False) as cur:                
                 await cur.execute("SELECT 1")
                 self.assertEqual(cur.rowcount, 0)
@@ -1566,7 +1567,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(cur.rowcount, 0)
 
     async def test_negative_numbers(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor()
             await cur.execute("drop table if exists t1")
             await cur.execute("create table t1(a tinyint, b int, c bigint)")
@@ -1579,7 +1580,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cur
 
     async def test_none_val(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor()
             await cur.execute("CREATE TEMPORARY TABLE t1 (a int)")
             vals = [(1,), (2,), (4,), (None,), (3,)]
@@ -1590,7 +1591,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cur
 
     async def test_conpy81(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor()
             await cur.execute("CREATE TEMPORARY TABLE t1 (a int)")
             await cur.execute("INSERT INTO t1 VALUES(1)")
@@ -1603,7 +1604,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cur
 
     async def test_conpy94(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cur = con.cursor()
             a = foo(2)
             await cur.execute("SELECT ?", (a,))
@@ -1612,15 +1613,15 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             del cur
 
     async def test_conpy98(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cursor = con.cursor()
             await cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1")
             row = await cursor.fetchone()
             self.assertEqual(row[0], b'foo')
-            del cursor
+            await cursor.close()
 
     async def test_conpy68(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             if con.server_version < 100207:
                 self.skipTest("Not supported in versions < 10.2.7")
             cursor = con.cursor()
@@ -1630,10 +1631,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("SELECT a FROM t1")
             row = await cursor.fetchone()
             self.assertEqual(row[0], json.dumps(content))
-            del cursor
+            await cursor.close()
 
     async def test_conpy123(self):
-        async with await mariadb.AsyncConnection.connect(**{**conf(), **{"client_flag": CLIENT.MULTI_STATEMENTS}}) as con:
+        async with await mariadb.asyncConnect(**{**conf(), **{"client_flag": CLIENT.MULTI_STATEMENTS}}) as con:
             cursor1 = con.cursor()
             await cursor1.execute("SELECT 1; SELECT 2")
             await cursor1.close()
@@ -1644,17 +1645,17 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor2.close()
 
     async def test_conpy103(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf()) as con:
             cursor = con.cursor()
             await cursor.execute("CREATE TEMPORARY TABLE t1 (a decimal(10,2))")
             await cursor.executemany("INSERT INTO t1 VALUES (?)", [[decimal.Decimal(1)]])
             await cursor.execute("SELECT a FROM t1")
             row = await cursor.fetchone()
             self.assertEqual(row[0], decimal.Decimal(1))
-            del cursor
+            await cursor.close()
 
     async def test_conpy129(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             server_version = conn.server_version
             major = int(server_version / 10000)
             minor = int((server_version % 10000) / 100)
@@ -1663,7 +1664,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(conn.get_server_version(), (major, minor, patch))
 
     async def test_conpy167(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
 
             await cursor.execute("CREATE TEMPORARY table t1 ("
@@ -1672,45 +1673,45 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cursor.rowcount, 1)
             await cursor.executemany("INSERT INTO t1 VALUES (NULL, ?)", [(2, ), (3,)])
             self.assertEqual(cursor.rowcount, 2)
-            del cursor
+            await cursor.close()
 
     async def test_conpy168(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             x = os.urandom(32)
             await cursor.execute("SELECT cast(? as binary) as a", (x,))
             row = await cursor.fetchone()
             self.assertEqual(row[0], x)
-            del cursor
+            await cursor.close()
 
     async def test_conpy133(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
 
             cursor = conn.cursor()
             await cursor.execute("SELECT /*! ? */", (1,))
             row = await cursor.fetchone()
             self.assertEqual(row[0], 1)
-            del cursor
+            await cursor.close()
 
             cursor = conn.cursor()
             await cursor.execute("SELECT /*M! ? */", (1,))
             row = await cursor.fetchone()
             self.assertEqual(row[0], 1)
-            del cursor
+            await cursor.close()
 
             cursor = conn.cursor()
             await cursor.execute("SELECT /*M!50601 ? */", (1,))
             row = await cursor.fetchone()
             self.assertEqual(row[0], 1)
-            del cursor
+            await cursor.close()
 
             cursor = conn.cursor()
             await cursor.execute("SELECT /*!40301 ? */", (1,))
             row = await cursor.fetchone()
             self.assertEqual(row[0], 1)
-            del cursor
+            await cursor.close()
 
             async with conn.cursor() as cursor:
                 try:
@@ -1725,7 +1726,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                     pass
 
     async def check_closed(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor1 = conn.cursor()
             cursor2 = conn.cursor()
             await cursor1.close()
@@ -1734,14 +1735,14 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                 await cursor1.execute("select 1")
             except (mariadb.ProgrammingError):
                 pass
-            del cursor1
+            await cursor1.close()
 
             await conn.close()
             try:
                 await cursor2.execute("select 1")
             except (mariadb.ProgrammingError):
                 pass
-            del cursor2
+            await cursor2.close()
 
     async def test_conpy194(self):
         if is_mysql():
@@ -1750,7 +1751,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         if (self.connection.server_version < 105000):
             self.skipTest("Insert returning requires MariaDB >= 10.5")
 
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             await cursor.execute("create temporary table t1 "
                            "(a int not null auto_increment primary key,"
@@ -1781,12 +1782,12 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             rows = await cursor.fetchall()
             self.assertEqual(rows, [(1, "xyz")])
 
-            del cursor
+            await cursor.close()
 
     async def test_conpy178(self):
         if os.environ.get('RUN_LONG_TEST') != '1':
             self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")            
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             await cursor.execute("DROP PROCEDURE IF EXISTS p2")
             await cursor.execute("CREATE PROCEDURE p2(IN s1 VARCHAR(20), "
@@ -1800,7 +1801,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(row[0], b"foobar" if is_mysql() else "foobar")
 
     async def test_conpy205(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
 
             await cursor.execute("select %(name)s", {"name": "Marc"})
@@ -1845,7 +1846,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.close()
 
     async def test_conpy203(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute("SELECT")
@@ -1853,7 +1854,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(err.errno, ERR.ER_PARSE_ERROR)
 
     async def test_unicode_parsing(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
 
             await cursor.execute("create temporary table Unitéble2 ( 測試 int, méil int)")
@@ -1864,12 +1865,12 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                            "`Unitéble2` WHERE ? = `Unitéble2`.`測試`", (1, ))
             await cursor.fetchall()
             self.assertEqual(cursor.rowcount, 1)
-            del cursor
+            await cursor.close()
 
     async def test_unicode_parsing_named(self):
         if is_async_native():
             self.skipTest("Skip (Native doesn't support named parameters)")
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
 
             await cursor.execute("create temporary table Unitéble2 ( 測試 int, méil int)")
@@ -1881,13 +1882,13 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                            "`Unitéble2` WHERE ? = `Unitéble2`.`測試`", (1, ))
             await cursor.fetchall()
             self.assertEqual(cursor.rowcount, 1)
-            del cursor
+            await cursor.close()
 
     async def test_conpy209(self):
         if is_async_native():
             self.skipTest("Skip (Native)")
 
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             data = ("col_Unitéble_id_seq", "foobar")
             sql = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE "\
@@ -1900,10 +1901,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                                        b' and TABLE_SCHEMA=\'foobar\''])
             await cursor.execute(sql, data)
             self.assertEqual(transformed, cursor._transformed_statement)
-            del cursor
+            await cursor.close()
 
     async def test_conpy277(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             await cursor.execute("SET session sql_mode='TRADITIONAL,ANSI_QUOTES,ONLY_FULL_GROUP_BY,PIPES_AS_CONCAT'")
             await cursor.execute('select ? as x', ('hi',))
@@ -1913,7 +1914,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy213(self):
         conversions = {**{FIELD_TYPE.NEWDECIMAL: float}}
-        async with await mariadb.AsyncConnection.connect(**{**conf(), **{"converter": conversions}}) as conn:
+        async with await mariadb.asyncConnect(**{**conf(), **{"converter": conversions}}) as conn:
             cursor = conn.cursor()
             await cursor.execute("SELECT 1.1")
             rows = await cursor.fetchall()
@@ -1921,10 +1922,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("SELECT 1.1")
             row = await cursor.fetchone()
             self.assertEqual(row[0], 1.1)
-            del cursor
+            await cursor.close()
 
     async def test_conpy218(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             await cursor.execute("SELECT 1",  None)
             row = await cursor.fetchone()
@@ -1938,16 +1939,16 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("SELECT 4",  {})
             row = await cursor.fetchone()
             self.assertEqual(row[0], 4)
-            del cursor
+            await cursor.close()
 
     async def test_conpy222(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             await cursor.close()
-            del cursor
+            await cursor.close()
 
             cursor = conn.cursor()
-            del cursor
+            await cursor.close()
             try:
                 await cursor.close()   # noqa: F821
             except Exception:
@@ -1984,10 +1985,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("Andrey", row[0])
 
-        del cursor
+        await cursor.close()
 
     async def test_conpy225(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
 
             await cursor.execute("CREATE TEMPORARY TABLE x01 (a int, b int)")
@@ -2005,10 +2006,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("UPDATE x01 SET a=1 WHERE a=4")
             self.assertEqual(cursor.affected_rows, 1)
             self.assertEqual(cursor.rowcount, 1)
-            del cursor
+            await cursor.close()
 
     async def test_conpy270(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             x = connection.server_version_info
             if x < (10, 7, 0) or is_mysql():
                 self.skipTest("Skip (MySQL and MariaDB < 10.7)")
@@ -2034,7 +2035,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
     async def test_conpy269(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             cursor = connection.cursor()
             await cursor.execute("SELECT 1 UNION SELECT 2")
             self.assertEqual(cursor.rowcount, 2)
@@ -2042,7 +2043,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cursor.rowcount, -1)
 
     async def test_conpy258(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             cursor = connection.cursor()
             await cursor.execute("CREATE TEMPORARY TABLE t1 (a INT(9) ZEROFILL)")
             await cursor.execute("INSERT INTO t1 VALUES(123)")
@@ -2059,7 +2060,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
     async def test_conpy291(self):
         if is_mysql:
             self.skipTest("Skip (MySQL doesn't support batch/indicators)")
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             cursor = connection.cursor()
 
             await cursor.execute("DROP TABLE IF EXISTS t1")
@@ -2070,11 +2071,11 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.executemany("INSERT INTO t1 VALUES (?,?,?,?)", data)
             self.assertEqual(cursor.rowcount, 2)
             await cursor.execute("DROP TABLE IF EXISTS t1")
-            del cursor
+            await cursor.close()
 
     async def test_conpy276(self):
 
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
 
             await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4")
@@ -2087,12 +2088,12 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             row= await cursor.fetchone()
             self.assertEqual(row[0], 1)
             self.assertEqual(cursor.rowcount, 4)
-            del cursor
+            await cursor.close()
 
     async def test_conpy289(self):
         if is_mysql:
             self.skipTest("Skip (MySQL doesn't support batch)")
-        async with await mariadb.AsyncConnection.connect(**conf()) as conn:
+        async with await mariadb.asyncConnect(**conf()) as conn:
             cursor= conn.cursor()
             await cursor.execute("CREATE OR REPLACE TABLE t289 (a bigint unsigned,"\
                            "b bigint unsigned, c bigint unsigned,"\
@@ -2109,7 +2110,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(rows, data)
 
     async def test_conpy91(self):
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             async with connection.cursor() as cursor:
                 for parameter_type in (int, decimal.Decimal):
                     with self.subTest(parameter_type=parameter_type):
@@ -2168,7 +2169,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor2.fetchone()  # Consume the result
         
         # Create a new connection to close
-        conn = await mariadb.AsyncConnection.connect(**conf())
+        conn = await mariadb.asyncConnect(**conf())
         cursor3 = conn.cursor()
         await cursor3.execute("SELECT 1")
         await cursor3.fetchone()  # Consume the result
@@ -2197,7 +2198,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(cursor, mariadb.AsyncCursor)
 
     async def test_streaming_noconnection(self):
-        conn = await mariadb.AsyncConnection.connect(**conf())
+        conn = await mariadb.asyncConnect(**conf())
         cursor = conn.cursor(buffered=False)
         await cursor.execute("SELECT 1")
         
@@ -2298,7 +2299,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                              "NOT_NULL | PRIMARY_KEY | AUTO_INCREMENT | NUMERIC")
         self.assertEqual(fieldinfo.flag(info[1]), "PART_KEY | NUMERIC")
         self.assertEqual(fieldinfo.flag(info[9]), "BLOB | BINARY")
-        del cursor
+        await cursor.close()
 
     async def test_ext_field_types_binary(self):
         """Test extended field types with binary=True cursor"""
@@ -2371,7 +2372,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy270_binary(self):
         """Test UUID field type with binary=True cursor"""
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             x = connection.server_version_info
             if x < (10, 7, 0) or is_mysql():
                 self.skipTest("Skip (MySQL and MariaDB < 10.7)")
@@ -2393,7 +2394,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         
     async def test_field_info_integer_types(self):
         """Test integer field types"""
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute("CREATE TEMPORARY TABLE test_integer_types (tiny TINYINT, small SMALLINT, medium MEDIUMINT, normal INT, big BIGINT)")
                 await cursor.execute("INSERT INTO test_integer_types VALUES (1, 2, 3, 4, 5)")
@@ -2414,7 +2415,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_field_info_integer_types_unsigned(self):
         """Test integer field types"""
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute("CREATE TEMPORARY TABLE test_integer_types (tiny TINYINT UNSIGNED, small SMALLINT UNSIGNED, medium MEDIUMINT UNSIGNED, normal INT UNSIGNED, big BIGINT UNSIGNED)")
                 await cursor.execute("INSERT INTO test_integer_types VALUES (255, 65535, 16777215, 4294967295, 18446744073709551615)")
@@ -2436,7 +2437,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_field_info_float_types(self):
         """Test integer field types"""
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute("CREATE TEMPORARY TABLE test_float_types (f FLOAT, d DOUBLE)")
                 await cursor.execute("INSERT INTO test_float_types VALUES (1.1, 2.2)")
@@ -2458,7 +2459,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_field_json_types(self):
         """Test integer field types"""
-        async with await mariadb.AsyncConnection.connect(**conf()) as connection:
+        async with await mariadb.asyncConnect(**conf()) as connection:
             async with connection.cursor() as cursor:
                 await cursor.execute("CREATE TEMPORARY TABLE test_json_types (f JSON)")
                 await cursor.execute("INSERT INTO test_json_types VALUES ('{\"age\": 30, \"email\": \"john.doe@example.com\"}')")

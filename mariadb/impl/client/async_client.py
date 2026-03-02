@@ -623,7 +623,7 @@ class AsyncClient(BaseClient):
                 key = (self.context.database, sql)
 
                 # Check cache first
-                cached_stmt = self.prepared_statement_cache.get(key)
+                cached_stmt = self.prepared_statement_cache.get(key) if self.prepared_statement_cache is not None else None
                 if cached_stmt and cached_stmt.acquire():
                     with cached_stmt:
                         all_completions = []
@@ -690,7 +690,7 @@ class AsyncClient(BaseClient):
                 finally:
                     # Cache and close prepared statement
                     if prepareResult:
-                        if self.configuration.cache_prep_stmts:
+                        if self.prepared_statement_cache is not None:
                             self.prepared_statement_cache[key] = prepareResult
                         prepareResult.close()
 
@@ -964,7 +964,8 @@ class AsyncClient(BaseClient):
             if self.closed:
                 return
 
-            self.prepared_statement_cache.clear()
+            if self.prepared_statement_cache is not None:
+                self.prepared_statement_cache.clear()
 
             # Send COM_QUIT packet to gracefully close the connection
             if self.connected and self.writer:
@@ -1049,7 +1050,7 @@ class AsyncClient(BaseClient):
         packet_type = packet[0]
 
         if packet_type == self.OK_PACKET:
-            if self.configuration.cache_prep_stmts:
+            if self.prepared_statement_cache is not None:
                 prepare_stmt_packet = CachedPrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)
             else:
                 prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)  # type: ignore[assignment]
