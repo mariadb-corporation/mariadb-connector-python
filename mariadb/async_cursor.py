@@ -102,7 +102,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             client = self.connection._client
             if self._stmt:
                 # Release cached statement reference
-                client.prepared_statement_cache.release(self._stmt)
+                if client.prepared_statement_cache is not None:
+                    client.prepared_statement_cache.release(self._stmt)
                 self._stmt = None
 
             # Consume any remaining streaming results

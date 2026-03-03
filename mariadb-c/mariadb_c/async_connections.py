@@ -698,3 +698,21 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         while isinstance(wait_status, int) and wait_status != 0:
             actual_status = await self._wait_for_status(wait_status)
             wait_status = self._async_reset_cont(actual_status)
+
+    async def dump_debug_info(self):
+        """
+        Send a COM_DEBUG command to the server (async)
+
+        Instructs the server to write debug information to its error log.
+        Requires the SUPER privilege.
+
+        Raises:
+            OperationalError: If the command fails (e.g. insufficient privileges)
+        """
+        self._check_closed()
+
+        wait_status = self._async_dump_debug_info_start()
+
+        while isinstance(wait_status, int) and wait_status != 0:
+            actual_status = await self._wait_for_status(wait_status)
+            wait_status = self._async_dump_debug_info_cont(actual_status)

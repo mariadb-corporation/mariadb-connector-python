@@ -111,25 +111,20 @@ import asyncio
 
 async def main():
     # Connect to MariaDB using async API
-    conn = await mariadb.asyncConnect(
+    async with await mariadb.asyncConnect(
         host="localhost",
         port=3306,
         user="root",
         password="password",
         database="mydb"
-    )
-    
-    cursor = conn.cursor()
-    
-    # Execute query
-    await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
-    
-    # Fetch results
-    async for row in cursor:
-        print(row)
-    
-    await cursor.close()
-    await conn.close()
+    ) as conn:
+        async with conn.cursor() as cursor:
+            # Execute query
+            await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
+
+            # Fetch results
+            async for row in cursor:
+                print(row)
 
 # Run async function
 asyncio.run(main())

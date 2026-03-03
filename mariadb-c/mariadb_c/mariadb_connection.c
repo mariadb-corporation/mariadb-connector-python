@@ -113,6 +113,8 @@ static PyObject *MrdbConnection_async_change_user_start(MrdbConnection *self, Py
 static PyObject *MrdbConnection_async_change_user_cont(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_async_reset_start(MrdbConnection *self);
 static PyObject *MrdbConnection_async_reset_cont(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_async_dump_debug_info_start(MrdbConnection *self);
+static PyObject *MrdbConnection_async_dump_debug_info_cont(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_prepare_async_connect(MrdbConnection *self, PyObject *args, PyObject *kwargs);
 static PyObject *MrdbConnection_async_connect_start(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_async_connect_cont(MrdbConnection *self, PyObject *args);
@@ -245,6 +247,12 @@ MrdbConnection_Methods[] =
     {"_async_reset_cont", (PyCFunction)MrdbConnection_async_reset_cont,
       METH_VARARGS,
       "Continue non-blocking reset"},
+    {"_async_dump_debug_info_start", (PyCFunction)MrdbConnection_async_dump_debug_info_start,
+      METH_NOARGS,
+      "Start non-blocking dump_debug_info"},
+    {"_async_dump_debug_info_cont", (PyCFunction)MrdbConnection_async_dump_debug_info_cont,
+      METH_VARARGS,
+      "Continue non-blocking dump_debug_info"},
     {"_check_socket_ready", (PyCFunction)MrdbConnection_check_socket_ready,
       METH_VARARGS,
       "Check if socket is ready for I/O (non-blocking)"},
@@ -1728,6 +1736,60 @@ MrdbConnection_async_reset_cont(MrdbConnection *self, PyObject *args)
 
     Py_BEGIN_ALLOW_THREADS;
     status = mysql_reset_connection_cont(&ret, self->mysql, wait_status);
+    Py_END_ALLOW_THREADS;
+
+    if (status == 0 && ret != 0) {
+        mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 0, NULL);
+        return NULL;
+    }
+
+    if (status == 0) {
+        /* Completed */
+        Py_RETURN_NONE;
+    }
+
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbConnection_async_dump_debug_info_start(MrdbConnection *self)
+{
+    int ret;
+    int status;
+
+    MARIADB_CHECK_CONNECTION(self, NULL);
+
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_dump_debug_info_start(&ret, self->mysql);
+    Py_END_ALLOW_THREADS;
+
+    if (status == 0 && ret != 0) {
+        mariadb_throw_exception(self->mysql, Mariadb_OperationalError, 0, NULL);
+        return NULL;
+    }
+
+    if (status == 0) {
+        /* Completed immediately */
+        Py_RETURN_NONE;
+    }
+
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbConnection_async_dump_debug_info_cont(MrdbConnection *self, PyObject *args)
+{
+    int wait_status;
+    int status;
+    int ret;
+
+    MARIADB_CHECK_CONNECTION(self, NULL);
+
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_dump_debug_info_cont(&ret, self->mysql, wait_status);
     Py_END_ALLOW_THREADS;
 
     if (status == 0 && ret != 0) {

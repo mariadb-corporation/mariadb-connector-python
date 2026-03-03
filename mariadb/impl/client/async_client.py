@@ -728,6 +728,13 @@ class AsyncClient(BaseClient):
                 continue
             elif packet_type == self.ERROR_PACKET:
                 raise _decode_error_packet(packet, context).toError(self.exception_factory)
+            elif packet_type == self.EOF_PACKET:
+                # EOF packet at top level (e.g. COM_DEBUG response)
+                completion = _decode_eof_packet(packet, context)
+                results.append(completion)  # type: ignore[arg-type]
+                if (context.server_status & _MORE_RESULTS_EXIST) == 0:
+                    break
+                continue
             elif packet_type == self.LOCAL_INFILE_PACKET:
                 # LOAD DATA LOCAL INFILE request from server
                 completion, packets = await self._handle_local_infile(packet, sql, packets)

@@ -194,6 +194,27 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
                 sql_state='HY000'
             )
 
+    async def dump_debug_info(self) -> None:
+        """
+        Send a COM_DEBUG command to the server
+
+        Instructs the server to write debug information to its error log.
+        Requires the SUPER privilege.
+
+        Raises:
+            OperationalError: If the command fails (e.g. insufficient privileges)
+        """
+        self._check_closed()
+        try:
+            from .impl.message.client.debug_packet import DebugPacket
+            await self._client.execute(DebugPacket(), self._configuration)
+        except Exception as e:
+            raise self._exception_factory.create_exception(
+                f"dump_debug_info failed: {e}",
+                errno=2013,
+                sql_state='HY000'
+            )
+
     async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
         """
         Change the user and database of the current connection

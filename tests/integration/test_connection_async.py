@@ -195,6 +195,20 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             pass
         await conn.close()
 
+    async def test_dump_debug_info(self):
+        async with await mariadb.asyncConnect(**conf()) as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute(
+                    "SELECT COUNT(*) FROM information_schema.USER_PRIVILEGES "
+                    "WHERE GRANTEE = CONCAT(\"'\", SUBSTRING_INDEX(CURRENT_USER(),'@',1), \"'@'\", SUBSTRING_INDEX(CURRENT_USER(),'@',-1), \"'\") "
+                    "AND PRIVILEGE_TYPE = 'SUPER'"
+                )
+                row = await cursor.fetchone()
+                has_super = row is not None and row[0] > 0
+            if not has_super:
+                self.skipTest("SUPER privilege required for dump_debug_info")
+            await conn.dump_debug_info()
+
     async def test_open(self):
         """Test connection.open property"""
         if is_maxscale():

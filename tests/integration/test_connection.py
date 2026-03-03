@@ -163,7 +163,21 @@ class TestConnection(unittest.TestCase):
                 conn.ping()
             except (mariadb.InterfaceError, mariadb.DatabaseError):
                 pass           
-            
+
+    def test_dump_debug_info(self):
+        with create_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM information_schema.USER_PRIVILEGES "
+                    "WHERE GRANTEE = CONCAT(\"'\", SUBSTRING_INDEX(CURRENT_USER(),'@',1), \"'@'\", SUBSTRING_INDEX(CURRENT_USER(),'@',-1), \"'\") "
+                    "AND PRIVILEGE_TYPE = 'SUPER'"
+                )
+                row = cursor.fetchone()
+                has_super = row is not None and row[0] > 0
+            if not has_super:
+                self.skipTest("SUPER privilege required for dump_debug_info")
+            conn.dump_debug_info()
+
     def test_open(self):
         """Test connection.open property"""
         if is_maxscale():
