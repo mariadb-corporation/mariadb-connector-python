@@ -471,23 +471,11 @@ static void MrdbCursor_dealloc(PyObject *obj)
 {
   MrdbCursor *self = (MrdbCursor *)obj;
   ma_cursor_close(self);
-  MrdbCursor_FreeValues(self);
-  MrdbCursor_FreeResultValues(self);
-  MARIADB_FREE_MEM(self->bind);
-  MARIADB_FREE_MEM(self->value);
-  MARIADB_FREE_MEM(self->params);
-  self->fields = NULL;
-  if (self->statement)
-  {
-      PyMem_RawFree(self->statement);
-      self->statement = NULL;
-  }
-  if (self->result)
+  if (self->result && !(self->connection && self->connection->mysql))
   {
       mysql_free_result(self->result);
       self->result = NULL;
   }
-
   MrdbCursor_tpclear(self);
   Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -580,10 +568,18 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
         /* drain current result — may be unbuffered even if is_buffered is now True */
         if (self->result)
         {
-            while (mysql_fetch_row(self->result))
+            if (!self->is_buffered &&
+                !(self->connection && self->connection->mysql))
             {
+                self->result = NULL;
             }
-            mysql_free_result(self->result);
+            else
+            {
+                while (mysql_fetch_row(self->result))
+                {
+                }
+                mysql_free_result(self->result);
+            }
         }
         /* drain any additional result sets from a multi-statement */
         if (self->connection && self->connection->mysql)
@@ -635,28 +631,12 @@ static void MrdbCursor_FreeResultValues(MrdbCursor *self)
    associated memory
  */
 static
-void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
+void MrdbCursor_clear(MrdbCursor *self)
 {
-    /* clear pending result sets; ma_cursor_clear_tracking inside
-       MrdbCursor_clear_result is already exception-neutral */
+    /* Drain and free pending result sets; ma_cursor_clear_tracking inside
+       MrdbCursor_clear_result is already exception-neutral. */
     MrdbCursor_clear_result(self);
 
-    if (!self->is_text && self->stmt) {
-        if (new_stmt)
-        {
-          mysql_stmt_close(self->stmt);
-          self->stmt= mysql_stmt_init(self->connection->mysql);
-        }
-        else {
-            uint32_t val= 0;
-
-            mysql_stmt_reset(self->stmt);
-
-            /* we need to unset array size only */
-            mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &val);
-        }
-
-    }
     self->fetched= 0;
 
     Py_CLEAR(self->sequence_type);
@@ -716,16 +696,42 @@ void ma_cursor_reset(MrdbCursor *self)
             return;
         }
 
+        /* If this cursor is the active async cursor its non-blocking state machine
+           is still using self->stmt and self->result.  Calling mysql_fetch_row /
+           mysql_stmt_close on an in-flight async operation corrupts state and
+           causes SIGSEGV.  MrdbCursor_finalize already skips clearing in this
+           case; ma_cursor_reset must do the same so that dealloc (which calls
+           ma_cursor_close → ma_cursor_reset) doesn't re-enter. */
+        if (self->connection)
+        {
+            PyObject *async_active = PyObject_GetAttrString(
+                (PyObject *)self->connection, "_active_async_cursor");
+            if (!async_active)
+                PyErr_Clear();
+            else
+            {
+                int is_async = (async_active == (PyObject *)self &&
+                                async_active != Py_None);
+                Py_DECREF(async_active);
+                if (is_async)
+                    return;
+            }
+        }
+
         if (!self->is_text && self->stmt)
         {
-            /* Todo: check if all the cursor stuff is deleted (when using prepared
-               statements this should be handled in mysql_stmt_close) */
-            Py_BEGIN_ALLOW_THREADS;
-            mysql_stmt_close(self->stmt);
-            Py_END_ALLOW_THREADS;
+            /* Only send COM_STMT_CLOSE if the underlying MYSQL* is still alive.
+               If the connection was GC-finalized before this cursor, mysql is NULL
+               and mysql_stmt_close on a dangling handle is UB. */
+            if (self->connection && self->connection->mysql)
+            {
+                Py_BEGIN_ALLOW_THREADS;
+                mysql_stmt_close(self->stmt);
+                Py_END_ALLOW_THREADS;
+            }
             self->stmt= NULL;
         }
-        MrdbCursor_clear(self, 0);
+        MrdbCursor_clear(self);
     }
 }
 
@@ -1668,7 +1674,7 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
     }
     Py_RETURN_NONE;
 error:
-    MrdbCursor_clear(self, 0);
+    MrdbCursor_clear(self);
     return NULL;
 }
 

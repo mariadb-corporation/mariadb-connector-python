@@ -39,22 +39,24 @@ class TestPreparedStatementCache(unittest.TestCase):
     def test_cache_disabled(self):
         """Test that cache can be disabled"""
         conn = mariadb.connect(**conf(), cache_prep_stmts=False)
-        self.assertFalse(conn._configuration.cache_prep_stmts)
-        
-        # Use binary cursor to force prepared statements
-        cursor = conn.cursor(binary=True)
-        
-        # Execute same query multiple times
-        for i in range(5):
-            cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
-            row = cursor.fetchone()
-            self.assertEqual(row[0], 1)
-        
-        # Cache should be empty when disabled
-        self.assertEqual(len(conn._client.prepared_statement_cache), 0)
-        
-        cursor.close()
-        conn.close()
+        try:
+            self.assertFalse(conn._configuration.cache_prep_stmts)
+
+            # Use binary cursor to force prepared statements
+            cursor = conn.cursor(binary=True)
+            try:
+                # Execute same query multiple times
+                for i in range(5):
+                    cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
+                    row = cursor.fetchone()
+                    self.assertEqual(row[0], 1)
+
+                # Cache is None when disabled (not an empty dict)
+                self.assertIsNone(conn._client.prepared_statement_cache)
+            finally:
+                cursor.close()
+        finally:
+            conn.close()
     
     def test_cache_custom_size(self):
         """Test custom cache size"""
@@ -348,16 +350,25 @@ class TestPreparedStatementCacheAsync(unittest.IsolatedAsyncioTestCase):
     async def test_async_cache_disabled(self):
         """Test async with cache disabled"""
         conn = await mariadb.AsyncConnection.connect(**conf(), cache_prep_stmts=False)
-        cursor = conn.cursor(binary=True)
-        
-        await cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
-        await cursor.fetchone()
-        
-        self.assertEqual(len(conn._client.prepared_statement_cache), 0)
-        
-        await cursor.close()
-        await conn.close()
-    
+        try:
+            self.assertFalse(conn._configuration.cache_prep_stmts)
+
+            # Use binary cursor to force prepared statements
+            cursor = conn.cursor(binary=True)
+            try:
+                # Execute same query multiple times
+                for i in range(5):
+                    await cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
+                    row = await cursor.fetchone()
+                    self.assertEqual(row[0], 1)
+
+                # Cache is None when disabled (not an empty dict)
+                self.assertIsNone(conn._client.prepared_statement_cache)
+            finally:
+                await cursor.close()
+        finally:
+            await conn.close()
+
     async def test_async_callproc_cache(self):
         """Test async callproc uses cache"""
         cursor = self.conn.cursor()

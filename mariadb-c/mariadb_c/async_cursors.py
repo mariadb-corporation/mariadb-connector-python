@@ -558,6 +558,13 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             del self._data
 
         if not self.connection._closed:
+            if self.connection._active_async_cursor is self and self.field_count > 0:
+                try:
+                    while await self._fetch_row() is not None:
+                        pass
+                except Exception:
+                    pass
+                self.connection._active_async_cursor = None
             super().close()
 
         if self.connection._active_async_cursor is self:

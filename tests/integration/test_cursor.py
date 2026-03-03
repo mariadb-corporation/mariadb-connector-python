@@ -2270,6 +2270,29 @@ class TestCursor(unittest.TestCase):
         conn.close();
         cursor.close()
 
+    def test_unbuffered_cursor_gc_before_connection(self):
+        """Regression: SIGSEGV when GC collects connection before unbuffered cursor.
+
+        An unbuffered cursor holds a MYSQL_RES* backed by the live MYSQL* of the
+        connection.  If Python's cyclic GC finalizes the connection first (freeing
+        MYSQL*), the cursor's subsequent MrdbCursor_clear_result must NOT call
+        mysql_fetch_row on the now-dangling handle.  Previously this caused a
+        SIGSEGV in mysql_fetch_row@libmariadb inside finalize_garbage.
+        """
+        import gc
+
+        conn = create_connection()
+        cursor = conn.cursor(buffered=False)
+        cursor.execute("SELECT 1")
+        # Do not fetch — leave rows pending on the wire (unbuffered)
+
+        # Drop connection reference first, then cursor reference, then force GC.
+        # The cyclic GC may finalize in any order; this exercises the crash path.
+        del conn
+        del cursor
+        gc.collect()
+        # If we reach here without a SIGSEGV the fix is working.
+
     def test_xfield_types_binary(self):
         """Test field types with binary=True cursor"""
         if is_maxscale():
