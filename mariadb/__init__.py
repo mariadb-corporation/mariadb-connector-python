@@ -418,7 +418,7 @@ def _get_current_version_info() -> tuple:
 
 
 def create_pool(
-    min_size: int = 10,
+    min_size: Optional[int] = None,
     max_size: int = 10,
     max_idle_time: float = 600.0,
     max_lifetime: float = 3600.0,
@@ -433,7 +433,7 @@ def create_pool(
     Create a synchronous connection pool with clean separation of pool and connection options.
 
     Pool Configuration Parameters:
-        min_size (int): Minimum number of connections in the pool (default: 10)
+        min_size (int): Minimum number of connections in the pool (default: same as max_size)
         max_size (int): Maximum number of connections in the pool (default: 10)
         max_idle_time (float): Maximum time (seconds) a connection can be idle (default: 600.0)
         max_lifetime (float): Maximum lifetime (seconds) of a connection (default: 3600.0)
@@ -477,7 +477,7 @@ def create_pool(
 
     # Build PoolConfig from pool-specific parameters
     pool_config = PoolConfig(
-        min_size=min_size,
+        min_size=min_size if min_size is not None else max_size,
         max_size=max_size,
         max_idle_time=max_idle_time,
         max_lifetime=max_lifetime,
@@ -497,7 +497,7 @@ def create_pool(
 
 
 async def create_async_pool(
-    min_size: int = 10,
+    min_size: Optional[int] = None,
     max_size: int = 10,
     max_idle_time: float = 600.0,
     max_lifetime: float = 3600.0,
@@ -514,7 +514,7 @@ async def create_async_pool(
     This function automatically calls pool.open() to pre-fill the pool with connections.
 
     Pool Configuration Parameters:
-        min_size (int): Minimum number of connections in the pool (default: 10)
+        min_size (int): Minimum number of connections in the pool (default: same as max_size)
         max_size (int): Maximum number of connections in the pool (default: 10)
         max_idle_time (float): Maximum time (seconds) a connection can be idle (default: 600.0)
         max_lifetime (float): Maximum lifetime (seconds) of a connection (default: 3600.0)
@@ -562,7 +562,7 @@ async def create_async_pool(
 
     # Build PoolConfig from pool-specific parameters
     pool_config = PoolConfig(
-        min_size=min_size,
+        min_size=min_size if min_size is not None else max_size,
         max_size=max_size,
         max_idle_time=max_idle_time,
         max_lifetime=max_lifetime,
