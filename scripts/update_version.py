@@ -83,16 +83,16 @@ __version__ = "{version}"
     print(f"Updated {mariadb_release_file}")
     
     # Update release_info.py for mariadb_c package to ensure version sync
-    mariadb_c_release_file = project_root / "mariadb-c" / "src" / "release_info.py"
+    mariadb_c_release_file = project_root / "mariadb-c" / "mariadb_c" / "release_info.py"
     
     # Parse version to extract numeric parts and suffix
     # Handle formats like "2.0.0", "2.0.0.dev", "2.0.0-dev"
-    version_match = re.match(r'^(\d+)\.(\d+)\.(\d+)(?:[.-](.+))?$', version)
+    version_match = re.match(r'^(\d+)\.(\d+)\.(\d+)([.-](.+)|([a-zA-Z].*))?$', version)
     if version_match:
         major = int(version_match.group(1))
         minor = int(version_match.group(2))
         patch = int(version_match.group(3))
-        suffix = version_match.group(4)
+        suffix = version_match.group(5) or version_match.group(6)
         
         if suffix:
             version_info_tuple = f"({major}, {minor}, {patch}, '{suffix}')"

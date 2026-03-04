@@ -658,14 +658,14 @@ class SyncClient(BaseClient):
                 raise _decode_error_packet(packet, context).toError(self.exception_factory)
             elif packet_type == self.EOF_PACKET:
                 # EOF packet at top level (e.g. COM_DEBUG response)
-                completion = _decode_eof_packet(packet, context)
-                results.append(completion)  # type: ignore[arg-type]
+                eof_completion = _decode_eof_packet(packet, context)
+                results.append(eof_completion)
                 if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                     break
                 continue
             elif packet_type == self.LOCAL_INFILE_PACKET:
-                completion, packets = self._handle_local_infile(packet, sql, packets)
-                results.append(completion)
+                infile_completion, packets = self._handle_local_infile(packet, sql, packets)
+                results.append(infile_completion)
                 # After sending file, read the actual result
                 if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                     break
@@ -729,9 +729,9 @@ class SyncClient(BaseClient):
                 self._active_streaming_result = streaming_result
 
                 # Create completion with streaming result
-                completion = OkPacket(0,0,0,0,b'')
-                completion.result_set = streaming_result
-                results.append(completion)
+                streaming_completion: OkPacket = OkPacket(0,0,0,0,b'')
+                streaming_completion.result_set = streaming_result
+                results.append(streaming_completion)
                 return results
 
             # Read rows
@@ -752,21 +752,22 @@ class SyncClient(BaseClient):
 
                     # Check for EOF/OK packet terminator
                     if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
+                        result_completion: Union[OkPacket, EofPacket]
                         if eof_deprecated:
-                            completion = _decode_ok_packet(row_packet, context)
+                            result_completion = _decode_ok_packet(row_packet, context)
                         else:
-                            completion = _decode_eof_packet(row_packet, context)  # type: ignore[assignment]
+                            result_completion = _decode_eof_packet(row_packet, context)
 
                         if config and config.converter:
                             rows = self._apply_converters_to_rows(rows, columns, config)  # type: ignore[arg-type]
 
-                        completion.result_set = SyncCompleteResult(
+                        result_completion.result_set = SyncCompleteResult(
                             columns,  # type: ignore[arg-type]
                             column_count,
                             config,
                             rows
                         )
-                        results.append(completion)
+                        results.append(result_completion)
                         finish_result = True
                         
                         # Save any remaining packets for next result set

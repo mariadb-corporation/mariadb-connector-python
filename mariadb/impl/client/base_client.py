@@ -57,7 +57,7 @@ from ..message.server.ok_packet import OkPacket
 try:
     from cachetools import LRUCache
 except ImportError:
-    LRUCache = None  # type: ignore[assignment]
+    LRUCache = None
 
 # Frozenset type constants for O(1) lookup in row parsers (text protocol)
 _TEXT_INT_TYPES = frozenset((

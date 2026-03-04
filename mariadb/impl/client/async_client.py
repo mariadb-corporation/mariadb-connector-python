@@ -730,15 +730,15 @@ class AsyncClient(BaseClient):
                 raise _decode_error_packet(packet, context).toError(self.exception_factory)
             elif packet_type == self.EOF_PACKET:
                 # EOF packet at top level (e.g. COM_DEBUG response)
-                completion = _decode_eof_packet(packet, context)
-                results.append(completion)  # type: ignore[arg-type]
+                eof_completion = _decode_eof_packet(packet, context)
+                results.append(eof_completion)
                 if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                     break
                 continue
             elif packet_type == self.LOCAL_INFILE_PACKET:
                 # LOAD DATA LOCAL INFILE request from server
-                completion, packets = await self._handle_local_infile(packet, sql, packets)
-                results.append(completion)
+                infile_completion, packets = await self._handle_local_infile(packet, sql, packets)
+                results.append(infile_completion)
                 if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                     break
                 continue
@@ -800,9 +800,9 @@ class AsyncClient(BaseClient):
                 self._active_streaming_result = streaming_result
 
                 # Create completion with streaming result
-                completion = OkPacket(0,0,0,0,b'')
-                completion.result_set = streaming_result
-                results.append(completion)
+                streaming_completion: OkPacket = OkPacket(0,0,0,0,b'')
+                streaming_completion.result_set = streaming_result
+                results.append(streaming_completion)
                 return results
 
             # Read rows
@@ -824,21 +824,22 @@ class AsyncClient(BaseClient):
 
                     # Check for EOF/OK packet terminator
                     if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
+                        result_completion: Union[OkPacket, EofPacket]
                         if eof_deprecated:
-                            completion = _decode_ok_packet(row_packet, context)
+                            result_completion = _decode_ok_packet(row_packet, context)
                         else:
-                            completion = _decode_eof_packet(row_packet, context)  # type: ignore[assignment]
+                            result_completion = _decode_eof_packet(row_packet, context)
 
                         if config and config.converter:
                             rows = self._apply_converters_to_rows(rows, columns, config)
 
-                        completion.result_set = AsyncCompleteResult(
+                        result_completion.result_set = AsyncCompleteResult(
                             columns,
                             column_count,
                             config,
                             rows
                         )
-                        results.append(completion)
+                        results.append(result_completion)
                         finish_result = True
 
                         # Save any remaining packets for next result set
@@ -878,7 +879,7 @@ class AsyncClient(BaseClient):
 
 
         # Check if local_infile is enabled
-        if self.configuration.local_infile == False:
+        if self.configuration.local_infile is False:
             # Send empty packet to keep connection state OK
             await self.write_payload(bytearray(4), reset_sequence=False)
             raise ProgrammingError(

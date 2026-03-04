@@ -246,10 +246,26 @@ class MySQLExecutionContext_mariadbconnector_async(
     MySQLExecutionContext_mariadbconnector
 ):
     def create_server_side_cursor(self) -> Any:
-        return self._dbapi_connection.cursor(buffered=False)
+        # Handle pooled connections that don't support buffered parameter
+        try:
+            return self._dbapi_connection.cursor(buffered=False)  # type: ignore[call-arg]
+        except TypeError:
+            # Fallback for pooled connections
+            cursor = self._dbapi_connection.cursor()
+            if hasattr(cursor, 'buffered'):
+                cursor.buffered = False  # type: ignore[attr-defined]
+            return cursor
 
     def create_default_cursor(self) -> Any:
-        return self._dbapi_connection.cursor(buffered=True)
+        # Handle pooled connections that don't support buffered parameter
+        try:
+            return self._dbapi_connection.cursor(buffered=True)  # type: ignore[call-arg]
+        except TypeError:
+            # Fallback for pooled connections
+            cursor = self._dbapi_connection.cursor()
+            if hasattr(cursor, 'buffered'):
+                cursor.buffered = True  # type: ignore[attr-defined]
+            return cursor
 
 
 class MySQLDialect_mariadbconnector_async(MySQLDialect_mariadbconnector):

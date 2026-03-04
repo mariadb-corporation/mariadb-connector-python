@@ -52,13 +52,16 @@ def _parse_version_info(version_string):
     import re
     
     # Extract major.minor.patch and optional suffix from version string
-    # Handle formats like "1.2.3", "1.2.3-dev", "1.2.3.dev", "1.2.3-ga", etc.
-    match = re.match(r'^(\d+)\.(\d+)\.(\d+)(?:[.-](.+))?$', version_string)
+    # Handle formats like "1.2.3", "1.2.3-dev", "1.2.3.dev", "1.2.3-ga",
+    # "2.0.0rc1", "2.0.0a1", "2.0.0b2", etc.
+    match = re.match(r'^(\d+)\.(\d+)\.(\d+)([.-](.+)|([a-zA-Z].*))?$', version_string)
     if match:
         major = int(match.group(1))
         minor = int(match.group(2))
         patch = int(match.group(3))
-        suffix = match.group(4)  # Optional suffix (dev, ga, etc.)
+        # group(5): suffix after a '.' or '-' separator (e.g. "dev19" from "2.0.0.dev19")
+        # group(6): suffix attached directly (e.g. "rc1" from "2.0.0rc1")
+        suffix = match.group(5) or match.group(6)
         
         # Convert to tuple format - include suffix if present
         if suffix:
@@ -96,12 +99,7 @@ version_tuple, version_numeric = _parse_version_info(_base_version)
 
 # Set version variables for C extension
 # Append '-c' suffix to the version string (after any existing suffix)
-if len(version_tuple) == 4:
-    # Has suffix like 'dev', append '-c' to make it 'dev-c'
-    __version__ = f"{version_tuple[0]}.{version_tuple[1]}.{version_tuple[2]}.{version_tuple[3]}-c"
-else:
-    # No suffix, just append '-c'
-    __version__ = _base_version + "-c"
+__version__ = _base_version + "-c"
 
 __version_info__ = version_tuple  # Use tuple, not numeric
 __version_type__ = "c"

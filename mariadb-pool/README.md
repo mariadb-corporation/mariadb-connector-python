@@ -1,6 +1,7 @@
-# MariaDB Connection Pool
+# mariadb-pool
 
-Connection pooling for MariaDB Connector/Python with automatic connection management, health checking, and monitoring.
+`mariadb-pool` is the **connection pooling add-on** for the [mariadb](https://pypi.org/project/mariadb/) connector.
+It provides synchronous and asynchronous connection pools with automatic connection management, health checking, and monitoring.
 
 ## Installation
 

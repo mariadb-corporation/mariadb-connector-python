@@ -99,9 +99,10 @@ with open(target / "README.md", "w") as f:
 
 # Update pyproject.toml - replace all mariadb_c with mariadb_binary
 if (target / "pyproject.toml").exists():
+    # First rename the hyphenated package name (mariadb-c → mariadb-binary)
+    sed_i(r'name = "mariadb-c"', 'name = "mariadb-binary"', target / "pyproject.toml")
+    # Then rename all underscored references (mariadb_c → mariadb_binary)
     sed_i(r'\bmariadb_c\b', 'mariadb_binary', target / "pyproject.toml")
-    # Change package name to use hyphen for PyPI compatibility
-    sed_i(r'name = "mariadb_binary"', 'name = "mariadb-binary"', target / "pyproject.toml")
     # Ensure build-backend is set correctly (not using custom build backends)
     sed_i(r'build-backend\s*=\s*["\'](?:build|_build_backend)["\']', 'build-backend = "setuptools.build_meta"', target / "pyproject.toml")
     # Remove backend-path if it exists (it references the root build backend)

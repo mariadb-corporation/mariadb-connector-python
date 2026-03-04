@@ -299,13 +299,16 @@ def _parse_version_info(version_string: str) -> tuple:
     import re
 
     # Extract major.minor.patch and optional suffix from version string
-    # Handle formats like "1.2.3", "1.2.3-dev", "1.2.3.dev", "1.2.3-ga", etc.
-    match = re.match(r'^(\d+)\.(\d+)\.(\d+)(?:[.-](.+))?$', version_string)
+    # Handle formats like "1.2.3", "1.2.3-dev", "1.2.3.dev", "1.2.3-ga",
+    # "2.0.0rc1", "2.0.0a1", "2.0.0b2", etc.
+    match = re.match(r'^(\d+)\.(\d+)\.(\d+)([.-](.+)|([a-zA-Z].*))?$', version_string)
     if match:
         major = int(match.group(1))
         minor = int(match.group(2))
         patch = int(match.group(3))
-        suffix = match.group(4)  # Optional suffix (dev, ga, etc.)
+        # group(5): suffix after a '.' or '-' separator (e.g. "dev19" from "2.0.0.dev19")
+        # group(6): suffix attached directly (e.g. "rc1" from "2.0.0rc1")
+        suffix = match.group(5) or match.group(6)
 
         # Convert to tuple format - include suffix if present
         if suffix:
@@ -414,7 +417,14 @@ def _get_current_version_type() -> str:
 
 def _get_current_version_info() -> tuple:
     """Get version info based on current implementation selection"""
-    return version_tuple  # type: ignore[no-any-return]
+    current = _get_current_version()
+    # Strip PEP 440 local label (+native, +c, +binary) and implementation
+    # suffixes (-c) so _parse_version_info gets a clean X.Y.Z[prerelease] string.
+    base = current.split('+')[0]
+    if base.endswith('-c'):
+        base = base[:-2]
+    parsed, _ = _parse_version_info(base)
+    return parsed  # type: ignore[no-any-return]
 
 
 def create_pool(
