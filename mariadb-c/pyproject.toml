@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mariadb-c"
-version = "2.0.0rc1"
+version = "2.0.0rc2"
 description = "Python MariaDB extension"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
@@ -52,6 +52,8 @@ Repository = "https://www.github.com/mariadb-corporation/mariadb-connector-pytho
 
 [tool.setuptools]
 packages = ["mariadb_c", "mariadb_shared"]
+py-modules = ["mariadb_posix", "mariadb_windows"]
+include-package-data = true
 
 [tool.setuptools.package-dir]
 mariadb_c = "mariadb_c"

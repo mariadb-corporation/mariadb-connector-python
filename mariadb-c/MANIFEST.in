@@ -1,0 +1,8 @@
+include site.cfg
+include README.md
+include setup.py
+include mariadb_posix.py
+include mariadb_windows.py
+include pyproject.toml
+recursive-include include *.h
+recursive-include mariadb_c *.c *.h *.py

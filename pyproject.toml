@@ -5,7 +5,7 @@ backend-path = ["."]
 
 [project]
 name = "mariadb"
-version = "2.0.0rc1"
+version = "2.0.0rc2"
 description = "MariaDB Connector/Python with Java-equivalent implementation"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.8"
@@ -21,7 +21,7 @@ keywords = ["MariaDB", "MySQL", "database", "connector"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
-    "Environment :: MacOS X", 
+    "Environment :: MacOS X",
     "Environment :: Win32 (MS Windows)",
     "Programming Language :: C",
     "Programming Language :: Python",
@@ -35,7 +35,7 @@ classifiers = [
     "Operating System :: MacOS",
     "Operating System :: POSIX",
     "Intended Audience :: End Users/Desktop",
-    "Intended Audience :: Developers", 
+    "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Topic :: Database",
 ]
@@ -48,11 +48,15 @@ dependencies = [
 [project.optional-dependencies]
 # C extension for better performance (must match mariadb version)
 c = [
-    "mariadb-c==2.0.0rc1",
+    "mariadb-c==2.0.0rc2",
 ]
 # Connection pooling (must match mariadb version)
 pool = [
-    "mariadb-pool==2.0.0rc1",
+    "mariadb-pool==2.0.0rc2",
+]
+# Binary wheels with pre-compiled C extension (must match mariadb version)
+binary = [
+    "mariadb-binary==2.0.0rc2",
 ]
 
 # Development dependencies

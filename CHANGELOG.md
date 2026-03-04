@@ -1,5 +1,30 @@
 # Release history
 
+## MariaDB Connector/Python 2.0.0rc2
+
+Release date: Mar. 2026
+
+**Notable changes:**
+
+- [CONPY-2](https://jira.mariadb.org/browse/CONPY-2): Asynchronous support
+- [CONPY-324](https://jira.mariadb.org/browse/CONPY-324): Enhanced Python Connector Distribution
+- [CONPY-325](https://jira.mariadb.org/browse/CONPY-325): Add Type Hints to MariaDB Python Connector
+- [CONPY-326](https://jira.mariadb.org/browse/CONPY-326): Add Connection URI Support to MariaDB Python Connector
+- [CONPY-327](https://jira.mariadb.org/browse/CONPY-327): Asynchronous support for C implementation
+- [CONPY-333](https://jira.mariadb.org/browse/CONPY-333): C implementation: columns metadata reading
+- [CONPY-338](https://jira.mariadb.org/browse/CONPY-338): Unify binary protocol use
+- [CONPY-335](https://jira.mariadb.org/browse/CONPY-335): Metadata: Store metadata as an object of arrays instead of an array of objects
+
+
+## MariaDB Connector/Python 1.1.14
+
+Release date: Oct 10 2025
+
+**Bug fixes:**
+
+- [CONPY-318](https://jira.mariadb.org/browse/CONPY-318): Segfault appears on mariadb-connector 1.1.13
+- [CONPY-321](https://jira.mariadb.org/browse/CONPY-321): Exception handler in ConnectionPool.__init__ does not close all open connections and raises IndexError
+
 ## MariaDB Connector/Python 1.1.13
 
 Release date: Jul 7 2025

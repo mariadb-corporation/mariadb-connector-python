@@ -59,8 +59,8 @@ RelWithDebInfo
 
 # Auto-generated version files
 mariadb/release_info.py
-mariadb-c/src/release_info.py
-mariadb_pool/src/release_info.py
+mariadb-c/mariadb_c/release_info.py
+mariadb-pool/src/release_info.py
 
 sqlalchemy/
 .test_venv/

@@ -23,15 +23,20 @@ except ImportError:
             from importlib_metadata import version
             __version__ = version('mariadb-pool')
         except ImportError:
-            # Final fallback - use hardcoded version that matches root project
+            # Final fallback - use development version to indicate release_info.py generation failed
             __version__ = "2.0.0.dev1"
 
 # Parse version info
+# Handles "1.2.3", "1.2.3-dev", "1.2.3.dev", "2.0.0rc1", etc.
 try:
     import re
-    match = re.match(r'^(\d+)\.(\d+)\.(\d+)', __version__)
+    match = re.match(r'^(\d+)\.(\d+)\.(\d+)([.-](.+)|([a-zA-Z].*))?$', __version__)
     if match:
-        __version_info__ = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        suffix = match.group(5) or match.group(6)
+        if suffix:
+            __version_info__ = (int(match.group(1)), int(match.group(2)), int(match.group(3)), suffix)
+        else:
+            __version_info__ = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
     else:
         __version_info__ = (2, 0, 0)
 except Exception:
@@ -58,5 +63,3 @@ __all__ = [
     'PoolConfig',
     'PoolError'
 ]
-
-__version__ = '2.0.0.dev1'
