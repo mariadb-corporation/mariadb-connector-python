@@ -7,11 +7,10 @@
 # MariaDB Connector/Python
 
 [![License (LGPL version 2.1+)][licence-image]](LICENSE)
-[![Python 3.7][python-image]][python-url]
-[![Build Status](https://travis-ci.com/mariadb-corporation/mariadb-connector-python.svg?branch=1.1)](https://app.travis-ci.com/mariadb-corporation/mariadb-connector-python)
+[![Python 3.10][python-image]][python-url]
+[![Build Status](https://travis-ci.com/mariadb-corporation/mariadb-connector-python.svg?branch=2.0)](https://app.travis-ci.com/mariadb-corporation/mariadb-connector-python)
 <a href="https://scan.coverity.com/projects/mariadb-connector-python">
-  <img alt="Coverity Scan Build Status"
-       src="https://scan.coverity.com/projects/21386/badge.svg"/>
+  <img alt="Coverity Scan Build Status" src="https://scan.coverity.com/projects/21386/badge.svg"/>
 </a>
 
 MariaDB Connector/Python enables python programs to access MariaDB and MySQL databases, using an API which is compliant with the Python DB API 2.0 (PEP-249).
@@ -71,11 +70,11 @@ import mariadb
 
 # Connect to MariaDB using URI
 with mariadb.connect("mariadb://root:password@localhost:3306/mydb") as conn:
-    
+
     with conn.cursor() as cursor:
         # Execute query
         cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
-        
+
         # Fetch results
         for row in cursor.fetchall():
             print(row)
@@ -153,10 +152,10 @@ pool = mariadb.create_pool(
 with pool.acquire() as conn:
     with conn.cursor() as cursor:
         # Insert data
-        cursor.execute("INSERT INTO users (name, email) VALUES (?, ?)", 
+        cursor.execute("INSERT INTO users (name, email) VALUES (?, ?)",
                        ("John Doe", "john@example.com"))
         conn.commit()
-        
+
         # Fetch data
         cursor.execute("SELECT * FROM users WHERE name = ?", ("John Doe",))
         for row in cursor.fetchall():
@@ -198,7 +197,7 @@ with mariadb.connect("mariadb://user:password@localhost/mydb") as conn:
         cursor.execute("SELECT id, name, email FROM users LIMIT 1")
         row = cursor.fetchone()
         print(f"User: {row['name']}, Email: {row['email']}")
-    
+
     # Named tuple cursor - access columns as attributes
     with conn.cursor(named_tuple=True) as cursor:
         cursor.execute("SELECT id, name, email FROM users LIMIT 1")
@@ -224,7 +223,7 @@ async def main():
         min_size=5,
         max_size=10
     )
-    
+
     # Get connection from pool
     async with await pool.acquire() as conn:
         async with conn.cursor() as cursor:
@@ -232,19 +231,19 @@ async def main():
             await cursor.execute("SELECT * FROM users WHERE id = ?", (1,))
             row = await cursor.fetchone()
             print(f"User: {row}")
-            
+
             # Fetch multiple rows
             await cursor.execute("SELECT * FROM users LIMIT 5")
             async for row in cursor:
                 print(f"User: {row}")
-            
+
             # Insert data with transaction
             await cursor.execute(
                 "INSERT INTO users (name, email) VALUES (?, ?)",
                 ("Jane Doe", "jane@example.com")
             )
             await conn.commit()
-    
+
     await pool.close()
 
 # Run the async function
@@ -305,5 +304,5 @@ Bugs and feature requests should be filed in the [MariaDB bug ticket system](htt
 
 
 [licence-image]:https://img.shields.io/badge/license-GNU%20LGPL%20version%202.1-green.svg?style=flat-square
-[python-image]:https://img.shields.io/badge/python-3.7-blue.svg
-[python-url]:https://www.python.org/downloads/release/python-370/
+[python-image]:https://img.shields.io/badge/python-3.10-blue.svg
+[python-url]:https://www.python.org/downloads/release/python-3100/
