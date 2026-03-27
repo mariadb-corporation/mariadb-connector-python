@@ -8,6 +8,7 @@
 
 [![License (LGPL version 2.1)][licence-image]](LICENSE)
 [![Python 3.10][python-image]][python-url]
+[![Run CI Tests](https://github.com/mariadb-corporation/mariadb-connector-python/actions/workflows/ci.yml/badge.svg)](https://github.com/mariadb-corporation/mariadb-connector-python/actions/workflows/ci.yml)
 <a href="https://scan.coverity.com/projects/mariadb-connector-python">
   <img alt="Coverity Scan Build Status"
        src="https://scan.coverity.com/projects/21386/badge.svg"/>
@@ -27,7 +28,7 @@ MariaDB Connector/Python source code is hosted on [Github](https://github.com/ma
 
 ## Documentation
 
-MariaDB Connector/Python documentation can be found on [Github Pages](https://mariadb-corporation.github.io/mariadb-connector-python/)
+MariaDB Connector/Python documentation can be found on [MariaDB documentation](https://mariadb.com/docs/connectors/mariadb-connector-python)
 
 ## Bugs
 

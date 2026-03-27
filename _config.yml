@@ -1,1 +1,4 @@
 theme: jekyll-theme-minimal
+plugins:
+  - jekyll-redirect-from
+redirect_to: https://mariadb.com/docs/connectors/mariadb-connector-python
