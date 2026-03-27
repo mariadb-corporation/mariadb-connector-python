@@ -7,8 +7,7 @@
 # MariaDB Connector/Python
 
 [![License (LGPL version 2.1)][licence-image]](LICENSE)
-[![Python 3.7][python-image]][python-url]
-[![Build Status](https://travis-ci.com/mariadb-corporation/mariadb-connector-python.svg?branch=1.1)](https://app.travis-ci.com/mariadb-corporation/mariadb-connector-python)
+[![Python 3.10][python-image]][python-url]
 <a href="https://scan.coverity.com/projects/mariadb-connector-python">
   <img alt="Coverity Scan Build Status"
        src="https://scan.coverity.com/projects/21386/badge.svg"/>
@@ -36,5 +35,5 @@ Bugs and feature requests should be filed in the [MariaDB bug ticket system](htt
 
 
 [licence-image]:https://img.shields.io/badge/license-GNU%20LGPL%20version%202.1-green.svg?style=flat-square
-[python-image]:https://img.shields.io/badge/python-3.7-blue.svg
-[python-url]:https://www.python.org/downloads/release/python-370/
+[python-image]:https://img.shields.io/badge/python-3.10-blue.svg
+[python-url]:https://www.python.org/downloads/release/python-3100/

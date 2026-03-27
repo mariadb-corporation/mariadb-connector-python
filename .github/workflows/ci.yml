@@ -27,9 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name != 'schedule' ||
-      github.ref == 'refs/heads/3.4' ||
-      github.ref == 'refs/heads/3.1' ||
-      github.ref == 'refs/heads/3.2'
+      github.ref == 'refs/heads/1.1' ||
+      github.ref == 'refs/heads/1.0' ||
+      github.ref == 'refs/heads/2.0'
     outputs:
       matrix: ${{ steps.set-matrix.outputs.final-matrix }}
     steps:
