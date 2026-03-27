@@ -8,7 +8,7 @@
 
 [![License (LGPL version 2.1+)][licence-image]](LICENSE)
 [![Python 3.10][python-image]][python-url]
-[![Build Status](https://travis-ci.com/mariadb-corporation/mariadb-connector-python.svg?branch=2.0)](https://app.travis-ci.com/mariadb-corporation/mariadb-connector-python)
+[![Run CI Tests](https://github.com/mariadb-corporation/mariadb-connector-python/actions/workflows/ci.yml/badge.svg?branch=2.0)](https://github.com/mariadb-corporation/mariadb-connector-python/actions/workflows/ci.yml)
 <a href="https://scan.coverity.com/projects/mariadb-connector-python">
   <img alt="Coverity Scan Build Status" src="https://scan.coverity.com/projects/21386/badge.svg"/>
 </a>
