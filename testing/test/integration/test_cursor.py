@@ -75,10 +75,10 @@ class TestCursor(unittest.TestCase):
             except Exception:
                 pass
             cursor.close()
-            cursor=conn.cursor(binary=True)
+            cursor=conn.cursor(binary=False)
             cursor.execute("SELECT CAST(0xEDA080 AS CHAR CHARSET UTF8MB3)");
             try:
-                cursor.fetchone()
+                cursor.fetchall()
             except Exception:
                 pass
             cursor.close()

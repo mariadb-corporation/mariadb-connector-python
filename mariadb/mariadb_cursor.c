@@ -908,7 +908,14 @@ MrdbCursor_fetchone(MrdbCursor *self)
     for (i= 0; i < field_count; i++)
     {
         ma_set_result_column_value(self, row, i);
+
+        if (PyErr_Occurred())
+        {
+          Py_XDECREF(row);
+          return NULL;
+        }
     }
+
     return row;
 }
 
@@ -1330,7 +1337,15 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
         for (j=0; j < field_count; j++)
         {
             ma_set_result_column_value(self, Row, j);
+
+            if (PyErr_Occurred()) {
+              Py_XDECREF(Row);
+              Py_XDECREF(List);
+              self->row_count= 0;
+              return NULL;
+            }
         }
+
         PyList_Append(List, Row);
         /* CONPY-99: Decrement Row to prevent memory leak */
         Py_DECREF(Row);
