@@ -21,6 +21,7 @@ class Configuration:
     
     # Socket parameters
     unix_socket: Optional[str] = None
+    protocol: int = 0  # 0=DEFAULT, 1=TCP, 2=SOCKET  (mirrors mysql_protocol_type)
     socket_timeout: float = 30  # 30 seconds
     connect_timeout: float = 10  # 10 seconds
     
@@ -129,6 +130,14 @@ class Configuration:
         # Socket parameters
         if 'unix_socket' in params:
             config.unix_socket = params['unix_socket']
+        if 'protocol' in params:
+            _proto_map = {'DEFAULT': 0, 'TCP': 1, 'SOCKET': 2,
+                          'default': 0, 'tcp': 1, 'socket': 2}
+            v = params['protocol']
+            if isinstance(v, str):
+                config.protocol = _proto_map[v.upper()] if v.upper() in _proto_map else int(v)
+            else:
+                config.protocol = int(v)
         if 'socket_timeout' in params:
             config.socket_timeout = int(params['socket_timeout'])
         # read_timeout and write_timeout are aliases for socket_timeout
@@ -222,7 +231,7 @@ class Configuration:
         valid_params = {
             'host', 'hostname', 'server', 'user', 'username', 'password', 'passwd',
             'database', 'db', 'schema', 'port',
-            'unix_socket', 'socket', 'named_pipe', 'pipe_name',
+            'unix_socket', 'protocol', 'socket', 'named_pipe', 'pipe_name',
             'socket_timeout', 'read_timeout', 'write_timeout', 'connect_timeout',
             'ssl', 'use_ssl', 'ssl_key', 'ssl_ca', 'ssl_cert', 'ssl_crl',
             'ssl_cipher', 'ssl_capath', 'ssl_crlpath', 'ssl_verify_cert', 'tls_version',

@@ -100,7 +100,11 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
     - **`user`, `username`** - The username used to authenticate with the database server
     - **`password`, `passwd`** - The password of the given user
     - **`database`, `db`** - Database (schema) name to use when connecting with the database server
-    - **`unix_socket`** - The location of the unix socket file to use instead of using an IP port to connect. If socket authentication is enabled, this can also be used in place of a password.
+    - **`unix_socket`** - The location of the unix socket file to use instead of using an IP port to connect. If socket authentication is enabled, this can also be used in place of a password. When `host` is ``localhost`` and this parameter is not set, the connector automatically tries ``/tmp/mysql.sock`` (mirroring libmariadb behaviour).
+    - **`protocol`** - Force a specific transport protocol. Accepted values (case-insensitive string or integer):
+        - ``'DEFAULT'`` / ``0`` — connector chooses automatically (default); Unix socket is used for ``localhost`` when available
+        - ``'TCP'`` / ``1`` — force TCP/IP even when ``host`` is ``localhost``
+        - ``'SOCKET'`` / ``2`` — force Unix socket (requires ``unix_socket`` to be set or auto-detected)
     - **`port`** - Port number of the database server. If not specified, the default value of 3306 will be used.
     - **`connect_timeout`** - Connect timeout in seconds
     - **`read_timeout`** - Read timeout in seconds

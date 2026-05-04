@@ -184,6 +184,22 @@ class Connection(CConnection, SyncConnectionCommon):
         cache_prep_stmts: bool = bool(kwargs.pop("cache_prep_stmts", True))
         prep_stmt_cache_size: int = int(kwargs.pop("prep_stmt_cache_size", 100))
 
+        # protocol='TCP' forces TCP — strip the unix_socket so libmariadb
+        # doesn't pick it up, and replace 'localhost' with '127.0.0.1' so
+        # libmariadb doesn't auto-select the Unix socket either.
+        # Other protocol values are silently accepted (DEFAULT/SOCKET are the
+        # C library's default behaviour already).
+        _proto_map = {'DEFAULT': 0, 'TCP': 1, 'SOCKET': 2}
+        _proto_raw = kwargs.pop("protocol", 0)
+        if isinstance(_proto_raw, str):
+            _protocol = _proto_map.get(_proto_raw.upper(), 0)
+        else:
+            _protocol = int(_proto_raw)
+        if _protocol == 1:  # TCP
+            kwargs.pop("unix_socket", None)
+            if kwargs.get("host", "localhost") == "localhost":
+                kwargs["host"] = "127.0.0.1"
+
         # if host contains a connection string or multiple hosts,
         # we need to check if it's supported by Connector/C
         if "host" in kwargs:

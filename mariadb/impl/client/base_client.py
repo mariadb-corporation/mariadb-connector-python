@@ -11,11 +11,32 @@ Contains all common logic shared between AsyncClient and SyncClient.
 
 import decimal
 import datetime
+import os
+import stat
 import struct
+import sys
 import ipaddress
 import uuid
 from abc import ABC, abstractmethod
 from typing import List, Optional, Callable, Dict, Tuple, Any, TYPE_CHECKING, Union
+
+# Protocol constants — mirror mysql_protocol_type from Connector/C mysql.h
+PROTOCOL_DEFAULT = 0
+PROTOCOL_TCP     = 1
+PROTOCOL_SOCKET  = 2
+
+# Default Unix socket path when host='localhost' and no unix_socket is given.
+# Mirrors libmariadb (Connector/C): MARIADB_UNIX_ADDR defaults to /tmp/mysql.sock.
+_DEFAULT_UNIX_SOCKET = '/tmp/mysql.sock'
+
+def _find_default_unix_socket() -> Optional[str]:
+    """Return _DEFAULT_UNIX_SOCKET if it exists and is a socket file, else None."""
+    try:
+        if stat.S_ISSOCK(os.stat(_DEFAULT_UNIX_SOCKET).st_mode):
+            return _DEFAULT_UNIX_SOCKET
+    except OSError:
+        pass
+    return None
 
 if TYPE_CHECKING:
     from ..plugin.authentication_plugin import AuthenticationPlugin

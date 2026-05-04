@@ -297,5 +297,72 @@ class TestUnixSocket(unittest.TestCase):
             self.fail(f"Unix socket operations failed: {e}")
 
 
+    @unittest.skipIf(is_windows(), "Unix sockets not supported on Windows")
+    @unittest.skipIf(not is_local_test(), "Test requires local environment")
+    def test_localhost_defaults_to_unix_socket(self):
+        """
+        CONPY-340: connecting with host='localhost' (or no host) and no
+        unix_socket should auto-detect /tmp/mysql.sock, mirroring libmariadb
+        behaviour (MARIADB_UNIX_ADDR default).
+        """
+        import stat as _stat
+        # This test only makes sense when the default socket path exists.
+        try:
+            if not _stat.S_ISSOCK(os.stat('/tmp/mysql.sock').st_mode):
+                self.skipTest("/tmp/mysql.sock exists but is not a socket")
+        except OSError:
+            self.skipTest("/tmp/mysql.sock not present on this system")
+
+        # Build a config with host='localhost' and no explicit unix_socket.
+        conf = get_test_config()
+        conf.pop('unix_socket', None)
+        conf['host'] = 'localhost'
+
+        conn = mariadb.connect(**conf)
+        try:
+            self.assertEqual(conn.unix_socket, '/tmp/mysql.sock',
+                             "Expected unix_socket to be auto-detected as /tmp/mysql.sock")
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            self.assertEqual(cursor.fetchone()[0], 1)
+            cursor.close()
+        finally:
+            conn.close()
+
+
+    @unittest.skipIf(is_windows(), "Unix sockets not supported on Windows")
+    @unittest.skipIf(not is_local_test(), "Test requires local environment")
+    def test_localhost_with_tcp_protocol_skips_unix_socket(self):
+        """
+        CONPY-340: when protocol='TCP' is set, the connector must use TCP even
+        when host='localhost' and /tmp/mysql.sock is present.
+        """
+        import stat as _stat
+        # Only meaningful when the default socket would otherwise be picked up.
+        try:
+            if not _stat.S_ISSOCK(os.stat('/tmp/mysql.sock').st_mode):
+                self.skipTest("/tmp/mysql.sock exists but is not a socket")
+        except OSError:
+            self.skipTest("/tmp/mysql.sock not present on this system")
+
+        conf = get_test_config()
+        conf.pop('unix_socket', None)
+        conf['host'] = 'localhost'
+        conf['protocol'] = 'TCP'
+
+        conn = mariadb.connect(**conf)
+        try:
+            self.assertIsNone(conn.unix_socket,
+                              "unix_socket should be None when protocol=TCP forces TCP")
+            self.assertNotEqual(conn.server_port, 0,
+                                "server_port should be non-zero for a TCP connection")
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            self.assertEqual(cursor.fetchone()[0], 1)
+            cursor.close()
+        finally:
+            conn.close()
+
+
 if __name__ == '__main__':
     unittest.main()

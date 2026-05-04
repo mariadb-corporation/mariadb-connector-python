@@ -13,6 +13,7 @@ import asyncio
 import ssl
 import struct
 import copy
+import sys
 from typing import List, Optional, Any, Union, overload
 
 from mariadb.impl.message.server.ok_packet import OkPacket
@@ -20,7 +21,7 @@ from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnsDefinition
-from .base_client import BaseClient
+from .base_client import BaseClient, _find_default_unix_socket, PROTOCOL_TCP
 from .context import Context
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
@@ -341,19 +342,26 @@ class AsyncClient(BaseClient):
     async def _create_socket(self) -> None:
         """Create and configure async TCP or Unix socket connection"""
         try:
-            if self.configuration.unix_socket:
-                # Unix socket connection
+            unix_socket = self.configuration.unix_socket
+            if (not unix_socket
+                    and self.configuration.protocol != PROTOCOL_TCP
+                    and not sys.platform.startswith('win')
+                    and self.host_address.host == 'localhost'):
+                unix_socket = _find_default_unix_socket()
+                if unix_socket:
+                    self.configuration.unix_socket = unix_socket
+
+            if unix_socket and self.configuration.protocol != PROTOCOL_TCP:
                 if self.connect_timeout:
                     self.reader, self.writer = await asyncio.wait_for(
-                        asyncio.open_unix_connection(self.configuration.unix_socket),
+                        asyncio.open_unix_connection(unix_socket),
                         timeout=self.connect_timeout
                     )
                 else:
                     self.reader, self.writer = await asyncio.open_unix_connection(
-                        self.configuration.unix_socket
+                        unix_socket
                     )
             else:
-                # TCP connection
                 if self.connect_timeout:
                     self.reader, self.writer = await asyncio.wait_for(
                         asyncio.open_connection(self.host_address.host, self.host_address.port),

@@ -13,6 +13,7 @@ import socket
 import ssl
 import struct
 import copy
+import sys
 from typing import List, Optional, Any, Union, overload
 import threading
 
@@ -21,7 +22,7 @@ from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnsDefinition
-from .base_client import BaseClient
+from .base_client import BaseClient, _find_default_unix_socket, PROTOCOL_TCP
 from .context import Context
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
@@ -358,11 +359,20 @@ class SyncClient(BaseClient):
     def _create_socket(self) -> None:
         """Create and configure TCP or Unix socket connection"""
         try:
-            if self.configuration.unix_socket:
+            unix_socket = self.configuration.unix_socket
+            if (not unix_socket
+                    and self.configuration.protocol != PROTOCOL_TCP
+                    and not sys.platform.startswith('win')
+                    and self.host_address.host == 'localhost'):
+                unix_socket = _find_default_unix_socket()
+                if unix_socket:
+                    self.configuration.unix_socket = unix_socket
+
+            if unix_socket and self.configuration.protocol != PROTOCOL_TCP:
                 self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 if self.connect_timeout:
                     self.socket.settimeout(self.connect_timeout)
-                self.socket.connect(self.configuration.unix_socket)
+                self.socket.connect(unix_socket)
             else:
                 self.socket = socket.create_connection(
                     (self.host_address.host, self.host_address.port),
@@ -372,7 +382,7 @@ class SyncClient(BaseClient):
 
             if self.socket_timeout:
                 self.socket.settimeout(self.socket_timeout)
-            
+
         except Exception as e:
             if self.socket:
                 try:
@@ -382,7 +392,7 @@ class SyncClient(BaseClient):
             self.socket = None  # type: ignore[assignment]
             # Use errno 2002 for connection errors (Can't connect to server)
             raise self.exception_factory.create_exception(
-                f"Can't connect to server on '{self.host_address.host}':{self.host_address.port}: {e}", 
+                f"Can't connect to server on '{self.host_address.host}':{self.host_address.port}: {e}",
                 errno=2002,
                 sql_state='HY000'
             )
