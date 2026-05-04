@@ -1,0 +1,10 @@
+--- a/test/requirements.py
++++ b/test/requirements.py
+@@ -1350,7 +1350,6 @@ class DefaultRequirements(SuiteRequirements):
+                 "+pymysql",
+                 "+asyncmy",
+                 "+mysqlconnector",
+-                "+mariadbconnector",
+                 "+cymysql",
+                 "+aiomysql",
+             ]

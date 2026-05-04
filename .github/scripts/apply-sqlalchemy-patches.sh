@@ -55,4 +55,18 @@ else
     echo "⚠ Patch file not found: $PATCHES_DIR/sqlalchemy-mariadb-12.3-connection-option.patch"
 fi
 
+# Remove +mariadbconnector from time_implicit_bound fails_on list
+# (mariadb-connector-python CONPY-343 fixed TIME literal handling)
+if [ -f "$PATCHES_DIR/sqlalchemy-time-implicit-bound.patch" ]; then
+    echo "Applying time_implicit_bound mariadbconnector patch..."
+    if patch -p1 --dry-run < "$PATCHES_DIR/sqlalchemy-time-implicit-bound.patch" > /dev/null 2>&1; then
+        patch -p1 < "$PATCHES_DIR/sqlalchemy-time-implicit-bound.patch"
+        echo "✓ time_implicit_bound patch applied successfully"
+    else
+        echo "⚠ Patch already applied or conflicts detected, skipping..."
+    fi
+else
+    echo "⚠ Patch file not found: $PATCHES_DIR/sqlalchemy-time-implicit-bound.patch"
+fi
+
 echo "Patch application complete!"
