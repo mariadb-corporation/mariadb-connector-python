@@ -164,7 +164,16 @@ def _none_to_bytes(v: Any, ctx: Any = None) -> bytes:
     return NULL_BYTES
 
 def _date_to_bytes(v: Any, ctx: Any = None) -> bytes:
-    return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
+    # Use SQL temporal literal so the server preserves DATE type on `SELECT ?`
+    return b"DATE'" + str(v).encode('ascii') + QUOTE_BYTES
+
+def _datetime_to_bytes(v: Any, ctx: Any = None) -> bytes:
+    # Use SQL TIMESTAMP literal so the server preserves DATETIME type on `SELECT ?`
+    return b"TIMESTAMP'" + str(v).encode('ascii') + QUOTE_BYTES
+
+def _time_to_bytes(v: Any, ctx: Any = None) -> bytes:
+    # Use SQL TIME literal so the server preserves TIME type on `SELECT ?`
+    return b"TIME'" + str(v).encode('ascii') + QUOTE_BYTES
 
 def _ipv4_to_bytes(v: Any, ctx: Any = None) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
@@ -183,8 +192,8 @@ PARAM_CONVERT_TBL = {
   bytearray: escape_bytes,
   decimal.Decimal: decimal2bytes,
   datetime.date: _date_to_bytes,
-  datetime.datetime: _date_to_bytes,
-  datetime.time: _date_to_bytes,
+  datetime.datetime: _datetime_to_bytes,
+  datetime.time: _time_to_bytes,
   datetime.timedelta: timedelta_to_bytes,
   type(None): _none_to_bytes,
   bool: _bool_to_bytes,

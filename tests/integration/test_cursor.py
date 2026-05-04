@@ -1421,6 +1421,34 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0], 0)
             cursor.close()
 
+    def test_conpy343(self):
+        """CONPY-343: SELECT ? must return a date/datetime/time, not a string."""
+        import datetime
+        with create_connection() as con:
+            cursor = con.cursor()
+
+            d = datetime.date(2012, 10, 15)
+            cursor.execute("SELECT ?", (d,))
+            row = cursor.fetchone()
+            self.assertEqual(row[0], d)
+            self.assertIsInstance(row[0], datetime.date)
+
+            dt = datetime.datetime(2012, 10, 15, 12, 34, 56)
+            cursor.execute("SELECT ?", (dt,))
+            row = cursor.fetchone()
+            self.assertEqual(row[0], dt)
+            self.assertIsInstance(row[0], datetime.datetime)
+
+            t = datetime.time(12, 34, 56)
+            cursor.execute("SELECT ?", (t,))
+            row = cursor.fetchone()
+            # TIME literal is returned as timedelta by the server
+            self.assertEqual(
+                row[0],
+                datetime.timedelta(hours=12, minutes=34, seconds=56),
+            )
+            cursor.close()
+
     def test_conpy48(self):
         with create_connection() as con:
             cur = con.cursor()
