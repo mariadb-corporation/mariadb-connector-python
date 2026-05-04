@@ -68,7 +68,7 @@ class TestParsecAuthentication(unittest.TestCase):
     def test_parsec_basic_authentication(self):
         """Test basic PARSEC authentication with standard password"""
         # Create test user with PARSEC authentication
-        test_password = "parsec_test_password_123"
+        test_password = "Parsec_Test_Password_123!"
         
         self.cursor.execute(f"DROP USER IF EXISTS 'parsec_test_user'{get_host_suffix()}")
         self.cursor.execute(
@@ -134,7 +134,7 @@ class TestParsecAuthentication(unittest.TestCase):
     
     def test_parsec_wrong_password(self):
         """Test PARSEC authentication with incorrect password"""
-        test_password = "correct_password_123"
+        test_password = "Correct_Password_123!"
         
         self.cursor.execute(f"DROP USER IF EXISTS 'parsec_test_user'{get_host_suffix()}")
         self.cursor.execute(
@@ -189,7 +189,7 @@ class TestParsecAuthentication(unittest.TestCase):
     def test_parsec_unicode_password(self):
         """Test PARSEC authentication with Unicode characters in password"""
         # Password with Unicode characters
-        test_password = "пароль密码🔐"
+        test_password = "Aa1!пароль密码🔐"
         
         self.cursor.execute(f"DROP USER IF EXISTS 'parsec_test_user'{get_host_suffix()}")
         # Need to escape single quotes in SQL
@@ -219,7 +219,7 @@ class TestParsecAuthentication(unittest.TestCase):
     
     def test_parsec_multiple_connections(self):
         """Test multiple simultaneous PARSEC authenticated connections"""
-        test_password = "multi_conn_test_123"
+        test_password = "Multi_Conn_Test_123!"
         
         self.cursor.execute(f"DROP USER IF EXISTS 'parsec_test_user'{get_host_suffix()}")
         self.cursor.execute(
@@ -263,7 +263,7 @@ class TestParsecAuthentication(unittest.TestCase):
     
     def test_parsec_reconnection(self):
         """Test reconnecting with PARSEC authentication after disconnect"""
-        test_password = "reconnect_test_456"
+        test_password = "Reconnect_Test_456!"
         
         self.cursor.execute(f"DROP USER IF EXISTS 'parsec_test_user'{get_host_suffix()}")
         self.cursor.execute(
