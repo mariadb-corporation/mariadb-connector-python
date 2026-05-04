@@ -56,7 +56,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.continue-on-error || false }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Test Environment
         id: setup-env
@@ -72,9 +72,10 @@ jobs:
           registry-user: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_USER || (secrets.DOCKER_TOKEN != '' && secrets.DOCKER_LOGIN || '') }}
           registry-password: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_TOKEN || secrets.DOCKER_TOKEN }}
           os: ${{ matrix.os }}
+          maxscale-tag: ${{ matrix.maxscale-tag || ''}}
           init-script-folder: ${{ format('{0}/.github/workflows/init', github.workspace) }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         id: setup-python
         with:
           python-version: ${{ matrix.python || '3.13' }}
@@ -166,6 +167,7 @@ jobs:
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
           MARIADB_PYTHON_CONNECTOR: mariadb
           RUN_LONG_TEST: 1
+          MAXSCALE_TAG: ${{ matrix.maxscale-tag || '' }}
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
@@ -183,7 +185,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.continue-on-error || false }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Test Environment
         id: setup-env
@@ -199,9 +201,10 @@ jobs:
           registry-user: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_USER || (secrets.DOCKER_TOKEN != '' && secrets.DOCKER_LOGIN || '') }}
           registry-password: ${{ matrix.db-type == 'enterprise' && secrets.ENTERPRISE_TOKEN || secrets.DOCKER_TOKEN }}
           os: ${{ matrix.os }}
+          maxscale-tag: ${{ matrix.maxscale-tag || ''}}
           init-script-folder: ${{ format('{0}/.github/workflows/init', github.workspace) }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         id: setup-python
         with:
           python-version: ${{ matrix.python || '3.13' }}
@@ -363,6 +366,7 @@ jobs:
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
           MARIADB_PYTHON_CONNECTOR: mariadb_c
           RUN_LONG_TEST: 1
+          MAXSCALE_TAG: ${{ matrix.maxscale-tag || '' }}
 
       - name: Analyze core dumps (Linux)
         if: ${{ always() && startsWith(matrix.os, 'ubuntu') }}

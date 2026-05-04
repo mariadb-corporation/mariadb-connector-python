@@ -16,7 +16,7 @@ import unittest
 import platform
 
 from ..conftest import get_test_config
-from ..base_test import create_connection
+from ..base_test import create_connection, is_maxscale
 
 try:
     import mariadb
@@ -40,6 +40,7 @@ def generate_long_text(length):
 
 
 @unittest.skipIf(mariadb is None, "mariadb module not available")
+@unittest.skipIf(is_maxscale(), "Unix socket connections not supported through MaxScale")
 class TestUnixSocket(unittest.TestCase):
     """Test Unix socket connections"""
 

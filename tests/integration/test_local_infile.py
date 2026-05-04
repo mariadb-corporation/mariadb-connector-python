@@ -12,10 +12,11 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import mariadb
-from ..base_test import create_connection, is_native
+from ..base_test import create_connection, is_maxscale, is_native
 from ..conftest import get_test_config as conf
 
 
+@unittest.skipIf(is_maxscale(), "LOAD DATA LOCAL INFILE not supported through MaxScale")
 class TestLocalInfile(unittest.TestCase):
     """Test LOAD DATA LOCAL INFILE functionality"""
 

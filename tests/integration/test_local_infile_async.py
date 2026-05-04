@@ -12,7 +12,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import mariadb
-from ..base_test import is_native
+from ..base_test import is_maxscale, is_native
 from ..conftest import get_test_config as conf
 
 def create_async_connection_url():
@@ -26,6 +26,7 @@ def create_async_connection_url():
     return f"mariadb://{user}:{password}@{host}:{port}/{database}?autocommit=True"
 
 
+@unittest.skipIf(is_maxscale(), "LOAD DATA LOCAL INFILE not supported through MaxScale")
 class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
     """Test LOAD DATA LOCAL INFILE functionality (async)"""
 

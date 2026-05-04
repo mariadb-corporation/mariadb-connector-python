@@ -23,7 +23,25 @@ def is_skysql():
     return False
 
 
-def is_maxscale():
+def is_maxscale(conn=None):
+    # Detection from server banner (MaxScale 23.08+)
+    if conn is not None:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT @@maxscale_version")
+            row = cursor.fetchone()
+            cursor.close()
+            if row and row[0]:
+                return True
+        except Exception:
+            pass
+
+    # Detection from environment: maxscale-tag set by connector-ci-setup action
+    maxscale_tag = os.environ.get('MAXSCALE_TAG')
+    if maxscale_tag:
+        return True
+
+    # Legacy detection via srv env var
     return (os.environ.get('srv') == "maxscale" or
             os.environ.get('srv') == 'skysql-ha')
 

@@ -14,7 +14,7 @@ import os
 import unittest
 import platform
 import mariadb
-from tests.base_test import is_native
+from tests.base_test import is_maxscale, is_native
 from ..conftest import get_test_config
 
 
@@ -32,6 +32,7 @@ def generate_long_text(length):
     """Generate a long text string for testing"""
     return 'a' * length
 
+@unittest.skipIf(is_maxscale(), "Unix socket connections not supported through MaxScale")
 class TestAsyncUnixSocket(unittest.IsolatedAsyncioTestCase):
     """Test async Unix socket connections"""
 
