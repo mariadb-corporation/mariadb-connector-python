@@ -353,8 +353,8 @@ class TestUnixSocket(unittest.TestCase):
 
         conn = mariadb.connect(**conf)
         try:
-            self.assertIsNone(conn.unix_socket,
-                              "unix_socket should be None when protocol=TCP forces TCP")
+            self.assertEqual(conn.unix_socket, '',
+                             "unix_socket should be '' when protocol=TCP forces TCP")
             self.assertNotEqual(conn.server_port, 0,
                                 "server_port should be non-zero for a TCP connection")
             cursor = conn.cursor()

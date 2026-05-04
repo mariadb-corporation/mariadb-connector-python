@@ -177,15 +177,15 @@ class BaseConnection(ABC, Generic[TClient]):
         return self._database
 
     @property
-    def unix_socket(self) -> Optional[str]:
+    def unix_socket(self) -> str:
         """
         Get Unix socket path
 
         Returns:
-            Unix socket path, or None if using TCP/IP
+            Unix socket path, or '' if using TCP/IP
         """
         self._check_closed()
-        return self._client.configuration.unix_socket
+        return self._client.configuration.unix_socket or ''
 
     # =========================================================================
     # Server Information Properties
