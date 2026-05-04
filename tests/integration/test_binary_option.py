@@ -256,14 +256,14 @@ class TestBinaryOptionDataTypes(unittest.TestCase):
         self._test_roundtrip(True, (None,), (None,))
 
     def test_datetime_text(self):
-        """Text protocol returns datetime as string (no auto-promotion)"""
+        """CONPY-343: text protocol must preserve datetime type via SQL TIMESTAMP literal."""
         dt = datetime.datetime(2025, 1, 15, 10, 30, 0)
         conn = create_connection({"binary": False})
         cursor = conn.cursor()
         cursor.execute("SELECT ?", (dt,))
         row = cursor.fetchone()
-        self.assertIsInstance(row[0], str)
-        self.assertEqual(row[0], "2025-01-15 10:30:00")
+        self.assertIsInstance(row[0], datetime.datetime)
+        self.assertEqual(row[0], dt)
         cursor.close()
         conn.close()
 
