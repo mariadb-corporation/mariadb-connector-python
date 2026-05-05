@@ -23,7 +23,7 @@ concurrency:
 env:
   MYSQL_TEST_HOST: mariadb.example.com
   MYSQL_TEST_PORT: 3306
-  MYSQL_TEST_USER: root
+  MYSQL_TEST_USER: testuser
   MYSQL_TEST_PASSWD: "heyPassw-!*20oRd"
   MYSQL_TEST_DB: testp
 
