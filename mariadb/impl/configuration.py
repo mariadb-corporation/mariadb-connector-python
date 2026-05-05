@@ -140,7 +140,7 @@ class Configuration:
                 config.protocol = int(v)
         if 'socket_timeout' in params:
             config.socket_timeout = int(params['socket_timeout'])
-        # read_timeout and write_timeout are aliases for socket_timeout
+        # read_timeout and write_timeout are C-extension parameters; map to socket_timeout
         if 'read_timeout' in params:
             config.socket_timeout = int(params['read_timeout'])
         if 'write_timeout' in params:

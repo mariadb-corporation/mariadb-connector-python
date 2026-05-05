@@ -892,6 +892,9 @@ class TestConnection(unittest.TestCase):
             self.skipTest("charset enforcement test is pure-Python only")
 
         conn = create_connection()
+        if not conn.server_version >= 110300:
+            conn.close()
+            self.skipTest("SESSION_TRACK for character_set_client requires MariaDB >= 11.3")
         cursor = conn.cursor()
 
         # Changing character_set_client away from utf8mb4 must be rejected.

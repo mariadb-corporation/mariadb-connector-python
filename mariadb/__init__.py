@@ -106,6 +106,9 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
         - ``'TCP'`` / ``1`` — force TCP/IP even when ``host`` is ``localhost``
         - ``'SOCKET'`` / ``2`` — force Unix socket (requires ``unix_socket`` to be set or auto-detected)
     - **`port`** - Port number of the database server. If not specified, the default value of 3306 will be used.
+    - **`read_timeout`** *(C extension only)* - Read (receive) timeout in seconds passed directly to libmariadb. In the pure-Python connector use ``socket_timeout`` instead.
+    - **`write_timeout`** *(C extension only)* - Write (send) timeout in seconds passed directly to libmariadb. In the pure-Python connector use ``socket_timeout`` instead.
+    - **`socket_timeout`** - I/O timeout in seconds (default: 30). Primary timeout parameter for the pure-Python connector. In the C extension it is mapped to ``read_timeout`` and ``write_timeout`` when those are not explicitly set.
     - **`connect_timeout`** - Connect timeout in seconds
     - **`read_timeout`** - Read timeout in seconds
     - **`write_timeout`** - Write timeout in seconds

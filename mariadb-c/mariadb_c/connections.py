@@ -184,6 +184,15 @@ class Connection(CConnection, SyncConnectionCommon):
         cache_prep_stmts: bool = bool(kwargs.pop("cache_prep_stmts", True))
         prep_stmt_cache_size: int = int(kwargs.pop("prep_stmt_cache_size", 100))
 
+        # socket_timeout is a pure-Python alias; map it to read_timeout and
+        # write_timeout for libmariadb when the caller hasn't set them explicitly.
+        socket_timeout = kwargs.pop("socket_timeout", None)
+        if socket_timeout is not None:
+            if "read_timeout" not in kwargs:
+                kwargs["read_timeout"] = socket_timeout
+            if "write_timeout" not in kwargs:
+                kwargs["write_timeout"] = socket_timeout
+
         # protocol='TCP' forces TCP — strip the unix_socket so libmariadb
         # doesn't pick it up, and replace 'localhost' with '127.0.0.1' so
         # libmariadb doesn't auto-select the Unix socket either.
