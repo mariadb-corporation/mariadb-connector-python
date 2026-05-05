@@ -49,15 +49,14 @@ class ChangeUserPacket(ClientMessage):
         # Authentication response
         from ...plugin.authentication.native_password_plugin import NativePasswordPlugin
         auth_response = NativePasswordPlugin.encrypt_password(self.password, context.auth_data)  # type: ignore[arg-type]
-        if auth_response:
-            if context.client_capabilities & CAPABILITY.SECURE_CONNECTION:
-                # Length-encoded auth response
-                stream.write_byte(len(auth_response))
-                stream.write_bytes(auth_response)
-            else:
-                stream.write_bytes(auth_response)
-                stream.write_byte(0x00)
+        if context.client_capabilities & CAPABILITY.PLUGIN_AUTH_LENENC_CLIENT_DATA:
+            stream.write_length_encoded_int(len(auth_response))
+            stream.write_bytes(auth_response)
+        elif context.client_capabilities & CAPABILITY.SECURE_CONNECTION:
+            stream.write_byte(len(auth_response))
+            stream.write_bytes(auth_response)
         else:
+            stream.write_bytes(auth_response)
             stream.write_byte(0x00)
         
         # Database name (null-terminated string)

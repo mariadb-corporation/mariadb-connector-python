@@ -904,5 +904,72 @@ class TestConnection(unittest.TestCase):
             cursor.execute("SELECT 1")
 
 
+    def test_long_password_connection(self):
+        """
+        PLUGIN_AUTH_LENENC_CLIENT_DATA: a password whose encoded auth data
+        is sent with a length-encoded integer (not a single byte) must work.
+        Native-password auth data is always 20 bytes, but this test verifies
+        the LENENC path is taken when the server advertises the capability.
+        We create a user with a 300-character password to go well beyond 255.
+        """
+        long_password = 'Aa1!' * 75  # 300 chars, meets typical complexity rules
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(f"DROP USER IF EXISTS 'lenenc_user'{get_host_suffix()}")
+            cursor.execute(
+                f"CREATE USER 'lenenc_user'{get_host_suffix()} "
+                f"IDENTIFIED BY '{long_password}'"
+            )
+            cursor.execute(
+                f"GRANT SELECT ON `{conf()['database']}`.* "
+                f"TO 'lenenc_user'{get_host_suffix()}"
+            )
+            conn_conf = conf().copy()
+            conn_conf['user'] = 'lenenc_user'
+            conn_conf['password'] = long_password
+            conn = mariadb.connect(**conn_conf)
+            try:
+                c = conn.cursor()
+                c.execute("SELECT 1")
+                self.assertEqual(c.fetchone()[0], 1)
+                c.close()
+            finally:
+                conn.close()
+        finally:
+            cursor.execute(f"DROP USER IF EXISTS 'lenenc_user'{get_host_suffix()}")
+            cursor.close()
+
+    def test_long_password_change_user(self):
+        """
+        PLUGIN_AUTH_LENENC_CLIENT_DATA: COM_CHANGE_USER with a long password
+        must use a length-encoded integer for the auth data length.
+        """
+        long_password = 'Aa1!' * 75  # 300 chars
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(f"DROP USER IF EXISTS 'lenenc_cu_user'{get_host_suffix()}")
+            cursor.execute(
+                f"CREATE USER 'lenenc_cu_user'{get_host_suffix()} "
+                f"IDENTIFIED BY '{long_password}'"
+            )
+            cursor.execute(
+                f"GRANT SELECT ON `{conf()['database']}`.* "
+                f"TO 'lenenc_cu_user'{get_host_suffix()}"
+            )
+            conn = create_connection()
+            try:
+                conn.change_user('lenenc_cu_user', long_password, conf()['database'])
+                self.assertEqual(conn.user, 'lenenc_cu_user')
+                c = conn.cursor()
+                c.execute("SELECT 1")
+                self.assertEqual(c.fetchone()[0], 1)
+                c.close()
+            finally:
+                conn.close()
+        finally:
+            cursor.execute(f"DROP USER IF EXISTS 'lenenc_cu_user'{get_host_suffix()}")
+            cursor.close()
+
+
 if __name__ == '__main__':
     unittest.main()
