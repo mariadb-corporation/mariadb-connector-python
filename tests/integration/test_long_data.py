@@ -21,7 +21,7 @@ class LongDataTest(unittest.TestCase):
             self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")
 
         """Set up test connection and check max_allowed_packet"""
-        self.connection = create_connection()
+        self.connection = create_connection({'socket_timeout': 120})
         self.cursor = self.connection.cursor()
         
         # Check current max_allowed_packet setting
