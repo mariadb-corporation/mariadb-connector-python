@@ -552,7 +552,8 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             await conn.close()
 
     async def test_ssl_fingerprint_validation(self):
-        
+        if is_maxscale():
+            self.skipTest("fingerprint_validation not supported in MaxScale test environment")
         if self.connection.server_version < 110401 or (platform.system() == "Windows" and not is_native()):
             self.skipTest(f"SSL fingerprint validation requires MariaDB >= 11.4.1")
 
@@ -772,34 +773,34 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
     async def test_ssl_connection_with_ca(self):
         """Test SSL connection with server CA certificate"""
         import os
-        
         # Skip if TEST_DB_SERVER_CERT is not set
         server_cert = os.environ.get('TEST_DB_SERVER_CERT')
         if not server_cert:
             self.skipTest("TEST_DB_SERVER_CERT not set, skipping SSL test")
-        
-        # Skip if certificate file doesn't exist
+
         if not os.path.exists(server_cert):
             self.skipTest(f"Server certificate file not found: {server_cert}")
-        
+
         default_conf = conf()
-        
-        # Test SSL connection with CA certificate
         test_conf = default_conf.copy()
         test_conf['ssl'] = True
         test_conf['ssl_ca'] = server_cert
         test_conf['ssl_verify_cert'] = True
-        
+
+        # MaxScale exposes SSL on a dedicated TLS port
+        mxs_tls_port = os.environ.get('MXS_TLS_PORT')
+        if is_maxscale() and mxs_tls_port:
+            test_conf['port'] = int(mxs_tls_port)
+        elif is_maxscale():
+            self.skipTest("MaxScale TLS port (MXS_TLS_PORT) not set")
+
         try:
             conn = await mariadb.asyncConnect(**test_conf)
-            
-            # Verify SSL is active
             cursor = conn.cursor()
             await cursor.execute("SHOW STATUS LIKE 'Ssl_cipher'")
             result = await cursor.fetchone()
             self.assertIsNotNone(result)
             self.assertNotEqual(result[1], '', "SSL cipher should not be empty")
-            
             await cursor.close()
             await conn.close()
         except mariadb.Error as e:

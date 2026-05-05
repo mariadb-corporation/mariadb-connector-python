@@ -18,9 +18,10 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import mariadb
-from tests.base_test import is_native, get_host_suffix
+from tests.base_test import is_maxscale, is_native, get_host_suffix
 from tests.conftest import get_test_config
 
+@unittest.skipIf(is_maxscale(), "PARSEC authentication plugin not available through MaxScale")
 class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
     """Async test cases for PARSEC password authentication plugin"""
     

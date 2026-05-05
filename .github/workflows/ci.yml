@@ -168,6 +168,7 @@ jobs:
           MARIADB_PYTHON_CONNECTOR: mariadb
           RUN_LONG_TEST: 1
           MAXSCALE_TAG: ${{ matrix.maxscale-tag || '' }}
+          MXS_TLS_PORT: ${{ steps.setup-env.outputs.mxs-tls-port || '' }}
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
@@ -367,6 +368,7 @@ jobs:
           MARIADB_PYTHON_CONNECTOR: mariadb_c
           RUN_LONG_TEST: 1
           MAXSCALE_TAG: ${{ matrix.maxscale-tag || '' }}
+          MXS_TLS_PORT: ${{ steps.setup-env.outputs.mxs-tls-port || '' }}
 
       - name: Analyze core dumps (Linux)
         if: ${{ always() && startsWith(matrix.os, 'ubuntu') }}
