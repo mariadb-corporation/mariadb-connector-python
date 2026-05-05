@@ -19,7 +19,7 @@ STATUS = mariadb.constants.STATUS
 from packaging.version import parse as parse_version
 from packaging import version
 
-from ..base_test import is_skysql, is_maxscale, is_native, is_async_native, get_host_suffix
+from ..base_test import is_mysql, is_skysql, is_maxscale, is_native, is_async_native, get_host_suffix
 from ..conftest import get_test_config as conf
 
 class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
@@ -872,6 +872,79 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         except (mariadb.OperationalError, mariadb.DatabaseError):
             # Expected if server doesn't support SSL or requires certs
             pass
+
+    async def test_long_password_connection(self):
+        """
+        PLUGIN_AUTH_LENENC_CLIENT_DATA: a password whose encoded auth data
+        is sent with a length-encoded integer (not a single byte) must work
+        for async connections too.
+        """
+        if is_mysql():
+            self.skipTest("MySQL 8.4+ disables mysql_native_password by default; LENENC tested on MariaDB only")
+        long_password = 'Aa1!' * 75  # 300 chars
+        cursor = self.connection.cursor()
+        try:
+            await cursor.execute(f"DROP USER IF EXISTS 'lenenc_async_user'{get_host_suffix()}")
+            await cursor.execute(
+                f"CREATE USER 'lenenc_async_user'{get_host_suffix()} "
+                f"IDENTIFIED BY '{long_password}'"
+            )
+            await cursor.execute(
+                f"GRANT SELECT ON `{conf()['database']}`.* "
+                f"TO 'lenenc_async_user'{get_host_suffix()}"
+            )
+            conn_conf = conf().copy()
+            conn_conf['user'] = 'lenenc_async_user'
+            conn_conf['password'] = long_password
+            conn = await mariadb.asyncConnect(**conn_conf)
+            try:
+                c = conn.cursor()
+                await c.execute("SELECT 1")
+                row = await c.fetchone()
+                self.assertEqual(row[0], 1)
+                await c.close()
+            finally:
+                await conn.close()
+        finally:
+            await cursor.execute(f"DROP USER IF EXISTS 'lenenc_async_user'{get_host_suffix()}")
+            await cursor.close()
+
+    async def test_long_password_change_user(self):
+        """
+        PLUGIN_AUTH_LENENC_CLIENT_DATA: COM_CHANGE_USER with a long password
+        on an async connection.
+        """
+        if is_maxscale():
+            self.skipTest("Skipping LENENC test on MaxScale")
+        if is_mysql():
+            self.skipTest("MySQL 8.4+ disables mysql_native_password by default; LENENC tested on MariaDB only")
+        long_password = 'Aa1!' * 75  # 300 chars
+        cursor = self.connection.cursor()
+        try:
+            await cursor.execute(f"DROP USER IF EXISTS 'lenenc_async_cu_user'{get_host_suffix()}")
+            await cursor.execute(
+                f"CREATE USER 'lenenc_async_cu_user'{get_host_suffix()} "
+                f"IDENTIFIED BY '{long_password}'"
+            )
+            await cursor.execute(
+                f"GRANT SELECT ON `{conf()['database']}`.* "
+                f"TO 'lenenc_async_cu_user'{get_host_suffix()}"
+            )
+            conn = await mariadb.asyncConnect(**conf())
+            try:
+                await conn.change_user('lenenc_async_cu_user', long_password, conf()['database'])
+                self.assertEqual(conn.user, 'lenenc_async_cu_user')
+                c = conn.cursor()
+                await c.execute("SELECT 1")
+                row = await c.fetchone()
+                self.assertEqual(row[0], 1)
+                await c.close()
+            finally:
+                await conn.close()
+        finally:
+            await cursor.execute(f"DROP USER IF EXISTS 'lenenc_async_cu_user'{get_host_suffix()}")
+            await cursor.close()
+
 
 if __name__ == '__main__':
     unittest.main()

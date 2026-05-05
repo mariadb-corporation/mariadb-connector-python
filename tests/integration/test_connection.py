@@ -18,7 +18,7 @@ STATUS = mariadb.constants.STATUS
 from packaging.version import parse as parse_version
 from packaging import version
 
-from ..base_test import create_connection, is_skysql, is_maxscale, is_native, get_host_suffix
+from ..base_test import create_connection, is_mysql, is_skysql, is_maxscale, is_native, get_host_suffix
 from ..conftest import get_test_config as conf
 
 
@@ -915,6 +915,9 @@ class TestConnection(unittest.TestCase):
         the LENENC path is taken when the server advertises the capability.
         We create a user with a 300-character password to go well beyond 255.
         """
+  
+        if is_mysql():
+            self.skipTest("MySQL 8.4+ disables mysql_native_password by default; LENENC tested on MariaDB only")
         long_password = 'Aa1!' * 75  # 300 chars, meets typical complexity rules
         cursor = self.connection.cursor()
         try:
@@ -947,6 +950,9 @@ class TestConnection(unittest.TestCase):
         PLUGIN_AUTH_LENENC_CLIENT_DATA: COM_CHANGE_USER with a long password
         must use a length-encoded integer for the auth data length.
         """
+
+        if is_mysql():
+            self.skipTest("MySQL 8.4+ disables mysql_native_password by default; LENENC tested on MariaDB only")
         long_password = 'Aa1!' * 75  # 300 chars
         cursor = self.connection.cursor()
         try:
