@@ -22,6 +22,7 @@ from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnsDefinition
 from .base_client import BaseClient, _find_default_unix_socket, PROTOCOL_TCP
+from ..message.server.ok_packet import CharsetMismatchError
 from .context import Context
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
@@ -437,6 +438,7 @@ class AsyncClient(BaseClient):
             query_packet = QueryPacket.from_sql(sql_command)
             await self.execute(query_packet, self.configuration)
 
+
     async def _handle_ssl_connection(self, client_capabilities: int) -> None:
         """Setup SSL/TLS connection if configured"""
         # Check if server supports SSL
@@ -523,11 +525,14 @@ class AsyncClient(BaseClient):
             self.configuration = new_conf
 
             message = ChangeUserPacket(new_conf.user or '', new_conf.password, new_conf.database)
+            # Disarm charset enforcement during re-authentication; _ensure_default re-arms it.
+            self.context.charset = ''
             await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
 
             # Read initial authentication result
             auth_result = await self.read_payload()
             await self._handle_authentication(auth_result)
+            await self._ensure_default()
 
         except Exception as e:
             self.configuration = old_conf
@@ -616,6 +621,9 @@ class AsyncClient(BaseClient):
                 self.reset_buffer()
                 return await self._read_result(message.is_binary(), config, buffered, prepare_stmt_packet, message.get_sql())
             except DatabaseError as e:
+                if isinstance(e, CharsetMismatchError):
+                    await self._cleanup_connection()
+                    self.closed = True
                 raise e
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")

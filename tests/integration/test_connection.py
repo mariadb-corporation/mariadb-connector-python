@@ -883,5 +883,26 @@ class TestConnection(unittest.TestCase):
             self.fail(f"SSL connection with CA failed: {e}")
 
 
+    def test_charset_change_closes_connection(self):
+        """
+        CONPY-342: executing SET NAMES <non-utf8mb4> must raise OperationalError
+        and close the connection, because the connector only supports utf8mb4.
+        """
+        if not is_native():
+            self.skipTest("charset enforcement test is pure-Python only")
+
+        conn = create_connection()
+        cursor = conn.cursor()
+
+        # Changing character_set_client away from utf8mb4 must be rejected.
+        with self.assertRaises(mariadb.OperationalError) as ctx:
+            cursor.execute("SET NAMES latin1")
+        self.assertIn("character_set_client", str(ctx.exception))
+
+        # The connection must have been closed — any subsequent use raises.
+        with self.assertRaises((mariadb.OperationalError, mariadb.ProgrammingError)):
+            cursor.execute("SELECT 1")
+
+
 if __name__ == '__main__':
     unittest.main()

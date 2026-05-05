@@ -11,6 +11,7 @@ import struct
 from typing import TYPE_CHECKING, Optional
 from ..payload_reader import PayloadReader
 from ...completion import Completion
+from mariadb_shared.exceptions import OperationalError
 from mariadb_shared import constants
 
 _unpack_H = struct.Struct('<H').unpack_from
@@ -113,17 +114,22 @@ class OkPacket(Completion):
         return OkPacket(affected_rows, insert_id, server_status, warning_count, info)
 
 
+class CharsetMismatchError(OperationalError):
+    """Raised when the server changes character_set_client away from the configured charset."""
+    pass
+
+
 def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None:
     """Process session tracking data (separate function for better branch prediction)"""
     while parser.has_remaining():
         total_length = parser.read_length_encoded_int()
         if total_length == 0:
             break
-        
+
         start_pos = parser.pos
         tracking_type = parser.read_byte()
         data_length = parser.read_length_encoded_int()
-        
+
         if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
             end_pos = start_pos + total_length  # type: ignore[operator]
             while parser.pos < end_pos:
@@ -132,6 +138,12 @@ def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None
                 var_value_len = parser.read_length_encoded_int()
                 if (var_name == 'character_set_client'):
                     var_value = parser.read_bytes(var_value_len).decode('utf-8')  # type: ignore[arg-type]
+                    if context.charset and var_value != context.charset:
+                        raise CharsetMismatchError(
+                            f"character_set_client changed to '{var_value}' "
+                            "but only 'utf8mb4' is permitted. "
+                            "Connection closed."
+                        )
                     context.charset = var_value
                 else:
                     parser.skip(var_value_len)  # type: ignore[arg-type]

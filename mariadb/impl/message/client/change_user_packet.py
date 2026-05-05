@@ -27,7 +27,7 @@ class ChangeUserPacket(ClientMessage):
                  username: str,
                  password: Optional[str] = None,
                  database: Optional[str] = None,
-                 charset_collation: int = 33,  # utf8mb4_general_ci
+                 charset_collation: int = 45,  # utf8mb4_general_ci
                  connect_attrs: Optional[dict] = None):
         """Initialize COM_CHANGE_USER packet with username, password, database, and charset"""
         self.username = username or ""
