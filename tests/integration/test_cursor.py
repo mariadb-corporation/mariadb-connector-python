@@ -1879,7 +1879,8 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy178(self):
         if os.environ.get('RUN_LONG_TEST') != '1':
-            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")        
+            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")
+        expected = b"foobar" if is_mysql() else "foobar"
         with create_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DROP PROCEDURE IF EXISTS p2")
@@ -1891,7 +1892,7 @@ class TestCursor(unittest.TestCase):
             for i in range(0, 500):
                 cursor.callproc("p2", ("foo", "bar", 1))
                 row = cursor.fetchone()
-                self.assertEqual(row[0], b"foobar" if is_mysql() else "foobar")
+                self.assertEqual(row[0], expected)
 
     def test_conpy205(self):
         with create_connection() as conn:

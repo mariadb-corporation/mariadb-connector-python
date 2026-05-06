@@ -1786,7 +1786,8 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy178(self):
         if os.environ.get('RUN_LONG_TEST') != '1':
-            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")            
+            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")
+        expected = b"foobar" if is_mysql() else "foobar"
         async with await mariadb.asyncConnect(**conf()) as conn:
             cursor = conn.cursor()
             await cursor.execute("DROP PROCEDURE IF EXISTS p2")
@@ -1798,7 +1799,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             for i in range(0, 500):
                 await cursor.callproc("p2", ("foo", "bar", 1))
                 row = await cursor.fetchone()
-                self.assertEqual(row[0], b"foobar" if is_mysql() else "foobar")
+                self.assertEqual(row[0], expected)
 
     async def test_conpy205(self):
         async with await mariadb.asyncConnect(**conf()) as conn:
