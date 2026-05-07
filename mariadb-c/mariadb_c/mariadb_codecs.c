@@ -502,6 +502,9 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
     Mrdb_ExtFieldType *ext_field_type;
     uint16_t type= self->fields[column].type;
 
+    Py_XDECREF(self->values[column]);
+    self->values[column]= NULL;
+
     ext_field_type= mariadb_extended_field_type(&self->fields[column]);
 
     if (!data)
@@ -690,6 +693,9 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 
     /* Acquire the GIL */
     gstate = PyGILState_Ensure();
+
+    Py_XDECREF(self->values[column]);
+    self->values[column]= NULL;
 
     ext_field_type= mariadb_extended_field_type(&self->fields[column]);
 

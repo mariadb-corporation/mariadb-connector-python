@@ -33,12 +33,12 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name != 'schedule' ||
-      github.ref == 'refs/heads/1.1' ||
+      startsWith(github.ref, 'refs/heads/1.1') ||
       startsWith(github.ref, 'refs/heads/2.0')
     outputs:
       matrix: ${{ steps.set-matrix.outputs.final-matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: set-matrix
         name: build matrix
         uses: mariadb-corporation/connector-ci-build-matrix@main
@@ -62,7 +62,6 @@ jobs:
         id: setup-env
         uses: mariadb-corporation/connector-ci-setup@master
         with:
-          node-version: ${{ matrix.node }}
           db-type: ${{ matrix.db-type }}
           db-tag: ${{ matrix.db-tag }}
           test-db-password: ${{ env.MYSQL_TEST_PASSWD }}
@@ -192,7 +191,6 @@ jobs:
         id: setup-env
         uses: mariadb-corporation/connector-ci-setup@master
         with:
-          node-version: ${{ matrix.node }}
           db-type: ${{ matrix.db-type }}
           db-tag: ${{ matrix.db-tag }}
           test-db-password: ${{ env.MYSQL_TEST_PASSWD }}

@@ -323,6 +323,7 @@ typedef struct {
     uint32_t paramcount;
     uint8_t is_text;
     PyObject **values;
+    uint32_t values_count;
     PyStructSequence_Field *sequence_fields;
     PyTypeObject *sequence_type;
     unsigned long prefetch_rows;

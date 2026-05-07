@@ -739,17 +739,19 @@ static void ma_connection_close(MrdbConnection *conn)
     }
 }
 
-/* Like ma_connection_close() but suppresses the COM_QUIT network send by
-   nulling the VIO handle first.  Use this from GC-driven paths (tp_finalize,
-   tp_dealloc) where sending a protocol message is wrong — either because we
-   are in a forked child (shared fd) or simply because GC teardown should
-   never do network I/O.  Only the explicit connection.close() Python call
-   should send COM_QUIT. */
+/* Close the underlying MYSQL handle from a GC-driven path (tp_finalize or
+   tp_dealloc).  In a forked child the connection fd is shared with the
+   parent — sending COM_QUIT would corrupt the parent's stream — so we
+   null out pvio first; libmariadb's end_server then skips ma_pvio_close
+   too, intentionally leaking pvio in the child rather than closing the
+   parent's fd.  In the normal (same-pid) case we just call mysql_close,
+   which sends COM_QUIT and cleans everything up. */
 static void ma_connection_close_no_quit(MrdbConnection *conn)
 {
     if (conn && conn->mysql)
     {
-        conn->mysql->net.pvio = NULL;
+        if (conn->creation_pid && conn->creation_pid != getpid())
+            conn->mysql->net.pvio = NULL;
         Py_BEGIN_ALLOW_THREADS
         mysql_close(conn->mysql);
         Py_END_ALLOW_THREADS
@@ -761,33 +763,15 @@ static void MrdbConnection_dealloc(PyObject *obj)
 {
     MrdbConnection *self = (MrdbConnection *)obj;
 
-    /* Close MySQL connection if open */
-    if (self && self->mysql)
+    if (self->mysql)
         ma_connection_close_no_quit(self);
 
-    /* Clear all Python object references */
-    if (self->converter)
-        Py_XDECREF(self->converter);
-    self->converter = NULL;
-
-    if (self->last_executed_stmt)
-        Py_XDECREF(self->last_executed_stmt);
-    self->last_executed_stmt = NULL;
-
+    Py_CLEAR(self->converter);
+    Py_CLEAR(self->last_executed_stmt);
 #if MARIADB_PACKAGE_VERSION_ID > 30301
-    if (self->status_callback)
-        Py_XDECREF(self->status_callback);
-    self->status_callback = NULL;
+    Py_CLEAR(self->status_callback);
 #endif
-
-    if (self->dsn)
-        Py_XDECREF(self->dsn);
-    self->dsn = NULL;
-
-    /* Note: active_result_cursor is managed by cursor code - don't touch it in dealloc */
-    /* The cursor should have already cleared itself before connection dealloc */
-
-    /* Free the object */
+    Py_CLEAR(self->dsn);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -834,6 +818,11 @@ MrdbConnection_connect(
 static
 void MrdbConnection_finalize(MrdbConnection *self)
 {
+    int forked = (self->mysql &&
+                  self->creation_pid && self->creation_pid != getpid());
+    if (forked)
+        self->mysql->net.pvio = NULL;
+
     PyObject *cache = PyObject_GetAttrString((PyObject *)self, "_stmt_cache");
     if (cache && cache != Py_None)
     {
@@ -1973,18 +1962,35 @@ MrdbConnection_close_stmt_capsule(MrdbConnection *self, PyObject *capsule)
     Py_RETURN_NONE;
 }
 
-/* _neutralize_stmt_capsule(capsule): disarm the PyCapsule destructor so it
- * won't call mysql_stmt_close() when freed by GC. */
+/* _neutralize_stmt_capsule(capsule): free the MYSQL_STMT and disarm the
+ * PyCapsule destructor.  Uses mysql_stmt_close (public API) to release
+ * libmariadb's internal allocations, list bookkeeping, and the stmt
+ * struct itself.  Whether COM_STMT_CLOSE is actually sent depends on
+ * the caller — when invoked from a connection-teardown path that has
+ * already nulled mysql->net.pvio, the send is suppressed and only the
+ * local memory is reclaimed. */
 static PyObject *
 MrdbConnection_neutralize_stmt_capsule(MrdbConnection *self, PyObject *capsule)
 {
+    MYSQL_STMT *stmt;
+
     if (!PyCapsule_CheckExact(capsule)) {
         PyErr_SetString(PyExc_TypeError,
                         "_neutralize_stmt_capsule: expected a PyCapsule");
         return NULL;
     }
 
+    stmt = (MYSQL_STMT *)PyCapsule_GetPointer(capsule, "MYSQL_STMT");
     PyCapsule_SetDestructor(capsule, NULL);
+
+    if (stmt) {
+        Py_BEGIN_ALLOW_THREADS;
+        mysql_stmt_close(stmt);
+        Py_END_ALLOW_THREADS;
+    } else {
+        PyErr_Clear();
+    }
+
     Py_RETURN_NONE;
 }
 

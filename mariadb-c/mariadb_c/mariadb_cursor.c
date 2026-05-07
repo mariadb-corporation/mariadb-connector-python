@@ -329,6 +329,7 @@ MrdbCursor_init_fields(MrdbCursor *self)
     self->paramcount = 0;
     self->is_text = 0;
     self->values = NULL;
+    self->values_count = 0;
     self->sequence_fields = NULL;
     self->sequence_type = NULL;
     self->prefetch_rows = 0;
@@ -471,11 +472,17 @@ static void MrdbCursor_dealloc(PyObject *obj)
 {
   MrdbCursor *self = (MrdbCursor *)obj;
   ma_cursor_close(self);
-  if (self->result && !(self->connection && self->connection->mysql))
+  if (self->result)
   {
       mysql_free_result(self->result);
       self->result = NULL;
   }
+  MARIADB_FREE_MEM(self->sequence_fields);
+  MARIADB_FREE_MEM(self->statement);
+  MrdbCursor_FreeValues(self);
+  MrdbCursor_FreeResultValues(self);
+  MARIADB_FREE_MEM(self->bind);
+  MARIADB_FREE_MEM(self->params);
   MrdbCursor_tpclear(self);
   Py_TYPE(self)->tp_free((PyObject *)self);
 }
@@ -504,17 +511,12 @@ PyTypeObject MrdbCursor_Type =
 
 static void MrdbCursor_clearstmt(MrdbCursor *self)
 {
-  if (self->statement)
-    MARIADB_FREE_MEM(self->statement);
-  self->statement = NULL;
+  MARIADB_FREE_MEM(self->statement);
   self->statement_len = 0;
   self->paramcount = 0;
   self->is_text = 0;
 }
 
-/* {{{ MrdbCursor_clear_result(MrdbCursor *self)
-   clear pending result sets
-*/
 /* Clear Python-level active-cursor tracking attributes on the connection.
    Tries _active_streaming_result first (sync text + binary), then
    _active_async_cursor. */
@@ -548,6 +550,26 @@ ma_cursor_clear_tracking(MrdbCursor *self)
     PyErr_Restore(exc_type, exc_val, exc_tb);
 }
 
+/* True if this cursor owns the connection's in-flight async state machine.
+   In that case the non-blocking fetch is still using self->stmt and
+   self->result; calling mysql_fetch_row / mysql_stmt_close would corrupt
+   protocol state.  Caller must skip cleanup when this returns 1. */
+static int
+ma_cursor_is_async_active(MrdbCursor *self)
+{
+    if (!self->connection)
+        return 0;
+    PyObject *active = PyObject_GetAttrString(
+        (PyObject *)self->connection, "_active_async_cursor");
+    if (!active) {
+        PyErr_Clear();
+        return 0;
+    }
+    int is_active = (active != Py_None && active == (PyObject *)self);
+    Py_DECREF(active);
+    return is_active;
+}
+
 PyObject *MrdbCursor_clear_result(MrdbCursor *self)
 {
     if (!self->is_text && self->stmt)
@@ -571,7 +593,8 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
             if (!self->is_buffered &&
                 !(self->connection && self->connection->mysql))
             {
-                self->result = NULL;
+                self->result->handle = NULL;
+                mysql_free_result(self->result);
             }
             else
             {
@@ -618,12 +641,13 @@ static void MrdbCursor_FreeValues(MrdbCursor *self)
 
 static void MrdbCursor_FreeResultValues(MrdbCursor *self)
 {
-  if (self->values && self->field_count > 0) {
-    for (uint32_t i = 0; i < self->field_count; i++) {
+  if (self->values) {
+    for (uint32_t i = 0; i < self->values_count; i++) {
       Py_CLEAR(self->values[i]);
     }
   }
   MARIADB_FREE_MEM(self->values);
+  self->values_count = 0;
 }
 
 /* {{{ MrdbCursor_clear
@@ -648,7 +672,6 @@ void MrdbCursor_clear(MrdbCursor *self)
     MrdbCursor_clearstmt(self);
     MrdbCursor_FreeResultValues(self);
     MARIADB_FREE_MEM(self->bind);
-    MARIADB_FREE_MEM(self->value);
     MARIADB_FREE_MEM(self->params);
 }
 /* }}} */
@@ -696,27 +719,9 @@ void ma_cursor_reset(MrdbCursor *self)
             return;
         }
 
-        /* If this cursor is the active async cursor its non-blocking state machine
-           is still using self->stmt and self->result.  Calling mysql_fetch_row /
-           mysql_stmt_close on an in-flight async operation corrupts state and
-           causes SIGSEGV.  MrdbCursor_finalize already skips clearing in this
-           case; ma_cursor_reset must do the same so that dealloc (which calls
-           ma_cursor_close → ma_cursor_reset) doesn't re-enter. */
-        if (self->connection)
-        {
-            PyObject *async_active = PyObject_GetAttrString(
-                (PyObject *)self->connection, "_active_async_cursor");
-            if (!async_active)
-                PyErr_Clear();
-            else
-            {
-                int is_async = (async_active == (PyObject *)self &&
-                                async_active != Py_None);
-                Py_DECREF(async_active);
-                if (is_async)
-                    return;
-            }
-        }
+        /* Skip clearing if this cursor owns the in-flight async state. */
+        if (ma_cursor_is_async_active(self))
+            return;
 
         if (!self->is_text && self->stmt)
         {
@@ -763,45 +768,30 @@ PyObject * MrdbCursor_close(MrdbCursor *self)
 /* }}} */
 
 /* {{{ MrdbCursor_Finalize
-   Called by the cyclic GC before tp_clear/tp_dealloc.
-   We must NOT send any new protocol commands here (COM_STMT_CLOSE,
-   COM_STMT_EXECUTE, …) because the connection may have an in-flight
-   query whose response has not been read yet.
-*/
+   Called by the cyclic GC before tp_clear/tp_dealloc.  Free the
+   prepared-statement handle via mysql_stmt_close (public API); this
+   sends COM_STMT_CLOSE if the connection is healthy, which is
+   acceptable here — by the time GC runs, the cursor's own results
+   have been consumed (we drained streaming results above) and the
+   cursor is not the active async cursor (we returned early above).
+   In a forked child the fd is shared with the parent, so we null
+   pvio first to suppress the network send and accept leaking pvio
+   in the child rather than corrupting the parent's stream. */
 static void MrdbCursor_finalize(MrdbCursor *self)
 {
     if (!self->closed)
     {
         self->closed = 1;
 
-        /* Fork safety: if we are in a forked child process
-           skip all socket I/O and just orphan the cursor. */
-        if (self->connection &&
-            self->connection->creation_pid &&
-            self->connection->creation_pid != getpid())
-        {
-            self->stmt = NULL;
-            return;
-        }
+        int forked = (self->connection &&
+                      self->connection->creation_pid &&
+                      self->connection->creation_pid != getpid());
 
-        if (self->connection)
+        if (!forked && self->connection)
         {
-            /* If this cursor is the active async cursor, the non-blocking
-               state machine is still using self->stmt — do not null it or
-               call clear_result (mysql_fetch_row on an in-flight async
-               operation corrupts state and causes SIGSEGV). */
-            PyObject *async_active = PyObject_GetAttrString(
-                (PyObject *)self->connection, "_active_async_cursor");
-            if (!async_active)
-                PyErr_Clear();
-            else
-            {
-                int is_async = (async_active == (PyObject *)self &&
-                                async_active != Py_None);
-                Py_DECREF(async_active);
-                if (is_async)
-                    return;
-            }
+            /* Skip cleanup if non-blocking state machine still owns the stmt. */
+            if (ma_cursor_is_async_active(self))
+                return;
 
             /* Only drain synchronous streaming results. */
             PyObject *active = PyObject_GetAttrString(
@@ -815,7 +805,16 @@ static void MrdbCursor_finalize(MrdbCursor *self)
                 Py_DECREF(active);
             }
         }
-        self->stmt = NULL;
+
+        if (self->stmt)
+        {
+            if (forked && self->connection->mysql)
+                self->connection->mysql->net.pvio = NULL;
+            Py_BEGIN_ALLOW_THREADS;
+            mysql_stmt_close(self->stmt);
+            Py_END_ALLOW_THREADS;
+            self->stmt = NULL;
+        }
     }
 }
 /* }}} */
@@ -897,8 +896,7 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             }
             self->sequence_type= PyStructSequence_NewType(&sequence_desc);
             if (!self->sequence_type) {
-                PyMem_RawFree(self->sequence_fields);
-                self->sequence_fields = NULL;
+                MARIADB_FREE_MEM(self->sequence_fields);
                 return 1;
             }
 #if PY_VERSION_HEX < 0x03070000
@@ -933,6 +931,7 @@ PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
             PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for cursor values");
             return NULL;
         }
+        self->values_count = self->field_count;
         if (!self->is_text)
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
 
@@ -1375,8 +1374,7 @@ MrdbCursor_set_text_statement(MrdbCursor *self, PyObject *stmt)
           self->statement_len == (size_t)statement_len &&
           memcmp(self->statement, statement, statement_len) == 0))
     {
-        if (self->statement)
-            PyMem_RawFree(self->statement);
+        PyMem_RawFree(self->statement);
         self->statement = PyMem_RawCalloc(statement_len + 1, 1);
         if (!self->statement)
             return PyErr_NoMemory();
@@ -1407,6 +1405,7 @@ MrdbCursor_set_statement(MrdbCursor *self, PyObject *args)
     if (self->statement)
     {
         uint32_t old_paramcount = self->paramcount;
+        MrdbCursor_clear_result(self);
         MrdbCursor_clearstmt(self);
         if (paramcount != old_paramcount)
         {
@@ -1550,8 +1549,7 @@ MrdbCursor_execute_text(MrdbCursor *self, PyObject *const *args, Py_ssize_t narg
                   self->statement_len == (size_t)store_len &&
                   memcmp(self->statement, store_buf, store_len) == 0))
             {
-                if (self->statement)
-                    PyMem_RawFree(self->statement);
+                PyMem_RawFree(self->statement);
                 self->statement = PyMem_RawCalloc(store_len + 1, 1);
                 if (!self->statement)
                     return PyErr_NoMemory();
