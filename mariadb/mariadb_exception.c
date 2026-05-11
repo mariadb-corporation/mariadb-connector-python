@@ -138,11 +138,11 @@ void mariadb_exception_connection_gone(PyObject *exception_type,
     return;
   }
 
-  PyObject_SetAttr(Exception, PyUnicode_FromString("sqlstate"), SqlState);
-  PyObject_SetAttr(Exception, PyUnicode_FromString("errno"), ErrorNo);
-  PyObject_SetAttr(Exception, PyUnicode_FromString("errmsg"), ErrorMsg);
+  PyObject_SetAttrString(Exception, "sqlstate", SqlState);
+  PyObject_SetAttrString(Exception, "errno", ErrorNo);
+  PyObject_SetAttrString(Exception, "errmsg", ErrorMsg);
   /* For MySQL Connector/Python compatibility */
-  PyObject_SetAttr(Exception, PyUnicode_FromString("msg"), ErrorMsg);
+  PyObject_SetAttrString(Exception, "msg", ErrorMsg);
   PyErr_SetObject(exception_type, Exception);
   Py_XDECREF(ErrorMsg);
   Py_XDECREF(ErrorNo);
@@ -206,11 +206,11 @@ void mariadb_throw_exception(void *handle,
     return;
   }
 
-  PyObject_SetAttr(Exception, PyUnicode_FromString("sqlstate"), SqlState);
-  PyObject_SetAttr(Exception, PyUnicode_FromString("errno"), ErrorNo);
-  PyObject_SetAttr(Exception, PyUnicode_FromString("errmsg"), ErrorMsg);
+  PyObject_SetAttrString(Exception, "sqlstate", SqlState);
+  PyObject_SetAttrString(Exception, "errno", ErrorNo);
+  PyObject_SetAttrString(Exception, "errmsg", ErrorMsg);
   /* For MySQL Connector/Python compatibility */
-  PyObject_SetAttr(Exception, PyUnicode_FromString("msg"), ErrorMsg);
+  PyObject_SetAttrString(Exception, "msg", ErrorMsg);
   PyErr_SetObject(exception_type, Exception);
   Py_XDECREF(ErrorMsg);
   Py_XDECREF(ErrorNo);

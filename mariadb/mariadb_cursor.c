@@ -745,7 +745,7 @@ static PyObject *MrdbCursor_metadata(MrdbCursor *self)
 
     for (i=0; i < 13; i++)
     {
-        if (PyDict_SetItem(dict, PyUnicode_FromString(keys[i]), tuple[i]))
+        if (PyDict_SetItemString(dict, keys[i], tuple[i]))
             goto error;
         Py_DECREF(tuple[i]);
         tuple[i]= NULL;
