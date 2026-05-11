@@ -102,7 +102,6 @@ setup(
                 'mariadb_c/mariadb_cursor.c',
                 'mariadb_c/mariadb_codecs.c',
                 'mariadb_c/mariadb_exception.c',
-                'mariadb_c/mariadb_parser.c',
             ],
             define_macros=define_macros,
             include_dirs=cfg.includes,

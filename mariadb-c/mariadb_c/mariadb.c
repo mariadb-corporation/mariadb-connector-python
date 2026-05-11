@@ -74,22 +74,6 @@ static int mariadb_datetime_init(void)
     return 0;
 }
 
-static void mariadb_add_exception(PyObject *module,
-        PyObject **exception,
-        const char *exception_name,
-        PyObject *base_exception,
-        const char *doc,
-        const char *object_name)
-{
-    *exception= PyErr_NewExceptionWithDoc(exception_name,
-            doc,
-            Mariadb_Error,
-            NULL);
-
-    Py_INCREF(*exception);
-    PyModule_AddObject(module, object_name, *exception);
-}
-
 /* MariaDB module initialization function */
 PyMODINIT_FUNC PyInit__mariadb(void)
 {

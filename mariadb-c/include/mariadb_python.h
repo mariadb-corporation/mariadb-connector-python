@@ -154,26 +154,6 @@ int clock_gettime(int dummy, struct timespec *ct);
 /* Placeholder for missing documentation */
 #define MISSING_DOC NULL
 
-/* Magic constant for checking dynamic columns */
-#define PYTHON_DYNCOL_VALUE 0xA378BD8E
-
-typedef struct st_lex_str {
-    char *str;
-    size_t length;
-} MrdbString;
-
-enum enum_binary_command {
-    SQL_NONE= 0,
-    SQL_INSERT,
-    SQL_UPDATE,
-    SQL_REPLACE,
-    SQL_DELETE,
-    SQL_CALL,
-    SQL_DO,
-    SQL_SELECT,
-    SQL_OTHER=255
-};
-
 enum enum_extended_field_type
 {
   EXT_TYPE_NONE=0,
@@ -197,16 +177,6 @@ enum enum_result_format
     RESULT_DICTIONARY
 };
 
-enum enum_dyncol_type
-{
-    DYNCOL_LIST= 1,
-    DYNCOL_TUPLE,
-    DYNCOL_SET,
-    DYNCOL_DICT,
-    DYNCOL_ODICT,
-    DYNCOL_LAST
-};
-
 enum enum_tpc_state
 {
     TPC_STATE_NONE= 0,
@@ -214,35 +184,10 @@ enum enum_tpc_state
     TPC_STATE_PREPARE
 };
 
-enum enum_paramstyle
-{
-    NONE= 0,
-    QMARK= 1,
-    FORMAT= 2,
-    PYFORMAT= 3
-};
-
 typedef struct st_ext_field_type {
   enum enum_extended_field_type ext_type;
   MARIADB_CONST_STRING str;
 } Mrdb_ExtFieldType;
-
-typedef struct st_parser {
-    MrdbString statement;
-    MrdbString *keys;
-    uint8_t in_literal[3];
-    uint8_t in_comment;
-    uint8_t in_values;
-    uint8_t is_insert;
-    uint8_t comment_eol;
-    uint32_t param_count;
-    uint32_t key_count;
-    char* value_ofs;
-    PyObject *param_list;
-    enum enum_paramstyle paramstyle;
-    enum enum_binary_command command;
-    MYSQL *mysql;
-} MrdbParser;
 
 /* PEP-249: Connection object */
 typedef struct {
@@ -338,7 +283,6 @@ typedef struct {
     uint8_t fetched;
     uint8_t closed;
     uint8_t reprepare;
-    enum enum_paramstyle paramstyle;
     PyObject *weakreflist;
 } MrdbCursor;
 
@@ -455,16 +399,6 @@ mariadb_check_execute_parameters(MrdbCursor *self, PyObject *data);
 
 uint8_t
 mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
-
-/* parser prototypes */
-MrdbParser *
-MrdbParser_init(MYSQL *mysql, const char *statement, size_t length);
-
-void
-MrdbParser_end(MrdbParser *p);
-
-uint8_t
-MrdbParser_parse(MrdbParser *p, uint8_t is_batch, uint8_t skip_command, char *errmsg, size_t errmsg_len);
 
 /* Global defines */
 

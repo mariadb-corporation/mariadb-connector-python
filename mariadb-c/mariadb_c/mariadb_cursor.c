@@ -63,7 +63,6 @@ static void MrdbCursor_FreeResultValues(MrdbCursor *self);
 /* Prepared statement cache helpers */
 static PyObject *MrdbCursor_detach_stmt(MrdbCursor *self);
 static PyObject *MrdbCursor_attach_stmt(MrdbCursor *self, PyObject *capsule);
-static PyObject *MrdbCursor_close_stmt_no_close(MrdbCursor *self);
 
 static PyObject *
 MrdbCursor_seek(MrdbCursor *self,
@@ -201,9 +200,6 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"_attach_stmt", (PyCFunction)MrdbCursor_attach_stmt,
         METH_O,
         "Attach a cached MYSQL_STMT PyCapsule to this cursor"},
-    {"_close_stmt_no_close", (PyCFunction)MrdbCursor_close_stmt_no_close,
-        METH_NOARGS,
-        "Free local MYSQL_STMT without sending COM_STMT_CLOSE"},
     {"_set_text_statement", (PyCFunction)MrdbCursor_set_text_statement,
         METH_O,
         NULL},
@@ -344,7 +340,6 @@ MrdbCursor_init_fields(MrdbCursor *self)
     self->fetched = 0;
     self->closed = 0;
     self->reprepare = 0;
-    self->paramstyle = 0;
     self->weakreflist = NULL;
     return 0;
 }
@@ -2301,33 +2296,6 @@ MrdbCursor_attach_stmt(MrdbCursor *self, PyObject *capsule)
     Py_RETURN_NONE;
 }
 
-/* _close_stmt_no_close(): drain pending results, then free the local
- * MYSQL_STMT* without sending COM_STMT_CLOSE to the server.
- * Achieved by zeroing stmt_id before mysql_stmt_close(). */
-static PyObject *
-MrdbCursor_close_stmt_no_close(MrdbCursor *self)
-{
-    if (!self->stmt)
-        Py_RETURN_NONE;
-
-    Py_BEGIN_ALLOW_THREADS;
-    /* Drain any pending result sets */
-    if (mysql_stmt_field_count(self->stmt))
-        mysql_stmt_free_result(self->stmt);
-    while (mysql_stmt_next_result(self->stmt) == 0)
-    {
-        if (mysql_stmt_field_count(self->stmt))
-            mysql_stmt_free_result(self->stmt);
-    }
-    /* Zero stmt_id so net_stmt_close() skips COM_STMT_CLOSE */
-    self->stmt->stmt_id = 0;
-    mysql_stmt_close(self->stmt);
-    Py_END_ALLOW_THREADS;
-
-    self->stmt = NULL;
-    Py_RETURN_NONE;
-}
-
 /* Method definitions for async cursor methods */
 PyMethodDef MrdbCursor_AsyncMethods[] = {
     {"_set_field_count_from_connection", (PyCFunction)MrdbCursor_set_field_count_from_connection,
@@ -2363,8 +2331,5 @@ PyMethodDef MrdbCursor_AsyncMethods[] = {
     {"_attach_stmt", (PyCFunction)MrdbCursor_attach_stmt,
         METH_O,
         "Attach a cached MYSQL_STMT PyCapsule to this cursor"},
-    {"_close_stmt_no_close", (PyCFunction)MrdbCursor_close_stmt_no_close,
-        METH_NOARGS,
-        "Free local MYSQL_STMT without sending COM_STMT_CLOSE"},
     {NULL, NULL, 0, NULL}  /* Sentinel */
 };
