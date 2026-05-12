@@ -170,7 +170,7 @@ jobs:
           MXS_TLS_PORT: ${{ steps.setup-env.outputs.mxs-tls-port || '' }}
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -353,11 +353,7 @@ jobs:
           python -c "import os; print(f'MARIADB_PYTHON_CONNECTOR={os.environ.get(\"MARIADB_PYTHON_CONNECTOR\", \"NOT SET\")}')"
           # Enable core dumps for this process
           ulimit -c unlimited 2>/dev/null || true
-          echo "=== Running tests with debug malloc and verbose output ==="
-          # Run with PYTHONMALLOC=debug to detect memory issues early
-          # Use -vv for extra verbose output to see which test is running when it crashes
-          PYTHONMALLOC=debug python -m pytest tests -vv -s --tb=short
-          #--cov=mariadb --cov=mariadb_c --cov=mariadb_pool --cov=mariadb_shared --cov-branch --cov-report=xml --cov-report=term
+          python -m pytest tests -v -s --cov=mariadb --cov=mariadb_c --cov=mariadb_pool --cov=mariadb_shared --cov-branch --cov-report=xml --cov-report=term
           echo "=== Coverage report for mariadb_c ==="
           python -m coverage report --include="*/mariadb_c/*" || echo "No mariadb_c coverage found"
         env:
@@ -406,9 +402,134 @@ jobs:
           fi
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  ci-c-coverage:
+    # Dedicated job that builds the C extension with gcov instrumentation and
+    # uploads C-level line coverage to codecov.  Single ubuntu/Python entry —
+    # one report is enough; the main ci-c-extension matrix covers correctness.
+    name: C Coverage (gcov)
+    needs: setup
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Test Environment
+        id: setup-env
+        uses: mariadb-corporation/connector-ci-setup@master
+        with:
+          db-type: community
+          db-tag: latest
+          test-db-password: ${{ env.MYSQL_TEST_PASSWD }}
+          test-db-database: ${{ env.MYSQL_TEST_DB }}
+          test-db-port: ${{ env.MYSQL_TEST_PORT }}
+          additional-conf: '--max_allowed_packet=40M --character-set-server=utf8mb4'
+          os: ubuntu-latest
+          init-script-folder: ${{ format('{0}/.github/workflows/init', github.workspace) }}
+
+      - uses: actions/setup-python@v6
+        id: setup-python
+        with:
+          python-version: '3.13'
+
+      - name: Clone C/C
+        uses: GuillaumeFalourd/clone-github-repo-action@v2.3
+        with:
+          branch: '3.4'
+          owner: 'mariadb-corporation'
+          repository: 'mariadb-connector-c'
+
+      - name: Build libmariadb (C/C)
+        run: |
+          cd ${{ github.workspace }}/mariadb-connector-c
+          cmake . -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB=On -DCMAKE_INSTALL_PREFIX=/usr
+          make -j4
+          sudo make install
+          echo "MARIADB_PLUGIN_DIR=`mariadb_config --plugindir`" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/mariadb" >> $GITHUB_ENV
+
+      - name: Install lcov
+        run: sudo apt-get update && sudo apt-get install -y lcov
+
+      - name: Install mariadb-connector-python with gcov instrumentation
+        env:
+          CFLAGS: "-O0 -fprofile-arcs -ftest-coverage"
+          LDFLAGS: "-fprofile-arcs"
+        run: |
+          python -m pip install .[test]
+          # setuptools/wheel are required for the direct setup.py call.
+          python -m pip install setuptools wheel
+          cd mariadb-c
+          mkdir -p build-coverage
+          python setup.py build_ext \
+              --inplace --force \
+              --build-temp "$(pwd)/build-coverage"
+          cd ..
+          cd mariadb-pool && python -m pip install . && cd ..
+
+      - name: Verify gcov instrumentation
+        env:
+          PYTHONPATH: ${{ github.workspace }}/mariadb-c
+        run: |
+          echo "=== .gcno files (build-time, under build-coverage/) ==="
+          find mariadb-c/build-coverage -name '*.gcno' 2>/dev/null | head -20
+          if [ -z "$(find mariadb-c/build-coverage -name '*.gcno' 2>/dev/null)" ]; then
+            echo "ERROR: no .gcno files — build did not produce coverage instrumentation."
+            exit 1
+          fi
+          echo "=== which .so does Python import? ==="
+          LOADED_SO=$(python -c "import mariadb_c._mariadb as m; print(m.__file__)")
+          echo "$LOADED_SO"
+          echo "=== gcov symbol count in loaded .so ==="
+          COUNT=$(nm -D "$LOADED_SO" 2>/dev/null | grep -c "__gcov" || true)
+          echo "$COUNT  (non-zero = instrumented)"
+          if [ "$COUNT" = "0" ]; then
+            echo "ERROR: loaded .so has no __gcov_ symbols — coverage flags didn't reach the build."
+            exit 1
+          fi
+
+      - name: Run test suite
+        run: |
+          python -m pytest tests -v -s --tb=short
+        env:
+          PYTHONPATH: ${{ github.workspace }}/mariadb-c
+          TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
+          TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
+          TEST_DB_DATABASE: ${{ env.MYSQL_TEST_DB }}
+          TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
+          TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
+          LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
+          MARIADB_PYTHON_CONNECTOR: mariadb_c
+          RUN_LONG_TEST: 1
+
+      - name: Generate C coverage report
+        run: |
+          echo "=== .gcda files under build-coverage/ ==="
+          find mariadb-c/build-coverage -name '*.gcda' 2>/dev/null | head -20
+          if [ -z "$(find mariadb-c/build-coverage -name '*.gcda' 2>/dev/null)" ]; then
+            echo "ERROR: no .gcda files — instrumented .so was not executed."
+            exit 1
+          fi
+          lcov --capture --directory mariadb-c/build-coverage \
+               --output-file c-coverage.info \
+               --rc geninfo_unexecuted_blocks=1
+          # Strip system headers and Python.h that we don't author.
+          # --ignore-errors unused: tolerate patterns that don't match (lcov
+          # would otherwise fail when, e.g., no /usr/* headers got captured).
+          lcov --remove c-coverage.info '/usr/*' '*/Python.h' \
+               --output-file c-coverage.info \
+               --ignore-errors unused
+          lcov --list c-coverage.info
+
+      - name: Upload C coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./c-coverage.info
+          flags: c-extension
 
   build-source-packages:
     name: Build Source Packages
