@@ -7,16 +7,7 @@
 #include <datetime.h>
 #ifndef _WIN32
 #include <poll.h>
-#endif
-
-/* Check if MariaDB Connector/C has ma_tls_has_buffered_data() function.
- * to properly handle SSL/TLS buffered data in async operations. */
-#ifdef HAVE_TLS
-/* Try to include ma_tls.h if available */
-#if __has_include(<ma_tls.h>)
-#include <ma_tls.h>
-#define HAVE_MA_TLS_HAS_BUFFERED_DATA 1
-#endif
+#include <fcntl.h>
 #endif
 
 #define MADB_SET_OPTION(m,o,v)\
@@ -118,7 +109,6 @@ static PyObject *MrdbConnection_async_dump_debug_info_cont(MrdbConnection *self,
 static PyObject *MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_close_stmt_capsule(MrdbConnection *self, PyObject *capsule);
 static PyObject *MrdbConnection_neutralize_stmt_capsule(MrdbConnection *self, PyObject *capsule);
-static PyObject *MrdbConnection_send_stmt_close(MrdbConnection *self, PyObject *arg);
 
 static PyGetSetDef
 MrdbConnection_sets[]=
@@ -269,10 +259,6 @@ MrdbConnection_Methods[] =
         (PyCFunction)MrdbConnection_neutralize_stmt_capsule,
         METH_O,
         "Disarm a PyCapsule destructor without sending COM_STMT_CLOSE"},
-    {"_send_stmt_close",
-        (PyCFunction)MrdbConnection_send_stmt_close,
-        METH_O,
-        "Send COM_STMT_CLOSE for a given stmt_id (integer)"},
     {NULL} /* always last */
 };
 
@@ -633,7 +619,23 @@ MrdbConnection_Initialize(MrdbConnection *self,
     if (mysql_get_ssl_cipher(self->mysql))
         self->tls_in_use= 1;
 
-    self->creation_pid= getpid();
+    /* PEP-446-style hygiene: mark the socket non-inheritable so an
+       execve() in a child process won't leak our fd.  This does NOT
+       protect against fork() without exec — that case is documented
+       as unsupported (open a fresh connection in the child). */
+    {
+        my_socket _fd = mysql_get_socket(self->mysql);
+#ifdef _WIN32
+        if (_fd != INVALID_SOCKET)
+            SetHandleInformation((HANDLE)_fd, HANDLE_FLAG_INHERIT, 0);
+#else
+        if (_fd >= 0) {
+            int _flags = fcntl((int)_fd, F_GETFD, 0);
+            if (_flags != -1)
+                fcntl((int)_fd, F_SETFD, _flags | FD_CLOEXEC);
+        }
+#endif
+    }
     mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
 
     has_error= 0;
@@ -736,32 +738,12 @@ static void ma_connection_close(MrdbConnection *conn)
     }
 }
 
-/* Close the underlying MYSQL handle from a GC-driven path (tp_finalize or
-   tp_dealloc).  In a forked child the connection fd is shared with the
-   parent — sending COM_QUIT would corrupt the parent's stream — so we
-   null out pvio first; libmariadb's end_server then skips ma_pvio_close
-   too, intentionally leaking pvio in the child rather than closing the
-   parent's fd.  In the normal (same-pid) case we just call mysql_close,
-   which sends COM_QUIT and cleans everything up. */
-static void ma_connection_close_no_quit(MrdbConnection *conn)
-{
-    if (conn && conn->mysql)
-    {
-        if (conn->creation_pid && conn->creation_pid != getpid())
-            conn->mysql->net.pvio = NULL;
-        Py_BEGIN_ALLOW_THREADS
-        mysql_close(conn->mysql);
-        Py_END_ALLOW_THREADS
-        conn->mysql = NULL;
-    }
-}
-
 static void MrdbConnection_dealloc(PyObject *obj)
 {
     MrdbConnection *self = (MrdbConnection *)obj;
 
     if (self->mysql)
-        ma_connection_close_no_quit(self);
+        ma_connection_close(self);
 
     Py_CLEAR(self->converter);
     Py_CLEAR(self->last_executed_stmt);
@@ -815,11 +797,6 @@ MrdbConnection_connect(
 static
 void MrdbConnection_finalize(MrdbConnection *self)
 {
-    int forked = (self->mysql &&
-                  self->creation_pid && self->creation_pid != getpid());
-    if (forked)
-        self->mysql->net.pvio = NULL;
-
     PyObject *cache = PyObject_GetAttrString((PyObject *)self, "_stmt_cache");
     if (cache && cache != Py_None)
     {
@@ -832,7 +809,7 @@ void MrdbConnection_finalize(MrdbConnection *self)
         PyErr_Clear();
     Py_XDECREF(cache);
 
-    ma_connection_close_no_quit(self);
+    ma_connection_close(self);
 }
 
 static PyObject *
@@ -862,9 +839,6 @@ PyObject *MrdbConnection_close(MrdbConnection *self)
 {
     if (!self->closed)
     {
-        /* Fork safety: suppress COM_QUIT in forked child */
-        if (self->mysql && self->creation_pid && self->creation_pid != getpid())
-            self->mysql->net.pvio = NULL;
         ma_connection_close(self);
         self->closed= 1;
     }
@@ -1375,7 +1349,7 @@ static PyObject *MrdbConnection_readresponse(MrdbConnection *self)
     int rc;
 
     Py_BEGIN_ALLOW_THREADS;
-    rc= self->mysql->methods->db_read_query_result(self->mysql);
+    rc= mysql_read_query_result(self->mysql);
     Py_END_ALLOW_THREADS;
 
     if (rc)
@@ -1809,20 +1783,6 @@ MrdbConnection_check_socket_ready(MrdbConnection *self, PyObject *args)
         return PyLong_FromLong(0);
     }
 
-    /* SSL optimization: All SSL implementations (OpenSSL, GnuTLS, SCHANNEL) buffer
-     * decrypted data internally that select() cannot detect. Check buffered data
-     * first to avoid unnecessary syscalls and event loop iterations.
-     */
-#ifdef HAVE_MA_TLS_HAS_BUFFERED_DATA
-    if (self->tls_in_use && (wait_status & MYSQL_WAIT_READ) &&
-        self->mysql->net.pvio &&
-        self->mysql->net.pvio->ctls &&
-        ma_tls_has_buffered_data(self->mysql->net.pvio->ctls)) {
-        /* Buffered data available - return immediately to process it */
-        return PyLong_FromLong(MYSQL_WAIT_READ);
-    }
-#endif
-
 #ifdef _WIN32
     /* Windows-specific: SCHANNEL requires special handling.
      * If SSL is in use but no buffered data, add a small sleep to prevent busy loop.
@@ -1962,10 +1922,10 @@ MrdbConnection_close_stmt_capsule(MrdbConnection *self, PyObject *capsule)
 /* _neutralize_stmt_capsule(capsule): free the MYSQL_STMT and disarm the
  * PyCapsule destructor.  Uses mysql_stmt_close (public API) to release
  * libmariadb's internal allocations, list bookkeeping, and the stmt
- * struct itself.  Whether COM_STMT_CLOSE is actually sent depends on
- * the caller — when invoked from a connection-teardown path that has
- * already nulled mysql->net.pvio, the send is suppressed and only the
- * local memory is reclaimed. */
+ * struct itself.  Sends COM_STMT_CLOSE to the server if the connection
+ * is still healthy; callers that don't want the wire traffic (e.g.
+ * teardown ordering with COM_QUIT immediately after) can ignore that
+ * cost — the server will free the stmt at connection close anyway. */
 static PyObject *
 MrdbConnection_neutralize_stmt_capsule(MrdbConnection *self, PyObject *capsule)
 {
@@ -1991,29 +1951,6 @@ MrdbConnection_neutralize_stmt_capsule(MrdbConnection *self, PyObject *capsule)
     Py_RETURN_NONE;
 }
 
-/* _send_stmt_close(stmt_id): send COM_STMT_CLOSE for a given server-side
- * statement id.  Used by the ref-counted StmtCache on eviction and
- * connection.close() cleanup. */
-static PyObject *
-MrdbConnection_send_stmt_close(MrdbConnection *self, PyObject *arg)
-{
-    unsigned long stmt_id;
-    char buff[STMT_ID_LENGTH];
-
-    stmt_id = PyLong_AsUnsignedLong(arg);
-    if (stmt_id == (unsigned long)-1 && PyErr_Occurred())
-        return NULL;
-
-    if (self->mysql) {
-        int4store(buff, stmt_id);
-        Py_BEGIN_ALLOW_THREADS;
-        self->mysql->methods->db_command(self->mysql, COM_STMT_CLOSE,
-                                         buff, sizeof(buff), 1, NULL);
-        Py_END_ALLOW_THREADS;
-    }
-
-    Py_RETURN_NONE;
-}
 
 /* Note: Cursor-level fetch methods (MrdbCursor_fetch_row_start/cont in mariadb_cursor.c)
  * are used by async cursors. They properly use field_fetch_fromtext for type conversion.

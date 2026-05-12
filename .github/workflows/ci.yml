@@ -108,7 +108,7 @@ jobs:
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
             DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names) and not VersioningTest"
           fi
-          python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN"
+          python -m pytest -xvs --dburi="$DBURI" --backend-only --ignore=test/aaa_profiling -k "$DESELECT_PATTERN"
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
           TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
@@ -252,10 +252,23 @@ jobs:
           echo "MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL_DIR\lib\mariadb\plugin" >> $env:GITHUB_ENV
           echo "$MARIADB_CC_INSTALL_DIR\lib\mariadb" >> $env:GITHUB_PATH
 
+      - name: Enable core dumps (Linux)
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        shell: bash
+        run: |
+          # Persistent kernel setting (carries across step shells)
+          sudo sysctl -w kernel.core_pattern="$GITHUB_WORKSPACE/core.%e.%p"
+          echo "Core pattern: $(cat /proc/sys/kernel/core_pattern)"
+          # Install debugging tools once, up front, so they are available even
+          # if a later test step crashes and short-circuits the workflow.
+          sudo apt-get update && sudo apt-get install -y gdb python3-dbg
+
       - name: Run SQLAlchemy tests (C extension)
         if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
         shell: bash
         run: |
+          # ulimit is per-shell; must be set in every step that should dump.
+          ulimit -c unlimited
           git clone https://github.com/sqlalchemy/sqlalchemy.git
           cd sqlalchemy
           git checkout rel_2_0
@@ -275,11 +288,16 @@ jobs:
           DBURI="${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           echo "Testing with dburi: ${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
           # Skip problematic tests
+          # test/aaa_profiling/: SQLAlchemy's heap-growth tests run each case in a
+          # forked subprocess that shares the parent's DB socket — no DBAPI in
+          # the Python ecosystem (pymysql/mysqlclient/mysql-connector-python)
+          # supports this pattern.  These tests profile SQLAlchemy itself, not
+          # the connector, so they don't belong in connector CI.
           DESELECT_PATTERN="not VersioningTest"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
             DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names) and not VersioningTest"
           fi
-          python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN"
+          python -m pytest -xvs --dburi="$DBURI" --backend-only --ignore=test/aaa_profiling -k "$DESELECT_PATTERN"
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
           TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
@@ -292,6 +310,7 @@ jobs:
         if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
         shell: bash
         run: |
+          ulimit -c unlimited
           cd "$GITHUB_WORKSPACE/sqlalchemy"
           DIALECT_PREFIX="${{ matrix.db-type == 'mysql' && 'mysql' || 'mariadb' }}"
           # URL-encode password to handle special characters
@@ -317,19 +336,6 @@ jobs:
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
           TEST_DB: ${{ env.MYSQL_TEST_DB }}
           MARIADB_PYTHON_CONNECTOR: mariadb_c
-
-      - name: Enable core dumps (Linux)
-        if: ${{ startsWith(matrix.os, 'ubuntu') }}
-        shell: bash
-        run: |
-          # Enable core dumps
-          ulimit -c unlimited
-          echo "Core dump size limit: $(ulimit -c)"
-          # Set core dump pattern
-          sudo sysctl -w kernel.core_pattern=core.%e.%p
-          echo "Core pattern: $(cat /proc/sys/kernel/core_pattern)"
-          # Install debugging tools
-          sudo apt-get update && sudo apt-get install -y gdb python3-dbg || true
 
       - name: Run test suite
         shell: bash
@@ -372,8 +378,19 @@ jobs:
         if: ${{ always() && startsWith(matrix.os, 'ubuntu') }}
         shell: bash
         run: |
+          # Make sure gdb is installed even if the SQLAlchemy step crashed
+          # before the "Enable core dumps" step ran (e.g. on a matrix entry
+          # where SQLAlchemy is skipped, or if the env changed).
+          if ! command -v gdb >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y gdb python3-dbg || true
+          fi
           echo "=== Searching for core dumps ==="
-          find . -name "core.*" -o -name "core" | while read core_file; do
+          # -type f so we don't pick up the sqlalchemy/doc/build/core directory.
+          mapfile -t cores < <(find . -type f \( -name "core" -o -name "core.*" \))
+          if [ ${#cores[@]} -eq 0 ]; then
+            echo "No core dump found under $(pwd)"
+          fi
+          for core_file in "${cores[@]}"; do
             echo "Found core dump: $core_file"
             echo "=== Core dump info ==="
             file "$core_file"
@@ -383,7 +400,7 @@ jobs:
             gdb -batch -ex "py-bt" -ex "quit" python3 "$core_file" 2>&1 || true
           done
           # Also check system core dumps
-          if [ -f /var/crash/* ]; then
+          if compgen -G "/var/crash/*" > /dev/null; then
             echo "=== System crash dumps ==="
             ls -lh /var/crash/
           fi

@@ -220,7 +220,6 @@ typedef struct {
     uint8_t tls_in_use;
     PyObject *weakreflist;
     void *active_result_cursor;
-    pid_t creation_pid;
 } MrdbConnection;
 
 typedef struct {

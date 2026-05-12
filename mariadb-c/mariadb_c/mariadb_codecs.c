@@ -1137,7 +1137,7 @@ mariadb_get_parameter(MrdbCursor *self,
             mariadb_throw_exception(NULL, Mariadb_NotSupportedError, 0,
                     "MariaDB %s doesn't support indicator variables. "\
                     "Required version is 10.2.6 or newer",
-                    mysql_get_server_info(self->stmt->mysql));
+                    mysql_get_server_info(self->connection->mysql));
             goto end;
         }
         param->indicator= (uint8_t)MrdbIndicator_AsLong(column);
@@ -1648,6 +1648,7 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     MrdbCursor *self= (MrdbCursor *)data;
     uint32_t i;
     uint8_t rc= 1;
+    PyGILState_STATE gstate = PyGILState_Ensure();
 
     for (i=0; i < self->paramcount; i++)
     {
@@ -1670,6 +1671,7 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     }
     rc= 0;
 end:
+    PyGILState_Release(gstate);
     return rc;
 }
 

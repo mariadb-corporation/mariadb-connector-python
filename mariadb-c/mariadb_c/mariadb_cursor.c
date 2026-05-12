@@ -704,16 +704,6 @@ void ma_cursor_reset(MrdbCursor *self)
 {
     if (!self->closed)
     {
-        int is_forked_child = (self->connection &&
-                               self->connection->creation_pid &&
-                               self->connection->creation_pid != getpid());
-
-        if (is_forked_child)
-        {
-            self->stmt = NULL;
-            return;
-        }
-
         /* Skip clearing if this cursor owns the in-flight async state. */
         if (ma_cursor_is_async_active(self))
             return;
@@ -767,22 +757,15 @@ PyObject * MrdbCursor_close(MrdbCursor *self)
    prepared-statement handle via mysql_stmt_close (public API); this
    sends COM_STMT_CLOSE if the connection is healthy, which is
    acceptable here — by the time GC runs, the cursor's own results
-   have been consumed (we drained streaming results above) and the
-   cursor is not the active async cursor (we returned early above).
-   In a forked child the fd is shared with the parent, so we null
-   pvio first to suppress the network send and accept leaking pvio
-   in the child rather than corrupting the parent's stream. */
+   have been consumed and the cursor is not the active async cursor
+   (we return early in either case). */
 static void MrdbCursor_finalize(MrdbCursor *self)
 {
     if (!self->closed)
     {
         self->closed = 1;
 
-        int forked = (self->connection &&
-                      self->connection->creation_pid &&
-                      self->connection->creation_pid != getpid());
-
-        if (!forked && self->connection)
+        if (self->connection)
         {
             /* Skip cleanup if non-blocking state machine still owns the stmt. */
             if (ma_cursor_is_async_active(self))
@@ -803,8 +786,6 @@ static void MrdbCursor_finalize(MrdbCursor *self)
 
         if (self->stmt)
         {
-            if (forked && self->connection->mysql)
-                self->connection->mysql->net.pvio = NULL;
             Py_BEGIN_ALLOW_THREADS;
             mysql_stmt_close(self->stmt);
             Py_END_ALLOW_THREADS;
@@ -1426,8 +1407,6 @@ static PyObject *
 MrdbCursor_execute_binary(MrdbCursor *self)
 {
     int rc;
-    unsigned char *buf= NULL;
-    size_t buflen;
     MYSQL *db;
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
@@ -1464,9 +1443,6 @@ MrdbCursor_execute_binary(MrdbCursor *self)
 
     if (self->paramcount)
         mysql_stmt_bind_param(self->stmt, self->params);
-
-    if (!(buf= self->connection->mysql->methods->db_execute_generate_request(self->stmt, &buflen, 1)))
-        goto error;
 
     if ((rc= Mrdb_execute_direct(self, self->statement, self->statement_len)))
     {
@@ -1583,7 +1559,7 @@ MrdbCursor_readresponse(MrdbCursor *self)
     if (self->is_text)
     {
         Py_BEGIN_ALLOW_THREADS;
-        rc= db->methods->db_read_query_result(db);
+        rc= mysql_read_query_result(db);
         Py_END_ALLOW_THREADS;
 
         if (rc)
@@ -1600,8 +1576,6 @@ static PyObject *
 MrdbCursor_execute_bulk(MrdbCursor *self)
 {
     int rc;
-    unsigned char *buf= NULL;
-    size_t buflen;
 
     MARIADB_CHECK_STMT(self);
 
@@ -1640,12 +1614,6 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &self->array_size);
 
     mysql_stmt_bind_param(self->stmt, self->params);
-
-    if (!(buf= self->connection->mysql->methods->db_execute_generate_request(self->stmt, &buflen, 1)))
-    {
-        mariadb_throw_exception(self->stmt, NULL, 1, NULL);
-        goto error;
-    }
 
     if ((rc= Mrdb_execute_direct(self, self->statement, self->statement_len)))
     {
@@ -2225,10 +2193,8 @@ static void
 MrdbCursor_stmt_capsule_destructor(PyObject *capsule)
 {
     MYSQL_STMT *stmt = (MYSQL_STMT *)PyCapsule_GetPointer(capsule, "MYSQL_STMT");
-    if (stmt) {
-        stmt->stmt_id = 0;
+    if (stmt)
         mysql_stmt_close(stmt);
-    }
 }
 
 /* _detach_stmt(): drain results, wrap self->stmt in a PyCapsule, set stmt=NULL.
