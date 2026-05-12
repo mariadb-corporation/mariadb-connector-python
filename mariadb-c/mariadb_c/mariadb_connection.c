@@ -57,12 +57,6 @@ static PyObject *
 MrdbConnection_escape_string(MrdbConnection *self, PyObject *str);
 
 static PyObject *
-MrdbConnection_escape_str_c(MrdbConnection *self, PyObject *args);
-
-static PyObject *
-MrdbConnection_escape_str_mysql(MrdbConnection *self, PyObject *str);
-
-static PyObject *
 MrdbConnection_getinfo(MrdbConnection *self, PyObject *optionval);
 
 static PyObject *
@@ -70,13 +64,6 @@ MrdbConnection_dump_debug_info(MrdbConnection *self);
 
 static PyObject *
 MrdbConnection_warnings(MrdbConnection *self);
-
-static PyObject *
-MrdbConnection_executecommand(MrdbConnection *self,
-                             PyObject *command);
-
-static PyObject *
-MrdbConnection_readresponse(MrdbConnection *self);
 
 static PyObject
 *MrdbConnection_socket(MrdbConnection *self);
@@ -93,7 +80,6 @@ PyObject *MrdbConnection_sync_ping(MrdbConnection *self);
 
 /* Async methods and helpers are now defined at the end of this file */
 static PyObject *MrdbConnection_init_fields_only(MrdbConnection *self);
-static PyObject *MrdbConnection_set_active_cursor(MrdbConnection *self, PyObject *cursor);
 static PyObject *MrdbConnection_async_real_query_start(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_async_real_query_cont(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_async_ping_start(MrdbConnection *self);
@@ -175,13 +161,6 @@ MrdbConnection_Methods[] =
        connection_dump_debug_info__doc__
     },
     /* Internal methods */
-    { "_execute_command",
-      (PyCFunction)MrdbConnection_executecommand,
-      METH_O,
-      "For internal use only"},
-    {"_read_response", (PyCFunction)MrdbConnection_readresponse,
-      METH_NOARGS,
-      "For internal use only"},
     {"_mariadb_get_info", (PyCFunction)MrdbConnection_getinfo,
       METH_O,
       "For internal use only"},
@@ -192,9 +171,6 @@ MrdbConnection_Methods[] =
     {"_init_fields_only", (PyCFunction)MrdbConnection_init_fields_only,
       METH_NOARGS,
       "Initialize C struct fields without connecting (for async)"},
-    {"_set_active_cursor", (PyCFunction)MrdbConnection_set_active_cursor,
-      METH_O,
-      "Set active result cursor (for async cursor management)"},
     {"set_nonblock_option", (PyCFunction)MrdbConnection_set_nonblock_option,
       METH_NOARGS,
       "Enable non-blocking mode"},
@@ -243,14 +219,6 @@ MrdbConnection_Methods[] =
     {"_check_socket_ready", (PyCFunction)MrdbConnection_check_socket_ready,
       METH_VARARGS,
       "Check if socket is ready for I/O (non-blocking)"},
-    {"_escape_str_c",
-        (PyCFunction)MrdbConnection_escape_str_c,
-        METH_VARARGS,
-        NULL},
-    {"_escape_str_mysql",
-        (PyCFunction)MrdbConnection_escape_str_mysql,
-        METH_O,
-        NULL},
     {"_close_stmt_capsule",
         (PyCFunction)MrdbConnection_close_stmt_capsule,
         METH_O,
@@ -812,29 +780,6 @@ void MrdbConnection_finalize(MrdbConnection *self)
     ma_connection_close(self);
 }
 
-static PyObject *
-MrdbConnection_executecommand(MrdbConnection *self,
-                             PyObject *command)
-{
-  const char *cmd;
-  int rc;
-
-  MARIADB_CHECK_CONNECTION(self, NULL);
-
-  cmd= PyUnicode_AsUTF8AndSize(command, NULL);
-
-  Py_BEGIN_ALLOW_THREADS;
-  rc= mysql_send_query(self->mysql, cmd, (long)strlen(cmd));
-  Py_END_ALLOW_THREADS;
-
-  if (rc)
-  {
-      mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-      return NULL;
-  }
-  Py_RETURN_NONE;
-}
-
 PyObject *MrdbConnection_close(MrdbConnection *self)
 {
     if (!self->closed)
@@ -1179,153 +1124,6 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
 }
 /* }}} */
 
-/* {{{ MrdbConnection_escape_str_c
-   C equivalent of pure Python escape_str(): escapes a string for SQL,
-   wraps in single quotes, returns bytes.
-   Uses manual char scanning (no mysql_real_escape_string dependency). */
-static PyObject *MrdbConnection_escape_str_c(MrdbConnection *self,
-        PyObject *args)
-{
-    PyObject *str;
-    int no_backslash_escapes = 0;
-    const char *src;
-    Py_ssize_t src_len;
-
-    if (!PyArg_ParseTuple(args, "O|p", &str, &no_backslash_escapes))
-        return NULL;
-
-    if (!CHECK_TYPE_NO_NONE(str, &PyUnicode_Type)) {
-        PyErr_SetString(PyExc_TypeError, "Parameter must be a string");
-        return NULL;
-    }
-
-    src = PyUnicode_AsUTF8AndSize(str, &src_len);
-    if (!src)
-        return NULL;
-
-    if (no_backslash_escapes)
-    {
-        /* NO_BACKSLASH_ESCAPES: only double single quotes */
-        int has_quote = (memchr(src, '\'', src_len) != NULL);
-        if (!has_quote)
-        {
-            char *buf = (char *)PyMem_Malloc(src_len + 2);
-            if (!buf) return PyErr_NoMemory();
-            buf[0] = '\'';
-            memcpy(buf + 1, src, src_len);
-            buf[src_len + 1] = '\'';
-            PyObject *result = PyBytes_FromStringAndSize(buf, src_len + 2);
-            PyMem_Free(buf);
-            return result;
-        }
-        else
-        {
-            Py_ssize_t count = 0;
-            for (Py_ssize_t i = 0; i < src_len; i++)
-                if (src[i] == '\'') count++;
-            Py_ssize_t out_len = src_len + count + 2;
-            char *buf = (char *)PyMem_Malloc(out_len);
-            if (!buf) return PyErr_NoMemory();
-            char *p = buf;
-            *p++ = '\'';
-            for (Py_ssize_t i = 0; i < src_len; i++)
-            {
-                if (src[i] == '\'')
-                    *p++ = '\'';
-                *p++ = src[i];
-            }
-            *p++ = '\'';
-            PyObject *result = PyBytes_FromStringAndSize(buf, p - buf);
-            PyMem_Free(buf);
-            return result;
-        }
-    }
-    else
-    {
-        /* Standard mode: escape \, ', ", \0 */
-        int needs_escape = 0;
-        for (Py_ssize_t i = 0; i < src_len; i++)
-        {
-            char c = src[i];
-            if (c == '\\' || c == '\'' || c == '"' || c == '\0')
-            {
-                needs_escape = 1;
-                break;
-            }
-        }
-
-        if (!needs_escape)
-        {
-            char *buf = (char *)PyMem_Malloc(src_len + 2);
-            if (!buf) return PyErr_NoMemory();
-            buf[0] = '\'';
-            memcpy(buf + 1, src, src_len);
-            buf[src_len + 1] = '\'';
-            PyObject *result = PyBytes_FromStringAndSize(buf, src_len + 2);
-            PyMem_Free(buf);
-            return result;
-        }
-        else
-        {
-            char *buf = (char *)PyMem_Malloc(src_len * 2 + 2);
-            if (!buf) return PyErr_NoMemory();
-            char *p = buf;
-            *p++ = '\'';
-            for (Py_ssize_t i = 0; i < src_len; i++)
-            {
-                char c = src[i];
-                switch (c)
-                {
-                    case '\\': *p++ = '\\'; *p++ = '\\'; break;
-                    case '\'': *p++ = '\\'; *p++ = '\''; break;
-                    case '"':  *p++ = '\\'; *p++ = '"';  break;
-                    case '\0': *p++ = '\\'; *p++ = '0';  break;
-                    default:   *p++ = c; break;
-                }
-            }
-            *p++ = '\'';
-            PyObject *result = PyBytes_FromStringAndSize(buf, p - buf);
-            PyMem_Free(buf);
-            return result;
-        }
-    }
-}
-/* }}} */
-
-/* {{{ MrdbConnection_escape_str_mysql
-   Like escape_str but uses mysql_real_escape_string for escaping,
-   returns quoted bytes directly. */
-static PyObject *MrdbConnection_escape_str_mysql(MrdbConnection *self,
-        PyObject *str)
-{
-    const char *src;
-    Py_ssize_t src_len;
-
-    MARIADB_CHECK_CONNECTION(self, NULL);
-
-    if (!CHECK_TYPE_NO_NONE(str, &PyUnicode_Type)) {
-        PyErr_SetString(PyExc_TypeError, "Parameter must be a string");
-        return NULL;
-    }
-
-    src = PyUnicode_AsUTF8AndSize(str, &src_len);
-    if (!src)
-        return NULL;
-
-    char *buf = (char *)PyMem_Malloc(src_len * 2 + 3);
-    if (!buf) return PyErr_NoMemory();
-
-    buf[0] = '\'';
-    unsigned long esc_len = mysql_real_escape_string(
-        self->mysql, buf + 1, src, (unsigned long)src_len);
-    buf[1 + esc_len] = '\'';
-
-    PyObject *result = PyBytes_FromStringAndSize(buf, esc_len + 2);
-    PyMem_Free(buf);
-    return result;
-}
-/* }}} */
-
 static PyObject *
 MrdbConnection_dump_debug_info(MrdbConnection *self)
 {
@@ -1334,22 +1132,6 @@ MrdbConnection_dump_debug_info(MrdbConnection *self)
 
     Py_BEGIN_ALLOW_THREADS;
     rc= mysql_dump_debug_info(self->mysql);
-    Py_END_ALLOW_THREADS;
-
-    if (rc)
-    {
-        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-static PyObject *MrdbConnection_readresponse(MrdbConnection *self)
-{
-    int rc;
-
-    Py_BEGIN_ALLOW_THREADS;
-    rc= mysql_read_query_result(self->mysql);
     Py_END_ALLOW_THREADS;
 
     if (rc)
@@ -1379,32 +1161,6 @@ MrdbConnection_init_fields_only(MrdbConnection *self)
      * (like active_result_cursor) to exist before the actual async
      * connection is established. */
     MrdbConnection_init_fields(self);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-MrdbConnection_set_active_cursor(MrdbConnection *self, PyObject *cursor)
-{
-    /* Set the active result cursor with proper reference counting.
-     * Pass None to clear, or a cursor object to set. */
-
-    if (cursor == Py_None) {
-        cursor = NULL;
-    }
-
-    /* Clear old cursor if exists */
-    if (self->active_result_cursor != NULL) {
-        PyObject *old = (PyObject *)self->active_result_cursor;
-        self->active_result_cursor = NULL;
-        Py_DECREF(old);
-    }
-
-    /* Set new cursor */
-    if (cursor != NULL) {
-        Py_INCREF(cursor);
-        self->active_result_cursor = cursor;
-    }
-
     Py_RETURN_NONE;
 }
 
