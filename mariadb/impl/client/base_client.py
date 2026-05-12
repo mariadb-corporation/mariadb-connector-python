@@ -25,12 +25,68 @@ PROTOCOL_DEFAULT = 0
 PROTOCOL_TCP     = 1
 PROTOCOL_SOCKET  = 2
 
-# Default Unix socket path when host='localhost' and no unix_socket is given.
-# Mirrors libmariadb (Connector/C): MARIADB_UNIX_ADDR defaults to /tmp/mysql.sock.
-_DEFAULT_UNIX_SOCKET = '/tmp/mysql.sock'
+# Default Unix socket path used when host='localhost' and no unix_socket
+# was given.  Mirrors what libmariadb (the C connector) does: each distro
+# packages libmariadb compiled with a single MARIADB_UNIX_ADDR value that
+# matches where that distro's MariaDB/MySQL package puts its socket.  We
+# detect the distro once at module load and pick the matching path.
+#
+# This is intentionally one path per system (not a probed list) so that
+# behaviour matches the C extension byte-for-byte: same default everywhere,
+# same failure mode (TCP fallback) if the socket isn't where it should be.
+#
+# Security: every path returned here lives under a root-owned directory
+# (/run, /var/run, /var/lib), so a non-privileged attacker cannot plant a
+# fake socket at the probed location.  We never probe '/tmp/mysql.sock'
+# (which is libmariadb's upstream compile default but lives in a world-
+# writable directory).  Users who genuinely need /tmp/mysql.sock must pass
+# unix_socket='/tmp/mysql.sock' explicitly.
+
+def _resolve_default_unix_socket() -> Optional[str]:
+    """Pick the Unix socket path that libmariadb would have been compiled
+    with on this platform.  Called once at module import.  Returns None on
+    non-Linux platforms or unknown distros (caller falls back to TCP)."""
+    if sys.platform != 'linux':
+        return None
+    try:
+        with open('/etc/os-release', 'r', encoding='utf-8') as f:
+            info: Dict[str, str] = {}
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                k, _, v = line.partition('=')
+                info[k] = v.strip().strip('"').strip("'")
+    except OSError:
+        return None
+
+    # ID is the canonical distro id; ID_LIKE lists ancestors (e.g. Ubuntu has
+    # ID_LIKE="debian").  Combining both lets us match derivatives without
+    # enumerating every downstream.
+    family = (info.get('ID', '') + ' ' + info.get('ID_LIKE', '')).lower().split()
+
+    # Paths verified against each distro's libmariadb-connector-c packaging
+    # (compile-time MARIADB_UNIX_ADDR / INSTALL_UNIX_ADDRDIR) so this matches
+    # what the C extension would resolve to via libmariadb on the same OS.
+    if any(d in family for d in ('debian', 'ubuntu', 'raspbian', 'kali')):
+        return '/run/mysqld/mysqld.sock'        # Debian libmariadb3 .deb
+    if any(d in family for d in ('rhel', 'fedora', 'centos', 'rocky', 'almalinux')):
+        return '/var/lib/mysql/mysql.sock'      # Fedora mariadb-connector-c.spec
+    if 'arch' in family:
+        return '/run/mysqld/mysqld.sock'        # Arch PKGBUILD
+    if 'alpine' in family:
+        return '/run/mysqld/mysqld.sock'        # Alpine APKBUILD
+    if 'suse' in family or 'opensuse' in family or 'sles' in family:
+        return '/run/mysql/mysql.sock'          # openSUSE OBS (note: 'mysql' not 'mysqld')
+    return None
+
+_DEFAULT_UNIX_SOCKET: Optional[str] = _resolve_default_unix_socket()
 
 def _find_default_unix_socket() -> Optional[str]:
-    """Return _DEFAULT_UNIX_SOCKET if it exists and is a socket file, else None."""
+    """Return the per-distro default socket path if it exists and is a real
+    socket file, else None.  Distro detection happens once at module load."""
+    if _DEFAULT_UNIX_SOCKET is None:
+        return None
     try:
         if stat.S_ISSOCK(os.stat(_DEFAULT_UNIX_SOCKET).st_mode):
             return _DEFAULT_UNIX_SOCKET

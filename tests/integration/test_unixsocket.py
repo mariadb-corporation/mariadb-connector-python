@@ -303,16 +303,20 @@ class TestUnixSocket(unittest.TestCase):
     def test_localhost_defaults_to_unix_socket(self):
         """
         CONPY-340: connecting with host='localhost' (or no host) and no
-        unix_socket should auto-detect /tmp/mysql.sock, mirroring libmariadb
-        behaviour (MARIADB_UNIX_ADDR default).
+        unix_socket should auto-detect the distro's default socket path,
+        mirroring libmariadb behaviour (MARIADB_UNIX_ADDR compile-time
+        default — different per distro).
         """
-        import stat as _stat
-        # This test only makes sense when the default socket path exists.
+        # Pure-Python path detects the per-distro default at module load;
+        # skip if we can't find it (non-Linux, or distro not in our mapping,
+        # or the path simply doesn't exist on this server).
         try:
-            if not _stat.S_ISSOCK(os.stat('/tmp/mysql.sock').st_mode):
-                self.skipTest("/tmp/mysql.sock exists but is not a socket")
-        except OSError:
-            self.skipTest("/tmp/mysql.sock not present on this system")
+            from mariadb.impl.client.base_client import _find_default_unix_socket
+        except ImportError:
+            self.skipTest("Auto-detection only applies to the pure-Python client")
+        detected = _find_default_unix_socket()
+        if detected is None:
+            self.skipTest("No default Unix socket detected for this platform/distro")
 
         # Build a config with host='localhost' and no explicit unix_socket.
         conf = get_test_config()
@@ -321,8 +325,8 @@ class TestUnixSocket(unittest.TestCase):
 
         conn = mariadb.connect(**conf)
         try:
-            self.assertEqual(conn.unix_socket, '/tmp/mysql.sock',
-                             "Expected unix_socket to be auto-detected as /tmp/mysql.sock")
+            self.assertEqual(conn.unix_socket, detected,
+                             f"Expected unix_socket to be auto-detected as {detected}")
             cursor = conn.cursor()
             cursor.execute("SELECT 1")
             self.assertEqual(cursor.fetchone()[0], 1)
@@ -336,15 +340,14 @@ class TestUnixSocket(unittest.TestCase):
     def test_localhost_with_tcp_protocol_skips_unix_socket(self):
         """
         CONPY-340: when protocol='TCP' is set, the connector must use TCP even
-        when host='localhost' and /tmp/mysql.sock is present.
+        when host='localhost' and a default Unix socket is auto-detectable.
         """
-        import stat as _stat
-        # Only meaningful when the default socket would otherwise be picked up.
         try:
-            if not _stat.S_ISSOCK(os.stat('/tmp/mysql.sock').st_mode):
-                self.skipTest("/tmp/mysql.sock exists but is not a socket")
-        except OSError:
-            self.skipTest("/tmp/mysql.sock not present on this system")
+            from mariadb.impl.client.base_client import _find_default_unix_socket
+        except ImportError:
+            self.skipTest("Auto-detection only applies to the pure-Python client")
+        if _find_default_unix_socket() is None:
+            self.skipTest("No default Unix socket would otherwise be picked up")
 
         conf = get_test_config()
         conf.pop('unix_socket', None)
