@@ -3,7 +3,6 @@
 
 #include <mariadb_python.h>
 #include <docs/cursor.h>
-#include <datetime.h>
 
 static void
 MrdbCursor_finalize(MrdbCursor *self);
@@ -1339,7 +1338,7 @@ MrdbCursor_set_text_statement(MrdbCursor *self, PyObject *stmt)
         return NULL;
 
     if (!(self->statement &&
-          self->statement_len == (size_t)statement_len &&
+          self->statement_len == (Py_ssize_t)statement_len &&
           memcmp(self->statement, statement, statement_len) == 0))
     {
         PyMem_RawFree(self->statement);
@@ -1399,11 +1398,9 @@ static PyObject *
 MrdbCursor_execute_binary(MrdbCursor *self)
 {
     int rc;
-    MYSQL *db;
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
-    db = self->connection->mysql;
     ma_connection_consume_active_result(self->connection, self);
     if (!self->stmt &&
         !(self->stmt= mysql_stmt_init(self->connection->mysql)))
@@ -1509,7 +1506,7 @@ MrdbCursor_execute_text(MrdbCursor *self, PyObject *const *args, Py_ssize_t narg
         {
             /* Fast path: same statement already stored — skip alloc */
             if (!(self->statement &&
-                  self->statement_len == (size_t)store_len &&
+                  self->statement_len == (Py_ssize_t)store_len &&
                   memcmp(self->statement, store_buf, store_len) == 0))
             {
                 PyMem_RawFree(self->statement);
@@ -1925,7 +1922,6 @@ PyObject *
 MrdbCursor_fetch_row_start(MrdbCursor *self)
 {
     MYSQL_ROW row;
-    int status;
     unsigned int i;
 
     if (!self->connection) {

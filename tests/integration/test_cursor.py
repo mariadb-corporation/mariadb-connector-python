@@ -97,7 +97,7 @@ class TestCursor(unittest.TestCase):
             cursor= conn.cursor(named_tuple=True)
             self.assertEqual(cursor._resulttype, 1)
             cursor.close()
-            
+
             cursor= conn.cursor()
             self.assertEqual(cursor._resulttype, 0)
             cursor.close()
@@ -124,7 +124,7 @@ class TestCursor(unittest.TestCase):
         data= [(1408531143, 'Amazon', '2021-04-16', True, -1),
                (1442076847, 'Uber', '2021-04-15', True, -100000)]
         cursor.executemany("INSERT INTO items VALUES (?,?,?,?,?)", data)
-        
+
         cursor.execute("SELECT * FROM items")
         rows= cursor.fetchall()
         self.assertEqual(rows, data)
@@ -270,7 +270,7 @@ class TestCursor(unittest.TestCase):
 
         cursor.execute("SELECT * from test_string")
         row = cursor.fetchone()
-        
+
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], c2)
         self.assertEqual(row[2], c3)
@@ -282,7 +282,7 @@ class TestCursor(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             cursor.execute("SELECT * from test_string WHERE 1 = ?", (1,))
             row = cursor.fetchone()
-            
+
             self.assertEqual(row[0], c1)
             self.assertEqual(row[1], c2)
             self.assertEqual(row[2], c3)
@@ -450,7 +450,7 @@ class TestCursor(unittest.TestCase):
                   (5, u"Andrey", u"Sofia")]
         cursor.executemany("INSERT INTO test_fetchmany3 VALUES (?,?,?)", params)
         cursor.execute("DO 1")
-        
+
         with self.assertRaises(mariadb.Error):
             cursor.scroll(1)
 
@@ -508,12 +508,12 @@ class TestCursor(unittest.TestCase):
         cursor_buffered = self.connection.cursor(buffered=True)
         self.assertTrue(cursor_buffered.buffered, "buffered property should return True when cursor created with buffered=True")
         cursor_buffered.close()
-        
+
         # Test buffered=False
         cursor_unbuffered = self.connection.cursor(buffered=False)
         self.assertFalse(cursor_unbuffered.buffered, "buffered property should return False when cursor created with buffered=False")
         cursor_unbuffered.close()
-        
+
         # Test default (should be True based on implementation)
         cursor_default = self.connection.cursor()
         self.assertTrue(cursor_default.buffered, "buffered property should return True by default")
@@ -524,7 +524,7 @@ class TestCursor(unittest.TestCase):
         if x < (10, 10, 0) or is_mysql():
             self.skipTest("Skip (MySQL and MariaDB < 10.10)")
         cursor = self.connection.cursor()
-        
+
         # Test all extended field types including all geometry types
         cursor.execute("CREATE TEMPORARY TABLE t1 ("
                        "a json, "
@@ -540,47 +540,47 @@ class TestCursor(unittest.TestCase):
                        "k geometrycollection)")
         cursor.execute("SELECT a,b,c,d,e,f,g,h,i,j,k FROM t1")
         metadata = cursor.metadata
-        
+
         # JSON
         self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
         self.assertEqual(metadata["type"][0], FIELD_TYPE.BLOB)
-        
+
         # UUID
         self.assertEqual(metadata["ext_type_or_format"][1], EXT_FIELD_TYPE.UUID)
         self.assertEqual(metadata["type"][1], FIELD_TYPE.STRING)
-        
+
         # INET4
         self.assertEqual(metadata["ext_type_or_format"][2], EXT_FIELD_TYPE.INET4)
         self.assertEqual(metadata["type"][2], FIELD_TYPE.STRING)
-        
+
         # INET6
         self.assertEqual(metadata["ext_type_or_format"][3], EXT_FIELD_TYPE.INET6)
         self.assertEqual(metadata["type"][3], FIELD_TYPE.STRING)
-        
+
         # POINT
         self.assertEqual(metadata["ext_type_or_format"][4], EXT_FIELD_TYPE.POINT)
         self.assertEqual(metadata["type"][4], FIELD_TYPE.GEOMETRY)
-        
+
         # MULTIPOINT
         self.assertEqual(metadata["ext_type_or_format"][5], EXT_FIELD_TYPE.MULTIPOINT)
         self.assertEqual(metadata["type"][5], FIELD_TYPE.GEOMETRY)
-        
+
         # LINESTRING
         self.assertEqual(metadata["ext_type_or_format"][6], EXT_FIELD_TYPE.LINESTRING)
         self.assertEqual(metadata["type"][6], FIELD_TYPE.GEOMETRY)
-        
+
         # MULTILINESTRING
         self.assertEqual(metadata["ext_type_or_format"][7], EXT_FIELD_TYPE.MULTILINESTRING)
         self.assertEqual(metadata["type"][7], FIELD_TYPE.GEOMETRY)
-        
+
         # POLYGON
         self.assertEqual(metadata["ext_type_or_format"][8], EXT_FIELD_TYPE.POLYGON)
         self.assertEqual(metadata["type"][8], FIELD_TYPE.GEOMETRY)
-        
+
         # MULTIPOLYGON
         self.assertEqual(metadata["ext_type_or_format"][9], EXT_FIELD_TYPE.MULTIPOLYGON)
         self.assertEqual(metadata["type"][9], FIELD_TYPE.GEOMETRY)
-        
+
         # GEOMETRYCOLLECTION
         self.assertEqual(metadata["ext_type_or_format"][10], EXT_FIELD_TYPE.GEOMETRYCOLLECTION)
         self.assertEqual(metadata["type"][10], FIELD_TYPE.GEOMETRY)
@@ -638,6 +638,7 @@ class TestCursor(unittest.TestCase):
         params = [(1,), (2,)]
         cursor.executemany("DELETE FROM bulk_delete WHERE id=?", params)
         self.assertEqual(cursor.rowcount, 2)
+        cursor.close()
         del cursor
 
     def test_pyformat(self):
@@ -892,7 +893,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("INSERT INTO t1 VALUES (?, ?, ?)", values)
         cursor.execute("SELECT a,b,c FROM t1")
         row= cursor.fetchone()
-        
+
         self.assertEqual(row[0], values[0].__str__())
         self.assertEqual(row[1], values[1].__str__())
         self.assertEqual(row[2], values[2].__str__())
@@ -944,14 +945,14 @@ class TestCursor(unittest.TestCase):
         test_ipv4 = ipaddress.ip_address('192.168.1.100')
         test_uuid = uuid.uuid4()
 
-        cursor_default.execute("INSERT INTO t1 VALUES (?, ?, ?)", 
+        cursor_default.execute("INSERT INTO t1 VALUES (?, ?, ?)",
                               (test_ipv6, test_ipv4, test_uuid))
         cursor_default.execute("INSERT INTO t1 VALUES (NULL, NULL, NULL)")
-        
+
         # Test text protocol (default behavior - returns strings)
         cursor_default.execute("SELECT a, b, c FROM t1")
         row = cursor_default.fetchone()
-        
+
         self.assertIsInstance(row[0], str, "INET6 should be string by default")
         self.assertIsInstance(row[1], str, "INET4 should be string by default")
         self.assertIsInstance(row[2], str, "UUID should be string by default")
@@ -962,13 +963,13 @@ class TestCursor(unittest.TestCase):
         self.assertIsNone(row[0], "NULL INET6 should be None")
         self.assertIsNone(row[1], "NULL INET4 should be None")
         self.assertIsNone(row[2], "NULL UUID should be None")
-        
+
         # Test binary protocol (default behavior - returns bytes/strings)
         cursor_default.close()
         cursor_default = self.connection.cursor(binary=True)
         cursor_default.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_default.fetchone()
-        
+
         # Binary protocol returns bytes for these types by default
         self.assertIsInstance(row[0], (str, bytes), "INET6 should be string or bytes by default")
         self.assertIsInstance(row[1], (str, bytes), "INET4 should be string or bytes by default")
@@ -982,15 +983,15 @@ class TestCursor(unittest.TestCase):
 
         # Test with native_object=True - should return native Python objects
         cursor_native = self.connection.cursor(native_object=True)
-        
+
         # Test text protocol with native_object
         cursor_native.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_native.fetchone()
-        self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+        self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address),
                             "INET6 should be ipaddress object with native_object=True")
-        self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+        self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address),
                             "INET4 should be ipaddress object with native_object=True")
-        self.assertIsInstance(row[2], uuid.UUID, 
+        self.assertIsInstance(row[2], uuid.UUID,
                             "UUID should be uuid.UUID object with native_object=True")
         self.assertEqual(row[0], test_ipv6)
         self.assertEqual(row[1], test_ipv4)
@@ -1004,12 +1005,12 @@ class TestCursor(unittest.TestCase):
         cursor_native = self.connection.cursor(native_object=True, binary=True)
         cursor_native.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_native.fetchone()
-        
-        self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+
+        self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address),
                             "INET6 should be ipaddress object with native_object=True (binary)")
-        self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
+        self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address),
                             "INET4 should be ipaddress object with native_object=True (binary)")
-        self.assertIsInstance(row[2], uuid.UUID, 
+        self.assertIsInstance(row[2], uuid.UUID,
                             "UUID should be uuid.UUID object with native_object=True (binary)")
         self.assertEqual(row[0], test_ipv6)
         self.assertEqual(row[1], test_ipv4)
@@ -1018,11 +1019,11 @@ class TestCursor(unittest.TestCase):
         self.assertIsNone(row[0], "NULL INET6 should be None")
         self.assertIsNone(row[1], "NULL INET4 should be None")
         self.assertIsNone(row[2], "NULL UUID should be None")
-        
+
         # Cleanup
         cursor_native.execute("DROP TABLE t1")
         cursor_native.close()
-        
+
 
     def test_conpy34(self):
         with create_connection() as conn:
@@ -1182,7 +1183,7 @@ class TestCursor(unittest.TestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         if os.environ.get('RUN_LONG_TEST') != '1':
-            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")   
+            self.skipTest("Skipping long-running test. Set RUN_LONG_TEST=1 to run.")
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_update_bulk ("
                        "a int primary key, b int)")
@@ -1307,7 +1308,7 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(row[0], "foobar")
             cursor.nextset()
             del cursor
-            
+
             cursor = con.cursor(binary=True)
             cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
             self.assertEqual(cursor.sp_outparams, True)
@@ -1620,7 +1621,7 @@ class TestCursor(unittest.TestCase):
 
     def test_conpy67(self):
          with create_connection() as con:
-            with con.cursor(buffered=False) as cur:                
+            with con.cursor(buffered=False) as cur:
                 cur.execute("SELECT 1")
                 self.assertEqual(cur.rowcount, 0)
             with con.cursor() as cur:
@@ -2125,7 +2126,7 @@ class TestCursor(unittest.TestCase):
             cursor.fetchall()
 
             cursor.close()
-    
+
     def test_conpy269(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
@@ -2244,31 +2245,31 @@ class TestCursor(unittest.TestCase):
     def test_fetchone_states(self):
         """Test fetchone behavior in different cursor states"""
         cursor = self.connection.cursor()
-        
+
         with self.assertRaises((mariadb.ProgrammingError, RuntimeError)):
             result = cursor.fetchone()
-        
+
         # Test 2: fetchone after closing cursor should raise an error
         cursor.execute("SELECT 1")
         cursor.fetchone()  # Consume the result
         cursor.close()
-        
+
         with self.assertRaises((mariadb.ProgrammingError, RuntimeError)):
             cursor.fetchone()
-        
+
         # Test 3: fetchone after closing connection should raise an error
         cursor2 = self.connection.cursor()
         cursor2.execute("SELECT 1")
         cursor2.fetchone()  # Consume the result
-        
+
         # Create a new connection to close
         conn = create_connection()
         cursor3 = conn.cursor()
         cursor3.execute("SELECT 1")
         cursor3.fetchone()  # Consume the result
-        
+
         cursor3.close()
-        
+
         cursor4 = conn.cursor()
         cursor4.execute("SELECT 1")
         cursor5 = conn.cursor(buffered=False)
@@ -2294,7 +2295,7 @@ class TestCursor(unittest.TestCase):
         conn = create_connection()
         cursor = conn.cursor(buffered=False)
         cursor.execute("SELECT 1")
-        
+
         # explicitly close connection before cursor
         conn.close();
         cursor.close()
@@ -2364,7 +2365,7 @@ class TestCursor(unittest.TestCase):
         if x < (10, 10, 0) or is_mysql():
             self.skipTest("Skip (MySQL and MariaDB < 10.10)")
         cursor = self.connection.cursor(binary=True)
-        
+
         # Test all extended field types including all geometry types
         cursor.execute("CREATE TEMPORARY TABLE t1_binary ("
                        "a json, "
@@ -2380,47 +2381,47 @@ class TestCursor(unittest.TestCase):
                        "k geometrycollection)")
         cursor.execute("SELECT a,b,c,d,e,f,g,h,i,j,k FROM t1_binary WHERE 1=?", (1,))
         metadata = cursor.metadata
-        
+
         # JSON
         self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
         self.assertEqual(metadata["type"][0], FIELD_TYPE.BLOB)
-        
+
         # UUID
         self.assertEqual(metadata["ext_type_or_format"][1], EXT_FIELD_TYPE.UUID)
         self.assertEqual(metadata["type"][1], FIELD_TYPE.STRING)
-        
+
         # INET4
         self.assertEqual(metadata["ext_type_or_format"][2], EXT_FIELD_TYPE.INET4)
         self.assertEqual(metadata["type"][2], FIELD_TYPE.STRING)
-        
+
         # INET6
         self.assertEqual(metadata["ext_type_or_format"][3], EXT_FIELD_TYPE.INET6)
         self.assertEqual(metadata["type"][3], FIELD_TYPE.STRING)
-        
+
         # POINT
         self.assertEqual(metadata["ext_type_or_format"][4], EXT_FIELD_TYPE.POINT)
         self.assertEqual(metadata["type"][4], FIELD_TYPE.GEOMETRY)
-        
+
         # MULTIPOINT
         self.assertEqual(metadata["ext_type_or_format"][5], EXT_FIELD_TYPE.MULTIPOINT)
         self.assertEqual(metadata["type"][5], FIELD_TYPE.GEOMETRY)
-        
+
         # LINESTRING
         self.assertEqual(metadata["ext_type_or_format"][6], EXT_FIELD_TYPE.LINESTRING)
         self.assertEqual(metadata["type"][6], FIELD_TYPE.GEOMETRY)
-        
+
         # MULTILINESTRING
         self.assertEqual(metadata["ext_type_or_format"][7], EXT_FIELD_TYPE.MULTILINESTRING)
         self.assertEqual(metadata["type"][7], FIELD_TYPE.GEOMETRY)
-        
+
         # POLYGON
         self.assertEqual(metadata["ext_type_or_format"][8], EXT_FIELD_TYPE.POLYGON)
         self.assertEqual(metadata["type"][8], FIELD_TYPE.GEOMETRY)
-        
+
         # MULTIPOLYGON
         self.assertEqual(metadata["ext_type_or_format"][9], EXT_FIELD_TYPE.MULTIPOLYGON)
         self.assertEqual(metadata["type"][9], FIELD_TYPE.GEOMETRY)
-        
+
         # GEOMETRYCOLLECTION
         self.assertEqual(metadata["ext_type_or_format"][10], EXT_FIELD_TYPE.GEOMETRYCOLLECTION)
         self.assertEqual(metadata["type"][10], FIELD_TYPE.GEOMETRY)
@@ -2447,20 +2448,20 @@ class TestCursor(unittest.TestCase):
 
             cursor.execute("drop table if exists t1_binary_270")
             cursor.close()
-        
+
     def test_field_info_integer_types(self):
         """Test integer field types"""
         with create_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute("CREATE TEMPORARY TABLE test_integer_types (tiny TINYINT, small SMALLINT, medium MEDIUMINT, normal INT, big BIGINT)")
                 cursor.execute("INSERT INTO test_integer_types VALUES (1, 2, 3, 4, 5)")
-                
+
                 self.field_info_integer_types_res(cursor)
-            
+
             with connection.cursor(binary=True) as cursor:
                 self.field_info_integer_types_res(cursor)
-        
-    def field_info_integer_types_res(self, cursor):    
+
+    def field_info_integer_types_res(self, cursor):
         cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
         row = cursor.fetchone()
         self.assertEqual(row[0], 1)
@@ -2475,13 +2476,13 @@ class TestCursor(unittest.TestCase):
             with connection.cursor() as cursor:
                 cursor.execute("CREATE TEMPORARY TABLE test_integer_types (tiny TINYINT UNSIGNED, small SMALLINT UNSIGNED, medium MEDIUMINT UNSIGNED, normal INT UNSIGNED, big BIGINT UNSIGNED)")
                 cursor.execute("INSERT INTO test_integer_types VALUES (255, 65535, 16777215, 4294967295, 18446744073709551615)")
-                
+
                 self.field_info_integer_types_res_unsigned(cursor)
-            
+
             with connection.cursor(binary=True) as cursor:
                 self.field_info_integer_types_res_unsigned(cursor)
-        
-    def field_info_integer_types_res_unsigned(self, cursor):    
+
+    def field_info_integer_types_res_unsigned(self, cursor):
         cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
         row = cursor.fetchone()
         self.assertEqual(row[0], 255)
@@ -2497,13 +2498,13 @@ class TestCursor(unittest.TestCase):
             with connection.cursor() as cursor:
                 cursor.execute("CREATE TEMPORARY TABLE test_float_types (f FLOAT, d DOUBLE)")
                 cursor.execute("INSERT INTO test_float_types VALUES (1.1, 2.2)")
-                
+
                 self.field_info_float_types_res(cursor)
-            
+
             with connection.cursor(binary=True) as cursor:
                 self.field_info_float_types_res(cursor)
-        
-    def field_info_float_types_res(self, cursor):    
+
+    def field_info_float_types_res(self, cursor):
         cursor.execute("SELECT * FROM test_float_types WHERE 1=?", (1,))
         row = cursor.fetchone()
         self.assertAlmostEqual(row[0], 1.1, places=7)
@@ -2519,14 +2520,14 @@ class TestCursor(unittest.TestCase):
             with connection.cursor() as cursor:
                 cursor.execute("CREATE TEMPORARY TABLE test_json_types (f JSON)")
                 cursor.execute("INSERT INTO test_json_types VALUES ('{\"age\": 30, \"email\": \"john.doe@example.com\"}')")
-                
+
                 self.field_json_types_res(cursor)
 
             with connection.cursor(binary=True) as cursor:
                 self.field_json_types_res(cursor)
 
-        
-    def field_json_types_res(self, cursor):    
+
+    def field_json_types_res(self, cursor):
         cursor.execute("SELECT * FROM test_json_types WHERE 1=?", (1,))
         row = cursor.fetchone()
         self.assertEqual(row[0], '{"age": 30, "email": "john.doe@example.com"}')
