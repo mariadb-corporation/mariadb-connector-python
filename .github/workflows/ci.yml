@@ -86,7 +86,9 @@ jobs:
         run: |
           git clone https://github.com/sqlalchemy/sqlalchemy.git
           cd sqlalchemy
-          git checkout rel_2_0
+          SQLA_TAG=$(git tag -l 'rel_2_0_*' --sort=-version:refname | head -1)
+          echo "Pinning SQLAlchemy to $SQLA_TAG"
+          git checkout "$SQLA_TAG"
           python --version
           cd "$GITHUB_WORKSPACE"
           # Apply patches to SQLAlchemy for MariaDB Enterprise compatibility
@@ -271,7 +273,9 @@ jobs:
           ulimit -c unlimited
           git clone https://github.com/sqlalchemy/sqlalchemy.git
           cd sqlalchemy
-          git checkout rel_2_0
+          SQLA_TAG=$(git tag -l 'rel_2_0_*' --sort=-version:refname | head -1)
+          echo "Pinning SQLAlchemy to $SQLA_TAG"
+          git checkout "$SQLA_TAG"
           python --version
           cd "$GITHUB_WORKSPACE"
           # Apply patches to SQLAlchemy for MariaDB Enterprise compatibility
