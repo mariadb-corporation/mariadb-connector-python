@@ -1729,53 +1729,6 @@ MrdbCursor_set_field_count_from_connection(MrdbCursor *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-/* Async fetch methods - reuse field_fetch_fromtext for type conversion */
-PyObject *
-MrdbCursor_fetch_row_cont(MrdbCursor *self, PyObject *args)
-{
-    MYSQL_ROW row;
-    int wait_status;
-    int status;
-    unsigned int i;
-
-    if (!PyArg_ParseTuple(args, "i", &wait_status))
-        return NULL;
-
-    if (!self->result) {
-        PyErr_SetString(PyExc_RuntimeError, "No result set available");
-        return NULL;
-    }
-
-    /* Continue non-blocking row fetch */
-    Py_BEGIN_ALLOW_THREADS;
-    status = mysql_fetch_row_cont(&row, self->result, wait_status);
-    Py_END_ALLOW_THREADS;
-
-    if (status == 0 && !row) {
-        /* No more rows */
-        Py_RETURN_NONE;
-    }
-
-    if (status == 0) {
-        /* Row fetched - use field_fetch_fromtext for type conversion */
-        PyObject *tuple = mariadb_get_sequence_or_tuple(self);
-        if (!tuple)
-            return NULL;
-
-        for (i = 0; i < self->field_count; i++) {
-            field_fetch_fromtext(self, row[i], i);
-            if (PyErr_Occurred()) {
-                Py_DECREF(tuple);
-                return NULL;
-            }
-            ma_set_result_column_value(self, tuple, i);
-        }
-        return tuple;
-    }
-
-    /* Return status to indicate we need to continue waiting */
-    return PyLong_FromLong(status);
-}
 
 /* Prepare statement for async execution (synchronous, but fast - no network I/O) */
 PyObject *
@@ -1918,65 +1871,99 @@ MrdbCursor_stmt_execute_cont(MrdbCursor *self, PyObject *args)
 }
 
 /* Async text protocol fetch methods */
-PyObject *
-MrdbCursor_fetch_row_start(MrdbCursor *self)
+static PyObject *
+mariadb_build_row_from_text(MrdbCursor *self, MYSQL_ROW row)
 {
-    MYSQL_ROW row;
-    unsigned int i;
-
-    if (!self->connection) {
-        PyErr_SetString(PyExc_RuntimeError, "Cursor connection is NULL");
-        return NULL;
-    }
-
-    if (!self->result) {
-        PyErr_SetString(PyExc_RuntimeError, "No result set available");
-        return NULL;
-    }
-
-    if (!self->values) {
-        PyErr_SetString(PyExc_RuntimeError, "Cursor not properly initialized - values array is NULL");
-        return NULL;
-    }
-
-    /* Fetch row from result set */
-    Py_BEGIN_ALLOW_THREADS;
-    row = mysql_fetch_row(self->result);
-    Py_END_ALLOW_THREADS;
-
     if (!row) {
-        /* No more rows */
         Py_RETURN_NONE;
     }
 
-    /* Mark that we've fetched data */
     self->fetched = 1;
 
     /* Convert row data from text format and store in self->values */
-    for (i = 0; i < self->field_count; i++) {
+    for (unsigned int i = 0; i < self->field_count; i++) {
         field_fetch_fromtext(self, row[i], i);
         if (PyErr_Occurred()) {
             return NULL;
         }
     }
 
-    /* Create tuple/sequence to hold the row */
+    /* Create the Python tuple/sequence */
     PyObject *tuple = mariadb_get_sequence_or_tuple(self);
-    if (!tuple)
+    if (!tuple) {
         return NULL;
+    }
 
-    /* Copy converted values from self->values to the tuple */
-    for (i = 0; i < self->field_count; i++) {
+    /* Copy converted values into the tuple */
+    for (unsigned int i = 0; i < self->field_count; i++) {
         ma_set_result_column_value(self, tuple, i);
     }
 
     return tuple;
 }
 
+/* Async fetch methods - reuse field_fetch_fromtext for type conversion */
+static PyObject *
+MrdbCursor_fetch_row_start(MrdbCursor *self)
+{
+    MYSQL_ROW row;
+
+    /* Minimal safety checks - keep it tight */
+    if (!self->connection || !self->result || !self->values) {
+        PyErr_SetString(PyExc_RuntimeError, "Cursor or connection not initialized");
+        return NULL;
+    }
+
+    MARIADB_ASYNC_OP(self->connection, mysql_fetch_row_start(&row, self->result),
+                     0, NULL, {
+        return mariadb_build_row_from_text(self, row);
+    });
+}
+
+static PyObject *
+MrdbCursor_fetch_row_cont(MrdbCursor *self, PyObject *args)
+{
+    int wait_status;
+    MYSQL_ROW row;
+
+    if (!PyArg_ParseTuple(args, "i", &wait_status)) {
+        return NULL;
+    }
+
+    MARIADB_ASYNC_OP(self->connection, mysql_fetch_row_cont(&row, self->result, wait_status),
+                     0, NULL, {
+        return mariadb_build_row_from_text(self, row);
+    });
+}
+
+static PyObject *
+mariadb_build_row_from_stmt(MrdbCursor *self, int rc)
+{
+    /* rc == 0 or rc == MYSQL_DATA_TRUNCATED are success cases for a row fetch */
+    if (rc == 0 || rc == MYSQL_DATA_TRUNCATED) {
+        self->fetched = 1;
+
+        PyObject *tuple = mariadb_get_sequence_or_tuple(self);
+        if (!tuple) return NULL;
+
+        for (unsigned int i = 0; i < self->field_count; i++) {
+            ma_set_result_column_value(self, tuple, i);
+        }
+        return tuple;
+    }
+
+    if (rc == MYSQL_NO_DATA) {
+        Py_RETURN_NONE;
+    }
+
+    /* Error */
+    mariadb_throw_exception(self->stmt, NULL, 1, NULL);
+    return NULL;
+}
+
 PyObject *
 MrdbCursor_stmt_fetch_start(MrdbCursor *self)
 {
-    int status;
     int rc;
 
     if (!self->stmt) {
@@ -1986,50 +1973,16 @@ MrdbCursor_stmt_fetch_start(MrdbCursor *self)
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
-    /* Start non-blocking prepared statement fetch */
-    Py_BEGIN_ALLOW_THREADS;
-    status = mysql_stmt_fetch_start(&rc, self->stmt);
-    Py_END_ALLOW_THREADS;
-
-    if (status == 0) {
-        /* FAST PATH: Completed immediately - no event loop trip needed */
-        if (rc == 0 || rc == MYSQL_DATA_TRUNCATED) {
-            /* Row fetched successfully - data is already in self->values via callbacks */
-            self->fetched = 1;
-
-            /* Create tuple/sequence to hold the row */
-            PyObject *tuple = mariadb_get_sequence_or_tuple(self);
-            if (!tuple)
-                return NULL;
-
-            /* Copy converted values from self->values to the tuple */
-            unsigned int i;
-            for (i = 0; i < self->field_count; i++) {
-                ma_set_result_column_value(self, tuple, i);
-            }
-
-            return tuple;
-        } else if (rc == MYSQL_NO_DATA) {
-            /* No more rows */
-            Py_RETURN_NONE;
-        } else {
-            /* Error */
-            mariadb_throw_exception(self->stmt, NULL, 1, NULL);
-            return NULL;
-        }
-    }
-
-    /* Need to wait — return the status as a Python int.  CPython caches
-       small ints in [-5, 256] internally, so no extra optimization needed. */
-    return PyLong_FromLong(status);
+    MARIADB_ASYNC_OP(self->connection, mysql_stmt_fetch_start(&rc, self->stmt),
+                     0, NULL, {
+        return mariadb_build_row_from_stmt(self, rc);
+    });
 }
 
 PyObject *
 MrdbCursor_stmt_fetch_cont(MrdbCursor *self, PyObject *args)
 {
-    int wait_status;
-    int status;
-    int rc;
+    int wait_status, rc;
 
     if (!PyArg_ParseTuple(args, "i", &wait_status))
         return NULL;
@@ -2041,41 +1994,10 @@ MrdbCursor_stmt_fetch_cont(MrdbCursor *self, PyObject *args)
 
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
-    /* Continue non-blocking statement fetch */
-    Py_BEGIN_ALLOW_THREADS;
-    status = mysql_stmt_fetch_cont(&rc, self->stmt, wait_status);
-    Py_END_ALLOW_THREADS;
-
-    if (status == 0) {
-        /* Completed */
-        if (rc == MYSQL_NO_DATA) {
-            /* No more rows */
-            Py_RETURN_NONE;
-        }
-        if (rc && rc != MYSQL_DATA_TRUNCATED) {
-            mariadb_throw_exception(self->stmt, NULL, 1, NULL);
-            return NULL;
-        }
-
-        /* Row fetched successfully - data is already in self->values via callbacks */
-        self->fetched = 1;
-
-        /* Create tuple/sequence to hold the row */
-        PyObject *tuple = mariadb_get_sequence_or_tuple(self);
-        if (!tuple)
-            return NULL;
-
-        /* Copy converted values from self->values to the tuple */
-        unsigned int i;
-        for (i = 0; i < self->field_count; i++) {
-            ma_set_result_column_value(self, tuple, i);
-        }
-
-        return tuple;
-    }
-
-    /* Return status to indicate we need to continue waiting */
-    return PyLong_FromLong(status);
+    MARIADB_ASYNC_OP(self->connection, mysql_stmt_fetch_cont(&rc, self->stmt, wait_status),
+                     0, NULL, {
+        return mariadb_build_row_from_stmt(self, rc);
+    });
 }
 
 /* Capsule destructor — called only if the capsule is GC'd without being attached */

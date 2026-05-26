@@ -32,6 +32,7 @@ PyObject *decimal_module= NULL,
          *decimal_type= NULL,
          *socket_module= NULL,
          *indicator_module= NULL;
+PyObject *wait_status_cache[8];
 
 int
 Mariadb_traverse(PyObject *self,
@@ -40,6 +41,16 @@ Mariadb_traverse(PyObject *self,
 {
     return 0;
 }
+
+static void
+mariadb_module_free(void *m) {
+    /* Loop through and decref our cached wait status objects */
+    for (int i = 1; i < 8; i++) {
+        Py_XDECREF(wait_status_cache[i]);
+        wait_status_cache[i] = NULL;
+    }
+}
+
 
 static PyMethodDef
 Mariadb_Methods[] =
@@ -54,13 +65,17 @@ Mariadb_Methods[] =
 };
 
 /* MariaDB module definition */
-static struct PyModuleDef 
+static struct PyModuleDef
 mariadb_module= {
     PyModuleDef_HEAD_INIT,
     "_mariadb",
     "MariaDB Connector for Python",
     -1,
-    Mariadb_Methods
+    Mariadb_Methods,
+    NULL,                              /* m_slots (for multi-phase init) */
+    NULL,                              /* m_traverse */
+    NULL,                              /* m_clear */
+    (freefunc)mariadb_module_free      /* m_free - THIS IS YOUR SHUTDOWN */
 };
 
 static int mariadb_datetime_init(void)
@@ -89,6 +104,11 @@ PyMODINIT_FUNC PyInit__mariadb(void)
                MARIADB_PACKAGE_VERSION, mysql_get_client_info());
       PyErr_SetString(PyExc_ImportError, errmsg);
       goto error;
+    }
+
+    /* Initialize wait_status_cache */
+    for (int i = 1; i < 8; i++) {
+        wait_status_cache[i] = PyLong_FromLong((long)i);
     }
 
     /* Initialize DateTimeAPI */
@@ -142,7 +162,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
         PyErr_SetString(PyExc_ImportError, "Cannot import mariadb module. mariadb_c must be imported after mariadb.");
         goto error;
     }
-    
+
     Mariadb_Error = PyObject_GetAttrString(mariadb_module, "Error");
     Mariadb_Warning = PyObject_GetAttrString(mariadb_module, "Warning");
     Mariadb_InterfaceError = PyObject_GetAttrString(mariadb_module, "InterfaceError");
@@ -153,18 +173,18 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     Mariadb_IntegrityError = PyObject_GetAttrString(mariadb_module, "IntegrityError");
     Mariadb_DataError = PyObject_GetAttrString(mariadb_module, "DataError");
     Mariadb_NotSupportedError = PyObject_GetAttrString(mariadb_module, "NotSupportedError");
-    
+
     Py_DECREF(mariadb_module);
-    
+
     // All exceptions MUST be successfully imported
-    if (!Mariadb_Error || !Mariadb_Warning || !Mariadb_InterfaceError || 
+    if (!Mariadb_Error || !Mariadb_Warning || !Mariadb_InterfaceError ||
         !Mariadb_DatabaseError || !Mariadb_InternalError || !Mariadb_OperationalError ||
         !Mariadb_ProgrammingError || !Mariadb_IntegrityError || !Mariadb_DataError ||
         !Mariadb_NotSupportedError) {
         PyErr_SetString(PyExc_ImportError, "Failed to import exceptions from mariadb module");
         goto error;
     }
-    
+
     Py_INCREF(&MrdbConnection_Type);
     PyModule_AddObject(module, "connection", (PyObject *)&MrdbConnection_Type);
     PyModule_AddObject(module, "_have_asan", HAVE_ASAN);

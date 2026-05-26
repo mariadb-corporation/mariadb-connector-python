@@ -729,3 +729,27 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 
 #endif /* __i386__ OR _WIN32 */
 
+/* Async macro */
+
+extern PyObject *wait_status_cache[8];
+#define MARIADB_ASYNC_OP(self, call_expr, err_check, err_class, completion_code) \
+do {                                                                            \
+    int status;                                                                 \
+    Py_BEGIN_ALLOW_THREADS;                                                     \
+    status = call_expr;                                                         \
+    Py_END_ALLOW_THREADS;                                                       \
+    if (status == 0) {                                                          \
+        if (err_check) {                                                        \
+            mariadb_throw_exception(self->mysql, err_class, 0, NULL);           \
+            return NULL;                                                        \
+        }                                                                       \
+        completion_code;                                                        \
+        Py_RETURN_NONE;                                                         \
+    }                                                                           \
+    /* Cache optimization: status is usually 1 (READ) or 2 (WRITE) */           \
+    if (status > 0 && status < 8 && wait_status_cache[status]) {                \
+        Py_INCREF(wait_status_cache[status]);                                   \
+        return wait_status_cache[status];                                       \
+    }                                                                           \
+    return PyLong_FromLong(status);                                             \
+} while (0)
