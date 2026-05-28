@@ -300,6 +300,10 @@ class TestUnixSocket(unittest.TestCase):
 
     @unittest.skipIf(is_windows(), "Unix sockets not supported on Windows")
     @unittest.skipIf(not is_local_test(), "Test requires local environment")
+    @unittest.skipUnless(
+        mariadb is not None and getattr(mariadb, "__impl__", None) == "python",
+        "Auto-detection only applies to the pure-Python client",
+    )
     def test_localhost_defaults_to_unix_socket(self):
         """
         CONPY-340: connecting with host='localhost' (or no host) and no
@@ -313,7 +317,7 @@ class TestUnixSocket(unittest.TestCase):
         try:
             from mariadb.impl.client.base_client import _find_default_unix_socket
         except ImportError:
-            self.skipTest("Auto-detection only applies to the pure-Python client")
+            self.skipTest("Auto-detection only applies to the pure-Python client, to avoid false positives with libmariadb build by default")
         detected = _find_default_unix_socket()
         if detected is None:
             self.skipTest("No default Unix socket detected for this platform/distro")
