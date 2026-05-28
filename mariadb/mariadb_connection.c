@@ -269,16 +269,20 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
       MARIADB_CONST_STRING *key= va_arg(ap, MARIADB_CONST_STRING *);
       MARIADB_CONST_STRING *val= va_arg(ap, MARIADB_CONST_STRING *);
 
-      if (!strncmp(key->str, "character_set_client", key->length) &&
-           strncmp(val->str, "utf8mb4", val->length))
+      if (key->length == strlen("character_set_client") &&
+          !strncmp(key->str, "character_set_client", key->length) &&
+          (val->length != strlen("utf8mb4") ||
+           strncmp(val->str, "utf8mb4", val->length)))
       {
         /* mariadb_throw_exception (PyUnicode_FormatV)
            doesn't support string with length,
            so we need a temporary variable */
         char charset[128];
+        size_t copy_len= val->length < sizeof(charset) ?
+                         val->length : sizeof(charset) - 1;
 
-        memcpy(charset, val->str, val->length);
-        charset[val->length]= 0;
+        memcpy(charset, val->str, copy_len);
+        charset[copy_len]= 0;
         mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
                 "Character set '%s' is not supported", charset);
         goto end;
