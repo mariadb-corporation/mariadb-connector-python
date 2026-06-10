@@ -11,6 +11,7 @@ the certificate fingerprint against a hash provided by the server.
 
 import ssl
 import hashlib
+import hmac
 from typing import Optional
 
 
@@ -123,6 +124,9 @@ class SSLFingerprintValidator:
         
         # Convert to hex for comparison
         calculated_hash_hex = calculated_hash.hex()
-        
-        # Compare (case-insensitive)
-        return calculated_hash_hex.lower() == server_hash_hex.lower()
+
+        # Compare in constant time
+        return hmac.compare_digest(
+            calculated_hash_hex.lower().encode('ascii'),
+            server_hash_hex.lower().encode('ascii'),
+        )
