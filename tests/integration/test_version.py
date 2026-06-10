@@ -3,6 +3,8 @@
 
 import unittest
 
+from packaging import version
+
 import mariadb
 
 
@@ -92,6 +94,35 @@ class TestVersion(unittest.TestCase):
         version_type = mariadb.__version_type__
         self.assertIsInstance(version_type, str)
         self.assertIn(version_type, ('native', 'c', 'binary'))
+
+    def test_mariadbapi_version(self):
+        """mariadbapi_version reports the underlying MariaDB Connector/C (libmariadb)
+        version for native implementations, and is None for the pure Python connector."""
+        impl = mariadb.__impl__
+        api_version = mariadb.mariadbapi_version
+        if impl == 'python':
+            # Pure Python connector has no libmariadb -> None is correct.
+            self.assertIsNone(
+                api_version,
+                "pure Python connector has no libmariadb; expected None")
+        else:
+            # C extension or binary wheel -> real mysql_get_client_info() string.
+            self.assertIsInstance(
+                api_version, str,
+                f"{impl} implementation must expose a libmariadb version string")
+            self.assertTrue(len(api_version) > 0, "mariadbapi_version must not be empty")
+            # Must be a parseable version (e.g. "3.4.9").
+            self.assertGreaterEqual(version.parse(api_version), version.parse('3.0.0'))
+
+    def test_mariadbapi_version_matches_native_module(self):
+        """For native implementations mariadbapi_version must match the value exposed
+        by the underlying C extension's _mariadb module (mysql_get_client_info())."""
+        impl = mariadb.__impl__
+        if impl == 'python':
+            self.skipTest("pure Python connector has no native _mariadb module")
+        module_name = {'c': 'mariadb_c', 'binary': 'mariadb_binary'}[impl]
+        native = __import__(f"{module_name}._mariadb", fromlist=['mariadbapi_version'])
+        self.assertEqual(mariadb.mariadbapi_version, native.mariadbapi_version)
 
 
 if __name__ == '__main__':

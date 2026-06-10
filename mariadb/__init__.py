@@ -331,8 +331,14 @@ def _parse_version_info(version_string: str) -> tuple:
         # Fallback for invalid version strings
         return (0, 0, 0), 0
 
+# mariadbapi_version reports the version of the underlying MariaDB Connector/C
+# (libmariadb) as returned by mysql_get_client_info(). It is only meaningful
+# when a native implementation (C extension or binary wheel) is loaded; those
+# modules re-export the value from their _mariadb C extension. The pure Python
+# connector has no libmariadb, so it stays None.
+mariadbapi_version = getattr(impl_selector.sync_connection, "mariadbapi_version", None)
+
 # Load base version from release_info.py (generated at build time)
-mariadbapi_version = None
 try:
     from .release_info import __version__ as _base_version
 except ImportError:
