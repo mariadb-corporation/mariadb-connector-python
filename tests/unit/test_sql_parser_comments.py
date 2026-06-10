@@ -62,6 +62,15 @@ class SqlParserCommentTest(unittest.TestCase):
     def test_block_comment_suppresses_placeholder(self):
         self.assertEqual(_norm("SELECT /* :x */ :p"), "SELECT /* :x */ ?")
 
+    def test_star_after_block_comment_is_not_new_comment(self):
+        # after '*/' a following '*' is the multiply operator, not '/*';
+        # the placeholder after it must still be found
+        self.assertEqual(_subst("SELECT 2 /* x */*3, ?", [9]), "SELECT 2 /* x */*3, 9")
+        self.assertEqual(_norm("SELECT 2 /* x */*3, :p"), "SELECT 2 /* x */*3, ?")
+
+    def test_adjacent_block_comments(self):
+        self.assertEqual(_norm("SELECT /*a*//*b*/ :p"), "SELECT /*a*//*b*/ ?")
+
 
 if __name__ == "__main__":
     unittest.main()

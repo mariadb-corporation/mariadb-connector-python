@@ -538,7 +538,12 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
 
         elif state == 5:  # COMMENT
             if last_char == 42 and c == 47:  # '*/'
+                # Reset last_char after closing a block comment so a following
+                # '*' is not re-paired with this '/' into a spurious '/*'
                 state = 0
+                last_char = 0
+                i += 1
+                continue
 
         last_char = c
         i += 1
@@ -681,8 +686,12 @@ def normalize_to_qmark(sql: str) -> Tuple[str, Optional[List[str]]]:
                 state = 0
 
         elif state == 5:
-            if last_char == 42 and c == 47:
+            if last_char == 42 and c == 47:  # '*/'
+                # Reset last_char so a following '*' is not re-paired into '/*'.
                 state = 0
+                last_char = 0
+                i += 1
+                continue
 
         last_char = c
         i += 1
