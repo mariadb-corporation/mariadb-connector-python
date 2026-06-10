@@ -966,11 +966,13 @@ class AsyncClient(BaseClient):
         # Escape backslashes in filename for regex
         escaped_filename = re.escape(filename.replace("\\", "\\\\"))
 
-        # Pattern to match LOAD DATA LOCAL INFILE with the specific filename
+        # Pattern to match LOAD DATA LOCAL INFILE with the specific filename.
+        # The SQL keywords are matched case-insensitively, but the filename is
+        # wrapped in a (?-i:...) group so it is matched case-SENSITIVELY
         pattern = (
             r"^((\s[--]|#).*(\r\n|\r|\n)|\s*/\*([^*]|\*[^/])*\*/|.)*"
             r"\s*LOAD\s+(DATA|XML)\s+((LOW_PRIORITY|CONCURRENT)\s+)?"
-            r"LOCAL\s+INFILE\s+['\"]" + escaped_filename + r"['\"]"
+            r"LOCAL\s+INFILE\s+['\"](?-i:" + escaped_filename + r")['\"]"
         )
 
         return bool(re.search(pattern, sql, re.IGNORECASE))
