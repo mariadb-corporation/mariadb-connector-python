@@ -509,14 +509,15 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
                 if i + 1 < length and _sql[i + 1] not in (33, 77):
                     state = 5
             elif c == 47:  # '/'
-                if last_char == 42:  # '*/'
+                if last_char == 42:  # '*/' (defensive no-op in NORMAL state)
                     state = 0
-                elif last_char == 47:  # '//'
-                    state = 4
             elif c == 35:  # '#'
                 state = 4
             elif c == 45 and last_char == 45:  # '--'
-                state = 4
+                # MySQL/MariaDB: '--' only starts a line comment when the second
+                # dash is followed by whitespace or a control character
+                if i + 1 >= length or _sql[i + 1] <= 0x20:
+                    state = 4
 
         elif state == 1:  # STRING
             if c == 92:  # '\'
@@ -649,14 +650,15 @@ def normalize_to_qmark(sql: str) -> Tuple[str, Optional[List[str]]]:
                 elif i + 1 >= length:
                     state = 5
             elif c == 47:
-                if last_char == 42:
+                if last_char == 42:  # '*/' (defensive no-op in NORMAL state)
                     state = 0
-                elif last_char == 47:
-                    state = 4
             elif c == 35:
                 state = 4
             elif c == 45 and last_char == 45:
-                state = 4
+                # '--' starts a comment only when followed by whitespace / a
+                # control character
+                if i + 1 >= length or _sql[i + 1] <= 0x20:
+                    state = 4
 
         elif state == 1:
             if c == 92:
