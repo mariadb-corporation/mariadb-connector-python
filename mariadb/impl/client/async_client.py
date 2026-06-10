@@ -576,6 +576,8 @@ class AsyncClient(BaseClient):
             plugin_factory = AuthenticationPluginLoader.get(plugin_name, self.configuration)
             plugin = plugin_factory.initialize(self.configuration.password, auth_data, self.configuration, self.host_address)
             self.auth_plugin = plugin
+            # Reject unsafe plugins before any credential is transmitted
+            self.check_auth_switch_allowed(plugin_name, plugin_factory, plugin)
             response: memoryview = await plugin.processAsync(self.read_payload, self.write_payload, self.context)
             await self._handle_authentication(response)
         except DatabaseError as e:

@@ -271,7 +271,7 @@ class BaseClient(ABC):
         import platform
 
         # Unix domain sockets are always local
-        if self.host_address and self.configuration.unix_socket:
+        if self._uses_unix_socket():
             return True
 
         # If no host address, not local
@@ -289,6 +289,61 @@ class BaseClient(ABC):
 
         # Check if hostname matches any local host name
         return hostname in local_host_names
+
+
+    def _uses_unix_socket(self) -> bool:
+        """True only if this connection actually runs over a unix socket.
+
+        A unix_socket configured together with protocol='TCP' is ignored, the
+        connection falls back to TCP (see _connect), so the bare config flag is
+        not a reliable transport indicator for the security checks below.
+        """
+        return (bool(self.configuration.unix_socket)
+                and self.configuration.protocol != PROTOCOL_TCP)
+
+
+    def check_auth_switch_allowed(self, plugin_name: str, plugin_factory: Any, plugin: Any) -> None:
+        """Gate a server-requested authentication plugin (auth switch) against two
+        MitM risks, *before* the plugin transmits any credential.
+
+        The plugin name on an authentication-switch request is fully
+        server-controlled, so a hostile/MitM server can request any registered
+        plugin. Two checks must pass first:
+
+        1. A plugin that sends secrets in clear text (``require_ssl``) may only run
+           over a secure transport (TLS or a local connection) never remote plain TCP.
+        2. When the server's identity rests solely on self-signed-certificate
+           fingerprint validation, only a MitM-proof plugin with a non-empty
+           password may run. Otherwise a MitM could harvest the credential before
+           the post-auth fingerprint check (validate_ssl_fingerprint) rejects the
+           connection (e.g. caching_sha2_password sends the password in clear over
+           TLS and is not MitM-proof).
+
+        A local connection (unix socket or loopback) is treated as secure /
+        MitM-proof, matching Connector/C (``is_local_connection`` in my_auth.c,
+        which relaxes verification for loopback and unix-socket transports).
+        """
+        # 1. clear-text plugins require a secure transport (TLS or local)
+        secure_transport = bool(self.configuration.ssl) or self.is_local_connection()
+        if plugin_factory.require_ssl() and not secure_transport:
+            raise OperationalError(
+                f"Cannot use authentication plugin '{plugin_name}' over an insecure "
+                "connection: a clear-text password plugin requires TLS or a local connection."
+            )
+
+        # 2. fingerprint-only connections require a MitM-proof plugin + password
+        fingerprint_only = (
+            self.cert_fingerprint_validator is not None
+            and self.cert_fingerprint_validator.get_fingerprint()
+            and not self.is_local_connection()
+        )
+        if fingerprint_only and (not plugin.is_mitm_proof() or not self.configuration.password):
+            raise OperationalError(
+                f"Cannot use authentication plugin '{plugin_name}' with self-signed "
+                "certificates validated only by fingerprint. Either set "
+                "ssl_verify_cert=True, use a password with a MitM-proof authentication "
+                "plugin, or provide the server certificate to the client."
+            )
 
 
     def validate_ssl_fingerprint(self, ok_packet: OkPacket) -> None:
@@ -310,7 +365,7 @@ class BaseClient(ABC):
             return
 
         # Skip validation for local and Unix domain sockets (MitM-proof by design)
-        if self.is_local_connection() or self.configuration.unix_socket:
+        if self.is_local_connection():
             return
 
         # Check if auth plugin is MitM-proof and has password
