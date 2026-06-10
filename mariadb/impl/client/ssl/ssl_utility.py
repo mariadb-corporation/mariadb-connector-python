@@ -170,8 +170,8 @@ class SSLUtility:
         # Check if we need fingerprint validation (MariaDB-specific feature)
         # Only enable when: MariaDB server >= 11.4.1 + ssl_verify_cert enabled + no SSL CA configured + password provided
         use_fingerprint_validation = (
-            context.is_mariadb_server() and
-            context.get_version().version_greater_or_equal(11, 4, 1) and
+            context.version.is_mariadb and
+            context.version.version_greater_or_equal(11, 4, 1) and
             configuration.ssl_verify_cert and
             not configuration.ssl_ca and
             configuration.password is not None and 

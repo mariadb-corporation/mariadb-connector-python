@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-from typing import Optional, Dict, Any
+from typing import Optional
 from dataclasses import dataclass
 
 
@@ -70,8 +70,7 @@ class Context:
         # Connection state
         self.database: str = ""
         self.charset: str = ""
-        self.collation: str = ""
-        
+
         # Server status
         self.server_status: int = server_status
         self.warning_count: int = 0
@@ -79,10 +78,7 @@ class Context:
         # Authentication
         self.auth_plugin: Optional[str] = auth_plugin
         self.auth_data: Optional[bytes] = auth_data
-        
-        # Additional properties
-        self.properties: Dict[str, Any] = {}
-        
+
         self.parse_server_version(server_version, is_mariadb)
     
     # =========================================================================
@@ -103,14 +99,6 @@ class Context:
             self.version.minor = int(version_match.group(2))
             self.version.patch = int(version_match.group(3))
     
-    def get_version(self) -> ServerVersion:
-        """Get server version object"""
-        return self.version
-    
-    def is_mariadb_server(self) -> bool:
-        """Check if connected to MariaDB server"""
-        return self.version.is_mariadb
-    
     # =========================================================================
     # Capability Methods
     # =========================================================================
@@ -130,40 +118,6 @@ class Context:
     def hasExtendedMetadata(self) -> bool:
         """Check if extended metadata is enabled (EXTENDED_METADATA capability)"""
         return self.extended_metadata
-    
-    # =========================================================================
-    # Database/Charset Methods
-    # =========================================================================
-       
-    def set_charset(self, charset: str, collation: Optional[str] = None) -> None:
-        """Set character set and optional collation"""
-        self.charset = charset
-        if collation:
-            self.collation = collation
-    
-    def get_charset(self) -> str:
-        """Get current character set"""
-        return self.charset
-    
-    def get_collation(self) -> str:
-        """Get current collation"""
-        return self.collation
-    
-    def get_connection_id(self) -> int:
-        """Get connection ID"""
-        return self.connection_id
-    
-    # =========================================================================
-    # Properties
-    # =========================================================================
-
-    def get_property(self, key: str, default: Any = None) -> Any:
-        """Get context property by key with optional default"""
-        return self.properties.get(key, default)
-    
-    def set_property(self, key: str, value: Any) -> None:
-        """Set context property by key"""
-        self.properties[key] = value
     
     def __str__(self) -> str:
         return (f"Context(server_version={self.server_version}, "

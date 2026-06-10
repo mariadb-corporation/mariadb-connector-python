@@ -49,10 +49,7 @@ class Configuration:
     # Timeouts
     query_timeout: int = 0  # No timeout
     max_allowed_packet: int = 16777216  # 16MB
-    
-    # Character encoding
-    character_encoding: str = 'utf8mb4'
-    
+
     # Initialization command
     init_command: Optional[str] = None
     
@@ -193,10 +190,6 @@ class Configuration:
         if 'max_allowed_packet' in params:
             config.max_allowed_packet = int(params['max_allowed_packet'])
         
-        # Character encoding
-        if 'character_encoding' in params or 'charset' in params:
-            config.character_encoding = params.get('character_encoding') or params.get('charset', 'utf8mb4')
-        
         # Initialization command
         if 'init_command' in params:
             config.init_command = params['init_command']
@@ -238,7 +231,7 @@ class Configuration:
             'autocommit', 'read_only',
             'compress', 'binary', 'local_infile',
             'query_timeout', 'max_allowed_packet',
-            'character_encoding', 'charset', 'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object',
+            'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object',
             'cache_prep_stmts', 'prep_stmt_cache_size', 'pipeline', 'client_flag'
         }
         

@@ -223,7 +223,7 @@ class BaseConnection(ABC, Generic[TClient]):
             true if server is MariaDB, false otherwise
         """
         self._check_closed()
-        return self._client.context.is_mariadb_server()
+        return self._client.context.version.is_mariadb
 
     @property
     def server_name(self) -> Optional[str]:
@@ -304,7 +304,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Returns:
             Character set name (e.g., "utf8mb4")
         """
-        return self._client.context.get_charset() or _DEFAULT_CHARSET
+        return self._client.context.charset or _DEFAULT_CHARSET
 
     @property
     def collation(self) -> str:
@@ -314,7 +314,7 @@ class BaseConnection(ABC, Generic[TClient]):
         Returns:
             Collation name (e.g., "utf8mb4_general_ci")
         """
-        return self._client.context.get_collation() or _DEFAULT_COLLATION
+        return _DEFAULT_COLLATION
 
 
     # =========================================================================
