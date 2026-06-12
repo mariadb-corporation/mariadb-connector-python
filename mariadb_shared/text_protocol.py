@@ -332,7 +332,7 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
                 if cached_conv_func is not None:
                     converted[i] = cached_conv_func(param, no_backslash_escapes)
                 else:
-                    converted[i] = str(param).encode('utf8')
+                    converted[i] = escape_str(str(param), no_backslash_escapes)
             # Interleave SQL parts and converted params (pre-allocated)
             interleaved: list[Any] = [None] * (2 * n_placeholders + 1)
             j = 0
@@ -396,7 +396,7 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
                 if cached_conv_func is not None:
                     _append(cached_conv_func(param, no_backslash_escapes))
                 else:
-                    _append(str(param).encode('utf8'))
+                    _append(escape_str(str(param), no_backslash_escapes))
 
                 param_idx += 1
                 last_copy = i + 1
@@ -421,7 +421,7 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
                         if cached_conv_func is not None:
                             _append(cached_conv_func(param, no_backslash_escapes))
                         else:
-                            _append(str(param).encode('utf8'))
+                            _append(escape_str(str(param), no_backslash_escapes))
 
                         param_idx += 1
                         last_copy = i + 2
@@ -451,7 +451,7 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
                                 if cached_conv_func is not None:
                                     _append(cached_conv_func(param, no_backslash_escapes))
                                 else:
-                                    _append(str(param).encode('utf8'))
+                                    _append(escape_str(str(param), no_backslash_escapes))
                             else:
                                 if params_dict.get(param_name, _MISSING) is _MISSING:
                                     raise ProgrammingError(
@@ -484,7 +484,7 @@ def substitute_params(sql: str, parameters: Any, no_backslash_escapes: bool = Fa
                             if cached_conv_func is not None:
                                 _append(cached_conv_func(param, no_backslash_escapes))
                             else:
-                                _append(str(param).encode('utf8'))
+                                _append(escape_str(str(param), no_backslash_escapes))
                         else:
                             if params_dict.get(param_name, _MISSING) is _MISSING:  # type: ignore[union-attr]
                                 raise ProgrammingError(
