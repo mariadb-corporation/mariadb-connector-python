@@ -21,7 +21,7 @@ from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnsDefinition
-from .base_client import BaseClient, _find_default_unix_socket, PROTOCOL_TCP
+from .base_client import BaseClient, _find_default_unix_socket, PROTOCOL_TCP, PROTOCOL_SOCKET
 from ..message.server.ok_packet import CharsetMismatchError
 from .context import Context
 from ..message.payload_reader import PayloadReader
@@ -351,6 +351,13 @@ class AsyncClient(BaseClient):
                 unix_socket = _find_default_unix_socket()
                 if unix_socket:
                     self.configuration.unix_socket = unix_socket
+                elif self.configuration.protocol == PROTOCOL_SOCKET:
+                    # protocol=SOCKET is a hard request for a Unix socket; do not
+                    # silently fall back to TCP
+                    raise OperationalError(
+                        "protocol=SOCKET requires a Unix socket but none was found "
+                        "for this platform; pass unix_socket=<path> explicitly."
+                    )
 
             if unix_socket and self.configuration.protocol != PROTOCOL_TCP:
                 if self.connect_timeout:
@@ -374,6 +381,10 @@ class AsyncClient(BaseClient):
                         self.host_address.port
                     )
 
+        except OperationalError:
+            # A deliberate, already-explanatory error (e.g. protocol=SOCKET with
+            # no available socket)
+            raise
         except Exception as e:
             if self.writer:
                 self.writer.close()
