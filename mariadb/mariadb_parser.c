@@ -129,6 +129,7 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
 {
     char *a, *end;
     char lastchar = 0;
+    uint8_t escaped = 0;
     uint8_t i;
     PyObject *tmp;
 
@@ -162,15 +163,17 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
                     else if (*a == '`') p->in_literal = LIT_BACKTICK;
                     break;
                 case LIT_SINGLE_QUOTE:
-                    if (*a == '\'' && lastchar != '\\')
+                    if (*a == '\'' && !escaped)
                         p->in_literal = LIT_NONE;
+                    escaped = (*a == '\\' && !escaped);
                     lastchar = *a;
                     a++;
                     continue;
 
                 case LIT_DOUBLE_QUOTE:
-                    if (*a == '"' && lastchar != '\\')
+                    if (*a == '"' && !escaped)
                         p->in_literal = LIT_NONE;
+                    escaped = (*a == '\\' && !escaped);
                     lastchar = *a;
                     a++;
                     continue;

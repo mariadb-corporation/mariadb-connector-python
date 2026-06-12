@@ -1882,6 +1882,56 @@ class TestCursor(unittest.TestCase):
                                 [[value, _]] = cursor.fetchall()
                                 self.assertEqual(value, 1)
 
+    def test_escaped_backslash_in_string_literal(self):
+        # An escaped backslash ('\\') inside a string literal must not cause
+        # the following string literal containing a '?' to be parsed as a
+        # parameter placeholder.
+        cursor = self.connection.cursor()
+
+        cursor.execute(
+            "CREATE TEMPORARY TABLE t1"
+                "(`id` INT, `a` VARCHAR(64), `b` VARCHAR(64))"
+        )
+
+        # backslash followed by an escaped quote, then a '?' literal
+        cursor.execute(r"INSERT IGNORE INTO t1 VALUES (1, '\\\'', '?')")
+        self.assertEqual(cursor.paramcount, 0)
+
+        # same escaping rules apply to double-quoted string literals
+        cursor.execute(r'INSERT IGNORE INTO t1 VALUES (2, "\\\"", "?")')
+        self.assertEqual(cursor.paramcount, 0)
+
+        # an escaped backslash must not swallow a following format placeholder
+        # that lives inside its own string literal
+        cursor.execute(r"INSERT IGNORE INTO t1 VALUES (3, '\\', '?')")
+        self.assertEqual(cursor.paramcount, 0)
+
+        cursor.execute(r"INSERT IGNORE INTO t1 VALUES (4, '\\', '%s')")
+        self.assertEqual(cursor.paramcount, 0)
+
+        # same escaping rules apply to double-quoted string literals
+        cursor.execute(r'INSERT IGNORE INTO t1 VALUES (5, "\\", "?")')
+        self.assertEqual(cursor.paramcount, 0)
+
+        cursor.execute(r'INSERT IGNORE INTO t1 VALUES (6, "\\", "%s")')
+        self.assertEqual(cursor.paramcount, 0)
+
+        cursor.execute("SELECT `id`, `a`, `b` FROM t1 ORDER BY `id`")
+        rows = cursor.fetchall()
+        self.assertEqual(
+            rows,
+            [
+                (1, '\\\'', '?'),
+                (2, '\\\"', '?'),
+                (3, '\\', '?'),
+                (4, '\\', '%s'),
+                (5, '\\', '?'),
+                (6, '\\', '%s'),
+            ],
+        )
+
+        cursor.close()
+
 
 if __name__ == '__main__':
     unittest.main()
