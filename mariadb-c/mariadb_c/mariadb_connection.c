@@ -28,7 +28,7 @@ char *dsn_keys[]= {
     "client_flag", "plugin_dir",
     "username", "db", "passwd",
     "status_callback", "tls_version",
-    "tls_fp", "tls_fp_list",
+    "tls_fp", "tls_fp_list", "protocol",
     NULL
 };
 
@@ -418,7 +418,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
          *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
          *plugin_dir= NULL, *tls_version= NULL, *tls_fp= NULL, *tls_fp_list= NULL;
     uint8_t ssl_enforce= 0;
-    unsigned int client_flags= 0, port= 0;
+    unsigned int client_flags= 0, port= 0, protocol= 0;
     unsigned int local_infile= 0xFF;
     unsigned int connect_timeout=10, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 0;
@@ -428,7 +428,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
     MrdbConnection_init_fields(self);
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|zzzzziziiibbzzzzzzzzzzibizzzzOzzz:connect",
+                "|zzzzziziiibbzzzzzzzzzzibizzzzOzzzi:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -439,7 +439,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_verify_cert, &ssl_enforce,
                 &client_flags, &plugin_dir,
                 &user, &schema, &password, &status_callback,
-                &tls_version, &tls_fp, &tls_fp_list))
+                &tls_version, &tls_fp, &tls_fp_list, &protocol))
     {
         return -1;
     }
@@ -539,6 +539,12 @@ MrdbConnection_Initialize(MrdbConnection *self,
     if (write_timeout)
     {
         if (mysql_options(self->mysql, MYSQL_OPT_WRITE_TIMEOUT, &write_timeout))
+          goto end;
+    }
+
+    if (protocol)
+    {
+        if (mysql_options(self->mysql, MYSQL_OPT_PROTOCOL, &protocol))
           goto end;
     }
 
