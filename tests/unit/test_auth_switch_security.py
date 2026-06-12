@@ -20,6 +20,9 @@ protocol=TCP actually runs over TCP and is therefore NOT local.
 import unittest
 import mariadb
 from mariadb.impl.client.base_client import BaseClient, PROTOCOL_TCP, PROTOCOL_DEFAULT
+from mariadb.impl.plugin.authentication.caching_sha2_password_plugin import (
+    CachingSha2PasswordPlugin,
+)
 
 # Arbitrary non-empty placeholder. The checks never open the path, so the value
 # is irrelevant and must NOT be a real system socket path.
@@ -169,6 +172,34 @@ class AuthSwitchSecurityTest(unittest.TestCase):
         client = _FakeClient(_Cfg(ssl=True), validator=None, host=_REMOTE)
         client.check_auth_switch_allowed("caching_sha2_password",
                                          _Factory(), _Plugin(mitm_proof=False))
+
+    # --- check 2, exercised against the REAL caching_sha2_password plugin -------
+    # caching_sha2_password is the canonical non-MitM-proof plugin and only ever
+    # arrives via auth-switch (the initial handshake plugin is hard-coded native).
+    # These guard the actual class so that flipping its is_mitm_proof() — or
+    # changing the gate — can't silently stop protecting it.
+
+    def test_real_caching_sha2_is_not_mitm_proof(self):
+        plugin = CachingSha2PasswordPlugin("pw", b"\xaa" * 20, _Cfg(ssl=True),
+                                           _Host(_REMOTE))
+        self.assertFalse(plugin.is_mitm_proof())
+
+    def test_real_caching_sha2_rejected_on_remote_fingerprint(self):
+        # delayed (fingerprint) cert validation: the password would be sent before
+        # the server's identity is proven, so caching_sha2 must be refused here.
+        plugin = CachingSha2PasswordPlugin("pw", b"\xaa" * 20, _Cfg(ssl=True),
+                                           _Host(_REMOTE))
+        client = _FakeClient(_Cfg(ssl=True), validator=_Validator(), host=_REMOTE)
+        with self.assertRaises(mariadb.OperationalError):
+            client.check_auth_switch_allowed("caching_sha2_password",
+                                             _Factory(), plugin)
+
+    def test_real_caching_sha2_allowed_on_loopback_fingerprint(self):
+        # loopback is local -> exempt (matches Connector/C is_local_connection)
+        plugin = CachingSha2PasswordPlugin("pw", b"\xaa" * 20, _Cfg(ssl=True),
+                                           _Host(_LOOPBACK))
+        client = _FakeClient(_Cfg(ssl=True), validator=_Validator(), host=_LOOPBACK)
+        client.check_auth_switch_allowed("caching_sha2_password", _Factory(), plugin)
 
 
 if __name__ == "__main__":

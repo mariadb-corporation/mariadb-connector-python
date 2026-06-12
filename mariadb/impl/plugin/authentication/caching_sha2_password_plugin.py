@@ -120,9 +120,8 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                 # Fast authentication successful, return ending ok packet
                 return await read_payload_func()
             elif auth_method == 0x04:
-                # Perform full authentication
-                if self.conf.ssl:
-                    # Send password in clear text over SSL
+                if self._is_connection_secure():
+                    # Send password in clear text over the secure transport
                     if self.authentication_data:
                         payload = bytearray(b'\0\0\0\0')
                         payload.extend(self.authentication_data.encode('utf-8'))
@@ -132,23 +131,22 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     await write_payload_func(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", False)
                     return await read_payload_func()
                 else:
-                    # SSL not available - try RSA public key encryption
                     if not HAS_CRYPTOGRAPHY:
                         raise OperationalError(
                             "caching_sha2_password requires SSL or cryptography library for RSA encryption"
                         )
-                    
+
                     # Request public key from server
                     await write_payload_func(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", False)
-                    
+
                     # Read public key response
                     key_response = await read_payload_func()
                     if len(key_response) > 0 and key_response[0] == 0xFF:
                         return key_response
-                    
+
                     # Parse public key
                     public_key_pem = bytes(key_response[1:])  # Skip first byte
-                    
+
                     # Encrypt password with RSA public key
                     encrypted_pwd = self._get_rsa_encrytped_pwd(public_key_pem.decode('utf-8'))
                     payload = bytearray(b'\0\0\0\0')
@@ -186,10 +184,9 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                 # Fast authentication successful, return ending ok packet
                 return read_payload_func()
             elif auth_method == 0x04:
-                # Perform full authentication
-                if self.conf.ssl:
-                    # Send password in clear text over SSL
+                if self._is_connection_secure():
                     if self.authentication_data and self.authentication_data != "":
+                        # Send password in clear text over the secure transport
                         payload = bytearray(b'\0\0\0\0')
                         payload.extend(self.authentication_data.encode('utf-8'))
                         payload.append(0)
@@ -198,24 +195,23 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     write_payload_func(payload, "CACHING_SHA2_PASSWORD CLEAR PWD", False)
                     return read_payload_func()
                 else:
-                    # SSL not available - try RSA public key encryption
                     if not HAS_CRYPTOGRAPHY:
                         raise OperationalError(
                             "Authentication plugin 'caching_sha2_password' requires SSL connection "
                             "or cryptography library for RSA encryption when not cached"
                         )
-                    
+
                     # Request RSA public key from server
                     write_payload_func(bytearray(b'\0\0\0\0\2'), "CACHING_SHA2_REQUEST_KEY", False)
-                    
+
                     # Read public key response
                     key_response = read_payload_func()
                     if len(key_response) > 0 and key_response[0] == 0xFF:
                         return key_response
-                    
+
                     # Parse public key (skip first byte which is packet type)
                     public_key_pem = bytes(key_response[1:]).decode('utf-8')
-                    
+
                     # Encrypt password using shared logic
                     encrypted_pwd = self._get_rsa_encrytped_pwd(public_key_pem)
                     payload = bytearray(b'\0\0\0\0')
@@ -225,9 +221,18 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     return read_payload_func()
             else:
                 raise OperationalError(f"Unknown authentication method: {auth_method}")
-        
+
         return response
-    
+
+    # --- transport-security helper --------------------------------------------
+
+    def _is_connection_secure(self) -> bool:
+        """a connection is secure when TLS is active, or when the transport is not 
+        a plain TCP socket (e.g. a unix socket)."""
+        if self.conf.ssl:
+            return True
+        return bool(self.conf.unix_socket) and getattr(self.conf, 'protocol', 0) != 1
+
     def is_mitm_proof(self) -> bool:
         return False
     
