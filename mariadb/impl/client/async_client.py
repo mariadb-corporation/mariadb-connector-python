@@ -649,7 +649,7 @@ class AsyncClient(BaseClient):
                             message.statement_id = cached_stmt.statement_id  # type: ignore[attr-defined]
                             await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                             self.reset_buffer()
-                            completions = await self._read_result(message.is_binary(), config, buffered, cached_stmt)
+                            completions = await self._read_result(message.is_binary(), config, buffered, cached_stmt, sql)
                             all_completions.append(completions)
                         return all_completions
 
@@ -682,7 +682,7 @@ class AsyncClient(BaseClient):
                         # Read all execute results (even if prepare failed)
                         for message in messages:
                             try:
-                                completions = await self._read_result(message.is_binary(), config, buffered, prepareResult)
+                                completions = await self._read_result(message.is_binary(), config, buffered, prepareResult, sql)
                                 all_completions.append(completions)
                             except DatabaseError as e:
                                 if not first_error:
@@ -700,7 +700,7 @@ class AsyncClient(BaseClient):
                             await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                             self.reset_buffer()
                             try:
-                                completions = await self._read_result(message.is_binary(), config, buffered, prepareResult)
+                                completions = await self._read_result(message.is_binary(), config, buffered, prepareResult, sql)
                                 all_completions.append(completions)
                             except DatabaseError as e:
                                 if not first_error:
@@ -904,8 +904,11 @@ class AsyncClient(BaseClient):
                 "LOAD DATA LOCAL INFILE is disabled. Set local_infile=True in connection parameters to enable it."
             )
 
-        # Validate filename matches the SQL query (security check)
-        if sql and not self._validate_local_filename(sql, filename):
+        # Validate filename matches the LOAD ... LOCAL INFILE in the client's own
+        # statement. Fail closed: a request with no SQL context to validate against
+        # (e.g. the prepared-statement path) must be rejected, never trusted — a
+        # malicious/MitM server could otherwise read an arbitrary client file.
+        if not sql or not self._validate_local_filename(sql, filename):
             # Send empty packet to keep connection state OK
             await self.write_payload(bytearray(4), reset_sequence=False)
             raise OperationalError(
