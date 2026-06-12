@@ -472,14 +472,14 @@ static PyObject *ma_convert_value(MrdbCursor *self,
                                   enum enum_field_types type,
                                   PyObject *value)
 {
-    PyObject *key= PyLong_FromLongLong(type);
+    PyObject *key;
     PyObject *func;
     PyObject *new_value= NULL;
 
-    if (!self->connection->converter) {
-        Py_XDECREF(key);
+    if (!value || !self->connection->converter)
         return NULL;
-    }
+
+    key= PyLong_FromLongLong(type);
 
     if ((func= PyDict_GetItem(self->connection->converter, key)) &&
             PyCallable_Check(func))
