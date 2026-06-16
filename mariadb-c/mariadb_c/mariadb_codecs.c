@@ -1180,6 +1180,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
     param->is_unsigned= 0;
     paramvalue.indicator= 0;
     uint8_t rc;
+    uint8_t has_negative= 0;
 
     if (!self->array_size)
     {
@@ -1239,12 +1240,14 @@ mariadb_get_parameter_info(MrdbCursor *self,
 
         if (pinfo.type == MYSQL_TYPE_LONGLONG)
         {
-            PyLong_AsLongLong(paramvalue.value);
-
-            if (PyErr_Occurred())
+            if (!param->is_unsigned)
             {
-              param->is_unsigned= 1;
-              PyErr_Clear();
+                PyLong_AsLongLong(paramvalue.value);
+                if (PyErr_Occurred())
+                {
+                    param->is_unsigned= 1;
+                    PyErr_Clear();
+                }
             }
             if (pinfo.bits > bits)
             {
@@ -1252,6 +1255,16 @@ mariadb_get_parameter_info(MrdbCursor *self,
             }
 
         }
+
+#if PY_VERSION_HEX >= 0x030e00a1
+        if (!has_negative && paramvalue.value && PyLong_Check(paramvalue.value) &&
+            PyLong_IsNegative(paramvalue.value) > 0)
+            has_negative= 1;
+#else
+        if (!has_negative && paramvalue.value && PyLong_Check(paramvalue.value) &&
+            _PyLong_Sign(paramvalue.value) < 0)
+            has_negative= 1;
+#endif
 
         if (!param->buffer_type ||
                 param->buffer_type == MYSQL_TYPE_NULL)
@@ -1299,6 +1312,11 @@ mariadb_get_parameter_info(MrdbCursor *self,
         else {
             param->buffer_type= MYSQL_TYPE_LONGLONG;
         }
+    }
+    if (param->is_unsigned && has_negative)
+    {
+        param->buffer_type= MYSQL_TYPE_NEWDECIMAL;
+        param->is_unsigned= 0;
     }
     return 0;
 }

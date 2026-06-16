@@ -16,7 +16,11 @@ _STRUCT_b = struct.Struct('<b')  # signed byte for tiny int
 _STRUCT_h = struct.Struct('<h')  # signed short for small int
 _STRUCT_i = struct.Struct('<i')  # signed int for int
 _STRUCT_q = struct.Struct('<q')  # signed long long for bigint
+_STRUCT_Q = struct.Struct('<Q')  # unsigned long long for bigint > 2**63-1
 _STRUCT_d = struct.Struct('<d')  # double for float
+
+_INT64_MAX = 0x7FFFFFFFFFFFFFFF
+_UNSIGNED_FLAG = 0x80
 _STRUCT_BB = struct.Struct('<BB')  # two unsigned bytes for type info
 
 # Composite struct formats for datetime/date/time (pack multiple fields at once)
@@ -101,10 +105,11 @@ class ExecutePacket(ClientMessage):
                         field_type = type_func(param)
                     else:
                         field_type = self._get_parameter_type(param)
-                    
-                    # Write type to combined buffer (unsigned flag already 0 from bytearray init)
+
                     combined_buffer[type_offset + i * 2] = field_type
-                    
+                    if field_type == _FT_LONGLONG and param > _INT64_MAX:
+                        combined_buffer[type_offset + i * 2 + 1] = _UNSIGNED_FLAG
+
                     # Write parameter value immediately
                     write_func = write_tbl.get(param_type)
                     if write_func is not None:
@@ -177,6 +182,9 @@ class ExecutePacket(ClientMessage):
         return "COM_STMT_EXECUTE"
 
 
+_FT_LONGLONG = FIELD_TYPE.LONGLONG
+
+
 # Optimized type detection functions
 def _get_type_bool(param: Any) -> int:
     return FIELD_TYPE.TINY
@@ -238,6 +246,8 @@ def _write_int(self: Any, stream: Any, param: Any) -> None:
         stream.write_bytes(_STRUCT_h.pack(param))
     elif bits <= 31:
         stream.write_bytes(_STRUCT_i.pack(param))
+    elif param > _INT64_MAX:
+        stream.write_bytes(_STRUCT_Q.pack(param))
     else:
         stream.write_bytes(_STRUCT_q.pack(param))
 

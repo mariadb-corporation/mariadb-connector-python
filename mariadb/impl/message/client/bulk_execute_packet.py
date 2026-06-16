@@ -16,8 +16,12 @@ _STRUCT_b = struct.Struct('<b')  # signed byte
 _STRUCT_h = struct.Struct('<h')  # signed short
 _STRUCT_i = struct.Struct('<i')  # signed int
 _STRUCT_q = struct.Struct('<q')  # signed long long
+_STRUCT_Q = struct.Struct('<Q')  # unsigned long long for bigint > 2**63-1
 _STRUCT_d = struct.Struct('<d')  # double
 _STRUCT_BB = struct.Struct('<BB')  # two unsigned bytes
+
+_INT64_MAX = 0x7FFFFFFFFFFFFFFF
+_UNSIGNED_FLAG = 0x80
 
 # Composite struct formats for datetime/date/time
 _STRUCT_DATETIME_WITH_MICRO = struct.Struct('<BHHBBBBBI')  # length + year(H) + 5 bytes + microsecond(I)
@@ -138,14 +142,16 @@ class BulkExecutePacket(ClientMessage):
         for param_idx in range(num_params):
             # Collect all values at this parameter position across all sets
             max_type = FIELD_TYPE.NULL
-            
+            unsigned = 0
+            has_negative = False
+
             for param_set in self.parameter_sets:
                 if param_idx >= len(param_set):
                     continue
-                    
+
                 param = param_set[param_idx]
-                param_type, _ = self._get_parameter_type(param)
-                
+                param_type, param_unsigned = self._get_parameter_type(param)
+
                 # Determine the maximum type needed
                 if param_type != FIELD_TYPE.NULL:
                     if max_type == FIELD_TYPE.NULL:
@@ -153,8 +159,26 @@ class BulkExecutePacket(ClientMessage):
                     else:
                         # For integers, upgrade to larger type if needed
                         max_type = self._get_wider_integer_type(max_type, param_type)
-            
-            self.parameter_types.append((max_type, 0))
+                # A single unsigned-64 value makes the whole column unsigned.
+                if param_unsigned:
+                    unsigned = _UNSIGNED_FLAG
+                elif type(param) is int and param < 0:
+                    has_negative = True
+
+            # A binary column carries one type+flag for every row. An unsigned-64
+            # value (flag 0x80) and a negative value cannot coexist in an integer
+            # column -- the negative would be packed signed and read back as a huge
+            # positive. No integer type holds both ranges, so promote the column to
+            # DECIMAL (sent as text), which represents both losslessly.
+            if unsigned and has_negative:
+                max_type = FIELD_TYPE.NEWDECIMAL
+                unsigned = 0
+            elif unsigned and max_type != FIELD_TYPE.LONGLONG:
+                # Widened to a non-integer type (e.g. mixed with str/Decimal); the
+                # unsigned flag is only meaningful on a LONGLONG column.
+                unsigned = 0
+
+            self.parameter_types.append((max_type, unsigned))
             # Store the write function for this parameter
             writer = type_to_writer.get(max_type, self._write_string)
             self.parameter_writers.append(writer)
@@ -204,7 +228,9 @@ class BulkExecutePacket(ClientMessage):
                 return FIELD_TYPE.SHORT, 0
             elif -2147483648 <= param <= 2147483647:
                 return FIELD_TYPE.LONG, 0
-            return FIELD_TYPE.LONGLONG, 0            
+            elif param > _INT64_MAX:
+                return FIELD_TYPE.LONGLONG, _UNSIGNED_FLAG
+            return FIELD_TYPE.LONGLONG, 0
         elif isinstance(param, float):
             return FIELD_TYPE.DOUBLE, 0
         elif isinstance(param, decimal.Decimal):
@@ -248,8 +274,11 @@ class BulkExecutePacket(ClientMessage):
         stream.write_bytes(_STRUCT_i.pack(param))
     
     def _write_longlong(self, stream: PayloadWriter, param: Any) -> None:
-        """Write LONGLONG (8 byte signed integer)"""
-        stream.write_bytes(_STRUCT_q.pack(param))
+        """Write LONGLONG (8 byte integer, unsigned above the signed-64 range)"""
+        if param > _INT64_MAX:
+            stream.write_bytes(_STRUCT_Q.pack(param))
+        else:
+            stream.write_bytes(_STRUCT_q.pack(param))
     
     def _write_double(self, stream: PayloadWriter, param: Any) -> None:
         """Write DOUBLE (8 byte float)"""
