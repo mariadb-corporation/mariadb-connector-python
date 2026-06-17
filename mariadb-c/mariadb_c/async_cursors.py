@@ -181,10 +181,13 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             params = ("?," * len(data))[:-1]
         await self.execute("CALL %s(%s)" % (sp, params), data, _force_binary=True)
 
-    def nextset(self):
+    async def nextset(self):
         """
         Will make the cursor skip to the next available result set,
         discarding any remaining rows from the current set.
+
+        Returns True if another result set is available, or None if there are
+        no more result sets (PEP-249).
         """
 
         self.check_closed()
@@ -192,15 +195,27 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # Clear buffered rows from previous result set
         self._buffered_rows = None
         self._row_index = 0
-        
-        # Move to next result set
-        result = super()._nextset()
-        
-        # If buffered mode and there's a new result set, we need to buffer it
-        # However, nextset() is synchronous, so we can't await here
-        # The buffering will need to happen on first fetch
-        
-        return result
+
+        if self.field_count:
+            while await self._fetch_row() is not None:
+                pass
+
+        # Advance to the next result set without blocking the event loop
+        result = self._async_next_result_start()
+        while type(result) is int and result != 0:
+            actual_status = await self.connection._wait_for_status(result)
+            result = self._async_next_result_cont(actual_status)
+
+        if result is False:
+            # No more result sets.
+            if self.connection._active_async_cursor is self:
+                self.connection._active_async_cursor = None
+            return None
+
+        # A further result set is now current
+        if not self._user_buffered:
+            self.connection._active_async_cursor = self
+        return True
 
     async def execute(self, statement: str, data: Sequence = (), buffered=None, _force_binary=False):
         """
@@ -354,19 +369,16 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         return True
 
     async def _execute_binary_async(self):
-        """Execute binary query using async prepared statement protocol
-        
-        LIMITATION: mysql_stmt_prepare() is synchronous (no async version in MariaDB C API).
-        This means statement preparation will block the event loop briefly.
-        
-        However, statement execution and fetching are fully async, which is where
-        most of the network I/O happens.
-        """
-        # Prepare statement (synchronous - blocks event loop, but typically fast)
-        # This includes stmt init, parameter binding, and mysql_stmt_prepare()
+        """Execute binary query using async prepared statement protocol."""
+        # Local setup only: stmt init, parameter binding (prebound), clear result.
         self._prepare_stmt_only()
-        
-        # Execute statement asynchronously (network I/O)
+
+        wait_status = self._async_stmt_prepare_start()
+
+        while wait_status:
+            actual_status = await self.connection._wait_for_status(wait_status)
+            wait_status = self._async_stmt_prepare_cont(actual_status)
+
         wait_status = self._async_stmt_execute_start()
         
         while wait_status:
@@ -470,7 +482,26 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             self._data = parameters
             self._text = False
             self._rowcount = 0
-            self._execute_bulk()
+            try:
+                self._prepare_bulk_only()
+                wait_status = self._async_stmt_prepare_start()
+                while wait_status:
+                    actual_status = await self.connection._wait_for_status(wait_status)
+                    wait_status = self._async_stmt_prepare_cont(actual_status)
+
+                wait_status = self._async_stmt_execute_start()
+                while wait_status:
+                    actual_status = await self.connection._wait_for_status(wait_status)
+                    wait_status = self._async_stmt_execute_cont(actual_status)
+                self._finalize_bulk_result()
+            except BaseException:
+                if self.connection._active_async_cursor is self:
+                    self.connection._active_async_cursor = None
+                try:
+                    self._reset()
+                except Exception:
+                    pass
+                raise
             self._bulk = 1
 
     async def _consume_active_result(self):
@@ -560,7 +591,10 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         if not self.connection._closed:
             if self.connection._active_async_cursor is self and self.field_count > 0:
                 try:
+                    # Drain the current result set, then any further sets
                     while await self._fetch_row() is not None:
+                        pass
+                    while await self.nextset() is not None:
                         pass
                 except Exception:
                     pass

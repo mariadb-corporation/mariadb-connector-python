@@ -693,7 +693,7 @@ class BaseClient(ABC):
 
         for i in range(num_cols):
             # Read length-encoded integer for field length
-            length_byte = data[pos]
+            length_byte = data_bytes[pos]
             if (length_byte < 0xFB):
                 length = length_byte
                 pos += 1
@@ -701,13 +701,13 @@ class BaseClient(ABC):
                 pos += 1
                 continue
             elif length_byte == 0xFC:
-                length = _unpack_H(data, pos + 1)[0]
+                length = _unpack_H(data_bytes, pos + 1)[0]
                 pos += 3
             elif length_byte == 0xFD:
-                length = struct.unpack('<I', bytes(data[pos+ 1:pos+4]) + b'\x00')[0]
+                length = _unpack_I(data_bytes, pos + 1)[0] & 0xFFFFFF
                 pos += 4
             else:
-                length = _unpack_Q(data, pos + 1)[0]
+                length = _unpack_Q(data_bytes, pos + 1)[0]
                 pos += 9
 
             col_type = col_types[i]

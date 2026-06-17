@@ -53,12 +53,12 @@ _MORE_RESULTS_EXIST = STATUS.MORE_RESULTS_EXIST
 class SyncClient(BaseClient):
     """
     Synchronous client implementation for MariaDB connections
-    
+
     Handles all low-level protocol communication with the MariaDB server
     using blocking I/O operations.
- 
+
     """
-    
+
     # =========================================================================
     # Initialization
     # =========================================================================
@@ -183,7 +183,7 @@ class SyncClient(BaseClient):
                 if bytes_in_buffer < 4:
                     if self._recv_len == self._recv_buf_capacity:
                         self._ensure_space(4)
-                    
+
                     got = self._recv_into_buffer(4 - bytes_in_buffer)
                     if got == 0:  # Connection lost
                         raise ConnectionError("Connection lost during read")
@@ -199,10 +199,10 @@ class SyncClient(BaseClient):
                     missing = packet_total - bytes_in_buffer
                     if packet_length == 0xFFFFFF:
                         missing += 4
-                    
+
                     if self._recv_len + missing > self._recv_buf_capacity:
                         self._ensure_space(missing)
-                        
+
                     got = self._recv_into_buffer(missing)
                     if got == 0:
                         raise ConnectionError("Connection lost during read")
@@ -233,7 +233,7 @@ class SyncClient(BaseClient):
                     p_end = p_start + total_size
                     self._recv_pos = p_end
                     break
-                
+
                 # Move to next fragment header
                 if pkt_seen > 1:
                     self._recv_pos = first_pos + 4 + total_size
@@ -272,48 +272,48 @@ class SyncClient(BaseClient):
     # =========================================================================
     # Packet Writing
     # =========================================================================
-    
+
     def write_payload(self, payload: bytearray, packet_type: str = "", reset_sequence: bool = True) -> None:
         """Write payload with MariaDB packet framing (sync version)"""
         if reset_sequence:
             self.sequence[0] = -1
-        
+
         payload_len = len(payload) - 4  # Payload has 4 bytes reserved at start for header
-        
+
         if payload_len == 0:  # Handle empty payload - still need to send header
             self.sequence[0] = (self.sequence[0] + 1) % 256
             payload[0:3] = b'\x00\x00\x00'
             payload[3] = self.sequence[0]
-            
+
             self.socket.sendall(payload[0:4])
             return
-        
+
         # Fast path: single packet (< 16MB) - avoids memoryview, min(), loop overhead
         if payload_len < 0xFFFFFF:
             self.sequence[0] = (self.sequence[0] + 1) % 256
             _pack_pkt_hdr(payload, 0, payload_len | (self.sequence[0] << 24))
             self.socket.sendall(payload)
             return
-        
+
         # Slow path: large payload requiring packet splitting
         data_offset = 4
         payload_view = memoryview(payload)
         sent = 0
-        
+
         while sent < payload_len:
             chunk_size = min(0xFFFFFF, payload_len - sent)
             self.sequence[0] = (self.sequence[0] + 1) % 256
-            
+
             chunk_start = data_offset + sent
             chunk_end = chunk_start + chunk_size
-            
+
             header_pos = chunk_start - 4
             header_int = chunk_size | (self.sequence[0] << 24)
             _pack_pkt_hdr(payload, header_pos, header_int)
-            
+
             self.socket.sendall(payload_view[header_pos:chunk_end])
             sent += chunk_size
-        
+
         if payload_len % 0xFFFFFF == 0:
             self.sequence[0] = (self.sequence[0] + 1) % 256
             header = b'\x00\x00\x00' + bytes([self.sequence[0]])
@@ -327,31 +327,31 @@ class SyncClient(BaseClient):
         """Establish connection to MariaDB server with host failover support"""
         if self.connected:
             return
-        
+
         # Get list of hosts to try
         hosts = self.configuration.get_hosts()
         last_exception = None
-        
+
         for host_address in hosts:
             try:
                 self.host_address = host_address
-                
+
                 self._create_socket()
                 self._perform_handshake()
-            
+
                 # Ensure autocommit and charset are correctly set
                 self._ensure_default()
                 # Execute init command if specified
                 if self.configuration.init_command:
                     self._execute_init_command()
-                
+
                 return  # Success!
-                
+
             except Exception as e:
                 last_exception = e
                 self._cleanup_connection()
                 continue  # Try next host
-        
+
         # All hosts failed
         if last_exception:
             raise last_exception
@@ -432,13 +432,13 @@ class SyncClient(BaseClient):
         message = HandshakeResponse(self.configuration, self.context)
         self.write_payload(message.payload(self.context, self._payload_writer), message.type(), False)
         self._handle_authentication(self.read_payload())
-        
+
         self.connected = True
 
     def _execute_init_command(self) -> None:
         """
         Execute initialization command if specified in configuration
-        
+
         Raises:
             OperationalError: If init command execution fails
         """
@@ -448,54 +448,54 @@ class SyncClient(BaseClient):
                 self.execute(query_packet, self.configuration)
             except Exception as e:
                 raise OperationalError(f"Failed to execute init command: {e}")
-    
+
     def _handle_ssl_connection(self, client_capabilities: int) -> None:
         """
         Handle SSL connection setup
-        
+
         Raises:
             OperationalError: If SSL setup fails
         """
         # Check if server supports SSL
         if not self.context.has_capability(constants.CAPABILITY.SSL):
             raise OperationalError("Trying to connect with SSL, but SSL not enabled in the server")
-        
+
         # Import SSL request packet
         from ..message.client.ssl_request_packet import SslRequestPacket
-        
+
         # Calculate client capabilities with SSL enabled
         # Add SSL capability if SSL enabled and server supports it
         client_capabilities |= constants.CAPABILITY.SSL
-        
+
         # Send SSL request packet
         message = SslRequestPacket(client_capabilities)
         self.write_payload(message.payload(self.context, self._payload_writer), message.type(), False)
-        
+
         try:
             # Import SSL utility
             from .ssl.ssl_utility import SSLUtility
-            
+
             # Prepare SSL context with optional fingerprint validation
             ssl_context, self.cert_fingerprint_validator = SSLUtility.prepare_ssl_context(
                 self.configuration,
                 self.context
             )
-            
+
             # Wrap socket with SSL
             self.socket = ssl_context.wrap_socket(
                 self.socket,
                 server_hostname=self.host_address.host if self.configuration.ssl_verify_cert and not self.cert_fingerprint_validator else None
             )
-            
+
             # Capture fingerprint if using fingerprint validation
             if self.cert_fingerprint_validator:
                 self.cert_fingerprint_validator.capture_fingerprint(self.socket)
-            
+
             # Reset sequence after SSL upgrade
             self.sequence[0] = 1
         except Exception as e:
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
-    
+
 
     # =========================================================================
     # Authentication
@@ -505,9 +505,9 @@ class SyncClient(BaseClient):
         """Process authentication response from server"""
         if len(packet) == 0:
             raise OperationalError("Empty authentication response")
-        
+
         packet_type = packet[0]
-        
+
         if packet_type == self.OK_PACKET:
             ok_packet = _decode_ok_packet(packet, self.context)
             # Validate SSL fingerprint if needed
@@ -539,7 +539,7 @@ class SyncClient(BaseClient):
             raise e
         except Exception as e:
             raise OperationalError(f"Authentication plugin '{plugin_name}' failed: {e}")
-    
+
     # =========================================================================
     # Command Execution
     # =========================================================================
@@ -549,7 +549,7 @@ class SyncClient(BaseClient):
         with self.lock:
             if self.closed:
                 raise OperationalError("Invalid connection or not connected")
-            
+
             # Drain any active streaming result before executing new command
             if self._active_streaming_result is not None:
                 try:
@@ -557,7 +557,7 @@ class SyncClient(BaseClient):
                 except Exception:
                     pass  # Ignore errors during draining
                 self._active_streaming_result = None
-            
+
             try:
                 self.write_payload(message.payload(self.context, self._payload_writer))
                 self.reset_buffer()
@@ -578,7 +578,7 @@ class SyncClient(BaseClient):
 
             try:
                 key = (self.context.database, sql)
-                
+
                 # Check cache first
                 cached_stmt = self.prepared_statement_cache.get(key) if self.prepared_statement_cache is not None else None
                 if cached_stmt and cached_stmt.acquire():
@@ -591,33 +591,33 @@ class SyncClient(BaseClient):
                             completions = self._read_result(message.is_binary(), config, buffered, cached_stmt, sql)
                             all_completions.append(completions)
                         return all_completions
-                
+
                 # Not in cache, prepare once and execute all
                 from ..message.client.prepare_packet import PreparePacket
                 prepare_message = PreparePacket(sql)
-                
+
                 # Check if pipelining is enabled and server supports BULK operations
-                use_pipeline = (self.configuration.pipeline and 
+                use_pipeline = (self.configuration.pipeline and
                                self.context.has_capability(constants.CAPABILITY.BULK_OPERATIONS))
-                
+
                 prepare_result = None
                 first_error = None
                 all_completions = []
-                
+
                 try:
                     if use_pipeline:
                         # Pipeline mode: write prepare and all execute messages before reading
                         self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
-                        
+
                         for message in messages:
                             self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
                         self.reset_buffer()
-                        
+
                         try:
                             prepare_result = self._parse_prepare_response(self.read_payload(), sql)
                         except DatabaseError as e:
                             first_error = e
-                        
+
                         # Read all execute results (even if prepare failed)
                         for message in messages:
                             try:
@@ -630,9 +630,9 @@ class SyncClient(BaseClient):
                         # Non-pipeline mode: read prepare response before writing execute messages
                         self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
                         self.reset_buffer()
-                        
+
                         prepare_result = self._parse_prepare_response(self.read_payload(), sql)
-                        
+
                         # Now write and read execute messages
                         for message in messages:
                             message.statement_id = prepare_result.statement_id  # type: ignore[attr-defined]
@@ -650,10 +650,10 @@ class SyncClient(BaseClient):
                         if self.prepared_statement_cache is not None:
                             self.prepared_statement_cache[key] = prepare_result
                         prepare_result.close()
-                
+
                 if first_error:
                     raise first_error
-                return all_completions    
+                return all_completions
 
             except DatabaseError as e:
                 raise e
@@ -674,7 +674,7 @@ class SyncClient(BaseClient):
                 packets = packets[1:] if len(packets) > 1 else None
             else:
                 packet = read_payload()
-            
+
             packet_type = packet[0]
             if packet_type == self.OK_PACKET:
                 results.append(_decode_ok_packet(packet, context))
@@ -715,7 +715,7 @@ class SyncClient(BaseClient):
                 col_idx = 0
                 if not packets:
                     packets = read_payload(column_count)
-                
+
                 # Decode columns inside collection loop to avoid buffer
                 # invalidation when read_payload is called multiple times
                 columns = ColumnsDefinition(column_count)
@@ -725,9 +725,9 @@ class SyncClient(BaseClient):
                     start, end = packets[col_idx]
                     columns.decode_column(col_idx, self._recv_buf_mv[start:end], context)
                     col_idx += 1
-                
+
                 packets = packets[column_count:] if len(packets) > column_count else None
-                
+
                 if prepare_stmt_packet is not None:
                     prepare_stmt_packet.columns = columns  # type: ignore[assignment]
 
@@ -796,7 +796,7 @@ class SyncClient(BaseClient):
                         )
                         results.append(result_completion)
                         finish_result = True
-                        
+
                         # Save any remaining packets for next result set
                         if packet_idx + 1 < len(packets):
                             packets = packets[packet_idx + 1:]
@@ -819,22 +819,84 @@ class SyncClient(BaseClient):
 
         return results
 
+    def read_next_result(self, is_binary: bool, config: Configuration,
+                         prepare_stmt_packet: Optional[PrepareStmtPacket] = None,
+                         sql: Optional[str] = None) -> Optional[Completion]:
+        """Read exactly one further result set from the wire"""
+        with self.lock:
+            if self.closed:
+                raise OperationalError("Invalid connection or not connected")
+
+            context = self.context
+            read_payload = self.read_payload
+            try:
+                packet = read_payload()
+                packet_type = packet[0]
+
+                if packet_type == self.OK_PACKET:
+                    return _decode_ok_packet(packet, context)
+                elif packet_type == self.ERROR_PACKET:
+                    raise _decode_error_packet(packet, context).toError(self.exception_factory)
+                elif packet_type == self.EOF_PACKET:
+                    return _decode_eof_packet(packet, context)
+                elif packet_type == self.LOCAL_INFILE_PACKET:
+                    completion, _packets = self._handle_local_infile(packet, sql, None)
+                    return completion
+
+                parser = PayloadReader(packet)
+                column_count = parser.read_length_encoded_int()
+                assert column_count is not None
+                eof_deprecated = context.isEofDeprecated()
+
+                if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+                    if prepare_stmt_packet is None or prepare_stmt_packet.columns is None:
+                        raise OperationalError(
+                            "Server omitted result-set metadata for a subsequent "
+                            "result set and no cached metadata is available")
+                    columns = prepare_stmt_packet.columns
+                else:
+                    packets = read_payload(column_count)
+                    columns = ColumnsDefinition(column_count)
+                    col_idx = 0
+                    while col_idx < column_count:
+                        if col_idx >= len(packets):
+                            packets.extend(read_payload(column_count - col_idx))
+                        start, end = packets[col_idx]
+                        columns.decode_column(col_idx, self._recv_buf_mv[start:end], context)
+                        col_idx += 1
+                    if prepare_stmt_packet is not None:
+                        prepare_stmt_packet.columns = columns
+
+                if not eof_deprecated:
+                    read_payload()
+
+                row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+                streaming_result = SyncStreamingResult(read_payload,  # type: ignore[arg-type]
+                    context, columns, column_count, config, row_parser)
+                self._active_streaming_result = streaming_result
+                streaming_completion: OkPacket = OkPacket(0, 0, 0, 0, b'')
+                streaming_completion.result_set = streaming_result
+                return streaming_completion
+            except DatabaseError as e:
+                raise e
+            except Exception as e:
+                raise OperationalError(f"Reading next result set failed: {e}")
 
     def _handle_local_infile(self, packet: memoryview, sql: Optional[str], remaining_packets: Optional[list[tuple[int, int]]]) -> tuple[OkPacket, Optional[list[tuple[int, int]]]]:
 
         """Handle LOAD DATA LOCAL INFILE request from server
-        
+
         Returns:
             tuple: (Completion, remaining_packets)
         """
         import os
         import re
-        
+
         # Read filename from packet (skip 0xFB header)
         parser = PayloadReader(packet)
         parser.skip(1)  # Skip 0xFB
         filename = parser.read_null_terminated_string()
-        
+
         # Check if local_infile is enabled
         if self.configuration.local_infile is False:
             # Send empty packet to keep connection state OK
@@ -874,10 +936,10 @@ class SyncClient(BaseClient):
             error = OperationalError(f"Could not send file: {e}")
         except Exception as e:
             error = OperationalError(f"Error reading file '{filename}': {e}")
-        
+
         # Send empty packet to signal end of file transfer
         self.write_payload(bytearray(4), reset_sequence=False)
-        
+
         # Read server's response (OK or ERR packet)
         # This is necessary to keep connection state synchronized
         if remaining_packets:
@@ -885,17 +947,17 @@ class SyncClient(BaseClient):
             remaining_packets = remaining_packets[1:] if len(remaining_packets) > 1 else None
         else:
             response = self.read_payload()
-        
+
         if response[0] == 0x00:  # OK packet
             ok = _decode_ok_packet(response, self.context)
             if error:
                 raise error
             return ok, remaining_packets
-       
+
         # Raise error after reading response if file operation failed
         if error:
             raise error
-        
+
         # Check if server returned an error
         if response[0] == 0xFF:  # ERR packet
             raise _decode_error_packet(response, self.context).toError(self.exception_factory)
@@ -905,10 +967,10 @@ class SyncClient(BaseClient):
     def _validate_local_filename(self, sql: str, filename: str) -> bool:
         """Validate that filename matches LOAD DATA LOCAL INFILE query"""
         import re
-        
+
         # Escape backslashes in filename for regex
         escaped_filename = re.escape(filename.replace("\\", "\\\\"))
-        
+
         # Pattern to match LOAD DATA LOCAL INFILE with the specific filename.
         # The SQL keywords are matched case-insensitively, but the filename is
         # wrapped in a (?-i:...) group so it is matched case-SENSITIVELY
@@ -958,11 +1020,11 @@ class SyncClient(BaseClient):
         with self.lock:
             if self.closed:
                 return
-            
+
             # Clear prepared statement cache
             if self.prepared_statement_cache is not None:
                 self.prepared_statement_cache.clear()
-            
+
             # Send COM_QUIT packet to gracefully close the connection
             if self.connected and self.socket:
                 try:
@@ -990,7 +1052,7 @@ class SyncClient(BaseClient):
     def get_ssl_version(self) -> Optional[str]:
         """
         Get current TLS/SSL version
-        
+
         Returns:
             TLS version string (e.g., 'TLSv1.3') or None if not using SSL
         """
@@ -1011,7 +1073,7 @@ class SyncClient(BaseClient):
         return None
 
     def _cleanup_connection(self) -> None:
-        """Cleanup socket and stream resources"""       
+        """Cleanup socket and stream resources"""
         if hasattr(self, 'socket') and self.socket:
             try:
                 self.socket.close()
@@ -1019,7 +1081,7 @@ class SyncClient(BaseClient):
                 pass
             self.socket = None  # type: ignore[assignment]
         # Read buffer cleanup handled by garbage collection
-    
+
 
     def _ensure_default(self) -> None:
         """
@@ -1039,18 +1101,18 @@ class SyncClient(BaseClient):
             query_packet = QueryPacket.from_sql(sql_command)
             self.execute(query_packet, self.configuration)
 
-    
+
     # =========================================================================
     # Prepared Statements
     # =========================================================================
-  
+
     def _parse_prepare_response(self, packet: memoryview, sql: str) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet"""
         if len(packet) == 0:
             raise OperationalError("Empty prepare response packet")
-        
+
         packet_type = packet[0]
-        
+
         if packet_type == 0x00:
             if self.prepared_statement_cache is not None:
                 prepare_stmt_packet = CachedPrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)
@@ -1065,7 +1127,7 @@ class SyncClient(BaseClient):
 
                 if not self.context.isEofDeprecated():
                     self.read_payload()  # Skip EOF packet
-            
+
             # Read column metadata if present
             if prepare_stmt_packet.column_count > 0:
                 col_count = prepare_stmt_packet.column_count
@@ -1073,21 +1135,21 @@ class SyncClient(BaseClient):
                 for i in range(col_count):
                     columns.decode_column(i, self.read_payload(), self.context)
                 prepare_stmt_packet.columns = columns  # type: ignore[assignment]
-                
+
                 if not self.context.isEofDeprecated():
                     self.read_payload()  # Skip EOF packet
-            
+
             return prepare_stmt_packet
         elif packet_type == self.ERROR_PACKET:
             raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
         else:
             raise OperationalError(f"Unexpected prepare response packet type: {packet_type}")
-       
+
     def _close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
         """Close prepared statement on server (for cache eviction callback)"""
         if stmt.is_closed():
             return
-        
+
         try:
             if not self.closed:
                 from ..message.client.stmt_close_packet import StmtClosePacket
@@ -1096,4 +1158,4 @@ class SyncClient(BaseClient):
         except Exception:
             # Ignore errors when closing
             pass
-    
+

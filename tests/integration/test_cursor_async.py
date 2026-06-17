@@ -35,7 +35,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy251(self):
         cursor = self.connection.cursor()
-        x = cursor.nextset()
+        x = await cursor.nextset()
         self.assertEqual(x, None)
         await cursor.close()
 
@@ -444,7 +444,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("call p1()")
         row = await cursor.fetchone()
         self.assertEqual(row[0], 1)
-        cursor.nextset()
+        await cursor.nextset()
         row = await cursor.fetchone()
         self.assertEqual(row[0], 2)
         await cursor.close()
@@ -827,7 +827,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute(sql)
         await cursor.execute("call p1()")
 
-        cursor.nextset()
+        await cursor.nextset()
         row = await cursor.fetchone()
         self.assertEqual(row[0], 2)
         await cursor.close()
@@ -1300,7 +1300,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cursor.sp_outparams, True)
             row = await cursor.fetchone()
             self.assertEqual(row[0], "foobar")
-            cursor.nextset()
+            await cursor.nextset()
             await cursor.close()
 
             cursor = con.cursor(binary=True)
@@ -1329,7 +1329,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cursor.sp_outparams, False)
             row = await cursor.fetchone()
             self.assertEqual(row[0], "1")
-            cursor.nextset()
+            await cursor.nextset()
             self.assertEqual(cursor.sp_outparams, True)
             row = await cursor.fetchone()
             self.assertEqual(row[0], "foobar")

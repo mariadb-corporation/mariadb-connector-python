@@ -892,6 +892,70 @@ class AsyncClient(BaseClient):
                 break
         return results
 
+    async def read_next_result(self, is_binary: bool, config: Configuration,
+                               prepare_stmt_packet: Optional[PrepareStmtPacket] = None,
+                               sql: Optional[str] = None) -> Optional[Completion]:
+        """Read exactly one further result set from the wire."""
+        async with self.lock:
+            if self.closed:
+                raise OperationalError("Invalid connection or not connected")
+
+            context = self.context
+            read_payload = self.read_payload
+            try:
+                packet = await read_payload()
+                packet_type = packet[0]
+
+                if packet_type == self.OK_PACKET:
+                    return _decode_ok_packet(packet, context)
+                elif packet_type == self.ERROR_PACKET:
+                    raise _decode_error_packet(packet, context).toError(self.exception_factory)
+                elif packet_type == self.EOF_PACKET:
+                    return _decode_eof_packet(packet, context)
+                elif packet_type == self.LOCAL_INFILE_PACKET:
+                    completion, _packets = await self._handle_local_infile(packet, sql, None)
+                    return completion
+
+                parser = PayloadReader(packet)
+                column_count = parser.read_length_encoded_int()
+                assert column_count is not None
+                eof_deprecated = context.isEofDeprecated()
+
+                if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
+                    if prepare_stmt_packet is None or prepare_stmt_packet.columns is None:
+                        raise OperationalError(
+                            "Server omitted result-set metadata for a subsequent "
+                            "result set and no cached metadata is available")
+                    columns: ColumnsDefinition = prepare_stmt_packet.columns  # type: ignore[union-attr, assignment]
+                else:
+                    packets = await read_payload(column_count)
+                    columns = ColumnsDefinition(column_count)
+                    col_idx = 0
+                    while col_idx < column_count:
+                        if col_idx >= len(packets):
+                            packets.extend(await read_payload(column_count - col_idx))
+                        start, end = packets[col_idx]
+                        columns.decode_column(col_idx, self._recv_buf_mv[start:end], context)
+                        col_idx += 1
+                    if prepare_stmt_packet is not None:
+                        prepare_stmt_packet.columns = columns  # type: ignore[assignment]
+
+                if not eof_deprecated:
+                    await read_payload()
+
+                row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+
+                streaming_result = AsyncStreamingResult(read_payload,  # type: ignore[arg-type]
+                    context, columns, column_count, config, row_parser)
+                self._active_streaming_result = streaming_result
+                streaming_completion: OkPacket = OkPacket(0, 0, 0, 0, b'')
+                streaming_completion.result_set = streaming_result
+                return streaming_completion
+            except DatabaseError as e:
+                raise e
+            except Exception as e:
+                raise OperationalError(f"Reading next result set failed: {e}")
+
     async def _handle_local_infile(self, packet: memoryview, sql: Optional[str], remaining_packets: Optional[list[tuple[int, int]]]) -> tuple[OkPacket, Optional[list[tuple[int, int]]]]:
         """Handle LOAD DATA LOCAL INFILE request from server (async)
 

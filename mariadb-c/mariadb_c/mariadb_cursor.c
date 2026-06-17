@@ -45,10 +45,14 @@ static PyObject *MrdbCursor_set_field_count_from_connection(MrdbCursor *self, Py
 static PyObject *MrdbCursor_fetch_row_start(MrdbCursor *self);
 static PyObject *MrdbCursor_fetch_row_cont(MrdbCursor *self, PyObject *args);
 static PyObject *MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args);
+static PyObject *MrdbCursor_stmt_prepare_start(MrdbCursor *self);
+static PyObject *MrdbCursor_stmt_prepare_cont(MrdbCursor *self, PyObject *args);
 static PyObject *MrdbCursor_stmt_execute_start(MrdbCursor *self, PyObject *args);
 static PyObject *MrdbCursor_stmt_execute_cont(MrdbCursor *self, PyObject *args);
 static PyObject *MrdbCursor_stmt_fetch_start(MrdbCursor *self);
 static PyObject *MrdbCursor_stmt_fetch_cont(MrdbCursor *self, PyObject *args);
+static PyObject *MrdbCursor_async_next_result_start(MrdbCursor *self);
+static PyObject *MrdbCursor_async_next_result_cont(MrdbCursor *self, PyObject *args);
 
 /* Shared fetch function - used by both sync and async cursors */
 int MrdbCursor_fetchinternal(MrdbCursor *self);
@@ -67,6 +71,12 @@ MrdbCursor_seek(MrdbCursor *self,
 
 static PyObject *
 MrdbCursor_execute_bulk(MrdbCursor *self);
+
+static PyObject *
+MrdbCursor_prepare_bulk_only(MrdbCursor *self);
+
+static PyObject *
+MrdbCursor_finalize_bulk_result(MrdbCursor *self);
 
 void
 field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column);
@@ -173,6 +183,12 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"_prepare_stmt_only", (PyCFunction)MrdbCursor_prepare_stmt_only,
         METH_NOARGS,
         "Prepare statement without executing (shared)"},
+    {"_async_stmt_prepare_start", (PyCFunction)MrdbCursor_stmt_prepare_start,
+        METH_NOARGS,
+        "Start non-blocking prepared statement preparation"},
+    {"_async_stmt_prepare_cont", (PyCFunction)MrdbCursor_stmt_prepare_cont,
+        METH_VARARGS,
+        "Continue non-blocking prepared statement preparation"},
     {"_async_stmt_execute_start", (PyCFunction)MrdbCursor_stmt_execute_start,
         METH_NOARGS,
         "Start non-blocking prepared statement execution"},
@@ -185,6 +201,12 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"_async_stmt_fetch_cont", (PyCFunction)MrdbCursor_stmt_fetch_cont,
         METH_VARARGS,
         "Continue non-blocking prepared statement fetch"},
+    {"_async_next_result_start", (PyCFunction)MrdbCursor_async_next_result_start,
+        METH_NOARGS,
+        "Start non-blocking advance to the next result set"},
+    {"_async_next_result_cont", (PyCFunction)MrdbCursor_async_next_result_cont,
+        METH_VARARGS,
+        "Continue non-blocking advance to the next result set"},
     {"_detach_stmt", (PyCFunction)MrdbCursor_detach_stmt,
         METH_NOARGS,
         "Detach MYSQL_STMT into a PyCapsule for cache storage"},
@@ -209,6 +231,12 @@ static PyMethodDef MrdbCursor_Methods[] =
     {"_execute_bulk", (PyCFunction)MrdbCursor_execute_bulk,
         METH_NOARGS,
         NULL},
+    {"_prepare_bulk_only", (PyCFunction)MrdbCursor_prepare_bulk_only,
+        METH_NOARGS,
+        "Bulk-execute setup (init/bind/attrs) without the prepare+execute round-trip"},
+    {"_finalize_bulk_result", (PyCFunction)MrdbCursor_finalize_bulk_result,
+        METH_NOARGS,
+        "Post-(async)-bulk-execute result/affected-rows finalisation"},
     {"_clear_result", (PyCFunction)MrdbCursor_clear_result,
         METH_NOARGS,
         NULL},
@@ -1291,6 +1319,105 @@ MrdbCursor_nextset(MrdbCursor *self)
 }
 
 static PyObject *
+MrdbCursor_async_next_result_complete(MrdbCursor *self, int rc)
+{
+    if (rc > 0)
+    {
+        /* genuine server error advancing to the next result set */
+        if (self->is_text)
+            mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
+        else
+            mariadb_throw_exception(self->stmt, NULL, 1, NULL);
+        return NULL;
+    }
+    if (rc)
+    {
+        /* rc == -1: no more result sets */
+        Py_RETURN_FALSE;
+    }
+    /* rc == 0: a further result set is available */
+    if ((self->field_count= CURSOR_FIELD_COUNT(self)))
+    {
+        if (!MrdbCursor_InitResultSet(self))
+            return NULL;
+    }
+    else
+    {
+        self->fields= 0;
+    }
+    Py_RETURN_TRUE;
+}
+
+static PyObject *
+MrdbCursor_async_next_result_start(MrdbCursor *self)
+{
+    int status;
+    int rc;
+
+    MARIADB_CHECK_STMT(self);
+    if (PyErr_Occurred())
+        return NULL;
+
+    if (!self->is_text)
+    {
+        if (!self->stmt)
+            Py_RETURN_FALSE;
+        Py_BEGIN_ALLOW_THREADS;
+        status= mysql_stmt_next_result_start(&rc, self->stmt);
+        Py_END_ALLOW_THREADS;
+    }
+    else
+    {
+        if (self->result)
+        {
+            mysql_free_result(self->result);
+            self->result= NULL;
+        }
+        Py_BEGIN_ALLOW_THREADS;
+        status= mysql_next_result_start(&rc, self->connection->mysql);
+        Py_END_ALLOW_THREADS;
+    }
+
+    if (status == 0)
+        return MrdbCursor_async_next_result_complete(self, rc);
+
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbCursor_async_next_result_cont(MrdbCursor *self, PyObject *args)
+{
+    int wait_status;
+    int status;
+    int rc;
+
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+
+    MARIADB_CHECK_STMT(self);
+    if (PyErr_Occurred())
+        return NULL;
+
+    if (!self->is_text)
+    {
+        Py_BEGIN_ALLOW_THREADS;
+        status= mysql_stmt_next_result_cont(&rc, self->stmt, wait_status);
+        Py_END_ALLOW_THREADS;
+    }
+    else
+    {
+        Py_BEGIN_ALLOW_THREADS;
+        status= mysql_next_result_cont(&rc, self->connection->mysql, wait_status);
+        Py_END_ALLOW_THREADS;
+    }
+
+    if (status == 0)
+        return MrdbCursor_async_next_result_complete(self, rc);
+
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
 Mariadb_row_count(MrdbCursor *self)
 {
     if (!self->statement)
@@ -1629,6 +1756,65 @@ error:
 }
 
 static PyObject *
+MrdbCursor_prepare_bulk_only(MrdbCursor *self)
+{
+    MARIADB_CHECK_STMT(self);
+
+    if (PyErr_Occurred())
+    {
+        return NULL;
+    }
+
+    if (!self->data)
+    {
+        PyErr_SetString(PyExc_TypeError, "No data provided");
+        return NULL;
+    }
+
+    if (!self->stmt)
+    {
+        if (!(self->stmt= mysql_stmt_init(self->connection->mysql)))
+        {
+            mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
+            return NULL;
+        }
+    }
+    if (mariadb_check_bulk_parameters(self, self->data))
+        return NULL;
+
+    if (self->reprepare)
+    {
+        mysql_stmt_attr_set(self->stmt, STMT_ATTR_PREBIND_PARAMS, &self->paramcount);
+        mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_USER_DATA, (void *)self);
+        mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_PARAM, mariadb_param_update);
+    }
+    mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &self->array_size);
+
+    mysql_stmt_bind_param(self->stmt, self->params);
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+MrdbCursor_finalize_bulk_result(MrdbCursor *self)
+{
+    if ((self->field_count= CURSOR_FIELD_COUNT(self)))
+    {
+        if (!MrdbCursor_InitResultSet(self))
+        {
+            return NULL;
+        }
+    }
+    else
+    {
+        self->affected_rows= CURSOR_AFFECTED_ROWS(self);
+        self->lastrow_id= CURSOR_INSERT_ID(self);
+        MrdbCursor_FreeResultValues(self);
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
 {
     PyObject *List;
@@ -1734,8 +1920,6 @@ MrdbCursor_set_field_count_from_connection(MrdbCursor *self, PyObject *args)
 PyObject *
 MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args)
 {
-    int rc;
-
     MARIADB_CHECK_CONNECTION(self->connection, NULL);
 
     /* Initialize statement if needed */
@@ -1774,30 +1958,76 @@ MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args)
     /* Clear pending result sets */
     MrdbCursor_clear_result(self);
 
-    /* LIMITATION: mysql_stmt_prepare() is synchronous (no async version in MariaDB C API)
-     * For non-BULK servers, we must call it here and accept the event loop blocking.
-     * For BULK servers, execute_direct handles preparation asynchronously.
-     *
-     * This is acceptable because:
-     * 1. Statement preparation is typically fast (SQL parsing + metadata)
-     * 2. BULK-capable servers (MariaDB 10.2+) use async execute_direct instead
-     * 3. The bulk of network I/O happens during execute and fetch, which are async
-     */
-    if (self->reprepare)
-    {
-        rc = mysql_stmt_prepare(self->stmt, self->statement,
-                                (unsigned long)self->statement_len);
-        if (rc)
-        {
+   Py_RETURN_NONE;
+}
+
+static PyObject *
+MrdbCursor_stmt_prepare_start(MrdbCursor *self)
+{
+    int status;
+    int rc;
+
+    if (!self->stmt) {
+        PyErr_SetString(PyExc_RuntimeError, "No prepared statement available");
+        return NULL;
+    }
+
+    MARIADB_CHECK_CONNECTION(self->connection, NULL);
+
+    if (!self->reprepare)
+        Py_RETURN_NONE;
+
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_stmt_prepare_start(&rc, self->stmt, self->statement,
+                                      (unsigned long)self->statement_len);
+    Py_END_ALLOW_THREADS;
+
+    if (status == 0) {
+        /* FAST PATH: completed immediately */
+        if (rc) {
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
             return NULL;
         }
-
         /* Set field count after preparation */
         self->field_count = mysql_stmt_field_count(self->stmt);
+        Py_RETURN_NONE;
     }
 
-    Py_RETURN_NONE;
+    return PyLong_FromLong(status);
+}
+
+static PyObject *
+MrdbCursor_stmt_prepare_cont(MrdbCursor *self, PyObject *args)
+{
+    int wait_status;
+    int status;
+    int rc;
+
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+
+    if (!self->stmt) {
+        PyErr_SetString(PyExc_RuntimeError, "No prepared statement available");
+        return NULL;
+    }
+
+    MARIADB_CHECK_CONNECTION(self->connection, NULL);
+
+    Py_BEGIN_ALLOW_THREADS;
+    status = mysql_stmt_prepare_cont(&rc, self->stmt, wait_status);
+    Py_END_ALLOW_THREADS;
+
+    if (status == 0) {
+        if (rc) {
+            mariadb_throw_exception(self->stmt, NULL, 1, NULL);
+            return NULL;
+        }
+        /* Set field count after preparation completes */
+        self->field_count = mysql_stmt_field_count(self->stmt);
+        Py_RETURN_NONE;
+    }
+
+    return PyLong_FromLong(status);
 }
 
 /* Async prepared statement execution methods */

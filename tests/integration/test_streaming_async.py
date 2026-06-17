@@ -14,7 +14,7 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.connection = await mariadb.AsyncConnection.connect(**conf())
         self.cursor = self.connection.cursor()
-        
+
         # Create test table with data
         await self.cursor.execute("DROP TABLE IF EXISTS test_streaming_async")
         await self.cursor.execute("""
@@ -23,7 +23,7 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
                 value VARCHAR(50)
             )
         """)
-        
+
         # Insert test data (20 rows)
         for i in range(1, 21):
             await self.cursor.execute(
@@ -42,19 +42,96 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
             await self.cursor.close()
             await self.connection.close()
 
+    async def test_streaming_multi_resultset(self):
+        async with await mariadb.asyncConnect(**conf()) as con:
+            setup = con.cursor()
+            await setup.execute("DROP PROCEDURE IF EXISTS p_stream_multi")
+            await setup.execute(
+                "CREATE PROCEDURE p_stream_multi()\n"
+                "BEGIN\n"
+                "  SELECT 100 AS a;\n"
+                "  SELECT 200 AS b;\n"
+                "END")
+            await setup.close()
+
+            try:
+                cursor = con.cursor(buffered=False)
+                await cursor.execute("CALL p_stream_multi()")
+
+                row = await cursor.fetchone()
+                self.assertEqual(row[0], 100)
+
+                self.assertTrue(await cursor.nextset())
+
+                row = await cursor.fetchone()
+                self.assertEqual(row[0], 200)
+
+                while await cursor.nextset() is not None:
+                    pass
+                await cursor.close()
+            finally:
+                cleanup = con.cursor()
+                await cleanup.execute("DROP PROCEDURE IF EXISTS p_stream_multi")
+                await cleanup.close()
+
+    async def test_close_mid_multi_resultset(self):
+        async with await mariadb.asyncConnect(**conf()) as con:
+            setup = con.cursor()
+            await setup.execute("DROP PROCEDURE IF EXISTS p_close_multi")
+            await setup.execute(
+                "CREATE PROCEDURE p_close_multi()\n"
+                "BEGIN\n"
+                "  SELECT 1 AS a UNION SELECT 2 UNION SELECT 3;\n"
+                "  SELECT 10 AS b;\n"
+                "END")
+            await setup.close()
+            try:
+                cursor = con.cursor(buffered=False)
+                await cursor.execute("CALL p_close_multi()")
+                # Read only one row of the first set, leaving rows + a whole
+                # trailing result set unread, then close without draining.
+                row = await cursor.fetchone()
+                self.assertEqual(row[0], 1)
+                await cursor.close()
+
+                # The connection must still be usable for a new command.
+                cursor2 = con.cursor()
+                await cursor2.execute("SELECT 42")
+                self.assertEqual((await cursor2.fetchone())[0], 42)
+                await cursor2.close()
+            finally:
+                cleanup = con.cursor()
+                await cleanup.execute("DROP PROCEDURE IF EXISTS p_close_multi")
+                await cleanup.close()
+
+    async def test_streaming_resultless_ok_midstream(self):
+        if not is_async_native():
+            self.skipTest("multi-statement requires the pure-Python async client")
+        async with await mariadb.asyncConnect(**conf()) as con:
+            cursor = con.cursor(buffered=False)
+            await cursor.execute("SELECT 100 AS a; SET @x:=1; SELECT 200 AS b")
+            values = [(await cursor.fetchone())[0]]
+            while await cursor.nextset() is not None:
+                if cursor.field_count:
+                    row = await cursor.fetchone()
+                    if row is not None:
+                        values.append(row[0])
+            self.assertEqual(values, [100, 200])
+            await cursor.close()
+
     async def test_fetch_remaining_buffered(self):
         """Test fetch_remaining on buffered cursor"""
         cursor = self.connection.cursor(buffered=True)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Fetch a few rows
         row1 = await cursor.fetchone()
         self.assertEqual(row1[0], 1)
         row2 = await cursor.fetchone()
         self.assertEqual(row2[0], 2)
-        
+
         await cursor.execute("SELECT 10")
-        
+
         row1 = await cursor.fetchone()
         self.assertEqual(row1[0], 10)
         await cursor.close()
@@ -63,13 +140,13 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         """Test fetch_remaining on streaming cursor"""
         cursor = self.connection.cursor(buffered=False)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Fetch a few rows
         row1 = await cursor.fetchone()
         self.assertEqual(row1[0], 1)
         row2 = await cursor.fetchone()
         self.assertEqual(row2[0], 2)
-        
+
         await cursor.execute("SELECT 10")
         row1 = await cursor.fetchone()
         self.assertEqual(row1[0], 10)
@@ -79,112 +156,112 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         """Test scroll with relative mode on buffered cursor"""
         cursor = self.connection.cursor(buffered=True)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Scroll forward 5 rows
         await cursor.scroll(5, mode='relative')
         row = await cursor.fetchone()
         self.assertEqual(row[0], 6)
-        
+
         # Scroll forward 3 more rows
         await cursor.scroll(3, mode='relative')
         row = await cursor.fetchone()
         self.assertEqual(row[0], 10)
-        
+
         # Scroll backward 5 rows
         await cursor.scroll(-5, mode='relative')
         row = await cursor.fetchone()
         self.assertEqual(row[0], 6)
-        
+
         # Scroll 0 (no movement)
         await cursor.scroll(0, mode='relative')
         row = await cursor.fetchone()
         self.assertEqual(row[0], 7)
-        
+
         await cursor.close()
 
     async def test_scroll_absolute_buffered(self):
         """Test scroll with absolute mode on buffered cursor"""
         cursor = self.connection.cursor(buffered=True)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Scroll to position 10 (0-indexed, so row 10)
         await cursor.scroll(10, mode='absolute')
         row = await cursor.fetchone()
         self.assertEqual(row[0], 11)
-        
+
         # Scroll to position 0 (before first row)
         await cursor.scroll(0, mode='absolute')
         row = await cursor.fetchone()
         self.assertEqual(row[0], 1)
-        
+
         # Scroll to position 15
         await cursor.scroll(15, mode='absolute')
         row = await cursor.fetchone()
         self.assertEqual(row[0], 16)
-        
+
         await cursor.close()
 
     async def test_scroll_invalid_mode_buffered(self):
         """Test scroll with invalid mode on buffered cursor"""
         cursor = self.connection.cursor(buffered=True)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Invalid mode should raise ValueError
         with self.assertRaises(mariadb.ProgrammingError) as cm:
             await cursor.scroll(5, mode='invalid')
         self.assertIn("Invalid", str(cm.exception))
-        
+
         await cursor.close()
 
     async def test_scroll_out_of_range_buffered(self):
         """Test scroll out of range on buffered cursor"""
         cursor = self.connection.cursor(buffered=True)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Scroll past end
         with self.assertRaises(mariadb.ProgrammingError) as cm:
             await cursor.scroll(100, mode='relative')
         self.assertIn("out of range", str(cm.exception))
-        
+
         # Scroll before start with absolute
         with self.assertRaises(mariadb.ProgrammingError) as cm:
             await cursor.scroll(-5, mode='absolute')
         self.assertIn("out of range", str(cm.exception))
-        
+
         await cursor.close()
 
     async def test_scroll_relative_streaming(self):
         """Test scroll with relative mode on streaming cursor"""
         cursor = self.connection.cursor(buffered=False)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Fetch first row
         row = await cursor.fetchone()
         self.assertEqual(row[0], 1)
-        
+
         # Scroll forward 5 rows (skips rows 2-6)
         if is_async_native():
             await cursor.scroll(5, mode='relative')
             row = await cursor.fetchone()
             self.assertEqual(row[0], 7)
-            
+
             # Scroll forward 3 more rows (skips rows 8-10)
             await cursor.scroll(3, mode='relative')
             row = await cursor.fetchone()
             self.assertEqual(row[0], 11)
-            
+
             # Scroll 0 (no movement)
             await cursor.scroll(0, mode='relative')
             row = await cursor.fetchone()
             self.assertEqual(row[0], 12)
-        
+
         await cursor.close()
 
     async def test_scroll_absolute_streaming_not_supported(self):
         """Test that absolute mode is not supported on streaming cursor"""
         cursor = self.connection.cursor(buffered=False)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Absolute mode should raise ValueError
         with self.assertRaises(mariadb.ProgrammingError) as cm:
             await cursor.scroll(5, mode='absolute')
@@ -192,64 +269,64 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Streaming cursors only support relative scroll mode", str(cm.exception))
         else:
             self.assertIn("This method is available only for cursors with a buffered result set", str(cm.exception))
-        
+
         await cursor.close()
 
     async def test_scroll_negative_streaming_not_supported(self):
         """Test that negative scroll is not supported on streaming cursor"""
         cursor = self.connection.cursor(buffered=False)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Fetch a row first
         await cursor.fetchone()
-        
+
         # Negative scroll should raise ValueError
         with self.assertRaises(mariadb.ProgrammingError) as cm:
             await cursor.scroll(-1, mode='relative')
-        
+
         await cursor.close()
 
     async def test_scroll_past_end_streaming(self):
         """Test scrolling past end on streaming cursor"""
         cursor = self.connection.cursor(buffered=False)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id LIMIT 5")
-        
+
         # Fetch first row
         await cursor.fetchone()
-        
+
         # Try to scroll past end
         with self.assertRaises(mariadb.ProgrammingError) as cm:
             await cursor.scroll(10, mode='relative')
-        
+
         await cursor.close()
 
     async def test_scroll_invalid_mode_streaming(self):
         """Test scroll with invalid mode on streaming cursor"""
         cursor = self.connection.cursor(buffered=False)
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Invalid mode should raise ValueError
         with self.assertRaises(mariadb.ProgrammingError) as cm:
             await cursor.scroll(5, mode='invalid')
-        
+
         await cursor.close()
 
     async def test_streaming_result_consumed_before_new_query(self):
         """Test that streaming results are consumed before executing new query"""
         cursor = self.connection.cursor(buffered=False)
-        
+
         # Execute first query
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
-        
+
         # Fetch only a few rows
         await cursor.fetchone()
         await cursor.fetchone()
-        
+
         # Execute new query - should consume remaining rows from first query
         await cursor.execute("SELECT COUNT(*) FROM test_streaming_async")
         row = await cursor.fetchone()
         self.assertEqual(row[0], 20)
-        
+
         await cursor.close()
 
     async def test_buffered_vs_streaming_behavior(self):
@@ -258,15 +335,15 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         buffered_cursor = self.connection.cursor(buffered=True)
         await buffered_cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
         self.assertEqual(buffered_cursor.rowcount, 20)
-        
+
         # Streaming cursor - rows loaded on demand
         streaming_cursor = self.connection.cursor(buffered=False)
         await streaming_cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
         self.assertEqual(streaming_cursor.rowcount, 0)
-        
+
         # Fetch all rows
         rows = await streaming_cursor.fetchall()
         self.assertEqual(len(rows), 20)
-        
+
         await buffered_cursor.close()
         await streaming_cursor.close()
