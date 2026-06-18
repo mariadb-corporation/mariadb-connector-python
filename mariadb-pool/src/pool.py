@@ -389,10 +389,13 @@ class ConnectionPool:
 
                 # Try to create a new connection if we're under max_size
                 if self.config.max_size and len(self._all_connections) < self.config.max_size:
+                    before = len(self._all_connections)
                     self._fill_free_pool()
-                    continue
+                    if self._free or len(self._all_connections) > before:
+                        continue
 
-                # No free connections and at max capacity, wait for one to be released
+                # No free connection (pool exhausted, or one could not be created
+                # right now) -- wait for a release, bounded by the acquire timeout.
                 if deadline:
                     remaining = deadline - time.time()
                     if remaining <= 0:
@@ -723,10 +726,13 @@ class AsyncConnectionPool:
 
                 # Try to create a new connection if we're under max_size
                 if self.config.max_size and len(self._all_connections) < self.config.max_size:
+                    before = len(self._all_connections)
                     await self._fill_free_pool()
-                    continue
+                    if self._free or len(self._all_connections) > before:
+                        continue
 
-                # No free connections and at max capacity, wait for one to be released
+                # No free connection (pool exhausted, or one could not be created
+                # right now) -- wait for a release, bounded by the acquire timeout.
                 if deadline:
                     remaining = deadline - time.time()
                     if remaining <= 0:
