@@ -267,9 +267,10 @@ jobs:
           # Persistent kernel setting (carries across step shells)
           sudo sysctl -w kernel.core_pattern="$GITHUB_WORKSPACE/core.%e.%p"
           echo "Core pattern: $(cat /proc/sys/kernel/core_pattern)"
-          # Install debugging tools once, up front, so they are available even
-          # if a later test step crashes and short-circuits the workflow.
-          sudo apt-get update && sudo apt-get install -y gdb python3-dbg
+          # gdb / python3-dbg are intentionally NOT installed here. They are only
+          # needed to read a core dump, which only exists when a test crashes.
+          # The "Analyze core dumps" step installs them on demand, so the ~85 MB
+          # apt download stays off the common (no-crash) path.
 
       - name: Run SQLAlchemy tests (C extension)
         # See note above: ssl=false; default Python 3.13 only (PyPy fails).
@@ -388,27 +389,27 @@ jobs:
         if: ${{ always() && startsWith(matrix.os, 'ubuntu') }}
         shell: bash
         run: |
-          # Make sure gdb is installed even if the SQLAlchemy step crashed
-          # before the "Enable core dumps" step ran (e.g. on a matrix entry
-          # where SQLAlchemy is skipped, or if the env changed).
-          if ! command -v gdb >/dev/null 2>&1; then
-            sudo apt-get update && sudo apt-get install -y gdb python3-dbg || true
-          fi
           echo "=== Searching for core dumps ==="
           # -type f so we don't pick up the sqlalchemy/doc/build/core directory.
           mapfile -t cores < <(find . -type f \( -name "core" -o -name "core.*" \))
           if [ ${#cores[@]} -eq 0 ]; then
             echo "No core dump found under $(pwd)"
+          else
+            # A crash actually happened: only now pull in the ~85 MB of debug
+            # tooling (gdb + python3-dbg) needed to read the dump.
+            if ! command -v gdb >/dev/null 2>&1; then
+              sudo apt-get update && sudo apt-get install -y gdb python3-dbg || true
+            fi
+            for core_file in "${cores[@]}"; do
+              echo "Found core dump: $core_file"
+              echo "=== Core dump info ==="
+              file "$core_file"
+              echo "=== Backtrace from core dump ==="
+              gdb -batch -ex "thread apply all bt" -ex "quit" python3 "$core_file" 2>&1 || true
+              echo "=== Python-specific backtrace ==="
+              gdb -batch -ex "py-bt" -ex "quit" python3 "$core_file" 2>&1 || true
+            done
           fi
-          for core_file in "${cores[@]}"; do
-            echo "Found core dump: $core_file"
-            echo "=== Core dump info ==="
-            file "$core_file"
-            echo "=== Backtrace from core dump ==="
-            gdb -batch -ex "thread apply all bt" -ex "quit" python3 "$core_file" 2>&1 || true
-            echo "=== Python-specific backtrace ==="
-            gdb -batch -ex "py-bt" -ex "quit" python3 "$core_file" 2>&1 || true
-          done
           # Also check system core dumps
           if compgen -G "/var/crash/*" > /dev/null; then
             echo "=== System crash dumps ==="
