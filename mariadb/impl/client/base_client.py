@@ -713,25 +713,26 @@ class BaseClient(ABC):
             length_byte = data_bytes[pos]
             if (length_byte < 0xFB):
                 length = length_byte
-                pos += 1
+                vstart = pos + 1
             elif (length_byte == 0xFB):
                 pos += 1
                 continue
             elif length_byte == 0xFC:
                 length = _unpack_H(data_bytes, pos + 1)[0]
-                pos += 3
+                vstart = pos + 3
             elif length_byte == 0xFD:
                 length = _unpack_I(data_bytes, pos + 1)[0] & 0xFFFFFF
-                pos += 4
+                vstart = pos + 4
             else:
                 length = _unpack_Q(data_bytes, pos + 1)[0]
-                pos += 9
+                vstart = pos + 9
+            pos = vstart + length
 
             col_type = col_types[i]
             if col_type in _TEXT_INT_TYPES:
-                row_values[i] = int(data_bytes[pos:pos + length])
+                row_values[i] = int(data_bytes[vstart:pos])
             elif col_type in _TEXT_STRING_TYPES:
-                val = data_bytes[pos:pos + length]
+                val = data_bytes[vstart:pos]
                 if col_special_formats[i]:
                     ext_fmt = col_ext_type_formats[i]
                     if ext_fmt == b'json':
@@ -751,20 +752,20 @@ class BaseClient(ABC):
                 else:
                     row_values[i] = val.decode('utf-8', errors='ignore')
             elif col_type in _TEXT_FLOAT_TYPES:
-                row_values[i] = float(data_bytes[pos:pos + length].decode('ascii'))
+                row_values[i] = float(data_bytes[vstart:pos].decode('ascii'))
             elif col_type in _TEXT_DECIMAL_TYPES:
-                row_values[i] = decimal.Decimal(data_bytes[pos:pos + length].decode('ascii'))
+                row_values[i] = decimal.Decimal(data_bytes[vstart:pos].decode('ascii'))
             elif col_type in _TEXT_DATE_TYPES:
                 if length == 10:
                     try:
-                        year_b, _, month_b, _, day_b = _unpack_DATE_TEXT(data_bytes, pos)
+                        year_b, _, month_b, _, day_b = _unpack_DATE_TEXT(data_bytes, vstart)
                         row_values[i] = datetime.date(int(year_b), int(month_b), int(day_b))
                     except (ValueError, struct.error):
                         row_values[i] = None
                 else:
                     row_values[i] = None
             elif col_type == FIELD_TYPE.TIME:
-                time_str = data_bytes[pos:pos + length].decode('ascii')
+                time_str = data_bytes[vstart:pos].decode('ascii')
                 negative = time_str[0] == '-'
                 if negative:
                     time_str = time_str[1:]
@@ -782,9 +783,9 @@ class BaseClient(ABC):
             elif col_type in _TEXT_DATETIME_TYPES:
                 if length >= 19:
                     try:
-                        year_b, _, month_b, _, day_b, _, hour_b, _, min_b, _, sec_b = _unpack_DATETIME_TEXT(data_bytes, pos)
-                        if length > 19 and data_bytes[pos+19] == 46:  # '.'
-                            microseconds = int(data_bytes[pos+20:pos+length].ljust(6, b'0'))
+                        year_b, _, month_b, _, day_b, _, hour_b, _, min_b, _, sec_b = _unpack_DATETIME_TEXT(data_bytes, vstart)
+                        if length > 19 and data_bytes[vstart+19] == 46:  # '.'
+                            microseconds = int(data_bytes[vstart+20:pos].ljust(6, b'0'))
                         else:
                             microseconds = 0
                         row_values[i] = datetime.datetime(
@@ -798,9 +799,7 @@ class BaseClient(ABC):
             elif col_type == FIELD_TYPE.NULL:
                 row_values[i] = None
             elif col_type == FIELD_TYPE.JSON:
-                row_values[i] = data_bytes[pos:pos + length].decode('utf-8', errors='ignore')
-
-            pos += length
+                row_values[i] = data_bytes[vstart:pos].decode('utf-8', errors='ignore')
 
         return tuple(row_values)
 
@@ -851,18 +850,19 @@ class BaseClient(ABC):
                 length = data[pos]
 
                 if (length < 0xFB):
-                    pos += 1
+                    vstart = pos + 1
                 elif length == 0xFC:
                     length = _unpack_H(data, pos + 1)[0]
-                    pos += 3
+                    vstart = pos + 3
                 elif length == 0xFD:
                     length = _unpack_I(data, pos + 1)[0] & 0xFFFFFF
-                    pos += 4
+                    vstart = pos + 4
                 else:  # 0xFE
                     length = _unpack_Q(data, pos + 1)[0]
-                    pos += 9
+                    vstart = pos + 9
+                pos = vstart + length
 
-                val = bytes(data[pos:pos + length])
+                val = bytes(data[vstart:pos])
                 if col_special_formats[i]:
                     if col_ext_type_formats[i] == b'json':
                         row_values[i] = val.decode('utf-8')
@@ -878,7 +878,6 @@ class BaseClient(ABC):
                     row_values[i] = val
                 else:
                     row_values[i] = val.decode('utf-8', errors='ignore')
-                pos += length
 
             elif field_type == FIELD_TYPE.TINY:
                 if (col_flags[i] & _UNSIGNED) != 0:
@@ -901,11 +900,12 @@ class BaseClient(ABC):
             elif field_type in _BIN_DECIMAL_TYPES:
                 # Decimal as length-encoded string
                 length = data[pos]
-                pos += 1
+                vstart = pos + 1
                 if length > 0:
-                    row_values[i] = decimal.Decimal(data[pos:pos + length].tobytes().decode('ascii'))
-                    pos += length
+                    pos = vstart + length
+                    row_values[i] = decimal.Decimal(data[vstart:pos].tobytes().decode('ascii'))
                 else:
+                    pos = vstart
                     row_values[i] = decimal.Decimal('0')
             elif field_type in _BIN_DATE_TYPES:
                 length_byte = data[pos]
