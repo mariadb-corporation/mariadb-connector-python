@@ -13,6 +13,7 @@ from mariadb_shared.exceptions import (
     Error, ProgrammingError,
 )
 from mariadb_shared.sync_connection_common import SyncConnectionCommon
+from mariadb_shared.validators import validate_bool
 
 # Import mariadbapi_version from C extension
 from mariadb_c._mariadb import mariadbapi_version
@@ -177,11 +178,11 @@ class Connection(CConnection, SyncConnectionCommon):
         self._pooled_connection = None
         self._active_streaming_result = None
 
-        autocommit = kwargs.pop("autocommit", False)
+        autocommit = validate_bool(kwargs.pop("autocommit", False), "autocommit")
         kwargs.pop("reconnect", None)
         converter = kwargs.pop("converter", None)
-        self._binary = bool(kwargs.pop("binary", False))
-        cache_prep_stmts: bool = bool(kwargs.pop("cache_prep_stmts", True))
+        self._binary = validate_bool(kwargs.pop("binary", False), "binary")
+        cache_prep_stmts: bool = validate_bool(kwargs.pop("cache_prep_stmts", True), "cache_prep_stmts")
         prep_stmt_cache_size: int = int(kwargs.pop("prep_stmt_cache_size", 100))
 
         # socket_timeout is a pure-Python alias; map it to read_timeout and
@@ -210,6 +211,11 @@ class Connection(CConnection, SyncConnectionCommon):
                 raise ProgrammingError("Host failover list requires "
                                                "MariaDB Connector/C 3.3.0 "
                                                "or newer")
+
+        # loosly match values True/'true'/1/'1'→True, False/'false'/0/'0'→False, None→None, and raise for anything else.
+        for _bk in ("ssl", "ssl_verify_cert", "compress", "local_infile"):
+            if _bk in kwargs and kwargs[_bk] is not None and not isinstance(kwargs[_bk], dict):
+                kwargs[_bk] = validate_bool(kwargs[_bk], _bk)
 
         # Initialize using parent C extension class
         super().__init__(*args, **kwargs)

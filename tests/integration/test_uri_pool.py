@@ -35,10 +35,15 @@ def build_uri(config, scheme='mariadb', database=None, query_params=None):
     else:
         uri = f"{scheme}://{auth}@{host}:{port}"
     
-    # Add query parameters if provided
-    if query_params:
-        uri += "?" + query_params
-    
+    # Honour the suite's TLS setting (ssl=False by default) unless the caller
+    # already set ssl. Without this the URI connects with the secure-by-default
+    # ssl=True and fails on servers without TLS (MaxScale, MariaDB 10.x).
+    params = [query_params] if query_params else []
+    if 'ssl' in config and 'ssl=' not in (query_params or ''):
+        params.append(f"ssl={'true' if config['ssl'] else 'false'}")
+    if params:
+        uri += "?" + "&".join(params)
+
     return uri
 
 
@@ -289,6 +294,7 @@ class TestURIPool(unittest.TestCase):
             password=config.get('password', ''),
             database=config.get('database', 'test'),
             port=config.get('port', 3306),
+            ssl=config.get('ssl', False),
             pool_size=3,
             acquire_timeout=1
         ) as pool:

@@ -4,6 +4,7 @@
 from typing import Callable, Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
 from .host_address import HostAddress
+from mariadb_shared.validators import validate_bool
 
 
 @dataclass
@@ -25,8 +26,8 @@ class Configuration:
     socket_timeout: float = 30  # 30 seconds
     connect_timeout: float = 10  # 10 seconds
     
-    # SSL parameters
-    ssl: bool = False
+    # SSL parameters, Secure by default
+    ssl: bool = True
     ssl_key: Optional[str] = None
     ssl_ca: Optional[str] = None
     ssl_cert: Optional[str] = None
@@ -34,7 +35,7 @@ class Configuration:
     ssl_cipher: Optional[str] = None
     ssl_capath: Optional[str] = None
     ssl_crlpath: Optional[str] = None
-    ssl_verify_cert: bool = False
+    ssl_verify_cert: bool = True
     tls_version: Optional[str] = None  # TLS version: 'TLSv1.2', 'TLSv1.3' or 'TLSv1.2,TLSv1.3' (automatically enables SSL)
     
     # Connection behavior
@@ -147,7 +148,7 @@ class Configuration:
         
         # SSL parameters
         if 'ssl' in params or 'use_ssl' in params:
-            config.ssl = bool(params.get('ssl', params.get('use_ssl', False)))
+            config.ssl = validate_bool(params.get('ssl', params.get('use_ssl')), 'ssl')
         if 'ssl_key' in params:
             config.ssl_key = params['ssl_key']
         if 'ssl_ca' in params:
@@ -163,7 +164,7 @@ class Configuration:
         if 'ssl_crlpath' in params:
             config.ssl_crlpath = params['ssl_crlpath']
         if 'ssl_verify_cert' in params:
-            config.ssl_verify_cert = bool(params['ssl_verify_cert'])
+            config.ssl_verify_cert = validate_bool(params['ssl_verify_cert'], 'ssl_verify_cert')
         if 'tls_version' in params:
             config.tls_version = params['tls_version']
             # Automatically enable SSL if tls_version is specified
@@ -172,17 +173,17 @@ class Configuration:
         
         # Connection behavior
         if 'autocommit' in params:
-            config.autocommit = bool(params['autocommit'])
+            config.autocommit = validate_bool(params['autocommit'], 'autocommit')
         if 'read_only' in params:
-            config.read_only = bool(params['read_only'])
+            config.read_only = validate_bool(params['read_only'], 'read_only')
         
         # Protocol parameters
         if 'compress' in params:
-            config.compress = bool(params['compress'])
+            config.compress = validate_bool(params['compress'], 'compress')
         if 'binary' in params:
-            config.binary = bool(params['binary'])
+            config.binary = validate_bool(params['binary'], 'binary')
         if 'local_infile' in params:
-            config.local_infile = bool(params['local_infile']) if params['local_infile'] is not None else None
+            config.local_infile = validate_bool(params['local_infile'], 'local_infile') if params['local_infile'] is not None else None
         
         # Timeouts
         if 'query_timeout' in params:
@@ -200,21 +201,21 @@ class Configuration:
         
         # Result format options
         if 'named_tuple' in params:
-            config.named_tuple = bool(params['named_tuple'])
+            config.named_tuple = validate_bool(params['named_tuple'], 'named_tuple')
         if 'dictionary' in params:
-            config.dictionary = bool(params['dictionary'])
+            config.dictionary = validate_bool(params['dictionary'], 'dictionary')
         if 'native_object' in params:
-            config.native_object = bool(params['native_object'])
+            config.native_object = validate_bool(params['native_object'], 'native_object')
         
         # Prepared statement caching
         if 'cache_prep_stmts' in params:
-            config.cache_prep_stmts = bool(params['cache_prep_stmts'])
+            config.cache_prep_stmts = validate_bool(params['cache_prep_stmts'], 'cache_prep_stmts')
         if 'prep_stmt_cache_size' in params:
             config.prep_stmt_cache_size = int(params['prep_stmt_cache_size'])
         
         # Pipeline option
         if 'pipeline' in params:
-            config.pipeline = bool(params['pipeline'])
+            config.pipeline = validate_bool(params['pipeline'], 'pipeline')
         
         # Client capabilities
         if 'client_flag' in params:

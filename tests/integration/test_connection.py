@@ -63,6 +63,7 @@ class TestConnection(unittest.TestCase):
         f.close()
 
         new_conn = mariadb.connect(user=default_conf["user"], ssl=True,
+                                     ssl_verify_cert=False,
                                      default_file="./client.cnf")
         self.assertEqual(new_conn.database, default_conf["database"])
         del new_conn
@@ -96,7 +97,7 @@ class TestConnection(unittest.TestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE test has no SSL on port by default")
         default_conf = conf()
-        conn = mariadb.connect(**default_conf, tls_version="TLSv1.2")
+        conn = mariadb.connect(**default_conf, tls_version="TLSv1.2", ssl_verify_cert=False)
         cursor = conn.cursor()
         cursor.execute("SHOW STATUS LIKE 'ssl_version'")
         row = cursor.fetchone()
@@ -356,7 +357,8 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn._tls_verify_status, None)
         conn.close()
         default_conf= conf()
-        default_conf["ssl"] = True 
+        default_conf["ssl"] = True
+        default_conf["ssl_verify_cert"] = False
         conn= mariadb.connect(**default_conf)
         self.assertNotEqual(conn._tls_verify_status, None)
         conn.close()
@@ -369,9 +371,10 @@ class TestConnection(unittest.TestCase):
             self.skipTest("Requires C/C 3.4.2 or newer")
         default_conf= conf()
         default_conf["ssl"] = True
+        default_conf["ssl_verify_cert"] = False
         conn= mariadb.connect(**default_conf)
         self.assertEqual(conn._tls, True)
-        
+
         # Verify TLS cipher and version are set
         self.assertIsNotNone(conn.tls_cipher)
         self.assertIsNotNone(conn.tls_version)
@@ -965,7 +968,8 @@ class TestConnection(unittest.TestCase):
                 f"GRANT SELECT ON `{conf()['database']}`.* "
                 f"TO 'lenenc_cu_user'{get_host_suffix()}"
             )
-            conn = create_connection()
+            # ssl disabled: change_user re-auth can't re-validate a self-signed (zero-conf) cert
+            conn = create_connection({'ssl': False})
             try:
                 conn.change_user('lenenc_cu_user', long_password, conf()['database'])
                 self.assertEqual(conn.user, 'lenenc_cu_user')

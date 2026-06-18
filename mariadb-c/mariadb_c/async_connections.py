@@ -23,6 +23,7 @@ from mariadb_shared.exceptions import (
     Error, ProgrammingError, OperationalError,
 )
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
+from mariadb_shared.validators import validate_bool
 
 # Import mariadbapi_version from C extension
 from mariadb_c._mariadb import mariadbapi_version
@@ -83,13 +84,13 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._write_event = None
         
         # Extract parameters that need special handling (use .pop() like sync)
-        self._autocommit = kwargs.pop("autocommit", False)
+        self._autocommit = validate_bool(kwargs.pop("autocommit", False), "autocommit")
         kwargs.pop("reconnect", None)
         self._converter_param = kwargs.pop("converter", None)
-        self._binary = bool(kwargs.pop("binary", False))
+        self._binary = validate_bool(kwargs.pop("binary", False), "binary")
         # Remove debug parameter that C extension doesn't support
         kwargs.pop("debug", None)
-        self._cache_prep_stmts: bool = bool(kwargs.pop("cache_prep_stmts", True))
+        self._cache_prep_stmts: bool = validate_bool(kwargs.pop("cache_prep_stmts", True), "cache_prep_stmts")
         self._prep_stmt_cache_size: int = int(kwargs.pop("prep_stmt_cache_size", 100))
         
         # Handle SSL dictionary for compatibility (mariadb-c compatibility)
@@ -112,7 +113,13 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
                 kwargs['ssl_verify_cert'] = ssl_dict['verify_cert']
             # Set ssl to True to enable SSL
             kwargs['ssl'] = True
-        
+
+        # Normalize boolean connection options to the same accepted values as the
+        # pure-Python client before handing them to the C connect.
+        for _bk in ("ssl", "ssl_verify_cert", "compress", "local_infile"):
+            if _bk in kwargs and kwargs[_bk] is not None and not isinstance(kwargs[_bk], dict):
+                kwargs[_bk] = validate_bool(kwargs[_bk], _bk)
+
         # Validate host parameter (same as sync)
         if "host" in kwargs:
             host = kwargs.get("host")

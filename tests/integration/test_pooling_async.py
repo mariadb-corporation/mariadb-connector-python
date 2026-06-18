@@ -485,8 +485,9 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
         port = default_conf.get('port', 3306)
         database = default_conf.get('database', 'test')
 
-        # Test 1: URL with pool_name in query params
-        url = f"mariadb://{user}:{password}@{host}:{port}/{database}?pool_name=test_url_pool"
+        # Test 1: URL with pool_name in query params (ssl honours the suite default)
+        _ssl = f"&ssl={'true' if default_conf['ssl'] else 'false'}" if 'ssl' in default_conf else ""
+        url = f"mariadb://{user}:{password}@{host}:{port}/{database}?pool_name=test_url_pool{_ssl}"
         async with mariadb.AsyncConnectionPool(url) as pool:
             await pool.open()
 
@@ -505,6 +506,8 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
 
         # Test 2: URL as first arg, pool_name as kwarg
         url2 = f"mariadb://{user}:{password}@{host}:{port}/{database}"
+        if 'ssl' in default_conf:
+            url2 += f"?ssl={'true' if default_conf['ssl'] else 'false'}"
         async with mariadb.AsyncConnectionPool(url2, pool_name="test_url_pool2", pool_size=3) as pool2:
             await pool2.open()
 
@@ -527,6 +530,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
                                            host=host,
                                            port=port,
                                            database=database,
+                                           ssl=default_conf.get('ssl', False),
                                            pool_size=2) as pool3:
             await pool3.open()
 
@@ -565,6 +569,10 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
             user=default_conf.get('user', 'root'),
             password=default_conf.get('password', ''),
             database=default_conf.get('database', 'test'),
+            # honour the suite's TLS setting (ssl=False by default) -- otherwise the
+            # pool connects with secure-by-default ssl=True and acquire() times out
+            # on a server without (verifiable) TLS (MaxScale, MariaDB 10.x).
+            ssl=default_conf.get('ssl', False),
             min_size=5,
             max_size=10,
             ping_threshold=0.25,

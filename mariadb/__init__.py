@@ -152,9 +152,9 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
                 args = args[1:]
 
     # Compatibility feature: if SSL is provided as a dictionary,
-    # map its content to ssl_* parameters (mariadb-c compatibility)
-    if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
-        ssl = kwargs.pop("ssl", None)
+    # map its content to ssl_* parameters (mariadb-c compatibility).
+    if "ssl" in kwargs and isinstance(kwargs["ssl"], dict):
+        ssl = kwargs.pop("ssl")
         for key in ["ca", "cert", "capath", "key", "cipher"]:
             if key in ssl:
                 kwargs["ssl_%s" % key] = ssl[key]
@@ -264,9 +264,11 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
                 args = args[1:]
 
     # Compatibility feature: if SSL is provided as a dictionary,
-    # map its content to ssl_* parameters (mariadb-c compatibility)
-    if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
-        ssl = kwargs.pop("ssl", None)
+    # map its content to ssl_* parameters (mariadb-c compatibility). Only a dict
+    # is expanded here; bool/int/str values flow through to the boolean validator
+    # in Configuration.from_dict (pure-Python) / the mariadb_c wrapper (C ext).
+    if "ssl" in kwargs and isinstance(kwargs["ssl"], dict):
+        ssl = kwargs.pop("ssl")
         for key in ["ca", "cert", "capath", "key", "cipher"]:
             if key in ssl:
                 kwargs["ssl_%s" % key] = ssl[key]

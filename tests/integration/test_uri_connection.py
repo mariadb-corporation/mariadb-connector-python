@@ -27,10 +27,15 @@ def build_uri(config, scheme='mariadb', database=None, query_params=None):
     else:
         uri = f"{scheme}://{auth}@{host}:{port}"
     
-    # Add query parameters if provided
-    if query_params:
-        uri += "?" + query_params
-    
+    # Honour the suite's TLS setting (ssl=False by default) unless the caller
+    # already set ssl. Without this the URI connects with the secure-by-default
+    # ssl=True and fails on servers without TLS (MaxScale, MariaDB 10.x).
+    params = [query_params] if query_params else []
+    if 'ssl' in config and 'ssl=' not in (query_params or ''):
+        params.append(f"ssl={'true' if config['ssl'] else 'false'}")
+    if params:
+        uri += "?" + "&".join(params)
+
     return uri
 
 
@@ -79,8 +84,10 @@ class TestURIConnection(unittest.TestCase):
         if 'password' not in config:
             self.skipTest("Password not configured, cannot test kwarg override")
         
-        # Build URI with wrong password
-        uri = f"mariadb://{config.get('user', 'root')}:wrongpassword@{config.get('host', 'localhost')}:{config.get('port', 3306)}/{config.get('database', 'test')}"
+        # Build URI with wrong password (ssl honours the suite default so the
+        # connection reaches auth on servers without TLS)
+        _ssl = f"?ssl={'true' if config['ssl'] else 'false'}" if 'ssl' in config else ""
+        uri = f"mariadb://{config.get('user', 'root')}:wrongpassword@{config.get('host', 'localhost')}:{config.get('port', 3306)}/{config.get('database', 'test')}{_ssl}"
         
         # Connect using URI but override password with kwarg
         conn = mariadb.connect(uri, password=config['password'])
@@ -182,7 +189,8 @@ class TestURIConnection(unittest.TestCase):
                 # Build URI with URL-encoded password
                 import urllib.parse
                 encoded_pass = urllib.parse.quote(test_pass, safe='')
-                uri = f"mariadb://{test_user}:{encoded_pass}@{config['host']}:{config['port']}/{config['database']}"
+                _ssl = f"?ssl={'true' if config['ssl'] else 'false'}" if 'ssl' in config else ""
+                uri = f"mariadb://{test_user}:{encoded_pass}@{config['host']}:{config['port']}/{config['database']}{_ssl}"
                 
                 # Connect using URI
                 test_conn = mariadb.connect(uri)

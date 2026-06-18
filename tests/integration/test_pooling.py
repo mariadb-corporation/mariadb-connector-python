@@ -446,6 +446,11 @@ class TestPooling(unittest.TestCase):
             user=default_conf.get('user', 'root'),
             password=default_conf.get('password', ''),
             database=default_conf.get('database', 'test'),
+            # Honour the suite's TLS setting (ssl=False by default). Without it the
+            # pool would connect with the secure-by-default ssl=True and never be
+            # able to create a connection on a server without (verifiable) TLS --
+            # e.g. MariaDB 10.x -- so acquire() would time out with a PoolError.
+            ssl=default_conf.get('ssl', False),
             min_size=5,
             max_size=10,
             ping_threshold=0.25,

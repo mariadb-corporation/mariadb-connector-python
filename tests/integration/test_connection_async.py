@@ -34,8 +34,12 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         port = default_conf.get('port', 3306)
         database = default_conf.get('database', 'test')
         
-        # Test 1: URL with pool_name in query params
+        # Honour the suite's TLS setting (ssl=False by default); without it the
+        # URL connects with secure-by-default ssl=True and fails on servers
+        # without TLS (MaxScale, MariaDB 10.x).
         url = f"mariadb://{user}:{password}@{host}:{port}/{database}"
+        if 'ssl' in default_conf:
+            url += f"?ssl={'true' if default_conf['ssl'] else 'false'}"
 
         self.connection = await mariadb.asyncConnect(url, autocommit=True)
 
@@ -79,6 +83,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
         new_conn = await mariadb.asyncConnect(
             user=default_conf["user"], ssl=True,
+            ssl_verify_cert=False,
             default_file="./client.cnf"
         )
         self.assertEqual(new_conn.database, default_conf["database"])
@@ -113,7 +118,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE test has no SSL on port by default")
         default_conf = conf()
-        conn = await mariadb.asyncConnect(**default_conf, tls_version="TLSv1.2")
+        conn = await mariadb.asyncConnect(**default_conf, tls_version="TLSv1.2", ssl_verify_cert=False)
         cursor = conn.cursor()
         await cursor.execute("SHOW STATUS LIKE 'ssl_version'")
         row = await cursor.fetchone()
@@ -125,7 +130,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE test has no SSL on port by default")
         default_conf = conf()
-        conn = await mariadb.asyncConnect(**default_conf, tls_version="TLSv1.2,TLSv1.3")
+        conn = await mariadb.asyncConnect(**default_conf, tls_version="TLSv1.2,TLSv1.3", ssl_verify_cert=False)
         cursor = conn.cursor()
         await cursor.execute("SHOW STATUS LIKE 'ssl_version'")
         row = await cursor.fetchone()
@@ -402,6 +407,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         await conn.close()
         default_conf = conf()
         default_conf["ssl"] = True
+        default_conf["ssl_verify_cert"] = False
         conn = await mariadb.asyncConnect(**default_conf)
         self.assertNotEqual(conn._tls_verify_status, None)
         
@@ -423,6 +429,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             self.skipTest("Requires C/C 3.4.2 or newer")
         default_conf = conf()
         default_conf["ssl"] = True
+        default_conf["ssl_verify_cert"] = False
 
         conn = await mariadb.asyncConnect(**default_conf)
         self.assertEqual(conn._tls, True)
@@ -930,7 +937,8 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 f"GRANT SELECT ON `{conf()['database']}`.* "
                 f"TO 'lenenc_async_cu_user'{get_host_suffix()}"
             )
-            conn = await mariadb.asyncConnect(**conf())
+            # ssl disabled: change_user re-auth can't re-validate a self-signed (zero-conf) cert
+            conn = await mariadb.asyncConnect(**{**conf(), 'ssl': False})
             try:
                 await conn.change_user('lenenc_async_cu_user', long_password, conf()['database'])
                 self.assertEqual(conn.user, 'lenenc_async_cu_user')

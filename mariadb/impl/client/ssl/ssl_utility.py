@@ -141,32 +141,34 @@ class SSLUtility:
     @staticmethod
     def prepare_ssl_context(
         configuration: Configuration,
-        context: Any
+        context: Any,
+        is_local_connection: bool = False
     ) -> Tuple[ssl.SSLContext, Optional[Any]]:
         """
         Prepare SSL context with optional fingerprint validation support.
-        
+
         This method handles:
-        - Disabling SSL verification for local connections (matching C connector behavior)
+        - Skipping the hostname check for local connections (matching libmariadb,
+          which never sets MARIADB_TLS_VERIFY_HOST for a local peer)
         - Setting up fingerprint validation for MariaDB >= 11.4.1 when appropriate
         - Creating unverified context for fingerprint capture
-        
+
         Args:
             configuration: Connection configuration
             context: Connection context with server version info
-            is_local_connection: Whether connection is to localhost
-            
+            is_local_connection: Whether the peer is local (loopback / unix socket)
+
         Returns:
             Tuple of (ssl_context, fingerprint_validator or None)
-            
+
         Raises:
             OperationalError: If SSL context preparation fails
         """
         from .ssl_fingerprint_validator import SSLFingerprintValidator
-        
+
         # Create SSL context
         ssl_context = SSLUtility.create_ssl_context(configuration)
-        
+
         # Check if we need fingerprint validation (MariaDB-specific feature)
         # Only enable when: MariaDB server >= 11.4.1 + ssl_verify_cert enabled + no SSL CA configured + password provided
         use_fingerprint_validation = (
@@ -174,10 +176,10 @@ class SSLUtility:
             context.version.version_greater_or_equal(11, 4, 1) and
             configuration.ssl_verify_cert and
             not configuration.ssl_ca and
-            configuration.password is not None and 
+            configuration.password is not None and
             configuration.password != ""
         )
-        
+
         cert_fingerprint_validator = None
         if use_fingerprint_validation:
             configuration.ssl_verify_cert = False
@@ -185,5 +187,12 @@ class SSLUtility:
             cert_fingerprint_validator = SSLFingerprintValidator()
             # Create unverified context to capture fingerprint
             ssl_context = cert_fingerprint_validator.create_unverified_context(ssl_context)
-        
+        elif is_local_connection and configuration.ssl_verify_cert:
+            # Local peer (loopback / unix socket) can't be MitM'd, so skip the hostname check.
+            ssl_context.check_hostname = False
+            if not (configuration.ssl_ca or configuration.ssl_capath):
+                # No CA to anchor the chain: PERIOD only
+                ssl_context.verify_mode = ssl.CERT_NONE
+                cert_fingerprint_validator = SSLFingerprintValidator()
+
         return ssl_context, cert_fingerprint_validator

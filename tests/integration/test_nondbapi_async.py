@@ -60,7 +60,8 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
                            "BY 'heyPassw-!µ20§rd'")
             await cursor.execute("GRANT ALL on `" + default_conf["database"] +
                            "`.* TO foo"+get_host_suffix())
-        new_conn = await mariadb.AsyncConnection.connect(**conf())
+        # ssl disabled: change_user re-auth can't re-validate a self-signed (zero-conf) cert
+        new_conn = await mariadb.AsyncConnection.connect(**{**conf(), 'ssl': False})
         await new_conn.change_user("foo", "heyPassw-!µ20§rd", "")
         self.assertEqual("foo", new_conn.user)
         await cursor.execute("drop user foo"+get_host_suffix())
@@ -156,7 +157,8 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
         await cursor.close()
 
     async def test_conpy279(self):
-        conn = self.connection
+        # ssl disabled: change_user re-auth can't re-validate a self-signed (zero-conf) cert
+        conn = await mariadb.AsyncConnection.connect(**{**conf(), 'ssl': False})
         default_conf = conf()
         if "password" not in default_conf:
             default_conf["password"] = None

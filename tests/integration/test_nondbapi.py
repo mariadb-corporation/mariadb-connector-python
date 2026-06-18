@@ -71,7 +71,8 @@ class CursorTest(unittest.TestCase):
                            "BY 'heyPassw-!µ20§rd'")
             cursor.execute("GRANT ALL on `" + default_conf["database"] +
                            "`.* TO foo"+get_host_suffix())
-        new_conn = create_connection()
+        # ssl disabled: change_user re-auth can't re-validate a self-signed (zero-conf) cert
+        new_conn = create_connection({'ssl': False})
         new_conn.change_user("foo", "heyPassw-!µ20§rd", "")
         self.assertEqual("foo", new_conn.user)
         cursor.execute("drop user foo"+get_host_suffix())
@@ -159,7 +160,8 @@ class CursorTest(unittest.TestCase):
         del cursor
 
     def test_conpy279(self):
-        conn = self.connection
+        # ssl disabled: change_user re-auth can't re-validate a self-signed (zero-conf) cert
+        conn = create_connection({'ssl': False})
         default_conf = conf()
         if "password" not in default_conf:
             default_conf["password"] = None

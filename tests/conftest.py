@@ -6,6 +6,7 @@ pytest configuration for MariaDB Connector/Python tests
 This file contains shared fixtures and configuration for all tests.
 """
 
+from logging import config
 import os
 import pytest
 
@@ -17,15 +18,18 @@ def get_test_config():
         "user": os.environ.get('TEST_DB_USER', 'root'),
         "host": os.environ.get('TEST_DB_HOST', '127.0.0.1'),
         "database": os.environ.get('TEST_DB_DATABASE', 'testp'),
-        "port": int(os.environ.get('TEST_DB_PORT', '3306'))
+        "port": int(os.environ.get('TEST_DB_PORT', '3306')),
+        "ssl": False
     }
     
 
-    # Optional SSL configuration
-    if os.environ.get('TEST_REQUIRE_TLS'):
-        if os.environ.get('TEST_REQUIRE_TLS') == "1":
-            config["ssl"] = True
-    
+    if os.environ.get('TEST_REQUIRE_TLS') == "1":
+        config["ssl"] = True
+
+    if TEST_DB_SERVER_CERT := os.environ.get('TEST_DB_SERVER_CERT'):
+        if config["ssl"] != False:
+            config["ssl_ca"] = TEST_DB_SERVER_CERT
+
     # Optional pool reset configuration
     if os.environ.get('TEST_RESET_SESSION'):
         reset = int(os.environ.get('TEST_RESET_SESSION', '1'))

@@ -163,6 +163,7 @@ class TestCachingSha256Authentication(unittest.TestCase):
         conn_config = get_test_config().copy()
         conn_config['user'] = 'cachingSha256User2'
         conn_config['password'] = ''
+        conn_config['ssl'] = False  # caching_sha2 isn't MitM-proof; use RSA full-auth, not fingerprint-only TLS
         
         # Connect with empty password
         sha256_conn = mariadb.connect(**conn_config)
@@ -198,6 +199,7 @@ class TestCachingSha256Authentication(unittest.TestCase):
         conn_config = get_test_config().copy()
         conn_config['user'] = 'cachingSha256User3'
         conn_config['password'] = '!Passw0rd3Works'
+        conn_config['ssl'] = False  # caching_sha2 isn't MitM-proof; use RSA full-auth, not fingerprint-only TLS
         
         # First connection - not cached
         sha256_conn = mariadb.connect(**conn_config)
@@ -218,6 +220,7 @@ class TestCachingSha256Authentication(unittest.TestCase):
         conn_config = get_test_config().copy()
         conn_config['user'] = 'cachingSha256User'
         conn_config['password'] = 'WrongPassword123'
+        conn_config['ssl'] = False  # caching_sha2 isn't MitM-proof; use RSA full-auth, not fingerprint-only TLS
         
         # Should fail with authentication error
         with self.assertRaises(mariadb.OperationalError) as cm:
@@ -237,6 +240,7 @@ class TestCachingSha256Authentication(unittest.TestCase):
         conn_config = get_test_config().copy()
         conn_config['user'] = 'cachingSha256User4'
         conn_config['password'] = '!Passw0rd3Works'
+        conn_config['ssl'] = False  # caching_sha2 isn't MitM-proof; use RSA full-auth, not fingerprint-only TLS
         
         connections = []
         try:
@@ -268,6 +272,7 @@ class TestCachingSha256Authentication(unittest.TestCase):
         conn_config = get_test_config().copy()
         conn_config['user'] = 'cachingSha256User'
         conn_config['password'] = '!Passw0rd3Works'
+        conn_config['ssl'] = False  # caching_sha2 isn't MitM-proof; use RSA full-auth, not fingerprint-only TLS
         
         # First connection
         sha256_conn = mariadb.connect(**conn_config)
@@ -285,10 +290,11 @@ class TestCachingSha256Authentication(unittest.TestCase):
     def test_caching_sha256_user_query(self):
         """Test that we can query user information"""
         self.cursor.execute("FLUSH PRIVILEGES")  # Reset cache
-        
+
         conn_config = get_test_config().copy()
         conn_config['user'] = 'cachingSha256User'
         conn_config['password'] = '!Passw0rd3Works'
+        conn_config['ssl'] = False  # caching_sha2 isn't MitM-proof; use RSA full-auth, not fingerprint-only TLS
         
         sha256_conn = mariadb.connect(**conn_config)
         cursor = sha256_conn.cursor()

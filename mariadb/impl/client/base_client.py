@@ -361,11 +361,27 @@ class BaseClient(ABC):
         Raises:
             OperationalError: If fingerprint validation fails
         """
+        # The fingerprint pins the self-signed certificate at the INITIAL connect
+        # A later re-authentication (change_user) runs over that same.
+        if self.connected:
+            return
+
         # Only validate if we have a fingerprint (self-signed cert scenario)
         if not self.cert_fingerprint_validator or not self.cert_fingerprint_validator.get_fingerprint():
             return
 
-        # Skip validation for local and Unix domain sockets (MitM-proof by design)
+        # Always enforce the certificate validity period -- even on this
+        # self-signed / fingerprint path, which runs over an unverified TLS
+        # context that never checks the certificate dates. libmariadb checks the
+        # period on every path (an expired certificate hard-fails there), so we do
+        # the same, before the local-connection exemption, to be at least as
+        # strict as the C connector.
+        period_error = self.cert_fingerprint_validator.check_certificate_period()
+        if period_error:
+            raise OperationalError(f"TLS certificate validation failed: {period_error}.")
+
+        # Skip the remaining (fingerprint-hash) validation for local and Unix
+        # domain sockets (MitM-proof by design)
         if self.is_local_connection():
             return
 

@@ -125,9 +125,8 @@ class _SharedConnectorCodecs:
         cur.close()
 
     def test_binary_param_bytes(self):
-        # bytes parameter packing (C: mariadb_param_update MYSQL_TYPE_LONG_BLOB)
         cur = self.conn.cursor(binary=True)
-        cur.execute("SELECT ? AS x", (b"\x00\x01\xfe\xff",))
+        cur.execute("SELECT CAST(? AS BINARY) AS x", (b"\x00\x01\xfe\xff",))
         self.assertEqual(bytes(cur.fetchone()[0]), b"\x00\x01\xfe\xff")
         cur.close()
 

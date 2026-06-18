@@ -357,6 +357,10 @@ class TestUnixSocket(unittest.TestCase):
         conf.pop('unix_socket', None)
         conf['host'] = 'localhost'
         conf['protocol'] = 'TCP'
+        # This checks socket routing, not TLS. Under secure-by-default a forced
+        # TCP connection to 'localhost' is classified remote (matching libmariadb),
+        # so a self-signed server would otherwise fail certificate verification.
+        conf['ssl'] = False
 
         conn = mariadb.connect(**conf)
         try:

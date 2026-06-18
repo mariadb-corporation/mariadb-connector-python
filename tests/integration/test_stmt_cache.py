@@ -717,7 +717,7 @@ class TestGCFinalizeWithActiveStream(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.conn = _cache_conn(prep_stmt_cache_size=5)
+        self.conn = _cache_conn(prep_stmt_cache_size=5, ssl=False)
         self.conn.autocommit = True
         cur = self.conn.cursor()
         cur.execute(

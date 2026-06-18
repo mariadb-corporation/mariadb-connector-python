@@ -417,11 +417,12 @@ MrdbConnection_Initialize(MrdbConnection *self,
          *ssl_key= NULL, *ssl_cert= NULL, *ssl_ca= NULL, *ssl_capath= NULL,
          *ssl_crl= NULL, *ssl_crlpath= NULL, *ssl_cipher= NULL,
          *plugin_dir= NULL, *tls_version= NULL, *tls_fp= NULL, *tls_fp_list= NULL;
-    uint8_t ssl_enforce= 0;
+    /* Secure by default */
+    uint8_t ssl_enforce= 1;
     unsigned int client_flags= 0, port= 0, protocol= 0;
     unsigned int local_infile= 0xFF;
     unsigned int connect_timeout=10, read_timeout=0, write_timeout=0,
-                 compress= 0, ssl_verify_cert= 0;
+                 compress= 0, ssl_verify_cert= 1;
     PyObject *status_callback= NULL;
 
     /* Initialize all fields first */
@@ -556,6 +557,11 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 (const char *)ssl_ca,
                 (const char *)ssl_capath,
                 (const char *)ssl_cipher);
+    else
+        /* No TLS option given. libmariadb is secure-by-default (it would still
+           negotiate and verify TLS), so when the caller explicitly opted out with
+           ssl=False we disable verification below to keep the connection in clear. */
+        ssl_verify_cert= 0;
     if (ssl_crl)
     {
         if (mysql_options(self->mysql, MYSQL_OPT_SSL_CRL, ssl_crl))

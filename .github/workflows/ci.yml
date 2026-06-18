@@ -81,7 +81,10 @@ jobs:
           allow-prereleases: true
 
       - name: Run SQLAlchemy tests (Pure Python)
-        if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
+        # SQLAlchemy doesn't test TLS; disable it via ssl=false (the dialect coerces
+        # it to a real bool). Run on MariaDB only (skip MySQL) and on the default
+        # Python 3.13 only -- SQLAlchemy's own suite fails under PyPy.
+        if: ${{ (matrix.python == '' || matrix.python == '3.13') && matrix.db-type != 'mysql' }}
         shell: bash
         run: |
           git clone https://github.com/sqlalchemy/sqlalchemy.git
@@ -101,8 +104,9 @@ jobs:
           DIALECT_PREFIX="${{ matrix.db-type == 'mysql' && 'mysql' || 'mariadb' }}"
           # URL-encode password to handle special characters
           ENCODED_PASSWORD=$(python -c "import urllib.parse; print(urllib.parse.quote('$TEST_DB_PASSWORD', safe=''))")
-          DBURI="${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
-          echo "Testing with dburi: ${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
+          # SQLAlchemy doesn't test TLS; disable it (the dialect coerces ssl=false to a bool).
+          DBURI="${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
+          echo "Testing with dburi: ${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
           # Skip problematic tests
           # VersioningTest: MariaDB 12.x raises errno 1020 directly instead of 0 rows affected,
           # so SQLAlchemy never sees StaleDataError. Server behavior change, not a connector bug.
@@ -121,15 +125,17 @@ jobs:
           MARIADB_PYTHON_CONNECTOR: python
 
       - name: Run SQLAlchemy async tests (Pure Python)
-        if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
+        # See note above: ssl=false; default Python 3.13 only (PyPy fails).
+        if: ${{ (matrix.python == '' || matrix.python == '3.13') && matrix.db-type != 'mysql' }}
         shell: bash
         run: |
           cd "$GITHUB_WORKSPACE/sqlalchemy"
           DIALECT_PREFIX="${{ matrix.db-type == 'mysql' && 'mysql' || 'mariadb' }}"
           # URL-encode password to handle special characters
           ENCODED_PASSWORD=$(python -c "import urllib.parse; print(urllib.parse.quote('$TEST_DB_PASSWORD', safe=''))")
-          DBURI="${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
-          echo "Testing async with dburi: ${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
+          # SQLAlchemy doesn't test TLS; disable it (the dialect coerces ssl=false to a bool).
+          DBURI="${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
+          echo "Testing async with dburi: ${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
           # Install greenlet for async support
           python -m pip install greenlet
           # Run async tests using mariadb connector's native async support
@@ -266,7 +272,8 @@ jobs:
           sudo apt-get update && sudo apt-get install -y gdb python3-dbg
 
       - name: Run SQLAlchemy tests (C extension)
-        if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
+        # See note above: ssl=false; default Python 3.13 only (PyPy fails).
+        if: ${{ (matrix.python == '' || matrix.python == '3.13') && matrix.db-type != 'mysql' }}
         shell: bash
         run: |
           # ulimit is per-shell; must be set in every step that should dump.
@@ -289,8 +296,9 @@ jobs:
           DIALECT_PREFIX="${{ matrix.db-type == 'mysql' && 'mysql' || 'mariadb' }}"
           # URL-encode password to handle special characters
           ENCODED_PASSWORD=$(python -c "import urllib.parse; print(urllib.parse.quote('$TEST_DB_PASSWORD', safe=''))")
-          DBURI="${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
-          echo "Testing with dburi: ${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
+          # SQLAlchemy doesn't test TLS; disable it (the dialect coerces ssl=false to a bool).
+          DBURI="${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
+          echo "Testing with dburi: ${DIALECT_PREFIX}+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
           # Skip problematic tests
           # test/aaa_profiling/: SQLAlchemy's heap-growth tests run each case in a
           # forked subprocess that shares the parent's DB socket — no DBAPI in
@@ -311,7 +319,8 @@ jobs:
           TEST_DB: ${{ env.MYSQL_TEST_DB }}
 
       - name: Run SQLAlchemy async tests (C extension)
-        if: ${{ matrix.db-type != 'mysql' || matrix.python == '3.13' || startsWith(matrix.python, '3.13')}}
+        # See note above: ssl=false; default Python 3.13 only (PyPy fails).
+        if: ${{ (matrix.python == '' || matrix.python == '3.13') && matrix.db-type != 'mysql' }}
         shell: bash
         run: |
           ulimit -c unlimited
@@ -319,8 +328,9 @@ jobs:
           DIALECT_PREFIX="${{ matrix.db-type == 'mysql' && 'mysql' || 'mariadb' }}"
           # URL-encode password to handle special characters
           ENCODED_PASSWORD=$(python -c "import urllib.parse; print(urllib.parse.quote('$TEST_DB_PASSWORD', safe=''))")
-          DBURI="${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
-          echo "Testing async with dburi: ${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB"
+          # SQLAlchemy doesn't test TLS; disable it (the dialect coerces ssl=false to a bool).
+          DBURI="${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
+          echo "Testing async with dburi: ${DIALECT_PREFIX}+mariadbconnector_async://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
           # Install greenlet for async support
           python -m pip install greenlet
           # Run async tests using mariadb_c connector's native async support

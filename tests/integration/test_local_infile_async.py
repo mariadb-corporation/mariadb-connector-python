@@ -23,7 +23,10 @@ def create_async_connection_url():
     host = default_conf.get('host', 'localhost')
     port = default_conf.get('port', 3306)
     database = default_conf.get('database', 'test')
-    return f"mariadb://{user}:{password}@{host}:{port}/{database}?autocommit=True"
+    url = f"mariadb://{user}:{password}@{host}:{port}/{database}?autocommit=True"
+    if 'ssl' in default_conf:
+        url += f"&ssl={'true' if default_conf['ssl'] else 'false'}"
+    return url
 
 
 @unittest.skipIf(is_maxscale(), "LOAD DATA LOCAL INFILE not supported through MaxScale")
