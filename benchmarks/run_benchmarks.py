@@ -40,6 +40,7 @@ BENCHMARKS = [
     'test_bench_select_100_cols.py',
     'test_bench_do_1000_params.py',
     'test_bench_insert_batch.py',
+    'test_bench_insert_row.py',
 ]
 
 DRIVERS = ['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector', 'mysql_connector_pure']

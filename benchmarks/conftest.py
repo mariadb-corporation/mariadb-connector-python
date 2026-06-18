@@ -13,14 +13,42 @@ import sys
 import pytest
 
 
-# Database configuration from environment variables
+# Connection transport selection.
+# Set TEST_DB_UNIX_SOCKET (e.g. /run/mysqld/mysqld.sock) to force every driver
+# onto that unix socket; leave it unset to connect over TCP/IP. Either way EVERY
+# driver uses the SAME transport (configured per-driver in transport_args) and
+# TLS is disabled.
+_UNIX_SOCKET = os.environ.get('TEST_DB_UNIX_SOCKET') or None
+
+# libmariadb only selects the unix socket when host is 'localhost' (an IP host
+# forces TCP); pymysql / mysql-connector use the socket whenever unix_socket is
+# passed. So use 'localhost' in socket mode, and an IP to force TCP otherwise.
+_HOST = os.environ.get('TEST_DB_HOST', '127.0.0.1')
+if _UNIX_SOCKET:
+    _HOST = 'localhost'
+elif _HOST == 'localhost':
+    _HOST = '127.0.0.1'
+
 DB_CONFIG = {
-    'host': os.environ.get('TEST_DB_HOST', '127.0.0.1'),
+    'host': _HOST,
     'port': int(os.environ.get('TEST_DB_PORT', '3306')),
     'user': os.environ.get('TEST_DB_USER', 'root'),
     'password': os.environ.get('TEST_DB_PASSWORD', ''),
     'database': os.environ.get('TEST_DB_DATABASE', 'testp'),
 }
+
+
+def transport_args(driver_name):
+    """Per-driver kwargs so every driver uses the SAME transport with TLS
+    disabled: a unix socket if one is available (see _UNIX_SOCKET), else plain
+    TCP/IP. (mariadb and pymysql otherwise negotiate TLS by default.)"""
+    if driver_name in ('mariadb', 'mariadb_c'):
+        args = {'ssl': False}
+    else:  # pymysql, mysql_connector, mysql_connector_pure
+        args = {'ssl_disabled': True}
+    if _UNIX_SOCKET:
+        args['unix_socket'] = _UNIX_SOCKET
+    return args
 
 # Global variable to store mysql_connector implementation type
 _mysql_connector_impl = None
@@ -116,9 +144,9 @@ def warmup_session(driver, driver_name):
     if driver_key not in _driver_warmed_up:
         # Create a temporary connection just for warmup
         if driver_name == 'mysql_connector_pure':
-            warmup_conn = driver.connect(**DB_CONFIG, use_pure=True)
+            warmup_conn = driver.connect(**DB_CONFIG, use_pure=True, **transport_args(driver_name))
         else:
-            warmup_conn = driver.connect(**DB_CONFIG)
+            warmup_conn = driver.connect(**DB_CONFIG, **transport_args(driver_name))
         warmup_cursor = warmup_conn.cursor()
         
         # Warm up with simple queries (simulates running test_do_1 first)
@@ -142,9 +170,9 @@ def connection(driver, driver_name, warmup_session):
     """Create a database connection for each test."""
     # Now create the actual test connection
     if driver_name == 'mysql_connector_pure':
-        conn = driver.connect(**DB_CONFIG, use_pure=True)
+        conn = driver.connect(**DB_CONFIG, use_pure=True, **transport_args(driver_name))
     else:
-        conn = driver.connect(**DB_CONFIG)
+        conn = driver.connect(**DB_CONFIG, **transport_args(driver_name))
     yield conn
     try:
         conn.close()
@@ -159,7 +187,7 @@ def setup_database():
     os.environ['MARIADB_PYTHON_CONNECTOR'] = 'python'
     import mariadb
     
-    conn = mariadb.connect(**DB_CONFIG)
+    conn = mariadb.connect(**DB_CONFIG, **transport_args('mariadb'))
     cursor = conn.cursor()
     
     try:
@@ -198,7 +226,22 @@ def setup_database():
             cursor.execute(create_table + " ENGINE = BLACKHOLE")
         except:
             cursor.execute(create_table)
-        
+
+        # Create perfTestInsertTypes table (int, date, string) for the mixed-type INSERT benchmark
+        cursor.execute("DROP TABLE IF EXISTS perfTestInsertTypes")
+        create_mixed = (
+            "CREATE TABLE perfTestInsertTypes ("
+            "i INT, d DATE, "
+            "bool_col BOOLEAN, bytes_col VARBINARY(255), small_str VARCHAR(32), "
+            "float_col FLOAT, decimal_col DECIMAL(10,2), null_col INT, "
+            "datetime_col DATETIME, time_col TIME"
+            ") COLLATE='utf8mb4_unicode_ci'"
+        )
+        try:
+            cursor.execute(create_mixed + " ENGINE = BLACKHOLE")
+        except:
+            cursor.execute(create_mixed)
+
         conn.commit()
     finally:
         cursor.close()
@@ -207,11 +250,12 @@ def setup_database():
     yield
     
     # Cleanup after all tests
-    conn = mariadb.connect(**DB_CONFIG)
+    conn = mariadb.connect(**DB_CONFIG, **transport_args('mariadb'))
     cursor = conn.cursor()
     try:
         cursor.execute("DROP TABLE IF EXISTS test100")
         cursor.execute("DROP TABLE IF EXISTS perfTestTextBatch")
+        cursor.execute("DROP TABLE IF EXISTS perfTestInsertTypes")
         conn.commit()
     finally:
         cursor.close()

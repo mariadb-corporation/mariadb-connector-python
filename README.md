@@ -61,6 +61,26 @@ Both APIs provide:
 - SSL/TLS support
 - Transaction management
 
+
+## Benchmarks
+
+We want MariaDB Connector/Python to be a **very fast** connector for MariaDB and
+MySQL, either with C or pure python implementation. We don't guess, we benchmark. A simple, reproducible benchmark suite
+lives in the [`benchmarks/`](benchmarks) folder. It measures various operations
+(simple queries, bulk reads, wide rows, batch inserts, many-parameter statements)
+and compares the `mariadb` C extension and pure-Python implementations against
+PyMySQL and MySQL Connector/Python.
+
+**Command round-trip — `DO 1`** (operations/second, higher is better):
+
+![DO 1 benchmark](docs/benchmarks/do_1.png)
+
+**Bulk read — `SELECT 1000 rows`** :
+
+![SELECT 1000 rows benchmark](docs/benchmarks/select_1000_rows_text.png)
+
+more on [docs/benchmarks.md](docs/benchmarks.md).
+
 ## Quick Start
 
 ### Basic Connection and Query (Synchronous)
