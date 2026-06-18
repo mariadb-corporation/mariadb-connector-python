@@ -23,7 +23,7 @@ class Configuration:
     # Socket parameters
     unix_socket: Optional[str] = None
     protocol: int = 0  # 0=DEFAULT, 1=TCP, 2=SOCKET  (mirrors mysql_protocol_type)
-    socket_timeout: float = 30  # 30 seconds
+    socket_timeout: Optional[float] = None
     connect_timeout: float = 10  # 10 seconds
     
     # SSL parameters, Secure by default

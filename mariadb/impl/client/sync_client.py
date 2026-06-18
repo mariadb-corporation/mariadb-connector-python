@@ -388,8 +388,7 @@ class SyncClient(BaseClient):
                 )
                 self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
-            if self.socket_timeout:
-                self.socket.settimeout(self.socket_timeout)
+            self.socket.settimeout(self.socket_timeout if self.socket_timeout else None)
 
         except OperationalError:
             # A deliberate, already-explanatory error (e.g. protocol=SOCKET with
