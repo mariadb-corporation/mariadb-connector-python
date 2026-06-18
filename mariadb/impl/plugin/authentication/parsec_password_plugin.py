@@ -21,7 +21,7 @@ try:
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     HAS_CRYPTOGRAPHY = True
-except ImportError:
+except Exception:
     HAS_CRYPTOGRAPHY = False
 
 

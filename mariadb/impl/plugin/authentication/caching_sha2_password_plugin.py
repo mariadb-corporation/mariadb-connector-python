@@ -19,7 +19,7 @@ try:
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa, padding
     HAS_CRYPTOGRAPHY = True
-except ImportError:
+except Exception:
     HAS_CRYPTOGRAPHY = False
 
 
