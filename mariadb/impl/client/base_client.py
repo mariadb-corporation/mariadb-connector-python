@@ -856,7 +856,7 @@ class BaseClient(ABC):
                     length = _unpack_H(data, pos + 1)[0]
                     pos += 3
                 elif length == 0xFD:
-                    length = struct.unpack('<I', data[pos+ 1:pos+4].tobytes() + b'\x00')[0]
+                    length = _unpack_I(data, pos + 1)[0] & 0xFFFFFF
                     pos += 4
                 else:  # 0xFE
                     length = _unpack_Q(data, pos + 1)[0]
