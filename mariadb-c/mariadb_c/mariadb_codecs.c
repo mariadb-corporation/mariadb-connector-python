@@ -5,6 +5,9 @@
 #include <datetime.h>
 
 #define CHARSET_BINARY 63
+#ifndef MYSQL_TYPE_VECTOR
+#define MYSQL_TYPE_VECTOR 242   /* MySQL 9.x VECTOR; absent from libmariadb's enum_field_types */
+#endif
 
 #define IS_DECIMAL_TYPE(type) \
 ((type) == MYSQL_TYPE_NEWDECIMAL || (type) == MYSQL_TYPE_DOUBLE || (type) == MYSQL_TYPE_FLOAT)
@@ -583,6 +586,7 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
                 }
             }
             break;
+        case MYSQL_TYPE_VECTOR:
         case MYSQL_TYPE_TINY_BLOB:
         case MYSQL_TYPE_MEDIUM_BLOB:
         case MYSQL_TYPE_BLOB:
@@ -848,6 +852,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 *row+= len;
                 break;
             }
+        case MYSQL_TYPE_VECTOR:
         case MYSQL_TYPE_TINY_BLOB:
         case MYSQL_TYPE_MEDIUM_BLOB:
         case MYSQL_TYPE_BLOB:
