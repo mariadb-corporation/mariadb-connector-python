@@ -128,6 +128,7 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
     - **`tls_version`** - A comma-separated list (without whitespaces) of TLS versions. Valid versions are TLSv1.0, TLSv1.1,TLSv1.2 and TLSv1.3. Added in version 1.1.7.
     - **`autocommit`** (default: `False`) - Specifies the autocommit settings. True will enable autocommit, False will disable it (default).
     - **`converter`** - Specifies a conversion dictionary, where keys are FIELD_TYPE values and values are conversion functions
+    - **`client_flag`** - Extra client capability flags to OR into the connection (same mechanism as PyMySQL's ``client_flag``). Most capabilities are negotiated automatically; use this to opt into ones that are off by default. In particular, **multi-statements** — running several ``;``-separated statements in one ``execute()`` — are disabled by default (matching the C extension, libmariadb and PyMySQL); pass ``client_flag=mariadb.constants.CAPABILITY.MULTI_STATEMENTS`` to enable them.
 
     **Environment Variables:**
     - **`MARIADB_PYTHON_CONNECTOR`** - Controls which connector implementation to use:

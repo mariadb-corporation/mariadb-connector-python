@@ -3,6 +3,7 @@
 
 import unittest
 import mariadb
+from mariadb.constants import CAPABILITY as CLIENT
 from ..base_test import is_native, is_async_native
 
 from ..conftest import get_test_config as conf
@@ -107,7 +108,7 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
     async def test_streaming_resultless_ok_midstream(self):
         if not is_async_native():
             self.skipTest("multi-statement requires the pure-Python async client")
-        async with await mariadb.asyncConnect(**conf()) as con:
+        async with await mariadb.asyncConnect(**conf(), client_flag=CLIENT.MULTI_STATEMENTS) as con:
             cursor = con.cursor(buffered=False)
             await cursor.execute("SELECT 100 AS a; SET @x:=1; SELECT 200 AS b")
             values = [(await cursor.fetchone())[0]]

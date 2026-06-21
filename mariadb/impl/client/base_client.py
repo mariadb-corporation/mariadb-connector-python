@@ -571,7 +571,6 @@ class BaseClient(ABC):
             constants.CAPABILITY.PROTOCOL_41 |
             constants.CAPABILITY.TRANSACTIONS |
             constants.CAPABILITY.SECURE_CONNECTION |
-            constants.CAPABILITY.MULTI_STATEMENTS |
             constants.CAPABILITY.MULTI_RESULTS |
             constants.CAPABILITY.PS_MULTI_RESULTS |
             constants.CAPABILITY.PLUGIN_AUTH |
