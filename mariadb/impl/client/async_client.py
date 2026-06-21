@@ -10,6 +10,7 @@ Uses asyncio for non-blocking I/O operations.
 """
 
 import asyncio
+import socket
 import ssl
 import struct
 import copy
@@ -380,6 +381,9 @@ class AsyncClient(BaseClient):
                         self.host_address.host,
                         self.host_address.port
                     )
+                _sock = self.writer.get_extra_info('socket')
+                if _sock is not None:
+                    _sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
         except OperationalError:
             # A deliberate, already-explanatory error (e.g. protocol=SOCKET with

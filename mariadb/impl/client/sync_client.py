@@ -387,6 +387,7 @@ class SyncClient(BaseClient):
                     timeout=self.connect_timeout if self.connect_timeout else None
                 )
                 self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
             self.socket.settimeout(self.socket_timeout if self.socket_timeout else None)
 
