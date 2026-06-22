@@ -1,5 +1,30 @@
 # Release history
 
+## MariaDB Connector/Python 2.0.0rc3
+
+Release date: ???. 2026
+
+**Notable changes:**
+
+- [CONPY-340](https://jira.mariadb.org/browse/CONPY-340): Add a `protocol` parameter to control the transport method, with auto-detection of the default Unix socket path per Linux distribution
+- [CONPY-355](https://jira.mariadb.org/browse/CONPY-355): Support for the MySQL `VECTOR` data type
+
+**Bug fixes:**
+
+- [CONPY-358](https://jira.mariadb.org/browse/CONPY-358): Support `default_file` and `default_group` (option-file reading) in the pure-Python client
+- [CONPY-346](https://jira.mariadb.org/browse/CONPY-346): memory leaks correction
+- [CONPY-345](https://jira.mariadb.org/browse/CONPY-345): Report a clean PEP 440 `__version__` and identify the implementation via `__impl__`
+- [CONPY-353](https://jira.mariadb.org/browse/CONPY-353): Fix mishandling of unsigned 64-bit integer parameters in prepared-statement binding
+- [CONPY-348](https://jira.mariadb.org/browse/CONPY-348): Fix empty `mariadbapi_version` when using the C extension
+- [CONPY-344](https://jira.mariadb.org/browse/CONPY-344): Support length-encoded passwords for `COM_CHANGE_USER` and the handshake response
+- [CONPY-343](https://jira.mariadb.org/browse/CONPY-343): Fix `SELECT ?` returning the wrong type for TIME/DATE/TIMESTAMP values
+- [CONPY-351](https://jira.mariadb.org/browse/CONPY-351): Enable TLS with certificate verification by default
+- [CONPY-357](https://jira.mariadb.org/browse/CONPY-357): Disable multi-statements by default (opt in via `client_flag`)
+- [CONPY-356](https://jira.mariadb.org/browse/CONPY-356): Enable TCP keep-alive by default
+- [CONPY-349](https://jira.mariadb.org/browse/CONPY-349): Use a constant-time comparison for the TLS fingerprint validation hash
+- [CONPY-342](https://jira.mariadb.org/browse/CONPY-342): Enforce the connection charset and close the connection on a charset mismatch
+
+
 ## MariaDB Connector/Python 2.0.0rc2
 
 Release date: Mar. 2026
