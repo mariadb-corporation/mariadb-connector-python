@@ -241,7 +241,7 @@ class Configuration:
         valid_params = {
             'host', 'user', 'username', 'password', 'passwd',
             'database', 'db', 'port',
-            'unix_socket', 'protocol', 'named_pipe', 'pipe_name',
+            'unix_socket', 'protocol',
             'socket_timeout', 'read_timeout', 'write_timeout', 'connect_timeout',
             'ssl', 'use_ssl', 'ssl_key', 'ssl_ca', 'ssl_cert', 'ssl_crl',
             'ssl_cipher', 'ssl_capath', 'ssl_crlpath', 'ssl_verify_cert', 'tls_version',
