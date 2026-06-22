@@ -9,12 +9,8 @@ if hasattr(sys, 'pypy_version_info'):
         "Please use the pure Python 'mariadb' package for async operations on PyPy."
     )
 
-import asyncio
-import datetime
-from numbers import Number
-
 # Import shared constants and exceptions to avoid circular dependencies
-from mariadb_shared.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
+from mariadb_shared.constants import STATUS, CAPABILITY
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES as _NO_BACKSLASH_ESCAPES
 from mariadb_shared.exceptions import (
     ProgrammingError,
@@ -22,35 +18,14 @@ from mariadb_shared.exceptions import (
 )
 from mariadb_shared.text_protocol import substitute_params, normalize_to_qmark
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
-from typing import Sequence, Optional, Any, List, Tuple
+from typing import Sequence, Optional
 import decimal
 
 _Decimal = decimal.Decimal
 
-ROWS_ALL = -1
-
 RESULT_TUPLE = 0
 RESULT_NAMEDTUPLE = 1
 RESULT_DICTIONARY = 2
-
-# Command types
-SQL_NONE = 0,
-SQL_INSERT = 1
-SQL_UPDATE = 2
-SQL_REPLACE = 3
-SQL_DELETE = 4
-SQL_CALL = 5
-SQL_DO = 6
-SQL_SELECT = 7
-SQL_OTHER = 255
-
-ROWS_EOF = -1
-
-# Wait status flags for non-blocking operations
-MYSQL_WAIT_READ = 1
-MYSQL_WAIT_WRITE = 2
-MYSQL_WAIT_EXCEPT = 4
-MYSQL_WAIT_TIMEOUT = 8
 
 # Import the C cursor base class
 from mariadb_c._mariadb import cursor as CCursor
@@ -126,19 +101,10 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
     @property
     def rownumber(self):
         """Return the current row number (0-indexed position)"""
-        # Return None if there's no result set
-        if self.field_count == 0:
+        # None if there is no result set or rows haven't been buffered yet;
+        # otherwise the current index into the buffered rows.
+        if self.field_count == 0 or self._buffered_rows is None:
             return None
-        
-        # For buffered cursors, return current index
-        if self._user_buffered and self._buffered_rows is not None:
-            return self._row_index
-        
-        # For unbuffered cursors or before first fetch, return None
-        if self._buffered_rows is None:
-            return None
-            
-        # Otherwise return the current row index
         return self._row_index
 
 
@@ -197,8 +163,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         self._row_index = 0
 
         if self.field_count:
-            while await self._fetch_row() is not None:
-                pass
+            await self._drain_rows()
 
         # Advance to the next result set without blocking the event loop
         result = self._async_next_result_start()
@@ -267,9 +232,9 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             use_binary = _force_binary or self._use_binary
 
             if not isinstance(data, dict) and use_binary:
-                # Validate unsupported decimal/float values for binary protocol
+                # Validate unsupported decimal/float values for binary protocol.
                 _check = self._check_decimal_parameter
-                for val in (data.values() if isinstance(data, dict) else data):
+                for val in data:
                     if type(val) is float or type(val) is _Decimal:
                         _check(val)
                 # Binary protocol: server parses placeholders during prepare
@@ -295,20 +260,42 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         if self._user_buffered and self.field_count > 0:
             await self._buffer_all_rows()
     
+    async def _drain_rows(self):
+        """Discard all remaining rows of the current result set."""
+        while await self._fetch_row() is not None:
+            pass
+
     async def _buffer_all_rows(self):
-        """Fetch all rows into memory for buffered cursor"""
-        self._buffered_rows = []
+        """Fetch all rows into memory for a buffered cursor.
+
+        This is the default cursor path, so it inlines _fetch_row() and hoists
+        the per-row invariants (connection, the text/binary start/cont pair) out
+        of the loop. Callers only reach here with a buffered cursor and
+        field_count > 0, so _fetch_row's check_closed()/field_count guards are
+        statically satisfied; the end-of-result _active_async_cursor clear is
+        replicated below.
+        """
+        self._buffered_rows = rows = []
         self._row_index = 0
-        
+        conn = self._connection
+        drive = conn._drive
+        append = rows.append
+        if self._text:
+            start, cont = self._async_fetch_row_start, self._async_fetch_row_cont
+        else:
+            start, cont = self._async_stmt_fetch_start, self._async_stmt_fetch_cont
+
         while True:
-            row = await self._fetch_row()
+            row = await drive(start, cont)
             if row is None:
+                if conn._active_async_cursor is self:
+                    conn._active_async_cursor = None
                 break
-            self._buffered_rows.append(row)
-        
+            append(row)
+
         # Set rowcount to the number of fetched rows
-        self._rowcount = len(self._buffered_rows)
-    
+        self._rowcount = len(rows)
+
     async def _execute_text_async(self, sql_to_send: str, original_statement: Optional[str] = None):
         """Execute text query using async non-blocking API.
 
@@ -319,14 +306,11 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # Store statement for cursor.statement and set is_text=1
         super()._set_text_statement(original_statement or sql_to_send)
 
-        # Start non-blocking query execution
-        wait_status = self.connection._async_real_query_start(sql_to_send)
-        
-        # Wait for query to complete
-        while wait_status:
-            actual_status = await self.connection._wait_for_status(wait_status)
-            wait_status = self.connection._async_real_query_cont(actual_status)
-        
+        # Run the non-blocking query to completion
+        await self.connection._drive(
+            lambda: self.connection._async_real_query_start(sql_to_send),
+            self.connection._async_real_query_cont)
+
         # Set field_count from connection so _initresult() can work properly
         self._set_field_count_from_connection()
 
@@ -373,18 +357,11 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # Local setup only: stmt init, parameter binding (prebound), clear result.
         self._prepare_stmt_only()
 
-        wait_status = self._async_stmt_prepare_start()
+        await self.connection._drive(self._async_stmt_prepare_start,
+                                     self._async_stmt_prepare_cont)
+        await self.connection._drive(self._async_stmt_execute_start,
+                                     self._async_stmt_execute_cont)
 
-        while wait_status:
-            actual_status = await self.connection._wait_for_status(wait_status)
-            wait_status = self._async_stmt_prepare_cont(actual_status)
-
-        wait_status = self._async_stmt_execute_start()
-        
-        while wait_status:
-            actual_status = await self.connection._wait_for_status(wait_status)
-            wait_status = self._async_stmt_execute_cont(actual_status)
-        
         # Field count is already set by the C extension after stmt execution
 
     async def executemany(self, statement, parameters):
@@ -466,14 +443,9 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
                 self._buffered_rows = accumulated_results
                 self._row_index = 0
                 self._user_buffered = True
-            else:
-                # No results accumulated - this is expected for non-RETURNING statements
-                # but for RETURNING statements, this indicates an issue
-                pass
         else:
             # Bulk execute: QMARK/FORMAT rows only.
-            # paramcount from first row — no SQL parse needed.
-            first_row = parameters[0] if hasattr(parameters, '__getitem__') else next(iter(parameters))
+            # paramcount from first row (computed above) — no SQL parse needed.
             if self.statement != normalized_sql or not self._bulk:
                 super()._set_statement(normalized_sql, len(first_row))
                 self._reprepare = True
@@ -484,15 +456,10 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             self._rowcount = 0
             try:
                 self._prepare_bulk_only()
-                wait_status = self._async_stmt_prepare_start()
-                while wait_status:
-                    actual_status = await self.connection._wait_for_status(wait_status)
-                    wait_status = self._async_stmt_prepare_cont(actual_status)
-
-                wait_status = self._async_stmt_execute_start()
-                while wait_status:
-                    actual_status = await self.connection._wait_for_status(wait_status)
-                    wait_status = self._async_stmt_execute_cont(actual_status)
+                await self.connection._drive(self._async_stmt_prepare_start,
+                                             self._async_stmt_prepare_cont)
+                await self.connection._drive(self._async_stmt_execute_start,
+                                             self._async_stmt_execute_cont)
                 self._finalize_bulk_result()
             except BaseException:
                 if self.connection._active_async_cursor is self:
@@ -522,13 +489,10 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
                 if (not active_cursor._closed and
                         active_cursor.field_count > 0):
                     try:
-                        while True:
-                            row = await active_cursor._fetch_row()
-                            if row is None:
-                                break
-                    except:
+                        await active_cursor._drain_rows()
+                    except Exception:
                         pass
-            except:
+            except Exception:
                 pass
             self.connection._active_async_cursor = None
 
@@ -547,25 +511,15 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             raise ProgrammingError("Cursor doesn't have a result set")
         
         if not self._text:
-            result = self._async_stmt_fetch_start()
-            
-            while isinstance(result, int) and result != 0:
-                actual_status = await self.connection._wait_for_status(result)
-                result = self._async_stmt_fetch_cont(actual_status)
-            
-            if result is None and self.connection._active_async_cursor is self:
-                self.connection._active_async_cursor = None
-            return result
+            result = await self.connection._drive(self._async_stmt_fetch_start,
+                                                  self._async_stmt_fetch_cont)
         else:
-            result = self._async_fetch_row_start()
-            
-            while isinstance(result, int) and result != 0:
-                actual_status = await self.connection._wait_for_status(result)
-                result = self._async_fetch_row_cont(actual_status)
-            
-            if result is None and self.connection._active_async_cursor is self:
-                self.connection._active_async_cursor = None
-            return result
+            result = await self.connection._drive(self._async_fetch_row_start,
+                                                  self._async_fetch_row_cont)
+
+        if result is None and self.connection._active_async_cursor is self:
+            self.connection._active_async_cursor = None
+        return result
 
     async def close(self) -> None:
         """
@@ -592,8 +546,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             if self.connection._active_async_cursor is self and self.field_count > 0:
                 try:
                     # Drain the current result set, then any further sets
-                    while await self._fetch_row() is not None:
-                        pass
+                    await self._drain_rows()
                     while await self.nextset() is not None:
                         pass
                 except Exception:
@@ -818,7 +771,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             return len(self._buffered_rows)
         
         # For executemany() aggregation, return accumulated rowcount
-        if hasattr(self, '_rowcount') and self._rowcount > 0:
+        if self._rowcount > 0:
             return self._rowcount
         return super().rowcount
 

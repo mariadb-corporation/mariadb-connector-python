@@ -183,9 +183,9 @@ class Cursor(CCursor):
             use_binary = _force_binary or self._use_binary
 
             if not isinstance(data, dict) and use_binary:
-                # Validate unsupported decimal/float values for binary protocol
+                # Validate unsupported decimal/float values for binary protocol.
                 _check = self._check_decimal_parameter
-                for val in (data.values() if isinstance(data, dict) else data):
+                for val in data:
                     if type(val) is float or type(val) is _Decimal:
                         _check(val)
                 # Binary protocol: server parses placeholders during prepare

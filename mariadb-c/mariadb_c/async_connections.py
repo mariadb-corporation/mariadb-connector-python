@@ -253,12 +253,32 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         """
         waiter = self._waiter
         if waiter is None:
-            if status == MYSQL_WAIT_READ and self._reader_armed:
-                self._loop.remove_reader(self._socket_fd)
-                self._reader_armed = False
+            if status == MYSQL_WAIT_READ:
+                self._disarm_reader()
             return
         if not waiter.done():
             waiter.set_result(status)
+
+    def _disarm_reader(self) -> None:
+        """Remove the persistent reader if armed (before an FD change or close)."""
+        if self._reader_armed and self._loop and self._socket_fd is not None:
+            try:
+                self._loop.remove_reader(self._socket_fd)
+            except (OSError, ValueError):
+                pass
+            self._reader_armed = False
+
+    async def _drive(self, start, cont):
+        """Drive a libmariadb non-blocking start/cont pair to completion.
+
+        Repeatedly waits for the requested socket readiness and feeds the
+        actual status back into cont() until the operation finishes (cont
+        returns 0 or None).
+        """
+        status = start()
+        while isinstance(status, int) and status != 0:
+            status = cont(await self._wait_for_status(status))
+        return status
 
     async def _wait_for_status_selector(self, wait_status: int) -> int:
         """
@@ -294,9 +314,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             # Suspend the reader while waiting to write so a spurious read-ready
             # cannot resolve this wait with the wrong status; it re-arms on the
             # next read-wait.
-            if self._reader_armed:
-                loop.remove_reader(fd)
-                self._reader_armed = False
+            self._disarm_reader()
             loop.add_writer(fd, self._io_ready, MYSQL_WAIT_WRITE)
             writing = True
         else:
@@ -381,22 +399,13 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             if self._stmt_cache is not None:
                 self._stmt_cache.clear()
                 self._stmt_cache = None
+            # Wake any coroutine still parked on the waiter so it raises
+            # CancelledError instead of hanging once the reader is torn down.
             if self._waiter is not None and not self._waiter.done():
                 self._waiter.cancel()
-            if self._loop and self._reader_armed and self._socket_fd is not None:
-                try:
-                    self._loop.remove_reader(self._socket_fd)
-                except (OSError, ValueError):
-                    pass
-                self._reader_armed = False
-            
-            # Use async close to avoid blocking event loop
-            wait_status = self._async_close_start()
-            
-            # If it's an integer, we need to wait
-            while isinstance(wait_status, int) and wait_status != 0:
-                actual_status = await self._wait_for_status(wait_status)
-                wait_status = self._async_close_cont(actual_status)
+            self._disarm_reader()
+            # Use async close to avoid blocking the event loop
+            await self._drive(self._async_close_start, self._async_close_cont)
 
     async def __aenter__(self):
         """Async context manager entry"""
@@ -654,17 +663,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             Error: If the connection is not alive
         """
         self._check_closed()
-        
-        # Start async ping
-        wait_status = self._async_ping_start()
-        
-        # If it's an integer, we need to wait
-        while isinstance(wait_status, int) and wait_status != 0:
-            actual_status = await self._wait_for_status(wait_status)
-            wait_status = self._async_ping_cont(actual_status)
-        
-        # wait_status is None when completed successfully
-        return wait_status
+        return await self._drive(self._async_ping_start, self._async_ping_cont)
 
     async def change_user(self, user, password, database=None):
         """
@@ -681,24 +680,15 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         if user is None and password is None:
             raise TypeError("change_user() missing required argument: 'user' and 'password' cannot both be None")
         
-        # Use async change_user to avoid blocking event loop
-        if database is not None:
-            wait_status = self._async_change_user_start(user, password, database)
-        else:
-            wait_status = self._async_change_user_start(user, password)
-        
-        # If it's an integer, we need to wait
-        while isinstance(wait_status, int) and wait_status != 0:
-            actual_status = await self._wait_for_status(wait_status)
-            wait_status = self._async_change_user_cont(actual_status)
-        
-        # Update socket FD after change_user in case the connection was re-established
-        if self._loop and self._reader_armed:
-            try:
-                self._loop.remove_reader(self._socket_fd)
-            except (OSError, ValueError):
-                pass
-            self._reader_armed = False
+        # Use async change_user to avoid blocking the event loop
+        args = (user, password, database) if database is not None \
+            else (user, password)
+        await self._drive(lambda: self._async_change_user_start(*args),
+                          self._async_change_user_cont)
+
+        # The socket FD may change if the connection was re-established; drop the
+        # persistent reader (armed on the old FD) so the next wait re-arms it.
+        self._disarm_reader()
         self._socket_fd = self.get_socket()
 
     async def reconnect(self):
@@ -715,13 +705,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self.closed = False
         
         # Unregister old socket FD from event loop before it is closed/reused
-        if self._loop and self._reader_armed and self._socket_fd is not None:
-            try:
-                self._loop.remove_reader(self._socket_fd)
-            except (OSError, ValueError):
-                # Socket already closed or invalid - ignore
-                pass
-            self._reader_armed = False
+        self._disarm_reader()
 
         # Call the C library's mariadb_reconnect function
         await loop.run_in_executor(None, lambda: super(AsyncConnection, self).reconnect())
@@ -735,14 +719,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         Reset the connection
         """
         self._check_closed()
-        
-        # Use async reset to avoid blocking event loop
-        wait_status = self._async_reset_start()
-        
-        # If it's an integer, we need to wait
-        while isinstance(wait_status, int) and wait_status != 0:
-            actual_status = await self._wait_for_status(wait_status)
-            wait_status = self._async_reset_cont(actual_status)
+        await self._drive(self._async_reset_start, self._async_reset_cont)
 
     async def dump_debug_info(self):
         """
@@ -755,9 +732,5 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             OperationalError: If the command fails (e.g. insufficient privileges)
         """
         self._check_closed()
-
-        wait_status = self._async_dump_debug_info_start()
-
-        while isinstance(wait_status, int) and wait_status != 0:
-            actual_status = await self._wait_for_status(wait_status)
-            wait_status = self._async_dump_debug_info_cont(actual_status)
+        await self._drive(self._async_dump_debug_info_start,
+                          self._async_dump_debug_info_cont)
