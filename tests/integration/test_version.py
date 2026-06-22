@@ -89,11 +89,11 @@ class TestVersion(unittest.TestCase):
             self.assertEqual(patch_suffix, version_info[3],
                              f"Patch suffix mismatch: {patch_suffix!r} vs {version_info[3]!r}")
 
-    def test_version_type(self):
-        """__version_type__ must be one of the known implementation identifiers."""
-        version_type = mariadb.__version_type__
-        self.assertIsInstance(version_type, str)
-        self.assertIn(version_type, ('native', 'c', 'binary'))
+    def test_impl(self):
+        """__impl__ must be one of the known implementation identifiers."""
+        impl = mariadb.__impl__
+        self.assertIsInstance(impl, str)
+        self.assertIn(impl, ('python', 'c', 'binary'))
 
     def test_mariadbapi_version(self):
         """mariadbapi_version reports the underlying MariaDB Connector/C (libmariadb)

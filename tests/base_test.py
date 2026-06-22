@@ -46,7 +46,7 @@ def is_maxscale(conn=None):
             os.environ.get('srv') == 'skysql-ha')
 
 def is_native():
-    return mariadb.__version_type__ == 'native'
+    return mariadb.__impl__ == 'python'
 
 def is_async_native():
     """

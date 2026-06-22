@@ -97,12 +97,9 @@ except ImportError:
 # Parse version info
 version_tuple, version_numeric = _parse_version_info(_base_version)
 
-# Set version variables for C extension
-# Append '-c' suffix to the version string (after any existing suffix)
-__version__ = _base_version + "-c"
+__version__ = _base_version
 
 __version_info__ = version_tuple  # Use tuple, not numeric
-__version_type__ = "c"
 __author__ = "MariaDB Corporation"
 
 # For compatibility
@@ -113,7 +110,7 @@ client_version = version_numeric
 __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "InterfaceError", "InternalError", "NotSupportedError",
            "OperationalError", "ProgrammingError",
-           "Warning", "SyncConnection", "AsyncConnection", "__version__", "__version_type__", "__version_info__",
+           "Warning", "SyncConnection", "AsyncConnection", "__version__", "__version_info__",
            "__author__", "SyncCursor", "AsyncCursor", "fieldinfo", "_have_asan", 
            "connect", "asyncConnect", "__impl__",
            # Backward compatibility

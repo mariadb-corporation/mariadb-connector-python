@@ -72,7 +72,7 @@ __impl__ = impl_selector.__impl__
 __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "InterfaceError", "InternalError", "NotSupportedError",
            "OperationalError", "PoolError", "ProgrammingError",
-           "Warning", "SyncConnection", "AsyncConnection", "__version__", "__version_type__", "__version_info__",
+           "Warning", "SyncConnection", "AsyncConnection", "__version__", "__version_info__",
            "__author__", "SyncCursor", "AsyncCursor", "fieldinfo", "constants",
            "connect", "asyncConnect", "create_pool", "create_async_pool", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
            "apilevel", "paramstyle", "threadsafety"]
@@ -385,8 +385,6 @@ def __getattr__(name: str) -> Any:
 
     if name == '__version__':
         return _get_current_version()
-    elif name == '__version_type__':
-        return _get_current_version_type()
     elif name == '__version_info__':
         return _get_current_version_info()
     elif name == 'ConnectionPool':
@@ -403,43 +401,16 @@ def __getattr__(name: str) -> Any:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 def _get_current_version() -> str:
-    """Get version based on current implementation selection"""
-    if __impl__ == 'c':
-        # C extension is selected
-        try:
-            import mariadb_c
-            return mariadb_c.__version__  # type: ignore[no-any-return]
-        except (ImportError, AttributeError):
-            return _base_version + "+c"
-    elif __impl__ == 'binary':
-        # Binary wheel is selected
-        try:
-            import mariadb_binary
-            return mariadb_binary.__version__  # type: ignore[no-any-return]
-        except (ImportError, AttributeError):
-            return _base_version + "+binary"
-    else:
-        # Pure Python implementation
-        return _base_version + "+native"
-
-def _get_current_version_type() -> str:
-    """Get version type based on current implementation selection"""
-    if __impl__ == 'c':
-        return "c"
-    elif __impl__ == 'binary':
-        return "binary"
-    else:
-        return "native"
+    """Connector version as a clean PEP 440 string, identical across all
+    implementations. The active implementation is reported separately via
+    __impl__ rather than a PEP 440 local version segment, which the spec
+    discourages for published packages.
+    """
+    return _base_version
 
 def _get_current_version_info() -> tuple:
-    """Get version info based on current implementation selection"""
-    current = _get_current_version()
-    # Strip PEP 440 local label (+native, +c, +binary) and implementation
-    # suffixes (-c) so _parse_version_info gets a clean X.Y.Z[prerelease] string.
-    base = current.split('+')[0]
-    if base.endswith('-c'):
-        base = base[:-2]
-    parsed, _ = _parse_version_info(base)
+    """Parsed (major, minor, patch[, prerelease]) of the connector version."""
+    parsed, _ = _parse_version_info(_base_version)
     return parsed  # type: ignore[no-any-return]
 
 

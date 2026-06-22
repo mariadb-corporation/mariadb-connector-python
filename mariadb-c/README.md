@@ -77,7 +77,7 @@ To verify which backend is active:
 import mariadb
 
 print(mariadb.__version__)       # e.g. "2.0.0rc1-c"
-print(mariadb.__version_type__)  # "c"
+print(mariadb.__impl__)  # "c"
 ```
 
 ## Links
