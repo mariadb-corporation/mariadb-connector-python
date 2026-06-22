@@ -152,8 +152,8 @@ def connect(*args, connectionclass=Connection, **kwargs):
     - **`local_infile`** - Enables or disables the use of LOAD DATA LOCAL INFILE statements.
     - **`compress`** (default: `False`) - Uses the compressed protocol for client server communication. If the server doesn't support compressed protocol, the default protocol will be used.
     - **`init_command`** - Command(s) which will be executed when connecting to the database server
-    - **`default_file`** - Read options from the specified option file. If the file is an empty string, default configuration file(s) will be used
-    - **`default_group`** - Read options from the specified group
+    - **`default_file`** - Read connection options from a MariaDB/MySQL option file. Option files are read only if this or `default_group` is set; the default (`None`) reads nothing. A path reads only that file; an empty string `""` reads the default files instead. On Windows the file must be an `.ini` file. Explicit connection arguments take precedence over option-file values.
+    - **`default_group`** - An additional option-file group to read, on top of the always-read `[client]`, `[client-server]` and `[client-mariadb]` groups. Setting it (even without `default_file`) triggers reading of the default option files.
     - **`plugin_dir`** - Directory which contains MariaDB client plugins.
     - **`ssl_key`** - Defines a path to a private key file to use for TLS. This option requires that you use the absolute path, not a relative path. The specified key must be in PEM format
     - **`ssl_cert`** - Defines a path to the X509 certificate file to use for TLS. This option requires that you use the absolute path, not a relative path. The X609 certificate must be in PEM format.

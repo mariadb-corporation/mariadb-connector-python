@@ -53,7 +53,11 @@ class Configuration:
 
     # Initialization command
     init_command: Optional[str] = None
-    
+
+    # Option files (my.cnf / my.ini)
+    default_file: Optional[str] = None
+    default_group: Optional[str] = None
+
     # Type conversion options
     converter: Optional[Dict[int, Callable]] = None
     
@@ -112,7 +116,19 @@ class Configuration:
     def from_dict(cls, params: Dict[str, Any]) -> 'Configuration':
         """Create Configuration instance from dictionary of parameters"""
         config = cls()
-        
+
+        # Option file(s) are read first so that explicit connection arguments
+        # below take precedence over file values
+        _default_file = params.get('default_file')
+        _default_group = params.get('default_group')
+        if _default_file is not None or _default_group is not None:
+            from .option_file import read_option_files
+            config.default_file = _default_file
+            config.default_group = _default_group
+            for _field, _value in read_option_files(_default_file,
+                                                    _default_group).items():
+                setattr(config, _field, _value)
+
         # Map common parameters
         if 'host' in params:
             config.host = params['host']
@@ -232,7 +248,8 @@ class Configuration:
             'autocommit', 'read_only',
             'compress', 'binary', 'local_infile',
             'query_timeout', 'max_allowed_packet',
-            'init_command', 'converter', 'named_tuple', 'dictionary', 'native_object',
+            'init_command', 'default_file', 'default_group',
+            'converter', 'named_tuple', 'dictionary', 'native_object',
             'cache_prep_stmts', 'prep_stmt_cache_size', 'pipeline', 'client_flag'
         }
         

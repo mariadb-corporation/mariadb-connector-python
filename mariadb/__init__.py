@@ -115,8 +115,8 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
     - **`local_infile`** - Enable or disable the use of LOAD DATA LOCAL INFILE statements
     - **`compress`** - Enable or disable protocol compression. If enabled, compression will be used if the server supports it
     - **`init_command`** - Command which will be executed when connecting and reconnecting to the server
-    - **`default_file`** - Read default values from the given option file. On Windows the file must be an .ini file
-    - **`default_group`** - Read default values from the given group. If not given, the default group name is the connection type
+    - **`default_file`** - Read connection options from a MariaDB/MySQL option file. Option files are read only if this or `default_group` is set; the default (`None`) reads nothing. A path reads only that file; an empty string `""` reads the default files instead (`/etc/my.cnf`, `/etc/mysql/my.cnf`, `$MARIADB_HOME` or `$MYSQL_HOME`, then `~/.my.cnf`). On Windows the file must be an `.ini` file. Explicit connection arguments take precedence over option-file values.
+    - **`default_group`** - An additional option-file group to read, on top of the always-read `[client]`, `[client-server]` and `[client-mariadb]` groups. Setting it (even without `default_file`) triggers reading of the default option files.
     - **`ssl_key`** - Defines a path to a private key file to use for TLS. This option requires that you use the absolute path, not a relative path. The private key must be in PEM format
     - **`ssl_cert`** - Defines a path to the X509 certificate file to use for TLS. This option requires that you use the absolute path, not a relative path. The X609 certificate must be in PEM format.
     - **`ssl_ca`** - Defines a path to a PEM file that should contain one or more X509 certificates for trusted Certificate Authorities (CAs) to use for TLS. This option requires that you use the absolute path, not a relative path.
