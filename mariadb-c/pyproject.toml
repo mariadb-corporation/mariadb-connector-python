@@ -51,7 +51,7 @@ Repository = "https://www.github.com/mariadb-corporation/mariadb-connector-pytho
 "Source Code" = "https://www.github.com/mariadb-corporation/mariadb-connector-python"
 
 [tool.setuptools]
-packages = ["mariadb_c", "mariadb_shared"]
+packages = ["mariadb_c", "mariadb_shared", "mariadb_shared.constants"]
 py-modules = ["mariadb_posix", "mariadb_windows"]
 include-package-data = true
 

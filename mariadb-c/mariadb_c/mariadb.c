@@ -155,26 +155,29 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     PyModule_AddObject(module, "mariadbapi_version",
                        PyUnicode_FromString(mysql_get_client_info()));
 
-    // Import exceptions from main mariadb package
-    // This MUST succeed - if mariadb package is not available, we should fail
-    PyObject *mariadb_module = PyImport_ImportModule("mariadb");
-    if (!mariadb_module) {
-        PyErr_SetString(PyExc_ImportError, "Cannot import mariadb module. mariadb_c must be imported after mariadb.");
+    // Import the shared exception classes from mariadb_shared.exceptions.
+    // mariadb_shared is vendored into the mariadb_c wheel, so the C extension is
+    // self-contained and does NOT require the umbrella 'mariadb' package. The umbrella
+    // re-exports these same class objects (from mariadb_shared.exceptions import *),
+    // so exceptions raised here remain catchable as mariadb.<Error>.
+    PyObject *shared_exc_module = PyImport_ImportModule("mariadb_shared.exceptions");
+    if (!shared_exc_module) {
+        PyErr_SetString(PyExc_ImportError, "Cannot import mariadb_shared.exceptions (the bundled shared module).");
         goto error;
     }
 
-    Mariadb_Error = PyObject_GetAttrString(mariadb_module, "Error");
-    Mariadb_Warning = PyObject_GetAttrString(mariadb_module, "Warning");
-    Mariadb_InterfaceError = PyObject_GetAttrString(mariadb_module, "InterfaceError");
-    Mariadb_DatabaseError = PyObject_GetAttrString(mariadb_module, "DatabaseError");
-    Mariadb_InternalError = PyObject_GetAttrString(mariadb_module, "InternalError");
-    Mariadb_OperationalError = PyObject_GetAttrString(mariadb_module, "OperationalError");
-    Mariadb_ProgrammingError = PyObject_GetAttrString(mariadb_module, "ProgrammingError");
-    Mariadb_IntegrityError = PyObject_GetAttrString(mariadb_module, "IntegrityError");
-    Mariadb_DataError = PyObject_GetAttrString(mariadb_module, "DataError");
-    Mariadb_NotSupportedError = PyObject_GetAttrString(mariadb_module, "NotSupportedError");
+    Mariadb_Error = PyObject_GetAttrString(shared_exc_module, "Error");
+    Mariadb_Warning = PyObject_GetAttrString(shared_exc_module, "Warning");
+    Mariadb_InterfaceError = PyObject_GetAttrString(shared_exc_module, "InterfaceError");
+    Mariadb_DatabaseError = PyObject_GetAttrString(shared_exc_module, "DatabaseError");
+    Mariadb_InternalError = PyObject_GetAttrString(shared_exc_module, "InternalError");
+    Mariadb_OperationalError = PyObject_GetAttrString(shared_exc_module, "OperationalError");
+    Mariadb_ProgrammingError = PyObject_GetAttrString(shared_exc_module, "ProgrammingError");
+    Mariadb_IntegrityError = PyObject_GetAttrString(shared_exc_module, "IntegrityError");
+    Mariadb_DataError = PyObject_GetAttrString(shared_exc_module, "DataError");
+    Mariadb_NotSupportedError = PyObject_GetAttrString(shared_exc_module, "NotSupportedError");
 
-    Py_DECREF(mariadb_module);
+    Py_DECREF(shared_exc_module);
 
     // All exceptions MUST be successfully imported
     if (!Mariadb_Error || !Mariadb_Warning || !Mariadb_InterfaceError ||
