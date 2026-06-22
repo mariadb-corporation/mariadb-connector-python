@@ -262,17 +262,16 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
     
     async def _drain_rows(self):
         """Discard all remaining rows of the current result set."""
-        while await self._fetch_row() is not None:
+        while await self._fetch_row_unbuffered() is not None:
             pass
 
     async def _buffer_all_rows(self):
         """Fetch all rows into memory for a buffered cursor.
 
-        This is the default cursor path, so it inlines _fetch_row() and hoists
-        the per-row invariants (connection, the text/binary start/cont pair) out
+        This is the default cursor path, so it inlines the per-row fetch and
+        hoists the invariants (connection, the text/binary start/cont pair) out
         of the loop. Callers only reach here with a buffered cursor and
-        field_count > 0, so _fetch_row's check_closed()/field_count guards are
-        statically satisfied; the end-of-result _active_async_cursor clear is
+        field_count > 0; the end-of-result _active_async_cursor clear is
         replicated below.
         """
         self._buffered_rows = rows = []
@@ -496,20 +495,16 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
                 pass
             self.connection._active_async_cursor = None
 
-    async def _fetch_row(self):
+    async def _fetch_row_unbuffered(self):
         """
-        Internal use only
+        Internal use only.
 
-        fetches row and converts values, if connection has a converter.
-        Uses cursor-level fetch_row_start/cont for text protocol (reuses field_fetch_fromtext).
-        Uses stmt_fetch_start/cont for binary protocol (prepared statements).
+        Fetch a single row,
+        Uses cursor-level fetch_row_start/cont for the text protocol and
+        stmt_fetch_start/cont for the binary protocol (prepared statements).
         """
-        if not self.buffered:
-            self.check_closed()
+        self.check_closed()
 
-        if not self.field_count:
-            raise ProgrammingError("Cursor doesn't have a result set")
-        
         if not self._text:
             result = await self.connection._drive(self._async_stmt_fetch_start,
                                                   self._async_stmt_fetch_cont)
@@ -586,7 +581,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
                 return row
             return None
         
-        row = await self._fetch_row()
+        row = await self._fetch_row_unbuffered()
         return row
 
     async def fetchmany(self, size: int = 0):
@@ -629,7 +624,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # For unbuffered cursors, fetch rows and update rowcount cumulatively
         rows = []
         for _ in range(size):
-            row = await self._fetch_row()
+            row = await self._fetch_row_unbuffered()
             if row is None:
                 break
             rows.append(row)
@@ -667,7 +662,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # For unbuffered cursors, fetch all rows and update rowcount
         rows = []
         while True:
-            row = await self._fetch_row()
+            row = await self._fetch_row_unbuffered()
             if row is None:
                 break
             rows.append(row)
