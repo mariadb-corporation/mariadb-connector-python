@@ -94,24 +94,21 @@ except ImportError:
             # Final fallback - use hardcoded version that matches root project
             _base_version = "2.0.0.dev"
 
-# Parse version info
-version_tuple, version_numeric = _parse_version_info(_base_version)
-
 __version__ = _base_version
-
-__version_info__ = version_tuple  # Use tuple, not numeric
 __author__ = "MariaDB Corporation"
 
-# For compatibility
-mariadbapi_version = _base_version
-client_version_info = version_tuple
-client_version = version_numeric
+# Parse version info
+client_version_info, client_version = _parse_version_info(_base_version)
+__version_info__ = client_version_info
+
+from mariadb_c._mariadb import mariadbapi_version
 
 __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "InterfaceError", "InternalError", "NotSupportedError",
            "OperationalError", "ProgrammingError",
            "Warning", "SyncConnection", "AsyncConnection", "__version__", "__version_info__",
-           "__author__", "SyncCursor", "AsyncCursor", "fieldinfo", "_have_asan", 
+           "mariadbapi_version", "client_version", "client_version_info",
+           "__author__", "SyncCursor", "AsyncCursor", "fieldinfo", "_have_asan",
            "connect", "asyncConnect", "__impl__",
            # Backward compatibility
            "Connection", "Cursor"]
@@ -233,7 +230,3 @@ async def asyncConnect(*args, connectionclass=None, **kwargs):
     # Use classmethod connect() which creates and connects
     connection = await connectionclass.connect(*args, **kwargs)
     return connection
-
-
-# Parse version info using the same logic as main package
-client_version_info, client_version = _parse_version_info(mariadbapi_version)
