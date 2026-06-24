@@ -45,6 +45,42 @@ jobs:
         with:
           additional-matrix: '[{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.10"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.11"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12", "continue-on-error": true}, {"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "pypy3.11-v7.3.21"}]'
 
+  mypy:
+    name: Type check (mypy)
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'schedule' ||
+      startsWith(github.ref, 'refs/heads/1.1') ||
+      startsWith(github.ref, 'refs/heads/2.0')
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install mypy and dependencies
+        # .[dev] brings mypy plus the runtime deps (cryptography, packaging,
+        # cachetools) so imports resolve. The C extension is NOT built here -- the
+        # in-tree mariadb_c/_mariadb.pyi stub is used instead, so this job needs
+        # no database and no compiler.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .[dev]
+
+      - name: mypy - mariadb + mariadb_shared
+        run: python -m mypy mariadb mariadb_shared
+
+      - name: mypy - mariadb-c
+        if: ${{ !cancelled() }}
+        working-directory: mariadb-c
+        run: python -m mypy
+
+      - name: mypy - mariadb-pool
+        if: ${{ !cancelled() }}
+        working-directory: mariadb-pool
+        run: python -m mypy
+
   ci-pure-python:
     name: ${{ matrix.name }} (Pure Python) ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
     needs: setup
