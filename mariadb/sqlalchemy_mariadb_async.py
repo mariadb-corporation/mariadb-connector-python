@@ -61,16 +61,16 @@ class AsyncAdapt_mariadb_cursor:
         self.server_side = not cursor.buffered
 
     @property
-    def description(self) -> Any:
-        return self._cursor.description
+    def description(self) -> Optional[Tuple[Any, ...]]:
+        return self._cursor.description  # type: ignore[no-any-return]
 
     @property
     def rowcount(self) -> int:
         return self._cursor.rowcount  # type: ignore[no-any-return]
 
     @property
-    def lastrowid(self) -> Any:
-        return self._cursor.lastrowid
+    def lastrowid(self) -> Optional[int]:
+        return self._cursor.lastrowid  # type: ignore[no-any-return]
 
     @property
     def arraysize(self) -> int:

@@ -9,7 +9,10 @@ connection implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 from .async_cursor_common import AsyncCursorCommon
 from .constants import STATUS, TPC_STATE
@@ -30,7 +33,7 @@ class AsyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    def cursor(self, cursor_class: Any = None, **kwargs: Any) -> AsyncCursorCommon:
+    def cursor(self, cursor_class: Optional[type] = None, **kwargs: Any) -> AsyncCursorCommon:
         """
         Create a new cursor object for executing queries
         
@@ -115,7 +118,7 @@ class AsyncConnectionCommon(ABC):
         """
         self._pooled_connection = pooled_connection
 
-    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
+    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[TracebackType]) -> None:
         """Async context manager exit"""
         await self.close()
 

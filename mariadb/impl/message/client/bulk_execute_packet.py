@@ -7,7 +7,7 @@ import array
 import datetime
 import decimal
 import struct
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional
 
 # Pre-compiled struct formats for performance
 _STRUCT_H = struct.Struct('<H')  # unsigned short (2 bytes)
@@ -74,7 +74,7 @@ class BulkExecutePacket(ClientMessage):
         self.sql = sql
         # Determine parameter types and write functions by analyzing all parameter sets
         self.parameter_types: List[tuple[int, int]] = []
-        self.parameter_writers: List = []  # Write functions for each parameter
+        self.parameter_writers: List[Callable[[PayloadWriter, Any], None]] = []  # Write functions for each parameter
         self._determine_parameter_types()
 
     def payload(self, context: Context, writer: PayloadWriter) -> bytearray:

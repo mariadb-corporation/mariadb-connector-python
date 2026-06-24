@@ -98,6 +98,7 @@ exclude = ["mariadb_binary*", "mariadb-c*", "mariadb-pool*"]
 
 [tool.setuptools.package-data]
 mariadb = ["*.pyi", "py.typed"]
+mariadb_shared = ["py.typed"]
 
 # Test configuration
 [tool.pytest.ini_options]
@@ -147,22 +148,52 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 strict_equality = true
+# The shipped pure-Python library. A bare `mypy` checks exactly these.
+files = ["mariadb", "mariadb_shared"]
+# Skip non-library trees so a recursive `mypy .` doesn't fail on the duplicate
+# `conftest` module (benchmarks/ and benchmarks/async/ and tests/ each define one,
+# and `benchmarks/async` can't be a package since `async` is a keyword) and
+# doesn't pull in the separately-checked sibling packages.
+exclude = [
+    '^benchmarks/',
+    '^tests/',
+    '^build/',
+    '^docs/',
+    '^helper/',
+    '^scripts/',
+    '^mariadb-c/',
+    '^mariadb-pool/',
+    '^setup\.py$',
+    '^_build_backend\.py$',
+]
 
 [[tool.mypy.overrides]]
 module = [
     "numpy",
-    "numpy.*",
     "mariadb_c",
     "mariadb_c.*",
     "mariadb_binary",
     "mariadb_binary.*",
     "mariadb_pool",
-    "mariadb_pool.*",
     "importlib_metadata",
     "cachetools",
-    "cachetools.*",
+    "sqlalchemy",
+    "sqlalchemy.*",
 ]
 ignore_missing_imports = true
+# Treat these external/sibling packages as opaque whether or not they happen to
+# be pip-installed in the current env, so `mypy .` is reproducible. (mariadb and
+# mariadb_shared are NOT listed here — they are checked as source.)
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+# Optional SQLAlchemy dialect integration. sqlalchemy is not a hard dependency
+# and its stubs aren't installed here, so its symbols resolve to Any: relax the
+# checks that depend on its real types (the `# type: ignore`s are still needed
+# when sqlalchemy *is* installed, so don't flag them as unused here).
+module = ["mariadb.sqlalchemy_mariadb_async"]
+warn_unused_ignores = false
+warn_return_any = false
 
 [tool.coverage.run]
 source = ["mariadb", "mariadb_c", "mariadb_pool", "mariadb_shared"]

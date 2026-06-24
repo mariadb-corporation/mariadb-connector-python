@@ -9,20 +9,22 @@ Benchmark: SELECT 1
 Simple SELECT query benchmark.
 """
 
+from typing import Any
+
 import pytest
 
 
-def test_select_1(benchmark, connection, driver_name):
+def test_select_1(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark SELECT 1 query execution."""
-    
+
     # Warmup: ensure connection is established and cached
     cursor = connection.cursor()
     for _ in range(10):
         cursor.execute("SELECT 1")
         cursor.fetchone()
     cursor.close()
-    
-    def select_1():
+
+    def select_1() -> Any:
         cursor = connection.cursor()
         cursor.execute("SELECT 1")
         result = cursor.fetchone()

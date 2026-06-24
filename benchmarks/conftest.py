@@ -10,6 +10,8 @@ Benchmark configuration and fixtures for comparing mariadb, mariadb_c, and pymys
 
 import os
 import sys
+from types import ModuleType
+from typing import Any, Iterator
 import pytest
 
 
@@ -18,18 +20,16 @@ import pytest
 # onto that unix socket; leave it unset to connect over TCP/IP. Either way EVERY
 # driver uses the SAME transport (configured per-driver in transport_args) and
 # TLS is disabled.
-_UNIX_SOCKET = os.environ.get('TEST_DB_UNIX_SOCKET') or None
+_UNIX_SOCKET : str | None = os.environ.get('TEST_DB_UNIX_SOCKET') or None
 
 # libmariadb only selects the unix socket when host is 'localhost' (an IP host
 # forces TCP); pymysql / mysql-connector use the socket whenever unix_socket is
 # passed. So use 'localhost' in socket mode, and an IP to force TCP otherwise.
-_HOST = os.environ.get('TEST_DB_HOST', '127.0.0.1')
-if _UNIX_SOCKET:
-    _HOST = 'localhost'
-elif _HOST == 'localhost':
-    _HOST = '127.0.0.1'
+_HOST_ENV: str = os.environ.get('TEST_DB_HOST', '127.0.0.1')
+# 'localhost' in socket mode (libmariadb only uses the socket then); an IP otherwise to force TCP.
+_HOST: str = 'localhost' if _UNIX_SOCKET else ('127.0.0.1' if _HOST_ENV == 'localhost' else _HOST_ENV)
 
-DB_CONFIG = {
+DB_CONFIG: dict[str, Any] = {
     'host': _HOST,
     'port': int(os.environ.get('TEST_DB_PORT', '3306')),
     'user': os.environ.get('TEST_DB_USER', 'root'),
@@ -38,10 +38,11 @@ DB_CONFIG = {
 }
 
 
-def transport_args(driver_name):
+def transport_args(driver_name: str) -> dict[str, Any]:
     """Per-driver kwargs so every driver uses the SAME transport with TLS
     disabled: a unix socket if one is available (see _UNIX_SOCKET), else plain
     TCP/IP. (mariadb and pymysql otherwise negotiate TLS by default.)"""
+    args: dict[str, Any]
     if driver_name in ('mariadb', 'mariadb_c'):
         args = {'ssl': False}
     else:  # pymysql, mysql_connector, mysql_connector_pure
@@ -51,10 +52,10 @@ def transport_args(driver_name):
     return args
 
 # Global variable to store mysql_connector implementation type
-_mysql_connector_impl = None
+_mysql_connector_impl: str | None = None
 
 
-def get_driver_module(driver_name):
+def get_driver_module(driver_name: str) -> Any:
     """Import and return the specified driver module."""
     if driver_name in ['mariadb', 'mariadb_c']:
         # Environment variable is already set by run_benchmarks.py
@@ -85,7 +86,7 @@ def get_driver_module(driver_name):
         raise ValueError(f"Unknown driver: {driver_name}")
 
 
-def _get_driver_ids():
+def _get_driver_ids() -> list[str]:
     """Generate driver IDs for parametrization, detecting mysql_connector implementation type."""
     global _mysql_connector_impl
     
@@ -122,23 +123,23 @@ def _get_driver_ids():
 
 
 @pytest.fixture(scope='session', params=['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector', 'mysql_connector_pure'], ids=_get_driver_ids())
-def driver_name(request):
+def driver_name(request: pytest.FixtureRequest) -> str:
     """Parametrize tests across all drivers."""
-    return request.param
+    return str(request.param)
 
 
 @pytest.fixture(scope='session')
-def driver(driver_name):
+def driver(driver_name: str) -> Any:
     """Get the driver module for the current test."""
     # Extract base driver name (remove implementation type suffix if present)
     base_name = driver_name.split(' (')[0] if ' (' in driver_name else driver_name
     return get_driver_module(base_name)
 
 
-_driver_warmed_up = {}
+_driver_warmed_up: dict[str, bool] = {}
 
 @pytest.fixture(scope='session')
-def warmup_session(driver, driver_name):
+def warmup_session(driver: ModuleType, driver_name: str) -> None:
     """Warm up the database and driver once per session, automatically before any tests run."""
     driver_key = driver_name
     if driver_key not in _driver_warmed_up:
@@ -166,7 +167,7 @@ def warmup_session(driver, driver_name):
 
 
 @pytest.fixture(scope='function')
-def connection(driver, driver_name, warmup_session):
+def connection(driver: ModuleType, driver_name: str, warmup_session: None) -> Iterator[Any]:
     """Create a database connection for each test."""
     # Now create the actual test connection
     if driver_name == 'mysql_connector_pure':
@@ -181,7 +182,7 @@ def connection(driver, driver_name, warmup_session):
 
 
 @pytest.fixture(scope='session')
-def setup_database():
+def setup_database() -> Iterator[None]:
     """Setup test database tables once per session."""
     # Use mariadb for setup (doesn't matter which driver)
     os.environ['MARIADB_PYTHON_CONNECTOR'] = 'python'

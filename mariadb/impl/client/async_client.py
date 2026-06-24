@@ -686,7 +686,7 @@ class AsyncClient(BaseClient):
 
                 prepareResult = None
                 first_error = None
-                all_completions: List[List[Completion]] = []
+                all_completions = []
 
                 try:
                     if use_pipeline:
@@ -815,7 +815,7 @@ class AsyncClient(BaseClient):
                 packets = packets[column_count:] if len(packets) > column_count else None
 
                 if prepare_stmt_packet is not None:
-                    prepare_stmt_packet.columns = columns  # type: ignore[assignment]
+                    prepare_stmt_packet.columns = columns
 
             # Read EOF packet after column definitions (if not deprecated)
             if not eof_deprecated:
@@ -938,7 +938,7 @@ class AsyncClient(BaseClient):
                         raise OperationalError(
                             "Server omitted result-set metadata for a subsequent "
                             "result set and no cached metadata is available")
-                    columns: ColumnsDefinition = prepare_stmt_packet.columns  # type: ignore[union-attr, assignment]
+                    columns: ColumnsDefinition = prepare_stmt_packet.columns
                 else:
                     packets = await read_payload(column_count)
                     columns = ColumnsDefinition(column_count)
@@ -950,7 +950,7 @@ class AsyncClient(BaseClient):
                         columns.decode_column(col_idx, self._recv_buf_mv[start:end], context)
                         col_idx += 1
                     if prepare_stmt_packet is not None:
-                        prepare_stmt_packet.columns = columns  # type: ignore[assignment]
+                        prepare_stmt_packet.columns = columns
 
                 if not eof_deprecated:
                     await read_payload()
@@ -1196,7 +1196,7 @@ class AsyncClient(BaseClient):
                 columns = ColumnsDefinition(col_count)
                 for i in range(col_count):
                     columns.decode_column(i, await self.read_payload(), self.context)
-                prepare_stmt_packet.columns = columns  # type: ignore[assignment]
+                prepare_stmt_packet.columns = columns
 
                 # Read EOF packet after columns (if not deprecated)
                 if not self.context.isEofDeprecated():

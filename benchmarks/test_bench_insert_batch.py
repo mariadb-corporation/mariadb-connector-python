@@ -9,22 +9,24 @@ Benchmark: Batch INSERT
 Benchmark batch insert operations with 100 rows.
 """
 
+from typing import Any
+
 import pytest
 import random
 import string
 
 
-def random_string(length=100):
+def random_string(length: int = 100) -> str:
     """Generate a random string with emojis."""
     chars = list(string.ascii_letters + string.digits + "\\Z😎🌶🎤🥂")
     return ''.join(random.choice(chars) for _ in range(length))
 
 
 @pytest.mark.usefixtures("setup_database")
-def test_insert_batch(benchmark, connection, driver_name):
+def test_insert_batch(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark batch insert of 100 rows."""
-    
-    def insert_batch():
+
+    def insert_batch() -> None:
         cursor = connection.cursor()
         s = random_string(100)
         

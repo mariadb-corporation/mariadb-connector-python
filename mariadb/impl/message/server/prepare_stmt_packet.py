@@ -9,7 +9,8 @@ Based on MySQL/MariaDB protocol COM_STMT_PREPARE response structure.
 
 import struct
 import threading
-from typing import TYPE_CHECKING, Any, List, Optional, Callable
+from types import TracebackType
+from typing import TYPE_CHECKING, List, Optional, Callable, Type
 
 from .column_definition_packet import ColumnsDefinition
 
@@ -68,8 +69,8 @@ class PrepareStmtPacket:
         self.warning_count = warning_count
         self.sql = sql
         self.database = database
-        self.columns = None   # ColumnsDefinition, set by _read_result or _parse_prepare_response
-        self.parameters = None  # ColumnsDefinition, set by _parse_prepare_response
+        self.columns: Optional[ColumnsDefinition] = None   # set by _read_result or _parse_prepare_response
+        self.parameters: Optional[ColumnsDefinition] = None  # set by _parse_prepare_response
         self.closed = False
         self.close_callback = close_callback
     
@@ -178,7 +179,12 @@ class CachedPrepareStmtPacket(PrepareStmtPacket):
         """Enter context manager"""
         return self
     
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         """Exit context manager and release cache reference"""
         self.close()
     

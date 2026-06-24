@@ -8,9 +8,13 @@ Provides SSL/TLS socket creation utilities for database connections.
 """
 
 import ssl
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple, TYPE_CHECKING
 from ...configuration import Configuration
+from ..context import Context
 from ....exceptions import OperationalError
+
+if TYPE_CHECKING:
+    from .ssl_fingerprint_validator import SSLFingerprintValidator
 
 
 class SSLUtility:
@@ -141,9 +145,9 @@ class SSLUtility:
     @staticmethod
     def prepare_ssl_context(
         configuration: Configuration,
-        context: Any,
+        context: Context,
         is_local_connection: bool = False
-    ) -> Tuple[ssl.SSLContext, Optional[Any]]:
+    ) -> Tuple[ssl.SSLContext, Optional["SSLFingerprintValidator"]]:
         """
         Prepare SSL context with optional fingerprint validation support.
 

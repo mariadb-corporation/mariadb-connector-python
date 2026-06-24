@@ -22,6 +22,7 @@ import sys
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import List, Optional
 
 
 DRIVERS = ["mariadb", "mariadb_c", "pymysql", "mysql_connector", "mysql_connector_pure"]
@@ -82,7 +83,8 @@ def check_database_connection() -> bool:
     return True
 
 
-def run_driver_benchmarks(results_dir: Path, skip: list = None) -> None:
+def run_driver_benchmarks(results_dir: Path,
+                          skip: Optional[List[str]] = None) -> None:
     """Run benchmarks for each driver and store JSON results in ``results_dir``."""
 
     for driver in DRIVERS:

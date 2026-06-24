@@ -20,7 +20,7 @@ except ImportError:
         __version__ = version('mariadb-pool')
     except ImportError:
         try:
-            from importlib_metadata import version
+            from importlib_metadata import version  # type: ignore[no-redef]
             __version__ = version('mariadb-pool')
         except ImportError:
             # Final fallback - use development version to indicate release_info.py generation failed
@@ -28,6 +28,7 @@ except ImportError:
 
 # Parse version info
 # Handles "1.2.3", "1.2.3-dev", "1.2.3.dev", "2.0.0rc1", etc.
+__version_info__: tuple
 try:
     import re
     match = re.match(r'^(\d+)\.(\d+)\.(\d+)([.-](.+)|([a-zA-Z].*))?$', __version__)

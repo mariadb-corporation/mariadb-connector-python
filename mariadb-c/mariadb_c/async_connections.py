@@ -13,7 +13,7 @@ if hasattr(sys, 'pypy_version_info'):
 
 import asyncio
 import socket
-from typing import Optional
+from typing import Any, Callable, Optional, Tuple, cast
 
 from .connections import StmtCache
 
@@ -54,12 +54,12 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
     Connections are created using the method mariadb_c.asyncConnect()
     """
 
-    def _check_closed(self):
+    def _check_closed(self) -> None:
         if self._closed:
             raise ProgrammingError("Invalid connection or "
                                            "not connected")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Initialize async connection (does not connect yet).
         Use AsyncConnection.connect() or asyncConnect() to connect.
@@ -68,20 +68,20 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._stmt_cache: Optional[StmtCache] = None
 
         # Initialize Python-side attributes first (same order as sync)
-        self._socket = None
+        self._socket: Optional[socket.socket] = None
         self._socket_fd: Optional[int] = None
         self._used = 0
         self._last_executed_statement = None
         self.__last_used = 0
         self.tpc_state = TPC_STATE.NONE
         self._xid = None
-        self._pooled_connection = None
+        self._pooled_connection: Any = None
         self._active_async_cursor = None  # Python-level tracking for async cursors only
         
         # Persistent event loop state for efficient I/O waiting.
         # _waiter holds the Future for an in-flight wait (None when idle);
         # _reader_armed tracks whether the persistent reader is registered.
-        self._loop = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._waiter: Optional[asyncio.Future] = None
         self._reader_armed = False
         
@@ -124,7 +124,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
 
         # Validate host parameter (same as sync)
         if "host" in kwargs:
-            host = kwargs.get("host")
+            host = kwargs["host"]
             if version.Version(mariadbapi_version) < version.Version('3.3.0') and ',' in host:
                 raise ProgrammingError("Host failover list requires MariaDB Connector/C 3.3.0 or newer")
         
@@ -136,7 +136,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         CConnection._init_fields_only(self)
     
     @classmethod
-    async def connect(cls, *args, **kwargs):
+    async def connect(cls, *args: Any, **kwargs: Any) -> Any:
         """
         Create and connect an async connection (classmethod).
         
@@ -185,7 +185,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         await instance._connect()
         return instance
     
-    async def _connect(self):
+    async def _connect(self) -> None:
         """
         Internal method to establish async connection.
         
@@ -216,7 +216,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         if hasattr(loop, 'add_reader'):
             # Test if add_reader actually works (Windows ProactorEventLoop has it but raises NotImplementedError)
             try:
-                def dummy_callback():
+                def dummy_callback() -> None:
                     pass
                 loop.add_reader(self._socket_fd, dummy_callback)
                 loop.remove_reader(self._socket_fd)
@@ -268,7 +268,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
                 pass
             self._reader_armed = False
 
-    async def _drive(self, start, cont):
+    async def _drive(self, start: Callable[[], Any], cont: Callable[[int], Any]) -> Any:
         """Drive a libmariadb non-blocking start/cont pair to completion.
 
         Repeatedly waits for the requested socket readiness and feeds the
@@ -304,6 +304,8 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
 
         loop = self._loop
         fd = self._socket_fd
+        # Both are set during _connect, before any wait can run.
+        assert loop is not None and fd is not None
         writing = False
 
         if wait_status & MYSQL_WAIT_READ:
@@ -325,8 +327,8 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._waiter = waiter
         try:
             if timeout is not None:
-                return await asyncio.wait_for(waiter, timeout=timeout)
-            return await waiter
+                return cast(int, await asyncio.wait_for(waiter, timeout=timeout))
+            return cast(int, await waiter)
         except asyncio.TimeoutError:
             return MYSQL_WAIT_TIMEOUT
         finally:
@@ -362,6 +364,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             
             # Check for timeout
             if timeout is not None:
+                assert start_time is not None  # set together with timeout above
                 elapsed = asyncio.get_event_loop().time() - start_time
                 if elapsed >= timeout:
                     return MYSQL_WAIT_TIMEOUT
@@ -370,7 +373,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             # Use 0 sleep since C extension now handles SSL efficiently
             await asyncio.sleep(0)
 
-    def cursor(self, cursorclass=None, **kwargs):
+    def cursor(self, cursorclass: Optional[type] = None, **kwargs: Any) -> Any:
         """
         Returns a new async cursor object for the current connection.
 
@@ -407,16 +410,16 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             # Use async close to avoid blocking the event loop
             await self._drive(self._async_close_start, self._async_close_cont)
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "AsyncConnection":
         """Async context manager entry"""
         self._check_closed()
         return self
     
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
         """Async context manager exit"""
         await self.close()
 
-    async def select_db(self, new_db: str):
+    async def select_db(self, new_db: str) -> None:
         """
         Gets the default database for the current connection (async).
 
@@ -430,7 +433,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         finally:
             await cursor.close()
 
-    def get_server_version(self):
+    def get_server_version(self) -> Tuple[int, int, int]:
         """
         Returns a tuple representing the version of the connected server in
         the following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)
@@ -439,7 +442,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         return self.server_version_info
 
     @property
-    def tls_peer_cert_info(self):
+    def tls_peer_cert_info(self) -> Optional[Any]:
         """Get peer certificate information."""
 
         if version.Version(mariadbapi_version) <\
@@ -451,14 +454,14 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         return None
 
     @property
-    def database(self):
+    def database(self) -> str:
         """Get the current database of the connection."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SCHEMA)
+        return cast(str, self._mariadb_get_info(INFO.SCHEMA))
 
     @database.setter
-    def database(self, schema):
+    def database(self, schema: str) -> None:
         """Set default database.
 
         Property setters cannot be async, so this raises an error.
@@ -470,7 +473,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         )
 
     @property
-    def user(self):
+    def user(self) -> str:
         """
         Returns the username for the current connection or empty
         string if it can't be determined, e.g., when using socket
@@ -478,10 +481,10 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         """
         self._check_closed()
 
-        return self._mariadb_get_info(INFO.USER)
+        return cast(str, self._mariadb_get_info(INFO.USER))
 
     @property
-    def character_set(self):
+    def character_set(self) -> str:
         """
         Client character set.
 
@@ -491,31 +494,31 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         return _DEFAULT_CHARSET
 
     @property
-    def client_capabilities(self):
+    def client_capabilities(self) -> int:
         """Client capability flags."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.CLIENT_CAPABILITIES)
+        return cast(int, self._mariadb_get_info(INFO.CLIENT_CAPABILITIES))
 
     @property
-    def server_capabilities(self):
+    def server_capabilities(self) -> int:
         """Server capability flags."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_CAPABILITIES)
+        return cast(int, self._mariadb_get_info(INFO.SERVER_CAPABILITIES))
 
     @property
-    def extended_server_capabilities(self):
+    def extended_server_capabilities(self) -> int:
         """
         Extended server capability flags (only for MariaDB
         database servers).
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.EXTENDED_SERVER_CAPABILITIES)
+        return cast(int, self._mariadb_get_info(INFO.EXTENDED_SERVER_CAPABILITIES))
 
     @property
-    def server_port(self):
+    def server_port(self) -> int:
         """
         Database server TCP/IP port. This value will be 0 in case of an unix
         socket connection.
@@ -524,7 +527,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._check_closed()
         if self.unix_socket:
             return 0
-        return self._mariadb_get_info(INFO.PORT)
+        return cast(int, self._mariadb_get_info(INFO.PORT))
 
     @property
     def server_mariadb(self) -> bool:
@@ -536,57 +539,57 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         """
         self._check_closed()
         # MARIADB_CONNECTION_SREVER_TYPE returns 1 for MariaDB, 0 for MySQL
-        return self._mariadb_get_info(INFO.SERVER_TYPE) == "MariaDB"
+        return bool(self._mariadb_get_info(INFO.SERVER_TYPE) == "MariaDB")
 
     @property
-    def unix_socket(self):
+    def unix_socket(self) -> Optional[str]:
         """Unix socket name."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.UNIX_SOCKET)
+        return cast(Optional[str], self._mariadb_get_info(INFO.UNIX_SOCKET))
 
     @property
-    def server_name(self):
+    def server_name(self) -> Optional[str]:
         """Name or IP address of database server."""
 
         self._check_closed()
         if self.unix_socket:
             return None
-        return self._mariadb_get_info(INFO.HOST)
+        return cast(Optional[str], self._mariadb_get_info(INFO.HOST))
 
     @property
-    def collation(self):
+    def collation(self) -> str:
         """Client character set collation"""
 
         return _DEFAULT_COLLATION
 
     @property
-    def server_info(self):
+    def server_info(self) -> str:
         """Server version in alphanumerical format (str)"""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_VERSION)
+        return cast(str, self._mariadb_get_info(INFO.SERVER_VERSION))
 
     @property
-    def tls_cipher(self):
+    def tls_cipher(self) -> Optional[str]:
         """TLS cipher suite if a secure connection is used."""
 
         self._check_closed()
         if self._tls:
-            return self._mariadb_get_info(INFO.SSL_CIPHER)
+            return cast(Optional[str], self._mariadb_get_info(INFO.SSL_CIPHER))
         return None
 
     @property
-    def tls_version(self):
+    def tls_version(self) -> Optional[str]:
         """TLS protocol version if a secure connection is used."""
 
         self._check_closed()
         if self._tls:
-            return self._mariadb_get_info(INFO.TLS_VERSION)
+            return cast(Optional[str], self._mariadb_get_info(INFO.TLS_VERSION))
         return None
 
     @property
-    def _tls_verify_status(self):
+    def _tls_verify_status(self) -> Optional[Any]:
         """Returns the result of the peer certificate verification."""
 
         if version.Version(mariadbapi_version) <\
@@ -599,16 +602,16 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         return None
 
     @property
-    def server_status(self):
+    def server_status(self) -> int:
         """
         Return server status flags
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_STATUS)
+        return cast(int, self._mariadb_get_info(INFO.SERVER_STATUS))
 
     @property
-    def server_version(self):
+    def server_version(self) -> int:
         """
         Server version in numerical format.
 
@@ -617,10 +620,10 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_VERSION_ID)
+        return cast(int, self._mariadb_get_info(INFO.SERVER_VERSION_ID))
 
     @property
-    def server_version_info(self):
+    def server_version_info(self) -> Tuple[int, int, int]:
         """
         Returns numeric version of connected database server in tuple format.
         """
@@ -632,7 +635,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
                 version % 100)
 
     @property
-    def socket(self):
+    def socket(self) -> socket.socket:
         """Returns the socket used for database connection"""
 
         fno = self._get_socket()
@@ -647,7 +650,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
     character_set_name = character_set
 
     @property
-    def thread_id(self):
+    def thread_id(self) -> int:
         """
         Alias for connection_id
         """
@@ -655,7 +658,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._check_closed()
         return self.connection_id
 
-    async def ping(self):
+    async def ping(self) -> Any:
         """
         Check if the connection to the server is alive (async)
         
@@ -665,7 +668,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._check_closed()
         return await self._drive(self._async_ping_start, self._async_ping_cont)
 
-    async def change_user(self, user, password, database=None):
+    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
         """
         Change the user and default database for the current connection
         
@@ -691,7 +694,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._disarm_reader()
         self._socket_fd = self.get_socket()
 
-    async def reconnect(self):
+    async def reconnect(self) -> None:
         """
         Reconnect to the server
         
@@ -714,14 +717,14 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         # The reader re-arms lazily on the new FD at the next read-wait.
         self._socket_fd = self.get_socket()
 
-    async def reset(self):
+    async def reset(self) -> None:
         """
         Reset the connection
         """
         self._check_closed()
         await self._drive(self._async_reset_start, self._async_reset_cont)
 
-    async def dump_debug_info(self):
+    async def dump_debug_info(self) -> None:
         """
         Send a COM_DEBUG command to the server (async)
 

@@ -6,7 +6,8 @@ Compatibility wrapper for mariadb_pool.ConnectionPool
 Matches the C extension API for connection pooling.
 """
 
-from typing import Callable, Any, Dict, Optional, TYPE_CHECKING, Union
+from types import TracebackType
+from typing import Callable, Any, Dict, Literal, Optional, Type, TYPE_CHECKING
 from .pool import ConnectionPool as _PoolImpl, PoolConfig
 
 # Import PoolError from shared exceptions
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
         from mariadb_c import Connection as CConnection
     except ImportError:
         CConnection = Any
+
+    # Shared ABC implemented by both pure-Python and C connections.
+    from mariadb_shared.sync_connection_common import SyncConnectionCommon
 MAX_POOL_SIZE = 64
 
 class ConnectionPoolWrapper:
@@ -117,12 +121,12 @@ class ConnectionPoolWrapper:
         if pool_name is not None:
             self._registry[pool_name] = self
     
-    def get_connection(self) -> Union['SyncConnection', 'CConnection']:
+    def get_connection(self) -> 'SyncConnectionCommon':
         """Get a connection from the pool"""
         pool_conn = self._pool._acquire()
         return pool_conn.connection
     
-    def add_connection(self, connection: Optional[Union['SyncConnection', 'CConnection']] = None) -> None:
+    def add_connection(self, connection: Optional['SyncConnectionCommon'] = None) -> None:
         """Add a connection to the pool
         
         Args:
@@ -209,7 +213,12 @@ class ConnectionPoolWrapper:
         """Enter context manager"""
         return self
     
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Literal[False]:
         """Exit context manager and close pool"""
         self.close()
         return False

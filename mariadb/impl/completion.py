@@ -2,7 +2,7 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from abc import ABC, abstractmethod
-from typing import Optional, Any, List, Dict, TYPE_CHECKING
+from typing import Optional, List, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .result import Result
@@ -34,7 +34,7 @@ class Completion(ABC):
         """Check if completion has result set"""
         return self.result_set is not None
     
-    def get_result_set(self) -> Optional[Any]:
+    def get_result_set(self) -> Optional['Result']:
         """Get result set"""
         return self.result_set
     

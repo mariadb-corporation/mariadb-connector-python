@@ -9,13 +9,15 @@ Benchmark: SELECT 1000 rows
 Benchmark fetching 1000 rows with text and binary protocol.
 """
 
+from typing import Any
+
 import pytest
 
 
 SQL = "SELECT seq, 'abcdefghijabcdefghijabcdefghijaa' FROM seq_1_to_1000"
 
 
-def test_select_1000_rows_text(benchmark, connection, driver_name):
+def test_select_1000_rows_text(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark SELECT 1000 rows using text protocol (regular execute)."""
 
     is_mariadb = driver_name in ('mariadb', 'mariadb_c')
@@ -28,7 +30,7 @@ def test_select_1000_rows_text(benchmark, connection, driver_name):
         cursor.fetchall()
         cursor.close()
 
-    def select_1000_rows():
+    def select_1000_rows() -> int:
         cursor = connection.cursor()
         cursor.execute(SQL_WHERE, (1,))
         rows = cursor.fetchall()
@@ -39,7 +41,7 @@ def test_select_1000_rows_text(benchmark, connection, driver_name):
     print(f"\n{driver_name} (text): {result}")
 
 
-def test_select_1000_rows_binary(benchmark, connection, driver_name):
+def test_select_1000_rows_binary(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark SELECT 1000 rows using binary protocol (prepared statement)."""
 
     if 'pymysql' in driver_name:
@@ -56,7 +58,7 @@ def test_select_1000_rows_binary(benchmark, connection, driver_name):
         cursor.fetchall()
     cursor.close()
 
-    def select_1000_rows():
+    def select_1000_rows() -> int:
         cursor = connection.cursor(**cursor_kwargs)
         cursor.execute(SQL_WHERE, (1,))
         rows = cursor.fetchall()

@@ -9,12 +9,21 @@ Async Benchmark: SELECT 1
 Simple async SELECT query benchmark.
 """
 
+import asyncio
+from typing import Any, Callable, Coroutine
 
-def test_async_select_1(benchmark, async_connection, async_driver_name, event_loop, cursor_factory):
+
+def test_async_select_1(
+    benchmark: Any,
+    async_connection: Any,
+    async_driver_name: str,
+    event_loop: asyncio.AbstractEventLoop,
+    cursor_factory: Callable[[Any], Coroutine[Any, Any, Any]],
+) -> None:
     """Benchmark async SELECT 1 query execution."""
 
     # Warmup
-    async def _warmup():
+    async def _warmup() -> None:
         for _ in range(10):
             cur = await cursor_factory(async_connection)
             await cur.execute("SELECT 1")
@@ -23,7 +32,7 @@ def test_async_select_1(benchmark, async_connection, async_driver_name, event_lo
 
     event_loop.run_until_complete(_warmup())
 
-    async def select_1():
+    async def select_1() -> Any:
         cur = await cursor_factory(async_connection)
         await cur.execute("SELECT 1")
         result = await cur.fetchone()

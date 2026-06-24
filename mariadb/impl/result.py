@@ -5,7 +5,7 @@
 Result set classes for MariaDB query results
 """
 
-from typing import List, Optional, Any, TYPE_CHECKING, Callable, Tuple
+from typing import List, Optional, TYPE_CHECKING, Callable, Tuple
 from abc import ABC, abstractmethod
 from .message.server.eof_packet import EofPacket
 from .message.server.ok_packet import OkPacket
@@ -90,15 +90,15 @@ class SyncResult(Result):
     # =========================================================================
     
     @abstractmethod
-    def fetch_one(self) -> Optional[Any]:
+    def fetch_one(self) -> Optional[tuple]:
         """Fetch next row"""
         ...
-        
+
     @abstractmethod
-    def fetch_all(self) -> List[Any]:
+    def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
         ...
-        
+
     @abstractmethod
     def scroll(self, value: int, mode: str = "relative") -> None:
         ...
@@ -123,12 +123,12 @@ class AsyncResult(Result):
     # =========================================================================
         
     @abstractmethod
-    async def fetch_one(self) -> Optional[Any]:
+    async def fetch_one(self) -> Optional[tuple]:
         """Fetch next row"""
         ...
-    
+
     @abstractmethod
-    async def fetch_all(self) -> List[Any]:
+    async def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
         ...
     
@@ -209,7 +209,7 @@ class SyncCompleteResult(BaseCompleteResult, SyncResult):
     """
     __slots__ = ()
     
-    def fetch_one(self) -> Optional[Any]:
+    def fetch_one(self) -> Optional[tuple]:
         """Fetch next row. row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
         row_pointer = self.row_pointer
         if row_pointer >= self.data_size - 1:
@@ -219,7 +219,7 @@ class SyncCompleteResult(BaseCompleteResult, SyncResult):
         self.row_pointer = row_pointer
         return self.rows[row_pointer]
     
-    def fetch_all(self) -> List[Any]:
+    def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows"""
         row_pointer = self.row_pointer
         data_size = self.data_size
@@ -242,7 +242,7 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
     """
     __slots__ = ()
     
-    async def fetch_one(self) -> Optional[Any]:
+    async def fetch_one(self) -> Optional[tuple]:
         """Fetch next row (async). row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
         row_pointer = self.row_pointer
         if row_pointer >= self.data_size - 1:
@@ -252,7 +252,7 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
         self.row_pointer = row_pointer
         return self.rows[row_pointer]
     
-    async def fetch_all(self) -> List[Any]:
+    async def fetch_all(self) -> List[tuple]:
         """Fetch all remaining rows (async)"""
         row_pointer = self.row_pointer
         data_size = self.data_size
@@ -314,7 +314,7 @@ class BaseStreamingResult(Result):
    
     
     @abstractmethod
-    def _read_next_row_packet(self) -> Optional[bytes]:
+    def _read_next_row_packet(self) -> Optional[memoryview]:
         """Read next row packet from network (sync or async)"""
         pass
     
@@ -420,7 +420,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
     """
     __slots__ = ()
     
-    async def _read_next_row_packet(self) -> Optional[memoryview]:  # type: ignore[override]
+    async def _read_next_row_packet(self) -> Optional[memoryview]:  # type: ignore[override]  # async override of the sync abstractmethod
         """Read next row packet from network (asynchronous). Returns row packet memoryview, or None if no more rows."""
         try:
             row_packet = await self.read_payload_func()  # type: ignore[misc]

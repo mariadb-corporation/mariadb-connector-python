@@ -18,6 +18,9 @@ from typing import TYPE_CHECKING, Any, List, Tuple, Optional
 
 from ...client.context import Context
 from ..client_message import ClientMessage
+
+if TYPE_CHECKING:
+    from ..payload_writer import PayloadWriter
 from mariadb_shared.text_protocol import (
     substitute_params,
     normalize_to_qmark,
@@ -69,7 +72,7 @@ class QueryPacket(ClientMessage):
         result_list.insert(0, b'\x00\x00\x00\x00\x03')
         return QueryPacket(bytearray(b"".join(result_list)), sql)
 
-    def payload(self, context: Context, writer: Any) -> bytearray:
+    def payload(self, context: Context, writer: 'PayloadWriter') -> bytearray:
         return self._payload_bytes
 
     def is_binary(self) -> bool:

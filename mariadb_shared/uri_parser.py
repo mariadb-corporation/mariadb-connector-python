@@ -7,7 +7,7 @@ URI parser for MariaDB connection strings
 Supports URI format: mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=value2]
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Union
 from urllib.parse import urlparse, parse_qs, unquote
 
 
@@ -35,7 +35,7 @@ def parse_connection_uri(uri: str) -> Dict[str, Any]:
     if parsed.scheme not in ('mariadb', 'mysql'):
         raise ValueError(f"Invalid URI scheme: {parsed.scheme}. Expected 'mariadb' or 'mysql'")
     
-    params = {}
+    params: Dict[str, Union[str, int, bool]] = {}
     
     # Extract user and password
     if parsed.username:
@@ -49,7 +49,7 @@ def parse_connection_uri(uri: str) -> Dict[str, Any]:
     
     # Extract port
     if parsed.port:
-        params['port'] = parsed.port  # type: ignore[assignment]
+        params['port'] = parsed.port
     
     # Extract database
     if parsed.path and len(parsed.path) > 1:
@@ -65,12 +65,12 @@ def parse_connection_uri(uri: str) -> Dict[str, Any]:
             
             # Convert boolean strings
             if value.lower() in ('true', '1', 'yes', 'on'):
-                params[key] = True  # type: ignore[assignment]
+                params[key] = True
             elif value.lower() in ('false', '0', 'no', 'off'):
-                params[key] = False  # type: ignore[assignment]
+                params[key] = False
             # Convert numeric strings
             elif value.isdigit():
-                params[key] = int(value)  # type: ignore[assignment]
+                params[key] = int(value)
             else:
                 params[key] = unquote(value)
     

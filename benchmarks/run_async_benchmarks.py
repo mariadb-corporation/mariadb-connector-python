@@ -19,6 +19,7 @@ import argparse
 import subprocess
 import json
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 
 ASYNC_BENCHMARKS = [
@@ -33,7 +34,8 @@ ASYNC_BENCHMARKS = [
 ASYNC_DRIVERS = ['mariadb_async', 'mariadb_c_async', 'aiomysql', 'asyncmy']
 
 
-def run_async_benchmark(driver=None, output_json=None):
+def run_async_benchmark(driver: Optional[str] = None,
+                        output_json: Optional[str] = None) -> int:
     """Run async pytest-benchmark with specified parameters."""
 
     cmd = [sys.executable, '-m', 'pytest', '-v']
@@ -64,10 +66,10 @@ def run_async_benchmark(driver=None, output_json=None):
     return result.returncode
 
 
-def generate_comparison(json_files):
+def generate_comparison(json_files: List[str]) -> None:
     """Generate comparison report from async benchmark JSON files."""
 
-    results = {}
+    results: Dict[str, Dict[str, Any]] = {}
     for jf in json_files:
         if not os.path.exists(jf):
             print(f"Warning: {jf} not found")
@@ -111,7 +113,7 @@ def generate_comparison(json_files):
     print("=" * len(header))
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description="Run async benchmarks")
     parser.add_argument('--driver', choices=ASYNC_DRIVERS, help='Specific async driver')
     parser.add_argument('--json', help='Output JSON file')

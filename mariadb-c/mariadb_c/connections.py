@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import socket
 from collections import OrderedDict
-from typing import Optional, Any
+from typing import Optional, Any, Tuple, Type, cast, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .cursors import Cursor
 
 # Import shared constants and exceptions to avoid circular dependencies
 from mariadb_shared.constants import STATUS, TPC_STATE, INFO
@@ -52,7 +55,7 @@ class StmtCacheEntry:
         self.checked_out = True
         return capsule
 
-    def checkin(self, capsule: Any, connection: Any) -> None:
+    def checkin(self, capsule: Any, connection: "Connection") -> None:
         """Return the template capsule after use."""
         self.checked_out = False
         if not self.in_cache:
@@ -64,7 +67,7 @@ class StmtCacheEntry:
         else:
             self.capsule = capsule
 
-    def evict(self, connection: Any) -> None:
+    def evict(self, connection: "Connection") -> None:
         """Mark as evicted.  Close capsule immediately if not checked out."""
         self.in_cache = False
         if self.capsule is not None:
@@ -84,10 +87,10 @@ class StmtCache:
 
     __slots__ = ("_cache", "_maxsize", "_connection")
 
-    def __init__(self, connection: Any, maxsize: int) -> None:
+    def __init__(self, connection: "Connection", maxsize: int) -> None:
         self._cache: OrderedDict[str, StmtCacheEntry] = OrderedDict()
         self._maxsize: int = maxsize
-        self._connection: Any = connection
+        self._connection: "Connection" = connection
 
     @property
     def enabled(self) -> bool:
@@ -158,12 +161,12 @@ class Connection(CConnection, SyncConnectionCommon):
     Connections are created using the method mariadb_c.connect()
     """
 
-    def _check_closed(self):
+    def _check_closed(self) -> None:
         if self._closed:
             raise ProgrammingError("Invalid connection or "
                                            "not connected")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Establishes a connection to a database server and returns a connection
         object.
@@ -173,15 +176,15 @@ class Connection(CConnection, SyncConnectionCommon):
         # raises AttributeError.
         self._stmt_cache: Optional[StmtCache] = None
 
-        self._socket = None
+        self._socket: Optional[socket.socket] = None
         self._used = 0
         self._last_executed_statement = None
         self._socket = None
         self.__last_used = 0
         self.tpc_state = TPC_STATE.NONE
         self._xid = None
-        self._pooled_connection = None
-        self._active_streaming_result = None
+        self._pooled_connection: Optional[Any] = None
+        self._active_streaming_result: Optional["Cursor"] = None
 
         autocommit = validate_bool(kwargs.pop("autocommit", False), "autocommit")
         kwargs.pop("reconnect", None)
@@ -210,7 +213,7 @@ class Connection(CConnection, SyncConnectionCommon):
         # if host contains a connection string or multiple hosts,
         # we need to check if it's supported by Connector/C
         if "host" in kwargs:
-            host = kwargs.get("host")
+            host = kwargs["host"]
             if version.Version(mariadbapi_version) <\
                version.Version('3.3.0') and ',' in host:
                 raise ProgrammingError("Host failover list requires "
@@ -234,7 +237,7 @@ class Connection(CConnection, SyncConnectionCommon):
 
         self.autocommit = autocommit
 
-    def cursor(self, cursorclass=None, **kwargs):
+    def cursor(self, cursorclass: Optional[Type["Cursor"]] = None, **kwargs: Any) -> "Cursor":
         """
         Returns a new cursor object for the current connection.
 
@@ -269,13 +272,13 @@ class Connection(CConnection, SyncConnectionCommon):
                 self._stmt_cache = None
             super().close()
 
-    def __enter__(self):
+    def __enter__(self) -> "Connection":
         self._check_closed()
         "Returns a copy of the connection."
 
         return self
 
-    def select_db(self, new_db: str):
+    def select_db(self, new_db: str) -> None:
         """
         Gets the default database for the current connection.
 
@@ -286,7 +289,7 @@ class Connection(CConnection, SyncConnectionCommon):
         self._check_closed()
         self.database = new_db
 
-    def get_server_version(self):
+    def get_server_version(self) -> Tuple[int, int, int]:
         """
         Returns a tuple representing the version of the connected server in
         the following format: (MAJOR_VERSION, MINOR_VERSION, PATCH_VERSION)
@@ -295,7 +298,7 @@ class Connection(CConnection, SyncConnectionCommon):
         return self.server_version_info
 
     @property
-    def tls_peer_cert_info(self):
+    def tls_peer_cert_info(self) -> Optional[Any]:
         """Get peer certificate information."""
 
         if version.Version(mariadbapi_version) <\
@@ -307,21 +310,21 @@ class Connection(CConnection, SyncConnectionCommon):
         return None
 
     @property
-    def database(self):
+    def database(self) -> str:
         """Get the current database of the connection."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SCHEMA)
+        return cast(str, self._mariadb_get_info(INFO.SCHEMA))
 
     @database.setter
-    def database(self, schema):
+    def database(self, schema: str) -> None:
         """Set default database."""
         self._check_closed()
         with self.cursor() as cursor:
             cursor.execute("USE %s" % str(schema))
 
     @property
-    def user(self):
+    def user(self) -> str:
         """
         Returns the username for the current connection or empty
         string if it can't be determined, e.g., when using socket
@@ -329,10 +332,10 @@ class Connection(CConnection, SyncConnectionCommon):
         """
         self._check_closed()
 
-        return self._mariadb_get_info(INFO.USER)
+        return cast(str, self._mariadb_get_info(INFO.USER))
 
     @property
-    def character_set(self):
+    def character_set(self) -> str:
         """
         Client character set.
 
@@ -342,31 +345,31 @@ class Connection(CConnection, SyncConnectionCommon):
         return _DEFAULT_CHARSET
 
     @property
-    def client_capabilities(self):
+    def client_capabilities(self) -> int:
         """Client capability flags."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.CLIENT_CAPABILITIES)
+        return cast(int, self._mariadb_get_info(INFO.CLIENT_CAPABILITIES))
 
     @property
-    def server_capabilities(self):
+    def server_capabilities(self) -> int:
         """Server capability flags."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_CAPABILITIES)
+        return cast(int, self._mariadb_get_info(INFO.SERVER_CAPABILITIES))
 
     @property
-    def extended_server_capabilities(self):
+    def extended_server_capabilities(self) -> int:
         """
         Extended server capability flags (only for MariaDB
         database servers).
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.EXTENDED_SERVER_CAPABILITIES)
+        return cast(int, self._mariadb_get_info(INFO.EXTENDED_SERVER_CAPABILITIES))
 
     @property
-    def server_port(self):
+    def server_port(self) -> int:
         """
         Database server TCP/IP port. This value will be 0 in case of an unix
         socket connection.
@@ -375,7 +378,7 @@ class Connection(CConnection, SyncConnectionCommon):
         self._check_closed()
         if self.unix_socket:
             return 0
-        return self._mariadb_get_info(INFO.PORT)
+        return cast(int, self._mariadb_get_info(INFO.PORT))
 
     @property
     def server_mariadb(self) -> bool:
@@ -387,57 +390,57 @@ class Connection(CConnection, SyncConnectionCommon):
         """
         self._check_closed()
         # MARIADB_CONNECTION_SREVER_TYPE returns 1 for MariaDB, 0 for MySQL
-        return self._mariadb_get_info(INFO.SERVER_TYPE) == "MariaDB"
+        return bool(self._mariadb_get_info(INFO.SERVER_TYPE) == "MariaDB")
 
     @property
-    def unix_socket(self):
+    def unix_socket(self) -> Optional[str]:
         """Unix socket name."""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.UNIX_SOCKET)
+        return cast(Optional[str], self._mariadb_get_info(INFO.UNIX_SOCKET))
 
     @property
-    def server_name(self):
+    def server_name(self) -> Optional[str]:
         """Name or IP address of database server."""
 
         self._check_closed()
         if self.unix_socket:
             return None
-        return self._mariadb_get_info(INFO.HOST)
+        return cast(Optional[str], self._mariadb_get_info(INFO.HOST))
 
     @property
-    def collation(self):
+    def collation(self) -> str:
         """Client character set collation"""
 
         return _DEFAULT_COLLATION
 
     @property
-    def server_info(self):
+    def server_info(self) -> str:
         """Server version in alphanumerical format (str)"""
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_VERSION)
+        return cast(str, self._mariadb_get_info(INFO.SERVER_VERSION))
 
     @property
-    def tls_cipher(self):
+    def tls_cipher(self) -> Optional[str]:
         """TLS cipher suite if a secure connection is used."""
 
         self._check_closed()
         if self._tls:
-            return self._mariadb_get_info(INFO.SSL_CIPHER)
+            return cast(Optional[str], self._mariadb_get_info(INFO.SSL_CIPHER))
         return None
 
     @property
-    def tls_version(self):
+    def tls_version(self) -> Optional[str]:
         """TLS protocol version if a secure connection is used."""
 
         self._check_closed()
         if self._tls:
-            return self._mariadb_get_info(INFO.TLS_VERSION)
+            return cast(Optional[str], self._mariadb_get_info(INFO.TLS_VERSION))
         return None
 
     @property
-    def _tls_verify_status(self):
+    def _tls_verify_status(self) -> Optional[int]:
         """Returns the result of the peer certificate verification."""
 
         if version.Version(mariadbapi_version) <\
@@ -446,20 +449,20 @@ class Connection(CConnection, SyncConnectionCommon):
 
         self._check_closed()
         if self._tls:
-            return self._mariadb_get_info(INFO.TLS_VERIFY_STATUS)
+            return cast(Optional[int], self._mariadb_get_info(INFO.TLS_VERIFY_STATUS))
         return None
 
     @property
-    def server_status(self):
+    def server_status(self) -> int:
         """
         Return server status flags
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_STATUS)
+        return cast(int, self._mariadb_get_info(INFO.SERVER_STATUS))
 
     @property
-    def server_version(self):
+    def server_version(self) -> int:
         """
         Server version in numerical format.
 
@@ -468,10 +471,10 @@ class Connection(CConnection, SyncConnectionCommon):
         """
 
         self._check_closed()
-        return self._mariadb_get_info(INFO.SERVER_VERSION_ID)
+        return cast(int, self._mariadb_get_info(INFO.SERVER_VERSION_ID))
 
     @property
-    def server_version_info(self):
+    def server_version_info(self) -> Tuple[int, int, int]:
         """
         Returns numeric version of connected database server in tuple format.
         """
@@ -483,7 +486,7 @@ class Connection(CConnection, SyncConnectionCommon):
                 version % 100)
 
     @property
-    def socket(self):
+    def socket(self) -> socket.socket:
         """Returns the socket used for database connection"""
 
         fno = self._get_socket()
@@ -494,7 +497,7 @@ class Connection(CConnection, SyncConnectionCommon):
             self._socket = socket.socket(fileno=fno)
         return self._socket
 
-    def ping(self):
+    def ping(self) -> None:
         """
         Check if the connection to the server is alive
 
@@ -504,10 +507,10 @@ class Connection(CConnection, SyncConnectionCommon):
             OperationalError: If connection is not alive
         """
         self._check_closed()
-        return self._sync_ping()
+        self._sync_ping()
 
     @property
-    def open(self):
+    def open(self) -> bool:
         """
         Returns true if the connection is alive.
 
@@ -529,7 +532,7 @@ class Connection(CConnection, SyncConnectionCommon):
     character_set_name = character_set
 
     @property
-    def thread_id(self):
+    def thread_id(self) -> int:
         """
         Alias for connection_id
         """
@@ -538,7 +541,7 @@ class Connection(CConnection, SyncConnectionCommon):
         return self.connection_id
 
 
-def _lazy_import_cursor():
+def _lazy_import_cursor() -> Type["Cursor"]:
     from .cursors import Cursor
     return Cursor
 

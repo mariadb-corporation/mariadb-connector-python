@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Type, Union
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 
 class SyncCursorCommon(ABC):
@@ -25,7 +28,12 @@ class SyncCursorCommon(ABC):
     def __enter__(self) -> SyncCursorCommon:
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Any,
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         self.close()
     
     # =========================================================================

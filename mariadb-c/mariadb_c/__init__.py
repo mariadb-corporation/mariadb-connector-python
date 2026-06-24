@@ -4,6 +4,8 @@ MySQL databases, using an API which is compliant with the Python DB API 2.0
 (PEP-249).
 '''
 
+from typing import Any
+
 # Import exceptions from shared package to avoid circular dependencies
 from mariadb_shared.exceptions import (
     Error,
@@ -39,7 +41,7 @@ Cursor = SyncCursor
 # from mariadb_c.pooling import *
 
 # Version information for the C extension connector
-def _parse_version_info(version_string):
+def _parse_version_info(version_string: str) -> "tuple[tuple, int]":
     """
     Parse version string into numeric format
     
@@ -64,6 +66,7 @@ def _parse_version_info(version_string):
         suffix = match.group(5) or match.group(6)
         
         # Convert to tuple format - include suffix if present
+        version_tuple: tuple
         if suffix:
             version_tuple = (major, minor, patch, suffix)
         else:
@@ -88,7 +91,7 @@ except ImportError:
         _base_version = version('mariadb_c')
     except ImportError:
         try:
-            from importlib_metadata import version
+            from importlib_metadata import version  # type: ignore[no-redef]
             _base_version = version('mariadb_c')
         except ImportError:
             # Final fallback - use hardcoded version that matches root project
@@ -114,7 +117,7 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "Connection", "Cursor"]
 
 
-def connect(*args, connectionclass=Connection, **kwargs):
+def connect(*args: Any, connectionclass: Any = Connection, **kwargs: Any) -> Any:
     """
     Creates a MariaDB Connection object.
 
@@ -177,13 +180,13 @@ def connect(*args, connectionclass=Connection, **kwargs):
                 args = args[1:]
     
     connection = connectionclass(*args, **kwargs)
-    if not isinstance(connection, Connection):
+    if Connection is not None and not isinstance(connection, Connection):
         raise ProgrammingError("%s is not an instance of "
                                        "mariadb_c.Connection" % connection)
     return connection
 
 
-async def asyncConnect(*args, connectionclass=None, **kwargs):
+async def asyncConnect(*args: Any, connectionclass: Any = None, **kwargs: Any) -> Any:
     """
     Creates an async MariaDB Connection object.
     

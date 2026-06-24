@@ -8,10 +8,10 @@ Advanced Connection Pool Implementation
 import threading
 import asyncio
 import time
-import queue
 import collections
-from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Dict, Union, TYPE_CHECKING
+from dataclasses import dataclass
+from types import TracebackType
+from typing import Any, Callable, Optional, Iterator, AsyncIterator, Literal, TYPE_CHECKING
 from contextlib import contextmanager, asynccontextmanager
 
 # Import PoolError from shared exceptions
@@ -20,7 +20,7 @@ try:
     from mariadb_shared.constants.STATUS import IN_TRANS
 except ImportError:
     # Fallback for standalone usage
-    class PoolError(Exception):
+    class PoolError(Exception):  # type: ignore[no-redef]
         """Exception raised for pool-related errors"""
         pass
 
@@ -37,6 +37,10 @@ if TYPE_CHECKING:
         from mariadb_c import Connection as CConnection
     except ImportError:
         CConnection = Any
+
+    # Shared ABC implemented by BOTH pure-Python and C connections; a pool may
+    # hand out either, so this (a real type) is the honest connection type.
+    from mariadb_shared.sync_connection_common import SyncConnectionCommon
 
 
 @dataclass
@@ -87,13 +91,13 @@ class BasePooledConnection:
         self.use_count = 0
         self.in_use = False
 
-    def mark_in_use(self):
+    def mark_in_use(self) -> None:
         """Mark connection as in use"""
         self.in_use = True
         self.use_count += 1
         self.last_used = time.time()
 
-    def mark_idle(self):
+    def mark_idle(self) -> None:
         """Mark connection as idle"""
         self.in_use = False
         self.last_used = time.time()
@@ -111,7 +115,7 @@ class PooledConnection(BasePooledConnection):
     """Sync pooled connection wrapper"""
 
     if TYPE_CHECKING:
-        connection: Union['SyncConnection', 'CConnection']
+        connection: 'SyncConnectionCommon'
 
     def is_healthy(self) -> bool:
         """
@@ -123,18 +127,18 @@ class PooledConnection(BasePooledConnection):
         except Exception:
             return False
 
-    def return_to_pool(self):
+    def return_to_pool(self) -> None:
         """Return this connection to the pool"""
         self.pool.release(self)
 
-    def closeSilently(self):
+    def closeSilently(self) -> None:
         try:
             self.connection._set_pooled_connection(None)
             self.connection.close()
         except Exception:
             pass
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         """Proxy attribute access to underlying connection"""
         return getattr(self.connection, name)
 
@@ -155,18 +159,18 @@ class AsyncPooledConnection(BasePooledConnection):
         except Exception:
             return False
 
-    async def return_to_pool(self):
+    async def return_to_pool(self) -> None:
         """Return this connection to the pool"""
         await self.pool.release(self)
 
-    async def closeSilently(self):
+    async def closeSilently(self) -> None:
         try:
             self.connection._set_pooled_connection(None)
             await self.connection.close()
         except Exception:
             pass
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         """Proxy attribute access to underlying connection"""
         return getattr(self.connection, name)
 
@@ -181,10 +185,10 @@ class ConnectionPool:
 
     def __init__(
         self,
-        connection_factory: Callable[[], Any],
+        connection_factory: Callable[..., Any],
         config: Optional[PoolConfig] = None,
-        **connection_params
-    ):
+        **connection_params: Any
+    ) -> None:
         """
         Initialize connection pool
 
@@ -210,7 +214,7 @@ class ConnectionPool:
         if (len(connection_params) > 0):
             self._set_config(**connection_params)
 
-    def _set_config(self, **kwargs):
+    def _set_config(self, **kwargs: Any) -> None:
         """
         Set pool configuration
 
@@ -255,7 +259,7 @@ class ConnectionPool:
         with self._cond:
             return self._create_connection_unlocked()
 
-    def _ensure_min_connections(self):
+    def _ensure_min_connections(self) -> None:
         """Ensure minimum number of connections exist"""
         with self._cond:
             current_count = len(self._all_connections)
@@ -271,7 +275,7 @@ class ConnectionPool:
                 except Exception:
                     break
 
-    def _maintenance_loop(self):
+    def _maintenance_loop(self) -> None:
         """Background thread for pool maintenance"""
         while not self._closed:
             self._cleanup_expired_connections()
@@ -280,7 +284,7 @@ class ConnectionPool:
             if self._shutdown_event.wait(timeout=self.config.validation_interval):
                 break  # Event was set, exit immediately
 
-    def _fill_free_pool(self, override_min: bool = False):
+    def _fill_free_pool(self, override_min: bool = False) -> None:
         """Fill free pool with connections (MUST be called with _cond held)
 
         Args:
@@ -323,7 +327,7 @@ class ConnectionPool:
             finally:
                 self._acquiring -= 1
 
-    def _cleanup_expired_connections(self):
+    def _cleanup_expired_connections(self) -> None:
         """Remove expired connections from pool"""
         with self._cond:
             # Clean up expired connections from free pool
@@ -340,7 +344,7 @@ class ConnectionPool:
                     self._free.rotate()
                 n += 1
 
-    def acquire(self, timeout: Optional[float] = None) -> Union['SyncConnection', 'CConnection']:
+    def acquire(self, timeout: Optional[float] = None) -> 'SyncConnectionCommon':
         return self._acquire(timeout).connection
 
     def _acquire(self, timeout: Optional[float] = None) -> PooledConnection:
@@ -405,7 +409,7 @@ class ConnectionPool:
                 else:
                     self._cond.wait()
 
-    def release(self, pool_conn: PooledConnection):
+    def release(self, pool_conn: PooledConnection) -> None:
         """
         Release a connection back to the pool (optimized with threading.Condition)
 
@@ -426,12 +430,13 @@ class ConnectionPool:
             conn = pool_conn.connection
 
             _client = getattr(conn, "_client", None)
-            _active = getattr(_client, "_active_streaming_result", None) if _client is not None else None
-            if _active is not None:
-                try:
-                    _active.fetch_remaining()
-                finally:
-                    _client._active_streaming_result = None
+            if _client is not None:
+                _active = getattr(_client, "_active_streaming_result", None)
+                if _active is not None:
+                    try:
+                        _active.fetch_remaining()
+                    finally:
+                        _client._active_streaming_result = None
 
             # Reset connection if reset_connection is enabled
             if self.config.reset_connection:
@@ -460,7 +465,7 @@ class ConnectionPool:
                     self._cond.notify()
 
     @contextmanager
-    def connection(self, timeout: Optional[float] = None):
+    def connection(self, timeout: Optional[float] = None) -> Iterator['SyncConnectionCommon']:
         """
         Context manager for acquiring and releasing connections
 
@@ -478,7 +483,7 @@ class ConnectionPool:
         finally:
             self.release(pool_conn)
 
-    def close(self):
+    def close(self) -> None:
         """Close the pool and all connections"""
         self._closed = True
 
@@ -497,11 +502,16 @@ class ConnectionPool:
             self._free.clear()
             self._used.clear()
 
-    def __enter__(self):
+    def __enter__(self) -> 'ConnectionPool':
         """Context manager entry"""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Literal[False]:
         """Context manager exit"""
         self.close()
         return False
@@ -526,7 +536,7 @@ class AsyncConnectionPool:
 
     def __init__(
         self,
-        connection_factory: Optional[Callable] = None,
+        connection_factory: Callable[..., Any],
         config: Optional[PoolConfig] = None,
         **connection_params: Any
     ) -> None:
@@ -773,12 +783,13 @@ class AsyncConnectionPool:
             # the connection less likely to be dropped from the pool). The C
             # extension has no such attribute and relies on reset() instead.
             _client = getattr(conn, "_client", None)
-            _active = getattr(_client, "_active_streaming_result", None) if _client is not None else None
-            if _active is not None:
-                try:
-                    await _active.fetch_remaining()
-                finally:
-                    _client._active_streaming_result = None
+            if _client is not None:
+                _active = getattr(_client, "_active_streaming_result", None)
+                if _active is not None:
+                    try:
+                        await _active.fetch_remaining()
+                    finally:
+                        _client._active_streaming_result = None
 
             # Reset connection if reset_connection is enabled
             if self.config.reset_connection:
@@ -807,7 +818,7 @@ class AsyncConnectionPool:
                     self._cond.notify()
 
     @asynccontextmanager
-    async def connection(self, timeout: Optional[float] = None):
+    async def connection(self, timeout: Optional[float] = None) -> AsyncIterator['AsyncConnection']:
         """
         Async context manager for acquiring and releasing connections
 
@@ -848,7 +859,12 @@ class AsyncConnectionPool:
         """Async context manager entry"""
         return self
 
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: Optional[type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> bool:
         """Async context manager exit"""
         await self.close()
         return False

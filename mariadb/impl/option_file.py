@@ -27,7 +27,11 @@ libmariadb but have no pure-Python equivalent (e.g. ``default-character-set``,
 """
 import os
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
+
+# A value parsed from an option file: str/int/bool, or None when an option is
+# explicitly unset. This is exactly what ``_convert`` produces.
+_OptValue = Union[str, int, bool, None]
 
 # libmariadb reads ``.cnf`` everywhere and additionally ``.ini`` on Windows.
 _INI_EXTS: Tuple[str, ...] = ("ini", "cnf") if sys.platform == "win32" else ("cnf",)
@@ -93,7 +97,7 @@ def _atoi(value: Optional[str]) -> int:
     return int(s[:j])
 
 
-def _convert(kind: str, value: Optional[str]) -> Any:
+def _convert(kind: str, value: Optional[str]) -> _OptValue:
     if kind == "str":
         # MARIADB_OPTION_STR: an empty value unsets the option.
         return value if value else None
@@ -131,7 +135,7 @@ def _strip_and_unescape(raw: str) -> str:
     return "".join(out)
 
 
-def _store(out: Dict[str, Any], key: str, value: Optional[str]) -> None:
+def _store(out: Dict[str, _OptValue], key: str, value: Optional[str]) -> None:
     entry = _OPT_MAP.get(key.replace("_", "-"))  # CONC-395: '_' -> '-'
     if entry is None:
         return
@@ -146,7 +150,7 @@ def _is_config_file(path: str) -> bool:
 
 
 def _read_includedir(directory: str, group: Optional[str],
-                     recursion: int, out: Dict[str, Any]) -> None:
+                     recursion: int, out: Dict[str, _OptValue]) -> None:
     try:
         names = os.listdir(directory)
     except OSError:
@@ -158,7 +162,7 @@ def _read_includedir(directory: str, group: Optional[str],
 
 
 def _read_file(path: str, group: Optional[str],
-               recursion: int, out: Dict[str, Any]) -> None:
+               recursion: int, out: Dict[str, _OptValue]) -> None:
     if recursion >= _RECURSION_LIMIT:
         return
     groups = set(_STD_GROUPS)
@@ -227,14 +231,14 @@ def _config_dirs() -> List[str]:
 
 
 def read_option_files(default_file: Optional[str],
-                      default_group: Optional[str]) -> Dict[str, Any]:
+                      default_group: Optional[str]) -> Dict[str, _OptValue]:
     """
     Read option file(s) and return a ``{Configuration attribute: value}`` mapping.
 
     Values are already typed (str/int/bool). When multiple files or groups set the
     same option, the last one read wins - the same ordering libmariadb uses.
     """
-    out: Dict[str, Any] = {}
+    out: Dict[str, _OptValue] = {}
 
     if default_file:  # a non-empty path is read on its own
         _read_file(default_file, default_group, 0, out)

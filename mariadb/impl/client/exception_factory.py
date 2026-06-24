@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-from typing import Optional, Any
+from typing import Optional
 from ...exceptions import (
     DatabaseError, 
     OperationalError, 

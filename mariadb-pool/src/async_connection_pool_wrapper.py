@@ -6,7 +6,8 @@ Async compatibility wrapper for mariadb_pool.AsyncConnectionPool
 Matches the 1.1 C extension API for connection pooling (async version).
 """
 
-from typing import Callable, Any, Dict, Optional, TYPE_CHECKING
+from types import TracebackType
+from typing import Awaitable, Callable, Any, Dict, Optional, Type, TYPE_CHECKING
 
 from mariadb import AsyncConnection
 from .pool import AsyncConnectionPool as _AsyncPoolImpl, PoolConfig
@@ -47,7 +48,7 @@ class AsyncConnectionPoolWrapper:
     # Class-level registry for pools
     _registry: Dict[str, 'AsyncConnectionPoolWrapper'] = {}
     
-    def __init__(self, connection_factory: Callable, pool_name: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, connection_factory: Callable[..., Awaitable[AsyncConnection]], pool_name: Optional[str] = None, **kwargs: Any) -> None:
         """
         Initialize async connection pool
         
@@ -242,7 +243,12 @@ class AsyncConnectionPoolWrapper:
         await self.open()
         return self
     
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> bool:
         """Exit async context manager and close pool"""
         await self.close()
         return False

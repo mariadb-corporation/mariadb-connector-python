@@ -7,9 +7,14 @@ Authentication Plugin Loader
 Permits loading authentication plugins with support for custom plugins.
 """
 
-from typing import Dict, Type, Optional, Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Dict, Type, Optional
 from .authentication_plugin_factory import AuthenticationPluginFactory
 from ...exceptions import OperationalError
+
+if TYPE_CHECKING:
+    from ..configuration import Configuration
 
 
 class AuthenticationPluginLoader:
@@ -29,7 +34,7 @@ class AuthenticationPluginLoader:
         cls._plugin_factories[plugin_type] = plugin_factory_class
     
     @classmethod
-    def get(cls, plugin_type: str, conf: Any) -> AuthenticationPluginFactory:
+    def get(cls, plugin_type: str, conf: "Configuration") -> AuthenticationPluginFactory:
         """Get authentication plugin factory from type string"""
         # TODO: implement restricted_auth
         #restricted_auth = getattr(conf, 'restricted_auth', None)

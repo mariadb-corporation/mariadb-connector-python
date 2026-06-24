@@ -18,8 +18,11 @@ from mariadb_shared.sync_cursor_common import SyncCursorCommon
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES, MORE_RESULTS_EXIST
 
 if TYPE_CHECKING:
+    from types import TracebackType
     from .base_connection import BaseConnection
     from .sync_connection import SyncConnection
+    from .impl.result import SyncCompleteResult
+    from .impl.message.server.column_definition_packet import ColumnsDefinition
 
 class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     """
@@ -80,7 +83,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
 
             self._closed = True
 
-    def nextset(self) -> Optional[bool]:  # type: ignore[override]
+    def nextset(self) -> Optional[bool]:
         """
         Advance to the next available result set.
 
@@ -103,7 +106,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         completion = self._current_completion
         result_set = completion.result_set if (completion is not None and completion.has_result_set()) else None
         if result_set is not None and result_set.streaming():
-            result_set.fetch_remaining()
+            result_set.fetch_remaining()  # type: ignore[attr-defined]  # streaming() guarantees a streaming result
             client._active_streaming_result = None
 
         if (client.context.server_status & MORE_RESULTS_EXIST) == 0:
@@ -511,7 +514,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         """Context manager entry"""
         return self
 
-    def __exit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
+    def __exit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional['TracebackType']) -> None:
         """Context manager exit"""
         self.close()
 
@@ -519,8 +522,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # Result Creation
     # =========================================================================
 
-    def _create_complete_result(self, columns: Any, column_count: int,
-                               rows: List[tuple]) -> Any:
+    def _create_complete_result(self, columns: 'ColumnsDefinition', column_count: int,
+                               rows: List[tuple]) -> 'SyncCompleteResult':
         """Create a synchronous complete result"""
         from .impl.result import SyncCompleteResult
         return SyncCompleteResult(

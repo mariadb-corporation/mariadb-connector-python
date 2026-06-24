@@ -13,6 +13,7 @@ conversion across the common Python -> SQL type mappings on the write path.
 
 import datetime
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -33,14 +34,14 @@ _VALUES = (
 
 
 @pytest.mark.usefixtures("setup_database")
-def test_insert_row(benchmark, connection, driver_name):
+def test_insert_row(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark a single-row INSERT of mixed types into a BLACKHOLE table."""
     cursor = connection.cursor()
     placeholder = "?" if driver_name in ('mariadb', 'mariadb_c') else "%s"
     sql = "INSERT INTO perfTestInsertTypes (%s) VALUES (%s)" % (
         _COLUMNS, ", ".join([placeholder] * len(_VALUES)))
 
-    def insert_row():
+    def insert_row() -> None:
         cursor.execute(sql, _VALUES)
 
     result = benchmark(insert_row)

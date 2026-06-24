@@ -10,17 +10,26 @@ Benchmark async fetching of 1000 rows.
 """
 
 
+import asyncio
+from typing import Any, Callable, Coroutine
+
 SQL = "SELECT seq, 'abcdefghijabcdefghijabcdefghijaa' FROM seq_1_to_1000"
 
 
-def test_async_select_1000_rows(benchmark, async_connection, async_driver_name, event_loop, cursor_factory):
+def test_async_select_1000_rows(
+    benchmark: Any,
+    async_connection: Any,
+    async_driver_name: str,
+    event_loop: asyncio.AbstractEventLoop,
+    cursor_factory: Callable[[Any], Coroutine[Any, Any, Any]],
+) -> None:
     """Benchmark async SELECT 1000 rows."""
 
     is_mariadb = 'mariadb' in async_driver_name
     sql = SQL + (" WHERE 1 = ?" if is_mariadb else " WHERE 1 = %s")
 
     # Warmup
-    async def _warmup():
+    async def _warmup() -> None:
         for _ in range(100):
             cur = await cursor_factory(async_connection)
             await cur.execute(sql, (1,))
@@ -29,7 +38,7 @@ def test_async_select_1000_rows(benchmark, async_connection, async_driver_name, 
 
     event_loop.run_until_complete(_warmup())
 
-    async def select_1000():
+    async def select_1000() -> int:
         cur = await cursor_factory(async_connection)
         await cur.execute(sql, (1,))
         rows = await cur.fetchall()

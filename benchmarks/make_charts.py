@@ -22,6 +22,7 @@ import argparse
 import glob
 import json
 import os
+from typing import Any, Dict, List, Tuple
 
 import matplotlib
 matplotlib.use("Agg")
@@ -62,17 +63,17 @@ ORDER = [
 ]
 
 
-def latest_results_dir():
+def latest_results_dir() -> str:
     dirs = sorted(glob.glob(os.path.join(HERE, "results_*")), key=os.path.getmtime)
     if not dirs:
         raise SystemExit("no results_* directory found; run run_all_benchmarks.py first")
     return dirs[-1]
 
 
-def load(results_dir):
+def load(results_dir: str) -> Tuple[Dict[str, Dict[str, float]], Dict[str, Any]]:
     """Return ({base_test_name: {driver_param: mean_seconds}}, machine_info)."""
-    data = {}
-    machine = {}
+    data: Dict[str, Dict[str, float]] = {}
+    machine: Dict[str, Any] = {}
     for jf in glob.glob(os.path.join(results_dir, "benchmark_*.json")):
         with open(jf) as fh:
             blob = json.load(fh)
@@ -85,13 +86,13 @@ def load(results_dir):
     return data, machine
 
 
-def slug(base):
+def slug(base: str) -> str:
     return base.replace("test_", "", 1)
 
 
-def chart(base, per_driver, out_dir):
+def chart(base: str, per_driver: Dict[str, float], out_dir: str) -> str:
     """Render one horizontal bar chart (ops/sec, higher is better) with matplotlib."""
-    rows = []
+    rows: List[Tuple[str, str, float, float]] = []
     for drv, mean in per_driver.items():
         if drv not in DRIVERS or mean <= 0:
             continue
@@ -124,8 +125,9 @@ def chart(base, per_driver, out_dir):
     return path
 
 
-def write_table(data, machine, out_dir):
-    cpu = machine.get("cpu", {}).get("brand_raw", "?")
+def write_table(data: Dict[str, Dict[str, float]], machine: Dict[str, Any],
+                out_dir: str) -> str:
+    cpu: str = machine.get("cpu", {}).get("brand_raw", "?")
     lines = ["| Benchmark | " + " | ".join(d[0] for d in DRIVERS.values()) + " |",
              "|---|" + "---|" * len(DRIVERS)]
     for base in ORDER:
@@ -141,6 +143,7 @@ def write_table(data, machine, out_dir):
             elif m == fastest:
                 cells.append("{:,.0f} ops/s **(fastest)**".format(1.0 / m))
             else:
+                assert fastest is not None  # reached only when a faster mean exists
                 cells.append("{:,.0f} ops/s ({:.1f}x)".format(1.0 / m, m / fastest))
         lines.append("| " + TITLES.get(base, base) + " | " + " | ".join(cells) + " |")
     with open(os.path.join(out_dir, "comparison_table.md"), "w") as fh:
@@ -148,7 +151,7 @@ def write_table(data, machine, out_dir):
     return cpu
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("results_dir", nargs="?", default=None)
     ap.add_argument("--out", default=os.path.join(HERE, "..", "docs", "benchmarks"))
@@ -159,7 +162,7 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     data, machine = load(results_dir)
-    made = []
+    made: List[str] = []
     for base in ORDER:
         if base in data:
             made.append(chart(base, data[base], out_dir))

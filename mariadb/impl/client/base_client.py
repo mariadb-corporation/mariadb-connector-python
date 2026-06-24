@@ -96,6 +96,7 @@ def _find_default_unix_socket() -> Optional[str]:
 
 if TYPE_CHECKING:
     from ..plugin.authentication_plugin import AuthenticationPlugin
+    from ..plugin.authentication_plugin_factory import AuthenticationPluginFactory
     from .ssl.ssl_fingerprint_validator import SSLFingerprintValidator
 
 # Cached unpack_from methods for row parsing performance (avoids attribute lookup overhead)
@@ -134,7 +135,7 @@ from ..message.server.ok_packet import OkPacket
 try:
     from cachetools import LRUCache
 except ImportError:
-    LRUCache = None
+    LRUCache = None  # type: ignore[assignment,misc]  # optional dependency
 
 # Frozenset type constants for O(1) lookup in row parsers (text protocol)
 _TEXT_INT_TYPES = frozenset((
@@ -320,7 +321,7 @@ class BaseClient(ABC):
                 and self.configuration.protocol != PROTOCOL_TCP)
 
 
-    def check_auth_switch_allowed(self, plugin_name: str, plugin_factory: Any, plugin: Any) -> None:
+    def check_auth_switch_allowed(self, plugin_name: str, plugin_factory: AuthenticationPluginFactory, plugin: AuthenticationPlugin) -> None:
         """Gate a server-requested authentication plugin (auth switch) against two
         MitM risks, *before* the plugin transmits any credential.
 
@@ -521,8 +522,8 @@ class BaseClient(ABC):
         if parser.remaining_bytes() >= 4:
             mariadb_additional_capacities = parser.read_uint32()
 
-        # Handle seed2 and combine with seed1
-        seed2 = b''
+        # Handle seed2 and combine with seed1 (parser may return memoryview)
+        seed2: bytes | memoryview = b''
         if (server_capabilities_4_first_bytes & constants.CAPABILITY.SECURE_CONNECTION) != 0:
             if salt_length > 0:
                 # Read salt_length bytes for seed2

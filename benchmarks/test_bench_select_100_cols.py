@@ -9,16 +9,18 @@ Benchmark: SELECT 100 columns
 Benchmark fetching a row with 100 integer columns.
 """
 
+from typing import Any
+
 import pytest
 
 
 @pytest.mark.usefixtures("setup_database")
-def test_select_100_cols_text(benchmark, connection, driver_name):
+def test_select_100_cols_text(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark SELECT 100 columns using text protocol."""
 
     is_mariadb = driver_name in ('mariadb', 'mariadb_c')
 
-    def select_100_cols():
+    def select_100_cols() -> int:
         cursor = connection.cursor()
         if is_mariadb:
             cursor.execute("SELECT * FROM test100 WHERE 1 = ?", (1,))
@@ -33,7 +35,7 @@ def test_select_100_cols_text(benchmark, connection, driver_name):
 
 
 @pytest.mark.usefixtures("setup_database")
-def test_select_100_cols_binary(benchmark, connection, driver_name):
+def test_select_100_cols_binary(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark SELECT 100 columns using binary protocol (prepared statement)."""
 
     if 'pymysql' in driver_name:
@@ -41,7 +43,7 @@ def test_select_100_cols_binary(benchmark, connection, driver_name):
 
     is_mariadb = driver_name in ('mariadb', 'mariadb_c')
 
-    def select_100_cols():
+    def select_100_cols() -> int:
         if is_mariadb:
             cursor = connection.cursor(binary=True)
             cursor.execute("SELECT * FROM test100 WHERE 1 = ?", (1,))

@@ -80,8 +80,8 @@ class ColumnsDefinition:
         self.special_formats = _zero[:]
         self.column_lengths = _zero[:]
         self.decimals_arr = _zero  # last use — no copy needed
-        self.ext_type_names = [None] * count
-        self.ext_type_formats = [None] * count
+        self.ext_type_names: List[Optional[bytes]] = [None] * count
+        self.ext_type_formats: List[Optional[bytes]] = [None] * count
         self._meta = [None] * count
 
     def decode_column(self, index: int, data: memoryview, context: 'Context') -> None:
@@ -176,8 +176,8 @@ class ColumnsDefinition:
         self.flags[index] = col_flags
         self.charsets[index] = charset
         self.special_formats[index] = special_format
-        self.ext_type_names[index] = ext_type_name  # type: ignore[assignment]
-        self.ext_type_formats[index] = ext_type_format  # type: ignore[assignment]
+        self.ext_type_names[index] = ext_type_name
+        self.ext_type_formats[index] = ext_type_format
         self.column_lengths[index] = column_length
         self.decimals_arr[index] = col_decimals
 

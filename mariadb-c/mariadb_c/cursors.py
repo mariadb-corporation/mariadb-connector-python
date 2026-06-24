@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+from __future__ import annotations
+
 import datetime
 from numbers import Number
-from typing import Optional, Any
+from types import TracebackType
+from typing import Optional, Any, List, Iterator, Type
 
 # Import shared constants and exceptions to avoid circular dependencies
 from mariadb_shared.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
@@ -47,21 +50,21 @@ class Cursor(StmtReuseMixin, CCursor):
     """
     MariaDB Connector/Python Cursor Object
     """
-    def __init__(self, connection, **kwargs):
+    def __init__(self, connection: Any, **kwargs: Any) -> None:
         """
         initialization
         """
         if not connection:
             raise ProgrammingError("Invalid or no connection provided")
 
-        self._bulk = False
+        self._bulk: int = False
         self._connection = connection
-        self._description = None
-        self._cache_entry = None
+        self._description: Any = None
+        self._cache_entry: Any = None
         self._rowcount = 0
-        self._data = None
-        self._closed = None
-        self._local_stmt_cache = None
+        self._data: Any = None
+        self._closed: Optional[bool] = None
+        self._local_stmt_cache: Any = None
 
         if kwargs:
             named_tuple_val = kwargs.pop("named_tuple", False)
@@ -94,13 +97,13 @@ class Cursor(StmtReuseMixin, CCursor):
                         binary=binary_val,
                         **kwargs)
 
-    def check_closed(self):
+    def check_closed(self) -> None:
         if self._closed:
             raise ProgrammingError("Cursor cannot be used anymore (it was already closed before).")
         self._connection._check_closed()
 
 
-    def _check_decimal_parameter(self, val):
+    def _check_decimal_parameter(self, val: Any) -> None:
         """
         Internal use only
 
@@ -120,7 +123,7 @@ class Cursor(StmtReuseMixin, CCursor):
         return None
 
 
-    def callproc(self, sp: str, data: Sequence = ()):
+    def callproc(self, sp: str, data: Sequence = ()) -> None:
         """
         Executes a stored procedure sp. The data sequence must contain an
         entry for each parameter the procedure expects.
@@ -139,7 +142,7 @@ class Cursor(StmtReuseMixin, CCursor):
             params = ("?," * len(data))[:-1]
         self.execute("CALL %s(%s)" % (sp, params), data, _force_binary=True)
 
-    def nextset(self):
+    def nextset(self) -> Optional[bool]:
         """
         Will make the cursor skip to the next available result set,
         discarding any remaining rows from the current set.
@@ -148,7 +151,7 @@ class Cursor(StmtReuseMixin, CCursor):
         self.check_closed()
         return super()._nextset()
 
-    def execute(self, statement: str, data: Sequence = (), buffered=None, _force_binary=False):
+    def execute(self, statement: str, data: Sequence = (), buffered: Optional[bool] = None, _force_binary: bool = False) -> None:
         """
         Prepare and execute a SQL statement.
 
@@ -215,7 +218,7 @@ class Cursor(StmtReuseMixin, CCursor):
         self._initresult()
         self._bulk = 0
 
-    def executemany(self, statement, parameters):
+    def executemany(self, statement: str, parameters: Any) -> None:
         """
         Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE
         statement) and execute it against all parameter found in sequence.
@@ -315,7 +318,7 @@ class Cursor(StmtReuseMixin, CCursor):
 
         self._closed = True
 
-    def fetchone(self):
+    def fetchone(self) -> Optional[Any]:
         """
         Fetch the next row of a query result set, returning a single sequence,
         or None if no more data is available.
@@ -334,7 +337,7 @@ class Cursor(StmtReuseMixin, CCursor):
         
         return super().fetchone()
 
-    def fetchmany(self, size: int = 0):
+    def fetchmany(self, size: int = 0) -> List[Any]:
         """
         Fetch the next set of rows of a query result, returning a sequence
         of sequences (e.g. a list of tuples). An empty sequence is returned
@@ -356,9 +359,10 @@ class Cursor(StmtReuseMixin, CCursor):
         if size == 0:
             size = self.arraysize
 
-        return super().fetchrows(size)
+        rows: List[Any] = super().fetchrows(size)
+        return rows
 
-    def fetchall(self):
+    def fetchall(self) -> List[Any]:
         """
         Fetch all remaining rows of a query result, returning them as a
         sequence of sequences (e.g. a list of tuples).
@@ -369,12 +373,13 @@ class Cursor(StmtReuseMixin, CCursor):
 
         if not (self.buffered and self._text):
             self.check_closed()
-        return super().fetchrows(ROWS_EOF)
+        rows: List[Any] = super().fetchrows(ROWS_EOF)
+        return rows
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Any]:
         return iter(self.fetchone, None)
 
-    def scroll(self, value: int, mode="relative"):
+    def scroll(self, value: int, mode: str = "relative") -> None:
         """
         Scroll the cursor in the result set to a new position according to
         mode.
@@ -402,11 +407,13 @@ class Cursor(StmtReuseMixin, CCursor):
             return
 
         if mode == "relative":
-            if self.rownumber + value < 0 or \
-               self.rownumber + value > self.rowcount:
+            rownumber = self.rownumber
+            assert rownumber is not None  # field_count != 0 guarantees a result set
+            if rownumber + value < 0 or \
+               rownumber + value > self.rowcount:
                 raise ProgrammingError("Position value "
                                                "is out of range.")
-            new_pos = self.rownumber + value
+            new_pos = rownumber + value
         else:
             if value < 0 or value >= self.rowcount:
                 raise ProgrammingError("Position value "
@@ -416,31 +423,36 @@ class Cursor(StmtReuseMixin, CCursor):
         self._seek(new_pos)
         self._rownumber = new_pos
 
-    def setinputsizes(self, size: int):
+    def setinputsizes(self, size: int) -> None:
         """
         Required by PEP-249. Does nothing in MariaDB Connector/Python
         """
 
         return
 
-    def setoutputsize(self, size: int):
+    def setoutputsize(self, size: int) -> None:
         """
         Required by PEP-249. Does nothing in MariaDB Connector/Python
         """
 
         return
 
-    def __enter__(self):
+    def __enter__(self) -> "Cursor":
         """Returns a copy of the cursor."""
 
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         """Closes cursor."""
         self.close()
 
     @property
-    def rowcount(self):
+    def rowcount(self) -> int:
         """
         This read-only attribute specifies the number of rows that the last\
         execute*() produced (for DQL statements like SELECT) or affected
@@ -461,10 +473,11 @@ class Cursor(StmtReuseMixin, CCursor):
 
         if self._rowcount > 0:
             return self._rowcount
-        return super().rowcount
+        count: int = super().rowcount
+        return count
 
     @property
-    def sp_outparams(self):
+    def sp_outparams(self) -> bool:
         """
         Indicates if the current result set contains in out or out parameter
         from a previous executed stored procedure
@@ -474,7 +487,7 @@ class Cursor(StmtReuseMixin, CCursor):
         return bool(self.connection.server_status & STATUS.PS_OUT_PARAMS)
 
     @property
-    def lastrowid(self):
+    def lastrowid(self) -> Optional[int]:
         """
         Returns the ID generated by a query on a table with a column having
         the AUTO_INCREMENT attribute or the value for the last usage of
@@ -487,13 +500,13 @@ class Cursor(StmtReuseMixin, CCursor):
         """
         self.check_closed()
 
-        id = self.insert_id
-        if id > 0:
+        id: Optional[int] = self.insert_id
+        if id is not None and id > 0:
             return id
         return None
 
     @property
-    def connection(self):
+    def connection(self) -> Any:
         """
         Read-Only attribute which returns the reference to the connection
         object on which the cursor was created.

@@ -7,7 +7,7 @@ This is a pure Python implementation. For better performance, install the
 optional C extension: pip install mariadb-python[c-extension]
 '''
 
-from typing import Any, Optional, Union, TYPE_CHECKING
+from typing import Any, Dict, Optional, Union, TYPE_CHECKING, cast
 
 # Import exceptions from shared package to avoid circular dependencies
 from mariadb_shared.exceptions import (
@@ -33,6 +33,10 @@ from .field import fieldinfo
 from .dbapi20 import *   # noqa: F401,F403
 # Import constants from shared package
 from mariadb_shared import constants
+# Common ABCs implemented by BOTH the pure-Python and C connection classes;
+# connect()/asyncConnect() may return either depending on the selected impl.
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
+from mariadb_shared.async_connection_common import AsyncConnectionCommon
 
 # Import implementation selector early
 from . import impl_selector  # noqa: F401 import early to stabilize side effects
@@ -43,10 +47,16 @@ if TYPE_CHECKING:
     except ImportError:
         CConnection = Any
     try:
-        from mariadb_pool import ConnectionPoolWrapper, AsyncConnectionPoolWrapper
+        from mariadb_pool import (
+            ConnectionPoolWrapper, AsyncConnectionPoolWrapper,
+            ConnectionPool as _ConnectionPoolImpl,
+            AsyncConnectionPool as _AsyncConnectionPoolImpl,
+        )
     except ImportError:
         ConnectionPoolWrapper = Any
         AsyncConnectionPoolWrapper = Any
+        _ConnectionPoolImpl = Any
+        _AsyncConnectionPoolImpl = Any
 
 
 
@@ -77,7 +87,7 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "connect", "asyncConnect", "create_pool", "create_async_pool", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
            "apilevel", "paramstyle", "threadsafety"]
 
-def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> Union['SyncConnection', 'CConnection']:  # type: ignore[valid-type]
+def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> SyncConnectionCommon:
     """
     Creates a MariaDB Connection object (synchronous).
 
@@ -168,17 +178,17 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
             pool = _CONNECTION_POOLS[pool_name]
         else:
             pool = _get_connection_pool_class()(**kwargs)
-        return pool.get_connection()
+        return cast(SyncConnectionCommon, pool.get_connection())
 
     # Use SyncConnection if no custom class specified
     if connectionclass is None:
         connectionclass = SyncConnection
 
     connection = connectionclass(*args, **kwargs)
-    return connection
+    return cast(SyncConnectionCommon, connection)
 
 
-async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> 'AsyncConnection':  # type: ignore[valid-type]
+async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> AsyncConnectionCommon:
     """
     Creates a MariaDB AsyncConnection object and connects asynchronously.
 
@@ -282,14 +292,14 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
             pool = _ASYNC_CONNECTION_POOLS[pool_name]
         else:
             pool = _get_async_connection_pool_class()(**kwargs)
-        return await pool.get_connection()  # type: ignore[no-any-return]
+        return cast(AsyncConnectionCommon, await pool.get_connection())
 
     # Use AsyncConnection if no custom class specified
     if connectionclass is None:
         connectionclass = connection_class  # Use the class selected by Windows+SSL workaround
 
     # Connect asynchronously using the classmethod
-    return await connectionclass.connect(*args, **kwargs)  # type: ignore[union-attr, no-any-return]
+    return cast(AsyncConnectionCommon, await connectionclass.connect(*args, **kwargs))  # type: ignore[union-attr]
 
 
 # Stub for ASAN detection
@@ -368,8 +378,8 @@ client_version = version_numeric
 __author__ = "MariaDB Corporation"
 
 # Connection pool support (lazy import)
-_CONNECTION_POOLS = {}
-_ASYNC_CONNECTION_POOLS = {}
+_CONNECTION_POOLS: Dict[str, 'ConnectionPoolWrapper'] = {}
+_ASYNC_CONNECTION_POOLS: Dict[str, 'AsyncConnectionPoolWrapper'] = {}
 
 # Cache for pool classes (lazy loaded)
 _ConnectionPoolClass = None
@@ -425,7 +435,7 @@ def create_pool(
     reset_connection: bool = False,
     ping_threshold: float = 0.25,
     **connection_params: Any
-) -> Any:
+) -> '_ConnectionPoolImpl':
     """
     Create a synchronous connection pool with clean separation of pool and connection options.
 
@@ -504,7 +514,7 @@ async def create_async_pool(
     reset_connection: bool = False,
     ping_threshold: float = 0.25,
     **connection_params: Any
-) -> Any:
+) -> '_AsyncConnectionPoolImpl':
     """
     Create an asynchronous connection pool with clean separation of pool and connection options.
 
@@ -603,7 +613,7 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
         Supports URI format: mariadb://[user[:password]@][host][:port][/database][?options]
         """
 
-        def __init__(self, uri_or_pool_name: Any = None, uri: Any = None, pool_name: Any = None, **kwargs: Any) -> None:
+        def __init__(self, uri_or_pool_name: Optional[str] = None, uri: Optional[str] = None, pool_name: Any = None, **kwargs: Any) -> None:
             """Initialize with mariadb.connect as factory and register in _CONNECTION_POOLS
 
             Args:
@@ -696,7 +706,7 @@ def _get_async_connection_pool_class() -> type['AsyncConnectionPoolWrapper']:
         Supports pool_name for registry in mariadb._CONNECTION_POOLS
         """
 
-        def __init__(self, uri_or_pool_name: Any = None, uri: Any = None, pool_name: Any = None, **kwargs: Any) -> None:
+        def __init__(self, uri_or_pool_name: Optional[str] = None, uri: Optional[str] = None, pool_name: Any = None, **kwargs: Any) -> None:
             """Initialize with mariadb.asyncConnect as factory and register in _CONNECTION_POOLS
 
             Args:

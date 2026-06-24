@@ -42,3 +42,51 @@ Repository = "https://www.github.com/mariadb-corporation/mariadb-connector-pytho
 [tool.setuptools]
 packages = ["mariadb_pool", "mariadb_shared", "mariadb_shared.constants"]
 package-dir = {"mariadb_pool" = "src", "mariadb_shared" = "../mariadb_shared"}
+include-package-data = true
+
+[tool.setuptools.package-data]
+# Ship PEP 561 typing markers so type checkers use the inline annotations.
+mariadb_pool = ["py.typed"]
+mariadb_shared = ["py.typed"]
+
+# Self-contained type-check config: run `mypy` from this directory to check the
+# pool package on its own. Sibling packages (mariadb, mariadb_shared, mariadb_c)
+# and third-party deps are treated as external here — checked in their own runs.
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+# off: the [[overrides]] below intentionally lists a defensive superset of
+# external deps, not all of which every module imports.
+warn_unused_configs = false
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+files = ["src"]
+# Skip build artifacts so a recursive `mypy .` doesn't hit duplicate modules
+# under build/.
+exclude = ['^build/', '\.egg-info']
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "mariadb", "mariadb.*",
+    "mariadb_shared", "mariadb_shared.*",
+    "mariadb_c", "mariadb_c.*",
+    "mariadb_binary", "mariadb_binary.*",
+    "numpy", "numpy.*",
+    "cachetools", "cachetools.*",
+    "packaging", "packaging.*",
+    "importlib_metadata",
+]
+ignore_missing_imports = true
+# Treat siblings as opaque whether or not they're pip-installed, so this check
+# is reproducible and focuses on the pool package's own code.
+follow_imports = "skip"

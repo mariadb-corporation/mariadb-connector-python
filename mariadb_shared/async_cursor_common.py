@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Type, Union
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 
 class AsyncCursorCommon(ABC):
@@ -188,7 +191,7 @@ class AsyncCursorCommon(ABC):
         """Async context manager entry"""
         return self
         
-    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> bool:
+    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[TracebackType]) -> bool:
         """Async context manager exit"""
         await self.close()
         return False
@@ -198,7 +201,7 @@ class AsyncCursorCommon(ABC):
         """Sync context manager not supported for async cursor"""
         raise TypeError("Use 'async with' with asynchronous Cursor")
         
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]) -> None:
         """Sync context manager not supported for async cursor"""
         raise TypeError("Use 'async with' with asynchronous Cursor")
             

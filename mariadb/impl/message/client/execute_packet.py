@@ -7,7 +7,7 @@ import array
 import datetime
 import decimal
 import struct
-from typing import Any, List, Optional, Union as UnionType
+from typing import Any, Callable, Dict, List, Optional, Union as UnionType
 
 # Pre-compiled struct formats for performance
 _STRUCT_H = struct.Struct('<H')  # unsigned short (2 bytes) for year
@@ -125,7 +125,7 @@ class ExecutePacket(ClientMessage):
         
         return payload
 
-    def _get_parameter_type(self, param: Any) -> int:
+    def _get_parameter_type(self, param: Any) -> int:  # param is a dynamic user-supplied SQL value
         """
         Get MySQL field type for parameter
         
@@ -186,10 +186,10 @@ _FT_LONGLONG = FIELD_TYPE.LONGLONG
 
 
 # Optimized type detection functions
-def _get_type_bool(param: Any) -> int:
+def _get_type_bool(param: bool) -> int:
     return FIELD_TYPE.TINY
 
-def _get_type_int(param: Any) -> int:
+def _get_type_int(param: int) -> int:
     # Use bit_length for faster type detection (avoids 4 comparisons)
     if param == 0:
         return FIELD_TYPE.TINY
@@ -203,38 +203,38 @@ def _get_type_int(param: Any) -> int:
     else:
         return FIELD_TYPE.LONGLONG
 
-def _get_type_float(param: Any) -> int:
+def _get_type_float(param: float) -> int:
     return FIELD_TYPE.DOUBLE
 
-def _get_type_decimal(param: Any) -> int:
+def _get_type_decimal(param: decimal.Decimal) -> int:
     return FIELD_TYPE.NEWDECIMAL
 
-def _get_type_str(param: Any) -> int:
+def _get_type_str(param: str) -> int:
     return FIELD_TYPE.VAR_STRING
 
-def _get_type_bytes(param: Any) -> int:
+def _get_type_bytes(param: UnionType[bytes, bytearray]) -> int:
     return FIELD_TYPE.BLOB
 
-def _get_type_datetime(param: Any) -> int:
+def _get_type_datetime(param: datetime.datetime) -> int:
     return FIELD_TYPE.DATETIME
 
-def _get_type_date(param: Any) -> int:
+def _get_type_date(param: datetime.date) -> int:
     return FIELD_TYPE.DATE
 
-def _get_type_time(param: Any) -> int:
+def _get_type_time(param: datetime.time) -> int:
     return FIELD_TYPE.TIME
 
-def _get_type_timedelta(param: Any) -> int:
+def _get_type_timedelta(param: datetime.timedelta) -> int:
     return FIELD_TYPE.TIME
 
-def _get_type_none(param: Any) -> int:
+def _get_type_none(param: None) -> int:
     return FIELD_TYPE.NULL
 
 # Optimized write functions
-def _write_bool(self: Any, stream: Any, param: Any) -> None:
+def _write_bool(self: "ExecutePacket", stream: PayloadWriter, param: bool) -> None:
     stream.write_byte(1 if param else 0)
 
-def _write_int(self: Any, stream: Any, param: Any) -> None:
+def _write_int(self: "ExecutePacket", stream: PayloadWriter, param: int) -> None:
     # Use bit_length for faster size detection
     if param == 0:
         stream.write_bytes(_STRUCT_b.pack(0))
@@ -251,23 +251,23 @@ def _write_int(self: Any, stream: Any, param: Any) -> None:
     else:
         stream.write_bytes(_STRUCT_q.pack(param))
 
-def _write_float(self: Any, stream: Any, param: Any) -> None:
+def _write_float(self: "ExecutePacket", stream: PayloadWriter, param: float) -> None:
     if repr(param) in ("nan", "inf", "-inf"):
         raise NotSupportedError(f"Float value '{repr(param)}' is not supported.")
     stream.write_bytes(_STRUCT_d.pack(param))
 
-def _write_decimal(self: Any, stream: Any, param: Any) -> None:
+def _write_decimal(self: "ExecutePacket", stream: PayloadWriter, param: decimal.Decimal) -> None:
     if param.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
         raise NotSupportedError(f"Decimal value '{param.__str__()}' is not supported.")
     stream.write_length_encoded_string(str(param))
 
-def _write_str(self: Any, stream: Any, param: Any) -> None:
+def _write_str(self: "ExecutePacket", stream: PayloadWriter, param: str) -> None:
     stream.write_length_encoded_string(param)
 
-def _write_bytes(self: Any, stream: Any, param: Any) -> None:
+def _write_bytes(self: "ExecutePacket", stream: PayloadWriter, param: Any) -> None:  # bytes/bytearray; PayloadWriter API is narrowly typed as bytes
     stream.write_length_encoded_bytes(param)
 
-def _write_datetime(self: Any, stream: Any, param: Any) -> None:
+def _write_datetime(self: "ExecutePacket", stream: PayloadWriter, param: datetime.datetime) -> None:
     """Write datetime in MySQL binary format"""
     if param.microsecond:
         # 11 bytes: length(1) + year(2) + month(1) + day(1) + hour(1) + minute(1) + second(1) + microsecond(4)
@@ -282,12 +282,12 @@ def _write_datetime(self: Any, stream: Any, param: Any) -> None:
             param.hour, param.minute, param.second
         ))
 
-def _write_date(self: Any, stream: Any, param: Any) -> None:
+def _write_date(self: "ExecutePacket", stream: PayloadWriter, param: datetime.date) -> None:
     """Write date in MySQL binary format"""
     # 4 bytes: length(1) + year(2) + month(1) + day(1)
     stream.write_bytes(_STRUCT_DATE.pack(4, param.year, param.month, param.day))
 
-def _write_time(self: Any, stream: Any, param: Any) -> None:
+def _write_time(self: "ExecutePacket", stream: PayloadWriter, param: datetime.time) -> None:
     """Write time in MySQL binary format"""
     if param.microsecond:
         # 12 bytes: length(1) + negative(1) + days(4) + hour(1) + minute(1) + second(1) + microsecond(4)
@@ -300,7 +300,7 @@ def _write_time(self: Any, stream: Any, param: Any) -> None:
             8, 0, 0, param.hour, param.minute, param.second
         ))
 
-def _write_timedelta(self: Any, stream: Any, param: Any) -> None:
+def _write_timedelta(self: "ExecutePacket", stream: PayloadWriter, param: datetime.timedelta) -> None:
     """Write timedelta as time in MySQL binary format"""
     total_seconds = int(param.total_seconds())
     negative = total_seconds < 0
@@ -324,7 +324,7 @@ def _write_timedelta(self: Any, stream: Any, param: Any) -> None:
             8, 1 if negative else 0, days, hours, minutes, seconds
         ))
 
-def _write_array(self: Any, stream: Any, param: Any) -> None:
+def _write_array(self: "ExecutePacket", stream: PayloadWriter, param: "array.array[float]") -> None:
     if len(param) == 0:
         return
     if HAS_NUMPY:
@@ -333,18 +333,21 @@ def _write_array(self: Any, stream: Any, param: Any) -> None:
         float_bytes = param.tobytes()
     stream.write_length_encoded_bytes(float_bytes)
 
-def _write_indicator(self: Any, stream: Any, param: Any) -> None:
+def _write_indicator(self: "ExecutePacket", stream: PayloadWriter, param: MrdbIndicator) -> None:
     """Handle MariaDB indicator values"""
     # Indicators 1 (NULL), 2 (DEFAULT), 3 (IGNORE), 4 (IGNORE_ROW) are handled at higher level
     # NULL is already in the null bitmap, others are skipped
     return
 
-def _get_type_indicator(param: Any) -> int:
+def _get_type_indicator(param: MrdbIndicator) -> int:
     """Get type for MrdbIndicator"""
     return FIELD_TYPE.NULL
 
 # Populate lookup tables
-PARAM_TYPE_TBL = {
+# The dispatch keys are concrete runtime types; each handler receives the value
+# matching its key, so the value annotation stays deliberately permissive (the
+# call site passes a dynamic user value).
+PARAM_TYPE_TBL: Dict[type, Callable[..., int]] = {
     bool: _get_type_bool,
     int: _get_type_int,
     float: _get_type_float,
@@ -360,7 +363,7 @@ PARAM_TYPE_TBL = {
     MrdbIndicator: _get_type_indicator,
 }
 
-PARAM_WRITE_TBL = {
+PARAM_WRITE_TBL: Dict[type, Callable[..., None]] = {
     bool: _write_bool,
     int: _write_int,
     float: _write_float,

@@ -9,6 +9,8 @@ Benchmark: DO with 1000 parameters
 Benchmark parameter binding with many parameters (text and binary protocol).
 """
 
+from typing import Any
+
 import pytest
 
 
@@ -17,14 +19,14 @@ SQL = "DO " + ",".join(["?" for _ in range(1000)])
 SQL_PERCENT = "DO " + ",".join(["%s" for _ in range(1000)])
 
 
-def test_do_1000_params_text(benchmark, connection, driver_name):
+def test_do_1000_params_text(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark DO with 1000 parameters using text protocol."""
 
     is_mariadb = driver_name in ('mariadb', 'mariadb_c')
     sql = SQL if is_mariadb else SQL_PERCENT
     params = list(range(1, 1001))
 
-    def do_1000_params():
+    def do_1000_params() -> None:
         cursor = connection.cursor()
         cursor.execute(sql, params)
         cursor.close()
@@ -33,7 +35,7 @@ def test_do_1000_params_text(benchmark, connection, driver_name):
     print(f"\n{driver_name} (text): {result}")
 
 
-def test_do_1000_params_binary(benchmark, connection, driver_name):
+def test_do_1000_params_binary(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark DO with 1000 parameters using binary (prepared) protocol."""
 
     if 'pymysql' in driver_name:
@@ -44,7 +46,7 @@ def test_do_1000_params_binary(benchmark, connection, driver_name):
     cursor_kwargs = {'binary': True} if is_mariadb else {'prepared': True}
     params = list(range(1, 1001))
 
-    def do_1000_params():
+    def do_1000_params() -> None:
         cursor = connection.cursor(**cursor_kwargs)
         cursor.execute(sql, params)
         cursor.close()

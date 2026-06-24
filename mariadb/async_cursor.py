@@ -20,6 +20,8 @@ from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 if TYPE_CHECKING:
     from .base_connection import BaseConnection
     from .async_connection import AsyncConnection
+    from .impl.message.server.column_definition_packet import ColumnsDefinition
+    from .impl.result import AsyncCompleteResult
 
 class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon):
     """
@@ -470,7 +472,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         completion = self._current_completion
         result_set = completion.result_set if (completion is not None and completion.has_result_set()) else None
         if result_set is not None and result_set.streaming():
-            await result_set.fetch_remaining()
+            await result_set.fetch_remaining()  # type: ignore[attr-defined]  # streaming() guarantees a streaming result
             client._active_streaming_result = None
 
         if (client.context.server_status & MORE_RESULTS_EXIST) == 0:
@@ -547,8 +549,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     # Result Creation
     # =========================================================================
 
-    def _create_complete_result(self, columns: Any, column_count: int,
-                               rows: List[tuple]) -> Any:
+    def _create_complete_result(self, columns: 'ColumnsDefinition', column_count: int,
+                               rows: List[tuple]) -> 'AsyncCompleteResult':
         """Create an asynchronous complete result"""
         from .impl.result import AsyncCompleteResult
         return AsyncCompleteResult(

@@ -31,6 +31,7 @@ import argparse
 import subprocess
 import json
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 
 BENCHMARKS = [
@@ -46,7 +47,9 @@ BENCHMARKS = [
 DRIVERS = ['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector', 'mysql_connector_pure']
 
 
-def run_pytest_benchmark(benchmark_file=None, driver=None, output_json=None):
+def run_pytest_benchmark(benchmark_file: Optional[str] = None,
+                         driver: Optional[str] = None,
+                         output_json: Optional[str] = None) -> int:
     """Run pytest-benchmark with specified parameters."""
     
     # Use the current Python interpreter to invoke pytest in a cross-platform
@@ -94,14 +97,14 @@ def run_pytest_benchmark(benchmark_file=None, driver=None, output_json=None):
     return result.returncode
 
 
-def generate_comparison_report(json_files):
+def generate_comparison_report(json_files: List[str]) -> None:
     """Generate a comparison report from multiple JSON result files."""
-    
+
     if not json_files:
         print("No JSON files provided for comparison")
         return
-    
-    results = {}
+
+    results: Dict[str, Dict[str, Any]] = {}
     for json_file in json_files:
         if not os.path.exists(json_file):
             print(f"Warning: {json_file} not found")
@@ -121,7 +124,7 @@ def generate_comparison_report(json_files):
     print("=" * 120)
     
     # Group benchmarks by base name (without driver suffix)
-    benchmark_groups = {}
+    benchmark_groups: Dict[str, Dict[str, Any]] = {}
     for driver_data in results.values():
         for bench in driver_data.get('benchmarks', []):
             # Extract base benchmark name (e.g., "test_select_1" from "test_select_1[mariadb]")
@@ -149,9 +152,9 @@ def generate_comparison_report(json_files):
         print("-" * 120)
         
         # Calculate baseline (fastest driver)
-        fastest_ops = 0
+        fastest_ops = 0.0
         fastest_driver = None
-        driver_results = {}
+        driver_results: Dict[str, Dict[str, float]] = {}
         
         for driver, stats in drivers_data.items():
             mean_ms = stats['mean'] * 1000
@@ -184,7 +187,7 @@ def generate_comparison_report(json_files):
     print("\n" + "=" * 120)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
         description='Run benchmarks comparing mariadb, mariadb_c, pymysql, and mysql-connector-python'
     )
@@ -228,7 +231,7 @@ def main():
         return 0
     
     # Determine benchmark file
-    benchmark_file = None
+    benchmark_file: Optional[str] = None
     if args.benchmark:
         benchmark_file = f'test_bench_{args.benchmark}.py'
     

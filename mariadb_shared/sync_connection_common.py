@@ -9,12 +9,15 @@ connection implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, TYPE_CHECKING
+from typing import Any, List, Optional, Type, TYPE_CHECKING
 
 from .sync_cursor_common import SyncCursorCommon
 from .constants import STATUS, TPC_STATE
 from .xid import Xid
 from .exceptions import ProgrammingError, Error
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 class SyncConnectionCommon(ABC):
 
@@ -29,7 +32,7 @@ class SyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    def cursor(self, cursor_class: Any = None, **kwargs: Any) -> SyncCursorCommon:
+    def cursor(self, cursor_class: Optional[type] = None, **kwargs: Any) -> SyncCursorCommon:
         """
         Create a new cursor object for executing queries
         
@@ -114,7 +117,12 @@ class SyncConnectionCommon(ABC):
         """
         self._pooled_connection = pooled_connection
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         """
         Context manager exit
         

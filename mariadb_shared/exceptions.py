@@ -8,8 +8,6 @@ This module defines the exception hierarchy used by both the pure Python
 and C extension implementations of MariaDB Connector/Python.
 """
 
-from typing import Any
-
 # Standard exception hierarchy following PEP 249 (DB API 2.0)
 
 class Warning(UserWarning):
@@ -35,12 +33,12 @@ class Error(Exception):
             sqlstate: SQL state code (5 characters)
         """
         super().__init__(msg)
-        self._msg: Any = msg or ""
-        self._errno: Any = errno or 0
-        self._sqlstate: Any = sqlstate or "HY000"
-    
+        self._msg: object = msg or ""
+        self._errno: object = errno or 0
+        self._sqlstate: object = sqlstate or "HY000"
+
     @property
-    def errmsg(self) -> Any:
+    def errmsg(self) -> object:
         """Get error message"""
         return self._msg
     
@@ -50,7 +48,7 @@ class Error(Exception):
         self._msg = value
     
     @property
-    def msg(self) -> Any:
+    def msg(self) -> object:
         """Get error message (alias for errmsg)"""
         return self._msg
     
@@ -60,7 +58,7 @@ class Error(Exception):
         self._msg = value
     
     @property
-    def errno(self) -> Any:
+    def errno(self) -> object:
         """Get error number"""
         return self._errno
     
@@ -70,7 +68,7 @@ class Error(Exception):
         self._errno = value if value is not None else 0
     
     @property
-    def sqlstate(self) -> Any:
+    def sqlstate(self) -> object:
         """Get SQL state"""
         return self._sqlstate
     

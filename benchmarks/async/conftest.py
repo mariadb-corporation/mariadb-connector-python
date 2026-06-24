@@ -12,6 +12,8 @@ Compares: mariadb async (pure Python), mariadb_c async (C extension), aiomysql, 
 import asyncio
 import os
 import sys
+from typing import Any, Callable, Coroutine, Iterator
+
 import pytest
 
 
@@ -26,14 +28,14 @@ DB_CONFIG = {
 ASYNC_DRIVERS = ['mariadb_async', 'mariadb_c_async', 'aiomysql', 'asyncmy']
 
 
-async def _cursor(conn, driver_name):
+async def _cursor(conn: Any, driver_name: str) -> Any:
     """Create a cursor — aiomysql requires await, others don't."""
     if driver_name == 'aiomysql':
         return await conn.cursor()
     return conn.cursor()
 
 
-def _async_driver_available(name):
+def _async_driver_available(name: str) -> bool:
     """Check if an async driver is importable."""
     try:
         if name in ('mariadb_async', 'mariadb_c_async'):
@@ -51,7 +53,7 @@ def _async_driver_available(name):
 
 
 @pytest.fixture(scope='session')
-def event_loop():
+def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     """Session-scoped event loop for async benchmarks."""
     loop = asyncio.new_event_loop()
     yield loop
@@ -63,7 +65,7 @@ def event_loop():
     params=ASYNC_DRIVERS,
     ids=ASYNC_DRIVERS,
 )
-def async_driver_name(request):
+def async_driver_name(request: pytest.FixtureRequest) -> Any:
     """Parametrize tests across async drivers."""
     name = request.param
     if not _async_driver_available(name):
@@ -71,7 +73,7 @@ def async_driver_name(request):
     return name
 
 
-def _make_async_connection(driver_name, loop):
+def _make_async_connection(driver_name: str, loop: asyncio.AbstractEventLoop) -> Any:
     """Create an async connection for the given driver."""
     if driver_name == 'mariadb_async':
         os.environ['MARIADB_PYTHON_CONNECTOR'] = 'python'
@@ -99,18 +101,20 @@ def _make_async_connection(driver_name, loop):
         raise ValueError(f"Unknown async driver: {driver_name}")
 
 
-_warmed_up = {}
+_warmed_up: dict[str, bool] = {}
 
 
 @pytest.fixture(scope='session', autouse=True)
-def async_warmup(async_driver_name, event_loop):
+def async_warmup(
+    async_driver_name: str, event_loop: asyncio.AbstractEventLoop
+) -> None:
     """Warm up async driver once per session."""
     if async_driver_name in _warmed_up:
         return
     conn = _make_async_connection(async_driver_name, event_loop)
     is_mariadb = 'mariadb' in async_driver_name
 
-    async def _warmup():
+    async def _warmup() -> None:
         for _ in range(500):
             cur = await _cursor(conn, async_driver_name)
             await cur.execute("DO 1")
@@ -132,7 +136,9 @@ def async_warmup(async_driver_name, event_loop):
 
 
 @pytest.fixture(scope='function')
-def async_connection(async_driver_name, event_loop):
+def async_connection(
+    async_driver_name: str, event_loop: asyncio.AbstractEventLoop
+) -> Iterator[Any]:
     """Create an async connection for each test."""
     conn = _make_async_connection(async_driver_name, event_loop)
     yield conn
@@ -146,15 +152,17 @@ def async_connection(async_driver_name, event_loop):
 
 
 @pytest.fixture(scope='session')
-def cursor_factory(async_driver_name):
+def cursor_factory(
+    async_driver_name: str,
+) -> Callable[[Any], Coroutine[Any, Any, Any]]:
     """Return an async callable that creates a cursor for the current driver."""
-    async def _factory(conn):
+    async def _factory(conn: Any) -> Any:
         return await _cursor(conn, async_driver_name)
     return _factory
 
 
 @pytest.fixture(scope='session')
-def setup_database(event_loop):
+def setup_database(event_loop: asyncio.AbstractEventLoop) -> Iterator[None]:
     """Setup test database tables once per session."""
     os.environ.setdefault('MARIADB_PYTHON_CONNECTOR', 'python')
     import mariadb

@@ -10,18 +10,27 @@ Benchmark async parameter binding with many parameters.
 """
 
 
+import asyncio
+from typing import Any, Callable, Coroutine
+
 SQL_Q = "DO " + ",".join(["?" for _ in range(1000)])
 SQL_P = "DO " + ",".join(["%s" for _ in range(1000)])
 
 
-def test_async_do_1000_params(benchmark, async_connection, async_driver_name, event_loop, cursor_factory):
+def test_async_do_1000_params(
+    benchmark: Any,
+    async_connection: Any,
+    async_driver_name: str,
+    event_loop: asyncio.AbstractEventLoop,
+    cursor_factory: Callable[[Any], Coroutine[Any, Any, Any]],
+) -> None:
     """Benchmark async DO with 1000 parameters."""
 
     is_mariadb = 'mariadb' in async_driver_name
     sql = SQL_Q if is_mariadb else SQL_P
     params = list(range(1, 1001))
 
-    async def do_1000():
+    async def do_1000() -> None:
         cur = await cursor_factory(async_connection)
         await cur.execute(sql, params)
         await cur.close()

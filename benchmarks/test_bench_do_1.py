@@ -9,13 +9,15 @@ Benchmark: DO 1
 Simple command execution benchmark.
 """
 
+from typing import Any
+
 import pytest
 
 
-def test_do_1(benchmark, connection, driver_name):
+def test_do_1(benchmark: Any, connection: Any, driver_name: str) -> None:
     """Benchmark DO 1 command execution."""
-    
-    def do_1():
+
+    def do_1() -> None:
         cursor = connection.cursor()
         cursor.execute("DO 1")
         cursor.close()

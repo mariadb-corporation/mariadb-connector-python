@@ -55,10 +55,58 @@ packages = ["mariadb_c", "mariadb_shared", "mariadb_shared.constants"]
 py-modules = ["mariadb_posix", "mariadb_windows"]
 include-package-data = true
 
+[tool.setuptools.package-data]
+# Ship PEP 561 typing marker and the C-extension stub so type checkers can use them.
+mariadb_c = ["py.typed", "*.pyi"]
+mariadb_shared = ["py.typed"]
+
 [tool.setuptools.package-dir]
 mariadb_c = "mariadb_c"
 mariadb_shared = "../mariadb_shared"
 
+
+# Self-contained type-check config: run `mypy` from this directory to check the
+# C connector on its own (uses the in-package _mariadb.pyi stub + py.typed).
+# Sibling packages (mariadb, mariadb_shared) and third-party deps are treated as
+# external here — they are type-checked in their own runs.
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+# off: the [[overrides]] below intentionally lists a defensive superset of
+# external deps, not all of which every module imports.
+warn_unused_configs = false
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+files = ["mariadb_c"]
+# Skip build artifacts / standalone helper+build scripts so a recursive
+# `mypy .` checks the same thing as a bare `mypy` (the mariadb_c package) and
+# doesn't hit a duplicate "mariadb_c" module under build/.
+exclude = ['^build/', '\.egg-info', '^setup\.py$', '^mariadb_posix\.py$', '^mariadb_windows\.py$']
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "mariadb", "mariadb.*",
+    "mariadb_shared", "mariadb_shared.*",
+    "mariadb_binary", "mariadb_binary.*",
+    "numpy", "numpy.*",
+    "cachetools", "cachetools.*",
+    "packaging", "packaging.*",
+    "importlib_metadata",
+]
+ignore_missing_imports = true
+# Treat siblings as opaque whether or not they're pip-installed, so this check
+# is reproducible and focuses on the C connector's own code.
+follow_imports = "skip"
 
 [tool.ruff]
 line-length = 100

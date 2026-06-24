@@ -610,7 +610,7 @@ class SyncClient(BaseClient):
 
                 prepare_result = None
                 first_error = None
-                all_completions: List[List[Completion]] = []
+                all_completions = []
 
                 try:
                     if use_pipeline:
@@ -737,7 +737,7 @@ class SyncClient(BaseClient):
                 packets = packets[column_count:] if len(packets) > column_count else None
 
                 if prepare_stmt_packet is not None:
-                    prepare_stmt_packet.columns = columns  # type: ignore[assignment]
+                    prepare_stmt_packet.columns = columns
 
 
             # Read EOF packet after column definitions (if not deprecated)
@@ -879,7 +879,7 @@ class SyncClient(BaseClient):
                     read_payload()
 
                 row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
-                streaming_result = SyncStreamingResult(read_payload,  # type: ignore[arg-type]
+                streaming_result = SyncStreamingResult(read_payload,
                     context, columns, column_count, config, row_parser)
                 self._active_streaming_result = streaming_result
                 streaming_completion: OkPacket = OkPacket(0, 0, 0, 0, b'')
@@ -1150,7 +1150,7 @@ class SyncClient(BaseClient):
                 columns = ColumnsDefinition(col_count)
                 for i in range(col_count):
                     columns.decode_column(i, self.read_payload(), self.context)
-                prepare_stmt_packet.columns = columns  # type: ignore[assignment]
+                prepare_stmt_packet.columns = columns
 
                 if not self.context.isEofDeprecated():
                     self.read_payload()  # Skip EOF packet
