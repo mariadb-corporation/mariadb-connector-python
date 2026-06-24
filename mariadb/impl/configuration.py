@@ -66,9 +66,9 @@ class Configuration:
     dictionary: bool = False
     native_object: bool = False
     
-    # Prepared statement caching
-    cache_prep_stmts: bool = True  # Enable prepared statement caching
-    prep_stmt_cache_size: int = 100  # Maximum number of cached prepared statements
+    # Prepared statement caching.
+    cache_prep_stmts: bool = False
+    prep_stmt_cache_size: int = 100  # Max cached statements when the shared cache is enabled
     
     # Pipeline option
     pipeline: bool = True  # Enable pipelining for prepared statements

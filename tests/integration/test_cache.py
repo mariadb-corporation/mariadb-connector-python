@@ -28,7 +28,8 @@ class TestPreparedStatementCache(unittest.TestCase):
     
     def setUp(self):
         """Set up test database and table"""
-        self.conn = mariadb.connect(**conf())
+        # The shared connection-level cache is opt-in; enable it for this suite.
+        self.conn = mariadb.connect(**conf(), cache_prep_stmts=True)
         cursor = self.conn.cursor()
         cursor.execute("DROP TABLE IF EXISTS cache_test")
         cursor.execute("CREATE TABLE cache_test (id INT, name VARCHAR(100))")
@@ -43,11 +44,11 @@ class TestPreparedStatementCache(unittest.TestCase):
         cursor.close()
         self.conn.close()
     
-    def test_cache_enabled_by_default(self):
-        """Test that cache is enabled by default"""
+    def test_cache_disabled_by_default(self):
+        """The shared connection-level cache is opt-in: off unless requested."""
         conn = mariadb.connect(**conf())
-        self.assertTrue(conn._configuration.cache_prep_stmts)
-        self.assertEqual(conn._configuration.prep_stmt_cache_size, 100)
+        self.assertFalse(conn._configuration.cache_prep_stmts)
+        self.assertIsNone(conn._client.prepared_statement_cache)
         conn.close()
     
     def test_cache_disabled(self):
@@ -74,7 +75,7 @@ class TestPreparedStatementCache(unittest.TestCase):
     
     def test_cache_custom_size(self):
         """Test custom cache size"""
-        conn = mariadb.connect(**conf(), prep_stmt_cache_size=10)
+        conn = mariadb.connect(**conf(), cache_prep_stmts=True, prep_stmt_cache_size=10)
         self.assertEqual(conn._configuration.prep_stmt_cache_size, 10)
         self.assertEqual(conn._client.prepared_statement_cache.maxsize, 10)
         conn.close()
@@ -267,7 +268,7 @@ class TestPreparedStatementCache(unittest.TestCase):
     def test_cache_eviction(self):
         """Test LRU eviction when cache is full"""
         # Create connection with small cache
-        conn = mariadb.connect(**conf(), prep_stmt_cache_size=3)
+        conn = mariadb.connect(**conf(), cache_prep_stmts=True, prep_stmt_cache_size=3)
         cursor = conn.cursor(binary=True)
         
         # Fill cache with 3 statements
@@ -294,7 +295,7 @@ class TestPreparedStatementCache(unittest.TestCase):
     
     def test_cache_clear_on_close(self):
         """Test that cache is cleared when connection closes"""
-        conn = mariadb.connect(**conf())
+        conn = mariadb.connect(**conf(), cache_prep_stmts=True)
         try:
             cursor = conn.cursor(binary=True)
             try:
@@ -407,7 +408,8 @@ class TestPreparedStatementCacheAsync(unittest.IsolatedAsyncioTestCase):
     
     async def asyncSetUp(self):
         """Set up test database and table"""
-        self.conn = await mariadb.AsyncConnection.connect(**conf())
+        # The shared connection-level cache is opt-in; enable it for this suite.
+        self.conn = await mariadb.AsyncConnection.connect(**conf(), cache_prep_stmts=True)
         cursor = self.conn.cursor()
         await cursor.execute("DROP TABLE IF EXISTS cache_test")
         await cursor.execute("CREATE TABLE cache_test (id INT, name VARCHAR(100))")

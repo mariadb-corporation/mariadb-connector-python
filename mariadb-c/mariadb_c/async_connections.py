@@ -92,7 +92,9 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._binary = validate_bool(kwargs.pop("binary", False), "binary")
         # Remove debug parameter that C extension doesn't support
         kwargs.pop("debug", None)
-        self._cache_prep_stmts: bool = validate_bool(kwargs.pop("cache_prep_stmts", True), "cache_prep_stmts")
+        # Shared connection-level statement cache is opt-in (default off);
+        # per-cursor single-statement reuse is the default.
+        self._cache_prep_stmts: bool = validate_bool(kwargs.pop("cache_prep_stmts", False), "cache_prep_stmts")
         self._prep_stmt_cache_size: int = int(kwargs.pop("prep_stmt_cache_size", 100))
         
         # Handle SSL dictionary for compatibility (mariadb-c compatibility)

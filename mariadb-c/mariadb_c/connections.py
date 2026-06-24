@@ -190,7 +190,9 @@ class Connection(CConnection, SyncConnectionCommon):
         kwargs.pop("reconnect", None)
         converter = kwargs.pop("converter", None)
         self._binary = validate_bool(kwargs.pop("binary", False), "binary")
-        cache_prep_stmts: bool = validate_bool(kwargs.pop("cache_prep_stmts", True), "cache_prep_stmts")
+        # Shared connection-level statement cache is opt-in (default off);
+        # per-cursor single-statement reuse is the default.
+        cache_prep_stmts: bool = validate_bool(kwargs.pop("cache_prep_stmts", False), "cache_prep_stmts")
         prep_stmt_cache_size: int = int(kwargs.pop("prep_stmt_cache_size", 100))
 
         # socket_timeout is a pure-Python alias; map it to read_timeout and
