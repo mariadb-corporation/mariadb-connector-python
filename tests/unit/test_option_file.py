@@ -7,10 +7,18 @@ the option-name -> parameter mapping, '_' -> '-' normalisation, quote/escape
 handling, !include/!includedir, and that explicit kwargs override file values.
 """
 import os
+import sys
 import tempfile
 import textwrap
 
 import pytest
+
+# The ~/.my.cnf home-directory scan is Unix-only, mirroring libmariadb's
+# ma_default.c (the HOME lookup is wrapped in `#ifndef _WIN32`).
+skip_on_windows = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="~/.my.cnf is only read on non-Windows platforms (see ma_default.c)",
+)
 
 from mariadb.impl.option_file import read_option_files
 from mariadb.impl.configuration import Configuration
@@ -139,6 +147,7 @@ def test_default_file_none_reads_nothing(tmp_path, monkeypatch):
     assert Configuration.from_dict({"default_file": None}).user is None
 
 
+@skip_on_windows
 def test_empty_default_file_scans_search_path(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".my.cnf").write_text("[client]\nuser = fromhome\n")
@@ -153,6 +162,7 @@ def test_specific_file_skips_search_path(tmp_path, monkeypatch):
     assert Configuration.from_dict({"default_file": str(explicit)}).user == "fromfile"
 
 
+@skip_on_windows
 def test_default_group_alone_scans_search_path(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".my.cnf").write_text("[client]\nuser = fromhome\n")
