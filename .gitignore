@@ -64,3 +64,4 @@ mariadb-pool/src/release_info.py
 
 sqlalchemy/
 .test_venv/
+.claude/

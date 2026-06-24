@@ -647,20 +647,27 @@ class AsyncClient(BaseClient):
                 raise OperationalError(f"Execution failed: {e}")
 
 
-    async def execute_stmt(self, sql: str, messages: List[ClientMessage], config: Configuration, buffered: bool = True) -> List[List[Completion]]:
-        """Execute SQL with prepared statements (with caching), handles prepare if needed"""
+    async def execute_stmt(self, sql: str, messages: List[ClientMessage], config: Configuration, buffered: bool = True, stmt_cache: Any = None) -> List[List[Completion]]:
+        """Execute SQL with prepared statements (with caching), handles prepare if needed
+
+        *stmt_cache* lets a caller (a cursor) supply its own prepared-statement
+        cache instead of the shared connection-level one. This is used for
+        per-cursor single-statement reuse when the connection cache is disabled.
+        """
         async with self.lock:
             if self.closed:
                 raise OperationalError("Invalid connection or not connected")
+
+            cache = stmt_cache if stmt_cache is not None else self.prepared_statement_cache
 
             try:
                 key = (self.context.database, sql)
 
                 # Check cache first
-                cached_stmt = self.prepared_statement_cache.get(key) if self.prepared_statement_cache is not None else None
+                cached_stmt = cache.get(key) if cache is not None else None
                 if cached_stmt and cached_stmt.acquire():
                     with cached_stmt:
-                        all_completions = []
+                        all_completions: List[List[Completion]] = []
                         for message in messages:
                             message.statement_id = cached_stmt.statement_id  # type: ignore[attr-defined]
                             await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
@@ -679,7 +686,7 @@ class AsyncClient(BaseClient):
 
                 prepareResult = None
                 first_error = None
-                all_completions = []
+                all_completions: List[List[Completion]] = []
 
                 try:
                     if use_pipeline:
@@ -691,7 +698,7 @@ class AsyncClient(BaseClient):
                         self.reset_buffer()
 
                         try:
-                            prepareResult = await self._parse_prepare_response(await self.read_payload(), sql)
+                            prepareResult = await self._parse_prepare_response(await self.read_payload(), sql, cache)
                         except DatabaseError as e:
                             first_error = e
 
@@ -708,7 +715,7 @@ class AsyncClient(BaseClient):
                         await self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
                         self.reset_buffer()
 
-                        prepareResult = await self._parse_prepare_response(await self.read_payload(), sql)
+                        prepareResult = await self._parse_prepare_response(await self.read_payload(), sql, cache)
 
                         # Now write and read execute messages
                         for message in messages:
@@ -724,8 +731,8 @@ class AsyncClient(BaseClient):
                 finally:
                     # Cache and close prepared statement
                     if prepareResult:
-                        if self.prepared_statement_cache is not None:
-                            self.prepared_statement_cache[key] = prepareResult
+                        if cache is not None:
+                            cache[key] = prepareResult
                         prepareResult.close()
 
                 if first_error:
@@ -1153,15 +1160,23 @@ class AsyncClient(BaseClient):
     # =========================================================================
 
 
-    async def _parse_prepare_response(self, packet: memoryview, sql: str) -> PrepareStmtPacket:
-        """Parse COM_STMT_PREPARE response packet asynchronously"""
+    async def _parse_prepare_response(self, packet: memoryview, sql: str, cache: Any = None) -> PrepareStmtPacket:
+        """Parse COM_STMT_PREPARE response packet asynchronously
+
+        *cache* is the prepared-statement cache the result will be stored in
+        (per-cursor or connection-level); a reference-counted
+        CachedPrepareStmtPacket is produced when a cache is in play, a plain
+        PrepareStmtPacket otherwise.
+        """
         if len(packet) == 0:
             raise OperationalError("Empty prepare response packet")
 
         packet_type = packet[0]
 
+        effective_cache = cache if cache is not None else self.prepared_statement_cache
+
         if packet_type == self.OK_PACKET:
-            if self.prepared_statement_cache is not None:
+            if effective_cache is not None:
                 prepare_stmt_packet = CachedPrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)
             else:
                 prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)  # type: ignore[assignment]
@@ -1206,15 +1221,22 @@ class AsyncClient(BaseClient):
             pass
 
     async def _close_prepared_statement_async(self, stmt: PrepareStmtPacket) -> None:
-        """Async implementation of close prepared statement"""
-        if stmt.is_closed():
-            return
+        """Async implementation of close prepared statement.
 
+        Invoked (via a scheduled task) from PrepareStmtPacket.close(), which marks
+        the statement closed *before* calling the callback — so we must not bail
+        out on stmt.is_closed() (always True here), which would skip COM_STMT_CLOSE
+        and leak the statement server-side until disconnect.
+
+        The write is serialized under the connection lock so the COM_STMT_CLOSE is
+        never interleaved mid-sequence with another in-flight command.
+        """
         try:
-            if not self.closed:
-                from ..message.client.stmt_close_packet import StmtClosePacket
-                message = StmtClosePacket(stmt.statement_id)
-                await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
-        except:
+            async with self.lock:
+                if not self.closed:
+                    from ..message.client.stmt_close_packet import StmtClosePacket
+                    message = StmtClosePacket(stmt.statement_id)
+                    await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+        except Exception:
             # Ignore errors when closing
             pass

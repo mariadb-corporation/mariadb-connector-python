@@ -29,7 +29,9 @@ RESULT_DICTIONARY = 2
 
 # Import the C cursor base class
 from mariadb_c._mariadb import cursor as CCursor
-class AsyncCursor(CCursor, AsyncCursorCommon):
+from .stmt_reuse_mixin import StmtReuseMixin
+
+class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
     """
     MariaDB Connector/Python Async Cursor Object
     """
@@ -54,6 +56,7 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         self._description = None
         self._use_binary = None
         self._cache_entry = None
+        self._local_stmt_cache = None
         self._rowcount = 0
         self._data = None
         self._closed= None
@@ -64,12 +67,12 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             raise ProgrammingError("Invalid or no connection provided")
 
         # Extract parameters (same pattern as sync cursor)
-        named_tuple_val = kwargs.pop("named_tuple", False)
-        dictionary_val = kwargs.pop("dictionary", False)
-        buffered_val = kwargs.pop("buffered", True)
+        named_tuple_val: bool = kwargs.pop("named_tuple", False)
+        dictionary_val: bool = kwargs.pop("dictionary", False)
+        buffered_val: bool = kwargs.pop("buffered", True)
         # Inherit connection-level binary default; cursor kwarg overrides
-        binary_val = kwargs.pop("binary", connection._binary)
-        cursor_type_val = kwargs.pop("cursor_type", 0)
+        binary_val: bool = kwargs.pop("binary", connection._binary)
+        cursor_type_val: int = kwargs.pop("cursor_type", 0)
         
         # Set Python wrapper attributes
         if named_tuple_val:
@@ -78,11 +81,11 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
             self._resulttype = RESULT_DICTIONARY
         else:
             self._resulttype = RESULT_TUPLE
-        self._use_binary = binary_val
-        self._cursor_type = cursor_type_val
-        
+        self._use_binary: bool = binary_val
+        self._cursor_type: int = cursor_type_val
+
         # Store the user's buffered preference
-        self._user_buffered = buffered_val
+        self._user_buffered: bool = buffered_val
         
         # Call initialization of C extension cursor
         # IMPORTANT: Always pass buffered=False to C cursor - we handle buffering in Python
@@ -240,7 +243,10 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
                 # Binary protocol: server parses placeholders during prepare
                 if self.statement != statement:
                     super()._set_statement(statement, len(data))
-                    self._reprepare = not self._restore_stmt_from_cache(statement)
+                    hit = self._restore_stmt_from_cache(statement)
+                    self._reprepare = not hit
+                    if not hit and self._local_stmt_cache is not None:
+                        self._local_stmt_cache.clear()
                 else:
                     self._reprepare = False
                 await self._execute_binary_async()
@@ -313,43 +319,6 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
         # Set field_count from connection so _initresult() can work properly
         self._set_field_count_from_connection()
 
-    def _save_stmt_to_cache(self, sql: str) -> None:
-        """Detach the current MYSQL_STMT and store/return it to the cache."""
-        if not sql:
-            return
-
-        # If we checked out a template, return it to the entry
-        if self._cache_entry is not None:
-            capsule = super()._detach_stmt()
-            if capsule is not None:
-                self._cache_entry.checkin(capsule, self._connection)
-            self._cache_entry = None
-            return
-
-        cache = getattr(self._connection, '_stmt_cache', None)
-        if cache is None:
-            return
-
-        # First prepare for this SQL — detach and create a new cache entry
-        capsule = super()._detach_stmt()
-        if capsule is None:
-            return
-        cache.put(sql, capsule)
-
-    def _restore_stmt_from_cache(self, sql: str) -> bool:
-        """Try to check out a cached template. Returns True on hit."""
-        cache = getattr(self._connection, '_stmt_cache', None)
-        if cache is None:
-            return False
-        entry = cache.get(sql)
-        if entry is None:
-            return False
-        capsule = entry.checkout()
-        if capsule is None:
-            return False
-        super()._attach_stmt(capsule)
-        self._cache_entry = entry
-        return True
 
     async def _execute_binary_async(self):
         """Execute binary query using async prepared statement protocol."""
@@ -532,6 +501,9 @@ class AsyncCursor(CCursor, AsyncCursorCommon):
 
         if not self._text:
             self._save_stmt_to_cache(self.statement)
+
+        # Close the per-cursor prepared statement (if connection cache off).
+        self._close_local_stmt_cache()
 
         # CONPY-231: fix memory leak
         if self._data:

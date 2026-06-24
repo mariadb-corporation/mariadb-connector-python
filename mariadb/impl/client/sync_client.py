@@ -571,20 +571,27 @@ class SyncClient(BaseClient):
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")
 
-    def execute_stmt(self, sql: str, messages: List[ClientMessage], config: Configuration, buffered: bool = True) -> List[List[Completion]]:
-        """Execute SQL with prepared statements (with caching), handles prepare if needed"""
+    def execute_stmt(self, sql: str, messages: List[ClientMessage], config: Configuration, buffered: bool = True, stmt_cache: Any = None) -> List[List[Completion]]:
+        """Execute SQL with prepared statements (with caching), handles prepare if needed
+
+        *stmt_cache* lets a caller (a cursor) supply its own prepared-statement
+        cache instead of the shared connection-level one. This is used for
+        per-cursor single-statement reuse when the connection cache is disabled.
+        """
         with self.lock:
             if self.closed:
                 raise OperationalError("Invalid connection or not connected")
+
+            cache = stmt_cache if stmt_cache is not None else self.prepared_statement_cache
 
             try:
                 key = (self.context.database, sql)
 
                 # Check cache first
-                cached_stmt = self.prepared_statement_cache.get(key) if self.prepared_statement_cache is not None else None
+                cached_stmt = cache.get(key) if cache is not None else None
                 if cached_stmt and cached_stmt.acquire():
                     with cached_stmt:
-                        all_completions = []
+                        all_completions: List[List[Completion]] = []
                         for message in messages:
                             message.statement_id = cached_stmt.statement_id  # type: ignore[attr-defined]
                             self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
@@ -603,7 +610,7 @@ class SyncClient(BaseClient):
 
                 prepare_result = None
                 first_error = None
-                all_completions = []
+                all_completions: List[List[Completion]] = []
 
                 try:
                     if use_pipeline:
@@ -615,7 +622,7 @@ class SyncClient(BaseClient):
                         self.reset_buffer()
 
                         try:
-                            prepare_result = self._parse_prepare_response(self.read_payload(), sql)
+                            prepare_result = self._parse_prepare_response(self.read_payload(), sql, cache)
                         except DatabaseError as e:
                             first_error = e
 
@@ -632,7 +639,7 @@ class SyncClient(BaseClient):
                         self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
                         self.reset_buffer()
 
-                        prepare_result = self._parse_prepare_response(self.read_payload(), sql)
+                        prepare_result = self._parse_prepare_response(self.read_payload(), sql, cache)
 
                         # Now write and read execute messages
                         for message in messages:
@@ -648,8 +655,8 @@ class SyncClient(BaseClient):
                 finally:
                     # Cache and close prepared statement
                     if prepare_result:
-                        if self.prepared_statement_cache is not None:
-                            self.prepared_statement_cache[key] = prepare_result
+                        if cache is not None:
+                            cache[key] = prepare_result
                         prepare_result.close()
 
                 if first_error:
@@ -1107,15 +1114,23 @@ class SyncClient(BaseClient):
     # Prepared Statements
     # =========================================================================
 
-    def _parse_prepare_response(self, packet: memoryview, sql: str) -> PrepareStmtPacket:
-        """Parse COM_STMT_PREPARE response packet"""
+    def _parse_prepare_response(self, packet: memoryview, sql: str, cache: Any = None) -> PrepareStmtPacket:
+        """Parse COM_STMT_PREPARE response packet
+
+        *cache* is the prepared-statement cache the result will be stored in
+        (per-cursor or connection-level); a reference-counted
+        CachedPrepareStmtPacket is produced when a cache is in play, a plain
+        PrepareStmtPacket otherwise.
+        """
         if len(packet) == 0:
             raise OperationalError("Empty prepare response packet")
 
         packet_type = packet[0]
 
+        effective_cache = cache if cache is not None else self.prepared_statement_cache
+
         if packet_type == 0x00:
-            if self.prepared_statement_cache is not None:
+            if effective_cache is not None:
                 prepare_stmt_packet = CachedPrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)
             else:
                 prepare_stmt_packet = PrepareStmtPacket.decode(packet, self.context, sql, self._close_prepared_statement)  # type: ignore[assignment]
@@ -1148,9 +1163,6 @@ class SyncClient(BaseClient):
 
     def _close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
         """Close prepared statement on server (for cache eviction callback)"""
-        if stmt.is_closed():
-            return
-
         try:
             if not self.closed:
                 from ..message.client.stmt_close_packet import StmtClosePacket

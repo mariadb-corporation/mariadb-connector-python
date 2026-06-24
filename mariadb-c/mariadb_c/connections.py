@@ -89,6 +89,11 @@ class StmtCache:
         self._maxsize: int = maxsize
         self._connection: Any = connection
 
+    @property
+    def enabled(self) -> bool:
+        """True when this cache actually retains statements (maxsize > 0)."""
+        return self._maxsize > 0
+
     def get(self, sql: str) -> Optional[StmtCacheEntry]:
         """Return the entry for *sql* if the template is available, or None."""
         entry = self._cache.get(sql)

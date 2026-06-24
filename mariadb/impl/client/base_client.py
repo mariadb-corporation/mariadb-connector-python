@@ -228,8 +228,19 @@ class BaseClient(ABC):
         # Prepared statement cache (LRU cache with eviction callback, configurable)
         # None means caching disabled
         cache_size = configuration.prep_stmt_cache_size if configuration.cache_prep_stmts else 0
-        if cache_size > 0 and LRUCache is not None:
-            # Create LRU cache that calls evicted_from_cache on eviction
+        self.prepared_statement_cache: Any = self.make_prepared_statement_cache(cache_size)
+
+    def make_prepared_statement_cache(self, size: int) -> Any:
+        """Create an LRU prepared-statement cache holding up to *size* entries.
+
+        Returns ``None`` when *size* <= 0 (caching disabled) or when cachetools
+        is unavailable. Used both for the shared connection-level cache and for
+        per-cursor single-statement reuse (``size=1``) when the connection-level
+        cache is disabled.
+        """
+        if size > 0 and LRUCache is not None:
+            # LRU cache that notifies the statement when it is evicted, so the
+            # underlying server-side prepared statement gets COM_STMT_CLOSE'd.
             class PreparedStatementLRUCache(LRUCache):
                 def popitem(self) -> tuple[Any, Any]:
                     """Called when LRU evicts an item"""
@@ -239,9 +250,15 @@ class BaseClient(ABC):
                         value.evicted_from_cache()
                     return key, value
 
-            self.prepared_statement_cache: Any = PreparedStatementLRUCache(maxsize=cache_size)
-        else:
-            self.prepared_statement_cache = None
+                def clear(self) -> None:
+                    """Evict every entry through popitem so each statement is
+                    closed on the server. cachetools' own clear() bypasses
+                    popitem, which would leak the prepared statements."""
+                    while len(self) > 0:
+                        self.popitem()
+
+            return PreparedStatementLRUCache(maxsize=size)
+        return None
 
     # =========================================================================
     # Write Stream Methods

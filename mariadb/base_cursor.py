@@ -66,6 +66,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         '_buffered',
         '_use_binary',
         '_stmt',
+        '_local_stmt_cache',
     )
 
     def __init__(self, connection: TConnection, **kwargs: Any) -> None:
@@ -87,6 +88,11 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._buffered: bool = bool(kwargs.pop('buffered', True))
         self._use_binary: bool = connection._configuration.binary
         self._stmt: Optional[PrepareStmtPacket] = None
+        # Per-cursor single-statement reuse cache. Only created (lazily) when the
+        # connection-level prepared-statement cache is disabled: it keeps the
+        # last prepared statement for this cursor, reusing it while the SQL is
+        # unchanged and closing it when a different statement is executed.
+        self._local_stmt_cache: Any = None
         if kwargs:
             self._config = copy.copy(self.connection._configuration)
             
@@ -112,6 +118,35 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                 errno=0,
                 sql_state='42000'
             )
+
+    def _resolve_stmt_cache(self) -> Any:
+        """Return the prepared-statement cache to use for binary execution.
+
+        When the connection-level cache is enabled, returns ``None`` so the
+        client uses its shared cache (statements reused across all cursors).
+        When it is disabled, lazily creates and returns a per-cursor size-1
+        cache, giving "keep the last prepared statement, reuse it while the SQL
+        is unchanged, close it otherwise" semantics scoped to this cursor.
+        """
+        client = self.connection._client
+        if client.prepared_statement_cache is not None:
+            return None
+        if self._local_stmt_cache is None:
+            self._local_stmt_cache = client.make_prepared_statement_cache(1)
+        return self._local_stmt_cache
+
+    def _close_local_stmt_cache(self) -> None:
+        """Evict and close the per-cursor prepared statement, if any.
+
+        Clearing the cache triggers the eviction callback, which sends
+        COM_STMT_CLOSE for the kept statement.
+        """
+        if self._local_stmt_cache is not None:
+            try:
+                self._local_stmt_cache.clear()
+            except Exception:
+                pass
+            self._local_stmt_cache = None
 
     # =========================================================================
     # Properties

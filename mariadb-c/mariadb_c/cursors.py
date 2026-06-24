@@ -40,9 +40,10 @@ ROWS_EOF = -1
 
 # Import the C cursor base class
 from mariadb_c._mariadb import cursor as CCursor
+from .stmt_reuse_mixin import StmtReuseMixin
 
 
-class Cursor(CCursor):
+class Cursor(StmtReuseMixin, CCursor):
     """
     MariaDB Connector/Python Cursor Object
     """
@@ -60,6 +61,7 @@ class Cursor(CCursor):
         self._rowcount = 0
         self._data = None
         self._closed = None
+        self._local_stmt_cache = None
 
         if kwargs:
             named_tuple_val = kwargs.pop("named_tuple", False)
@@ -191,7 +193,10 @@ class Cursor(CCursor):
                 # Binary protocol: server parses placeholders during prepare
                 if self.statement != statement:
                     super()._set_statement(statement, len(data))
-                    self._reprepare = not self._restore_stmt_from_cache(statement)
+                    hit = self._restore_stmt_from_cache(statement)
+                    self._reprepare = not hit
+                    if not hit and self._local_stmt_cache is not None:
+                        self._local_stmt_cache.clear()
                 else:
                     self._reprepare = False
                 self._execute_binary()
@@ -284,44 +289,6 @@ class Cursor(CCursor):
             self._bulk = 1
 
 
-    def _save_stmt_to_cache(self, sql: str) -> None:
-        """Detach the current MYSQL_STMT and store/return it to the cache."""
-        if not sql:
-            return
-
-        # If we checked out a template, return it to the entry
-        if self._cache_entry is not None:
-            capsule = super()._detach_stmt()
-            if capsule is not None:
-                self._cache_entry.checkin(capsule, self._connection)
-            self._cache_entry = None
-            return
-
-        cache = getattr(self._connection, '_stmt_cache', None)
-        if cache is None:
-            return
-
-        # First prepare for this SQL — detach and create a new cache entry
-        capsule = super()._detach_stmt()
-        if capsule is None:
-            return
-        cache.put(sql, capsule)
-
-    def _restore_stmt_from_cache(self, sql: str) -> bool:
-        """Try to check out a cached template. Returns True on hit."""
-        cache = getattr(self._connection, '_stmt_cache', None)
-        if cache is None:
-            return False
-        entry = cache.get(sql)
-        if entry is None:
-            return False
-        capsule = entry.checkout()
-        if capsule is None:
-            return False
-        super()._attach_stmt(capsule)
-        self._cache_entry = entry
-        return True
-
     def close(self) -> None:
         """
         Closes the cursor.
@@ -337,6 +304,9 @@ class Cursor(CCursor):
 
         if not self._text:
             self._save_stmt_to_cache(self.statement)
+
+        # Close the per-cursor prepared statement (if connection cache off).
+        self._close_local_stmt_cache()
 
         # CONPY-231: fix memory leak
         if self._data:

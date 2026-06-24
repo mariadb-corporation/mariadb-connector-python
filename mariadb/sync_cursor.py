@@ -64,6 +64,9 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                     client.prepared_statement_cache.release(self._stmt)
                 self._stmt = None
 
+            # Close the per-cursor prepared statement (if connection cache off).
+            self._close_local_stmt_cache()
+
             # Consume any remaining streaming result set(s).
             if (self._result is not None and
                 self._result.streaming() and
@@ -179,7 +182,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
 
                     from .impl.message.client.execute_packet import ExecutePacket
                     execute_packet = ExecutePacket(None, parameters, sql)  # type: ignore[arg-type]
-                    self._completions = client.execute_stmt(sql, [execute_packet], config, self._buffered)[0]
+                    self._completions = client.execute_stmt(sql, [execute_packet], config, self._buffered, self._resolve_stmt_cache())[0]
                 else:
                     # Named parameters use text protocol with substitution
                     no_backslash_escapes = (client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
@@ -266,7 +269,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                     # Use COM_STMT_BULK_EXECUTE for efficient bulk execution
                     from .impl.message.client.bulk_execute_packet import BulkExecutePacket
                     bulk_packet = BulkExecutePacket(None, data, normalized_sql)  # type: ignore[arg-type]
-                    self._completions = client.execute_stmt(normalized_sql, [bulk_packet], config, True)[0]
+                    self._completions = client.execute_stmt(normalized_sql, [bulk_packet], config, True, self._resolve_stmt_cache())[0]
                     self._completion_index = 0
                 else:
                     # Fallback to individual COM_STMT_EXECUTE packets (when bulk not available but binary forced)
@@ -276,7 +279,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                     execute_packets = [ExecutePacket(None, params, normalized_sql) for params in data]  # type: ignore[arg-type]
 
                     # Execute all at once with single prepare
-                    completions = client.execute_stmt(normalized_sql, execute_packets, config, True)  # type: ignore[arg-type]
+                    completions = client.execute_stmt(normalized_sql, execute_packets, config, True, self._resolve_stmt_cache())  # type: ignore[arg-type]
 
                     self._process_executemany_completions(completions)
             else:
@@ -461,7 +464,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             execute_packet = ExecutePacket(None, list(args), call_sql)  # type: ignore[arg-type]
             client = self.connection._client
             config = self._config or self.connection._configuration
-            self._completions = client.execute_stmt(call_sql, [execute_packet], config)[0]
+            self._completions = client.execute_stmt(call_sql, [execute_packet], config, True, self._resolve_stmt_cache())[0]
             self._completion_index = 0
             self._current_completion = self._completions[0]
             return None  # type: ignore[return-value]  # Match C extension behavior
