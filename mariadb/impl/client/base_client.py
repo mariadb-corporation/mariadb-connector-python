@@ -137,6 +137,30 @@ try:
 except ImportError:
     LRUCache = None  # type: ignore[assignment,misc]  # optional dependency
 
+if LRUCache is not None:
+    class _PreparedStatementLRUCache(LRUCache):
+        """LRU cache that COM_STMT_CLOSE's prepared statements as they leave it.
+
+        Defined once at module scope (not per call) since make_prepared_statement_cache
+        is invoked per cursor for size-1 per-cursor reuse.
+        """
+        def popitem(self) -> tuple[Any, Any]:
+            """Called when LRU evicts an item."""
+            key, value = super().popitem()
+            # Notify the statement it's been evicted.
+            if hasattr(value, 'evicted_from_cache'):
+                value.evicted_from_cache()
+            return key, value
+
+        def clear(self) -> None:
+            """Evict every entry through popitem so each statement is closed on
+            the server. cachetools' own clear() bypasses popitem, which would
+            leak the prepared statements."""
+            while len(self) > 0:
+                self.popitem()
+else:
+    _PreparedStatementLRUCache = None  # type: ignore[assignment,misc]
+
 # Frozenset type constants for O(1) lookup in row parsers (text protocol)
 _TEXT_INT_TYPES = frozenset((
     FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG,
@@ -239,26 +263,8 @@ class BaseClient(ABC):
         per-cursor single-statement reuse (``size=1``) when the connection-level
         cache is disabled.
         """
-        if size > 0 and LRUCache is not None:
-            # LRU cache that notifies the statement when it is evicted, so the
-            # underlying server-side prepared statement gets COM_STMT_CLOSE'd.
-            class PreparedStatementLRUCache(LRUCache):
-                def popitem(self) -> tuple[Any, Any]:
-                    """Called when LRU evicts an item"""
-                    key, value = super().popitem()
-                    # Notify the statement it's been evicted
-                    if hasattr(value, 'evicted_from_cache'):
-                        value.evicted_from_cache()
-                    return key, value
-
-                def clear(self) -> None:
-                    """Evict every entry through popitem so each statement is
-                    closed on the server. cachetools' own clear() bypasses
-                    popitem, which would leak the prepared statements."""
-                    while len(self) > 0:
-                        self.popitem()
-
-            return PreparedStatementLRUCache(maxsize=size)
+        if size > 0 and _PreparedStatementLRUCache is not None:
+            return _PreparedStatementLRUCache(maxsize=size)
         return None
 
     # =========================================================================

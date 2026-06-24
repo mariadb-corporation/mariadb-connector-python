@@ -58,6 +58,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         self._use_binary: Optional[bool] = None
         self._cache_entry: Any = None
         self._local_stmt_cache: Any = None
+        self._resolved_stmt_cache: Any = None  # memoised _resolve_stmt_cache() result
         self._rowcount = 0
         self._data: Any = None
         self._closed: Optional[bool] = None

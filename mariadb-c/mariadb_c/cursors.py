@@ -65,6 +65,7 @@ class Cursor(StmtReuseMixin, CCursor):
         self._data: Any = None
         self._closed: Optional[bool] = None
         self._local_stmt_cache: Any = None
+        self._resolved_stmt_cache: Any = None  # memoised _resolve_stmt_cache() result
 
         if kwargs:
             named_tuple_val = kwargs.pop("named_tuple", False)
