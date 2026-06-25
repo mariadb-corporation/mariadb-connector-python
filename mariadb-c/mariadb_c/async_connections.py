@@ -12,6 +12,7 @@ if hasattr(sys, 'pypy_version_info'):
     )
 
 import asyncio
+import os
 import socket
 from typing import Any, Callable, Optional, Tuple, cast
 
@@ -240,6 +241,9 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             # persistent writer would fire every loop iteration and busy-spin.
             self._loop = loop
             self._wait_for_status = self._wait_for_status_selector
+            
+            # libmariadb leaves the socket in blocking mode after the synchronous connect/handshake.
+            os.set_blocking(self._socket_fd, False)
         else:
             # Windows: Use C-based polling
             self._wait_for_status = self._wait_for_status_c_poll
