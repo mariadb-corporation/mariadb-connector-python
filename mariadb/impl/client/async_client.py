@@ -493,27 +493,36 @@ class AsyncClient(BaseClient):
             if self.configuration.ssl_verify_cert and not self.cert_fingerprint_validator:
                 server_hostname = self.host_address.host
 
-            # Perform TLS upgrade using loop.start_tls()
-            # This returns a new SSL transport
-            new_transport = await loop.start_tls(
-                transport,
-                protocol,
-                ssl_context,
-                server_side=False,
-                server_hostname=server_hostname
-            )
+            # Perform the in-band TLS upgrade.
+            #
+            # Python 3.11+ exposes StreamWriter.start_tls(), which does the
+            # upgrade and re-syncs the streams for us (it drains, then calls
+            # protocol._replace_transport(), which retargets the transport and
+            # sets _over_ssl). On version before that we call loop.start_tls() and replicate
+            # that fixup by hand on the internal attributes.
+            if hasattr(self.writer, "start_tls"):  # Python 3.11+
+                await self.writer.start_tls(
+                    ssl_context,
+                    server_hostname=server_hostname,
+                )
+            else:  # Python 3.10 fallback
+                new_transport = await loop.start_tls(
+                    transport,
+                    protocol,
+                    ssl_context,
+                    server_side=False,
+                    server_hostname=server_hostname,
+                )
+                self.writer._transport = new_transport     # type: ignore[attr-defined]
+                protocol._transport = new_transport         # type: ignore[attr-defined]
+                protocol._over_ssl = True                   # type: ignore[attr-defined]
 
-            # Capture fingerprint if using fingerprint validation
+            # Capture fingerprint if using fingerprint validation. The writer
+            # now targets the SSL transport, so read the ssl_object off it.
             if self.cert_fingerprint_validator:
-                # Get the SSL socket from the transport
-                ssl_socket = new_transport.get_extra_info('ssl_object')  # type: ignore[union-attr]
+                ssl_socket = self.writer.get_extra_info('ssl_object')
                 if ssl_socket:
                     self.cert_fingerprint_validator.capture_fingerprint(ssl_socket)
-
-            # After start_tls, the protocol's transport is updated automatically
-            # The existing reader and writer now use the SSL transport
-            # Update the stream's writer transport reference
-            self.writer._transport = new_transport  # type: ignore[attr-defined]
 
             # Update the stream sequence for the next packet
             self.sequence[0] = 1
