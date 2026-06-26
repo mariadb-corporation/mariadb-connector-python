@@ -26,11 +26,13 @@ from mariadb_shared.exceptions import NotSupportedError, ProgrammingError
 
 _MISSING: object = object()  # sentinel: distinguishes missing key from explicit None
 
+# numpy is an optional accelerator for float32 VECTOR encoding.
+numpy: Any = None
 try:
-    import numpy
-    HAS_NUMPY = True
+    import numpy  # type: ignore[no-redef]  # pyright: ignore[reportMissingImports]
 except ImportError:
-    HAS_NUMPY = False
+    pass
+HAS_NUMPY = numpy is not None
 
 # ============================================================================
 # Constants

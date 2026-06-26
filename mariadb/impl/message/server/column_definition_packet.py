@@ -18,19 +18,6 @@ _UNPACK_UINT16 = struct.Struct('<H').unpack_from
 _UNPACK_FIXED_FIELDS = struct.Struct('<HIBHB').unpack_from  # charset(H), column_length(I), type(B), flags(H), decimals(B)
 
 
-def _read_length_encoded_int(data: memoryview, pos: int) -> tuple[int, int]:
-    """Read a length-encoded integer, return (value, new_pos)."""
-    b = data[pos]
-    if b < 251:
-        return b, pos + 1
-    if b == 0xFC:
-        return _UNPACK_UINT16(data, pos + 1)[0], pos + 3
-    if b == 0xFD:
-        return struct.unpack('<I', bytes(data[pos + 1:pos + 4]) + b'\x00')[0], pos + 4
-    # 0xFE
-    return struct.Struct('<Q').unpack_from(data, pos + 1)[0], pos + 9
-
-
 def _read_small_length_encoded_bytes(data: memoryview, pos: int) -> tuple[bytes, int]:
     """Read length-encoded bytes, return (bytes, new_pos)."""
     length = data[pos]
@@ -217,20 +204,3 @@ class ColumnsDefinition:
 
     def __len__(self) -> int:
         return self.count
-
-    @staticmethod
-    def decode_all(packets: list, buf_mv: memoryview, count: int, context: 'Context') -> 'ColumnsDefinition':
-        """Decode a list of (start, end) packet positions into a ColumnsDefinition.
-
-        Args:
-            packets: list of (start, end) tuples into buf_mv
-            buf_mv: memoryview of the receive buffer
-            count: number of columns
-            context: connection context
-        """
-        cols = ColumnsDefinition(count)
-        for i in range(count):
-            start, end = packets[i]
-            cols.decode_column(i, buf_mv[start:end], context)
-        return cols
-

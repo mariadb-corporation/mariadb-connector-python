@@ -10,21 +10,26 @@ Provides default connection attributes for authentication and COM_CHANGE_USER
 import platform
 from typing import Dict
 
+# Process-constant connection attributes (client/OS/Python info). Computed once
+# on first use and cached — only "_server_host" varies per connection.
+_static_attrs: Dict[str, str] | None = None
 
-def get_default_connection_attributes(host: str | None = None) -> Dict[str, str]:
-    """Get default connection attributes"""
-    attrs = {}
-    
-    import mariadb
-    attrs["_client_name"] = "mariadb-connector-python"
-    attrs["_client_version"] = mariadb.__version__
-    if host:
-        attrs["_server_host"] = host
-    attrs["_os"] = platform.system()
-    attrs["_python_vendor"] = platform.python_implementation()
-    attrs["_python_version"] = platform.python_version()
-    
-    return attrs
+
+def get_default_connection_attributes(host: str) -> Dict[str, str]:
+    """Get default connection attributes."""
+    global _static_attrs
+    if _static_attrs is None:
+        # Deferred import: this module is loaded while `import mariadb` is still
+        # running, so mariadb can only be referenced at call time, not import time.
+        import mariadb
+        _static_attrs = {
+            "_client_name": "mariadb-connector-python",
+            "_client_version": mariadb.__version__,
+            "_os": platform.system(),
+            "_python_vendor": platform.python_implementation(),
+            "_python_version": platform.python_version(),
+        }
+    return {**_static_attrs, "_server_host": host}
 
 
 def encode_connection_attributes(attrs: Dict[str, str]) -> bytes:

@@ -8,18 +8,22 @@ import hashlib
 from ...configuration import Configuration
 from ...host_address import HostAddress
 
-from typing import Callable, Awaitable
+from typing import Any, Callable, Awaitable
 from ...client.context import Context
 
 from ..authentication_plugin import AuthenticationPlugin
 from ....exceptions import OperationalError
 
+hashes: Any = None
+serialization: Any = None
+rsa: Any = None
+padding: Any = None
 try:
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa, padding
-    HAS_CRYPTOGRAPHY = True
+    from cryptography.hazmat.primitives import hashes, serialization  # pyright: ignore[reportMissingImports]
+    from cryptography.hazmat.primitives.asymmetric import rsa, padding  # pyright: ignore[reportMissingImports]
 except Exception:
-    HAS_CRYPTOGRAPHY = False
+    pass
+HAS_CRYPTOGRAPHY = padding is not None
 
 
 class CachingSha2PasswordPlugin(AuthenticationPlugin):
@@ -82,7 +86,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     password_bytes = bytes(a ^ b for a, b in zip(password_bytes, seed_cycle))
                 
                 # Encrypt with RSA OAEP padding
-                encrypted = public_key.encrypt(
+                encrypted: bytes = public_key.encrypt(
                     password_bytes,
                     padding.OAEP(
                         mgf=padding.MGF1(algorithm=hashes.SHA1()),

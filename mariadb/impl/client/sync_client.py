@@ -413,7 +413,7 @@ class SyncClient(BaseClient):
         handshake_packet = self.read_payload()
         if (handshake_packet[0] == 0xff):
             raise _decode_error_packet(handshake_packet).toError(self.exception_factory)
-        self.context = self._parse_handshake(handshake_packet)
+        self.context = self._parse_handshake(handshake_packet, self.host_address)
 
         client_capabilities = self._calculate_client_capabilities()
 

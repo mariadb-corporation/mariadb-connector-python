@@ -10,7 +10,6 @@ import struct
 from typing import Any, Callable, List
 
 # Pre-compiled struct formats for performance
-_STRUCT_H = struct.Struct('<H')  # unsigned short (2 bytes)
 _STRUCT_I = struct.Struct('<I')  # unsigned int (4 bytes)
 _STRUCT_b = struct.Struct('<b')  # signed byte
 _STRUCT_h = struct.Struct('<h')  # signed short
@@ -24,17 +23,19 @@ _INT64_MAX = 0x7FFFFFFFFFFFFFFF
 _UNSIGNED_FLAG = 0x80
 
 # Composite struct formats for datetime/date/time
-_STRUCT_DATETIME_WITH_MICRO = struct.Struct('<BHHBBBBBI')  # length + year(H) + 5 bytes + microsecond(I)
+_STRUCT_DATETIME_WITH_MICRO = struct.Struct('<BHHBBBBBI') # length + year(H) + 5 bytes + microsecond(I)
 _STRUCT_DATETIME_NO_MICRO = struct.Struct('<BHBBBBB')     # length + year(H) + 5 bytes
-_STRUCT_DATE = struct.Struct('<BHBB')                      # length + year(H) + month + day
+_STRUCT_DATE = struct.Struct('<BHBB')                     # length + year(H) + month + day
 _STRUCT_TIME_WITH_MICRO = struct.Struct('<BBBIBBBI')      # length + negative + days(I) + 3 bytes + microsecond(I)
 _STRUCT_TIME_NO_MICRO = struct.Struct('<BBIBBB')          # length + negative + days(I) + 3 bytes
 
+# numpy is an optional accelerator for float32 VECTOR encoding.
+numpy: Any = None
 try:
-    import numpy
-    HAS_NUMPY = True
+    import numpy  # type: ignore[no-redef]  # pyright: ignore[reportMissingImports]
 except ImportError:
-    HAS_NUMPY = False
+    pass
+HAS_NUMPY = numpy is not None
 
 from ...client.context import Context
 from mariadb_shared.constants import FIELD_TYPE
@@ -58,7 +59,25 @@ class BulkExecutePacket(ClientMessage):
     # Bulk flags
     SEND_TYPES_TO_SERVER = 128  # Send parameter types
     SEND_UNIT_RESULTS = 64  # retrieve unit results
-    
+
+    # Static FIELD_TYPE -> writer-method-name dispatch table. Built once at class
+    # creation; resolved to a bound method per column in _determine_parameter_types.
+    # (Previously a dict literal that rebuilt all 11 bound methods on every packet.)
+    _WRITER_NAMES = {
+        FIELD_TYPE.TINY: '_write_tiny',
+        FIELD_TYPE.SHORT: '_write_short',
+        FIELD_TYPE.LONG: '_write_long',
+        FIELD_TYPE.LONGLONG: '_write_longlong',
+        FIELD_TYPE.DOUBLE: '_write_double',
+        FIELD_TYPE.NEWDECIMAL: '_write_decimal',
+        FIELD_TYPE.VAR_STRING: '_write_string',
+        FIELD_TYPE.BLOB: '_write_blob',
+        FIELD_TYPE.DATETIME: '_write_datetime',
+        FIELD_TYPE.DATE: '_write_date',
+        FIELD_TYPE.TIME: '_write_time',
+    }
+
+
     def __init__(self, statement_id: int | None, parameter_sets: List[List[Any]], sql: str = ""):
         """
         Initialize COM_STMT_BULK_EXECUTE packet
@@ -120,22 +139,7 @@ class BulkExecutePacket(ClientMessage):
         """
         if not self.parameter_sets:
             return
-        
-        # Map field types to write functions
-        type_to_writer = {
-            FIELD_TYPE.TINY: self._write_tiny,
-            FIELD_TYPE.SHORT: self._write_short,
-            FIELD_TYPE.LONG: self._write_long,
-            FIELD_TYPE.LONGLONG: self._write_longlong,
-            FIELD_TYPE.DOUBLE: self._write_double,
-            FIELD_TYPE.NEWDECIMAL: self._write_decimal,
-            FIELD_TYPE.VAR_STRING: self._write_string,
-            FIELD_TYPE.BLOB: self._write_blob,
-            FIELD_TYPE.DATETIME: self._write_datetime,
-            FIELD_TYPE.DATE: self._write_date,
-            FIELD_TYPE.TIME: self._write_time,
-        }
-        
+
         num_params = len(self.parameter_sets[0])
         
         for param_idx in range(num_params):
@@ -178,8 +182,9 @@ class BulkExecutePacket(ClientMessage):
                 unsigned = 0
 
             self.parameter_types.append((max_type, unsigned))
-            # Store the write function for this parameter
-            writer = type_to_writer.get(max_type, self._write_string)
+            # Store the write function for this parameter (resolve the static
+            # name table to a bound method).
+            writer = getattr(self, self._WRITER_NAMES.get(max_type, '_write_string'))
             self.parameter_writers.append(writer)
     
     def _get_wider_integer_type(self, type1: int, type2: int) -> int:
@@ -295,16 +300,16 @@ class BulkExecutePacket(ClientMessage):
         """Write VAR_STRING as length-encoded string"""
         stream.write_length_encoded_string(param)
     
-    def _write_blob(self, stream: PayloadWriter, param: Any) -> None:
-        """Write BLOB as length-encoded bytes"""
-        if isinstance(param, array.array) and param.typecode == 'f':
-            if len(param) == 0:
-                return
-            if HAS_NUMPY:
-                float_bytes = numpy.array(param, numpy.float32).tobytes()
-            else:
-                float_bytes = param.tobytes()
-            stream.write_length_encoded_bytes(float_bytes)
+    def _write_blob(self, stream: PayloadWriter, param: bytes | bytearray | memoryview | array.array[float]) -> None:
+        """Write BLOB as length-encoded bytes (or a float32 VECTOR array)."""
+        if isinstance(param, array.array):
+            # VECTOR: pack the float32 ('f') array as little-endian bytes.
+            if param.typecode == 'f' and len(param) > 0:
+                if HAS_NUMPY:
+                    float_bytes = numpy.array(param, numpy.float32).tobytes()
+                else:
+                    float_bytes = param.tobytes()
+                stream.write_length_encoded_bytes(float_bytes)
         else:
             stream.write_length_encoded_bytes(param)
     

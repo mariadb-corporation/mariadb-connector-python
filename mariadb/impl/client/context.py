@@ -3,6 +3,8 @@
 
 from dataclasses import dataclass
 
+from ..host_address import HostAddress
+
 
 @dataclass
 class ServerVersion:
@@ -39,7 +41,8 @@ class Context:
         server_status: int = 0,
         auth_plugin: str | None = None,
         auth_data: bytes | None = None,
-        is_mariadb: bool = False
+        is_mariadb: bool = False,
+        host_address: HostAddress | None = None
     ) -> None:
         """
         Initialize context
@@ -77,6 +80,7 @@ class Context:
         # Authentication
         self.auth_plugin: str | None = auth_plugin
         self.auth_data: bytes | None = auth_data
+        self.host_address: HostAddress | None = host_address
 
         self.parse_server_version(server_version, is_mariadb)
     

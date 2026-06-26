@@ -74,8 +74,8 @@ class HandshakeResponse(ClientMessage):
         if (context.client_capabilities & CAPABILITY.CONNECT_ATTRS):
             
             # Get default attributes
-            host = self.configuration.host if hasattr(self.configuration, 'host') else None
-            default_attrs = get_default_connection_attributes(host=host)
+            host = context.host_address.host if context.host_address is not None else 'localhost'
+            default_attrs = get_default_connection_attributes(host)
             
             # Encode attributes
             attr_data = encode_connection_attributes(default_attrs)

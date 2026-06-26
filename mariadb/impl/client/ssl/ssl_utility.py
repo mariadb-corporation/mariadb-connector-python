@@ -8,7 +8,7 @@ Provides SSL/TLS socket creation utilities for database connections.
 """
 
 import ssl
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import List, Optional, Tuple, TYPE_CHECKING
 from ...configuration import Configuration
 from ..context import Context
 from ....exceptions import OperationalError
@@ -114,7 +114,7 @@ class SSLUtility:
         if ',' in tls_versions_str:
             # Multiple versions specified - find min and max
             version_list = [v.strip().upper().replace('.', '_') for v in tls_versions_str.split(',')]
-            valid_versions = []
+            valid_versions: List[ssl.TLSVersion] = []
             
             for version in version_list:
                 if version in tls_version_map:

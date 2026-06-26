@@ -78,7 +78,7 @@ class Configuration:
     client_flag: int = 0  # Additional client capability flags to set
     
     # Additional options
-    non_mapped_options: Dict[str, Any] = field(default_factory=dict)
+    non_mapped_options: Dict[str, Any] = field(default_factory=lambda: {})
     
     @staticmethod
     def parse_hosts(host_string: str, default_port: int = 3306) -> List[HostAddress]:
@@ -86,8 +86,6 @@ class Configuration:
         hosts: List[HostAddress] = []
         
         # Split by comma for multiple hosts
-        if (host_string is None):
-            return hosts  # type: ignore[unreachable]
         host_parts = [h.strip() for h in host_string.split(',') if h.strip()]
         
         for host_part in host_parts:
@@ -132,9 +130,9 @@ class Configuration:
 
         # Map common parameters
         if 'host' in params:
-            config.host = params['host']
+            config.host = params['host'] or 'localhost'
         if 'port' in params:
-            config.port = int(params['port'])
+            config.port = int(params['port'] or 3306)
         if 'user' in params or 'username' in params:
             config.user = params.get('user') or params.get('username')
         if 'password' in params or 'passwd' in params:

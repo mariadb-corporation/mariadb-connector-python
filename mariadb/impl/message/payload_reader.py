@@ -116,6 +116,19 @@ class PayloadReader:
             return self.read_uint24()
         return self.read_uint64()
     
+    def read_length_encoded_int_not_null(self) -> int:
+        """Read length-encoded integer (MySQL protocol format) and advance position"""
+        first_byte = self.packet[self.pos]
+        self.pos += 1
+        
+        if first_byte < 251:
+            return first_byte
+        elif first_byte == 252:
+            return self.read_uint16()
+        elif first_byte == 253:
+            return self.read_uint24()
+        return self.read_uint64()
+    
     def read_length_encoded_string(self, encoding: str = 'utf-8') -> str | None:
         """Read length-encoded string with specified encoding and advance position"""
         length = self.read_length_encoded_int()

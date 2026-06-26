@@ -49,7 +49,7 @@ def hex_dump(data: bytes | bytearray, descr: str = "") -> str:
         offset_str = f"|{offset:06X}|"
         
         # Format hex bytes
-        hex_parts = []
+        hex_parts: list[str] = []
         for i in range(16):
             if i < len(chunk):
                 hex_parts.append(f"{chunk[i]:02X}")
@@ -63,7 +63,7 @@ def hex_dump(data: bytes | bytearray, descr: str = "") -> str:
         hex_str = " ".join(hex_parts)
         
         # Format ASCII representation
-        ascii_parts = []
+        ascii_parts : list[str] = []
         for i in range(len(chunk)):
             byte_val = chunk[i]
             if 32 <= byte_val <= 126:  # Printable ASCII

@@ -11,24 +11,19 @@ Connector/Python, including:
 
 # Load version from build-time generated release_info.py (ensures version sync)
 try:
-    from .release_info import __version__
+    from .release_info import __version__ as _base_version
 except ImportError:
-    # Fallback if release_info.py doesn't exist (development mode)
-    # Try to get from package metadata
     try:
         from importlib.metadata import version
-        __version__ = version('mariadb-pool')
+        _base_version = version('mariadb-pool')
     except ImportError:
-        try:
-            from importlib_metadata import version  # type: ignore[no-redef]
-            __version__ = version('mariadb-pool')
-        except ImportError:
-            # Final fallback - use development version to indicate release_info.py generation failed
-            __version__ = "2.0.0.dev1"
+        _base_version = "2.0.0.dev"
+__version__ : str = _base_version
+
 
 # Parse version info
 # Handles "1.2.3", "1.2.3-dev", "1.2.3.dev", "2.0.0rc1", etc.
-__version_info__: tuple
+__version_info__: tuple[int, int, int, str] | tuple[int, int, int]
 try:
     import re
     match = re.match(r'^(\d+)\.(\d+)\.(\d+)([.-](.+)|([a-zA-Z].*))?$', __version__)

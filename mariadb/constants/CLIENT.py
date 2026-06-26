@@ -1,12 +1,10 @@
 """
-CLIENT constants module - alias for CAPABILITY constants
+CLIENT constants backward-compatibility alias for the CAPABILITY flags in 1.1 branch.
+1.1-style imports::
 
-This module provides CLIENT.FOUND_ROWS for SQLAlchemy compatibility.
-The C extension exposes these as CLIENT constants, but they're actually
-CAPABILITY flags in the protocol.
+    import mariadb.constants.CLIENT
+    from mariadb.constants.CLIENT import FOUND_ROWS
+
 """
 
-from mariadb_shared.constants.CAPABILITY import *
-
-# Make all CAPABILITY constants available as CLIENT constants
-__all__ = [name for name in dir() if not name.startswith('_')]
+from mariadb_shared.constants.CAPABILITY import *  # noqa: F403

@@ -122,22 +122,27 @@ class CharsetMismatchError(OperationalError):
 def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None:
     """Process session tracking data (separate function for better branch prediction)"""
     while parser.has_remaining():
-        total_length = parser.read_length_encoded_int()
+        total_length = parser.read_length_encoded_int_not_null()
         if total_length == 0:
             break
 
         start_pos = parser.pos
         tracking_type = parser.read_byte()
-        data_length = parser.read_length_encoded_int()
+        data_length = parser.read_length_encoded_int_not_null()
 
         if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
-            end_pos = start_pos + total_length  # type: ignore[operator]
+            end_pos = start_pos + total_length
             while parser.pos < end_pos:
-                var_name_len = parser.read_length_encoded_int()
-                var_name = parser.read_bytes(var_name_len).decode('utf-8')  # type: ignore[arg-type]
+                var_name_len = parser.read_length_encoded_int_not_null()
+                var_name = parser.read_bytes(var_name_len).decode('utf-8')
                 var_value_len = parser.read_length_encoded_int()
                 if (var_name == 'character_set_client'):
-                    var_value = parser.read_bytes(var_value_len).decode('utf-8')  # type: ignore[arg-type]
+                    if var_value_len is None:
+                        raise CharsetMismatchError(
+                            "character_set_client cannot be changed to NULL. "
+                            "Connection closed."
+                        )
+                    var_value = parser.read_bytes(var_value_len).decode('utf-8')
                     if context.charset and var_value != context.charset:
                         raise CharsetMismatchError(
                             f"character_set_client changed to '{var_value}' "
@@ -146,15 +151,16 @@ def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None
                         )
                     context.charset = var_value
                 else:
-                    parser.skip(var_value_len)  # type: ignore[arg-type]
+                    if var_value_len:
+                        parser.skip(var_value_len)
                     
         elif tracking_type == constants.SESSION_TRACK.SCHEMA:
-            schema_len = parser.read_length_encoded_int()
-            context.database = parser.read_bytes(schema_len).decode('utf-8')  # type: ignore[arg-type]
+            schema_len = parser.read_length_encoded_int_not_null()
+            context.database = parser.read_bytes(schema_len).decode('utf-8')
     
         else:
-            parser.skip(data_length)  # type: ignore[arg-type]
+            parser.skip(data_length)
         
-        expected_pos = start_pos + total_length  # type: ignore[operator]
+        expected_pos = start_pos + total_length
         if parser.pos < expected_pos:
             parser.skip(expected_pos - parser.pos)

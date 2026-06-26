@@ -124,6 +124,7 @@ from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
 from ..host_address import HostAddress
 from ..message.server.column_definition_packet import ColumnsDefinition
+from ..message.server.prepare_stmt_packet import CachedPrepareStmtPacket
 from .exception_factory import ExceptionFactory
 from ...exceptions import OperationalError
 from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
@@ -135,18 +136,16 @@ except ImportError:
     LRUCache = None  # type: ignore[assignment,misc]  # optional dependency
 
 if LRUCache is not None:
-    class _PreparedStatementLRUCache(LRUCache):
+    class _PreparedStatementLRUCache(LRUCache[str, CachedPrepareStmtPacket]):
         """LRU cache that COM_STMT_CLOSE's prepared statements as they leave it.
 
         Defined once at module scope (not per call) since make_prepared_statement_cache
         is invoked per cursor for size-1 per-cursor reuse.
         """
-        def popitem(self) -> tuple[Any, Any]:
+        def popitem(self) -> tuple[str, CachedPrepareStmtPacket]:
             """Called when LRU evicts an item."""
             key, value = super().popitem()
-            # Notify the statement it's been evicted.
-            if hasattr(value, 'evicted_from_cache'):
-                value.evicted_from_cache()
+            value.evicted_from_cache()
             return key, value
 
         def clear(self) -> None:
@@ -155,8 +154,10 @@ if LRUCache is not None:
             leak the prepared statements."""
             while len(self) > 0:
                 self.popitem()
+
+    _prepared_stmt_cache_cls: type[_PreparedStatementLRUCache] | None = _PreparedStatementLRUCache
 else:
-    _PreparedStatementLRUCache = None  # type: ignore[assignment,misc]
+    _prepared_stmt_cache_cls = None
 
 # Frozenset type constants for O(1) lookup in row parsers (text protocol)
 _TEXT_INT_TYPES = frozenset((
@@ -260,8 +261,8 @@ class BaseClient(ABC):
         per-cursor single-statement reuse (``size=1``) when the connection-level
         cache is disabled.
         """
-        if size > 0 and _PreparedStatementLRUCache is not None:
-            return _PreparedStatementLRUCache(maxsize=size)
+        if size > 0 and _prepared_stmt_cache_cls is not None:
+            return _prepared_stmt_cache_cls(maxsize=size)
         return None
 
     # =========================================================================
@@ -449,7 +450,7 @@ class BaseClient(ABC):
     # Protocol Parsing
     # =========================================================================
 
-    def _parse_handshake(self, packet: memoryview) -> Context:
+    def _parse_handshake(self, packet: memoryview, host_address: HostAddress | None = None) -> Context:
         """
         Parse initial handshake packet from server
 
@@ -576,7 +577,8 @@ class BaseClient(ABC):
             server_status=server_status,
             auth_plugin=auth_plugin_name,
             auth_data=seed,
-            is_mariadb=server_mariadb
+            is_mariadb=server_mariadb,
+            host_address=host_address
         )
         return context
 

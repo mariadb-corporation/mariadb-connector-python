@@ -158,7 +158,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 config = self._config or self.connection._configuration
                 if not isinstance(parameters, dict) and self._use_binary:  # type: ignore[unreachable]
                     from .impl.message.client.execute_packet import ExecutePacket
-                    execute_packet = ExecutePacket(None, parameters, sql)  # type: ignore[arg-type]
+                    execute_packet = ExecutePacket(None, parameters, sql)
                     self._completions = (await client.execute_stmt(sql, [execute_packet], config, self._buffered, self._resolve_stmt_cache()))[0]
                 else:
                     # Named parameters use text protocol with substitution
@@ -525,7 +525,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
 
             # Use execute_stmt which handles prepared statement caching internally
             from .impl.message.client.execute_packet import ExecutePacket
-            execute_packet = ExecutePacket(None, list(args), call_sql)  # type: ignore[arg-type]
+            execute_packet = ExecutePacket(None, list(args), call_sql)
             client = self.connection._client
             config = self._config or self.connection._configuration
             self._completions = (await client.execute_stmt(call_sql, [execute_packet], config, True, self._resolve_stmt_cache()))[0]

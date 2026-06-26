@@ -411,7 +411,7 @@ class AsyncClient(BaseClient):
         if (handshake_packet[0] == 0xff):
             raise _decode_error_packet(handshake_packet).toError(self.exception_factory)
 
-        self.context = self._parse_handshake(handshake_packet)
+        self.context = self._parse_handshake(handshake_packet, self.host_address)
 
         client_capabilities = self._calculate_client_capabilities()
 
@@ -1110,45 +1110,37 @@ class AsyncClient(BaseClient):
 
     def get_ssl_cipher(self) -> tuple[str, str, int] | None:
         """Get the negotiated TLS cipher as (name, protocol_version, secret_bits).
-
-        Mirrors ssl.SSLObject.cipher(): a 3-tuple, or None when no TLS is active.
         """
-        if self.writer and hasattr(self.writer, '_transport'):
-            transport = self.writer._transport
-            if hasattr(transport, 'get_extra_info'):
-                ssl_object = transport.get_extra_info('ssl_object')
-                if ssl_object and hasattr(ssl_object, 'cipher'):
-                    try:
-                        return cast(ssl.SSLObject, ssl_object).cipher()
-                    except:
-                        return None
+        if self.writer:
+            ssl_object = self.writer.get_extra_info('ssl_object')
+            if ssl_object is not None:
+                try:
+                    return cast(ssl.SSLObject, ssl_object).cipher()
+                except Exception:
+                    return None
         return None
 
     def get_ssl_version(self) -> str | None:
         """Get current TLS/SSL version string"""
-        if self.writer and hasattr(self.writer, '_transport'):
-            transport = self.writer._transport
-            if hasattr(transport, 'get_extra_info'):
-                ssl_object = transport.get_extra_info('ssl_object')
-                if ssl_object and hasattr(ssl_object, 'version'):
-                    try:
-                        return cast(ssl.SSLObject, ssl_object).version()
-                    except:
-                        return None
+        if self.writer:
+            ssl_object = self.writer.get_extra_info('ssl_object')
+            if ssl_object is not None:
+                try:
+                    return cast(ssl.SSLObject, ssl_object).version()
+                except Exception:
+                    return None
         return None
 
     def get_peer_certificate(self) -> dict[str, Any] | None:
         """Get the peer's certificate as the decoded dict from ssl.getpeercert()
         , or None when no peer cert is available."""
-        if self.writer and hasattr(self.writer, '_transport'):
-            transport = self.writer._transport
-            if hasattr(transport, 'get_extra_info'):
-                ssl_object = transport.get_extra_info('ssl_object')
-                if ssl_object and hasattr(ssl_object, 'getpeercert'):
-                    try:
-                        return cast(ssl.SSLObject, ssl_object).getpeercert()
-                    except:
-                        return None
+        if self.writer:
+            ssl_object = self.writer.get_extra_info('ssl_object')
+            if ssl_object is not None:
+                try:
+                    return cast(ssl.SSLObject, ssl_object).getpeercert()
+                except Exception:
+                    return None
         return None
 
     async def _cleanup_connection(self) -> None:

@@ -5,7 +5,7 @@
 Result set classes for MariaDB query results
 """
 
-from typing import List, TYPE_CHECKING, Callable
+from typing import Any, List, TYPE_CHECKING, Callable, Awaitable, Generic, TypeVar
 from abc import ABC, abstractmethod
 from .message.server.eof_packet import EofPacket
 from .message.server.ok_packet import OkPacket
@@ -90,12 +90,12 @@ class SyncResult(Result):
     # =========================================================================
     
     @abstractmethod
-    def fetch_one(self) -> tuple | None:
+    def fetch_one(self) -> tuple[Any, ...] | None:
         """Fetch next row"""
         ...
 
     @abstractmethod
-    def fetch_all(self) -> List[tuple]:
+    def fetch_all(self) -> List[tuple[Any, ...] ]:
         """Fetch all remaining rows"""
         ...
 
@@ -123,12 +123,12 @@ class AsyncResult(Result):
     # =========================================================================
         
     @abstractmethod
-    async def fetch_one(self) -> tuple | None:
+    async def fetch_one(self) -> tuple[Any, ...] | None:
         """Fetch next row"""
         ...
 
     @abstractmethod
-    async def fetch_all(self) -> List[tuple]:
+    async def fetch_all(self) -> List[tuple[Any, ...] ]:
         """Fetch all remaining rows"""
         ...
     
@@ -154,7 +154,7 @@ class BaseCompleteResult(Result):
         columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration',
-        rows: List[tuple]
+        rows: List[tuple[Any, ...]]
     ):
         """
         Initialize complete result with all rows
@@ -170,7 +170,7 @@ class BaseCompleteResult(Result):
         self.config: 'Configuration' = config
         self.warning_count: int = 0
         self.is_output_parameters: bool = False
-        self.rows: List[tuple] = rows
+        self.rows: List[tuple[Any, ...]] = rows
         self.data_size: int = len(rows)
         self.loaded: bool = True
         self.row_pointer: int = -1  # Before first row
@@ -209,7 +209,7 @@ class SyncCompleteResult(BaseCompleteResult, SyncResult):
     """
     __slots__ = ()
     
-    def fetch_one(self) -> tuple | None:
+    def fetch_one(self) -> tuple[Any, ...] | None:
         """Fetch next row. row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
         row_pointer = self.row_pointer
         if row_pointer >= self.data_size - 1:
@@ -219,7 +219,7 @@ class SyncCompleteResult(BaseCompleteResult, SyncResult):
         self.row_pointer = row_pointer
         return self.rows[row_pointer]
     
-    def fetch_all(self) -> List[tuple]:
+    def fetch_all(self) -> List[tuple[Any, ...]]:
         """Fetch all remaining rows"""
         row_pointer = self.row_pointer
         data_size = self.data_size
@@ -242,7 +242,7 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
     """
     __slots__ = ()
     
-    async def fetch_one(self) -> tuple | None:
+    async def fetch_one(self) -> tuple[Any, ...] | None:
         """Fetch next row (async). row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
         row_pointer = self.row_pointer
         if row_pointer >= self.data_size - 1:
@@ -252,7 +252,7 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
         self.row_pointer = row_pointer
         return self.rows[row_pointer]
     
-    async def fetch_all(self) -> List[tuple]:
+    async def fetch_all(self) -> List[tuple[Any, ...]]:
         """Fetch all remaining rows (async)"""
         row_pointer = self.row_pointer
         data_size = self.data_size
@@ -269,7 +269,13 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
     async def scroll(self, value: int, mode: str = "relative") -> None:  # type: ignore[override]
         super().scroll(value, mode)
 
-class BaseStreamingResult(Result):
+# read_payload_func returns a memoryview (sync) or Awaitable[memoryview] (async);
+# the streaming base is generic over that return type so each implementation gets
+# the correct callable type (sync calls it, async awaits it).
+_PayloadT = TypeVar('_PayloadT')
+
+
+class BaseStreamingResult(Result, Generic[_PayloadT]):
     """
     Base class for streaming (unbuffered) result sets
     
@@ -283,12 +289,12 @@ class BaseStreamingResult(Result):
     
     def __init__(
         self,
-        read_payload_func: Callable[[], memoryview],
+        read_payload_func: Callable[[], _PayloadT],
         context: 'Context',
         columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration',
-        row_parser: Callable | None = None,
+        row_parser: Callable[[Any], Any] | None = None,
     ):
         """
         Initialize streaming result
@@ -302,9 +308,9 @@ class BaseStreamingResult(Result):
             row_parser: Function to parse row packets (from Client)
         """
         super().__init__(columns, column_count, config)
-        self.read_payload_func: Callable[[], memoryview] = read_payload_func
+        self.read_payload_func: Callable[[], _PayloadT] = read_payload_func
         self.context: Context = context
-        self.row_parser: Callable = row_parser  # type: ignore[assignment]
+        self.row_parser: Callable[[Any], Any] | None = row_parser
         self.loaded: bool = False
         self._row_count: int = 0  # Track number of rows fetched
         
@@ -324,7 +330,7 @@ class BaseStreamingResult(Result):
     
 
 
-class SyncStreamingResult(BaseStreamingResult, SyncResult):
+class SyncStreamingResult(BaseStreamingResult[memoryview], SyncResult):
     """
     Synchronous streaming (unbuffered) result set
     
@@ -332,7 +338,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
     """
     __slots__ = ()
     
-    def fetch_one(self) -> tuple | None:
+    def fetch_one(self) -> tuple[Any, ...] | None:
         """Fetch next row"""
         if self.loaded:
             return None
@@ -345,9 +351,9 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
         self._row_count += 1
         return self.row_parser(row_packet, self.columns, self.config, self.column_count)  # type: ignore[no-any-return]
         
-    def fetch_all(self) -> List[tuple]:
+    def fetch_all(self) -> List[tuple[Any, ...]]:
         """Fetch all remaining rows"""
-        result = []
+        result : List[tuple[Any, ...]] = []
         while not self.loaded:
             row = self.fetch_one()
             if row is None:
@@ -412,7 +418,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
             self._row_count += 1
             self.row_pointer += 1
 
-class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
+class AsyncStreamingResult(BaseStreamingResult[Awaitable[memoryview]], AsyncResult):
     """
     Asynchronous streaming (unbuffered) result set
     
@@ -420,10 +426,10 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
     """
     __slots__ = ()
     
-    async def _read_next_row_packet(self) -> memoryview | None:  # type: ignore[override]  # async override of the sync abstractmethod
+    async def _read_next_row_packet(self) -> memoryview[int] | None:  # type: ignore[override]  # async override of the sync abstractmethod
         """Read next row packet from network (asynchronous). Returns row packet memoryview, or None if no more rows."""
         try:
-            row_packet = await self.read_payload_func()  # type: ignore[misc]
+            row_packet = await self.read_payload_func()
             packet_type = row_packet[0]
             
             if packet_type == 0xFE:  # Check for EOF/OK packet
@@ -448,7 +454,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
             self.loaded = True
             raise
     
-    async def fetch_one(self) -> tuple | None:
+    async def fetch_one(self) -> tuple[Any, ...] | None:
         """Fetch next row (async)"""
         if self.loaded:
             return None
@@ -461,9 +467,9 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
         self._row_count += 1
         return self.row_parser(row_packet, self.columns, self.config, self.column_count)  # type: ignore[no-any-return]
     
-    async def fetch_all(self) -> List[tuple]:
+    async def fetch_all(self) -> List[tuple[Any, ...]]:
         """Fetch all remaining rows (async)"""
-        result = []
+        result : List[tuple[Any, ...]] = []
         while not self.loaded:
             row = await self.fetch_one()
             if row is None:

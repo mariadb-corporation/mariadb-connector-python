@@ -30,11 +30,13 @@ _STRUCT_DATE = struct.Struct('<BHBB')                     # length(B) + year(H) 
 _STRUCT_TIME_WITH_MICRO = struct.Struct('<BBIBBBI')      # length(B) + negative(B) + days(I) + hour(B) + minute(B) + second(B) + microsecond(I)
 _STRUCT_TIME_NO_MICRO = struct.Struct('<BBIBBB')         # length(B) + negative(B) + days(I) + hour(B) + minute(B) + second(B)
 
+# numpy is an optional accelerator for float32 VECTOR encoding.
+numpy: Any = None
 try:
-    import numpy
-    HAS_NUMPY = True
+    import numpy  # type: ignore[no-redef]  # pyright: ignore[reportMissingImports]
 except ImportError:
-    HAS_NUMPY = False
+    pass
+HAS_NUMPY = numpy is not None
 
 from ...client.context import Context
 from mariadb_shared.constants import FIELD_TYPE
@@ -53,7 +55,7 @@ class ExecutePacket(ClientMessage):
     
     COM_STMT_EXECUTE = 0x17
     
-    def __init__(self, statement_id: int, parameters: List[Any] | None = None, sql: str = ""):
+    def __init__(self, statement_id: int | None, parameters: List[Any] | None = None, sql: str = ""):
         """Initialize COM_STMT_EXECUTE packet with statement ID and parameters"""
         self.statement_id = statement_id
         self.parameters = parameters or []

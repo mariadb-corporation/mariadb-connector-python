@@ -7,7 +7,7 @@ This is a pure Python implementation. For better performance, install the
 optional C extension: pip install mariadb-python[c-extension]
 '''
 
-from typing import Any, Dict, Optional, TYPE_CHECKING, cast
+from typing import Any, Dict, TYPE_CHECKING, cast
 
 # Import exceptions from shared package to avoid circular dependencies
 from mariadb_shared.exceptions import (
@@ -368,11 +368,13 @@ version_tuple, version_numeric = _parse_version_info(_base_version)
 client_version_info = version_tuple
 client_version = version_numeric
 
-__author__ = "MariaDB Corporation"
+__author__ : str = "MariaDB Corporation"
+__version__ : str = _base_version
+__version_info__ : tuple[int, int, int, str] | tuple[int, int, int] = _parse_version_info(_base_version)[0]
 
 # Connection pool support (lazy import)
-_CONNECTION_POOLS: Dict[str, 'ConnectionPoolWrapper'] = {}
-_ASYNC_CONNECTION_POOLS: Dict[str, 'AsyncConnectionPoolWrapper'] = {}
+_CONNECTION_POOLS: 'Dict[str, ConnectionPoolWrapper]' = {}
+_ASYNC_CONNECTION_POOLS: 'Dict[str, AsyncConnectionPoolWrapper]' = {}
 
 # Cache for pool classes (lazy loaded)
 _ConnectionPoolClass = None
@@ -386,11 +388,7 @@ def __getattr__(name: str) -> Any:
     """
     global _ConnectionPoolClass, _AsyncConnectionPoolClass
 
-    if name == '__version__':
-        return _get_current_version()
-    elif name == '__version_info__':
-        return _get_current_version_info()
-    elif name == 'ConnectionPool':
+    if name == 'ConnectionPool':
         # Lazy import and cache compatibility wrapper
         if _ConnectionPoolClass is None:
             _ConnectionPoolClass = _get_connection_pool_class()
@@ -402,20 +400,6 @@ def __getattr__(name: str) -> Any:
         return _AsyncConnectionPoolClass
     else:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-
-def _get_current_version() -> str:
-    """Connector version as a clean PEP 440 string, identical across all
-    implementations. The active implementation is reported separately via
-    __impl__ rather than a PEP 440 local version segment, which the spec
-    discourages for published packages.
-    """
-    return _base_version
-
-def _get_current_version_info() -> tuple[int, int, int, str] | tuple[int, int, int]:
-    """Parsed (major, minor, patch[, prerelease]) of the connector version."""
-    parsed, _ = _parse_version_info(_base_version)
-    return parsed
-
 
 def create_pool(
     min_size: int | None = None,

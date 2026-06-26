@@ -8,19 +8,23 @@ import secrets
 
 from ...configuration import Configuration
 
-from typing import Callable, Awaitable
+from typing import Any, Callable, Awaitable
 from ...client.context import Context
 from ...message.payload_reader import PayloadReader
 from ..authentication_plugin import AuthenticationPlugin
 from ....exceptions import OperationalError
 
+hashes: Any = None
+serialization: Any = None
+PBKDF2HMAC: Any = None  # pyright: ignore[reportConstantRedefinition]
+Ed25519PrivateKey: Any = None
 try:
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-    HAS_CRYPTOGRAPHY = True
+    from cryptography.hazmat.primitives import hashes, serialization  # pyright: ignore[reportMissingImports]
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # pyright: ignore[reportMissingImports, reportConstantRedefinition]
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # pyright: ignore[reportMissingImports]
 except Exception:
-    HAS_CRYPTOGRAPHY = False
+    pass
+HAS_CRYPTOGRAPHY = Ed25519PrivateKey is not None
 
 
 class ParsecPasswordPlugin(AuthenticationPlugin):
@@ -187,7 +191,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         """Return hash for credential"""
         return self._hash
     
-    def _combine_arrays(self, arrays: list) -> bytes:
+    def _combine_arrays(self, arrays: list[bytes]) -> bytes:
         """Combine multiple byte arrays into one"""
         result = b''
         for arr in arrays:

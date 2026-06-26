@@ -91,7 +91,7 @@ except ImportError:
         # Final fallback - use hardcoded version that matches root project
         _base_version = "2.0.0.dev"
 
-__version__ = _base_version
+__version__ : str = _base_version
 __author__ = "MariaDB Corporation"
 
 # Parse version info

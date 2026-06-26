@@ -39,6 +39,31 @@ RESULT_DICTIONARY = 2
 TResult = TypeVar('TResult', bound=Result)
 TConnection = TypeVar('TConnection', bound='BaseConnection')
 
+# Module-level lookup tables — built once at import, not rebuilt on every call.
+# Both are used in the per-column metadata/description paths below.
+_CHARSET_MAX_LENGTHS = {
+    1: 2, 8: 1, 28: 2, 33: 3, 45: 4, 46: 4, 63: 1, 77: 1,
+    224: 4, 225: 4, 226: 4, 227: 4, 228: 4, 229: 4, 230: 4, 231: 4,
+    232: 4, 233: 4, 234: 4, 235: 4, 236: 4, 237: 4, 238: 4, 239: 4,
+    240: 4, 241: 4, 242: 4, 243: 4, 244: 4, 245: 4, 246: 4, 247: 4,
+    248: 4, 249: 4, 250: 4, 255: 4,
+}
+
+_EXT_TYPE_NAME_MAP = {
+    b'json': EXT_FIELD_TYPE.JSON,
+    b'uuid': EXT_FIELD_TYPE.UUID,
+    b'inet4': EXT_FIELD_TYPE.INET4,
+    b'inet6': EXT_FIELD_TYPE.INET6,
+    b'point': EXT_FIELD_TYPE.POINT,
+    b'multipoint': EXT_FIELD_TYPE.MULTIPOINT,
+    b'linestring': EXT_FIELD_TYPE.LINESTRING,
+    b'multilinestring': EXT_FIELD_TYPE.MULTILINESTRING,
+    b'polygon': EXT_FIELD_TYPE.POLYGON,
+    b'multipolygon': EXT_FIELD_TYPE.MULTIPOLYGON,
+    b'geometrycollection': EXT_FIELD_TYPE.GEOMETRYCOLLECTION,
+}
+
+
 class BaseCursor(ABC, Generic[TResult, TConnection]):
     """
     Base class for MariaDB Cursor Objects
@@ -227,21 +252,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         decimals_tuple = tuple(columns.decimals_arr)
         flags_tuple = tuple(columns.flags)
         
-        # Calculate extended field type - use dict lookup for performance
-        ext_type_name_map = {
-            b'json': EXT_FIELD_TYPE.JSON,
-            b'uuid': EXT_FIELD_TYPE.UUID,
-            b'inet4': EXT_FIELD_TYPE.INET4,
-            b'inet6': EXT_FIELD_TYPE.INET6,
-            b'point': EXT_FIELD_TYPE.POINT,
-            b'multipoint': EXT_FIELD_TYPE.MULTIPOINT,
-            b'linestring': EXT_FIELD_TYPE.LINESTRING,
-            b'multilinestring': EXT_FIELD_TYPE.MULTILINESTRING,
-            b'polygon': EXT_FIELD_TYPE.POLYGON,
-            b'multipolygon': EXT_FIELD_TYPE.MULTIPOLYGON,
-            b'geometrycollection': EXT_FIELD_TYPE.GEOMETRYCOLLECTION
-        }
-        
+        # Calculate extended field type - module-level dict lookup (see _EXT_TYPE_NAME_MAP)
         ext_type_list = []
         for i in range(n):
             ext_field_type = EXT_FIELD_TYPE.NONE
@@ -250,7 +261,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             if etf and etf.lower() == b'json':
                 ext_field_type = EXT_FIELD_TYPE.JSON
             elif etn:
-                ext_field_type = ext_type_name_map.get(etn.lower(), EXT_FIELD_TYPE.NONE)
+                ext_field_type = _EXT_TYPE_NAME_MAP.get(etn.lower(), EXT_FIELD_TYPE.NONE)
             
             ext_type_list.append(ext_field_type)
         
@@ -600,11 +611,4 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     
     def _get_charset_max_length(self, charset_id: int) -> int | None:
         """Get maximum character length for a charset ID"""
-        charset_max_lengths = {
-            1: 2, 8: 1, 28: 2, 33: 3, 45: 4, 46: 4, 63: 1, 77: 1, 
-            224: 4, 225: 4, 226: 4, 227: 4, 228: 4, 229: 4, 230: 4, 231: 4,
-            232: 4, 233: 4, 234: 4, 235: 4, 236: 4, 237: 4, 238: 4, 239: 4,
-            240: 4, 241: 4, 242: 4, 243: 4, 244: 4, 245: 4, 246: 4, 247: 4,
-            248: 4, 249: 4, 250: 4, 255: 4
-        }
-        return charset_max_lengths.get(charset_id)
+        return _CHARSET_MAX_LENGTHS.get(charset_id)
