@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Type, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Type
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -30,7 +30,7 @@ class AsyncCursorCommon(ABC):
     # =========================================================================
         
     @abstractmethod
-    async def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None) -> None:
+    async def execute(self, sql: str, data: Optional[Sequence[Any] | dict[str, Any]] = None, buffered: Optional[bool] = None) -> None:
         """
         Execute a SQL query or command
         
@@ -57,7 +57,7 @@ class AsyncCursorCommon(ABC):
         ...
 
     @abstractmethod
-    async def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None) -> None:
+    async def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: Optional[bool] = None) -> None:
         """
         Execute a statement multiple times with different parameter sets
         

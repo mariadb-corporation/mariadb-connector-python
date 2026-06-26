@@ -8,10 +8,9 @@ Base cursor implementation with common functionality for sync and async cursors
 """
 
 import copy
-import datetime
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING, TypeVar, Generic
+from typing import Sequence, Optional, List, Any, Dict, TYPE_CHECKING, TypeVar, Generic
 
 from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 
@@ -21,8 +20,6 @@ from .impl.message.server.column_definition_packet import ColumnsDefinition
 from .exceptions import ProgrammingError
 from .impl.client.exception_factory import ExceptionFactory
 from .impl.result import Result
-from .impl.string_utils import StringEscaper
-from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES
 from mariadb_shared.constants import EXT_FIELD_TYPE
 from mariadb_shared.constants.FIELD_TYPE import (
     INT24, TIMESTAMP, YEAR, NEWDECIMAL, DECIMAL, JSON
@@ -356,12 +353,12 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         ...
 
     @abstractmethod
-    def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None) -> None:
+    def execute(self, sql: str, data: Optional[Sequence[Any] | dict[str, Any]] = None, buffered: Optional[bool] = None) -> None:
         """Execute a database query or command"""
         ...
 
     @abstractmethod
-    def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None) -> None:
+    def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: Optional[bool] = None) -> None:
         """Execute a statement multiple times"""
         ...
 

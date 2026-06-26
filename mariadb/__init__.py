@@ -7,7 +7,7 @@ This is a pure Python implementation. For better performance, install the
 optional C extension: pip install mariadb-python[c-extension]
 '''
 
-from typing import Any, Dict, Optional, Union, TYPE_CHECKING, cast
+from typing import Any, Dict, Optional, TYPE_CHECKING, cast
 
 # Import exceptions from shared package to avoid circular dependencies
 from mariadb_shared.exceptions import (
@@ -306,7 +306,7 @@ async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwa
 _have_asan = False
 
 # Version information for the connector
-def _parse_version_info(version_string: str) -> tuple:
+def _parse_version_info(version_string: str) -> tuple[tuple[int, int, int, str] | tuple[int, int, int], int]:
     """
     Parse version string into numeric format
 
@@ -411,7 +411,7 @@ def _get_current_version() -> str:
     """
     return _base_version
 
-def _get_current_version_info() -> tuple:
+def _get_current_version_info() -> tuple[int, int, int, str] | tuple[int, int, int]:
     """Parsed (major, minor, patch[, prerelease]) of the connector version."""
     parsed, _ = _parse_version_info(_base_version)
     return parsed  # type: ignore[no-any-return]

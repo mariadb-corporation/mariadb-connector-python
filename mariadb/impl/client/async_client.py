@@ -31,7 +31,6 @@ from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
 from ..message.client.query_packet import QueryPacket
 from ..message.client.quit_packet import QuitPacket
-from ..message.client.prepare_packet import PreparePacket
 from ..message.client.change_user_packet import ChangeUserPacket
 from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..completion import Completion
@@ -983,8 +982,6 @@ class AsyncClient(BaseClient):
         Returns:
             tuple: (Completion, remaining_packets)
         """
-        import os
-        import re
 
         # Read filename from packet (skip 0xFB header)
         parser = PayloadReader(packet)

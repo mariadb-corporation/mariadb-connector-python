@@ -3,22 +3,19 @@
 
 from __future__ import annotations
 
-from collections import namedtuple
-from typing import Sequence, Optional, List, Any, Union, Dict, TYPE_CHECKING
+from typing import Sequence, Optional, List, Any, TYPE_CHECKING
 import warnings
 
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
 
 from .impl.result import AsyncResult
 
-from .base_cursor import BaseCursor, ROWS_ALL, RESULT_TUPLE, RESULT_NAMEDTUPLE, RESULT_DICTIONARY
-from .exceptions import DatabaseError, ProgrammingError, NotSupportedError, OperationalError
+from .base_cursor import BaseCursor
+from .exceptions import DatabaseError, ProgrammingError, NotSupportedError
 from .impl.message.client.query_packet import QueryPacket, normalize_to_qmark
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES, MORE_RESULTS_EXIST
-from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 
 if TYPE_CHECKING:
-    from .base_connection import BaseConnection
     from .async_connection import AsyncConnection
     from .impl.message.server.column_definition_packet import ColumnsDefinition
     from .impl.result import AsyncCompleteResult
@@ -106,7 +103,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     # Query Execution Methods
     # =========================================================================
 
-    async def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None) -> None:  # type: ignore[override]
+    async def execute(self, sql: str, data: Optional[Sequence[Any] | dict[str, Any]] = None, buffered: Optional[bool] = None) -> None:  # type: ignore[override]
         """
         Execute a SQL query or command asynchronously
 
@@ -189,7 +186,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 sql= sql
             )
 
-    async def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None) -> None:  # type: ignore[override]
+    async def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: Optional[bool] = None) -> None:  # type: ignore[override]
         """
         Execute a statement multiple times with different parameter sets
 

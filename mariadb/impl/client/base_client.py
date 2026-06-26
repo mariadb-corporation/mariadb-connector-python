@@ -17,8 +17,8 @@ import struct
 import sys
 import ipaddress
 import uuid
-from abc import ABC, abstractmethod
-from typing import List, Optional, Callable, Dict, Tuple, Any, TYPE_CHECKING, Union
+from abc import ABC
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 
 # Protocol constants — mirror mysql_protocol_type from Connector/C mysql.h
 PROTOCOL_DEFAULT = 0
@@ -123,9 +123,6 @@ from .context import Context
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
 from ..host_address import HostAddress
-from ..message.client_message import ClientMessage
-from ..message.server.prepare_stmt_packet import PrepareStmtPacket
-from ..completion import Completion
 from ..message.server.column_definition_packet import ColumnsDefinition
 from .exception_factory import ExceptionFactory
 from ...exceptions import OperationalError

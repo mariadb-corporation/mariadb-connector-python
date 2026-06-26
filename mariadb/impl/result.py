@@ -5,7 +5,7 @@
 Result set classes for MariaDB query results
 """
 
-from typing import List, Optional, TYPE_CHECKING, Callable, Tuple
+from typing import List, Optional, TYPE_CHECKING, Callable
 from abc import ABC, abstractmethod
 from .message.server.eof_packet import EofPacket
 from .message.server.ok_packet import OkPacket

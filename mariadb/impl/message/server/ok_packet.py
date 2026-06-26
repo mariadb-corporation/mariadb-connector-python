@@ -8,7 +8,7 @@ Based on MySQL/MariaDB protocol OK packet structure.
 """
 
 import struct
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from ..payload_reader import PayloadReader
 from ...completion import Completion
 from mariadb_shared.exceptions import OperationalError

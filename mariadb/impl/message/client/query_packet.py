@@ -14,7 +14,7 @@ while correctly handling:
 - Escape sequences
 """
 
-from typing import TYPE_CHECKING, Any, List, Tuple, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ...client.context import Context
 from ..client_message import ClientMessage
@@ -23,12 +23,8 @@ if TYPE_CHECKING:
     from ..payload_writer import PayloadWriter
 from mariadb_shared.text_protocol import (
     substitute_params,
-    normalize_to_qmark,
-    _IS_IDENTIFIER_START,
-    _IS_IDENTIFIER_CHAR,
-    _IS_SPECIAL_CHAR,
+    normalize_to_qmark as normalize_to_qmark,  # re-exported: cursors import it from here
 )
-from mariadb_shared.exceptions import ProgrammingError
 
 
 

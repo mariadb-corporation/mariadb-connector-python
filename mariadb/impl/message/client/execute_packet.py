@@ -35,7 +35,6 @@ try:
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
-from typing import TYPE_CHECKING
 
 from ...client.context import Context
 from mariadb_shared.constants import FIELD_TYPE

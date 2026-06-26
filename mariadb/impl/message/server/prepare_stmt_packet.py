@@ -10,7 +10,7 @@ Based on MySQL/MariaDB protocol COM_STMT_PREPARE response structure.
 import struct
 import threading
 from types import TracebackType
-from typing import TYPE_CHECKING, List, Optional, Callable, Type
+from typing import TYPE_CHECKING, Optional, Callable, Type
 
 from .column_definition_packet import ColumnsDefinition
 

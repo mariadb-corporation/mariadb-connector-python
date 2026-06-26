@@ -3,13 +3,11 @@
 
 from __future__ import annotations
 
-import datetime
-from numbers import Number
 from types import TracebackType
 from typing import Optional, Any, List, Iterator, Type
 
 # Import shared constants and exceptions to avoid circular dependencies
-from mariadb_shared.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
+from mariadb_shared.constants import STATUS, CAPABILITY
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES as _NO_BACKSLASH_ESCAPES
 from mariadb_shared.exceptions import (
     ProgrammingError,
@@ -219,7 +217,7 @@ class Cursor(StmtReuseMixin, CCursor):
         self._initresult()
         self._bulk = 0
 
-    def executemany(self, statement: str, parameters: Any) -> None:
+    def executemany(self, statement: str, parameters: Sequence[Sequence[Any] | dict[str, Any]]) -> None:
         """
         Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE
         statement) and execute it against all parameter found in sequence.

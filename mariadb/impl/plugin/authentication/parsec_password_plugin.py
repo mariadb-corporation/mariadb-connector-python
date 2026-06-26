@@ -4,9 +4,8 @@
 
 from __future__ import annotations
 
-import hashlib
 import secrets
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 from ...configuration import Configuration
 

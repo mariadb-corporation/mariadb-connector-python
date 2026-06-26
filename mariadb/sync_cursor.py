@@ -3,13 +3,10 @@
 
 from __future__ import annotations
 
-from collections import namedtuple
-from typing import Sequence, Optional, List, Any, Union, TYPE_CHECKING
+from typing import Sequence, Optional, List, Any, TYPE_CHECKING
 
 from .impl.result import SyncResult
 
-from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
-from .impl.client.sync_client import SyncClient
 
 from .base_cursor import BaseCursor
 from .exceptions import DatabaseError, ProgrammingError, NotSupportedError
@@ -19,7 +16,6 @@ from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES, MORE_RESULTS_E
 
 if TYPE_CHECKING:
     from types import TracebackType
-    from .base_connection import BaseConnection
     from .sync_connection import SyncConnection
     from .impl.result import SyncCompleteResult
     from .impl.message.server.column_definition_packet import ColumnsDefinition
@@ -131,7 +127,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # Query Execution Methods
     # =========================================================================
 
-    def execute(self, sql: str, data: Optional[Union[Sequence[Any], dict]] = None, buffered: Optional[bool] = None) -> None:
+    def execute(self, sql: str, data: Optional[Sequence[Any] | dict[str, Any]] = None, buffered: Optional[bool] = None) -> None:
         """
         Execute a SQL query or command
 
@@ -213,7 +209,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 sql= sql
             )
 
-    def executemany(self, sql: str, data: Sequence[Union[Sequence[Any], dict]], buffered: Optional[bool] = None) -> None:
+    def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: Optional[bool] = None) -> None:
         """
         Execute a statement multiple times with different parameter sets
 

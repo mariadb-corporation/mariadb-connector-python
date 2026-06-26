@@ -7,7 +7,6 @@ Debug utilities for MariaDB connector
 Provides hex dump and other debugging functionality.
 """
 
-import sys
 from typing import Union
 
 

@@ -335,7 +335,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
 
         # Field count is already set by the C extension after stmt execution
 
-    async def executemany(self, statement: str, parameters: Sequence) -> None:
+    async def executemany(self, statement: str, parameters: Sequence[Sequence[Any] | dict[str, Any]]) -> None:
         """
         Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE
         statement) and execute it against all parameter found in sequence.

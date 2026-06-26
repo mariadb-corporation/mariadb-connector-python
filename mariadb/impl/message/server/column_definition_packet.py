@@ -9,7 +9,7 @@ cache-friendly access during row parsing. No per-column objects are created.
 """
 
 import struct
-from typing import TYPE_CHECKING, Optional, Tuple, List
+from typing import TYPE_CHECKING, Optional, List
 
 if TYPE_CHECKING:
     from ...client.context import Context

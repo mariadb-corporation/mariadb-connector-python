@@ -10,11 +10,10 @@ Provides abstract base class with common functionality for both
 synchronous and asynchronous connection implementations.
 """
 
-from abc import ABC, abstractmethod
-from typing import Optional, Any, Union, TypeVar, Generic, TYPE_CHECKING, List
+from abc import ABC
+from typing import Optional, Any, TypeVar, Generic, TYPE_CHECKING
 
 from mariadb_shared.constants import STATUS, TPC_STATE
-from mariadb_shared.xid import Xid
 
 from .exceptions import (
     ProgrammingError, NotSupportedError, OperationalError,
@@ -22,7 +21,6 @@ from .exceptions import (
     InternalError, IntegrityError, DataError
 )
 from .impl.configuration import Configuration
-from .impl.host_address import HostAddress
 from .impl.string_utils import StringEscaper
 from .impl.client.exception_factory import ExceptionFactory
 

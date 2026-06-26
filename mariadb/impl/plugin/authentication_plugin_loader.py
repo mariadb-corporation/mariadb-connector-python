@@ -9,7 +9,7 @@ Permits loading authentication plugins with support for custom plugins.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Type, Optional
+from typing import TYPE_CHECKING, Dict, Type
 from .authentication_plugin_factory import AuthenticationPluginFactory
 from ...exceptions import OperationalError
 

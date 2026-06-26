@@ -2,7 +2,7 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .result import Result

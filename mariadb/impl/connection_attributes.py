@@ -7,7 +7,6 @@ Connection attributes utility
 Provides default connection attributes for authentication and COM_CHANGE_USER
 """
 
-import sys
 import platform
 from typing import Dict, Optional
 

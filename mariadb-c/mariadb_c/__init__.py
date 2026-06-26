@@ -41,7 +41,7 @@ Cursor = SyncCursor
 # from mariadb_c.pooling import *
 
 # Version information for the C extension connector
-def _parse_version_info(version_string: str) -> "tuple[tuple, int]":
+def _parse_version_info(version_string: str) -> tuple[tuple[int, int, int, str] | tuple[int, int, int], int]:
     """
     Parse version string into numeric format
     

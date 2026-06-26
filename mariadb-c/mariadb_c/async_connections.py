@@ -19,9 +19,9 @@ from typing import Any, Callable, Optional, Tuple, cast
 from .connections import StmtCache
 
 # Import shared constants and exceptions to avoid circular dependencies
-from mariadb_shared.constants import STATUS, TPC_STATE, INFO
+from mariadb_shared.constants import TPC_STATE, INFO
 from mariadb_shared.exceptions import (
-    Error, ProgrammingError, OperationalError,
+    ProgrammingError,
 )
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
 from mariadb_shared.validators import validate_bool
@@ -30,7 +30,6 @@ from mariadb_shared.validators import validate_bool
 from mariadb_c._mariadb import mariadbapi_version
 from packaging import version
 
-from mariadb_shared.xid import Xid
 
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
