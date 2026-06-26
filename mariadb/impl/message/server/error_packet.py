@@ -77,7 +77,7 @@ class ErrorPacket:
         
         return ErrorPacket(error_code, sql_state, error_message)
 
-    def toError(self, exception_factory: 'ExceptionFactory', sql: Optional[str] = None) -> Exception:
+    def toError(self, exception_factory: 'ExceptionFactory', sql: str | None = None) -> Exception:
         """Convert to exception"""
         return exception_factory.create_exception(
             self.error_message, 

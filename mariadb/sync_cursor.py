@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Sequence, Optional, List, Any, TYPE_CHECKING
+from typing import Sequence, List, Any, TYPE_CHECKING
 
 from .impl.result import SyncResult
 
@@ -79,7 +79,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
 
             self._closed = True
 
-    def nextset(self) -> Optional[bool]:
+    def nextset(self) -> bool | None:
         """
         Advance to the next available result set.
 
@@ -127,7 +127,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # Query Execution Methods
     # =========================================================================
 
-    def execute(self, sql: str, data: Optional[Sequence[Any] | dict[str, Any]] = None, buffered: Optional[bool] = None) -> None:
+    def execute(self, sql: str, data: Sequence[Any] | dict[str, Any] | None = None, buffered: bool | None = None) -> None:
         """
         Execute a SQL query or command
 
@@ -209,7 +209,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 sql= sql
             )
 
-    def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: Optional[bool] = None) -> None:
+    def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: bool | None = None) -> None:
         """
         Execute a statement multiple times with different parameter sets
 
@@ -312,7 +312,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # Result Fetching Methods
     # =========================================================================
 
-    def fetchone(self) -> Optional[Any]:
+    def fetchone(self) -> Any | None:
         """Fetch the next row of a query result set
 
         Returns:
@@ -339,7 +339,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             row = self._apply_row_formatting([row])[0]
         return row
 
-    def fetchmany(self, size: Optional[int] = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[Any]:
         """Fetch the next set of rows of a query result"""
         # Allow fetching from buffered results even if connection is closed
         if self._closed:
@@ -510,7 +510,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         """Context manager entry"""
         return self
 
-    def __exit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional['TracebackType']) -> None:
+    def __exit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: 'TracebackType' | None) -> None:
         """Context manager exit"""
         self.close()
 

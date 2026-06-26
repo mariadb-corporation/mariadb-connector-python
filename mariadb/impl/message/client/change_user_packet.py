@@ -7,7 +7,6 @@ COM_CHANGE_USER packet implementation
 Changes the user and optionally the database for the current connection.
 """
 
-from typing import Optional
 from ...client.context import Context
 from ..client_message import ClientMessage
 from ..payload_writer import PayloadWriter
@@ -25,10 +24,10 @@ class ChangeUserPacket(ClientMessage):
     
     def __init__(self, 
                  username: str,
-                 password: Optional[str] = None,
-                 database: Optional[str] = None,
+                 password: str | None = None,
+                 database: str | None = None,
                  charset_collation: int = 45,  # utf8mb4_general_ci
-                 connect_attrs: Optional[dict] = None):
+                 connect_attrs: dict | None = None):
         """Initialize COM_CHANGE_USER packet with username, password, database, and charset"""
         self.username = username or ""
         self.password = password

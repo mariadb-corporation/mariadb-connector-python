@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from .authentication_plugin import AuthenticationPlugin
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class AuthenticationPluginFactory(ABC):
         ...
     
     @abstractmethod
-    def initialize(self, authentication_data: Optional[str], seed: bytes,
+    def initialize(self, authentication_data: str | None, seed: bytes,
                   conf: "Configuration", host_address: "HostAddress") -> AuthenticationPlugin:
         """Plugin initialization"""
         ...

@@ -10,7 +10,7 @@ Base cursor implementation with common functionality for sync and async cursors
 import copy
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from typing import Sequence, Optional, List, Any, Dict, TYPE_CHECKING, TypeVar, Generic
+from typing import Sequence, List, Any, Dict, TYPE_CHECKING, TypeVar, Generic
 
 from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 
@@ -79,12 +79,12 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self.arraysize: int = 1
         self._completions: List[Completion] = []
         self._completion_index: int = 0
-        self._current_completion: Optional[Completion] = None
+        self._current_completion: Completion | None = None
         self._config = None
         self._exception_factory = ExceptionFactory()
         self._buffered: bool = bool(kwargs.pop('buffered', True))
         self._use_binary: bool = connection._configuration.binary
-        self._stmt: Optional[PrepareStmtPacket] = None
+        self._stmt: PrepareStmtPacket | None = None
         # Per-cursor single-statement reuse cache. Only created (lazily) when the
         # connection-level prepared-statement cache is disabled: it keeps the
         # last prepared statement for this cursor, reusing it while the SQL is
@@ -173,14 +173,14 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         return 0
 
     @property
-    def description(self) -> Optional[tuple]:
+    def description(self) -> tuple | None:
         """Get cursor description (computed on-demand from result set columns)"""
         if not self._result or not hasattr(self._result, 'columns'):
             return None
         return self._build_description(self._result.columns)
 
     @property
-    def lastrowid(self) -> Optional[int]:
+    def lastrowid(self) -> int | None:
         """Get the last insert ID from the current completion"""
         # For executemany, return the last insert ID from all executions
         # Use cached _current_completion for performance
@@ -189,7 +189,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         return None
 
     @property
-    def metadata(self) -> Optional[Dict[str, tuple]]:
+    def metadata(self) -> Dict[str, tuple] | None:
         """Get metadata information for result set columns"""
         # Inline _check_closed for performance
         if self._closed:
@@ -286,7 +286,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         return -1
 
     @property
-    def rownumber(self) -> Optional[int]:
+    def rownumber(self) -> int | None:
         """Current row number (1-based, DB-API style)"""
         # Use cached _current_completion for performance
         if self._current_completion and self._current_completion.has_result_set():
@@ -314,14 +314,14 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     # =========================================================================
 
     @property
-    def _completion(self) -> Optional[Completion]:
+    def _completion(self) -> Completion | None:
         """Get the current completion"""
         if self._completion_index < len(self._completions):
             return self._completions[self._completion_index]
         return None
 
     @property
-    def _result(self) -> Optional[TResult]:
+    def _result(self) -> TResult | None:
         """Get the current result set (for backward compatibility)"""
         completion = self._completion
         if completion and completion.has_result_set():
@@ -353,12 +353,12 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         ...
 
     @abstractmethod
-    def execute(self, sql: str, data: Optional[Sequence[Any] | dict[str, Any]] = None, buffered: Optional[bool] = None) -> None:
+    def execute(self, sql: str, data: Sequence[Any] | dict[str, Any] | None = None, buffered: bool | None = None) -> None:
         """Execute a database query or command"""
         ...
 
     @abstractmethod
-    def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: Optional[bool] = None) -> None:
+    def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: bool | None = None) -> None:
         """Execute a statement multiple times"""
         ...
 
@@ -368,24 +368,24 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         ...
 
     @abstractmethod
-    def fetchmany(self, size: Optional[int] = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[Any]:
         """Fetch the next set of rows"""
         ...
 
     @abstractmethod
-    def fetchone(self) -> Optional[Any]:
+    def fetchone(self) -> Any | None:
         """Fetch the next row"""
         ...
 
-    def setinputsizes(self, sizes: Sequence[Optional[int]]) -> None:
+    def setinputsizes(self, sizes: Sequence[int | None]) -> None:
         """Predefine memory areas for parameters (no-op in this implementation)"""
         pass
         
-    def setoutputsize(self, size: int, column: Optional[int] = None) -> None:
+    def setoutputsize(self, size: int, column: int | None = None) -> None:
         """Set a column buffer size for fetches (no-op in this implementation)"""
         pass
 
-    def nextset(self) -> Optional[bool]:
+    def nextset(self) -> bool | None:
         """
         Move to the next available result set
         
@@ -497,7 +497,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._completions = firstCompletion
         self._completion_index = 0
     
-    def _build_description(self, columns: 'ColumnsDefinition') -> Optional[tuple]:
+    def _build_description(self, columns: 'ColumnsDefinition') -> tuple | None:
         """Build cursor description tuple from column definitions"""
         if not columns or columns.count == 0:
             return None
@@ -598,7 +598,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         return rows
     
-    def _get_charset_max_length(self, charset_id: int) -> Optional[int]:
+    def _get_charset_max_length(self, charset_id: int) -> int | None:
         """Get maximum character length for a charset ID"""
         charset_max_lengths = {
             1: 2, 8: 1, 28: 2, 33: 3, 45: 4, 46: 4, 63: 1, 77: 1, 

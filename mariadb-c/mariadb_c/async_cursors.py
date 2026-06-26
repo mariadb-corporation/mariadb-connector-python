@@ -18,7 +18,7 @@ from mariadb_shared.exceptions import (
 )
 from mariadb_shared.text_protocol import substitute_params, normalize_to_qmark
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
-from typing import Sequence, Optional, List, Any, Union, cast
+from typing import Sequence, List, Any, cast
 from types import TracebackType
 import decimal
 
@@ -55,14 +55,14 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         self._connection = connection
         self._resulttype = RESULT_TUPLE
         self._description: Any = None
-        self._use_binary: Optional[bool] = None
+        self._use_binary: bool | None = None
         self._cache_entry: Any = None
         self._local_stmt_cache: Any = None
         self._resolved_stmt_cache: Any = None  # memoised _resolve_stmt_cache() result
         self._rowcount = 0
         self._data: Any = None
-        self._closed: Optional[bool] = None
-        self._buffered_rows: Optional[List[Any]] = None  # For buffered cursors: list of fetched rows
+        self._closed: bool | None = None
+        self._buffered_rows: List[Any] | None = None  # For buffered cursors: list of fetched rows
         self._row_index = 0  # Current position in buffered rows
 
         if not connection:
@@ -104,7 +104,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         self._connection._check_closed()
 
     @property
-    def rownumber(self) -> Optional[int]:
+    def rownumber(self) -> int | None:
         """Return the current row number (0-indexed position)"""
         # None if there is no result set or rows haven't been buffered yet;
         # otherwise the current index into the buffered rows.
@@ -152,7 +152,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
             params = ("?," * len(data))[:-1]
         await self.execute("CALL %s(%s)" % (sp, params), data, _force_binary=True)
 
-    async def nextset(self) -> Optional[bool]:
+    async def nextset(self) -> bool | None:
         """
         Will make the cursor skip to the next available result set,
         discarding any remaining rows from the current set.
@@ -187,7 +187,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
             self.connection._active_async_cursor = self
         return True
 
-    async def execute(self, statement: str, data: Sequence = (), buffered: Optional[bool] = None, _force_binary: bool = False) -> None:
+    async def execute(self, statement: str, data: Sequence = (), buffered: bool | None = None, _force_binary: bool = False) -> None:
         """
         Prepare and execute a SQL statement asynchronously.
 
@@ -304,7 +304,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         # Set rowcount to the number of fetched rows
         self._rowcount = len(rows)
 
-    async def _execute_text_async(self, sql_to_send: Union[str, bytes], original_statement: Optional[str] = None) -> None:
+    async def _execute_text_async(self, sql_to_send: str | bytes, original_statement: str | None = None) -> None:
         """Execute text query using async non-blocking API.
 
         Also stores the statement for cursor.statement and sets is_text=1.
@@ -406,7 +406,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
                 # BEFORE the next execute() clears them. (cast: execute() above
                 # repopulates _buffered_rows, which mypy can't see — it still has
                 # it narrowed to None from the reset at the top of executemany.)
-                buffered = cast(Optional[List[Any]], self._buffered_rows)
+                buffered = cast(List[Any] | None, self._buffered_rows)
                 if self.field_count > 0 and buffered is not None:
                     accumulated_results.extend(buffered)
             
@@ -470,7 +470,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
                 pass
             self.connection._active_async_cursor = None
 
-    async def _fetch_row_unbuffered(self) -> Optional[Any]:
+    async def _fetch_row_unbuffered(self) -> Any | None:
         """
         Internal use only.
 
@@ -532,7 +532,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
 
         self._closed = True
 
-    async def fetchone(self) -> Optional[Any]:
+    async def fetchone(self) -> Any | None:
         """
         Fetch the next row of a query result set, returning a single sequence,
         or None if no more data is available.
@@ -716,7 +716,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
 
         return self
 
-    async def __aexit__(self, exc_type: Optional[type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]) -> None:
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
         """Closes cursor."""
         await self.close()
 
@@ -760,7 +760,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         return bool(self.connection.server_status & STATUS.PS_OUT_PARAMS)
 
     @property
-    def lastrowid(self) -> Optional[int]:
+    def lastrowid(self) -> int | None:
         """
         Returns the ID generated by a query on a table with a column having
         the AUTO_INCREMENT attribute or the value for the last usage of

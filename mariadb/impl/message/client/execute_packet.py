@@ -7,7 +7,7 @@ import array
 import datetime
 import decimal
 import struct
-from typing import Any, Callable, Dict, List, Optional, Union as UnionType
+from typing import Any, Callable, Dict, List
 
 # Pre-compiled struct formats for performance
 _STRUCT_H = struct.Struct('<H')  # unsigned short (2 bytes) for year
@@ -53,7 +53,7 @@ class ExecutePacket(ClientMessage):
     
     COM_STMT_EXECUTE = 0x17
     
-    def __init__(self, statement_id: int, parameters: Optional[List[Any]] = None, sql: str = ""):
+    def __init__(self, statement_id: int, parameters: List[Any] | None = None, sql: str = ""):
         """Initialize COM_STMT_EXECUTE packet with statement ID and parameters"""
         self.statement_id = statement_id
         self.parameters = parameters or []
@@ -211,7 +211,7 @@ def _get_type_decimal(param: decimal.Decimal) -> int:
 def _get_type_str(param: str) -> int:
     return FIELD_TYPE.VAR_STRING
 
-def _get_type_bytes(param: UnionType[bytes, bytearray]) -> int:
+def _get_type_bytes(param: bytes | bytearray) -> int:
     return FIELD_TYPE.BLOB
 
 def _get_type_datetime(param: datetime.datetime) -> int:

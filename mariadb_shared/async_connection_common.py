@@ -9,7 +9,7 @@ connection implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, List
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -33,7 +33,7 @@ class AsyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    def cursor(self, cursor_class: Optional[type] = None, **kwargs: Any) -> AsyncCursorCommon:
+    def cursor(self, cursor_class: type | None = None, **kwargs: Any) -> AsyncCursorCommon:
         """
         Create a new cursor object for executing queries
         
@@ -94,7 +94,7 @@ class AsyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
+    async def change_user(self, user: str | None, password: str | None, database: str | None = None) -> None:
         """
         Change the user and database of the current connection
         
@@ -118,7 +118,7 @@ class AsyncConnectionCommon(ABC):
         """
         self._pooled_connection = pooled_connection
 
-    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[TracebackType]) -> None:
+    async def __aexit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: TracebackType | None) -> None:
         """Async context manager exit"""
         await self.close()
 
@@ -242,12 +242,12 @@ class AsyncConnectionCommon(ABC):
         object.__setattr__(self, 'auto_reconnect', value)
 
     @property
-    def database(self) -> Optional[str]:
+    def database(self) -> str | None:
         """Get current database name"""
         ...
     
     @database.setter
-    def database(self, value: Optional[str]) -> None:
+    def database(self, value: str | None) -> None:
         """
         Set database name - not supported for async connections
         
@@ -258,7 +258,7 @@ class AsyncConnectionCommon(ABC):
         """
         raise NotImplementedError("Use await connection.select_db(database) for async connections")
 
-    async def show_warnings(self) -> Optional[List[tuple]]:  # type: ignore[return]
+    async def show_warnings(self) -> List[tuple] | None:  # type: ignore[return]
         """
         Get warnings from the last executed command
         
@@ -329,7 +329,7 @@ class AsyncConnectionCommon(ABC):
         self.tpc_state = TPC_STATE.XID
         self._xid = xid
 
-    async def tpc_commit(self, xid: Optional[Xid] = None) -> None:
+    async def tpc_commit(self, xid: Xid | None = None) -> None:
         """
         Optional parameter:
 
@@ -403,7 +403,7 @@ class AsyncConnectionCommon(ABC):
                 raise
         self.tpc_state = TPC_STATE.PREPARE
 
-    async def tpc_rollback(self, xid: Optional[Xid] = None) -> None:
+    async def tpc_rollback(self, xid: Xid | None = None) -> None:
         """
         Parameter:
            xid: xid object which was created by .xid() method of connection

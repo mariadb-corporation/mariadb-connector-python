@@ -9,7 +9,7 @@ connection implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Type, TYPE_CHECKING
+from typing import Any, List, Type, TYPE_CHECKING
 
 from .sync_cursor_common import SyncCursorCommon
 from .constants import STATUS, TPC_STATE
@@ -32,7 +32,7 @@ class SyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    def cursor(self, cursor_class: Optional[type] = None, **kwargs: Any) -> SyncCursorCommon:
+    def cursor(self, cursor_class: type | None = None, **kwargs: Any) -> SyncCursorCommon:
         """
         Create a new cursor object for executing queries
         
@@ -93,7 +93,7 @@ class SyncConnectionCommon(ABC):
         ...
 
     @abstractmethod
-    def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
+    def change_user(self, user: str | None, password: str | None, database: str | None = None) -> None:
         """
         Change the user and database of the current connection
         
@@ -119,9 +119,9 @@ class SyncConnectionCommon(ABC):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """
         Context manager exit
@@ -233,7 +233,7 @@ class SyncConnectionCommon(ABC):
                 cursor.execute(f"SET autocommit={1 if bool(value) else 0}")
 
     
-    def show_warnings(self) -> Optional[List[tuple]]:
+    def show_warnings(self) -> List[tuple] | None:
         """
         Get warnings from the last executed command
         
@@ -305,7 +305,7 @@ class SyncConnectionCommon(ABC):
         self.tpc_state = TPC_STATE.XID
         self._xid = xid
 
-    def tpc_commit(self, xid: Optional[Xid] = None) -> None:
+    def tpc_commit(self, xid: Xid | None = None) -> None:
         """
         Optional parameter:
 
@@ -379,7 +379,7 @@ class SyncConnectionCommon(ABC):
                 raise
         self.tpc_state = TPC_STATE.PREPARE
 
-    def tpc_rollback(self, xid: Optional[Xid] = None) -> None:
+    def tpc_rollback(self, xid: Xid | None = None) -> None:
         """
         Parameter:
            xid: xid object which was created by .xid() method of connection

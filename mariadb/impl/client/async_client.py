@@ -15,14 +15,14 @@ import ssl
 import struct
 import copy
 import sys
-from typing import List, Optional, Any, Union, overload
+from typing import List, Any, overload, cast
 
 from mariadb.impl.message.server.ok_packet import OkPacket
 from mariadb.impl.message.server.error_packet import ErrorPacket
 from mariadb.impl.message.server.eof_packet import EofPacket
 from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, CachedPrepareStmtPacket
 from mariadb.impl.message.server.column_definition_packet import ColumnsDefinition
-from .base_client import BaseClient, _find_default_unix_socket, PROTOCOL_TCP, PROTOCOL_SOCKET
+from .base_client import BaseClient, find_default_unix_socket, PROTOCOL_TCP, PROTOCOL_SOCKET
 from ..message.server.ok_packet import CharsetMismatchError
 from .context import Context
 from ..message.payload_reader import PayloadReader
@@ -120,7 +120,7 @@ class AsyncClient(BaseClient):
     @overload
     async def read_payload(self, packet_count: int) -> list[tuple[int, int]]: ...
 
-    async def read_payload(self, packet_count: Optional[int] = None) -> Union[memoryview, list[tuple[int, int]]]:
+    async def read_payload(self, packet_count: int | None = None) -> memoryview | list[tuple[int, int]]:
         """
         Reads one or more complete packets from database server.
 
@@ -348,7 +348,7 @@ class AsyncClient(BaseClient):
                     and self.configuration.protocol != PROTOCOL_TCP
                     and not sys.platform.startswith('win')
                     and self.host_address.host == 'localhost'):
-                unix_socket = _find_default_unix_socket()
+                unix_socket = find_default_unix_socket()
                 if unix_socket:
                     self.configuration.unix_socket = unix_socket
                 elif self.configuration.protocol == PROTOCOL_SOCKET:
@@ -440,7 +440,7 @@ class AsyncClient(BaseClient):
 
     async def _ensure_default(self) -> None:
         """Ensure autocommit and charset are correctly set"""
-        sql_commands = []
+        sql_commands: List[str] = []
         if ((self.context.server_status & constants.STATUS.AUTOCOMMIT) > 0) != self.configuration.autocommit:
             sql_commands.append('autocommit = ' + str(int(self.configuration.autocommit)))
         if (self.context.charset != 'utf8mb4'):
@@ -470,6 +470,9 @@ class AsyncClient(BaseClient):
         message = SslRequestPacket(client_capabilities)
         await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), False)
 
+        # Get the transport and protocol from the writer
+        transport = self.writer.transport
+        protocol = transport.get_protocol()
         try:
             # Import SSL utility
             from .ssl.ssl_utility import SSLUtility
@@ -480,9 +483,6 @@ class AsyncClient(BaseClient):
                 self.context,
                 self.is_local_connection()
             )
-            # Get the transport and protocol from the writer
-            transport = self.writer.transport
-            protocol = transport.get_protocol()
 
             # Get the event loop
             loop = asyncio.get_event_loop()
@@ -537,11 +537,10 @@ class AsyncClient(BaseClient):
             raise OperationalError(f"Failed to upgrade socket to SSL: {e}")
 
 
-    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str]) -> None:
+    async def change_user(self, user: str | None, password: str | None, database: str | None) -> None:
         """Change current user and database"""
+        old_conf = self.configuration
         try:
-            old_conf = self.configuration
-
             new_conf = copy.copy(self.configuration)
             new_conf.user = user if user is not None else self.configuration.user
             new_conf.password = password if password is not None else self.configuration.password
@@ -628,7 +627,7 @@ class AsyncClient(BaseClient):
             except Exception as e:
                 raise OperationalError(f"Failed to execute init command '{self.configuration.init_command}': {e}")
 
-    async def execute(self, message: ClientMessage, config: Configuration, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None) -> List[Completion]:
+    async def execute(self, message: ClientMessage, config: Configuration, buffered: bool = True, prepare_stmt_packet: PrepareStmtPacket | None = None) -> List[Completion]:
         """Execute command and return list of completion results"""
         async with self.lock:
             if self.closed:
@@ -754,9 +753,9 @@ class AsyncClient(BaseClient):
 
 
 
-    async def _read_result(self, is_binary: bool, config: Configuration, buffered: bool = True, prepare_stmt_packet: Optional[PrepareStmtPacket] = None, sql: Optional[str] = None) -> List[Completion]:
+    async def _read_result(self, is_binary: bool, config: Configuration, buffered: bool = True, prepare_stmt_packet: PrepareStmtPacket | None = None, sql: str | None = None) -> List[Completion]:
         results : List[Completion] = []
-        packets : Optional[list[tuple[int, int]]] = None
+        packets : list[tuple[int, int]] | None = None
         # Cache frequently accessed attributes as locals
         context : Context = self.context
         read_payload = self.read_payload
@@ -855,7 +854,7 @@ class AsyncClient(BaseClient):
                 return results
 
             # Read rows
-            rows: List[tuple] = []
+            rows: List[tuple[Any, ...]] = []
 
             # Pre-compute EOF/OK length threshold
             eof_length_threshold = 16777215 if eof_deprecated else 8
@@ -873,7 +872,7 @@ class AsyncClient(BaseClient):
 
                     # Check for EOF/OK packet terminator
                     if packet_first_byte == 0xFE and len(row_packet) < eof_length_threshold:
-                        result_completion: Union[OkPacket, EofPacket]
+                        result_completion: OkPacket | EofPacket
                         if eof_deprecated:
                             result_completion = _decode_ok_packet(row_packet, context)
                         else:
@@ -913,8 +912,8 @@ class AsyncClient(BaseClient):
         return results
 
     async def read_next_result(self, is_binary: bool, config: Configuration,
-                               prepare_stmt_packet: Optional[PrepareStmtPacket] = None,
-                               sql: Optional[str] = None) -> Optional[Completion]:
+                               prepare_stmt_packet: PrepareStmtPacket | None = None,
+                               sql: str | None = None) -> Completion | None:
         """Read exactly one further result set from the wire."""
         async with self.lock:
             if self.closed:
@@ -976,7 +975,7 @@ class AsyncClient(BaseClient):
             except Exception as e:
                 raise OperationalError(f"Reading next result set failed: {e}")
 
-    async def _handle_local_infile(self, packet: memoryview, sql: Optional[str], remaining_packets: Optional[list[tuple[int, int]]]) -> tuple[OkPacket, Optional[list[tuple[int, int]]]]:
+    async def _handle_local_infile(self, packet: memoryview, sql: str | None, remaining_packets: list[tuple[int, int]] | None) -> tuple[OkPacket, list[tuple[int, int]] | None]:
         """Handle LOAD DATA LOCAL INFILE request from server (async)
 
         Returns:
@@ -1109,20 +1108,23 @@ class AsyncClient(BaseClient):
     # SSL/TLS Information
     # =========================================================================
 
-    def get_ssl_cipher(self) -> Optional[tuple]:
-        """Get current SSL cipher information"""
+    def get_ssl_cipher(self) -> tuple[str, str, int] | None:
+        """Get the negotiated TLS cipher as (name, protocol_version, secret_bits).
+
+        Mirrors ssl.SSLObject.cipher(): a 3-tuple, or None when no TLS is active.
+        """
         if self.writer and hasattr(self.writer, '_transport'):
             transport = self.writer._transport
             if hasattr(transport, 'get_extra_info'):
                 ssl_object = transport.get_extra_info('ssl_object')
                 if ssl_object and hasattr(ssl_object, 'cipher'):
                     try:
-                        return ssl_object.cipher()  # type: ignore[no-any-return]
+                        return cast(ssl.SSLObject, ssl_object).cipher()
                     except:
                         return None
         return None
 
-    def get_ssl_version(self) -> Optional[str]:
+    def get_ssl_version(self) -> str | None:
         """Get current TLS/SSL version string"""
         if self.writer and hasattr(self.writer, '_transport'):
             transport = self.writer._transport
@@ -1130,20 +1132,21 @@ class AsyncClient(BaseClient):
                 ssl_object = transport.get_extra_info('ssl_object')
                 if ssl_object and hasattr(ssl_object, 'version'):
                     try:
-                        return ssl_object.version()  # type: ignore[no-any-return]
+                        return cast(ssl.SSLObject, ssl_object).version()
                     except:
                         return None
         return None
 
-    def get_peer_certificate(self) -> Optional[dict]:
-        """Get peer SSL certificate information"""
+    def get_peer_certificate(self) -> dict[str, Any] | None:
+        """Get the peer's certificate as the decoded dict from ssl.getpeercert()
+        , or None when no peer cert is available."""
         if self.writer and hasattr(self.writer, '_transport'):
             transport = self.writer._transport
             if hasattr(transport, 'get_extra_info'):
                 ssl_object = transport.get_extra_info('ssl_object')
                 if ssl_object and hasattr(ssl_object, 'getpeercert'):
                     try:
-                        return ssl_object.getpeercert()  # type: ignore[no-any-return]
+                        return cast(ssl.SSLObject, ssl_object).getpeercert()
                     except:
                         return None
         return None

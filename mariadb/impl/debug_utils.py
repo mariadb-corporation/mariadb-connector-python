@@ -7,10 +7,9 @@ Debug utilities for MariaDB connector
 Provides hex dump and other debugging functionality.
 """
 
-from typing import Union
 
 
-def hex_dump(data: Union[bytes, bytearray], descr: str = "") -> str:
+def hex_dump(data: bytes | bytearray, descr: str = "") -> str:
     """
     Generate hex dump of binary data in MySQL protocol format
     

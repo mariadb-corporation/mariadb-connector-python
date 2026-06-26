@@ -19,7 +19,7 @@ cursor providing:
 
 from __future__ import annotations
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .connections import StmtCache, StmtCacheEntry
@@ -34,11 +34,11 @@ class StmtReuseMixin:
 
     # Provided by the host cursor (see module docstring).
     _connection: Any
-    _local_stmt_cache: Optional[StmtCache]
-    _cache_entry: Optional[StmtCacheEntry]
-    _resolved_stmt_cache: Optional[StmtCache]
+    _local_stmt_cache: StmtCache | None
+    _cache_entry: StmtCacheEntry | None
+    _resolved_stmt_cache: StmtCache | None
 
-    def _resolve_stmt_cache(self) -> Optional[StmtCache]:
+    def _resolve_stmt_cache(self) -> StmtCache | None:
         """Return the statement cache to use for prepared-statement reuse.
 
         When the connection-level cache is enabled, returns it (statements are
@@ -54,7 +54,7 @@ class StmtReuseMixin:
         resolved = self._resolved_stmt_cache
         if resolved is not None:
             return resolved
-        cache: Optional[StmtCache] = getattr(self._connection, '_stmt_cache', None)
+        cache: StmtCache | None = getattr(self._connection, '_stmt_cache', None)
         if cache is not None and cache.enabled:
             self._resolved_stmt_cache = cache
             return cache
@@ -64,7 +64,7 @@ class StmtReuseMixin:
         self._resolved_stmt_cache = self._local_stmt_cache
         return self._local_stmt_cache
 
-    def _save_stmt_to_cache(self, sql: Optional[str]) -> None:
+    def _save_stmt_to_cache(self, sql: str | None) -> None:
         """Detach the current MYSQL_STMT and store/return it to the cache."""
         if not sql:
             return

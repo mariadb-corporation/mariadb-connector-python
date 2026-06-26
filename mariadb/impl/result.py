@@ -5,7 +5,7 @@
 Result set classes for MariaDB query results
 """
 
-from typing import List, Optional, TYPE_CHECKING, Callable
+from typing import List, TYPE_CHECKING, Callable
 from abc import ABC, abstractmethod
 from .message.server.eof_packet import EofPacket
 from .message.server.ok_packet import OkPacket
@@ -63,7 +63,7 @@ class Result(ABC):
     # Utility Methods
     # =========================================================================
     
-    def row_number(self) -> Optional[int]:
+    def row_number(self) -> int | None:
         """Get current row number (1-based, DB-API style). Returns row_pointer + 1."""
         return self.row_pointer + 1
     
@@ -90,7 +90,7 @@ class SyncResult(Result):
     # =========================================================================
     
     @abstractmethod
-    def fetch_one(self) -> Optional[tuple]:
+    def fetch_one(self) -> tuple | None:
         """Fetch next row"""
         ...
 
@@ -123,7 +123,7 @@ class AsyncResult(Result):
     # =========================================================================
         
     @abstractmethod
-    async def fetch_one(self) -> Optional[tuple]:
+    async def fetch_one(self) -> tuple | None:
         """Fetch next row"""
         ...
 
@@ -209,7 +209,7 @@ class SyncCompleteResult(BaseCompleteResult, SyncResult):
     """
     __slots__ = ()
     
-    def fetch_one(self) -> Optional[tuple]:
+    def fetch_one(self) -> tuple | None:
         """Fetch next row. row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
         row_pointer = self.row_pointer
         if row_pointer >= self.data_size - 1:
@@ -242,7 +242,7 @@ class AsyncCompleteResult(BaseCompleteResult, AsyncResult):
     """
     __slots__ = ()
     
-    async def fetch_one(self) -> Optional[tuple]:
+    async def fetch_one(self) -> tuple | None:
         """Fetch next row (async). row_pointer: -1 = before first, 0 to data_size-1 = index of last fetched."""
         row_pointer = self.row_pointer
         if row_pointer >= self.data_size - 1:
@@ -288,7 +288,7 @@ class BaseStreamingResult(Result):
         columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration',
-        row_parser: Optional[Callable] = None,
+        row_parser: Callable | None = None,
     ):
         """
         Initialize streaming result
@@ -314,7 +314,7 @@ class BaseStreamingResult(Result):
    
     
     @abstractmethod
-    def _read_next_row_packet(self) -> Optional[memoryview]:
+    def _read_next_row_packet(self) -> memoryview | None:
         """Read next row packet from network (sync or async)"""
         pass
     
@@ -332,7 +332,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
     """
     __slots__ = ()
     
-    def fetch_one(self) -> Optional[tuple]:
+    def fetch_one(self) -> tuple | None:
         """Fetch next row"""
         if self.loaded:
             return None
@@ -363,7 +363,7 @@ class SyncStreamingResult(BaseStreamingResult, SyncResult):
                 if row_packet is not None:
                     self._row_count += 1    
     
-    def _read_next_row_packet(self) -> Optional[memoryview]:
+    def _read_next_row_packet(self) -> memoryview | None:
         """Read next row packet from network (synchronous). Returns row packet memoryview, or None if no more rows."""
         try:
             row_packet = self.read_payload_func()
@@ -420,7 +420,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
     """
     __slots__ = ()
     
-    async def _read_next_row_packet(self) -> Optional[memoryview]:  # type: ignore[override]  # async override of the sync abstractmethod
+    async def _read_next_row_packet(self) -> memoryview | None:  # type: ignore[override]  # async override of the sync abstractmethod
         """Read next row packet from network (asynchronous). Returns row packet memoryview, or None if no more rows."""
         try:
             row_packet = await self.read_payload_func()  # type: ignore[misc]
@@ -448,7 +448,7 @@ class AsyncStreamingResult(BaseStreamingResult, AsyncResult):
             self.loaded = True
             raise
     
-    async def fetch_one(self) -> Optional[tuple]:
+    async def fetch_one(self) -> tuple | None:
         """Fetch next row (async)"""
         if self.loaded:
             return None

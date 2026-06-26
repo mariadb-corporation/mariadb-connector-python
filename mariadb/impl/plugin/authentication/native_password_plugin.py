@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Optional
 
 from ...configuration import Configuration
 
@@ -19,13 +18,13 @@ class NativePasswordPlugin(AuthenticationPlugin):
     See https://mariadb.com/kb/en/library/authentication-plugin-mysql_native_password/
     """
         
-    def __init__(self, authentication_data: Optional[str], seed: bytes):
+    def __init__(self, authentication_data: str | None, seed: bytes):
         """Initialize plugin with authentication data and seed"""
         self.authentication_data = authentication_data
         self.seed = seed
 
     @staticmethod
-    def encrypt_password(password: Optional[str], seed: bytes) -> bytearray:
+    def encrypt_password(password: str | None, seed: bytes) -> bytearray:
         """Encrypts a password using MySQL native password algorithm"""
         if password is None or password == "":
             return bytearray(b'')
@@ -83,7 +82,7 @@ class NativePasswordPlugin(AuthenticationPlugin):
         """Native password plugin is MitM-proof"""
         return True
     
-    def hash(self, conf: Configuration) -> Optional[bytes]:
+    def hash(self, conf: Configuration) -> bytes | None:
         """Return hash for credential (double SHA1)"""
         password = conf.password
         if password is None:

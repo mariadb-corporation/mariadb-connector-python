@@ -28,7 +28,7 @@ class Completion(ABC):
         self.affected_rows = affected_rows
         self.insert_id = insert_id
         self.warning_count = warning_count
-        self.result_set: Optional['Result'] = None
+        self.result_set: 'Result' | None = None
     
     def has_result_set(self) -> bool:
         """Check if completion has result set"""

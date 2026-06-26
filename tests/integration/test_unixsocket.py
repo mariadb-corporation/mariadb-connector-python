@@ -315,10 +315,10 @@ class TestUnixSocket(unittest.TestCase):
         # skip if we can't find it (non-Linux, or distro not in our mapping,
         # or the path simply doesn't exist on this server).
         try:
-            from mariadb.impl.client.base_client import _find_default_unix_socket
+            from mariadb.impl.client.base_client import find_default_unix_socket
         except ImportError:
             self.skipTest("Auto-detection only applies to the pure-Python client, to avoid false positives with libmariadb build by default")
-        detected = _find_default_unix_socket()
+        detected = find_default_unix_socket()
         if detected is None:
             self.skipTest("No default Unix socket detected for this platform/distro")
 
@@ -347,10 +347,10 @@ class TestUnixSocket(unittest.TestCase):
         when host='localhost' and a default Unix socket is auto-detectable.
         """
         try:
-            from mariadb.impl.client.base_client import _find_default_unix_socket
+            from mariadb.impl.client.base_client import find_default_unix_socket
         except ImportError:
             self.skipTest("Auto-detection only applies to the pure-Python client")
-        if _find_default_unix_socket() is None:
+        if find_default_unix_socket() is None:
             self.skipTest("No default Unix socket would otherwise be picked up")
 
         conf = get_test_config()

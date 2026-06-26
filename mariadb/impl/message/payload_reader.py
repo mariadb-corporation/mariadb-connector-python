@@ -6,7 +6,6 @@ Does NOT perform any I/O - only parses bytes.
 """
 
 import struct
-from typing import Optional
 
 # Pre-compile all struct operations at module level for performance
 _unpack_H = struct.Struct('<H').unpack_from
@@ -102,7 +101,7 @@ class PayloadReader:
         self.pos += 8
         return value
 
-    def read_length_encoded_int(self) -> Optional[int]:
+    def read_length_encoded_int(self) -> int | None:
         """Read length-encoded integer (MySQL protocol format) and advance position"""
         first_byte = self.packet[self.pos]
         self.pos += 1
@@ -117,7 +116,7 @@ class PayloadReader:
             return self.read_uint24()
         return self.read_uint64()
     
-    def read_length_encoded_string(self, encoding: str = 'utf-8') -> Optional[str]:
+    def read_length_encoded_string(self, encoding: str = 'utf-8') -> str | None:
         """Read length-encoded string with specified encoding and advance position"""
         length = self.read_length_encoded_int()
         
@@ -132,7 +131,7 @@ class PayloadReader:
         # Decode directly from memoryview - faster than bytes()
         return bytes(string_data).decode(encoding, errors='replace')
     
-    def read_length_encoded_bytes(self) -> Optional[bytes]:
+    def read_length_encoded_bytes(self) -> bytes | None:
         """Read length-encoded bytes and advance position"""
         length = self.read_length_encoded_int()
         

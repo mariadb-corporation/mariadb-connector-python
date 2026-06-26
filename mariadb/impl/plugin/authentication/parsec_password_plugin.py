@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import secrets
-from typing import Optional
 
 from ...configuration import Configuration
 
@@ -36,7 +35,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20
     ])
     
-    def __init__(self, authentication_data: Optional[str], seed: bytes):
+    def __init__(self, authentication_data: str | None, seed: bytes):
         """Initialize plugin with authentication data and seed"""
         self.authentication_data = authentication_data
         self.seed = seed
@@ -184,7 +183,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         """Parsec password plugin is MitM-proof"""
         return True
     
-    def hash(self, conf: Configuration) -> Optional[bytes]:
+    def hash(self, conf: Configuration) -> bytes | None:
         """Return hash for credential"""
         return self._hash
     

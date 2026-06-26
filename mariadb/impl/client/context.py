@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-from typing import Optional
 from dataclasses import dataclass
 
 
@@ -38,8 +37,8 @@ class Context:
         protocol_version: int = 10,
         server_capabilities: int = 0,
         server_status: int = 0,
-        auth_plugin: Optional[str] = None,
-        auth_data: Optional[bytes] = None,
+        auth_plugin: str | None = None,
+        auth_data: bytes | None = None,
         is_mariadb: bool = False
     ) -> None:
         """
@@ -76,8 +75,8 @@ class Context:
         self.warning_count: int = 0
         
         # Authentication
-        self.auth_plugin: Optional[str] = auth_plugin
-        self.auth_data: Optional[bytes] = auth_data
+        self.auth_plugin: str | None = auth_plugin
+        self.auth_data: bytes | None = auth_data
 
         self.parse_server_version(server_version, is_mariadb)
     

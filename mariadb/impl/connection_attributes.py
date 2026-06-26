@@ -8,10 +8,10 @@ Provides default connection attributes for authentication and COM_CHANGE_USER
 """
 
 import platform
-from typing import Dict, Optional
+from typing import Dict
 
 
-def get_default_connection_attributes(host: Optional[str] = None) -> Dict[str, str]:
+def get_default_connection_attributes(host: str | None = None) -> Dict[str, str]:
     """Get default connection attributes"""
     attrs = {}
     

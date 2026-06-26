@@ -14,7 +14,7 @@ while correctly handling:
 - Escape sequences
 """
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from ...client.context import Context
 from ..client_message import ClientMessage
@@ -37,7 +37,7 @@ class QueryPacket(ClientMessage):
     """
     __slots__ = ('_payload_bytes', '_sql')
 
-    def __init__(self, payload_bytes: bytearray, sql: Optional[str] = None):
+    def __init__(self, payload_bytes: bytearray, sql: str | None = None):
         """
         Initialize COM_QUERY packet with pre-formatted payload
         
@@ -77,6 +77,6 @@ class QueryPacket(ClientMessage):
     def type(self) -> str:
         return "COM_QUERY"
     
-    def get_sql(self) -> Optional[str]:
+    def get_sql(self) -> str | None:
         """Get SQL string for LOAD LOCAL INFILE validation"""
         return self._sql

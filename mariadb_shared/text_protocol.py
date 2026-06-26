@@ -19,7 +19,7 @@ import decimal
 import ipaddress
 import re
 import uuid
-from typing import Any, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, List, Mapping, Sequence, Tuple
 
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from mariadb_shared.exceptions import NotSupportedError, ProgrammingError
@@ -47,12 +47,12 @@ BINARY_QUOTE_PREFIX: bytes = b"_binary'"
 # Parameter Conversion Functions
 # ============================================================================
 
-def float2bytes(value: float, ctx: Optional[bool] = None) -> bytes:
+def float2bytes(value: float, ctx: bool | None = None) -> bytes:
     if repr(value) in ("nan", "inf", "-inf"):
         raise NotSupportedError(f"Float value '{repr(value)}' is not supported.")
     return str(value).encode('ascii')
 
-def decimal2bytes(value: decimal.Decimal, ctx: Optional[bool] = None) -> bytes:
+def decimal2bytes(value: decimal.Decimal, ctx: bool | None = None) -> bytes:
     if value.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
         raise NotSupportedError(f"Decimal value '{value.__str__()}' is not supported.")
     return str(value).encode('ascii')
@@ -87,7 +87,7 @@ def escape_str(string: str, no_backslash_escapes: bool = False) -> bytearray:
     result[-1] = 39  # Single quote '
     return result
 
-def timedelta_to_bytes(val: datetime.timedelta, ctx: Optional[bool] = None) -> bytes:
+def timedelta_to_bytes(val: datetime.timedelta, ctx: bool | None = None) -> bytes:
     total_seconds = int(val.total_seconds())
     is_negative = total_seconds < 0
     
@@ -143,7 +143,7 @@ def tuple_to_bytes(t: tuple, no_backslash_escapes: bool = False) -> bytes:
     """Convert tuple to bytes - raises error as tuples are not directly supported"""
     raise NotSupportedError("Tuple parameters are not supported. Use individual values or convert to a supported type.")
 
-def indicator_val(v: MrdbIndicator, ctx: Optional[bool] = None) -> bytes:
+def indicator_val(v: MrdbIndicator, ctx: bool | None = None) -> bytes:
    indicator = v.indicator
    if indicator == 1:
        return NULL_BYTES
@@ -154,34 +154,34 @@ def indicator_val(v: MrdbIndicator, ctx: Optional[bool] = None) -> bytes:
 
 
 # Optimized converter functions (avoid lambda overhead)
-def _int_to_bytes(v: Any, ctx: Optional[bool] = None) -> bytes:
+def _int_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
     return b'%d' % v
 
-def _bool_to_bytes(v: Any, ctx: Optional[bool] = None) -> bytes:
+def _bool_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
     return TRUE_BYTES if v else FALSE_BYTES
 
-def _none_to_bytes(v: Any, ctx: Optional[bool] = None) -> bytes:
+def _none_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
     return NULL_BYTES
 
-def _date_to_bytes(v: Any, ctx: Optional[bool] = None) -> bytes:
+def _date_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
     # Use SQL temporal literal so the server preserves DATE type on `SELECT ?`
     return b"DATE'" + str(v).encode('ascii') + QUOTE_BYTES
 
-def _datetime_to_bytes(v: Any, ctx: Optional[bool] = None) -> bytes:
+def _datetime_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
     # Use SQL TIMESTAMP literal so the server preserves DATETIME type on `SELECT ?`
     return b"TIMESTAMP'" + str(v).encode('ascii') + QUOTE_BYTES
 
-def _time_to_bytes(v: Any, ctx: Optional[bool] = None) -> bytes:
+def _time_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
     # Use SQL TIME literal so the server preserves TIME type on `SELECT ?`
     return b"TIME'" + str(v).encode('ascii') + QUOTE_BYTES
 
-def _ipv4_to_bytes(v: Any, ctx: Optional[bool] = None) -> bytes:
+def _ipv4_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
-def _ipv6_to_bytes(v: Any, ctx: Optional[bool] = None) -> bytes:
+def _ipv6_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
-def _uuid_to_bytes(v: Any, ctx: Optional[bool] = None) -> bytes:
+def _uuid_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
 PARAM_CONVERT_TBL = {
@@ -558,7 +558,7 @@ def substitute_params(
     return result_list
 
 
-def normalize_to_qmark(sql: str) -> Tuple[str, Optional[List[str]]]:
+def normalize_to_qmark(sql: str) -> Tuple[str, List[str] | None]:
     """
     Convert SQL with any placeholder style to qmark (?) style.
 

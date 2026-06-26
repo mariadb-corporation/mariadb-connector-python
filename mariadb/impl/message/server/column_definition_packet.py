@@ -9,7 +9,7 @@ cache-friendly access during row parsing. No per-column objects are created.
 """
 
 import struct
-from typing import TYPE_CHECKING, Optional, List
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from ...client.context import Context
@@ -80,8 +80,8 @@ class ColumnsDefinition:
         self.special_formats = _zero[:]
         self.column_lengths = _zero[:]
         self.decimals_arr = _zero  # last use — no copy needed
-        self.ext_type_names: List[Optional[bytes]] = [None] * count
-        self.ext_type_formats: List[Optional[bytes]] = [None] * count
+        self.ext_type_names: List[bytes | None] = [None] * count
+        self.ext_type_formats: List[bytes | None] = [None] * count
         self._meta = [None] * count
 
     def decode_column(self, index: int, data: memoryview, context: 'Context') -> None:

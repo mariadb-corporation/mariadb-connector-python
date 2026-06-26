@@ -7,7 +7,7 @@ import array
 import datetime
 import decimal
 import struct
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List
 
 # Pre-compiled struct formats for performance
 _STRUCT_H = struct.Struct('<H')  # unsigned short (2 bytes)
@@ -59,7 +59,7 @@ class BulkExecutePacket(ClientMessage):
     SEND_TYPES_TO_SERVER = 128  # Send parameter types
     SEND_UNIT_RESULTS = 64  # retrieve unit results
     
-    def __init__(self, statement_id: Optional[int], parameter_sets: List[List[Any]], sql: str = ""):
+    def __init__(self, statement_id: int | None, parameter_sets: List[List[Any]], sql: str = ""):
         """
         Initialize COM_STMT_BULK_EXECUTE packet
         

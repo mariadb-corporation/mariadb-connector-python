@@ -17,7 +17,7 @@ Optimizations over a naive wrapper:
   - list + index instead of deque for row storage
 """
 
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, List, Sequence, Tuple
 
 from sqlalchemy.dialects.mysql.mariadbconnector import (
     MySQLDialect_mariadbconnector,
@@ -28,7 +28,7 @@ from sqlalchemy.util.concurrency import await_only
 from sqlalchemy.engine import AdaptedConnection
 
 
-async def _execute_and_buffer(cursor: Any, query: str, params: Any) -> Optional[List[Any]]:
+async def _execute_and_buffer(cursor: Any, query: str, params: Any) -> List[Any] | None:
     """Execute query and fetch all rows in a single async call.
 
     Combines execute + fetchall into one coroutine so that SQLAlchemy
@@ -61,7 +61,7 @@ class AsyncAdapt_mariadb_cursor:
         self.server_side = not cursor.buffered
 
     @property
-    def description(self) -> Optional[Tuple[Any, ...]]:
+    def description(self) -> Tuple[Any, ...] | None:
         return self._cursor.description  # type: ignore[no-any-return]
 
     @property
@@ -69,7 +69,7 @@ class AsyncAdapt_mariadb_cursor:
         return self._cursor.rowcount  # type: ignore[no-any-return]
 
     @property
-    def lastrowid(self) -> Optional[int]:
+    def lastrowid(self) -> int | None:
         return self._cursor.lastrowid  # type: ignore[no-any-return]
 
     @property
@@ -93,7 +93,7 @@ class AsyncAdapt_mariadb_cursor:
     def executemany(self, query: str, params_seq: Sequence[Any]) -> None:
         await_only(self._cursor.executemany(query, params_seq))
 
-    def fetchone(self) -> Optional[Any]:
+    def fetchone(self) -> Any | None:
         rows = self._rows
         if rows is None:
             return None
@@ -103,7 +103,7 @@ class AsyncAdapt_mariadb_cursor:
         self._row_idx = idx + 1
         return rows[idx]
 
-    def fetchmany(self, size: Optional[int] = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[Any]:
         rows = self._rows
         if rows is None:
             return []
@@ -134,7 +134,7 @@ class AsyncAdapt_mariadb_cursor:
     def setinputsizes(self, sizes: Any) -> None:
         pass
 
-    def setoutputsize(self, size: int, column: Optional[int] = None) -> None:
+    def setoutputsize(self, size: int, column: int | None = None) -> None:
         pass
 
 
@@ -158,10 +158,10 @@ class AsyncAdapt_mariadb_ss_cursor(AsyncAdapt_mariadb_cursor):
             await_only(self._cursor.execute(query))
         return self
 
-    def fetchone(self) -> Optional[Any]:
+    def fetchone(self) -> Any | None:
         return await_only(self._cursor.fetchone())
 
-    def fetchmany(self, size: Optional[int] = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[Any]:
         if size is None:
             size = self._cursor.arraysize
         return await_only(self._cursor.fetchmany(size))

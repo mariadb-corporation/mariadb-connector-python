@@ -10,7 +10,7 @@ for the C extension, similar to the mariadb package's impl_selector.
 
 import os
 import sys
-from typing import Any, Optional, Type, TYPE_CHECKING
+from typing import Any, Type, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .async_cursors import AsyncCursor as _AsyncCursorImpl
@@ -23,9 +23,9 @@ __impl__: str = "c"  # Always C for mariadb-c
 # as ``.Connection``/``.AsyncConnection``); genuinely dynamic, so kept as Any.
 sync_connection: Any = None
 async_connection: Any = None
-Cursor: Optional[Type["_CursorImpl"]] = None
-SyncCursor: Optional[Type["_CursorImpl"]] = None
-AsyncCursor: Optional[Type["_AsyncCursorImpl"]] = None
+Cursor: Type["_CursorImpl"] | None = None
+SyncCursor: Type["_CursorImpl"] | None = None
+AsyncCursor: Type["_AsyncCursorImpl"] | None = None
 
 
 def _select_implementation() -> None:

@@ -10,7 +10,7 @@ Based on MySQL/MariaDB protocol COM_STMT_PREPARE response structure.
 import struct
 import threading
 from types import TracebackType
-from typing import TYPE_CHECKING, Optional, Callable, Type
+from typing import TYPE_CHECKING, Callable, Type
 
 from .column_definition_packet import ColumnsDefinition
 
@@ -58,7 +58,7 @@ class PrepareStmtPacket:
         column_count: int,
         parameter_count: int,
         warning_count: int,
-        sql: Optional[str],
+        sql: str | None,
         database: str,
         close_callback: Callable[['PrepareStmtPacket'], None]
     ):
@@ -69,13 +69,13 @@ class PrepareStmtPacket:
         self.warning_count = warning_count
         self.sql = sql
         self.database = database
-        self.columns: Optional[ColumnsDefinition] = None   # set by _read_result or _parse_prepare_response
-        self.parameters: Optional[ColumnsDefinition] = None  # set by _parse_prepare_response
+        self.columns: ColumnsDefinition | None = None   # set by _read_result or _parse_prepare_response
+        self.parameters: ColumnsDefinition | None = None  # set by _parse_prepare_response
         self.closed = False
         self.close_callback = close_callback
     
     @staticmethod
-    def decode(data: memoryview, context: 'Context', sql: Optional[str], close_callback: Callable[['PrepareStmtPacket'], None]) -> 'PrepareStmtPacket':
+    def decode(data: memoryview, context: 'Context', sql: str | None, close_callback: Callable[['PrepareStmtPacket'], None]) -> 'PrepareStmtPacket':
         """Decode COM_STMT_PREPARE response packet (optimized)"""
         # Unpack all fields in one operation using pre-compiled struct
         _, statement_id, column_count, parameter_count, _, warning_count = _STRUCT_PREPARE_RESPONSE.unpack_from(data, 0)
@@ -132,7 +132,7 @@ class CachedPrepareStmtPacket(PrepareStmtPacket):
         column_count: int,
         parameter_count: int,
         warning_count: int,
-        sql: Optional[str],
+        sql: str | None,
         database: str,
         close_callback: Callable[['CachedPrepareStmtPacket'], None]
     ):
@@ -181,15 +181,15 @@ class CachedPrepareStmtPacket(PrepareStmtPacket):
     
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """Exit context manager and release cache reference"""
         self.close()
     
     @staticmethod
-    def decode(data: memoryview, context: 'Context', sql: Optional[str], close_callback: Callable[['CachedPrepareStmtPacket'], None]) -> 'CachedPrepareStmtPacket':
+    def decode(data: memoryview, context: 'Context', sql: str | None, close_callback: Callable[['CachedPrepareStmtPacket'], None]) -> 'CachedPrepareStmtPacket':
         """Decode COM_STMT_PREPARE response packet (optimized)"""
         # Unpack all fields in one operation using pre-compiled struct
         _, statement_id, column_count, parameter_count, _, warning_count = _STRUCT_PREPARE_RESPONSE.unpack_from(data, 0)

@@ -2,7 +2,7 @@
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from ..client.context import Context
 
@@ -30,6 +30,6 @@ class ClientMessage(ABC):
         """indicate message type"""
         return ""
     
-    def get_sql(self) -> Optional[str]:
+    def get_sql(self) -> str | None:
         """Get SQL string for LOAD LOCAL INFILE validation (optional)"""
         return None

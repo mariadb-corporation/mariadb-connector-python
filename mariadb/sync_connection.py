@@ -9,7 +9,7 @@ Synchronous connection implementation
 Provides a blocking API using the sync Client.
 """
 
-from typing import Optional, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .sync_cursor import SyncCursor
@@ -68,7 +68,7 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # typ
     # Core Connection Methods
     # =========================================================================
 
-    def cursor(self, cursor_class: Optional[type] = None, **kwargs: Any) -> SyncCursor:
+    def cursor(self, cursor_class: type | None = None, **kwargs: Any) -> SyncCursor:
         """
         Create a new cursor for executing queries
         
@@ -196,7 +196,7 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # typ
                 sql_state='HY000'
             )
 
-    def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
+    def change_user(self, user: str | None, password: str | None, database: str | None = None) -> None:
         """
         Change the user and database of the current connection
         
@@ -229,7 +229,7 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # typ
     # =========================================================================
     
     @BaseConnection.database.setter  # type: ignore[attr-defined, untyped-decorator]
-    def database(self, value: Optional[str]) -> None:
+    def database(self, value: str | None) -> None:
         """
         Set database name
         

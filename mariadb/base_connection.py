@@ -11,7 +11,7 @@ synchronous and asynchronous connection implementations.
 """
 
 from abc import ABC
-from typing import Optional, Any, TypeVar, Generic, TYPE_CHECKING
+from typing import Any, TypeVar, Generic, TYPE_CHECKING
 
 from mariadb_shared.constants import STATUS, TPC_STATE
 
@@ -156,12 +156,12 @@ class BaseConnection(ABC, Generic[TClient]):
         raise InterfaceError("Invalid connection or not connected")
 
     @property
-    def user(self) -> Optional[str]:
+    def user(self) -> str | None:
         """Get connection username"""
         return self._user
 
     @property
-    def database(self) -> Optional[str]:
+    def database(self) -> str | None:
         """
         Get current database name
 
@@ -224,7 +224,7 @@ class BaseConnection(ABC, Generic[TClient]):
         return self._client.context.version.is_mariadb
 
     @property
-    def server_name(self) -> Optional[str]:
+    def server_name(self) -> str | None:
         """
         Get server hostname or IP address
 
@@ -331,7 +331,7 @@ class BaseConnection(ABC, Generic[TClient]):
         return self._client.get_ssl_version() is not None  # type: ignore[attr-defined]
 
     @property
-    def tls_version(self) -> Optional[str]:
+    def tls_version(self) -> str | None:
         """
         Get TLS protocol version
 
@@ -342,7 +342,7 @@ class BaseConnection(ABC, Generic[TClient]):
         return self._client.get_ssl_version()  # type: ignore[attr-defined, no-any-return]
 
     @property
-    def tls_cipher(self) -> Optional[str]:
+    def tls_cipher(self) -> str | None:
         """
         Get TLS cipher suite in use
 
@@ -356,7 +356,7 @@ class BaseConnection(ABC, Generic[TClient]):
         return cipher[0] if cipher else None
 
     @property
-    def _tls_verify_status(self) -> Optional[int]:
+    def _tls_verify_status(self) -> int | None:
         """
         Get TLS certificate verification status
 
@@ -371,7 +371,7 @@ class BaseConnection(ABC, Generic[TClient]):
         return 1 if self._configuration.ssl_verify_cert else 0
 
     @property
-    def tls_peer_cert_info(self) -> Optional[dict]:
+    def tls_peer_cert_info(self) -> dict | None:
         """
         Get peer certificate information for TLS connections
 

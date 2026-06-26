@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import socket
 from collections import OrderedDict
-from typing import Optional, Any, Tuple, Type, cast, TYPE_CHECKING
+from typing import Any, Tuple, Type, cast, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .cursors import Cursor
@@ -45,7 +45,7 @@ class StmtCacheEntry:
         self.checked_out: bool = False
         self.in_cache: bool = True
 
-    def checkout(self) -> Optional[Any]:
+    def checkout(self) -> Any | None:
         """Take the template capsule (exclusive). Returns capsule or None."""
         if self.capsule is None or self.checked_out:
             return None
@@ -96,7 +96,7 @@ class StmtCache:
         """True when this cache actually retains statements (maxsize > 0)."""
         return self._maxsize > 0
 
-    def get(self, sql: str) -> Optional[StmtCacheEntry]:
+    def get(self, sql: str) -> StmtCacheEntry | None:
         """Return the entry for *sql* if the template is available, or None."""
         entry = self._cache.get(sql)
         if entry is None or entry.capsule is None:
@@ -173,17 +173,17 @@ class Connection(CConnection, SyncConnectionCommon):
         # Pre-initialize _stmt_cache before super().__init__() so that any
         # attribute access during C-level init (e.g. autocommit setter) never
         # raises AttributeError.
-        self._stmt_cache: Optional[StmtCache] = None
+        self._stmt_cache: StmtCache | None = None
 
-        self._socket: Optional[socket.socket] = None
+        self._socket: socket.socket | None = None
         self._used = 0
         self._last_executed_statement = None
         self._socket = None
         self.__last_used = 0
         self.tpc_state = TPC_STATE.NONE
         self._xid = None
-        self._pooled_connection: Optional[Any] = None
-        self._active_streaming_result: Optional["Cursor"] = None
+        self._pooled_connection: Any | None = None
+        self._active_streaming_result: "Cursor" | None = None
 
         autocommit = validate_bool(kwargs.pop("autocommit", False), "autocommit")
         kwargs.pop("reconnect", None)
@@ -238,7 +238,7 @@ class Connection(CConnection, SyncConnectionCommon):
 
         self.autocommit = autocommit
 
-    def cursor(self, cursorclass: Optional[Type["Cursor"]] = None, **kwargs: Any) -> "Cursor":
+    def cursor(self, cursorclass: Type["Cursor"] | None = None, **kwargs: Any) -> "Cursor":
         """
         Returns a new cursor object for the current connection.
 
@@ -299,7 +299,7 @@ class Connection(CConnection, SyncConnectionCommon):
         return self.server_version_info
 
     @property
-    def tls_peer_cert_info(self) -> Optional[Any]:
+    def tls_peer_cert_info(self) -> Any | None:
         """Get peer certificate information."""
 
         if version.Version(mariadbapi_version) <\
@@ -394,20 +394,20 @@ class Connection(CConnection, SyncConnectionCommon):
         return bool(self._mariadb_get_info(INFO.SERVER_TYPE) == "MariaDB")
 
     @property
-    def unix_socket(self) -> Optional[str]:
+    def unix_socket(self) -> str | None:
         """Unix socket name."""
 
         self._check_closed()
-        return cast(Optional[str], self._mariadb_get_info(INFO.UNIX_SOCKET))
+        return cast(str | None, self._mariadb_get_info(INFO.UNIX_SOCKET))
 
     @property
-    def server_name(self) -> Optional[str]:
+    def server_name(self) -> str | None:
         """Name or IP address of database server."""
 
         self._check_closed()
         if self.unix_socket:
             return None
-        return cast(Optional[str], self._mariadb_get_info(INFO.HOST))
+        return cast(str | None, self._mariadb_get_info(INFO.HOST))
 
     @property
     def collation(self) -> str:
@@ -423,25 +423,25 @@ class Connection(CConnection, SyncConnectionCommon):
         return cast(str, self._mariadb_get_info(INFO.SERVER_VERSION))
 
     @property
-    def tls_cipher(self) -> Optional[str]:
+    def tls_cipher(self) -> str | None:
         """TLS cipher suite if a secure connection is used."""
 
         self._check_closed()
         if self._tls:
-            return cast(Optional[str], self._mariadb_get_info(INFO.SSL_CIPHER))
+            return cast(str | None, self._mariadb_get_info(INFO.SSL_CIPHER))
         return None
 
     @property
-    def tls_version(self) -> Optional[str]:
+    def tls_version(self) -> str | None:
         """TLS protocol version if a secure connection is used."""
 
         self._check_closed()
         if self._tls:
-            return cast(Optional[str], self._mariadb_get_info(INFO.TLS_VERSION))
+            return cast(str | None, self._mariadb_get_info(INFO.TLS_VERSION))
         return None
 
     @property
-    def _tls_verify_status(self) -> Optional[int]:
+    def _tls_verify_status(self) -> int | None:
         """Returns the result of the peer certificate verification."""
 
         if version.Version(mariadbapi_version) <\
@@ -450,7 +450,7 @@ class Connection(CConnection, SyncConnectionCommon):
 
         self._check_closed()
         if self._tls:
-            return cast(Optional[int], self._mariadb_get_info(INFO.TLS_VERIFY_STATUS))
+            return cast(int | None, self._mariadb_get_info(INFO.TLS_VERIFY_STATUS))
         return None
 
     @property

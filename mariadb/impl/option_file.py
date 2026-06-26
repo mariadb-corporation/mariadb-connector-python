@@ -27,11 +27,11 @@ libmariadb but have no pure-Python equivalent (e.g. ``default-character-set``,
 """
 import os
 import sys
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Tuple
 
 # A value parsed from an option file: str/int/bool, or None when an option is
 # explicitly unset. This is exactly what ``_convert`` produces.
-_OptValue = Union[str, int, bool, None]
+_OptValue = str | int | bool | None
 
 # libmariadb reads ``.cnf`` everywhere and additionally ``.ini`` on Windows.
 _INI_EXTS: Tuple[str, ...] = ("ini", "cnf") if sys.platform == "win32" else ("cnf",)
@@ -83,7 +83,7 @@ _ESCAPES = {
 }
 
 
-def _atoi(value: Optional[str]) -> int:
+def _atoi(value: str | None) -> int:
     """Parse a leading optional sign and digits, returning 0 otherwise (C ``atoi``)."""
     if not value:
         return 0
@@ -97,7 +97,7 @@ def _atoi(value: Optional[str]) -> int:
     return int(s[:j])
 
 
-def _convert(kind: str, value: Optional[str]) -> _OptValue:
+def _convert(kind: str, value: str | None) -> _OptValue:
     if kind == "str":
         # MARIADB_OPTION_STR: an empty value unsets the option.
         return value if value else None
@@ -135,7 +135,7 @@ def _strip_and_unescape(raw: str) -> str:
     return "".join(out)
 
 
-def _store(out: Dict[str, _OptValue], key: str, value: Optional[str]) -> None:
+def _store(out: Dict[str, _OptValue], key: str, value: str | None) -> None:
     entry = _OPT_MAP.get(key.replace("_", "-"))  # CONC-395: '_' -> '-'
     if entry is None:
         return
@@ -149,7 +149,7 @@ def _is_config_file(path: str) -> bool:
     return any(path.endswith("." + ext) for ext in _INI_EXTS)
 
 
-def _read_includedir(directory: str, group: Optional[str],
+def _read_includedir(directory: str, group: str | None,
                      recursion: int, out: Dict[str, _OptValue]) -> None:
     try:
         names = os.listdir(directory)
@@ -161,7 +161,7 @@ def _read_includedir(directory: str, group: Optional[str],
         _read_file(os.path.join(directory, name), group, recursion + 1, out)
 
 
-def _read_file(path: str, group: Optional[str],
+def _read_file(path: str, group: str | None,
                recursion: int, out: Dict[str, _OptValue]) -> None:
     if recursion >= _RECURSION_LIMIT:
         return
@@ -216,7 +216,7 @@ def _read_file(path: str, group: Optional[str],
 def _config_dirs() -> List[str]:
     dirs: List[str] = []
 
-    def add(directory: Optional[str]) -> None:
+    def add(directory: str | None) -> None:
         if directory and directory not in dirs:
             dirs.append(directory)
 
@@ -230,8 +230,8 @@ def _config_dirs() -> List[str]:
     return dirs
 
 
-def read_option_files(default_file: Optional[str],
-                      default_group: Optional[str]) -> Dict[str, _OptValue]:
+def read_option_files(default_file: str | None,
+                      default_group: str | None) -> Dict[str, _OptValue]:
     """
     Read option file(s) and return a ``{Configuration attribute: value}`` mapping.
 

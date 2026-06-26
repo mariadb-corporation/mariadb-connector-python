@@ -87,7 +87,7 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "connect", "asyncConnect", "create_pool", "create_async_pool", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
            "apilevel", "paramstyle", "threadsafety"]
 
-def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> SyncConnectionCommon:
+def connect(*args: Any, connectionclass: type | None = None, **kwargs: Any) -> SyncConnectionCommon:
     """
     Creates a MariaDB Connection object (synchronous).
 
@@ -188,7 +188,7 @@ def connect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -
     return cast(SyncConnectionCommon, connection)
 
 
-async def asyncConnect(*args: Any, connectionclass: Optional[type] = None, **kwargs: Any) -> AsyncConnectionCommon:
+async def asyncConnect(*args: Any, connectionclass: type | None = None, **kwargs: Any) -> AsyncConnectionCommon:
     """
     Creates a MariaDB AsyncConnection object and connects asynchronously.
 
@@ -414,11 +414,11 @@ def _get_current_version() -> str:
 def _get_current_version_info() -> tuple[int, int, int, str] | tuple[int, int, int]:
     """Parsed (major, minor, patch[, prerelease]) of the connector version."""
     parsed, _ = _parse_version_info(_base_version)
-    return parsed  # type: ignore[no-any-return]
+    return parsed
 
 
 def create_pool(
-    min_size: Optional[int] = None,
+    min_size: int | None = None,
     max_size: int = 10,
     max_idle_time: float = 600.0,
     max_lifetime: float = 3600.0,
@@ -497,7 +497,7 @@ def create_pool(
 
 
 async def create_async_pool(
-    min_size: Optional[int] = None,
+    min_size: int | None = None,
     max_size: int = 10,
     max_idle_time: float = 600.0,
     max_lifetime: float = 3600.0,
@@ -606,7 +606,7 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
         Supports URI format: mariadb://[user[:password]@][host][:port][/database][?options]
         """
 
-        def __init__(self, uri_or_pool_name: Optional[str] = None, uri: Optional[str] = None, pool_name: Any = None, **kwargs: Any) -> None:
+        def __init__(self, uri_or_pool_name: str | None = None, uri: str | None = None, pool_name: Any = None, **kwargs: Any) -> None:
             """Initialize with mariadb.connect as factory and register in _CONNECTION_POOLS
 
             Args:
@@ -699,7 +699,7 @@ def _get_async_connection_pool_class() -> type['AsyncConnectionPoolWrapper']:
         Supports pool_name for registry in mariadb._CONNECTION_POOLS
         """
 
-        def __init__(self, uri_or_pool_name: Optional[str] = None, uri: Optional[str] = None, pool_name: Any = None, **kwargs: Any) -> None:
+        def __init__(self, uri_or_pool_name: str | None = None, uri: str | None = None, pool_name: Any = None, **kwargs: Any) -> None:
             """Initialize with mariadb.asyncConnect as factory and register in _CONNECTION_POOLS
 
             Args:

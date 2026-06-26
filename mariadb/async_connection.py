@@ -9,7 +9,7 @@ Asynchronous connection implementation
 Provides a native async API directly using the async Client.
 """
 
-from typing import Optional, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .async_cursor import AsyncCursor
@@ -87,7 +87,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
     # Core Connection Methods
     # =========================================================================
 
-    def cursor(self, cursor_class: Optional[type] = None, **kwargs: Any) -> AsyncCursor:
+    def cursor(self, cursor_class: type | None = None, **kwargs: Any) -> AsyncCursor:
         """
         Create a new async cursor for executing queries
 
@@ -215,7 +215,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
                 sql_state='HY000'
             )
 
-    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
+    async def change_user(self, user: str | None, password: str | None, database: str | None = None) -> None:
         """
         Change the user and database of the current connection
 

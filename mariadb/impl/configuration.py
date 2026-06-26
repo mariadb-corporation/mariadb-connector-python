@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-from typing import Callable, Dict, Any, Optional, List
+from typing import Callable, Dict, Any, List
 from dataclasses import dataclass, field
 from .host_address import HostAddress
 from mariadb_shared.validators import validate_bool
@@ -16,27 +16,27 @@ class Configuration:
     # Connection parameters
     host: str = 'localhost'
     port: int = 3306
-    user: Optional[str] = None
-    password: Optional[str] = None
-    database: Optional[str] = None
+    user: str | None = None
+    password: str | None = None
+    database: str | None = None
     
     # Socket parameters
-    unix_socket: Optional[str] = None
+    unix_socket: str | None = None
     protocol: int = 0  # 0=DEFAULT, 1=TCP, 2=SOCKET  (mirrors mysql_protocol_type)
-    socket_timeout: Optional[float] = None
+    socket_timeout: float | None = None
     connect_timeout: float = 10  # 10 seconds
     
     # SSL parameters, Secure by default
     ssl: bool = True
-    ssl_key: Optional[str] = None
-    ssl_ca: Optional[str] = None
-    ssl_cert: Optional[str] = None
-    ssl_crl: Optional[str] = None
-    ssl_cipher: Optional[str] = None
-    ssl_capath: Optional[str] = None
-    ssl_crlpath: Optional[str] = None
+    ssl_key: str | None = None
+    ssl_ca: str | None = None
+    ssl_cert: str | None = None
+    ssl_crl: str | None = None
+    ssl_cipher: str | None = None
+    ssl_capath: str | None = None
+    ssl_crlpath: str | None = None
     ssl_verify_cert: bool = True
-    tls_version: Optional[str] = None  # TLS version: 'TLSv1.2', 'TLSv1.3' or 'TLSv1.2,TLSv1.3' (automatically enables SSL)
+    tls_version: str | None = None  # TLS version: 'TLSv1.2', 'TLSv1.3' or 'TLSv1.2,TLSv1.3' (automatically enables SSL)
     
     # Connection behavior
     autocommit: bool = False
@@ -45,21 +45,22 @@ class Configuration:
     # Protocol parameters
     compress: bool = False
     binary: bool = False  # Use binary protocol (prepared statements) by default
-    local_infile: Optional[bool] = None  # Enable LOAD DATA LOCAL INFILE
+    local_infile: bool | None = None  # Enable LOAD DATA LOCAL INFILE
     
     # Timeouts
     query_timeout: int = 0  # No timeout
     max_allowed_packet: int = 16777216  # 16MB
 
     # Initialization command
-    init_command: Optional[str] = None
+    init_command: str | None = None
 
     # Option files (my.cnf / my.ini)
-    default_file: Optional[str] = None
-    default_group: Optional[str] = None
+    default_file: str | None = None
+    default_group: str | None = None
 
-    # Type conversion options
-    converter: Optional[Dict[int, Callable]] = None
+    # Type conversion options: maps a column type code to a converter that
+    # takes the raw column value and returns the converted value.
+    converter: Dict[int, Callable[[Any], Any]] | None = None
     
     # Result format options
     named_tuple: bool = False

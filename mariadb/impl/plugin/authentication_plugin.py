@@ -6,7 +6,7 @@ Authentication Plugin Interface
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Callable, Awaitable
+from typing import Callable, Awaitable
 
 from ..configuration import Configuration
 from ..client.context import Context
@@ -43,7 +43,7 @@ class AuthenticationPlugin(ABC):
         ...
     
     @abstractmethod
-    def hash(self, conf: Configuration) -> Optional[bytes]:
+    def hash(self, conf: Configuration) -> bytes | None:
         """Return hash for credential"""
         ...
 

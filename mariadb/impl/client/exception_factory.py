@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-from typing import Optional
 from ...exceptions import (
     DatabaseError, 
     OperationalError, 
@@ -16,9 +15,9 @@ class ExceptionFactory:
     
     def create_exception(self, 
                         message: str, 
-                        sql_state: Optional[str] = None, 
-                        errno: Optional[int] = None,
-                        sql: Optional[str] = None) -> Exception:
+                        sql_state: str | None = None, 
+                        errno: int | None = None,
+                        sql: str | None = None) -> Exception:
         """
         Create appropriate exception based on SQL state and error code
         
@@ -77,7 +76,7 @@ class ExceptionFactory:
         return exception
 
    
-    def create_connection_exception(self, message: str, cause: Optional[Exception] = None) -> OperationalError:
+    def create_connection_exception(self, message: str, cause: Exception | None = None) -> OperationalError:
         """
         Create connection exception
         

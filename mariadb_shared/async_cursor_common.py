@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Type
+from typing import TYPE_CHECKING, Any, List, Sequence, Type
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -30,7 +30,7 @@ class AsyncCursorCommon(ABC):
     # =========================================================================
         
     @abstractmethod
-    async def execute(self, sql: str, data: Optional[Sequence[Any] | dict[str, Any]] = None, buffered: Optional[bool] = None) -> None:
+    async def execute(self, sql: str, data: Sequence[Any] | dict[str, Any] | None = None, buffered: bool | None = None) -> None:
         """
         Execute a SQL query or command
         
@@ -57,7 +57,7 @@ class AsyncCursorCommon(ABC):
         ...
 
     @abstractmethod
-    async def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: Optional[bool] = None) -> None:
+    async def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: bool | None = None) -> None:
         """
         Execute a statement multiple times with different parameter sets
         
@@ -72,7 +72,7 @@ class AsyncCursorCommon(ABC):
     # Result Fetching Methods
     # =========================================================================
     @abstractmethod    
-    async def fetchone(self) -> Optional[Any]:
+    async def fetchone(self) -> Any | None:
         """Fetch the next row of a query result set
         
         Returns:
@@ -84,7 +84,7 @@ class AsyncCursorCommon(ABC):
         ...
 
     @abstractmethod
-    async def fetchmany(self, size: Optional[int] = None) -> List[Any]:
+    async def fetchmany(self, size: int | None = None) -> List[Any]:
         """Fetch the next set of rows of a query result"""
         ...
         
@@ -191,7 +191,7 @@ class AsyncCursorCommon(ABC):
         """Async context manager entry"""
         return self
         
-    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[TracebackType]) -> bool:
+    async def __aexit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: TracebackType | None) -> bool:
         """Async context manager exit"""
         await self.close()
         return False
@@ -201,7 +201,7 @@ class AsyncCursorCommon(ABC):
         """Sync context manager not supported for async cursor"""
         raise TypeError("Use 'async with' with asynchronous Cursor")
         
-    def __exit__(self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]) -> None:
+    def __exit__(self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
         """Sync context manager not supported for async cursor"""
         raise TypeError("Use 'async with' with asynchronous Cursor")
             

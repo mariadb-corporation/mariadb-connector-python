@@ -7,7 +7,7 @@ URI parser for MariaDB connection strings
 Supports URI format: mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=value2]
 """
 
-from typing import Any, Dict, Union
+from typing import Any, Dict
 from urllib.parse import urlparse, parse_qs, unquote
 
 
@@ -35,7 +35,7 @@ def parse_connection_uri(uri: str) -> Dict[str, Any]:
     if parsed.scheme not in ('mariadb', 'mysql'):
         raise ValueError(f"Invalid URI scheme: {parsed.scheme}. Expected 'mariadb' or 'mysql'")
     
-    params: Dict[str, Union[str, int, bool]] = {}
+    params: Dict[str, str | int | bool] = {}
     
     # Extract user and password
     if parsed.username:

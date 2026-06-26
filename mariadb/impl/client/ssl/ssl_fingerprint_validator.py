@@ -12,7 +12,6 @@ the certificate fingerprint against a hash provided by the server.
 import ssl
 import hashlib
 import hmac
-from typing import Optional
 
 
 class SSLFingerprintValidator:
@@ -25,8 +24,8 @@ class SSLFingerprintValidator:
     
     def __init__(self) -> None:
         """Initialize fingerprint validator"""
-        self.fingerprint: Optional[bytes] = None
-        self.cert_der: Optional[bytes] = None
+        self.fingerprint: bytes | None = None
+        self.cert_der: bytes | None = None
     
     def create_unverified_context(self, base_context: ssl.SSLContext) -> ssl.SSLContext:
         """
@@ -76,7 +75,7 @@ class SSLFingerprintValidator:
             # If we can't get the certificate, fingerprint remains None
             pass
     
-    def get_fingerprint(self) -> Optional[bytes]:
+    def get_fingerprint(self) -> bytes | None:
         """
         Get the captured certificate fingerprint
         
@@ -85,7 +84,7 @@ class SSLFingerprintValidator:
         """
         return self.fingerprint
 
-    def check_certificate_period(self) -> Optional[str]:
+    def check_certificate_period(self) -> str | None:
         """Check the captured certificate's validity period (notBefore/notAfter).
 
         The fingerprint path runs over an unverified TLS context (CERT_NONE), so

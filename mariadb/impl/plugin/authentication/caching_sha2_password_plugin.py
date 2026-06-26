@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Optional
 
 from ...configuration import Configuration
 from ...host_address import HostAddress
@@ -30,15 +29,15 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     
     TYPE = "caching_sha2_password"
     
-    def __init__(self, authentication_data: Optional[str], seed: bytes, conf: Configuration, host_address: HostAddress):
+    def __init__(self, authentication_data: str | None, seed: bytes, conf: Configuration, host_address: HostAddress):
         """Initialize plugin with authentication data and seed"""
-        self.authentication_data: Optional[str] = authentication_data
+        self.authentication_data: str | None = authentication_data
         self.seed: bytes = seed
         self.conf: Configuration = conf
         self.host_address: HostAddress = host_address
     
     @staticmethod
-    def encrypt_password(password: Optional[str], seed: bytes) -> bytearray:
+    def encrypt_password(password: str | None, seed: bytes) -> bytearray:
         """Send an SHA-2 encrypted password: XOR(SHA256(password), SHA256(seed, SHA256(SHA256(password))))"""
         if password is None or password == "":
             return bytearray(b'')
@@ -236,6 +235,6 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     def is_mitm_proof(self) -> bool:
         return False
     
-    def hash(self, conf: Configuration) -> Optional[bytes]:
+    def hash(self, conf: Configuration) -> bytes | None:
         """Return hash for credential"""
         return None

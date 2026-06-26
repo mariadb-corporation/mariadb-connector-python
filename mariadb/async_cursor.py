@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Sequence, Optional, List, Any, TYPE_CHECKING
+from typing import Sequence, List, Any, TYPE_CHECKING
 import warnings
 
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
@@ -103,7 +103,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     # Query Execution Methods
     # =========================================================================
 
-    async def execute(self, sql: str, data: Optional[Sequence[Any] | dict[str, Any]] = None, buffered: Optional[bool] = None) -> None:  # type: ignore[override]
+    async def execute(self, sql: str, data: Sequence[Any] | dict[str, Any] | None = None, buffered: bool | None = None) -> None:  # type: ignore[override]
         """
         Execute a SQL query or command asynchronously
 
@@ -186,7 +186,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 sql= sql
             )
 
-    async def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: Optional[bool] = None) -> None:  # type: ignore[override]
+    async def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: bool | None = None) -> None:  # type: ignore[override]
         """
         Execute a statement multiple times with different parameter sets
 
@@ -294,7 +294,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     # Result Fetching Methods
     # =========================================================================
 
-    async def fetchone(self) -> Optional[Any]:
+    async def fetchone(self) -> Any | None:
         """
         Fetch the next row from the result set
 
@@ -329,7 +329,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         return row
 
 
-    async def fetchmany(self, size: Optional[int] = None) -> List[Any]:  # type: ignore[override]
+    async def fetchmany(self, size: int | None = None) -> List[Any]:  # type: ignore[override]
         """
         Fetch the next set of rows from the result set
 
@@ -446,7 +446,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             raise ProgrammingError(str(e))
 
 
-    async def nextset(self) -> Optional[bool]:  # type: ignore[override]
+    async def nextset(self) -> bool | None:  # type: ignore[override]
         """Advance to the next available result set.
 
         Returns True if another result set is available, or None if there are no

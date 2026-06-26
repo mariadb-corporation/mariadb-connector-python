@@ -14,7 +14,7 @@ if hasattr(sys, 'pypy_version_info'):
 import asyncio
 import os
 import socket
-from typing import Any, Callable, Optional, Tuple, cast
+from typing import Any, Callable, Tuple, cast
 
 from .connections import StmtCache
 
@@ -65,11 +65,11 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         Use AsyncConnection.connect() or asyncConnect() to connect.
         """
         # Pre-initialize _stmt_cache before super().__init__() to avoid AttributeError
-        self._stmt_cache: Optional[StmtCache] = None
+        self._stmt_cache: StmtCache | None = None
 
         # Initialize Python-side attributes first (same order as sync)
-        self._socket: Optional[socket.socket] = None
-        self._socket_fd: Optional[int] = None
+        self._socket: socket.socket | None = None
+        self._socket_fd: int | None = None
         self._used = 0
         self._last_executed_statement = None
         self.__last_used = 0
@@ -81,8 +81,8 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         # Persistent event loop state for efficient I/O waiting.
         # _waiter holds the Future for an in-flight wait (None when idle);
         # _reader_armed tracks whether the persistent reader is registered.
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._waiter: Optional[asyncio.Future] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._waiter: asyncio.Future | None = None
         self._reader_armed = False
         
         # Extract parameters that need special handling (use .pop() like sync)
@@ -378,7 +378,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             # Use 0 sleep since C extension now handles SSL efficiently
             await asyncio.sleep(0)
 
-    def cursor(self, cursorclass: Optional[type] = None, **kwargs: Any) -> Any:
+    def cursor(self, cursorclass: type | None = None, **kwargs: Any) -> Any:
         """
         Returns a new async cursor object for the current connection.
 
@@ -420,7 +420,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._check_closed()
         return self
     
-    async def __aexit__(self, exc_type: Optional[type], exc_val: Optional[Exception], exc_tb: Optional[Any]) -> None:
+    async def __aexit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: Any | None) -> None:
         """Async context manager exit"""
         await self.close()
 
@@ -447,7 +447,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         return self.server_version_info
 
     @property
-    def tls_peer_cert_info(self) -> Optional[Any]:
+    def tls_peer_cert_info(self) -> Any | None:
         """Get peer certificate information."""
 
         if version.Version(mariadbapi_version) <\
@@ -547,20 +547,20 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         return bool(self._mariadb_get_info(INFO.SERVER_TYPE) == "MariaDB")
 
     @property
-    def unix_socket(self) -> Optional[str]:
+    def unix_socket(self) -> str | None:
         """Unix socket name."""
 
         self._check_closed()
-        return cast(Optional[str], self._mariadb_get_info(INFO.UNIX_SOCKET))
+        return cast(str | None, self._mariadb_get_info(INFO.UNIX_SOCKET))
 
     @property
-    def server_name(self) -> Optional[str]:
+    def server_name(self) -> str | None:
         """Name or IP address of database server."""
 
         self._check_closed()
         if self.unix_socket:
             return None
-        return cast(Optional[str], self._mariadb_get_info(INFO.HOST))
+        return cast(str | None, self._mariadb_get_info(INFO.HOST))
 
     @property
     def collation(self) -> str:
@@ -576,25 +576,25 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         return cast(str, self._mariadb_get_info(INFO.SERVER_VERSION))
 
     @property
-    def tls_cipher(self) -> Optional[str]:
+    def tls_cipher(self) -> str | None:
         """TLS cipher suite if a secure connection is used."""
 
         self._check_closed()
         if self._tls:
-            return cast(Optional[str], self._mariadb_get_info(INFO.SSL_CIPHER))
+            return cast(str | None, self._mariadb_get_info(INFO.SSL_CIPHER))
         return None
 
     @property
-    def tls_version(self) -> Optional[str]:
+    def tls_version(self) -> str | None:
         """TLS protocol version if a secure connection is used."""
 
         self._check_closed()
         if self._tls:
-            return cast(Optional[str], self._mariadb_get_info(INFO.TLS_VERSION))
+            return cast(str | None, self._mariadb_get_info(INFO.TLS_VERSION))
         return None
 
     @property
-    def _tls_verify_status(self) -> Optional[Any]:
+    def _tls_verify_status(self) -> Any | None:
         """Returns the result of the peer certificate verification."""
 
         if version.Version(mariadbapi_version) <\
@@ -673,7 +673,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         self._check_closed()
         return await self._drive(self._async_ping_start, self._async_ping_cont)
 
-    async def change_user(self, user: Optional[str], password: Optional[str], database: Optional[str] = None) -> None:
+    async def change_user(self, user: str | None, password: str | None, database: str | None = None) -> None:
         """
         Change the user and default database for the current connection
         

@@ -6,14 +6,14 @@ PayloadWriter - A write stream implementation that captures bytes to a buffer
 without sending them over the network. Used for generating message payloads.
 """
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
 
 # Anything bytearray.extend / len() accept (buffer protocol). The converters in
 # text_protocol return bytearray, so the write helpers accept it too.
-_BytesLike = Union[bytes, bytearray, memoryview]
+_BytesLike = bytes | bytearray | memoryview
 
 # Constants from write_stream
 SLASH_BYTE: int = b"\\"[0]

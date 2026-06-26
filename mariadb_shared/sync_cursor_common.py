@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Type
+from typing import TYPE_CHECKING, Any, List, Sequence, Type
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -30,9 +30,9 @@ class SyncCursorCommon(ABC):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
+        exc_type: Type[BaseException] | None,
         exc_val: Any,
-        exc_tb: Optional[TracebackType],
+        exc_tb: TracebackType | None,
     ) -> None:
         self.close()
     
@@ -41,7 +41,7 @@ class SyncCursorCommon(ABC):
     # =========================================================================
         
     @abstractmethod
-    def execute(self, sql: str, data: Optional[Sequence[Any] | dict[str, Any]] = None, buffered: Optional[bool] = None) -> None:
+    def execute(self, sql: str, data: Sequence[Any] | dict[str, Any] | None = None, buffered: bool | None = None) -> None:
         """
         Execute a SQL query or command
         
@@ -68,7 +68,7 @@ class SyncCursorCommon(ABC):
         ...
 
     @abstractmethod
-    def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: Optional[bool] = None) -> None:
+    def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: bool | None = None) -> None:
         """
         Execute a statement multiple times with different parameter sets
         
@@ -83,7 +83,7 @@ class SyncCursorCommon(ABC):
     # Result Fetching Methods
     # =========================================================================
     @abstractmethod    
-    def fetchone(self) -> Optional[Any]:
+    def fetchone(self) -> Any | None:
         """Fetch the next row of a query result set
         
         Returns:
@@ -95,7 +95,7 @@ class SyncCursorCommon(ABC):
         ...
 
     @abstractmethod
-    def fetchmany(self, size: Optional[int] = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[Any]:
         """Fetch the next set of rows of a query result"""
         ...
         

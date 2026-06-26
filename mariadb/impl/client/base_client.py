@@ -18,7 +18,7 @@ import sys
 import ipaddress
 import uuid
 from abc import ABC
-from typing import List, Optional, Dict, Any, TYPE_CHECKING
+from typing import List, Dict, Any, Callable, TYPE_CHECKING
 
 # Protocol constants — mirror mysql_protocol_type from Connector/C mysql.h
 PROTOCOL_DEFAULT = 0
@@ -42,7 +42,7 @@ PROTOCOL_SOCKET  = 2
 # writable directory).  Users who genuinely need /tmp/mysql.sock must pass
 # unix_socket='/tmp/mysql.sock' explicitly.
 
-def _resolve_default_unix_socket() -> Optional[str]:
+def _resolve_default_unix_socket() -> str | None:
     """Pick the Unix socket path that libmariadb would have been compiled
     with on this platform.  Called once at module import.  Returns None on
     non-Linux platforms or unknown distros (caller falls back to TCP)."""
@@ -80,9 +80,9 @@ def _resolve_default_unix_socket() -> Optional[str]:
         return '/run/mysql/mysql.sock'          # openSUSE OBS (note: 'mysql' not 'mysqld')
     return None
 
-_DEFAULT_UNIX_SOCKET: Optional[str] = _resolve_default_unix_socket()
+_DEFAULT_UNIX_SOCKET: str | None = _resolve_default_unix_socket()
 
-def _find_default_unix_socket() -> Optional[str]:
+def find_default_unix_socket() -> str | None:
     """Return the per-distro default socket path if it exists and is a real
     socket file, else None.  Distro detection happens once at module load."""
     if _DEFAULT_UNIX_SOCKET is None:
@@ -232,12 +232,12 @@ class BaseClient(ABC):
         self.closed = False
         self.socket_timeout = configuration.socket_timeout
         self.connect_timeout = configuration.connect_timeout
-        self.cert_fingerprint_validator: Optional[SSLFingerprintValidator] = None
-        self.auth_plugin: Optional[AuthenticationPlugin] = None
+        self.cert_fingerprint_validator: SSLFingerprintValidator | None = None
+        self.auth_plugin: AuthenticationPlugin | None = None
 
         # Track active streaming (unbuffered) result at client level
         # This prevents "Commands out of sync" when multiple cursors share the same connection
-        self._active_streaming_result: Optional[Any] = None
+        self._active_streaming_result: Any | None = None
 
         # Cached payload writer for packet generation (reused to avoid allocations)
         from ..message.payload_writer import PayloadWriter
@@ -491,8 +491,8 @@ class BaseClient(ABC):
         # Server capabilities first 2 bytes
         server_capabilities_2_first_bytes = parser.read_uint16()
 
-        # Default collation (1 byte)
-        default_collation = parser.read_byte()
+        # skip default collation (1 byte)
+        parser.read_byte()
 
         # Server status (2 bytes)
         server_status = parser.read_uint16()
@@ -649,7 +649,7 @@ class BaseClient(ABC):
         # This would need more sophisticated handling for multi-round auth
         OkPacket.decode(packet, self.context)  # type: ignore[arg-type]
 
-    def _apply_converters_to_rows(self, rows: List[tuple], columns: 'ColumnsDefinition', config: 'Configuration') -> List[tuple]:
+    def _apply_converters_to_rows(self, rows: List[tuple[Any, ...]], columns: 'ColumnsDefinition', config: 'Configuration') -> List[tuple[Any, ...]]:
         """
         Apply converters to all rows at once
 
@@ -665,8 +665,8 @@ class BaseClient(ABC):
         # Build list of column indices that need conversion
         converter_map = config.converter
         num_cols = len(columns)
-        converter_indices = []
-        converter_funcs = []
+        converter_indices: List[int] = []
+        converter_funcs: List[Callable[[Any], Any]] = []
 
         col_types = columns.types
         for i in range(num_cols):
@@ -682,9 +682,9 @@ class BaseClient(ABC):
         # Fast path: all columns need conversion
         num_converters = len(converter_indices)
         if num_converters == num_cols:
-            converted_rows = []
+            converted_rows: List[tuple[Any, ...]] = []
             for row in rows:
-                converted_row = []
+                converted_row: List[Any] = []
                 for i in range(num_cols):
                     try:
                         converted_row.append(converter_funcs[i](row[i]))
@@ -694,7 +694,7 @@ class BaseClient(ABC):
             return converted_rows
 
         # Partial conversion: only some columns need it
-        converted_rows = []
+        converted_rows = []  # type already declared on the fast path above
         for row in rows:
             row_list = list(row)
             for i in range(num_converters):
@@ -711,7 +711,7 @@ class BaseClient(ABC):
     # Row Data Parsing Methods
     # =========================================================================
 
-    def _parse_text_row_data(self, data: memoryview, columns: 'ColumnsDefinition', config: 'Configuration', num_cols: int) -> tuple:
+    def _parse_text_row_data(self, data: memoryview, columns: 'ColumnsDefinition', config: 'Configuration', num_cols: int) -> tuple[Any, ...]:
         """Parse text protocol row data using parallel arrays from ColumnsDefinition.
 
         Uses columns.types[], columns.charsets[], columns.special_formats[] etc.
@@ -823,7 +823,7 @@ class BaseClient(ABC):
 
         return tuple(row_values)
 
-    def _parse_binary_row_data(self, data: memoryview, columns: 'ColumnsDefinition', config: 'Configuration', num_cols: int) -> tuple:
+    def _parse_binary_row_data(self, data: memoryview, columns: 'ColumnsDefinition', config: 'Configuration', num_cols: int) -> tuple[Any, ...]:
         """Parse binary protocol row data using parallel arrays from ColumnsDefinition.
 
         Uses columns.types[], columns.flags[], columns.charsets[] etc.
