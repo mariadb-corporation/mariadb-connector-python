@@ -84,18 +84,12 @@ def _parse_version_info(version_string: str) -> "tuple[tuple, int]":
 try:
     from .release_info import __version__ as _base_version
 except ImportError:
-    # Fallback if release_info.py doesn't exist (development mode)
-    # Try to get from package metadata
     try:
         from importlib.metadata import version
         _base_version = version('mariadb_c')
     except ImportError:
-        try:
-            from importlib_metadata import version  # type: ignore[no-redef]
-            _base_version = version('mariadb_c')
-        except ImportError:
-            # Final fallback - use hardcoded version that matches root project
-            _base_version = "2.0.0.dev"
+        # Final fallback - use hardcoded version that matches root project
+        _base_version = "2.0.0.dev"
 
 __version__ = _base_version
 __author__ = "MariaDB Corporation"

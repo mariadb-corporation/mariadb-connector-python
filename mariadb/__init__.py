@@ -355,18 +355,11 @@ mariadbapi_version = getattr(impl_selector.sync_connection, "mariadbapi_version"
 try:
     from .release_info import __version__ as _base_version
 except ImportError:
-    # Fallback if release_info.py doesn't exist (development mode)
-    # Try to get from package metadata
     try:
         from importlib.metadata import version
         _base_version = version('mariadb')
     except ImportError:
-        try:
-            from importlib_metadata import version as version_func
-            _base_version = version_func('mariadb')
-        except ImportError:
-            # Final fallback
-            _base_version = "2.0.0.dev"
+        _base_version = "2.0.0.dev"
 
 # Parse version info
 version_tuple, version_numeric = _parse_version_info(_base_version)

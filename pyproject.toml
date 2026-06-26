@@ -8,7 +8,7 @@ name = "mariadb"
 version = "2.0.0rc2"
 description = "MariaDB Connector/Python with Java-equivalent implementation"
 readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = "LGPL-2.1-or-later"
 authors = [
     {name = "Georg Richter", email = "georg@mariadb.com"},
@@ -175,7 +175,6 @@ module = [
     "mariadb_binary",
     "mariadb_binary.*",
     "mariadb_pool",
-    "importlib_metadata",
     "cachetools",
     "sqlalchemy",
     "sqlalchemy.*",

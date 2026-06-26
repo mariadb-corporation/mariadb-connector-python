@@ -25,7 +25,6 @@ classifiers = [
   "Programming Language :: C",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -101,7 +100,6 @@ module = [
     "numpy", "numpy.*",
     "cachetools", "cachetools.*",
     "packaging", "packaging.*",
-    "importlib_metadata",
 ]
 ignore_missing_imports = true
 # Treat siblings as opaque whether or not they're pip-installed, so this check
