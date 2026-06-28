@@ -5,6 +5,8 @@
 Result set classes for MariaDB query results
 """
 
+from __future__ import annotations
+
 from typing import Any, List, TYPE_CHECKING, Callable, Awaitable, Generic, TypeVar
 from abc import ABC, abstractmethod
 from .message.server.eof_packet import EofPacket
