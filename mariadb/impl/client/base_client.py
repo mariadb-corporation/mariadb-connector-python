@@ -136,7 +136,7 @@ except ImportError:
     LRUCache = None  # type: ignore[assignment,misc]  # optional dependency
 
 if LRUCache is not None:
-    class _PreparedStatementLRUCache(LRUCache[str, CachedPrepareStmtPacket]):
+    class PreparedStatementLRUCache(LRUCache[str, CachedPrepareStmtPacket]):
         """LRU cache that COM_STMT_CLOSE's prepared statements as they leave it.
 
         Defined once at module scope (not per call) since make_prepared_statement_cache
@@ -155,7 +155,7 @@ if LRUCache is not None:
             while len(self) > 0:
                 self.popitem()
 
-    _prepared_stmt_cache_cls: type[_PreparedStatementLRUCache] | None = _PreparedStatementLRUCache
+    _prepared_stmt_cache_cls: type[PreparedStatementLRUCache] | None = PreparedStatementLRUCache
 else:
     _prepared_stmt_cache_cls = None
 
@@ -253,7 +253,11 @@ class BaseClient(ABC):
         cache_size = configuration.prep_stmt_cache_size if configuration.cache_prep_stmts else 0
         self.prepared_statement_cache: Any = self.make_prepared_statement_cache(cache_size)
 
-    def make_prepared_statement_cache(self, size: int) -> Any:
+    def get_ssl_cipher(self) -> tuple[str, str, int] | None: ...
+    def get_ssl_version(self) -> str | None: ...
+    def get_peer_certificate(self) -> dict[str, Any] | None: ...
+    
+    def make_prepared_statement_cache(self, size: int) -> PreparedStatementLRUCache | None:
         """Create an LRU prepared-statement cache holding up to *size* entries.
 
         Returns ``None`` when *size* <= 0 (caching disabled) or when cachetools

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Sequence, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Sequence, Type
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -83,7 +83,7 @@ class SyncCursorCommon(ABC):
     # Result Fetching Methods
     # =========================================================================
     @abstractmethod    
-    def fetchone(self) -> Any | None:
+    def fetchone(self) -> tuple[Any, ...] | Dict[str, Any] | None:
         """Fetch the next row of a query result set
         
         Returns:
@@ -95,12 +95,12 @@ class SyncCursorCommon(ABC):
         ...
 
     @abstractmethod
-    def fetchmany(self, size: int | None = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """Fetch the next set of rows of a query result"""
         ...
         
     @abstractmethod
-    def fetchall(self) -> List[Any]:
+    def fetchall(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """Fetch all remaining rows of a query result"""
         ...
     

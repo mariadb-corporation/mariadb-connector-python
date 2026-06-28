@@ -34,7 +34,7 @@ from ..message.client.quit_packet import QuitPacket
 from ..message.client.change_user_packet import ChangeUserPacket
 from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..completion import Completion
-from ..result import AsyncStreamingResult, AsyncCompleteResult
+from ..result import AsyncResult, AsyncStreamingResult, AsyncCompleteResult
 from ...exceptions import OperationalError, DatabaseError, ProgrammingError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
@@ -836,7 +836,7 @@ class AsyncClient(BaseClient):
 
             # If unbuffered, create streaming result
             if not buffered:
-                streaming_result = AsyncStreamingResult(read_payload,  # type: ignore[arg-type]
+                streaming_result = AsyncStreamingResult(read_payload,
                     context,
                     columns,
                     column_count,
@@ -964,7 +964,7 @@ class AsyncClient(BaseClient):
 
                 row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
 
-                streaming_result = AsyncStreamingResult(read_payload,  # type: ignore[arg-type]
+                streaming_result = AsyncStreamingResult(read_payload,
                     context, columns, column_count, config, row_parser)
                 self._active_streaming_result = streaming_result
                 streaming_completion: OkPacket = OkPacket(0, 0, 0, 0, b'')
@@ -974,6 +974,24 @@ class AsyncClient(BaseClient):
                 raise e
             except Exception as e:
                 raise OperationalError(f"Reading next result set failed: {e}")
+
+    async def drain_streaming_result(self, result: AsyncResult | None, is_binary: bool, first_only: bool) -> None:
+        """Drain a streaming result when a cursor is closed mid-stream."""
+        if (result is self._active_streaming_result
+                and isinstance(result, AsyncStreamingResult)):
+            try:
+                await result.fetch_remaining()
+                if first_only:
+                    return
+                while not is_binary and (self.context.server_status & _MORE_RESULTS_EXIST) != 0:
+                    completion = await self.read_next_result(False, self.configuration)
+                    next_result = completion.result_set if (completion is not None and completion.has_result_set()) else None
+                    if not isinstance(next_result, AsyncStreamingResult):
+                        break
+                    await next_result.fetch_remaining()
+            except Exception:
+                pass  # Ignore errors during close
+            self._active_streaming_result = None
 
     async def _handle_local_infile(self, packet: memoryview, sql: str | None, remaining_packets: list[tuple[int, int]] | None) -> tuple[OkPacket, list[tuple[int, int]] | None]:
         """Handle LOAD DATA LOCAL INFILE request from server (async)

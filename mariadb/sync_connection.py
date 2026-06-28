@@ -86,7 +86,7 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # typ
         """
         # Import here to avoid circular dependency
         from .sync_cursor import SyncCursor
-        return SyncCursor(self, **kwargs)
+        return SyncCursor(self, self._configuration, **kwargs)
     
     def close(self) -> None:
         """

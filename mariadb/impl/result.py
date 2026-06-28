@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from .client.context import Context
     from .configuration import Configuration
 
-
 class Result(ABC):
     """
     Abstract base class for result sets
@@ -294,7 +293,7 @@ class BaseStreamingResult(Result, Generic[_PayloadT]):
         columns: 'ColumnsDefinition',
         column_count: int,
         config: 'Configuration',
-        row_parser: Callable[[Any], Any] | None = None,
+        row_parser: Callable[[memoryview, ColumnsDefinition, 'Configuration', int], tuple[Any, ...]],
     ):
         """
         Initialize streaming result
@@ -310,7 +309,7 @@ class BaseStreamingResult(Result, Generic[_PayloadT]):
         super().__init__(columns, column_count, config)
         self.read_payload_func: Callable[[], _PayloadT] = read_payload_func
         self.context: Context = context
-        self.row_parser: Callable[[Any], Any] | None = row_parser
+        self.row_parser: Callable[[memoryview, ColumnsDefinition, 'Configuration', int], tuple[Any, ...]] = row_parser
         self.loaded: bool = False
         self._row_count: int = 0  # Track number of rows fetched
         
@@ -349,7 +348,7 @@ class SyncStreamingResult(BaseStreamingResult[memoryview], SyncResult):
         
         # Increment row count
         self._row_count += 1
-        return self.row_parser(row_packet, self.columns, self.config, self.column_count)  # type: ignore[no-any-return]
+        return self.row_parser(row_packet, self.columns, self.config, self.column_count)
         
     def fetch_all(self) -> List[tuple[Any, ...]]:
         """Fetch all remaining rows"""
@@ -448,7 +447,7 @@ class AsyncStreamingResult(BaseStreamingResult[Awaitable[memoryview]], AsyncResu
                 self.loaded = True
                 raise Exception("Error packet received during streaming")
             
-            return row_packet  # type: ignore[no-any-return]  # Regular row data packet
+            return row_packet
             
         except Exception:
             self.loaded = True
@@ -465,7 +464,7 @@ class AsyncStreamingResult(BaseStreamingResult[Awaitable[memoryview]], AsyncResu
         
         # Increment row count
         self._row_count += 1
-        return self.row_parser(row_packet, self.columns, self.config, self.column_count)  # type: ignore[no-any-return]
+        return self.row_parser(row_packet, self.columns, self.config, self.column_count)
     
     async def fetch_all(self) -> List[tuple[Any, ...]]:
         """Fetch all remaining rows (async)"""

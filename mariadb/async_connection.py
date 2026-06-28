@@ -105,7 +105,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
         """
         # Import here to avoid circular dependency
         from .async_cursor import AsyncCursor
-        return AsyncCursor(self, **kwargs)
+        return AsyncCursor(self, self._configuration, **kwargs)
 
     async def close(self) -> None:
         """
@@ -124,7 +124,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
         if not self._closed:
             try:
                 await self._client.close()
-            except Exception as e:
+            except Exception:
                 pass
             finally:
                 self._closed = True

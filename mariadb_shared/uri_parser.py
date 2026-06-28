@@ -87,7 +87,7 @@ def is_connection_uri(value: str) -> bool:
     Returns:
         True if the string appears to be a connection URI
     """
-    if not isinstance(value, str):
+    if not isinstance(value, str): # pyright: ignore[reportUnnecessaryIsInstance]
         return False  # type: ignore[unreachable]
     
     return value.startswith('mariadb://') or value.startswith('mysql://')

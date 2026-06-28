@@ -112,6 +112,11 @@ class BaseConnection(ABC, Generic[TClient]):
                 sql_state='42000'
             )
 
+    @property
+    def is_closed(self) -> bool:
+        """Whether the connection has been closed."""
+        return self._closed
+
     # =========================================================================
     # Utility Methods
     # =========================================================================
@@ -130,7 +135,7 @@ class BaseConnection(ABC, Generic[TClient]):
         no_backslash_escapes = (self._client.context.server_status & STATUS.NO_BACKSLASH_ESCAPES) > 0
         return StringEscaper.escape_string(string, no_backslash_escapes)
 
-    def get_server_version(self) -> tuple:
+    def get_server_version(self) -> tuple[int, int, int]:
         """
         Get server version as tuple
 
@@ -169,9 +174,7 @@ class BaseConnection(ABC, Generic[TClient]):
             Current database name, or None if no database selected
         """
         if self._client:
-            context_db = self._client.context.database
-            if context_db is not None:
-                return context_db
+            return self._client.context.database
         return self._database
 
     @property
@@ -269,7 +272,7 @@ class BaseConnection(ABC, Generic[TClient]):
         return version.major * 10000 + version.minor * 100 + version.patch
 
     @property
-    def server_version_info(self) -> tuple:
+    def server_version_info(self) -> tuple[int, int, int]:
         """
         Get server version as tuple
 
@@ -328,7 +331,7 @@ class BaseConnection(ABC, Generic[TClient]):
             True if TLS is active, False otherwise
         """
         self._check_closed()
-        return self._client.get_ssl_version() is not None  # type: ignore[attr-defined]
+        return self._client.get_ssl_version() is not None
 
     @property
     def tls_version(self) -> str | None:
@@ -339,7 +342,7 @@ class BaseConnection(ABC, Generic[TClient]):
             TLS version string (e.g., "TLSv1.3"), or None if not using TLS
         """
         self._check_closed()
-        return self._client.get_ssl_version()  # type: ignore[attr-defined, no-any-return]
+        return self._client.get_ssl_version()
 
     @property
     def tls_cipher(self) -> str | None:
@@ -352,7 +355,7 @@ class BaseConnection(ABC, Generic[TClient]):
         self._check_closed()
         if not self._tls:
             return None
-        cipher = self._client.get_ssl_cipher()  # type: ignore[attr-defined]
+        cipher = self._client.get_ssl_cipher()
         return cipher[0] if cipher else None
 
     @property
@@ -371,7 +374,7 @@ class BaseConnection(ABC, Generic[TClient]):
         return 1 if self._configuration.ssl_verify_cert else 0
 
     @property
-    def tls_peer_cert_info(self) -> dict | None:
+    def tls_peer_cert_info(self) -> dict[str, Any] | None:
         """
         Get peer certificate information for TLS connections
 
@@ -381,4 +384,4 @@ class BaseConnection(ABC, Generic[TClient]):
         self._check_closed()
         if not self._tls:
             return None
-        return self._client.get_peer_certificate()  # type: ignore[attr-defined, no-any-return]
+        return self._client.get_peer_certificate()

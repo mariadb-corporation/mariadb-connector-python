@@ -19,7 +19,7 @@ import decimal
 import ipaddress
 import re
 import uuid
-from typing import Any, List, Mapping, Sequence, Tuple
+from typing import Any, Callable, List, Mapping, Sequence, Tuple
 
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from mariadb_shared.exceptions import NotSupportedError, ProgrammingError
@@ -49,12 +49,12 @@ BINARY_QUOTE_PREFIX: bytes = b"_binary'"
 # Parameter Conversion Functions
 # ============================================================================
 
-def float2bytes(value: float, ctx: bool | None = None) -> bytes:
+def float2bytes(value: float, no_backslash_escapes: bool = False) -> bytes:
     if repr(value) in ("nan", "inf", "-inf"):
         raise NotSupportedError(f"Float value '{repr(value)}' is not supported.")
     return str(value).encode('ascii')
 
-def decimal2bytes(value: decimal.Decimal, ctx: bool | None = None) -> bytes:
+def decimal2bytes(value: decimal.Decimal, no_backslash_escapes: bool = False) -> bytes:
     if value.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
         raise NotSupportedError(f"Decimal value '{value.__str__()}' is not supported.")
     return str(value).encode('ascii')
@@ -89,7 +89,7 @@ def escape_str(string: str, no_backslash_escapes: bool = False) -> bytearray:
     result[-1] = 39  # Single quote '
     return result
 
-def timedelta_to_bytes(val: datetime.timedelta, ctx: bool | None = None) -> bytes:
+def timedelta_to_bytes(val: datetime.timedelta, no_backslash_escapes: bool = False) -> bytes:
     total_seconds = int(val.total_seconds())
     is_negative = total_seconds < 0
     
@@ -131,7 +131,7 @@ def escape_bytes(b: bytes, no_backslash_escapes: bool = False) -> bytearray:
     result[-1:] = QUOTE_BYTES
     return result
 
-def float_array_to_bytes(arr: array.array, no_backslash_escapes: bool = False) -> bytes | bytearray:
+def float_array_to_bytes(arr: array.array[float], no_backslash_escapes: bool = False) -> bytes | bytearray:
     """Convert float array to binary representation for VECTOR columns"""
     if len(arr) == 0:
         return b'NULL'
@@ -141,11 +141,11 @@ def float_array_to_bytes(arr: array.array, no_backslash_escapes: bool = False) -
         float_bytes = arr.tobytes()
     return escape_bytes(float_bytes, no_backslash_escapes)
 
-def tuple_to_bytes(t: tuple, no_backslash_escapes: bool = False) -> bytes:
+def tuple_to_bytes(t: tuple, no_backslash_escapes: bool = False) -> bytes: # pyright: ignore[reportUnknownParameterType, reportMissingTypeArgument]
     """Convert tuple to bytes - raises error as tuples are not directly supported"""
     raise NotSupportedError("Tuple parameters are not supported. Use individual values or convert to a supported type.")
 
-def indicator_val(v: MrdbIndicator, ctx: bool | None = None) -> bytes:
+def indicator_val(v: MrdbIndicator, no_backslash_escapes: bool = False) -> bytes:
    indicator = v.indicator
    if indicator == 1:
        return NULL_BYTES
@@ -156,37 +156,40 @@ def indicator_val(v: MrdbIndicator, ctx: bool | None = None) -> bytes:
 
 
 # Optimized converter functions (avoid lambda overhead)
-def _int_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
+def _int_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     return b'%d' % v
 
-def _bool_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
+def _bool_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     return TRUE_BYTES if v else FALSE_BYTES
 
-def _none_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
+def _none_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     return NULL_BYTES
 
-def _date_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
+def _date_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     # Use SQL temporal literal so the server preserves DATE type on `SELECT ?`
     return b"DATE'" + str(v).encode('ascii') + QUOTE_BYTES
 
-def _datetime_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
+def _datetime_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     # Use SQL TIMESTAMP literal so the server preserves DATETIME type on `SELECT ?`
     return b"TIMESTAMP'" + str(v).encode('ascii') + QUOTE_BYTES
 
-def _time_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
+def _time_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     # Use SQL TIME literal so the server preserves TIME type on `SELECT ?`
     return b"TIME'" + str(v).encode('ascii') + QUOTE_BYTES
 
-def _ipv4_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
+def _ipv4_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
-def _ipv6_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
+def _ipv6_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
-def _uuid_to_bytes(v: Any, ctx: bool | None = None) -> bytes:
+def _uuid_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     return QUOTE_BYTES + str(v).encode('ascii') + QUOTE_BYTES
 
-PARAM_CONVERT_TBL = {
+# A parameter converter: (value, no_backslash_escapes) -> SQL-safe bytes.
+ParamConverter = Callable[[Any, bool], bytes | bytearray]
+
+PARAM_CONVERT_TBL: dict[type[Any], ParamConverter] = {
   int: _int_to_bytes,
   float: float2bytes,
   str: escape_str,
@@ -207,12 +210,12 @@ PARAM_CONVERT_TBL = {
   tuple: tuple_to_bytes,
 }
 
-_type_cache: dict[type, Any] = {cls: func for cls, func in PARAM_CONVERT_TBL.items()}
+_type_cache: dict[type[Any], ParamConverter | None] = {cls: func for cls, func in PARAM_CONVERT_TBL.items()}
 
 # get cached conversion function
-def get_converter(val: Any) -> Any:
-    tbl = PARAM_CONVERT_TBL  # local reference
-    t = type(val)
+def get_converter(val: Any) -> ParamConverter | None:
+    tbl = PARAM_CONVERT_TBL
+    t: type[Any] = type(val) # pyright: ignore[reportUnknownVariableType]
     if t in _type_cache:
         return _type_cache[t]
 
@@ -237,22 +240,6 @@ _IS_IDENTIFIER_START = bytearray(256)
 _IS_IDENTIFIER_CHAR = bytearray(256)
 _IS_SPECIAL_CHAR = bytearray(256)  # Characters that need special handling in NORMAL state
 
-# Initialize lookup tables
-for _i in range(256):
-    # A-Z (65-90), a-z (97-122)
-    if (65 <= _i <= 90) or (97 <= _i <= 122):
-        _IS_ALPHA[_i] = 1
-        _IS_IDENTIFIER_START[_i] = 1
-        _IS_IDENTIFIER_CHAR[_i] = 1
-    # 0-9 (48-57)
-    if 48 <= _i <= 57:
-        _IS_DIGIT[_i] = 1
-        _IS_IDENTIFIER_CHAR[_i] = 1
-    # _ (95)
-    if _i == 95:
-        _IS_IDENTIFIER_START[_i] = 1
-        _IS_IDENTIFIER_CHAR[_i] = 1
-
 # Mark special characters that need handling in NORMAL state
 # These are characters that can trigger state changes or are placeholders
 _SPECIAL_CHARS = [
@@ -267,11 +254,34 @@ _SPECIAL_CHARS = [
     35,  # # (comment)
     45,  # - (comment)
 ]
-for _char_code in _SPECIAL_CHARS:
-    _IS_SPECIAL_CHAR[_char_code] = 1
 
-# Cleanup module-level loop variables
-del _i, _char_code
+
+def _init_lookup_tables() -> None:
+    """Populate the module-level parser lookup tables.
+
+    Kept in a function so the loop variables stay local instead of leaking into
+    the module namespace — which otherwise required a ``del`` cleanup that
+    pyright flags as possibly-unbound.
+    """
+    for i in range(256):
+        # A-Z (65-90), a-z (97-122)
+        if (65 <= i <= 90) or (97 <= i <= 122):
+            _IS_ALPHA[i] = 1
+            _IS_IDENTIFIER_START[i] = 1
+            _IS_IDENTIFIER_CHAR[i] = 1
+        # 0-9 (48-57)
+        if 48 <= i <= 57:
+            _IS_DIGIT[i] = 1
+            _IS_IDENTIFIER_CHAR[i] = 1
+        # _ (95)
+        if i == 95:
+            _IS_IDENTIFIER_START[i] = 1
+            _IS_IDENTIFIER_CHAR[i] = 1
+    for char_code in _SPECIAL_CHARS:
+        _IS_SPECIAL_CHAR[char_code] = 1
+
+
+_init_lookup_tables()
 
 
 # ============================================================================
@@ -331,7 +341,7 @@ def substitute_params(
             converted: list[Any] = [None] * n_placeholders
             for i in range(n_placeholders):
                 param = params_list[i]
-                p_type = type(param)
+                p_type: type[Any] = type(param)  # pyright: ignore[reportUnknownVariableType]
                 if p_type is not last_param_type:
                     cached_conv_func = _converter(param)
                     last_param_type = p_type
@@ -394,7 +404,7 @@ def substitute_params(
                 if i > last_copy:
                     _append(_sql[last_copy:i])
                 param = params_list[param_idx]
-                p_type = type(param)
+                p_type = type(param)  # pyright: ignore[reportUnknownVariableType]
                 if p_type is not last_param_type:
                     cached_conv_func = _converter(param)
                     last_param_type = p_type
@@ -417,9 +427,13 @@ def substitute_params(
                     if next_c == 115 or next_c == 100:  # %s or %d
                         if i > last_copy:
                             _append(_sql[last_copy:i])
-
-                        param = params_list[param_idx]  # type: ignore[index]
-                        p_type = type(param)
+                        if params_list is None:
+                            raise ProgrammingError(
+                                "Positional placeholder '%s' or '%d' used but parameters provided as dict. "
+                                "Use named placeholders like :name or %(name)s instead."
+                            )
+                        param = params_list[param_idx] # pyright: ignore[reportUnknownVariableType, reportOptionalSubscript]
+                        p_type = type(param)  # pyright: ignore[reportUnknownArgumentType, reportUnknownVariableType]
                         if p_type is not last_param_type:
                             cached_conv_func = _converter(param)
                             last_param_type = p_type
@@ -427,7 +441,7 @@ def substitute_params(
                         if cached_conv_func is not None:
                             _append(cached_conv_func(param, no_backslash_escapes))
                         else:
-                            _append(escape_str(str(param), no_backslash_escapes))
+                            _append(escape_str(str(param), no_backslash_escapes)) # pyright: ignore[reportUnknownArgumentType]
 
                         param_idx += 1
                         last_copy = i + 2
@@ -449,7 +463,7 @@ def substitute_params(
                                 )
                             param = params_dict.get(param_name)
                             if param is not None:
-                                p_type = type(param)
+                                p_type = type(param)  # pyright: ignore[reportUnknownVariableType]
                                 if p_type is not last_param_type:
                                     cached_conv_func = _converter(param)
                                     last_param_type = p_type
@@ -483,7 +497,7 @@ def substitute_params(
 
                         param = params_dict.get(param_name)  # type: ignore[union-attr]
                         if param is not None:
-                            p_type = type(param)
+                            p_type = type(param)  # pyright: ignore[reportUnknownVariableType]
                             if p_type is not last_param_type:
                                 cached_conv_func = _converter(param)
                                 last_param_type = p_type

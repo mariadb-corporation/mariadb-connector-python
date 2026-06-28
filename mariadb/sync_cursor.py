@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
-from typing import Sequence, List, Any, TYPE_CHECKING
+from typing import Dict, Sequence, List, Any, TYPE_CHECKING, cast
+
+from mariadb.impl.completion import Completion
+from mariadb.impl.configuration import Configuration
 
 from .impl.result import SyncResult
 
@@ -35,7 +38,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # Initialization and Lifecycle
     # =========================================================================
 
-    def __init__(self, connection: 'SyncConnection', **kwargs: Any) -> None:
+    def __init__(self, connection: 'SyncConnection', configuration: Configuration, **kwargs: Any) -> None:
         """
         Initialize synchronous cursor with a connection
 
@@ -46,7 +49,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 - named_tuple: Return rows as named tuples
                 - dictionary: Return rows as dictionaries
         """
-        super().__init__(connection, **kwargs)
+        super().__init__(connection, configuration, **kwargs)
 
     def close(self) -> None:
         """
@@ -56,7 +59,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         After closing, the cursor cannot be used anymore.
         """
         if not self._closed:
-            client = self.connection._client
+            client = self.connection._client # pyright: ignore[reportPrivateUsage]
             if self._stmt:
                 # Release cached statement reference
                 if client.prepared_statement_cache is not None:
@@ -66,16 +69,9 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             # Close the per-cursor prepared statement (if connection cache off).
             self._close_local_stmt_cache()
 
-            # Consume any remaining streaming result set(s).
-            if (self._result is not None and
-                self._result.streaming() and
-                client._active_streaming_result is self._result):
-                try:
-                    while self.nextset() is not None:
-                        pass
-                except Exception:
-                    pass  # Ignore errors during close
-                client._active_streaming_result = None
+            # Drain any remaining streaming result set(s) so the connection is
+            # left ready for the next command.
+            client.drain_streaming_result(self._result, self._use_binary, False)
 
             self._closed = True
 
@@ -98,12 +94,11 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             return True
 
         # Streaming (unbuffered) cursor: read the next set from the wire.
-        client = self.connection._client
+        client = self.connection._client # pyright: ignore[reportPrivateUsage]
         completion = self._current_completion
         result_set = completion.result_set if (completion is not None and completion.has_result_set()) else None
         if result_set is not None and result_set.streaming():
-            result_set.fetch_remaining()  # type: ignore[attr-defined]  # streaming() guarantees a streaming result
-            client._active_streaming_result = None
+            client.drain_streaming_result(self._result, self._use_binary, True)
 
         if (client.context.server_status & MORE_RESULTS_EXIST) == 0:
             self._current_completion = None
@@ -113,8 +108,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 "nextset() across multiple result sets is not supported on a "
                 "binary streaming cursor (binary=True, buffered=False); use a "
                 "buffered cursor for multi-result binary statements")
-        config = self._config or self.connection._configuration
-        next_completion = client.read_next_result(False, config)
+        
+        next_completion = client.read_next_result(False, self._config)
         if next_completion is None:
             self._current_completion = None
             return None
@@ -154,7 +149,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         self._check_closed()
 
         # Validate SQL type
-        if not isinstance(sql, str):
+        if not isinstance(sql, str): # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError("SQL statement must be a string")
         if (not sql):
             raise ProgrammingError("Empty SQL statement")
@@ -175,25 +170,24 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 else:
                     raise ProgrammingError("Unsupported parameter type: expected list, tuple, or dict")
 
-                client = self.connection._client
-                config = self._config or self.connection._configuration
+                client = self.connection._client # pyright: ignore[reportPrivateUsage]
+                
                 if not isinstance(parameters, dict) and self._use_binary:  # type: ignore[unreachable]
 
                     from .impl.message.client.execute_packet import ExecutePacket
                     execute_packet = ExecutePacket(None, parameters, sql)
-                    self._completions = client.execute_stmt(sql, [execute_packet], config, self._buffered, self._resolve_stmt_cache())[0]
+                    self._completions = client.execute_stmt(sql, [execute_packet], self._config, self._buffered, self._resolve_stmt_cache())[0]
                 else:
                     # Named parameters use text protocol with substitution
                     no_backslash_escapes = (client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
                     query_packet = QueryPacket.from_substitute(sql, parameters, no_backslash_escapes)
-                    self._completions = client.execute(query_packet, config, self._buffered)
+                    self._completions = client.execute(query_packet, self._config, self._buffered)
 
             else:
-                client = self.connection._client
-                config = self._config or self.connection._configuration
+                client = self.connection._client # pyright: ignore[reportPrivateUsage]
                 # Use simple query packet
                 query_packet = QueryPacket.from_sql(sql)
-                self._completions = client.execute(query_packet, config, self._buffered)
+                self._completions = client.execute(query_packet, self._config, self._buffered)
 
             # Process the completions to extract result data
             self._completion_index = 0
@@ -221,14 +215,14 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         self._check_closed()
 
         # Validate SQL type
-        if not isinstance(sql, str):
+        if not isinstance(sql, str): # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError("SQL statement must be a string")
 
         # Draining is now handled at client level in execute()
         # No need to do it here in cursor
 
         # Check if data is None or not an array-like type
-        if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):
+        if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)): # pyright: ignore[reportUnnecessaryComparison]
             raise ProgrammingError("No data provided")
 
         try:
@@ -241,7 +235,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             # Reorder parameters if needed (for named/pyformat styles)
             if param_names is not None:
                 # Named parameters - reorder each parameter set according to param_names
-                reordered_data = []
+                reordered_data : List[List[Any]] = []
                 for param_set in data:
                     if isinstance(param_set, dict):
                         reordered = [param_set.get(name) for name in param_names]
@@ -252,8 +246,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
 
             # Check if server supports COM_STMT_BULK_EXECUTE
             from mariadb_shared import constants
-            client = self.connection._client
-            config = self._config or self.connection._configuration
+            client = self.connection._client # pyright: ignore[reportPrivateUsage]
+            
             context = client.context
 
             # Use BULK_UNIT_RESULTS capability (MariaDB 11.5+) instead of BULK_OPERATIONS
@@ -261,14 +255,14 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             # returns error packets with errno=0 and empty messages
             use_bulk = (context.has_capability(constants.CAPABILITY.BULK_UNIT_RESULTS) and
                        len(data) > 0 and len(data[0]) > 0)
-
+            completions: List[List[Completion]]
             # Use binary protocol with normalized SQL (always qmark now)
             if use_bulk or self._use_binary:
                 if use_bulk and self._can_use_bulk_execute(data):  # type: ignore[arg-type]
                     # Use COM_STMT_BULK_EXECUTE for efficient bulk execution
                     from .impl.message.client.bulk_execute_packet import BulkExecutePacket
                     bulk_packet = BulkExecutePacket(None, data, normalized_sql)  # type: ignore[arg-type]
-                    self._completions = client.execute_stmt(normalized_sql, [bulk_packet], config, True, self._resolve_stmt_cache())[0]
+                    self._completions = client.execute_stmt(normalized_sql, [bulk_packet], self._config, True, self._resolve_stmt_cache())[0]
                     self._completion_index = 0
                 else:
                     # Fallback to individual COM_STMT_EXECUTE packets (when bulk not available but binary forced)
@@ -278,7 +272,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                     execute_packets = [ExecutePacket(None, params, normalized_sql) for params in data]  # type: ignore[arg-type]
 
                     # Execute all at once with single prepare
-                    completions = client.execute_stmt(normalized_sql, execute_packets, config, True, self._resolve_stmt_cache())  # type: ignore[arg-type]
+                    completions = client.execute_stmt(normalized_sql, execute_packets, self._config, True, self._resolve_stmt_cache())  # type: ignore[arg-type]
 
                     self._process_executemany_completions(completions)
             else:
@@ -286,13 +280,13 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
                 # Get NO_BACKSLASH_ESCAPES status from connection
                 no_backslash_escapes = (client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
 
-                completions = [None] * len(data)  # type: ignore[list-item]
+                completions = []
                 for i in range(len(data)):
                     params = data[i]
                     parameters = list(params) if params else []
                     # Use normalized_sql (qmark style) since parameters are already reordered
                     query_packet = QueryPacket.from_substitute(normalized_sql, parameters, no_backslash_escapes)
-                    completions[i] = client.execute(query_packet, config, True, self._stmt)
+                    completions.append(client.execute(query_packet, self._config, True, self._stmt))                    
 
                 self._process_executemany_completions(completions)
             if self._completions:
@@ -312,7 +306,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # Result Fetching Methods
     # =========================================================================
 
-    def fetchone(self) -> Any | None:
+    def fetchone(self) -> tuple[Any, ...] | Dict[str, Any] | None:
         """Fetch the next row of a query result set
 
         Returns:
@@ -330,16 +324,16 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             raise ProgrammingError("No result set to fetch from")
         result = self._current_completion.result_set
 
-        if self.connection._closed and result.streaming():  # type: ignore[union-attr]
+        if self.connection.is_closed and result.streaming():  # type: ignore[union-attr]
             raise ProgrammingError("Cursor is closed")
 
-        row = result.fetch_one()  # type: ignore[union-attr]
+        row : tuple[Any, ...] | None = result.fetch_one() # type: ignore
         if row is not None:
             # Apply row formatting
-            row = self._apply_row_formatting([row])[0]
+            return self._apply_row_formatting([row])[0]
         return row
 
-    def fetchmany(self, size: int | None = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """Fetch the next set of rows of a query result"""
         # Allow fetching from buffered results even if connection is closed
         if self._closed:
@@ -348,18 +342,18 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         # Use cached _current_completion for performance
         if not self._current_completion or not self._current_completion.has_result_set():
             raise ProgrammingError("No result set to fetch from")
-        result = self._current_completion.result_set
+        result : SyncResult = cast(SyncResult, self._current_completion.result_set)
 
-        if self.connection._closed and result.streaming():  # type: ignore[union-attr]
+        if self.connection.is_closed and result.streaming():
             raise ProgrammingError("Cursor is closed")
 
         if size is None:
             size = self.arraysize
 
         # Optimize: fetch rows directly instead of calling fetchone repeatedly
-        rows = []
+        rows : List[tuple[Any, ...]] = []
         for _ in range(size):
-            row = result.fetch_one()  # type: ignore[union-attr]
+            row = result.fetch_one()
             if row is None:
                 break
             rows.append(row)
@@ -368,7 +362,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             return self._apply_row_formatting(rows)
         return []
 
-    def fetchall(self) -> List[Any]:
+    def fetchall(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """Fetch all remaining rows of a query result"""
         # Allow fetching from buffered results even if connection is closed
         if self._closed:
@@ -377,13 +371,13 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         # Use cached _current_completion for performance
         if not self._current_completion or not self._current_completion.has_result_set():
             raise ProgrammingError("No result set to fetch from")
-        result = self._current_completion.result_set
+        result : SyncResult = cast(SyncResult, self._current_completion.result_set)
 
-        if self.connection._closed and result.streaming():  # type: ignore[union-attr]
+        if self.connection.is_closed and result.streaming():
             raise ProgrammingError("Cursor is closed")
 
         # Delegate to Result object
-        rows = result.fetch_all()  # type: ignore[union-attr]
+        rows = result.fetch_all()
         return self._apply_row_formatting(rows)
 
     def scroll(self, value: int, mode: str = "relative") -> None:
@@ -409,7 +403,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         if result is None:
             raise ProgrammingError("Cursor doesn't have a result set")
 
-        if self.connection._closed and result.streaming():
+        if self.connection.is_closed and result.streaming():
             raise ProgrammingError("Cursor is closed")
 
         # For streaming results, only forward relative scrolling is allowed
@@ -430,7 +424,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # Stored Procedures
     # =========================================================================
 
-    def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:  # type: ignore[override]
+    def callproc(self, procname: str, args: Sequence[Any] = ()) -> None:
         """
         Call a stored procedure
 
@@ -461,12 +455,11 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
             # Use execute_stmt which handles prepared statement caching internally
             from .impl.message.client.execute_packet import ExecutePacket
             execute_packet = ExecutePacket(None, list(args), call_sql)
-            client = self.connection._client
-            config = self._config or self.connection._configuration
-            self._completions = client.execute_stmt(call_sql, [execute_packet], config, True, self._resolve_stmt_cache())[0]
+            client = self.connection._client # pyright: ignore[reportPrivateUsage]
+            self._completions = client.execute_stmt(call_sql, [execute_packet], self._config, True, self._resolve_stmt_cache())[0]
             self._completion_index = 0
             self._current_completion = self._completions[0]
-            return None  # type: ignore[return-value]  # Match C extension behavior
+            return None
         except DatabaseError:
             raise
         except Exception as e:
@@ -510,7 +503,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         """Context manager entry"""
         return self
 
-    def __exit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: 'TracebackType' | None) -> None:
+    def __exit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: TracebackType | None) -> None:
         """Context manager exit"""
         self.close()
 
@@ -519,12 +512,12 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # =========================================================================
 
     def _create_complete_result(self, columns: 'ColumnsDefinition', column_count: int,
-                               rows: List[tuple]) -> 'SyncCompleteResult':
+                               rows: List[tuple[Any, ...]]) -> 'SyncCompleteResult':
         """Create a synchronous complete result"""
         from .impl.result import SyncCompleteResult
         return SyncCompleteResult(
             columns=columns,
             column_count=column_count,
-            config=self._config,  # type: ignore[arg-type]
+            config=self._config,
             rows=rows
         )

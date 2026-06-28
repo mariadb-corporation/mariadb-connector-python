@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from mariadb_shared import constants
 
 field_types = {constants.FIELD_TYPE.DECIMAL: "DECIMAL",
@@ -48,12 +52,12 @@ field_flags = {constants.FIELD_FLAG.NOT_NULL: "NOT_NULL",
 
 class fieldinfo():
 
-    def type(self, description: tuple) -> object:
+    def type(self, description: tuple[Any, ...]) -> str | None:
         if description[1] in field_types:
             return field_types[description[1]]
         return None
 
-    def flag(self, description: tuple) -> str:
+    def flag(self, description: tuple[Any, ...]) -> str:
         flags = [field_flags[f] for f in field_flags.keys()
                  if description[7] & f]
         return " | ".join(flags)

@@ -81,10 +81,15 @@ class Configuration:
     non_mapped_options: Dict[str, Any] = field(default_factory=lambda: {})
     
     @staticmethod
-    def parse_hosts(host_string: str, default_port: int = 3306) -> List[HostAddress]:
+    def parse_hosts(host_string: str | None, default_port: int = 3306) -> List[HostAddress]:
         """Parse host string into list of (host, port) tuples for failover"""
         hosts: List[HostAddress] = []
-        
+
+        # No host (None or empty) -> no candidates; the connect path then raises
+        # OperationalError("Connection failed to all hosts").
+        if not host_string:
+            return hosts
+
         # Split by comma for multiple hosts
         host_parts = [h.strip() for h in host_string.split(',') if h.strip()]
         
@@ -130,9 +135,9 @@ class Configuration:
 
         # Map common parameters
         if 'host' in params:
-            config.host = params['host'] or 'localhost'
+            config.host = params['host']
         if 'port' in params:
-            config.port = int(params['port'] or 3306)
+            config.port = int(params['port'])
         if 'user' in params or 'username' in params:
             config.user = params.get('user') or params.get('username')
         if 'password' in params or 'passwd' in params:

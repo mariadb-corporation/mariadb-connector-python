@@ -376,10 +376,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
             return
 
         # If the server doesn't support bulk operations, we need to emulate
-        # by looping
-        # TODO: insert/replace statements are not optimized yet
-        #       rowcount updating
-        
+        # by looping through the parameters and executing each one individually.
         normalized_sql, param_names = normalize_to_qmark(statement)
 
         if param_names is not None:
@@ -515,7 +512,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         if self._data:
             del self._data
 
-        if not self.connection._closed:
+        if not self.connection.is_closed:
             if self.connection._active_async_cursor is self and self.field_count > 0:
                 try:
                     # Drain the current result set, then any further sets

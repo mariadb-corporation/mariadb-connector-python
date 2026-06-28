@@ -17,18 +17,18 @@ Optimizations over a naive wrapper:
   - list + index instead of deque for row storage
 """
 
-from typing import Any, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
-from sqlalchemy.dialects.mysql.mariadbconnector import (
-    MySQLDialect_mariadbconnector,
-    MySQLExecutionContext_mariadbconnector,
+from sqlalchemy.dialects.mysql.mariadbconnector import (  # pyright: ignore[reportMissingImports]
+    MySQLDialect_mariadbconnector, # pyright: ignore[reportUnknownVariableType]
+    MySQLExecutionContext_mariadbconnector, # pyright: ignore[reportUnknownVariableType]
 )
-from sqlalchemy import pool
-from sqlalchemy.util.concurrency import await_only
-from sqlalchemy.engine import AdaptedConnection
+from sqlalchemy import pool  # pyright: ignore[reportUnknownVariableType, reportMissingImports]
+from sqlalchemy.util.concurrency import await_only  # pyright: ignore[reportUnknownVariableType, reportMissingImports]
+from sqlalchemy.engine import AdaptedConnection  # pyright: ignore[reportUnknownVariableType, reportMissingImports]
 
 
-async def _execute_and_buffer(cursor: Any, query: str, params: Any) -> List[Any] | None:
+async def _execute_and_buffer(cursor: Any, query: str, params: Any) -> List[tuple[Any, ...]] | List[Dict[str, Any]] | None:
     """Execute query and fetch all rows in a single async call.
 
     Combines execute + fetchall into one coroutine so that SQLAlchemy
@@ -56,34 +56,34 @@ class AsyncAdapt_mariadb_cursor:
 
     def __init__(self, cursor: Any) -> None:
         self._cursor = cursor
-        self._rows = None
+        self._rows : List[tuple[Any, ...]] | List[Dict[str, Any]] | None = None
         self._row_idx = 0
         self.server_side = not cursor.buffered
 
     @property
     def description(self) -> Tuple[Any, ...] | None:
-        return self._cursor.description  # type: ignore[no-any-return]
+        return self._cursor.description
 
     @property
     def rowcount(self) -> int:
-        return self._cursor.rowcount  # type: ignore[no-any-return]
+        return self._cursor.rowcount
 
     @property
     def lastrowid(self) -> int | None:
-        return self._cursor.lastrowid  # type: ignore[no-any-return]
+        return self._cursor.lastrowid
 
     @property
     def arraysize(self) -> int:
-        return self._cursor.arraysize  # type: ignore[no-any-return]
+        return self._cursor.arraysize
 
     @arraysize.setter
     def arraysize(self, value: int) -> None:
         self._cursor.arraysize = value
 
     def execute(self, query: str, params: Any = None, **kw: Any) -> 'AsyncAdapt_mariadb_cursor':
-        rows = await_only(_execute_and_buffer(self._cursor, query, params))
+        rows : List[tuple[Any, ...]] | List[Dict[str, Any]] | None = await_only(_execute_and_buffer(self._cursor, query, params)) # pyright: ignore[reportUnknownVariableType]
         if rows is not None:
-            self._rows = rows  # type: ignore[assignment]
+            self._rows = rows
             self._row_idx = 0
         else:
             self._rows = None
@@ -93,7 +93,7 @@ class AsyncAdapt_mariadb_cursor:
     def executemany(self, query: str, params_seq: Sequence[Any]) -> None:
         await_only(self._cursor.executemany(query, params_seq))
 
-    def fetchone(self) -> Any | None:
+    def fetchone(self) -> tuple[Any, ...] | Dict[str, Any] | None:
         rows = self._rows
         if rows is None:
             return None
@@ -103,18 +103,18 @@ class AsyncAdapt_mariadb_cursor:
         self._row_idx = idx + 1
         return rows[idx]
 
-    def fetchmany(self, size: int | None = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         rows = self._rows
         if rows is None:
             return []
         if size is None:  # type: ignore[unreachable]
-            size = self._cursor.arraysize
+            size = int(self._cursor.arraysize)
         idx = self._row_idx
         end = min(idx + size, len(rows))
         self._row_idx = end
         return rows[idx:end]
 
-    def fetchall(self) -> List[Any]:
+    def fetchall(self) ->  List[tuple[Any, ...]] | List[Dict[str, Any]]:
         rows = self._rows
         if rows is None:
             return []
@@ -158,22 +158,22 @@ class AsyncAdapt_mariadb_ss_cursor(AsyncAdapt_mariadb_cursor):
             await_only(self._cursor.execute(query))
         return self
 
-    def fetchone(self) -> Any | None:
-        return await_only(self._cursor.fetchone())
+    def fetchone(self) -> tuple[Any, ...] | Dict[str, Any] | None:
+        return await_only(self._cursor.fetchone()) # pyright: ignore[reportUnknownVariableType]
 
-    def fetchmany(self, size: int | None = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         if size is None:
-            size = self._cursor.arraysize
-        return await_only(self._cursor.fetchmany(size))
+            size = int(self._cursor.arraysize)
+        return await_only(self._cursor.fetchmany(size)) # pyright: ignore[reportUnknownVariableType]
 
-    def fetchall(self) -> List[Any]:
-        return await_only(self._cursor.fetchall())
+    def fetchall(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
+        return await_only(self._cursor.fetchall()) # pyright: ignore[reportUnknownVariableType]
 
     def close(self) -> None:
         await_only(self._cursor.close())
 
 
-class AsyncAdapt_mariadb_connection(AdaptedConnection):
+class AsyncAdapt_mariadb_connection(AdaptedConnection): # pyright: ignore[reportUntypedBaseClass]
     """Sync-style connection wrapper for SQLAlchemy.
 
     Wraps an async connection from either mariadb or mariadb_c backend.
@@ -238,12 +238,12 @@ class AsyncAdapt_mariadb_dbapi:
                 setattr(self, name, getattr(mariadb, name))
 
     def connect(self, *args: Any, **kwargs: Any) -> AsyncAdapt_mariadb_connection:
-        connection = await_only(self.mariadb_asyncio.connect(*args, **kwargs))
+        connection = await_only(self.mariadb_asyncio.connect(*args, **kwargs)) # pyright: ignore[reportUnknownVariableType]
         return AsyncAdapt_mariadb_connection(self, connection)
 
 
 class MySQLExecutionContext_mariadbconnector_async(
-    MySQLExecutionContext_mariadbconnector
+    MySQLExecutionContext_mariadbconnector # pyright: ignore[reportUntypedBaseClass]
 ):
     def create_server_side_cursor(self) -> Any:
         # Handle pooled connections that don't support buffered parameter
@@ -251,10 +251,10 @@ class MySQLExecutionContext_mariadbconnector_async(
             return self._dbapi_connection.cursor(buffered=False)  # type: ignore[call-arg]
         except TypeError:
             # Fallback for pooled connections
-            cursor = self._dbapi_connection.cursor()
-            if hasattr(cursor, 'buffered'):
+            cursor = self._dbapi_connection.cursor() # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+            if hasattr(cursor, 'buffered'): # pyright: ignore[reportUnknownArgumentType]
                 cursor.buffered = False  # type: ignore[attr-defined]
-            return cursor
+            return cursor # pyright: ignore[reportUnknownVariableType]
 
     def create_default_cursor(self) -> Any:
         # Handle pooled connections that don't support buffered parameter
@@ -262,13 +262,13 @@ class MySQLExecutionContext_mariadbconnector_async(
             return self._dbapi_connection.cursor(buffered=True)  # type: ignore[call-arg]
         except TypeError:
             # Fallback for pooled connections
-            cursor = self._dbapi_connection.cursor()
-            if hasattr(cursor, 'buffered'):
+            cursor = self._dbapi_connection.cursor() # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+            if hasattr(cursor, 'buffered'): # pyright: ignore[reportUnknownArgumentType]
                 cursor.buffered = True  # type: ignore[attr-defined]
-            return cursor
+            return cursor # pyright: ignore[reportUnknownVariableType]
 
 
-class MySQLDialect_mariadbconnector_async(MySQLDialect_mariadbconnector):
+class MySQLDialect_mariadbconnector_async(MySQLDialect_mariadbconnector): # pyright: ignore[reportUntypedBaseClass]
     """
     Async dialect for MariaDB Connector/Python.
 
@@ -298,12 +298,12 @@ class MySQLDialect_mariadbconnector_async(MySQLDialect_mariadbconnector):
 
     @classmethod
     def get_pool_class(cls, url: Any) -> Any:
-        return pool.AsyncAdaptedQueuePool
+        return pool.AsyncAdaptedQueuePool # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
 
     @classmethod
     def load_provisioning(cls) -> None:
         try:
-            from sqlalchemy.dialects.mysql import provision  # noqa: F401
+            from sqlalchemy.dialects.mysql import provision  # type: ignore
         except ImportError:
             pass
 

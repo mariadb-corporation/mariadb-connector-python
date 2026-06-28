@@ -150,7 +150,7 @@ class Cursor(StmtReuseMixin, CCursor):
         self.check_closed()
         return super()._nextset()
 
-    def execute(self, statement: str, data: Sequence = (), buffered: bool | None = None, _force_binary: bool = False) -> None:
+    def execute(self, statement: str, data: Sequence[Any] | dict[str, Any] = (), buffered: bool | None = None, _force_binary: bool = False) -> None:
         """
         Prepare and execute a SQL statement.
 

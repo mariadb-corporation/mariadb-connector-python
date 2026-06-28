@@ -223,7 +223,7 @@ class TestCA(unittest.TestCase):
             
             # Calling tpc_rollback with invalid xid type should fail
             with self.assertRaises(mariadb.ProgrammingError) as cm:
-                con.tpc_rollback(123)
+                con.tpc_rollback(123) # pyright: ignore[reportArgumentType]
             self.assertIn("must be xid", str(cm.exception).lower())
         finally:
             con.close()

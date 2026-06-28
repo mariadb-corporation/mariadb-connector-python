@@ -42,26 +42,21 @@ from mariadb_shared.async_connection_common import AsyncConnectionCommon
 from . import impl_selector  # noqa: F401 import early to stabilize side effects
 
 if TYPE_CHECKING:
-    try:
-        from mariadb_c import Connection as CConnection
-    except ImportError:
-        CConnection = Any
-    try:
-        from mariadb_pool import (
-            ConnectionPoolWrapper, AsyncConnectionPoolWrapper,
-            ConnectionPool as _ConnectionPoolImpl,
-            AsyncConnectionPool as _AsyncConnectionPoolImpl,
-        )
-    except ImportError:
-        ConnectionPoolWrapper = Any
-        AsyncConnectionPoolWrapper = Any
-        _ConnectionPoolImpl = Any
-        _AsyncConnectionPoolImpl = Any
+    # mariadb_pool is optional, so we import its types only for type checking
+    from mariadb_shared.pool_types import (
+        ConnectionPoolWrapper, AsyncConnectionPoolWrapper,
+        ConnectionPool as _ConnectionPoolImpl,
+        AsyncConnectionPool as _AsyncConnectionPoolImpl,
+    )
 
 
 
-# Re-export the selected implementation classes and implementation info
+# Re-export the selected implementation classes and implementation info.
+# Annotate the type: impl_selector exposes these as Any, but a concrete class
+# type lets callers like connect() narrow correctly — assigning an Any into a
+# `type | None` target would otherwise re-widen it back to include None.
 # Handle both pure Python (has SyncConnection) and C extension (has Connection)
+SyncConnection: type[SyncConnectionCommon]
 if hasattr(impl_selector.sync_connection, 'SyncConnection'):
     SyncConnection = impl_selector.sync_connection.SyncConnection
 else:
@@ -178,7 +173,7 @@ def connect(*args: Any, connectionclass: type | None = None, **kwargs: Any) -> S
             pool = _CONNECTION_POOLS[pool_name]
         else:
             pool = _get_connection_pool_class()(**kwargs)
-        return cast(SyncConnectionCommon, pool.get_connection())
+        return pool.get_connection()
 
     # Use SyncConnection if no custom class specified
     if connectionclass is None:
@@ -292,7 +287,7 @@ async def asyncConnect(*args: Any, connectionclass: type | None = None, **kwargs
             pool = _ASYNC_CONNECTION_POOLS[pool_name]
         else:
             pool = _get_async_connection_pool_class()(**kwargs)
-        return cast(AsyncConnectionCommon, await pool.get_connection())
+        return await pool.get_connection()
 
     # Use AsyncConnection if no custom class specified
     if connectionclass is None:
@@ -452,7 +447,7 @@ def create_pool(
         pool.close()
     """
     try:
-        from mariadb_pool import ConnectionPool, PoolConfig
+        from mariadb_pool import ConnectionPool, PoolConfig  # pyright: ignore[reportMissingImports]
     except ImportError:
         raise ImportError(
             "Connection pooling is not available. "
@@ -473,11 +468,11 @@ def create_pool(
     )
 
     # Create pool with mariadb.connect as factory
-    return ConnectionPool(
+    return cast('_ConnectionPoolImpl', ConnectionPool(
         connection_factory=connect,
         config=pool_config,
         **connection_params
-    )
+    ))
 
 
 async def create_async_pool(
@@ -537,7 +532,7 @@ async def create_async_pool(
         asyncio.run(main())
     """
     try:
-        from mariadb_pool import AsyncConnectionPool, PoolConfig
+        from mariadb_pool import AsyncConnectionPool, PoolConfig  # pyright: ignore[reportMissingImports]
     except ImportError:
         raise ImportError(
             "Async connection pooling is not available. "
@@ -567,7 +562,7 @@ async def create_async_pool(
     # Pre-fill the pool with connections
     await pool.open()
 
-    return pool
+    return cast('_AsyncConnectionPoolImpl', pool)
 
 
 def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
@@ -575,7 +570,7 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
     Get ConnectionPool class from mariadb_pool package.
     """
     try:
-        from mariadb_pool import ConnectionPoolWrapper
+        from mariadb_pool import ConnectionPoolWrapper  # pyright: ignore[reportMissingImports]
     except ImportError:
         raise AttributeError(
             "ConnectionPool is not available. "
@@ -668,7 +663,7 @@ def _get_async_connection_pool_class() -> type['AsyncConnectionPoolWrapper']:
     Get AsyncConnectionPool class from mariadb_pool package.
     """
     try:
-        from mariadb_pool import AsyncConnectionPoolWrapper
+        from mariadb_pool import AsyncConnectionPoolWrapper  # pyright: ignore[reportMissingImports]
     except ImportError:
         raise AttributeError(
             "AsyncConnectionPool is not available. "

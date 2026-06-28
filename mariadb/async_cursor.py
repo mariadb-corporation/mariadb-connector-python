@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
-from typing import Sequence, List, Any, TYPE_CHECKING
+from typing import Dict, Sequence, List, Any, TYPE_CHECKING
 import warnings
 
+from mariadb.impl.completion import Completion
+from mariadb.impl.configuration import Configuration
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
 
 from .impl.result import AsyncResult
@@ -52,7 +54,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     # Initialization and Lifecycle
     # =========================================================================
 
-    def __init__(self, connection: 'AsyncConnection', **kwargs: Any) -> None:
+    def __init__(self, connection: 'AsyncConnection', configuration: Configuration, **kwargs: Any) -> None:
         """
         Initialize asynchronous cursor with a connection
 
@@ -63,7 +65,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 - named_tuple: Return rows as named tuples
                 - dictionary: Return rows as dictionaries
         """
-        super().__init__(connection, **kwargs)
+        super().__init__(connection, configuration, **kwargs)
 
     async def close(self) -> None:  # type: ignore[override]
         """
@@ -73,7 +75,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         After closing, the cursor cannot be used anymore.
         """
         if not self._closed:
-            client = self.connection._client
+            client = self.connection._client # pyright: ignore[reportPrivateUsage]
             if self._stmt:
                 # Release cached statement reference
                 if client.prepared_statement_cache is not None:
@@ -83,15 +85,9 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             # Close the per-cursor prepared statement (if connection cache off).
             self._close_local_stmt_cache()
 
-            # Consume any remaining streaming
-            if (self._result is not None and self._result.streaming()
-                    and client._active_streaming_result is self._result):
-                try:
-                    while await self.nextset() is not None:
-                        pass
-                except Exception:
-                    pass  # Ignore errors during close
-                client._active_streaming_result = None
+            # Drain any remaining streaming result(s) so the connection is left
+            # ready for the next command.
+            await client.drain_streaming_result(self._result, self._use_binary, False)
 
             self._closed = True
             self.arraysize = 1
@@ -130,7 +126,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         self._check_closed()
 
         # Validate SQL type
-        if not isinstance(sql, str):
+        if not isinstance(sql, str): # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError("SQL statement must be a string")
         if (not sql):
             raise ProgrammingError("Empty SQL statement")
@@ -143,6 +139,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             if buffered is not None:
                 self._buffered = buffered
 
+            client = self.connection._client # pyright: ignore[reportPrivateUsage]
             if data:
                 if isinstance(data, list):
                     parameters = data
@@ -154,24 +151,20 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 else:
                     raise ProgrammingError(f"wrong parameter type")
 
-                client = self.connection._client
-                config = self._config or self.connection._configuration
+                
                 if not isinstance(parameters, dict) and self._use_binary:  # type: ignore[unreachable]
                     from .impl.message.client.execute_packet import ExecutePacket
                     execute_packet = ExecutePacket(None, parameters, sql)
-                    self._completions = (await client.execute_stmt(sql, [execute_packet], config, self._buffered, self._resolve_stmt_cache()))[0]
+                    self._completions = (await client.execute_stmt(sql, [execute_packet], self._config, self._buffered, self._resolve_stmt_cache()))[0]
                 else:
                     # Named parameters use text protocol with substitution
                     no_backslash_escapes = (client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
                     query_packet = QueryPacket.from_substitute(sql, parameters, no_backslash_escapes)
-                    self._completions = await client.execute(query_packet, config, self._buffered)
-
+                    self._completions = await client.execute(query_packet, self._config, self._buffered)
             else:
-                client = self.connection._client
-                config = self._config or self.connection._configuration
                 # Use simple query packet
                 query_packet = QueryPacket.from_sql(sql)
-                self._completions = await client.execute(query_packet, config, self._buffered)
+                self._completions = await client.execute(query_packet, self._config, self._buffered)
 
             self._completion_index = 0
             self._current_completion = self._completions[0]
@@ -198,7 +191,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         self._check_closed()
 
         # Validate SQL type
-        if not isinstance(sql, str):
+        if not isinstance(sql, str): # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError("SQL statement must be a string")
 
         # Consume any pending streaming results before executing new query
@@ -206,7 +199,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             await self._result.fetch_remaining()  # type: ignore[attr-defined]
 
         # Check if data is None or not an array-like type
-        if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):
+        if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)): # pyright: ignore[reportUnnecessaryComparison]
             raise ProgrammingError("No data provided")
 
         try:
@@ -219,7 +212,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             # Reorder parameters if needed (for named/pyformat styles)
             if param_names is not None:
                 # Named parameters - reorder each parameter set according to param_names
-                reordered_data = []
+                reordered_data : List[List[Any]] = []
                 for param_set in data:
                     if isinstance(param_set, dict):
                         reordered = [param_set.get(name) for name in param_names]
@@ -230,8 +223,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
 
             # Check if server supports COM_STMT_BULK_EXECUTE
             from mariadb_shared import constants
-            client = self.connection._client
-            config = self._config or self.connection._configuration
+            client = self.connection._client # pyright: ignore[reportPrivateUsage]
+
             context = client.context
 
             # Use BULK_UNIT_RESULTS capability (MariaDB 11.5+) instead of BULK_OPERATIONS
@@ -241,14 +234,14 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             has_parameters = len(data) > 0 and any(len(params) > 0 for params in data)
             use_bulk = (context.has_capability(constants.CAPABILITY.BULK_UNIT_RESULTS) and
                        has_parameters)
-
+            completions : List[List[Completion]] 
             # Use binary protocol with normalized SQL (always qmark now)
             if use_bulk or self._use_binary:
                 if use_bulk and self._can_use_bulk_execute(data):  # type: ignore[arg-type]
                     # Use COM_STMT_BULK_EXECUTE for efficient bulk execution
                     from .impl.message.client.bulk_execute_packet import BulkExecutePacket
                     bulk_packet = BulkExecutePacket(None, data, normalized_sql)  # type: ignore[arg-type]
-                    self._completions = (await client.execute_stmt(normalized_sql, [bulk_packet], config, True, self._resolve_stmt_cache()))[0]
+                    self._completions = (await client.execute_stmt(normalized_sql, [bulk_packet], self._config, True, self._resolve_stmt_cache()))[0]
                     self._completion_index = 0
                 else:
                     # Fallback to individual COM_STMT_EXECUTE packets (when bulk not available but binary forced)
@@ -258,7 +251,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                     execute_packets = [ExecutePacket(None, params, normalized_sql) for params in data]  # type: ignore[arg-type]
 
                     # Execute all at once with single prepare
-                    completions = await client.execute_stmt(normalized_sql, execute_packets, config, True, self._resolve_stmt_cache())  # type: ignore[arg-type]
+                    completions = await client.execute_stmt(normalized_sql, execute_packets, self._config, True, self._resolve_stmt_cache())  # type: ignore[arg-type]
 
                     self._process_executemany_completions(completions)
             else:
@@ -266,14 +259,14 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 # Get NO_BACKSLASH_ESCAPES status from connection
                 no_backslash_escapes = (client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
 
-                completions = [None] * len(data)  # type: ignore[list-item]
+                completions = []
                 for i in range(len(data)):
                     params = data[i]
                     parameters = list(params) if params else []
                     # Use normalized_sql (qmark style) since parameters are already reordered
                     query_packet = QueryPacket.from_substitute(normalized_sql, parameters, no_backslash_escapes)
                     # Text-protocol fallback has no prepared statement to thread.
-                    completions[i] = await client.execute(query_packet, config, True, None)
+                    completions.append(await client.execute(query_packet, self._config, True, None))
 
                 self._process_executemany_completions(completions)
             if self._completions:
@@ -294,7 +287,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     # Result Fetching Methods
     # =========================================================================
 
-    async def fetchone(self) -> Any | None:
+    async def fetchone(self) -> tuple[Any, ...] | Dict[str, Any] | None:  # type: ignore[override]
         """
         Fetch the next row from the result set
 
@@ -318,18 +311,18 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             raise ProgrammingError("No result set to fetch from")
 
         # Allow fetching from buffered results even if connection is closed
-        if self.connection._closed and result.streaming():
+        if self.connection.is_closed and result.streaming():
             raise ProgrammingError("Connection is closed")
 
         # Delegate to Result object
         row = await result.fetch_one()
         if row is not None:
             # Apply row formatting
-            row = self._apply_row_formatting([row])[0]
+            return self._apply_row_formatting([row])[0]
         return row
 
 
-    async def fetchmany(self, size: int | None = None) -> List[Any]:  # type: ignore[override]
+    async def fetchmany(self, size: int | None = None) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:  # type: ignore[override]
         """
         Fetch the next set of rows from the result set
 
@@ -354,14 +347,14 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             raise ProgrammingError("No result set to fetch from")
 
         # Allow fetching from buffered results even if connection is closed
-        if self.connection._closed and result.streaming():
+        if self.connection.is_closed and result.streaming():
             raise ProgrammingError("Connection is closed")
 
         if size is None:
             size = self.arraysize
 
         # Optimize: fetch rows directly instead of calling fetchone repeatedly
-        rows = []
+        rows : List[tuple[Any, ...]]= []
         for _ in range(size):
             row = await result.fetch_one()
             if row is None:
@@ -372,7 +365,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             return self._apply_row_formatting(rows)
         return []
 
-    async def fetchall(self) -> List[Any]:  # type: ignore[override]
+    async def fetchall(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:  # type: ignore[override]
         """
         Fetch all remaining rows from the result set
 
@@ -397,7 +390,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             raise ProgrammingError("No result set to fetch from")
 
         # Allow fetching from buffered results even if connection is closed
-        if self.connection._closed and result.streaming():
+        if self.connection.is_closed and result.streaming():
             raise ProgrammingError("Connection is closed")
 
         # Delegate to Result object
@@ -429,7 +422,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
         if result is None:
             raise ProgrammingError("Cursor doesn't have a result set")
 
-        if self.connection._closed and result.streaming():
+        if self.connection.is_closed and result.streaming():
             raise ProgrammingError("Cursor is closed")
 
         # For streaming results, only forward relative scrolling is allowed
@@ -465,12 +458,11 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             return True
 
         # Streaming (unbuffered) cursor: read the next set from the wire.
-        client = self.connection._client
+        client = self.connection._client # pyright: ignore[reportPrivateUsage]
         completion = self._current_completion
         result_set = completion.result_set if (completion is not None and completion.has_result_set()) else None
         if result_set is not None and result_set.streaming():
-            await result_set.fetch_remaining()  # type: ignore[attr-defined]  # streaming() guarantees a streaming result
-            client._active_streaming_result = None
+            await client.drain_streaming_result(self._result, self._use_binary, True)
 
         if (client.context.server_status & MORE_RESULTS_EXIST) == 0:
             self._current_completion = None
@@ -480,8 +472,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
                 "nextset() across multiple result sets is not supported on a "
                 "binary streaming cursor (binary=True, buffered=False); use a "
                 "buffered cursor for multi-result binary statements")
-        config = self._config or self.connection._configuration
-        next_completion = await client.read_next_result(False, config)
+        next_completion = await client.read_next_result(False, self._config)
         if next_completion is None:
             self._current_completion = None
             return None
@@ -526,9 +517,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
             # Use execute_stmt which handles prepared statement caching internally
             from .impl.message.client.execute_packet import ExecutePacket
             execute_packet = ExecutePacket(None, list(args), call_sql)
-            client = self.connection._client
-            config = self._config or self.connection._configuration
-            self._completions = (await client.execute_stmt(call_sql, [execute_packet], config, True, self._resolve_stmt_cache()))[0]
+            client = self.connection._client # pyright: ignore[reportPrivateUsage]
+            self._completions = (await client.execute_stmt(call_sql, [execute_packet], self._config, True, self._resolve_stmt_cache()))[0]
             self._completion_index = 0
             self._current_completion = self._completions[0]
             return None  # type: ignore[return-value]  # Match C extension behavior
@@ -547,12 +537,12 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     # =========================================================================
 
     def _create_complete_result(self, columns: 'ColumnsDefinition', column_count: int,
-                               rows: List[tuple]) -> 'AsyncCompleteResult':
+                               rows: List[tuple[Any, ...]]) -> 'AsyncCompleteResult':
         """Create an asynchronous complete result"""
         from .impl.result import AsyncCompleteResult
         return AsyncCompleteResult(
             columns=columns,
             column_count=column_count,
-            config=self._config,  # type: ignore[arg-type]
+            config=self._config,
             rows=rows
         )

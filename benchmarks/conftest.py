@@ -9,7 +9,6 @@ Benchmark configuration and fixtures for comparing mariadb, mariadb_c, and pymys
 """
 
 import os
-import sys
 from types import ModuleType
 from typing import Any, Iterator
 import pytest
@@ -67,21 +66,21 @@ def get_driver_module(driver_name: str) -> Any:
         return pymysql
     elif driver_name in ['mysql_connector', 'mysql_connector_pure']:
         global _mysql_connector_impl
-        import mysql.connector
+        import mysql.connector # pyright: ignore[reportMissingImports]
         if driver_name == 'mysql_connector_pure':
             print(f"\n{driver_name} using implementation: pure Python (use_pure=True)")
         else:
             # Detect if using C extension or pure Python implementation
             try:
-                import _mysql_connector
-                from mysql.connector.connection_cext import CMySQLConnection
+                import _mysql_connector # type: ignore
+                from mysql.connector.connection_cext import CMySQLConnection # type: ignore
                 _mysql_connector_impl = "C"
                 impl_type = "C extension (CMySQLConnection)"
             except ImportError:
                 _mysql_connector_impl = "Python"
                 impl_type = "pure Python (MySQLConnection)"
             print(f"\n{driver_name} using implementation: {impl_type}")
-        return mysql.connector
+        return mysql.connector # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
     else:
         raise ValueError(f"Unknown driver: {driver_name}")
 
@@ -93,21 +92,18 @@ def _get_driver_ids() -> list[str]:
     # Detect mysql_connector implementation type early
     if _mysql_connector_impl is None:
         try:
-            import mysql.connector
-            # Create a test connection to see which implementation is actually used
-            # Check the default connection class
-            test_config = {'host': 'localhost', 'user': 'root'}
+            import mysql.connector # pyright: ignore[reportUnusedImport, reportMissingImports]
             try:
                 # Try to determine from connection class without actually connecting
                 # Check if CMySQLConnection is available and will be used by default
-                from mysql.connector.connection_cext import CMySQLConnection
+                from mysql.connector.connection_cext import CMySQLConnection # pyright: ignore[reportMissingImports, reportUnusedImport, reportUnknownVariableType]
                 _mysql_connector_impl = "C"
             except ImportError:
                 _mysql_connector_impl = "Python"
         except Exception:
             # Fallback: check if _mysql_connector module exists
             try:
-                import _mysql_connector
+                import _mysql_connector # pyright: ignore[reportUnusedImport, reportMissingImports]
                 _mysql_connector_impl = "C"
             except ImportError:
                 _mysql_connector_impl = "Python"

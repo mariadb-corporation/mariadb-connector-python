@@ -95,28 +95,28 @@ class ExecutePacket(ClientMessage):
                 
                 # Check null
                 if (param is None or 
-                          (isinstance(param, array.array) and param.typecode == 'f' and len(param) == 0) or
+                          (isinstance(param, array.array) and param.typecode == 'f' and len(param) == 0) or # pyright: ignore[reportUnknownArgumentType]
                           isinstance(param, MrdbIndicator)):
                     combined_buffer[i >> 3] |= (1 << (i & 7))
                 else:
                     # Get type
-                    param_type = _type(param)
-                    type_func = type_tbl.get(param_type)
+                    param_type = _type(param) # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
+                    type_func = type_tbl.get(param_type) # pyright: ignore[reportUnknownArgumentType]
                     if type_func is not None:
                         field_type = type_func(param)
                     else:
                         field_type = self._get_parameter_type(param)
 
                     combined_buffer[type_offset + i * 2] = field_type
-                    if field_type == _FT_LONGLONG and param > _INT64_MAX:
+                    if field_type == _FT_LONGLONG and param > _INT64_MAX: # pyright: ignore[reportOperatorIssue]
                         combined_buffer[type_offset + i * 2 + 1] = _UNSIGNED_FLAG
 
                     # Write parameter value immediately
-                    write_func = write_tbl.get(param_type)
+                    write_func = write_tbl.get(param_type) # pyright: ignore[reportUnknownArgumentType]
                     if write_func is not None:
                         write_func(self, stream, param)
                     else:
-                        stream.write_length_encoded_string(str(param))
+                        stream.write_length_encoded_string(str(param)) # pyright: ignore[reportUnknownArgumentType]
             
             # Get payload and insert combined buffer at position 4
             payload = stream.get_payload()

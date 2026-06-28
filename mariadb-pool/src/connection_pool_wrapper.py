@@ -42,7 +42,7 @@ class ConnectionPoolWrapper:
     # Class-level registry for pools
     _registry: Dict[str, 'ConnectionPoolWrapper'] = {}
     
-    def __init__(self, connection_factory: Callable, pool_name: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, connection_factory: Callable[..., 'SyncConnectionCommon'], pool_name: Optional[str] = None, **kwargs: Any) -> None:
         """
         Initialize connection pool
         

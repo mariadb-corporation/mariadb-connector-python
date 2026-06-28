@@ -35,7 +35,7 @@ from ..message.client.quit_packet import QuitPacket
 from ..message.client.change_user_packet import ChangeUserPacket
 from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..completion import Completion
-from ..result import SyncStreamingResult, SyncCompleteResult
+from ..result import SyncResult, SyncStreamingResult, SyncCompleteResult
 from ...exceptions import OperationalError, DatabaseError, ProgrammingError
 from mariadb_shared.constants import STATUS
 from mariadb_shared import constants
@@ -888,6 +888,24 @@ class SyncClient(BaseClient):
                 raise e
             except Exception as e:
                 raise OperationalError(f"Reading next result set failed: {e}")
+
+    def drain_streaming_result(self, result: SyncResult | None, is_binary: bool, first_only: bool) -> None:
+        """Drain a streaming result when a cursor is closed mid-stream."""
+        if (result is self._active_streaming_result
+                and isinstance(result, SyncStreamingResult)):
+            try:
+                result.fetch_remaining()
+                if first_only:
+                    return
+                while not is_binary and (self.context.server_status & _MORE_RESULTS_EXIST) != 0:
+                    completion = self.read_next_result(False, self.configuration)
+                    next_result = completion.result_set if (completion is not None and completion.has_result_set()) else None
+                    if not isinstance(next_result, SyncStreamingResult):
+                        break
+                    next_result.fetch_remaining()
+            except Exception:
+                pass  # Ignore errors during close
+            self._active_streaming_result = None
 
     def _handle_local_infile(self, packet: memoryview, sql: str | None, remaining_packets: list[tuple[int, int]] | None) -> tuple[OkPacket, list[tuple[int, int]] | None]:
 

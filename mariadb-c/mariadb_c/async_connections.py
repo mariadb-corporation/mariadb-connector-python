@@ -59,6 +59,11 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             raise ProgrammingError("Invalid connection or "
                                            "not connected")
 
+    @property
+    def is_closed(self) -> bool:
+        """Whether the connection has been closed."""
+        return self._closed
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Initialize async connection (does not connect yet).

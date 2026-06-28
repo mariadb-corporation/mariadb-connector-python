@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Sequence, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Sequence, Type
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -72,7 +72,7 @@ class AsyncCursorCommon(ABC):
     # Result Fetching Methods
     # =========================================================================
     @abstractmethod    
-    async def fetchone(self) -> Any | None:
+    async def fetchone(self) -> tuple[Any, ...] | Dict[str, Any] | None:
         """Fetch the next row of a query result set
         
         Returns:
@@ -84,12 +84,12 @@ class AsyncCursorCommon(ABC):
         ...
 
     @abstractmethod
-    async def fetchmany(self, size: int | None = None) -> List[Any]:
+    async def fetchmany(self, size: int | None = None) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """Fetch the next set of rows of a query result"""
         ...
         
     @abstractmethod
-    async def fetchall(self) -> List[Any]:
+    async def fetchall(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """Fetch all remaining rows of a query result"""
         ...
     
@@ -152,7 +152,7 @@ class AsyncCursorCommon(ABC):
         """
         return self
         
-    async def __anext__(self) -> Any:
+    async def __anext__(self) -> tuple[Any, ...] | Dict[str, Any] | None:
         """
         Return the next row from the result set
         
@@ -191,10 +191,9 @@ class AsyncCursorCommon(ABC):
         """Async context manager entry"""
         return self
         
-    async def __aexit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: TracebackType | None) -> bool:
-        """Async context manager exit"""
+    async def __aexit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: TracebackType | None) -> None:
+        """Async context manager exit."""
         await self.close()
-        return False
     
     # Sync context manager methods raise error
     def __enter__(self) -> None:

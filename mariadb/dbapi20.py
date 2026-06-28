@@ -23,7 +23,7 @@ threadsafety = 3
 # Type System
 # ==============================================================================
 
-class DbApiType(frozenset):
+class DbApiType(frozenset[int]):
     """
     Immutable set for DB-API 2.0 type checking.
 

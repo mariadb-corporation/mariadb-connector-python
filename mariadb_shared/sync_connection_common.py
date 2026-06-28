@@ -9,7 +9,7 @@ connection implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, List, Type, TYPE_CHECKING
+from typing import Any, Dict, List, Type, TYPE_CHECKING
 
 from .sync_cursor_common import SyncCursorCommon
 from .constants import STATUS, TPC_STATE
@@ -29,6 +29,12 @@ class SyncConnectionCommon(ABC):
         Raises:
             ProgrammingError: If connection is closed
         """
+        ...
+
+    @property
+    @abstractmethod
+    def is_closed(self) -> bool:
+        """Whether the connection has been closed."""
         ...
 
     @abstractmethod
@@ -141,7 +147,7 @@ class SyncConnectionCommon(ABC):
             OperationalError: If kill fails
         """
         self._check_closed()
-        if not isinstance(connection_id, int):
+        if not isinstance(connection_id, int): # pyright: ignore[reportUnnecessaryIsInstance]
             raise ProgrammingError("connection_id must be of type int.")        
         with self.cursor() as cursor:
             cursor.execute(f"KILL {connection_id}")
@@ -162,7 +168,7 @@ class SyncConnectionCommon(ABC):
         self._check_closed()
         if self._xid is not None:
             raise ProgrammingError("Cannot commit during XA transaction. Use tpc_commit() instead.")
-        if (self.server_status & STATUS.IN_TRANS) > 0:  # type: ignore[unreachable]
+        if (self.server_status & STATUS.IN_TRANS) > 0:
             with self.cursor() as cursor:
                 cursor.execute("COMMIT")
 
@@ -181,7 +187,7 @@ class SyncConnectionCommon(ABC):
         self._check_closed()
         if self._xid is not None:
             raise ProgrammingError("Cannot rollback during XA transaction. Use tpc_rollback() instead.")
-        with self.cursor() as cursor:  # type: ignore[unreachable]
+        with self.cursor() as cursor:
             cursor.execute("ROLLBACK")
 
     def begin(self) -> None:
@@ -233,7 +239,7 @@ class SyncConnectionCommon(ABC):
                 cursor.execute(f"SET autocommit={1 if bool(value) else 0}")
 
     
-    def show_warnings(self) -> List[tuple] | None:
+    def show_warnings(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]] | None:
         """
         Get warnings from the last executed command
         
@@ -296,14 +302,14 @@ class SyncConnectionCommon(ABC):
         """
 
         self._check_closed()
-        if not isinstance(xid, Xid):
+        if not isinstance(xid, Xid): # pyright: ignore[reportUnnecessaryIsInstance]
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s", type(xid).__name__)
         with self.cursor() as cursor:
             cursor.execute("XA BEGIN '%s','%s',%s" % (xid[1], xid[2], xid[0]))
 
         self.tpc_state = TPC_STATE.XID
-        self._xid = xid
+        self._xid : Xid | None = xid
 
     def tpc_commit(self, xid: Xid | None = None) -> None:
         """
@@ -329,13 +335,14 @@ class SyncConnectionCommon(ABC):
 
         if self.tpc_state == TPC_STATE.NONE:
             raise ProgrammingError("Transaction not started.")
+
         if xid is None and self.tpc_state != TPC_STATE.PREPARE:
             raise ProgrammingError("Transaction is not prepared.")
 
         if not xid:
             xid = self._xid
 
-        if xid and not isinstance(xid, Xid):
+        if not isinstance(xid, Xid):
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s" % type(xid).__name__)
 
@@ -348,7 +355,7 @@ class SyncConnectionCommon(ABC):
                 else:
                     cursor.execute("XA COMMIT '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             finally:
-                self._xid = None  # type: ignore[assignment]
+                self._xid = None
                 self.tpc_state = TPC_STATE.NONE
 
     def tpc_prepare(self) -> None:
@@ -362,19 +369,20 @@ class SyncConnectionCommon(ABC):
         """
 
         self._check_closed()
-        if self.tpc_state == TPC_STATE.NONE:
+        xid = self._xid
+        
+        if not xid or self.tpc_state == TPC_STATE.NONE:
             raise ProgrammingError("Transaction not started.")
         if self.tpc_state == TPC_STATE.PREPARE:
             raise ProgrammingError("Transaction is already in "
                                            "prepared state.")
 
-        xid = self._xid
         with self.cursor() as cursor:
             try:
                 cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
                 cursor.execute("XA PREPARE '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
-                self._xid = None  # type: ignore[assignment]
+                self._xid = None
                 self.tpc_state = TPC_STATE.NONE
                 raise
         self.tpc_state = TPC_STATE.PREPARE
@@ -394,14 +402,14 @@ class SyncConnectionCommon(ABC):
         """
 
         self._check_closed()
-        if self.tpc_state == TPC_STATE.NONE:
-            raise ProgrammingError("Transaction not started.")
 
         if not xid:
             xid = self._xid
 
+        if self.tpc_state == TPC_STATE.NONE or xid is None:
+            raise ProgrammingError("Transaction not started.")
 
-        if xid and not isinstance(xid, Xid):
+        if not isinstance(xid, Xid): # pyright: ignore[reportUnnecessaryIsInstance]
             raise ProgrammingError("argument 1 must be xid "
                                            "not %s" % type(xid).__name__)
         with self.cursor() as cursor:
@@ -410,13 +418,13 @@ class SyncConnectionCommon(ABC):
                     cursor.execute("XA END '%s','%s',%s" % (xid[1], xid[2], xid[0]))
                 cursor.execute("XA ROLLBACK '%s','%s',%s" % (xid[1], xid[2], xid[0]))
             except Error:
-                self._xid = None  # type: ignore[assignment]
+                self._xid = None
                 self.tpc_state = TPC_STATE.NONE
                 raise
-        self._xid = None  # type: ignore[assignment]
+        self._xid = None
         self.tpc_state = TPC_STATE.NONE
 
-    def tpc_recover(self) -> List[tuple]:
+    def tpc_recover(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """
         Returns a list of pending transaction IDs suitable for use with
         tpc_commit(xid) or .tpc_rollback(xid).

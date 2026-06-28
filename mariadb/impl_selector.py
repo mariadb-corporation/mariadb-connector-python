@@ -12,6 +12,8 @@ from typing import Any, Type
 
 # Global variables to store the selected implementation
 __impl__: str = ""
+# These hold the selected implementation *module* (e.g. mariadb_c.connections),
+# not a connection instance — the class lives at e.g. sync_connection.SyncConnection.
 sync_connection: Any = None
 async_connection: Any = None
 Cursor: Type[Any] | None = None
@@ -38,7 +40,7 @@ def _select_implementation() -> None:
     global __impl__, sync_connection, async_connection, Cursor, SyncCursor, AsyncCursor
     
     impl = os.environ.get("MARIADB_PYTHON_CONNECTOR", "").strip().lower()
-    attempts = []
+    attempts: list[str] = []
     
     # PyPy 3.11+ has cpyext stack overflow issues with C extension async operations
     # Automatically use pure Python implementation on PyPy unless explicitly overridden
@@ -61,7 +63,7 @@ def _select_implementation() -> None:
             import mariadb_c.connections
             import mariadb_c.cursors
             # C extension for sync
-            sync_connection = mariadb_c.connections
+            sync_connection = mariadb_c.connections # pyright: ignore[reportAssignmentType]
             Cursor = mariadb_c.cursors.Cursor
             SyncCursor = mariadb_c.cursors.Cursor
             __impl__ = "c"
@@ -90,20 +92,20 @@ def _select_implementation() -> None:
     # Try binary wheel  (best for end users - precompiled with deps)
     if not impl or impl in ("binary", "mariadb_binary"):
         try:
-            import mariadb_binary.connections
-            import mariadb_binary.cursors
+            import mariadb_binary.connections # pyright: ignore[reportMissingImports]
+            import mariadb_binary.cursors # pyright: ignore[reportMissingImports]
             # Binary wheel for sync
-            sync_connection = mariadb_binary.connections
-            Cursor = mariadb_binary.cursors.Cursor
-            SyncCursor = mariadb_binary.cursors.Cursor
+            sync_connection = mariadb_binary.connections # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+            Cursor = mariadb_binary.cursors.Cursor # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+            SyncCursor = mariadb_binary.cursors.Cursor # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
             __impl__ = "binary"
             
             # Try to import binary async implementation first
             try:
-                import mariadb_binary.async_connections
-                import mariadb_binary.async_cursors
-                async_connection = mariadb_binary.async_connections
-                AsyncCursor = mariadb_binary.async_cursors.AsyncCursor
+                import mariadb_binary.async_connections # pyright: ignore[reportMissingImports]
+                import mariadb_binary.async_cursors # pyright: ignore[reportMissingImports]
+                async_connection = mariadb_binary.async_connections # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+                AsyncCursor = mariadb_binary.async_cursors.AsyncCursor # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
             except Exception:
                 # Fall back to pure Python async implementation
                 try:

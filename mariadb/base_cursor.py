@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+from mariadb.impl.client.base_client import BaseClient, PreparedStatementLRUCache
+from mariadb.impl.configuration import Configuration
+
 """
 Base cursor implementation with common functionality for sync and async cursors
 """
@@ -10,7 +13,7 @@ Base cursor implementation with common functionality for sync and async cursors
 import copy
 from abc import ABC, abstractmethod
 from collections import namedtuple
-from typing import Sequence, List, Any, Dict, TYPE_CHECKING, TypeVar, Generic
+from typing import Sequence, List, Any, Dict, TYPE_CHECKING, TypeVar, Generic, Callable, TypedDict
 
 from .impl.message.server.prepare_stmt_packet import PrepareStmtPacket
 
@@ -38,6 +41,31 @@ RESULT_DICTIONARY = 2
 
 TResult = TypeVar('TResult', bound=Result)
 TConnection = TypeVar('TConnection', bound='BaseConnection')
+
+# One column's DB-API (PEP 249) description row. The first seven fields are the
+# standard ones (name, type_code, display_size, internal_size, precision, scale,
+# null_ok); the remaining four are MariaDB extensions (flags, table, org_name,
+# org_table).
+ColumnDescription = tuple[str, int, int, int, int, int, bool, int, str, str, str]
+
+
+class ColumnMetadata(TypedDict):
+    """Per-column result metadata (the ``cursor.metadata`` mapping). Each value
+    is a tuple with one entry per column, in column order."""
+    catalog: tuple[str, ...]
+    schema: tuple[str, ...]
+    field: tuple[str, ...]
+    org_field: tuple[str, ...]
+    table: tuple[str, ...]
+    org_table: tuple[str, ...]
+    type: tuple[int, ...]
+    charset: tuple[int, ...]
+    length: tuple[int, ...]
+    max_length: tuple[int, ...]
+    decimals: tuple[int, ...]
+    flags: tuple[int, ...]
+    ext_type_or_format: tuple[int, ...]
+
 
 # Module-level lookup tables — built once at import, not rebuilt on every call.
 # Both are used in the per-column metadata/description paths below.
@@ -91,7 +119,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         '_local_stmt_cache',
     )
 
-    def __init__(self, connection: TConnection, **kwargs: Any) -> None:
+    def __init__(self, connection: TConnection, configuration: Configuration, **kwargs: Any) -> None:
         """
         Initialize cursor with a connection
         
@@ -105,18 +133,17 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._completions: List[Completion] = []
         self._completion_index: int = 0
         self._current_completion: Completion | None = None
-        self._config = None
         self._exception_factory = ExceptionFactory()
         self._buffered: bool = bool(kwargs.pop('buffered', True))
-        self._use_binary: bool = connection._configuration.binary
+        self._use_binary: bool = configuration.binary
         self._stmt: PrepareStmtPacket | None = None
         # Per-cursor single-statement reuse cache. Only created (lazily) when the
         # connection-level prepared-statement cache is disabled: it keeps the
         # last prepared statement for this cursor, reusing it while the SQL is
         # unchanged and closing it when a different statement is executed.
-        self._local_stmt_cache: Any = None
+        self._local_stmt_cache: PreparedStatementLRUCache | None = None
         if kwargs:
-            self._config = copy.copy(self.connection._configuration)
+            self._config = copy.copy(configuration)
             
             rtype = kwargs.pop("named_tuple", False)
             if rtype:
@@ -130,7 +157,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             if "binary" in kwargs:
                 self._use_binary = bool(kwargs.pop("binary"))
         else:
-            self._config = self.connection._configuration        
+            self._config = configuration        
 
     def _check_closed(self) -> None:
         """Check if cursor is closed"""
@@ -141,7 +168,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                 sql_state='42000'
             )
 
-    def _resolve_stmt_cache(self) -> Any:
+    def _resolve_stmt_cache(self) -> PreparedStatementLRUCache | None:
         """Return the prepared-statement cache to use for binary execution.
 
         When the connection-level cache is enabled, returns ``None`` so the
@@ -150,7 +177,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         cache, giving "keep the last prepared statement, reuse it while the SQL
         is unchanged, close it otherwise" semantics scoped to this cursor.
         """
-        client = self.connection._client
+        client: BaseClient = self.connection._client  # pyright: ignore[reportPrivateUsage]
         if client.prepared_statement_cache is not None:
             return None
         if self._local_stmt_cache is None:
@@ -187,7 +214,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     @property
     def closed(self) -> bool:
         """Return True if cursor is closed"""
-        return self._closed or self.connection._closed
+        return self._closed or self.connection.is_closed
 
     @property
     def field_count(self) -> int:
@@ -198,7 +225,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         return 0
 
     @property
-    def description(self) -> tuple | None:
+    def description(self) -> tuple[ColumnDescription, ...] | None:
         """Get cursor description (computed on-demand from result set columns)"""
         if not self._result or not hasattr(self._result, 'columns'):
             return None
@@ -214,7 +241,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         return None
 
     @property
-    def metadata(self) -> Dict[str, tuple] | None:
+    def metadata(self) -> ColumnMetadata | None:
         """Get metadata information for result set columns"""
         # Inline _check_closed for performance
         if self._closed:
@@ -253,9 +280,9 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         flags_tuple = tuple(columns.flags)
         
         # Calculate extended field type - module-level dict lookup (see _EXT_TYPE_NAME_MAP)
-        ext_type_list = []
+        ext_type_list : List[int] = []
         for i in range(n):
-            ext_field_type = EXT_FIELD_TYPE.NONE
+            ext_field_type : int = EXT_FIELD_TYPE.NONE
             etf = columns.ext_type_formats[i]
             etn = columns.ext_type_names[i]
             if etf and etf.lower() == b'json':
@@ -342,10 +369,9 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     @property
     def _resulttype(self) -> int:
         """Current result type"""
-        config = self._config or self.connection._configuration
-        if config.named_tuple:
+        if self._config.named_tuple:
             return RESULT_NAMEDTUPLE
-        elif config.dictionary:
+        elif self._config.dictionary:
             return RESULT_DICTIONARY
         return RESULT_TUPLE
 
@@ -354,7 +380,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     # =========================================================================
 
     @abstractmethod
-    def callproc(self, procname: str, args: Sequence[Any] = ()) -> Sequence[Any]:
+    def callproc(self, procname: str, args: Sequence[Any] = ()) -> None:
         """Call a stored procedure"""
         ...
 
@@ -374,17 +400,17 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         ...
 
     @abstractmethod
-    def fetchall(self) -> List[Any]:
+    def fetchall(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """Fetch all remaining rows"""
         ...
 
     @abstractmethod
-    def fetchmany(self, size: int | None = None) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """Fetch the next set of rows"""
         ...
 
     @abstractmethod
-    def fetchone(self) -> Any | None:
+    def fetchone(self) -> tuple[Any, ...] | Dict[str, Any] | None:
         """Fetch the next row"""
         ...
 
@@ -422,7 +448,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
     # =========================================================================
     # Helper Methods (Data Transformation)
     # =========================================================================
-    def _can_use_bulk_execute(self, parameter_sets: list) -> bool:
+    def _can_use_bulk_execute(self, parameter_sets: List[List[Any]]) -> bool:
         """
         Check if all parameter sets have compatible types for COM_STMT_BULK_EXECUTE.
         
@@ -471,7 +497,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                     if param is not None and not isinstance(param, MrdbIndicator):
                         if reference_type is None:
                             # First real value found - set as reference
-                            reference_type = type(param)
+                            reference_type = type(param) # pyright: ignore[reportUnknownVariableType]
                         elif type(param) != reference_type:
                             # Type mismatch found
                             return False
@@ -501,14 +527,14 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                     break
                 if c.affected_rows >= 0:
                     firstCompletion[i].affected_rows += c.affected_rows
-                if c.insert_id is not None and c.insert_id > 0:
+                if c.insert_id > 0:
                     firstCompletion[i].insert_id = c.insert_id
                 if c.has_result_set():
                     firstCompletion[i].result_set.rows.extend(c.result_set.rows)  # type: ignore[union-attr]
         self._completions = firstCompletion
         self._completion_index = 0
     
-    def _build_description(self, columns: 'ColumnsDefinition') -> tuple | None:
+    def _build_description(self, columns: 'ColumnsDefinition') -> tuple[ColumnDescription, ...] | None:
         """Build cursor description tuple from column definitions"""
         if not columns or columns.count == 0:
             return None
@@ -521,7 +547,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         col_decimals = columns.decimals_arr
         col_ext_type_formats = columns.ext_type_formats
         
-        description = []
+        description: list[ColumnDescription] = []
         for i in range(n):
             # Determine column type (override for JSON)
             col_type = JSON if col_ext_type_formats[i] == b'json' else col_types[i]
@@ -560,9 +586,14 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         return tuple(description)
     
-    def _create_named_tuple_class(self, columns: 'ColumnsDefinition') -> type:
-        """Create a namedtuple class from column definitions"""
-        
+    def _create_named_tuple_class(self, columns: 'ColumnsDefinition') -> Callable[..., tuple[Any, ...]]:
+        """Create a namedtuple class from column definitions.
+
+        Typed as a callable row factory rather than ``type[tuple[...]]``: the
+        fields are dynamic (from the result columns), so the per-field
+        constructor ``Row(*values)`` can't be expressed as a tuple subtype.
+        """
+
         field_names: list[str] = []
         for i in range(columns.count):
             name = columns.get_name(i) or columns.get_org_name(i)
@@ -575,14 +606,16 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                 counter += 1
             field_names.append(name)
         
-        return namedtuple('Row', field_names)
+        # namedtuple (not typing.NamedTuple) is required: field names are only
+        # known at runtime, so the fields can't be statically typed.
+        return namedtuple('Row', field_names)  # pyright: ignore[reportUntypedNamedTuple]
     
-    def _convert_rows_to_named_tuples(self, rows: List[tuple], columns: 'ColumnsDefinition') -> List[Any]:
+    def _convert_rows_to_named_tuples(self, rows: List[tuple[Any, ...]], columns: 'ColumnsDefinition') -> List[tuple[Any, ...]]:
         """Convert regular tuples to named tuples"""
         RowClass = self._create_named_tuple_class(columns)
         return [RowClass(*row) for row in rows]
     
-    def _convert_rows_to_dictionaries(self, rows: List[tuple], columns: 'ColumnsDefinition') -> List[Dict]:
+    def _convert_rows_to_dictionaries(self, rows: List[tuple[Any, ...]], columns: 'ColumnsDefinition') -> List[Dict[str, Any]]:
         """Convert regular tuples to dictionaries"""
         field_names: list[str] = []
         for i in range(columns.count):
@@ -593,7 +626,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         
         return [dict(zip(field_names, row)) for row in rows]
     
-    def _apply_row_formatting(self, rows: List[Any]) -> List[Any]:
+    def _apply_row_formatting(self, rows: List[tuple[Any, ...]]) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
         """Apply row formatting (named_tuple or dictionary) based on configuration"""
         # Use cached _current_completion for performance
         if self._config and (self._config.named_tuple or self._config.dictionary):
