@@ -384,5 +384,76 @@ class TestBinaryOptionWithTable(unittest.TestCase):
         conn.close()
 
 
+class TestPreparedOptionCompat(unittest.TestCase):
+    """Test the deprecated 1.x 'prepared' cursor option."""
+
+    @staticmethod
+    def _prepared_cursor(conn):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            return conn.cursor(prepared=True)
+
+    def test_prepared_true_emits_deprecation_warning(self):
+        """cursor(prepared=True) warns DeprecationWarning"""
+        conn = create_connection()
+        with self.assertWarns(DeprecationWarning):
+            cursor = conn.cursor(prepared=True)
+        cursor.close()
+        conn.close()
+
+    def test_prepared_true_enables_binary(self):
+        """cursor(prepared=True) runs via the binary (prepared statement) protocol"""
+        conn = create_connection()  # binary=False default
+        cursor = self._prepared_cursor(conn)
+        self.assertTrue(cursor._use_binary)
+        cursor.execute("SELECT ? as val", (42,))
+        self.assertEqual(cursor.fetchone()[0], 42)
+        cursor.close()
+        conn.close()
+
+    def test_prepared_ignores_sql_after_first_execute(self):
+        """After the first execute() the SQL is ignored (1.x behavior)"""
+        conn = create_connection()
+        cursor = self._prepared_cursor(conn)
+        # First execute() prepares "SELECT ? as val".
+        cursor.execute("SELECT ? as val", (1,))
+        self.assertEqual(cursor.fetchone()[0], 1)
+        # A completely different SQL is ignored; the prepared statement runs.
+        cursor.execute("SELECT ? + 999 as other", (2,))
+        self.assertEqual(cursor.fetchone()[0], 2)
+        # Even an empty SQL string is accepted and ignored.
+        cursor.execute("", (3,))
+        self.assertEqual(cursor.fetchone()[0], 3)
+        cursor.close()
+        conn.close()
+
+    def test_non_prepared_cursor_honors_sql(self):
+        """A normal binary cursor honors each execute()'s SQL (contrast)"""
+        conn = create_connection()
+        cursor = conn.cursor(binary=True)
+        cursor.execute("SELECT ? as val", (1,))
+        self.assertEqual(cursor.fetchone()[0], 1)
+        cursor.execute("SELECT ? + 100 as val", (2,))
+        self.assertEqual(cursor.fetchone()[0], 102)
+        cursor.close()
+        conn.close()
+
+    def test_prepared_false_uses_text(self):
+        """cursor(prepared=False) leaves binary disabled and does not pin SQL"""
+        conn = create_connection()
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            cursor = conn.cursor(prepared=False)
+        self.assertFalse(cursor._use_binary)
+        cursor.execute("SELECT ? as val", (7,))
+        self.assertEqual(cursor.fetchone()[0], 7)
+        cursor.execute("SELECT ? + 1 as val", (7,))
+        self.assertEqual(cursor.fetchone()[0], 8)
+        cursor.close()
+        conn.close()
+
+
 if __name__ == '__main__':
     unittest.main()

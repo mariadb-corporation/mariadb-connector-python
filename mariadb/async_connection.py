@@ -96,6 +96,7 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
                 - named_tuple: Return rows as named tuples
                 - dictionary: Return rows as dictionaries
                 - buffered: Buffer all results immediately
+                - binary: Execute via the binary (prepared statement) protocol
 
         Returns:
             AsyncCursor object

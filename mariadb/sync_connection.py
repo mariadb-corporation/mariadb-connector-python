@@ -77,7 +77,12 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # typ
                 - named_tuple: Return rows as named tuples
                 - dictionary: Return rows as dictionaries
                 - buffered: Buffer all results immediately
-            
+                - binary: Execute via the binary (prepared statement) protocol
+                - prepared: Deprecated 1.x compatibility mode; the first
+                  execute() prepares the statement and later execute() calls
+                  ignore their SQL, re-running it with new parameters. Prefer
+                  ``binary=True``.
+
         Returns:
             SyncCursor object
             

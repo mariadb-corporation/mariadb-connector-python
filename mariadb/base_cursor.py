@@ -11,6 +11,7 @@ Base cursor implementation with common functionality for sync and async cursors
 """
 
 import copy
+import warnings
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from typing import Sequence, List, Any, Dict, TYPE_CHECKING, TypeVar, Generic, Callable, TypedDict
@@ -103,7 +104,11 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         TResult: The result type (SyncResult or AsyncResult)
         TConnection: The connection type (SyncConnection or AsyncConnection)
     """
-    
+
+    # Whether this cursor class honors the deprecated 1.x ``prepared`` option.
+    # Only the synchronous cursor sets this True
+    _prepared_supported: bool = False
+
     __slots__ = (
         'connection',
         '_closed',
@@ -117,6 +122,8 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         '_use_binary',
         '_stmt',
         '_local_stmt_cache',
+        '_prepared',
+        '_prepared_sql',
     )
 
     def __init__(self, connection: TConnection, configuration: Configuration, **kwargs: Any) -> None:
@@ -137,11 +144,9 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._buffered: bool = bool(kwargs.pop('buffered', True))
         self._use_binary: bool = configuration.binary
         self._stmt: PrepareStmtPacket | None = None
-        # Per-cursor single-statement reuse cache. Only created (lazily) when the
-        # connection-level prepared-statement cache is disabled: it keeps the
-        # last prepared statement for this cursor, reusing it while the SQL is
-        # unchanged and closing it when a different statement is executed.
         self._local_stmt_cache: PreparedStatementLRUCache | None = None
+        self._prepared: bool = False
+        self._prepared_sql: str | None = None
         if kwargs:
             self._config = copy.copy(configuration)
             
@@ -154,6 +159,19 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                     self._config.dictionary = rtype
             
             self._config.native_object = bool(kwargs.pop("native_object", self._config.native_object))
+            if self._prepared_supported and "prepared" in kwargs:
+                self._prepared = bool(kwargs.pop("prepared"))
+                warnings.warn(
+                    "The 'prepared' cursor option is deprecated. It keeps the "
+                    "1.x behavior where every execute() after the first ignores "
+                    "its SQL and re-runs the first prepared statement. Prefer "
+                    "'binary=True', which reuses the prepared statement while "
+                    "the SQL is unchanged without ever ignoring the SQL.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                if self._prepared:
+                    self._use_binary = True
             if "binary" in kwargs:
                 self._use_binary = bool(kwargs.pop("binary"))
         else:
@@ -196,6 +214,16 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             except Exception:
                 pass
             self._local_stmt_cache = None
+
+    def _apply_prepared_sql(self, sql: str) -> str:
+        """Apply 1.x ``prepared`` cursor semantics to *sql*."""
+        if not self._prepared:
+            return sql
+        if self._prepared_sql is not None:
+            return self._prepared_sql
+        if sql:  # only remember a valid statement as the prepared one
+            self._prepared_sql = sql
+        return sql
 
     # =========================================================================
     # Properties

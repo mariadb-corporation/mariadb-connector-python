@@ -34,6 +34,8 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
 
     __slots__ = ()  # No additional attributes beyond BaseCursor
 
+    _prepared_supported = True
+
     # =========================================================================
     # Initialization and Lifecycle
     # =========================================================================
@@ -151,6 +153,10 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
         # Validate SQL type
         if not isinstance(sql, str): # pyright: ignore[reportUnnecessaryIsInstance]
             raise TypeError("SQL statement must be a string")
+        
+        # Prepared option compatibility
+        sql = self._apply_prepared_sql(sql)
+
         if (not sql):
             raise ProgrammingError("Empty SQL statement")
 

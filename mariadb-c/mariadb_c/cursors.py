@@ -16,6 +16,7 @@ from mariadb_shared.exceptions import (
 from mariadb_shared.text_protocol import substitute_params, normalize_to_qmark
 from typing import Sequence
 import decimal
+import warnings
 
 _Decimal = decimal.Decimal
 
@@ -64,12 +65,28 @@ class Cursor(StmtReuseMixin, CCursor):
         self._closed: bool | None = None
         self._local_stmt_cache: Any = None
         self._resolved_stmt_cache: Any = None  # memoised _resolve_stmt_cache() result
+        self._prepared: bool = False
+        self._prepared_sql: str | None = None
 
         if kwargs:
             named_tuple_val = kwargs.pop("named_tuple", False)
             dictionary_val = kwargs.pop("dictionary", False)
             buffered_val = kwargs.pop("buffered", True)
-            binary_val = kwargs.pop("binary", connection._binary)
+            binary_default = connection._binary
+            if "prepared" in kwargs:
+                self._prepared = bool(kwargs.pop("prepared"))
+                warnings.warn(
+                    "The 'prepared' cursor option is deprecated. It keeps the "
+                    "1.x behavior where every execute() after the first ignores "
+                    "its SQL and re-runs the first prepared statement. Prefer "
+                    "'binary=True', which reuses the prepared statement while "
+                    "the SQL is unchanged without ever ignoring the SQL.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                if self._prepared:
+                    binary_default = True
+            binary_val = kwargs.pop("binary", binary_default)
             cursor_type_val = kwargs.pop("cursor_type", 0)
             if named_tuple_val:
                 self._resulttype = RESULT_NAMEDTUPLE
@@ -166,6 +183,13 @@ class Cursor(StmtReuseMixin, CCursor):
         if self._closed:
             raise ProgrammingError("Cursor cannot be used anymore (it was already closed before).")
         self._connection._check_closed()
+
+        # 1.x "prepared" cursor: reuse the first statement, ignoring this SQL.
+        if self._prepared:
+            if self._prepared_sql is not None:
+                statement = self._prepared_sql
+            elif statement:
+                self._prepared_sql = statement
 
         if buffered is not None:
             self.buffered = buffered
