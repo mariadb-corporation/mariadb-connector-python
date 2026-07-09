@@ -295,11 +295,8 @@ class AsyncClient(BaseClient):
             chunk_start = data_offset + sent
             chunk_end = chunk_start + chunk_size
 
-            header_pos = chunk_start - 4
-            header_int = chunk_size | (self.sequence[0] << 24)
-            _pack_pkt_hdr(payload, header_pos, header_int)
-
-            self.writer.write(payload_view[header_pos:chunk_end])
+            self.writer.write(struct.pack('<I', chunk_size | (self.sequence[0] << 24)))
+            self.writer.write(payload_view[chunk_start:chunk_end])
             sent += chunk_size
 
         await self.writer.drain()

@@ -91,3 +91,24 @@ def create_connection(additional_conf=None):
         c = {key: value for (key, value) in (list(default_conf.items()) + list(
             additional_conf.items()))}
     return mariadb.connect(**c)
+
+
+# ---------------------------------------------------------------------------
+# Payload generators for long-data / multipart tests.
+# ---------------------------------------------------------------------------
+def varied_bytes(n: int) -> bytes:
+    """Deterministic non-uniform bytes of length n (for BLOB columns)."""
+    block = bytes(range(256))
+    buf = bytearray((block * (n // 256 + 1))[:n])
+    for i in range(0, n, 4096):
+        buf[i] = (i // 4096) & 0xFF
+    return bytes(buf)
+
+
+def varied_text(n: int) -> str:
+    """Deterministic non-uniform printable-ASCII str of length n (for TEXT)."""
+    block = bytes(range(0x21, 0x7f))          # 94 printable ASCII chars
+    buf = bytearray((block * (n // len(block) + 1))[:n])
+    for i in range(0, n, 4096):
+        buf[i] = 0x21 + ((i // 4096) % 94)
+    return buf.decode("ascii")

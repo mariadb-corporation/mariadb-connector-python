@@ -9,7 +9,7 @@ Tests sending and receiving data larger than the default max_allowed_packet size
 
 import os
 import unittest
-from ..base_test import create_connection
+from ..base_test import create_connection, varied_bytes, varied_text
 
 
 class LongDataTest(unittest.TestCase):
@@ -55,9 +55,11 @@ class LongDataTest(unittest.TestCase):
             )
         """)
         
-        # Create data slightly larger than 16MB
+        # Create data slightly larger than 16MB. Use a position-dependent
+        # payload (not a repeated byte) so a misaligned fragment boundary is
+        # actually detectable by the comparison.
         data_size = 17 * 1024 * 1024  # 17MB
-        test_data = 'x' * data_size
+        test_data = varied_text(data_size)
         with self.connection.cursor() as cursor:
             self.insert_long_varchar(test_data, data_size, cursor)
         self.cursor.execute('TRUNCATE TABLE test_long_varchar')
@@ -93,8 +95,8 @@ class LongDataTest(unittest.TestCase):
         
         # Create binary data slightly larger than 16MB
         data_size = 18 * 1024 * 1024  # 18MB
-        test_data = b'\0' + b'x' * (data_size - 1)
-        
+        test_data = varied_bytes(data_size)
+
         with self.connection.cursor() as cursor:
             self.insert_long_blob(test_data, data_size, cursor)
         self.cursor.execute('TRUNCATE TABLE test_long_blob')
@@ -130,11 +132,13 @@ class LongDataTest(unittest.TestCase):
             )
         """)
         
-        # Create test data (smaller to fit multiple columns)
+        # Create test data (smaller to fit multiple columns). Three *distinct*
+        # position-dependent payloads so a fragment boundary landing mid-column
+        # (or a cross-column swap) is caught.
         data_size = 6 * 1024 * 1024  # 6MB each
-        test_data1 = 'a' * data_size
-        test_data2 = 'b' * data_size
-        test_data3 = bytes([0xAA]) * data_size
+        test_data1 = varied_text(data_size)
+        test_data2 = varied_text(data_size)[::-1]
+        test_data3 = varied_bytes(data_size)
         
         with self.connection.cursor() as cursor:
             self.insert_multiple_long_columns(test_data1, test_data2, test_data3, data_size, cursor)
@@ -143,7 +147,7 @@ class LongDataTest(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             self.insert_multiple_long_columns(test_data1, test_data2, test_data3, data_size, cursor)
     
-    def insert_multiple_long_columns(self, test_data1: str, test_data2: str, test_data3: bytes, data_size: int, cursor):
+    def insert_multiple_long_columns(self, test_data1: str, test_data2: str, test_data3: bytes, data_size: int, cursor: SyncCursorCommon):
         # Insert long data
         cursor.execute(
             "INSERT INTO test_multiple_long (data1, data2, data3) VALUES (?, ?, ?)",
@@ -174,13 +178,14 @@ class LongDataTest(unittest.TestCase):
             )
         """)
         
-        # Create test data (smaller for multiple rows)
+        # Create test data (smaller for multiple rows). Overlapping windows of a
+        # varied buffer give three distinct, position-dependent payloads.
         data_size = 5 * 1024 * 1024  # 5MB per row
-        
+        base = varied_text(data_size + 2)
         rows = [
-            ('row1', 'x' * data_size),
-            ('row2', 'y' * data_size),
-            ('row3', 'z' * data_size),
+            ('row1', base[0:data_size]),
+            ('row2', base[1:data_size + 1]),
+            ('row3', base[2:data_size + 2]),
         ]
         
         with self.connection.cursor() as cursor:
@@ -220,8 +225,8 @@ class LongDataTest(unittest.TestCase):
         
         # Create test data
         data_size = 17 * 1024 * 1024  # 17MB
-        test_data = 'p' * data_size
-        
+        test_data = varied_text(data_size)
+
         with self.connection.cursor() as cursor:
             self.prepared_statement_with_long_data(test_data, data_size, cursor)
         self.cursor.execute('TRUNCATE TABLE test_prepared_long')
@@ -229,7 +234,7 @@ class LongDataTest(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             self.prepared_statement_with_long_data(test_data, data_size, cursor)
     
-    def prepared_statement_with_long_data(self, test_data: bytes, data_size: int, cursor):
+    def prepared_statement_with_long_data(self, test_data: str, data_size: int, cursor):
         # Use prepared statement
         cursor.execute(
             "INSERT INTO test_prepared_long (data) VALUES (?)",
@@ -293,8 +298,8 @@ class LongDataTest(unittest.TestCase):
         
         # Update with long data
         data_size = 17 * 1024 * 1024  # 17MB
-        test_data = 'u' * data_size
-        
+        test_data = varied_text(data_size)
+
         self.cursor.execute(
             "UPDATE test_update_long SET data = ? WHERE id = 1",
             (test_data,)
@@ -322,7 +327,7 @@ class LongDataTest(unittest.TestCase):
         
         # Create test data (smaller for WHERE clause)
         data_size = 1 * 1024 * 1024  # 1MB
-        test_data = 'w' * data_size
+        test_data = varied_text(data_size)
         
         # Insert test rows
         self.cursor.execute(
@@ -357,7 +362,7 @@ class LongDataTest(unittest.TestCase):
         
         # Use 90% of max_allowed_packet to leave room for protocol overhead
         data_size = int(self.max_allowed_packet * 0.9)
-        test_data = b'\0' + b'x' * (data_size - 1)
+        test_data = varied_bytes(data_size)
         
         # Insert data near boundary
         self.cursor.execute(
