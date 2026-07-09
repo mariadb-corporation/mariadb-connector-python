@@ -238,6 +238,30 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[3], c4)
         cursor.close()
 
+    def test_conpy368(self):
+        # Dates with a zero component (day=0 or 0000-00-00) that the server
+        # accepts under a lenient sql_mode are not representable in Python.
+        # Before the fix, fetch raised SystemError; now they must yield None.
+        if is_mysql():
+            self.skipTest("MySQL rejects these zero-date values")
+        cursor = self.connection.cursor()
+        cursor.execute("SET SESSION sql_mode=''")
+        cursor.execute("CREATE TEMPORARY TABLE test_zero_dates("
+                       "id INT PRIMARY KEY, d DATE, dt DATETIME, ts TIMESTAMP NULL)")
+        cursor.execute("INSERT INTO test_zero_dates VALUES "
+                       "(1, '2008-08-00', '2008-08-00 12:34:56', '0000-00-00 00:00:00')")
+
+        # Protocolo texto (execute sem parametros)
+        cursor.execute("SELECT d, dt, ts FROM test_zero_dates WHERE id=1")
+        row = cursor.fetchone()
+        self.assertEqual(row, (None, None, None))
+
+        # Protocolo binario (prepared statement, com parametro)
+        cursor.execute("SELECT d, dt, ts FROM test_zero_dates WHERE id=?", (1,))
+        row = cursor.fetchone()
+        self.assertEqual(row, (None, None, None))
+        cursor.close()
+
     def test_numbers(self):
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_numbers ("
