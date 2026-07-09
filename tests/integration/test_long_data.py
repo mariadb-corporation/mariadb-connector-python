@@ -9,6 +9,7 @@ Tests sending and receiving data larger than the default max_allowed_packet size
 
 import os
 import unittest
+from mariadb_shared.sync_cursor_common import SyncCursorCommon
 from ..base_test import create_connection, varied_bytes, varied_text
 
 
@@ -104,7 +105,7 @@ class LongDataTest(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             self.insert_long_blob(test_data, data_size, cursor)
 
-    def insert_long_blob(self, test_data: bytes, data_size: int, cursor):
+    def insert_long_blob(self, test_data: bytes, data_size: int, cursor: SyncCursorCommon):
         # Insert long data
         cursor.execute(
             "INSERT INTO test_long_blob (data) VALUES (?)",
@@ -158,8 +159,8 @@ class LongDataTest(unittest.TestCase):
         # Retrieve and verify
         cursor.execute("SELECT data1, data2, data3 FROM test_multiple_long WHERE id = ?", (1,))
         result = cursor.fetchone()
-        
-        self.assertIsNotNone(result)
+
+        assert result is not None and not isinstance(result, dict)
         self.assertEqual(len(result[0]), data_size)
         self.assertEqual(len(result[1]), data_size)
         self.assertEqual(len(result[2]), data_size)
