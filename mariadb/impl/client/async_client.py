@@ -91,7 +91,7 @@ class AsyncClient(BaseClient):
         """Ensure buffer has space for additional data"""
         required = self._recv_len + needed
         if required > self._recv_buf_capacity:
-            new_capacity = min(self.max_allowed_packet + 4, max(required, self._recv_buf_capacity * 2))
+            new_capacity = max(required, min(self.max_allowed_packet + 4, self._recv_buf_capacity * 2))
             new_buf = bytearray(new_capacity)
             new_buf[:self._recv_len] = self._recv_buf[:self._recv_len]
             self._recv_buf = new_buf
@@ -213,6 +213,12 @@ class AsyncClient(BaseClient):
                     p_end = p_start + total_size
                     self._recv_pos = p_end
                     break
+
+                if not self.connected:
+                    raise OperationalError(
+                        "Multipart packet (>16 MB) received before authentication "
+                        "completed; aborting to prevent unbounded memory allocation"
+                    )
 
                 # Move to next fragment header
                 if pkt_seen > 1:

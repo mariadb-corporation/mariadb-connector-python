@@ -233,6 +233,12 @@ class SyncClient(BaseClient):
                     self._recv_pos = p_end
                     break
 
+                if not self.connected:
+                    raise OperationalError(
+                        "Multipart packet (>16 MB) received before authentication "
+                        "completed; aborting to prevent unbounded memory allocation"
+                    )
+
                 # Move to next fragment header
                 if pkt_seen > 1:
                     self._recv_pos = first_pos + 4 + total_size
