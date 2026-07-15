@@ -81,14 +81,6 @@ jobs:
           owner: 'mariadb-corporation'
           repository: 'mariadb-connector-c'
 
-      - name: Clone SQLAlchemy
-        if: ${{ startsWith(matrix.python, '3.13') }}
-        uses: GuillaumeFalourd/clone-github-repo-action@v2.3
-        with:
-          branch: main
-          owner: 'sqlalchemy'
-          repository: 'sqlalchemy'
-
       - name: c/c make ubuntu
         if: ${{ startsWith(matrix.os, 'ubuntu') }}
         run: |
@@ -124,15 +116,56 @@ jobs:
           echo "MARIADB_CC_INSTALL_DIR=$MARIADB_CC_INSTALL_DIR" >> $env:GITHUB_ENV
           echo "MARIADB_PLUGIN_DIR=$MARIADB_CC_INSTALL_DIR/lib/mariadb/plugin" >> $env:GITHUB_ENV
 
-      - name: Run SQLAlchemy tests
-        if: ${{ startsWith(matrix.python, '3.13') }}
+      - name: Enable core dumps (Linux)
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
         shell: bash
         run: |
+          # Persistent kernel setting (carries across step shells)
+          sudo sysctl -w kernel.core_pattern="$GITHUB_WORKSPACE/core.%e.%p"
+          echo "Core pattern: $(cat /proc/sys/kernel/core_pattern)"
+          # gdb / python3-dbg are intentionally NOT installed here. They are only
+          # needed to read a core dump, which only exists when a test crashes.
+          # The "Analyze core dumps" step installs them on demand, so the ~85 MB
+          # apt download stays off the common (no-crash) path.
+
+      - name: Run SQLAlchemy tests
+        # On 1.1 the C extension IS the package: `pip install .` builds it and it
+        # is the only implementation, so there is no MARIADB_PYTHON_CONNECTOR
+        # selector to set (unlike 2.0) and there is no async connector to test.
+        # Gated to CPython 3.13 to keep 1.1's pre-existing convention; the
+        # mariadb+ dialect is MariaDB-only, hence the db-type guard.
+        if: ${{ startsWith(matrix.python, '3.13') && matrix.db-type != 'mysql' }}
+        shell: bash
+        run: |
+          # ulimit is per-shell; must be set in every step that should dump.
+          ulimit -c unlimited
+          git clone https://github.com/sqlalchemy/sqlalchemy.git
+          cd sqlalchemy
+          SQLA_TAG=$(git tag -l 'rel_2_0_*' --sort=-version:refname | head -1)
+          echo "Pinning SQLAlchemy to $SQLA_TAG"
+          git checkout "$SQLA_TAG"
           python --version
+          cd "$GITHUB_WORKSPACE"
+          # Apply patches to SQLAlchemy for MariaDB Enterprise / MariaDB 12.3 compatibility
+          bash .github/scripts/apply-sqlalchemy-patches.sh "$GITHUB_WORKSPACE/sqlalchemy"
           python -m pip install .
           python -m pip install pytest typing_extensions
-          cd ${{ github.workspace }}/sqlalchemy
-          python -m pytest --dburi=mysql+mariadbconnector://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB --backend-only
+          cd "$GITHUB_WORKSPACE/sqlalchemy"
+          python -m pip install -e .
+          # URL-encode password to handle special characters
+          ENCODED_PASSWORD=$(python -c "import urllib.parse; print(urllib.parse.quote('$TEST_DB_PASSWORD', safe=''))")
+          # SQLAlchemy doesn't test TLS; disable it (the dialect coerces ssl=false to a bool).
+          DBURI="mariadb+mariadbconnector://$TEST_DB_USER:${ENCODED_PASSWORD}@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
+          echo "Testing with dburi: mariadb+mariadbconnector://$TEST_DB_USER:****@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB?ssl=false"
+          # Skip problematic tests
+          # test/aaa_profiling/: SQLAlchemy's heap-growth tests run each case in a
+          # forked subprocess that shares the parent's DB socket — no DBAPI in
+          # the Python ecosystem (pymysql/mysqlclient/mysql-connector-python)
+          # supports this pattern.  These tests profile SQLAlchemy itself, not
+          # the connector, so they don't belong in connector CI.
+          # This step only ever runs on ubuntu (the only 3.13 matrix entry), so
+          # 2.0's extra windows/macos reflection exclusions are not needed here.
+          python -m pytest -xvs --dburi="$DBURI" --backend-only --ignore=test/aaa_profiling -k "not VersioningTest"
         env:
           TEST_DB_USER: ${{ env.MYSQL_TEST_USER }}
           TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
@@ -144,6 +177,7 @@ jobs:
       - name: Run test suite
         shell: bash
         run: |
+          ulimit -c unlimited 2>/dev/null || true
           python --version
           python -m pip install .
           cd testing
@@ -156,3 +190,34 @@ jobs:
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}
           LOCAL_DB: ${{ steps.setup-env.outputs.database-type }}
           PYTHON_VERSION: ${{ steps.setup-python.outputs.python-version }}
+
+      - name: Analyze core dumps (Linux)
+        if: ${{ always() && startsWith(matrix.os, 'ubuntu') }}
+        shell: bash
+        run: |
+          echo "=== Searching for core dumps ==="
+          # -type f so we don't pick up the sqlalchemy/doc/build/core directory.
+          mapfile -t cores < <(find . -type f \( -name "core" -o -name "core.*" \))
+          if [ ${#cores[@]} -eq 0 ]; then
+            echo "No core dump found under $(pwd)"
+          else
+            # A crash actually happened: only now pull in the ~85 MB of debug
+            # tooling (gdb + python3-dbg) needed to read the dump.
+            if ! command -v gdb >/dev/null 2>&1; then
+              sudo apt-get update && sudo apt-get install -y gdb python3-dbg || true
+            fi
+            for core_file in "${cores[@]}"; do
+              echo "Found core dump: $core_file"
+              echo "=== Core dump info ==="
+              file "$core_file"
+              echo "=== Backtrace from core dump ==="
+              gdb -batch -ex "thread apply all bt" -ex "quit" python3 "$core_file" 2>&1 || true
+              echo "=== Python-specific backtrace ==="
+              gdb -batch -ex "py-bt" -ex "quit" python3 "$core_file" 2>&1 || true
+            done
+          fi
+          # Also check system core dumps
+          if compgen -G "/var/crash/*" > /dev/null; then
+            echo "=== System crash dumps ==="
+            ls -lh /var/crash/
+          fi

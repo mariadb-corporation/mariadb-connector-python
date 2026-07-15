@@ -1,0 +1,16 @@
+--- a/lib/sqlalchemy/dialects/mysql/base.py
++++ b/lib/sqlalchemy/dialects/mysql/base.py
+@@ -1082,7 +1082,12 @@ class MySQLDialect(default.DefaultDialect):
+             if not parsed_token:
+                 continue
+             elif parsed_token.group(2):
+-                self._mariadb_normalized_version_info = tuple(version[-3:])
++                # For MariaDB Enterprise, limit to first 3 version components
++                # Enterprise versions like 10.6.9.20 have a 4th component (build number)
++                # that should not be included in version comparison
++                # Take only the first 3 components before the MariaDB marker
++                mariadb_version = version[:3] if len(version) >= 3 else version
++                self._mariadb_normalized_version_info = tuple(mariadb_version)
+                 is_mariadb = True
+             else:
+                 digit = int(parsed_token.group(1))
