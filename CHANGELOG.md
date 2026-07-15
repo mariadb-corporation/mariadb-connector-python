@@ -8,6 +8,7 @@ Release date: ???. 2026
 
 - [CONPY-340](https://jira.mariadb.org/browse/CONPY-340): Add a `protocol` parameter to control the transport method, with auto-detection of the default Unix socket path per Linux distribution
 - [CONPY-355](https://jira.mariadb.org/browse/CONPY-355): Support for the MySQL `VECTOR` data type
+- [CONPY-370](https://jira.mariadb.org/browse/CONPY-370): Accept a connection URI in `create_pool()` and `create_async_pool()`, with pool options readable from the URI query string.
 
 **Bug fixes:**
 

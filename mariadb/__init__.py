@@ -396,22 +396,159 @@ def __getattr__(name: str) -> Any:
     else:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
+
+def _coerce_bool(value: Any) -> bool:
+    """
+    Coerce a URI query-string value to a boolean.
+
+    ``parse_connection_uri`` already maps every recognised spelling
+    (``true``/``1``/``yes``/``on`` and ``false``/``0``/``no``/``off``) to a bool,
+    so anything else arriving here is a value it did not recognise. Reject it
+    rather than silently reading it as false.
+    """
+    if isinstance(value, bool):
+        return value
+    raise ValueError(
+        f"Invalid boolean value: {value!r}. Expected one of "
+        "true/false, 1/0, yes/no, on/off."
+    )
+
+
+# Pool-configuration keys accepted both as keyword arguments and in the URI query
+# string, with the coercer used to type values coming from the URI. The generic
+# URI parser cannot be trusted to type these (e.g. it leaves ``ping_threshold`` a
+# string and turns ``min_size=0`` into ``False``), so they are coerced explicitly.
+_POOL_CONFIG_COERCERS: 'Dict[str, Any]' = {
+    'min_size': int,
+    'max_size': int,
+    'max_idle_time': float,
+    'max_lifetime': float,
+    'validation_interval': float,
+    'acquire_timeout': float,
+    'enable_health_check': _coerce_bool,
+    'reset_connection': _coerce_bool,
+    'ping_threshold': float,
+}
+
+# Effective defaults for pool configuration. ``min_size`` defaults to ``max_size``.
+_POOL_CONFIG_DEFAULTS: 'Dict[str, Any]' = {
+    'min_size': None,
+    'max_size': 10,
+    'max_idle_time': 600.0,
+    'max_lifetime': 3600.0,
+    'validation_interval': 30.0,
+    'acquire_timeout': 30.0,
+    'enable_health_check': True,
+    'reset_connection': False,
+    'ping_threshold': 0.25,
+}
+
+
+def _resolve_pool_params(
+    uri: str | None,
+    explicit: 'Dict[str, Any]',
+    connection_params: 'Dict[str, Any]',
+) -> 'tuple[Dict[str, Any], Dict[str, Any]]':
+    """
+    Resolve pool configuration and connection parameters from a URI and kwargs.
+
+    Pool-config values may be supplied as keyword arguments or in the URI query
+    string; connection parameters likewise come from the URI and/or kwargs.
+    Precedence in both cases: explicit keyword argument > URI value > default.
+
+    Args:
+        uri: Optional connection URI; ``None`` means no URI was supplied.
+        explicit: Pool-config keyword arguments as passed to the factory; a value
+            of ``None`` means "not supplied" and falls back to URI/default.
+        connection_params: Connection keyword arguments (``**connection_params``).
+
+    Returns:
+        A ``(pool_config_kwargs, connection_params)`` tuple.
+
+    Raises:
+        ValueError: If ``uri`` is supplied but is not a connection URI, if a
+            pool option holds a value of the wrong type, or if ``pool_name`` is
+            supplied.
+    """
+    uri_pool: 'Dict[str, Any]' = {}
+    uri_conn: 'Dict[str, Any]' = {}
+    if uri is not None:
+        from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
+        if not is_connection_uri(uri):
+            raise ValueError(
+                f"Invalid connection URI: {uri!r}. The first positional argument must "
+                "be a URI starting with 'mariadb://' or 'mysql://'; pass connection "
+                "and pool options as keyword arguments instead."
+            )
+        for key, value in parse_connection_uri(uri).items():
+            if key in _POOL_CONFIG_COERCERS:
+                try:
+                    uri_pool[key] = _POOL_CONFIG_COERCERS[key](value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"Invalid value for pool option {key!r} in the connection "
+                        f"URI: {exc}"
+                    ) from exc
+            else:
+                uri_conn[key] = value
+
+    # Connection params: explicit kwargs override URI values.
+    uri_conn.update(connection_params)
+
+    # pool_name would be handed to the connection factory, and connect() treats it
+    # as a request for a named pool — so every connection this pool created would
+    # in fact be borrowed from a second, registered pool.
+    if 'pool_name' in uri_conn:
+        raise ValueError(
+            "pool_name is not supported by create_pool()/create_async_pool(), which "
+            "return the pool object directly instead of registering it by name. Use "
+            "mariadb.ConnectionPool(pool_name=...) if you want a named pool."
+        )
+
+    # Pool config: explicit kwarg (not None) > URI query > default.
+    resolved: 'Dict[str, Any]' = {}
+    for key, default in _POOL_CONFIG_DEFAULTS.items():
+        if explicit.get(key) is not None:
+            resolved[key] = explicit[key]
+        elif key in uri_pool:
+            resolved[key] = uri_pool[key]
+        else:
+            resolved[key] = default
+
+    # min_size defaults to max_size when not otherwise specified.
+    if resolved['min_size'] is None:
+        resolved['min_size'] = resolved['max_size']
+
+    return resolved, uri_conn
+
+
 def create_pool(
+    uri: str | None = None,
+    *,
     min_size: int | None = None,
-    max_size: int = 10,
-    max_idle_time: float = 600.0,
-    max_lifetime: float = 3600.0,
-    validation_interval: float = 30.0,
-    acquire_timeout: float = 30.0,
-    enable_health_check: bool = True,
-    reset_connection: bool = False,
-    ping_threshold: float = 0.25,
+    max_size: int | None = None,
+    max_idle_time: float | None = None,
+    max_lifetime: float | None = None,
+    validation_interval: float | None = None,
+    acquire_timeout: float | None = None,
+    enable_health_check: bool | None = None,
+    reset_connection: bool | None = None,
+    ping_threshold: float | None = None,
     **connection_params: Any
 ) -> '_ConnectionPoolImpl':
     """
     Create a synchronous connection pool with clean separation of pool and connection options.
 
-    Pool Configuration Parameters:
+    Connection parameters can be provided as:
+    1. A URI string as the first positional argument:
+       mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=value2]
+    2. A set of connection keyword arguments (host, user, password, ...)
+
+    Pool-configuration options may also be supplied in the URI query string, e.g.
+    ``mariadb://root@localhost/test?min_size=5&max_size=20``. Precedence for every
+    option is: explicit keyword argument > URI value > default.
+
+    Pool Configuration Parameters (keyword-only, or URI query string):
         min_size (int): Minimum number of connections in the pool (default: same as max_size)
         max_size (int): Maximum number of connections in the pool (default: 10)
         max_idle_time (float): Maximum time (seconds) a connection can be idle (default: 600.0)
@@ -423,10 +560,14 @@ def create_pool(
         ping_threshold (float): Ping if connection idle > threshold seconds (default: 0.25, 0 = disabled)
 
     Connection Parameters:
+        uri (str): Optional connection URI (first positional argument)
         **connection_params: Additional connection parameters (ssl_ca, ssl_cert, etc.)
 
     Returns:
         ConnectionPool: A configured connection pool
+
+    Raises:
+        ValueError: If the first positional argument is not a connection URI.
 
     Example:
         pool = mariadb.create_pool(
@@ -437,6 +578,11 @@ def create_pool(
             min_size=5,
             max_size=20,
             ping_threshold=0.25
+        )
+
+        # or with a URI (pool options may live in the query string)
+        pool = mariadb.create_pool(
+            "mariadb://root:secret@localhost/test?min_size=5&max_size=20"
         )
 
         with pool.get_connection() as conn:
@@ -454,18 +600,23 @@ def create_pool(
             "Install mariadb-pool: pip install mariadb[pool]"
         )
 
-    # Build PoolConfig from pool-specific parameters
-    pool_config = PoolConfig(
-        min_size=min_size if min_size is not None else max_size,
-        max_size=max_size,
-        max_idle_time=max_idle_time,
-        max_lifetime=max_lifetime,
-        validation_interval=validation_interval,
-        acquire_timeout=acquire_timeout,
-        enable_health_check=enable_health_check,
-        reset_connection=reset_connection,
-        ping_threshold=ping_threshold
+    # Resolve pool config and connection params from URI + kwargs.
+    pool_config_kwargs, connection_params = _resolve_pool_params(
+        uri,
+        {
+            'min_size': min_size,
+            'max_size': max_size,
+            'max_idle_time': max_idle_time,
+            'max_lifetime': max_lifetime,
+            'validation_interval': validation_interval,
+            'acquire_timeout': acquire_timeout,
+            'enable_health_check': enable_health_check,
+            'reset_connection': reset_connection,
+            'ping_threshold': ping_threshold,
+        },
+        connection_params,
     )
+    pool_config = PoolConfig(**pool_config_kwargs)
 
     # Create pool with mariadb.connect as factory
     return cast('_ConnectionPoolImpl', ConnectionPool(
@@ -476,15 +627,17 @@ def create_pool(
 
 
 async def create_async_pool(
+    uri: str | None = None,
+    *,
     min_size: int | None = None,
-    max_size: int = 10,
-    max_idle_time: float = 600.0,
-    max_lifetime: float = 3600.0,
-    validation_interval: float = 30.0,
-    acquire_timeout: float = 30.0,
-    enable_health_check: bool = True,
-    reset_connection: bool = False,
-    ping_threshold: float = 0.25,
+    max_size: int | None = None,
+    max_idle_time: float | None = None,
+    max_lifetime: float | None = None,
+    validation_interval: float | None = None,
+    acquire_timeout: float | None = None,
+    enable_health_check: bool | None = None,
+    reset_connection: bool | None = None,
+    ping_threshold: float | None = None,
     **connection_params: Any
 ) -> '_AsyncConnectionPoolImpl':
     """
@@ -492,7 +645,16 @@ async def create_async_pool(
 
     This function automatically calls pool.open() to pre-fill the pool with connections.
 
-    Pool Configuration Parameters:
+    Connection parameters can be provided as:
+    1. A URI string as the first positional argument:
+       mariadb://[user[:password]@][host][:port][/database][?option1=value1&option2=value2]
+    2. A set of connection keyword arguments (host, user, password, ...)
+
+    Pool-configuration options may also be supplied in the URI query string, e.g.
+    ``mariadb://root@localhost/test?min_size=5&max_size=20``. Precedence for every
+    option is: explicit keyword argument > URI value > default.
+
+    Pool Configuration Parameters (keyword-only, or URI query string):
         min_size (int): Minimum number of connections in the pool (default: same as max_size)
         max_size (int): Maximum number of connections in the pool (default: 10)
         max_idle_time (float): Maximum time (seconds) a connection can be idle (default: 600.0)
@@ -504,10 +666,14 @@ async def create_async_pool(
         ping_threshold (float): Ping if connection idle > threshold seconds (default: 0.25, 0 = disabled)
 
     Connection Parameters:
+        uri (str): Optional connection URI (first positional argument)
         **connection_params: Additional connection parameters (ssl_ca, ssl_cert, etc.)
 
     Returns:
         AsyncConnectionPool: A configured and opened async connection pool
+
+    Raises:
+        ValueError: If the first positional argument is not a connection URI.
 
     Example:
         async def main():
@@ -519,6 +685,11 @@ async def create_async_pool(
                 min_size=5,
                 max_size=20,
                 ping_threshold=0.25
+            )
+
+            # or with a URI (pool options may live in the query string)
+            pool = await mariadb.create_async_pool(
+                "mariadb://root:secret@localhost/test?min_size=5&max_size=20"
             )
 
             conn = await pool.get_connection()
@@ -539,18 +710,23 @@ async def create_async_pool(
             "Install mariadb-pool: pip install mariadb[pool]"
         )
 
-    # Build PoolConfig from pool-specific parameters
-    pool_config = PoolConfig(
-        min_size=min_size if min_size is not None else max_size,
-        max_size=max_size,
-        max_idle_time=max_idle_time,
-        max_lifetime=max_lifetime,
-        validation_interval=validation_interval,
-        acquire_timeout=acquire_timeout,
-        enable_health_check=enable_health_check,
-        reset_connection=reset_connection,
-        ping_threshold=ping_threshold
+    # Resolve pool config and connection params from URI + kwargs.
+    pool_config_kwargs, connection_params = _resolve_pool_params(
+        uri,
+        {
+            'min_size': min_size,
+            'max_size': max_size,
+            'max_idle_time': max_idle_time,
+            'max_lifetime': max_lifetime,
+            'validation_interval': validation_interval,
+            'acquire_timeout': acquire_timeout,
+            'enable_health_check': enable_health_check,
+            'reset_connection': reset_connection,
+            'ping_threshold': ping_threshold,
+        },
+        connection_params,
     )
+    pool_config = PoolConfig(**pool_config_kwargs)
 
     # Create pool with mariadb.asyncConnect as factory
     pool = AsyncConnectionPool(

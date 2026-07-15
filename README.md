@@ -168,6 +168,12 @@ pool = mariadb.create_pool(
     ping_threshold=0.25  # only check health of idle connections after 0.25 seconds of inactivity
 )
 
+# ... or from a URI.
+pool = mariadb.create_pool(
+    "mariadb://user:password@localhost:3306/mydb"
+    "?min_size=5&max_size=10&ping_threshold=0.25"
+)
+
 # Get connection from pool
 with pool.acquire() as conn:
     with conn.cursor() as cursor:
@@ -242,6 +248,11 @@ async def main():
         database="mydb",
         min_size=5,
         max_size=10
+    )
+
+    # ... or from a URI, as with create_pool()
+    pool = await mariadb.create_async_pool(
+        "mariadb://user:password@localhost/mydb?min_size=5&max_size=10"
     )
 
     # Get connection from pool
