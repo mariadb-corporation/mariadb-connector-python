@@ -726,6 +726,7 @@ static void MrdbConnection_dealloc(PyObject *obj)
 {
     MrdbConnection *self = (MrdbConnection *)obj;
 
+    PyObject_GC_UnTrack(self);
     if (self->mysql)
         ma_connection_close(self);
 

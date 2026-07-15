@@ -485,6 +485,7 @@ static PyObject *MrdbCursor_repr(MrdbCursor *self)
 static void MrdbCursor_dealloc(PyObject *obj)
 {
   MrdbCursor *self = (MrdbCursor *)obj;
+  PyObject_GC_UnTrack(self);
   ma_cursor_close(self);
   if (self->result)
   {
