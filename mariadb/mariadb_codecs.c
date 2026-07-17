@@ -145,14 +145,20 @@ mariadb_pydate_to_tm(enum enum_field_types type,
             type == MYSQL_TYPE_DATETIME)
     {
         uint8_t is_time= PyTime_CheckExact(obj);
-        tm->hour= is_time ? PyDateTime_TIME_GET_HOUR(obj) :
-            PyDateTime_DATE_GET_HOUR(obj);
-        tm->minute= is_time ? PyDateTime_TIME_GET_MINUTE(obj) :
-            PyDateTime_DATE_GET_MINUTE(obj);
-        tm->second= is_time ? PyDateTime_TIME_GET_SECOND(obj) :
-            PyDateTime_DATE_GET_SECOND(obj);
-        tm->second_part= is_time ? PyDateTime_TIME_GET_MICROSECOND(obj) :
-            PyDateTime_DATE_GET_MICROSECOND(obj);
+        uint8_t is_datetime= PyDateTime_CheckExact(obj);
+
+        if (is_time) {
+            tm->hour = PyDateTime_TIME_GET_HOUR(obj);
+            tm->minute = PyDateTime_TIME_GET_MINUTE(obj);
+            tm->second = PyDateTime_TIME_GET_SECOND(obj);
+            tm->second_part = PyDateTime_TIME_GET_MICROSECOND(obj);
+        } else if (is_datetime) {
+            tm->hour = PyDateTime_DATE_GET_HOUR(obj);
+            tm->minute = PyDateTime_DATE_GET_MINUTE(obj);
+            tm->second = PyDateTime_DATE_GET_SECOND(obj);
+            tm->second_part = PyDateTime_DATE_GET_MICROSECOND(obj);
+        }
+
         if (type == MYSQL_TYPE_TIME)
         {
             tm->time_type= MYSQL_TIMESTAMP_TIME;
@@ -162,9 +168,11 @@ mariadb_pydate_to_tm(enum enum_field_types type,
     if (type == MYSQL_TYPE_DATE ||
             type == MYSQL_TYPE_DATETIME)
     {
-        tm->year= PyDateTime_GET_YEAR(obj);
-        tm->month= PyDateTime_GET_MONTH(obj);
-        tm->day= PyDateTime_GET_DAY(obj);
+        if (PyDate_Check(obj) || PyDateTime_Check(obj)) {
+            tm->year = PyDateTime_GET_YEAR(obj);
+            tm->month = PyDateTime_GET_MONTH(obj);
+            tm->day = PyDateTime_GET_DAY(obj);
+        }
         if (type == MYSQL_TYPE_DATE)
             tm->time_type= MYSQL_TIMESTAMP_DATE;
         else
@@ -485,20 +493,28 @@ static PyObject *ma_convert_value(MrdbCursor *self,
                                   enum enum_field_types type,
                                   PyObject *value)
 {
-    PyObject *key= PyLong_FromLongLong(type);
+    PyObject *key;
     PyObject *func;
     PyObject *new_value= NULL;
 
-    if (!self->connection->converter)
+    if (!self->connection || !self->connection->converter ||
+        !PyDict_Check(self->connection->converter))
+        return NULL;
+    key= PyLong_FromLongLong(type);
+    if (!key)
         return NULL;
 
     if ((func= PyDict_GetItem(self->connection->converter, key)) &&
             PyCallable_Check(func))
     {
         PyObject *arglist= PyTuple_New(1);
-        PyTuple_SetItem(arglist, 0, value);
-        new_value= PyObject_CallObject(func, arglist);
+        if (arglist) {
+          PyTuple_SetItem(arglist, 0, value);
+          new_value= PyObject_CallObject(func, arglist);
+          Py_DECREF(arglist);
+        }
     }
+    Py_DECREF(key);
     return new_value;
 }
 
@@ -920,7 +936,9 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
           type= self->fields[column].type;
 
         if ((val= ma_convert_value(self, type, self->values[column])))
+        {
             self->values[column]= val;
+        }
     }
 
 end:
