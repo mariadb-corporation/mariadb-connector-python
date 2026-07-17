@@ -60,6 +60,15 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 #include <limits.h>
 #endif /* defined(_WIN32) */
 
+/* Constants added in C/C 3.4.10 */
+#ifndef MAX_ZEROFILL_LEN
+#define MAX_ZEROFILL_LEN 255
+#endif
+
+#ifndef MAX_DECIMAL_LEN
+#define MAX_DECIMAL_LEN 83
+#endif
+
 enum mariadb_info
 {
   PYMARIADB_CHARSET_ID,
