@@ -1232,6 +1232,11 @@ MrdbCursor_fetchone(MrdbCursor *self)
     for (i= 0; i < field_count; i++)
     {
         ma_set_result_column_value(self, row, i);
+        if (PyErr_Occurred())
+        {
+            Py_XDECREF(row);
+            return NULL;
+        }
     }
     return row;
 }
@@ -2128,6 +2133,10 @@ mariadb_build_row_from_text(MrdbCursor *self, MYSQL_ROW row)
     /* Copy converted values into the tuple */
     for (unsigned int i = 0; i < self->field_count; i++) {
         ma_set_result_column_value(self, tuple, i);
+        if (PyErr_Occurred()) {
+            Py_XDECREF(tuple);
+            return NULL;
+        }
     }
 
     return tuple;
@@ -2179,6 +2188,10 @@ mariadb_build_row_from_stmt(MrdbCursor *self, int rc)
 
         for (unsigned int i = 0; i < self->field_count; i++) {
             ma_set_result_column_value(self, tuple, i);
+            if (PyErr_Occurred()) {
+                Py_XDECREF(tuple);
+                return NULL;
+            }
         }
         return tuple;
     }

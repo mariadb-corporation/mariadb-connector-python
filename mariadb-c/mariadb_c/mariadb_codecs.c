@@ -880,14 +880,18 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
             {
                 unsigned long length= mysql_net_field_length(row);
 
-                if (length > 0)
+                if (length > 0 && length <= MAX_DECIMAL_LEN)
                 {
                     char *tmp= alloca(length + 1);
                     memcpy(tmp, (const char *)*row, length);
                     tmp[length]= 0;
                     self->values[column]= PyObject_CallFunction(decimal_type, "s", tmp);
+                } else if (length == 0) {
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
                 } else {
-                    self->values[column]= PyObject_CallFunction(decimal_type, "s", "0");
+                    PyErr_SetString(PyExc_ValueError, "Invalid or out-of-bounds decimal length encountered");
+                    return;
                 }
                 *row+= length;
                 break;
