@@ -283,6 +283,7 @@ typedef struct {
     PyObject *last_executed_stmt;
     PyObject *converter;
     uint8_t tls_in_use;
+    PyObject *weakreflist;
 } MrdbConnection;
 
 typedef struct {
@@ -356,6 +357,7 @@ typedef struct {
     uint8_t closed;
     uint8_t reprepare;
     enum enum_paramstyle paramstyle;
+    PyObject *weakreflist;
 } MrdbCursor;
 
 typedef struct

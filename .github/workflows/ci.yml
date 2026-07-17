@@ -3,7 +3,7 @@ name: Run CI Tests
 
 on:
   push:
-    branches: ['1.1', '1.0', 'sqlalchemy']
+    branches: ['1.1', '1.1-georg', '1.0', 'sqlalchemy']
   pull_request:
   workflow_dispatch:
   schedule:

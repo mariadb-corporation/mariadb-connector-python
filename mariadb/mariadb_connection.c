@@ -534,6 +534,18 @@ static PyObject *MrdbConnection_repr(MrdbConnection *self)
     return PyUnicode_FromString(cobj_repr);
 }
 
+static int
+MrdbConnection_clear(MrdbConnection *self)
+{
+    Py_CLEAR(self->last_executed_stmt);
+    Py_CLEAR(self->converter);
+#if MARIADB_PACKAGE_VERSION_ID > 30301
+    Py_CLEAR(self->status_callback);
+#endif
+    Py_CLEAR(self->dsn);
+    return 0;
+}
+
 static void ma_connection_close(MrdbConnection *conn)
 {
     if (conn)
@@ -553,9 +565,16 @@ static void MrdbConnection_dealloc(PyObject *obj)
 {
     MrdbConnection *self = (MrdbConnection *)obj;
 
-    if (self && self->mysql)
-        ma_connection_close(self);
-    Py_TYPE(self)->tp_free((PyObject *)self);
+    if (self) {
+        PyObject_GC_UnTrack(self);
+        if (self->weakreflist != NULL) {
+            PyObject_ClearWeakRefs((PyObject *)self);
+        }
+        if (self->mysql) {
+            ma_connection_close(self);
+        }
+        Py_TYPE(self)->tp_free((PyObject *)self);
+    }
 }
 
 PyTypeObject MrdbConnection_Type = {
@@ -566,6 +585,7 @@ PyTypeObject MrdbConnection_Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_BASETYPE,
     .tp_doc = connection__doc__,
     .tp_new = PyType_GenericNew,
+    .tp_clear = (inquiry)MrdbConnection_clear,
     .tp_traverse = (traverseproc)MrdbConnection_traverse,
     .tp_methods = (struct PyMethodDef *)MrdbConnection_Methods,
     .tp_members = (struct PyMemberDef *)MrdbConnection_Members,
@@ -573,7 +593,8 @@ PyTypeObject MrdbConnection_Type = {
     .tp_init = (initproc)MrdbConnection_Initialize,
     .tp_alloc = PyType_GenericAlloc,
     .tp_dealloc = MrdbConnection_dealloc,
-    .tp_finalize = (destructor)MrdbConnection_finalize
+    .tp_finalize = (destructor)MrdbConnection_finalize,
+    .tp_weaklistoffset = offsetof(MrdbConnection, weakreflist),
 };
 
 PyObject *

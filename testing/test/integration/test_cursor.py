@@ -4,6 +4,8 @@
 import datetime
 import unittest
 import os
+import gc
+import sys
 import decimal
 import json
 from decimal import Decimal
@@ -42,6 +44,52 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.close()
         del cursor
+
+    @unittest.skipIf(
+        os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
+        "sys.getrefcount() is CPython only"
+    )
+    def test_conpy369_cursor_owns_connection_ref(self):
+        connection = create_connection()
+        try:
+            before = sys.getrefcount(connection)
+            cursor = connection.cursor()
+            # +1 for Cursor._connection (Python), +1 for self->connection (C).
+            self.assertEqual(sys.getrefcount(connection) - before, 2)
+            cursor.close()
+            del cursor
+            gc.collect()
+            self.assertEqual(sys.getrefcount(connection), before)
+        finally:
+            connection.close()
+
+    @unittest.skipIf(
+        os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
+        "sys.getrefcount() is CPython only"
+    )
+    def test_conpy369_gc_collected_cursor(self):
+        # Reclaiming a cursor through the cyclic collector must leave the
+        # connection's refcount untouched. If the cursor's reference is borrowed
+        # rather than owned, this over-decrefs the connection and frees it early;
+        # the regression then shows up as a segfault here rather than a failure.
+        connection = create_connection()
+        try:
+            baseline = sys.getrefcount(connection)
+            for _ in range(50):
+                cursor = connection.cursor()
+                cursor.execute("SELECT 1")
+                cursor.fetchall()
+                # A reference cycle forces the collector, rather than
+                # refcounting, to reclaim the cursor -- that is the only path
+                # that reaches tp_clear.
+                cycle = {}
+                cycle["self"] = cycle
+                cycle["cursor"] = cursor
+                del cursor, cycle
+                gc.collect()
+            self.assertEqual(sys.getrefcount(connection), baseline)
+        finally:
+            connection.close()
 
     @unittest.skipIf(
         os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
