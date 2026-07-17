@@ -65,6 +65,10 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 #define MAX_ZEROFILL_LEN 255
 #endif
 
+#ifndef MAX_DECIMAL_LEN
+#define MAX_DECIMAL_LEN 83
+#endif
+
 enum mariadb_info
 {
   PYMARIADB_CHARSET_ID,
@@ -279,6 +283,7 @@ typedef struct {
     PyObject *last_executed_stmt;
     PyObject *converter;
     uint8_t tls_in_use;
+    PyObject *weakreflist;
 } MrdbConnection;
 
 typedef struct {
@@ -298,13 +303,13 @@ typedef struct {
 
 typedef struct {
     PyObject *value;
-    char indicator;
-    enum enum_field_types type;
-    size_t length;
-    uint8_t free_me;
     void *buffer;
-    unsigned char num[8];
+    size_t length;
     MYSQL_TIME tm;
+    unsigned char num[8];
+    enum enum_field_types type;
+    char indicator;
+    uint8_t free_me;
 } MrdbParamValue;
 
 typedef struct {
@@ -352,6 +357,7 @@ typedef struct {
     uint8_t closed;
     uint8_t reprepare;
     enum enum_paramstyle paramstyle;
+    PyObject *weakreflist;
 } MrdbCursor;
 
 typedef struct

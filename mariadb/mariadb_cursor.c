@@ -299,6 +299,8 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
     if (!self)
         return -1;
 
+    self->weakreflist= NULL;
+
     if (!PyArg_ParseTupleAndKeywords(args, kwargs,
                 "O!|kkii", key_words, &MrdbConnection_Type, &connection,
                 &prefetch_rows, &cursor_type, &is_prepared, &is_binary))
@@ -319,6 +321,7 @@ static int MrdbCursor_initialize(MrdbCursor *self, PyObject *args,
         return -1;
     }
 
+    Py_INCREF(connection);
     self->connection= (MrdbConnection *)connection;
 
     self->is_prepared= is_prepared;
@@ -365,9 +368,13 @@ static PyObject *MrdbCursor_repr(MrdbCursor *self)
 
 static void MrdbCursor_dealloc(PyObject *obj)
 {
-  MrdbCursor *self = (MrdbCursor *)obj;
-  ma_cursor_close(self);
-  Py_TYPE(self)->tp_free((PyObject *)self);
+    MrdbCursor *self = (MrdbCursor *)obj;
+    if (self) {
+        PyObject_GC_UnTrack(self);
+        ma_cursor_close(self);
+        MrdbCursor_tpclear(self);
+        Py_TYPE(self)->tp_free((PyObject *)self);
+    }
 }
 
 PyTypeObject MrdbCursor_Type =
@@ -386,7 +393,8 @@ PyTypeObject MrdbCursor_Type =
     .tp_new= PyType_GenericNew,
     .tp_dealloc= MrdbCursor_dealloc,
     .tp_clear = (inquiry)MrdbCursor_tpclear,
-    .tp_finalize= (destructor)MrdbCursor_finalize
+    .tp_finalize= (destructor)MrdbCursor_finalize,
+    .tp_weaklistoffset = offsetof(MrdbCursor, weakreflist),
 };
 
 void MrdbCursor_clearparseinfo(MrdbParseInfo *parseinfo)
@@ -1354,10 +1362,20 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
     return List;
 }
 
+int cursor_datetime_init(void)
+{
+    PyDateTime_IMPORT;
+
+    if (!PyDateTimeAPI) {
+        PyErr_SetString(PyExc_ImportError, "DateTimeAPI initialization failed");
+        return 1;
+    }
+    return 0;
+}
+
 static PyObject *
 MrdbCursor_check_text_types(MrdbCursor *self)
 {
-  PyDateTime_IMPORT;
   Py_ssize_t ofs= 0;
 
   if (!self || !self->data || !self->parseinfo.paramcount)

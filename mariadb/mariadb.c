@@ -42,6 +42,7 @@
 
 extern int codecs_datetime_init(void);
 extern int connection_datetime_init(void);
+extern int cursor_datetime_init(void);
 
 PyObject *decimal_module= NULL,
          *decimal_type= NULL,
@@ -126,6 +127,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     /* Initialize DateTimeAPI */
     if (mariadb_datetime_init() ||
         connection_datetime_init() ||
+        cursor_datetime_init() ||
         codecs_datetime_init())
     {
         goto error;
@@ -203,6 +205,7 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 
     return module;
 error:
+    Py_XDECREF(module);
     if (PyErr_Occurred())
     {
         return NULL;
