@@ -359,7 +359,6 @@ MrdbCursor_init_fields(MrdbCursor *self)
     self->fetched = 0;
     self->closed = 0;
     self->reprepare = 0;
-    self->weakreflist = NULL;
     return 0;
 }
 
@@ -521,7 +520,6 @@ PyTypeObject MrdbCursor_Type =
     .tp_clear = (inquiry)MrdbCursor_tpclear,
     .tp_free = PyObject_GC_Del,
     .tp_finalize= (destructor)MrdbCursor_finalize,
-    .tp_weaklistoffset = 0
 };
 
 static void MrdbCursor_clearstmt(MrdbCursor *self)

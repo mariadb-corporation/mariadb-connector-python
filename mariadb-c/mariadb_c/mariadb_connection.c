@@ -400,7 +400,6 @@ MrdbConnection_init_fields(MrdbConnection *self)
     self->last_executed_stmt = NULL;
     self->converter = NULL;
     self->tls_in_use = 0;
-    self->weakreflist = NULL;
     self->active_result_cursor = NULL;
     return 0;
 }
@@ -757,7 +756,6 @@ PyTypeObject MrdbConnection_Type = {
     .tp_dealloc = MrdbConnection_dealloc,
     .tp_free = PyObject_GC_Del,
     .tp_finalize = (destructor)MrdbConnection_finalize,
-    .tp_weaklistoffset = 0
 };
 
 PyObject *
