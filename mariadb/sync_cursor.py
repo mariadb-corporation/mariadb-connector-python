@@ -6,7 +6,6 @@ from __future__ import annotations
 from typing import Dict, Sequence, List, Any, TYPE_CHECKING, cast
 
 from mariadb.impl.completion import Completion
-from mariadb.impl.configuration import Configuration
 
 from .impl.result import SyncResult
 
@@ -39,19 +38,6 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
     # =========================================================================
     # Initialization and Lifecycle
     # =========================================================================
-
-    def __init__(self, connection: 'SyncConnection', configuration: Configuration, **kwargs: Any) -> None:
-        """
-        Initialize synchronous cursor with a connection
-
-        Args:
-            connection: Database connection object
-            **kwargs: Cursor options:
-                - buffered: Buffer all results immediately
-                - named_tuple: Return rows as named tuples
-                - dictionary: Return rows as dictionaries
-        """
-        super().__init__(connection, configuration, **kwargs)
 
     def close(self) -> None:
         """

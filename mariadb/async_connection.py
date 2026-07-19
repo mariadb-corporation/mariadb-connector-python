@@ -9,16 +9,14 @@ Asynchronous connection implementation
 Provides a native async API directly using the async Client.
 """
 
-from typing import Any, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .async_cursor import AsyncCursor
+from typing import Any
 
 from mariadb_shared.constants import CAPABILITY
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
 from .base_connection import BaseConnection
 
 from .impl.client.async_client import AsyncClient
+from .async_cursor import AsyncCursor
 
 
 class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # type: ignore[misc, override]
@@ -104,8 +102,6 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
         Raises:
             ProgrammingError: If connection is closed
         """
-        # Import here to avoid circular dependency
-        from .async_cursor import AsyncCursor
         return AsyncCursor(self, self._configuration, **kwargs)
 
     async def close(self) -> None:

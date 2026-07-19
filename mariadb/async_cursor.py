@@ -7,7 +7,6 @@ from typing import Dict, Sequence, List, Any, TYPE_CHECKING
 import warnings
 
 from mariadb.impl.completion import Completion
-from mariadb.impl.configuration import Configuration
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
 
 from .impl.result import AsyncResult
@@ -53,19 +52,6 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon)
     # =========================================================================
     # Initialization and Lifecycle
     # =========================================================================
-
-    def __init__(self, connection: 'AsyncConnection', configuration: Configuration, **kwargs: Any) -> None:
-        """
-        Initialize asynchronous cursor with a connection
-
-        Args:
-            connection: Database connection object
-            **kwargs: Cursor options:
-                - buffered: Buffer all results immediately
-                - named_tuple: Return rows as named tuples
-                - dictionary: Return rows as dictionaries
-        """
-        super().__init__(connection, configuration, **kwargs)
 
     async def close(self) -> None:  # type: ignore[override]
         """

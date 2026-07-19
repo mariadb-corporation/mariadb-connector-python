@@ -9,15 +9,14 @@ Synchronous connection implementation
 Provides a blocking API using the sync Client.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
-if TYPE_CHECKING:
-    from .sync_cursor import SyncCursor
 from mariadb_shared.constants import CAPABILITY
 from mariadb_shared.sync_connection_common import SyncConnectionCommon
 from .base_connection import BaseConnection
 
 from .impl.client.sync_client import SyncClient
+from .sync_cursor import SyncCursor
 
 
 class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # type: ignore[misc]
@@ -89,8 +88,6 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # typ
         Raises:
             ProgrammingError: If connection is closed
         """
-        # Import here to avoid circular dependency
-        from .sync_cursor import SyncCursor
         return SyncCursor(self, self._configuration, **kwargs)
     
     def close(self) -> None:

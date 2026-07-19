@@ -22,7 +22,6 @@ from .impl.completion import Completion
 from .impl.message.server.column_definition_packet import ColumnsDefinition
 
 from .exceptions import ProgrammingError
-from .impl.client.exception_factory import ExceptionFactory
 from .impl.result import Result
 from mariadb_shared.constants import EXT_FIELD_TYPE
 from mariadb_shared.constants.FIELD_TYPE import (
@@ -140,16 +139,19 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         self._completions: List[Completion] = []
         self._completion_index: int = 0
         self._current_completion: Completion | None = None
-        self._exception_factory = ExceptionFactory()
-        self._buffered: bool = bool(kwargs.pop('buffered', True))
+        self._exception_factory = connection._exception_factory  # pyright: ignore[reportPrivateUsage]
         self._use_binary: bool = configuration.binary
         self._stmt: PrepareStmtPacket | None = None
         self._local_stmt_cache: PreparedStatementLRUCache | None = None
         self._prepared: bool = False
         self._prepared_sql: str | None = None
         if kwargs:
+            self._buffered = bool(kwargs.pop('buffered', True))
+            if not kwargs:
+                self._config = configuration
+                return
             self._config = copy.copy(configuration)
-            
+
             rtype = kwargs.pop("named_tuple", False)
             if rtype:
                 self._config.named_tuple = rtype
@@ -175,7 +177,8 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
             if "binary" in kwargs:
                 self._use_binary = bool(kwargs.pop("binary"))
         else:
-            self._config = configuration        
+            self._buffered = True
+            self._config = configuration
 
     def _check_closed(self) -> None:
         """Check if cursor is closed"""
