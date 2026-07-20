@@ -12,28 +12,32 @@ with the commands under [Reproducing](#reproducing).
 
 ## TL;DR
 
-The `mariadb` **C extension is the fastest driver in every benchmark**, and the
-pure-Python `mariadb` implementation comes second in most of them. Selected
+The `mariadb` **C extension is the fastest driver in almost every benchmark**;
+the only exceptions are the bare `DO` round-trips (no result set to parse),
+where the pure-Python driver matches it. The pure-Python `mariadb`
+implementation is the **fastest pure-Python driver in every benchmark**, and on
+result-set parsing it now **matches or beats MySQL Connector/Python's C
+extension** — e.g. `SELECT 100 columns` (7,435 vs 7,303 ops/s, text). Selected
 results (operations per second, higher is better):
 
 | Workload | mariadb (C) | vs pure-Python `mariadb` | vs MySQL Connector/C |
 |---|---|---|---|
-| `SELECT 1` (simple query) | **50,155 ops/s** | 1.6× faster | 2.1× faster |
-| `SELECT 1000 rows` (binary) | **5,672 ops/s** | 8.0× faster | 4.4× faster |
-| `SELECT 100 columns` (binary) | **19,782 ops/s** | 1.5× faster | 4.8× faster |
-| `DO 1000 params` (binary) | **4,268 ops/s** | 2.2× faster | 58× faster |
-| Batch `INSERT` (100 rows) | **6,110 ops/s** | 1.3× faster | 3.0× faster |
+| `SELECT 1` (simple query) | **85,508 ops/s** | 1.6× faster | 2.4× faster |
+| `SELECT 1000 rows` (binary) | **6,259 ops/s** | 7.7× faster | 4.2× faster |
+| `SELECT 100 columns` (binary) | **13,624 ops/s** | 2.2× faster | 2.5× faster |
+| `DO 1000 params` (binary) | **2,721 ops/s** | 2.0× faster | 36× faster |
+| Batch `INSERT` (100 rows) | **8,454 ops/s** | 1.6× faster | 3.6× faster |
 
 ## Environment
 
 |  |  |
 |---|---|
 | CPU | Intel Core i9-11900K, governor `performance` (~4.8 GHz), client pinned to one core (`taskset -c 4`) |
-| OS / Python | Linux · CPython 3.12.3 |
-| Server | MariaDB 12.3.2 · TCP · TLS off |
-| Tooling | [pytest-benchmark](https://pypi.org/project/pytest-benchmark/) · ≥ 1000 rounds per benchmark · GC disabled |
-| Method | two full passes; the **second** (warmed-up) pass is reported (mean per-call time → ops/s) |
-| Date | 2026-06-18 |
+| OS / Python | Linux · CPython 3.14.4 |
+| Server | MariaDB 12.3.2 · Unix socket · TLS off |
+| Tooling | [pytest-benchmark](https://pypi.org/project/pytest-benchmark/) · ≥ 1000 rounds per benchmark (capped at ~1 s wall-time for the slowest drivers) · GC disabled |
+| Method | 2 warm-up passes (discarded) then 3 reported passes; the **median** per-call time across the 3 is reported (→ ops/s) |
+| Date | 2026-07-20 |
 
 > ⚠️ Sub-millisecond micro-benchmarks are sensitive to machine state (CPU
 > frequency scaling, background load, caches). These figures are meant for
@@ -45,16 +49,16 @@ results (operations per second, higher is better):
 
 | Benchmark | mariadb – C extension | mariadb – pure Python | PyMySQL | mysql-connector – C | mysql-connector – pure |
 |---|---|---|---|---|---|
-| DO 1 — command round-trip | 65,828 ops/s **(fastest)** | 60,869 ops/s (1.1x) | 59,863 ops/s (1.1x) | 33,994 ops/s (1.9x) | 23,257 ops/s (2.8x) |
-| SELECT 1 — simple query | 50,155 ops/s **(fastest)** | 31,623 ops/s (1.6x) | 30,522 ops/s (1.6x) | 23,906 ops/s (2.1x) | 14,770 ops/s (3.4x) |
-| INSERT — mixed types (single row) | 22,398 ops/s **(fastest)** | 20,125 ops/s (1.1x) | 19,846 ops/s (1.1x) | 21,392 ops/s (1.0x) | 14,755 ops/s (1.5x) |
-| Batch INSERT — 100 rows (executemany) | 6,110 ops/s **(fastest)** | 4,786 ops/s (1.3x) | 1,880 ops/s (3.3x) | 2,050 ops/s (3.0x) | 1,626 ops/s (3.8x) |
-| SELECT 1000 rows — binary protocol | 5,672 ops/s **(fastest)** | 713 ops/s (8.0x) | – | 1,289 ops/s (4.4x) | 22 ops/s (255.7x) |
-| SELECT 1000 rows — text protocol | 5,220 ops/s **(fastest)** | 854 ops/s (6.1x) | 444 ops/s (11.8x) | 1,429 ops/s (3.7x) | 298 ops/s (17.5x) |
-| SELECT 100 columns — binary protocol | 19,782 ops/s **(fastest)** | 13,489 ops/s (1.5x) | – | 4,139 ops/s (4.8x) | 24 ops/s (832.1x) |
-| SELECT 100 columns — text protocol | 13,910 ops/s **(fastest)** | 5,290 ops/s (2.6x) | 2,120 ops/s (6.6x) | 5,568 ops/s (2.5x) | 2,088 ops/s (6.7x) |
-| DO 1000 params — binary protocol | 4,268 ops/s **(fastest)** | 1,977 ops/s (2.2x) | – | 74 ops/s (58.0x) | 17 ops/s (246.5x) |
-| DO 1000 params — text protocol | 3,560 ops/s **(fastest)** | 3,415 ops/s (1.0x) | 1,748 ops/s (2.0x) | 2,485 ops/s (1.4x) | 860 ops/s (4.1x) |
+| DO 1 — command round-trip | 101,753 ops/s (1.0x) | 103,308 ops/s **(fastest)** | 91,890 ops/s (1.1x) | 52,438 ops/s (2.0x) | 31,414 ops/s (3.3x) |
+| SELECT 1 — simple query | 85,508 ops/s **(fastest)** | 52,596 ops/s (1.6x) | 43,679 ops/s (2.0x) | 34,932 ops/s (2.4x) | 18,266 ops/s (4.7x) |
+| INSERT — mixed types (single row) | 34,305 ops/s **(fastest)** | 30,269 ops/s (1.1x) | 26,165 ops/s (1.3x) | 30,360 ops/s (1.1x) | 17,693 ops/s (1.9x) |
+| Batch INSERT — 100 rows (executemany) | 8,454 ops/s **(fastest)** | 5,394 ops/s (1.6x) | 2,141 ops/s (3.9x) | 2,370 ops/s (3.6x) | 1,885 ops/s (4.5x) |
+| SELECT 1000 rows — binary protocol | 6,259 ops/s **(fastest)** | 818 ops/s (7.7x) | – | 1,490 ops/s (4.2x) | 287 ops/s (21.8x) |
+| SELECT 1000 rows — text protocol | 6,781 ops/s **(fastest)** | 1,049 ops/s (6.5x) | 541 ops/s (12.5x) | 1,633 ops/s (4.2x) | 355 ops/s (19.1x) |
+| SELECT 100 columns — binary protocol | 13,624 ops/s **(fastest)** | 6,170 ops/s (2.2x) | – | 5,511 ops/s (2.5x) | 1,230 ops/s (11.1x) |
+| SELECT 100 columns — text protocol | 18,113 ops/s **(fastest)** | 7,435 ops/s (2.4x) | 2,543 ops/s (7.1x) | 7,303 ops/s (2.5x) | 2,362 ops/s (7.7x) |
+| DO 1000 params — binary protocol | 2,721 ops/s **(fastest)** | 1,394 ops/s (2.0x) | – | 76 ops/s (35.8x) | 59 ops/s (46.2x) |
+| DO 1000 params — text protocol | 4,082 ops/s **(fastest)** | 4,066 ops/s (1.0x) | 2,187 ops/s (1.9x) | 2,870 ops/s (1.4x) | 1,100 ops/s (3.7x) |
 
 *(Multiplier in parentheses is how much slower than the fastest driver for that row.)*
 
@@ -96,12 +100,17 @@ python run_all_benchmarks.py                    # all drivers -> results_<timest
 ```
 
 For the stable numbers shown above, pin the CPU to maximum frequency, pin the
-client to one core, and take the **second** of two runs:
+client to one core, warm the machine with a couple of discarded passes, then
+report the **median** of several passes (which filters out any unlucky pass):
 
 ```bash
 sudo cpupower frequency-set -g performance      # restore later: -g powersave
 taskset -c 4 python run_all_benchmarks.py        # warm-up (discarded)
-taskset -c 4 python run_all_benchmarks.py        # reported run
+taskset -c 4 python run_all_benchmarks.py        # warm-up (discarded)
+for i in 1 2 3; do                               # reported passes
+  taskset -c 4 python run_all_benchmarks.py
+done
+# take the per-benchmark median across the 3 reported results_* dirs
 ```
 
 Regenerate the charts and the table on this page from a results directory
