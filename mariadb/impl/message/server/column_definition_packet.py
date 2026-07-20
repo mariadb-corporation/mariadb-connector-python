@@ -9,7 +9,7 @@ cache-friendly access during row parsing. No per-column objects are created.
 """
 
 import struct
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, List
 
 if TYPE_CHECKING:
     from ...client.context import Context
@@ -69,78 +69,56 @@ class ColumnsDefinition:
         self.decimals_arr = _zero  # last use — no copy needed
         self.ext_type_names: List[bytes | None] = [None] * count
         self.ext_type_formats: List[bytes | None] = [None] * count
-        self._meta = [None] * count
+        # Per column: raw identifier bytes (schema..org_name), lazily replaced by
+        # the split list[bytes] of the 5 identifiers on first get_*() access.
+        self._meta: List[Any] = [None] * count
 
     def decode_column(self, index: int, data: memoryview, context: 'Context') -> None:
-        """Decode a single column definition packet directly into parallel arrays."""
+        """Decode a single column definition packet directly into parallel arrays.
+
+        Only the hot-path fixed fields (type/flags/charset/length/decimals) are
+        parsed eagerly. The string identifiers (schema/table/org_table/name/
+        org_name) are kept as a single raw byte copy in ``_meta`` and decoded
+        lazily by the ``get_*`` accessors, because most queries fetch rows
+        without ever reading ``cursor.description``.
+        """
         pos = 0
-        start_pos = 0
 
-        # ---- Read 6 length-encoded string identifiers ----
-        # Field 0 (catalog): skip
+        # ---- Skip the 6 length-encoded string identifiers ----
+        # Field 0 (catalog): always the constant "def", never surfaced.
         length = data[pos]; pos += 1; pos += length
-
-        # Field 1 (schema)
+        # Fields 1..5 (schema, table, org_table, name, org_name): keep the raw
+        # region and defer per-field parsing to the get_*() accessors. Unrolled
+        # (no range() iterator) since this runs once per column of every result.
+        id_start = pos
         length = data[pos]; pos += 1
-        if length > 0:
-            if length >= 251:
-                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
-            sch_begin = pos - start_pos; sch_end = sch_begin + length; pos += length
-        else:
-            sch_begin = sch_end = 0
-
-        # Field 2 (table)
+        if length >= 251:
+            length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+        pos += length
         length = data[pos]; pos += 1
-        if length > 0:
-            if length >= 251:
-                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
-            tbl_begin = pos - start_pos; tbl_end = tbl_begin + length; pos += length
-        else:
-            tbl_begin = tbl_end = 0
-
-        # Field 3 (org_table)
+        if length >= 251:
+            length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+        pos += length
         length = data[pos]; pos += 1
-        if length > 0:
-            if length >= 251:
-                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
-            org_tbl_begin = pos - start_pos; org_tbl_end = org_tbl_begin + length; pos += length
-        else:
-            org_tbl_begin = org_tbl_end = 0
-
-        # Field 4 (name)
+        if length >= 251:
+            length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+        pos += length
         length = data[pos]; pos += 1
-        if length > 0:
-            if length >= 251:
-                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
-            name_begin = pos - start_pos; name_end = name_begin + length; pos += length
-        else:
-            name_begin = name_end = 0
-
-        # Field 5 (org_name)
+        if length >= 251:
+            length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+        pos += length
         length = data[pos]; pos += 1
-        if length > 0:
-            if length >= 251:
-                length = _UNPACK_UINT16(data, pos)[0]; pos += 2
-            org_name_begin = pos - start_pos; org_name_end = org_name_begin + length; pos += length
-        else:
-            org_name_begin = org_name_end = 0
-
-        # Save raw identifier bytes + all ranges as a single tuple
-        self._meta[index] = (  # type: ignore[call-overload]
-            data[start_pos:pos].tobytes(),
-            sch_begin, sch_end,
-            tbl_begin, tbl_end,
-            org_tbl_begin, org_tbl_end,
-            name_begin, name_end,
-            org_name_begin, org_name_end,
-        )
+        if length >= 251:
+            length = _UNPACK_UINT16(data, pos)[0]; pos += 2
+        pos += length
+        self._meta[index] = data[id_start:pos].tobytes()
 
         # ---- Extended metadata ----
         ext_type_name = None
         ext_type_format = None
         special_format = 0
 
-        if context.hasExtendedMetadata():
+        if context.extended_metadata:
             ext_length = data[pos]; pos += 1
             if ext_length > 0:
                 special_format = 1
@@ -162,38 +140,57 @@ class ColumnsDefinition:
         self.types[index] = col_type
         self.flags[index] = col_flags
         self.charsets[index] = charset
-        self.special_formats[index] = special_format
-        self.ext_type_names[index] = ext_type_name
-        self.ext_type_formats[index] = ext_type_format
         self.column_lengths[index] = column_length
         self.decimals_arr[index] = col_decimals
+        # special_formats/ext_type_* are pre-filled with 0/None in __init__, so
+        # only the rare extended-metadata columns need to overwrite them.
+        if special_format:
+            self.special_formats[index] = special_format
+            self.ext_type_names[index] = ext_type_name
+            self.ext_type_formats[index] = ext_type_format
 
     # =========================================================================
     # String accessors (lazy decode — cold path only)
     # =========================================================================
 
-    def _decode_str(self, i: int, begin_idx: int) -> str:
+    def _fields(self, i: int) -> List[bytes]:
+        """Lazily split the stored identifier region into its 5 fields
+        (schema, table, org_table, name, org_name), caching the result so a
+        full cursor.description read parses each column only once."""
         m = self._meta[i]
-        b = m[begin_idx]  # type: ignore[index]
-        e = m[begin_idx + 1]  # type: ignore[index]
-        if e > b:
-            return m[0][b:e].decode('utf-8', errors='replace')  # type: ignore[index, no-any-return]
+        if type(m) is bytes:
+            pos = 0
+            fields: List[bytes] = []
+            for _ in range(5):
+                length = m[pos]; pos += 1
+                if length >= 251:
+                    length = _UNPACK_UINT16(m, pos)[0]; pos += 2
+                fields.append(m[pos:pos + length]); pos += length
+            self._meta[i] = fields
+            return fields
+        # m is already the cached list[bytes] from a previous call
+        return m  # type: ignore[no-any-return]
+
+    def _decode_str(self, i: int, field_idx: int) -> str:
+        raw = self._fields(i)[field_idx]
+        if raw:
+            return raw.decode('utf-8', errors='replace')
         return ''
 
-    def get_name(self, i: int) -> str:
-        return self._decode_str(i, 7)  # name_begin, name_end
-
-    def get_org_name(self, i: int) -> str:
-        return self._decode_str(i, 9)  # org_name_begin, org_name_end
-
     def get_schema(self, i: int) -> str:
-        return self._decode_str(i, 1)  # sch_begin, sch_end
+        return self._decode_str(i, 0)
 
     def get_table(self, i: int) -> str:
-        return self._decode_str(i, 3)  # tbl_begin, tbl_end
+        return self._decode_str(i, 1)
 
     def get_org_table(self, i: int) -> str:
-        return self._decode_str(i, 5)  # org_tbl_begin, org_tbl_end
+        return self._decode_str(i, 2)
+
+    def get_name(self, i: int) -> str:
+        return self._decode_str(i, 3)
+
+    def get_org_name(self, i: int) -> str:
+        return self._decode_str(i, 4)
 
     def get_catalog(self, i: int) -> str:
         return 'def'
