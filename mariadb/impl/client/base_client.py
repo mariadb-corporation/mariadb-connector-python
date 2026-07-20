@@ -888,8 +888,8 @@ class BaseClient(ABC):
                     vstart = pos + 9
                 pos = vstart + length
 
-                val = bytes(data[vstart:pos])
                 if col_special_formats[i]:
+                    val = bytes(data[vstart:pos])
                     if col_ext_type_formats[i] == b'json':
                         row_values[i] = val.decode('utf-8')
                     elif col_ext_type_names[i] == b'inet6' or col_ext_type_names[i] == b'inet4':
@@ -901,9 +901,9 @@ class BaseClient(ABC):
                         if config.native_object:
                             row_values[i] = uuid.UUID(row_values[i])
                 elif field_type != FIELD_TYPE.JSON and col_charsets[i] == 63:  # Binary charset
-                    row_values[i] = val
+                    row_values[i] = bytes(data[vstart:pos])
                 else:
-                    row_values[i] = val.decode('utf-8', errors='ignore')
+                    row_values[i] = str(data[vstart:pos], 'utf-8', 'ignore')
 
             elif field_type == FIELD_TYPE.TINY:
                 if (col_flags[i] & _UNSIGNED) != 0:
