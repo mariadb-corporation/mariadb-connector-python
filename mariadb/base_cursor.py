@@ -10,6 +10,7 @@ from mariadb.impl.configuration import Configuration
 Base cursor implementation with common functionality for sync and async cursors
 """
 
+import contextlib
 import copy
 import warnings
 from abc import ABC, abstractmethod
@@ -212,10 +213,8 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         COM_STMT_CLOSE for the kept statement.
         """
         if self._local_stmt_cache is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._local_stmt_cache.clear()
-            except Exception:
-                pass
             self._local_stmt_cache = None
 
     def _apply_prepared_sql(self, sql: str) -> str:

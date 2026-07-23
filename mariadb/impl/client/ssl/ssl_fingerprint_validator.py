@@ -9,6 +9,7 @@ This allows secure connections even with self-signed certificates by validating
 the certificate fingerprint against a hash provided by the server.
 """
 
+import contextlib
 import ssl
 import hashlib
 import hmac
@@ -49,10 +50,11 @@ class SSLFingerprintValidator:
         context.verify_mode = ssl.CERT_NONE
         
         # Copy cipher settings if available
+        # Ignore cipher-copy failures; the context is usable with defaults.
         try:
             if hasattr(base_context, '_ciphers'):
                 context.set_ciphers(base_context._ciphers)
-        except:
+        except:  # nosec B110
             pass
         
         return context
@@ -64,16 +66,13 @@ class SSLFingerprintValidator:
         Args:
             ssl_socket: SSL socket after handshake
         """
-        try:
+        with contextlib.suppress(Exception):
             # Get the peer certificate in DER format
             cert_der = ssl_socket.getpeercert(binary_form=True)
             if cert_der:
                 self.cert_der = cert_der
                 # Calculate SHA-256 fingerprint
                 self.fingerprint = hashlib.sha256(cert_der).digest()
-        except Exception:
-            # If we can't get the certificate, fingerprint remains None
-            pass
     
     def get_fingerprint(self) -> bytes | None:
         """

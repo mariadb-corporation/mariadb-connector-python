@@ -20,6 +20,7 @@ from mariadb_shared.text_protocol import substitute_params, normalize_to_qmark
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
 from typing import Sequence, List, Any, cast
 from types import TracebackType
+import contextlib
 import decimal
 
 _Decimal = decimal.Decimal
@@ -435,10 +436,8 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
             except BaseException:
                 if self.connection._active_async_cursor is self:
                     self.connection._active_async_cursor = None
-                try:
+                with contextlib.suppress(Exception):
                     self._reset()
-                except Exception:
-                    pass
                 raise
             self._bulk = 1
 
@@ -456,15 +455,11 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
 
         if self.connection._active_async_cursor is not None:
             active_cursor = self.connection._active_async_cursor
-            try:
+            with contextlib.suppress(Exception):
                 if (not active_cursor._closed and
                         active_cursor.field_count > 0):
-                    try:
+                    with contextlib.suppress(Exception):
                         await active_cursor._drain_rows()
-                    except Exception:
-                        pass
-            except Exception:
-                pass
             self.connection._active_async_cursor = None
 
     async def _fetch_row_unbuffered(self) -> Any | None:
@@ -514,13 +509,11 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
 
         if not self.connection.is_closed:
             if self.connection._active_async_cursor is self and self.field_count > 0:
-                try:
+                with contextlib.suppress(Exception):
                     # Drain the current result set, then any further sets
                     await self._drain_rows()
                     while await self.nextset() is not None:
                         pass
-                except Exception:
-                    pass
                 self.connection._active_async_cursor = None
             super().close()
 

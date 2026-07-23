@@ -181,7 +181,7 @@ class SSLUtility:
             configuration.ssl_verify_cert and
             not configuration.ssl_ca and
             configuration.password is not None and
-            configuration.password != ""
+            configuration.password != ""  # nosec B105
         )
 
         cert_fingerprint_validator = None

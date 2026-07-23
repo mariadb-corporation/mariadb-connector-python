@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 
 from ...configuration import Configuration
@@ -18,11 +19,9 @@ hashes: Any = None
 serialization: Any = None
 rsa: Any = None
 padding: Any = None
-try:
+with contextlib.suppress(Exception):
     from cryptography.hazmat.primitives import hashes, serialization  # pyright: ignore[reportMissingImports]
     from cryptography.hazmat.primitives.asymmetric import rsa, padding  # pyright: ignore[reportMissingImports]
-except Exception:
-    pass
 HAS_CRYPTOGRAPHY = padding is not None
 
 
@@ -43,7 +42,7 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     @staticmethod
     def encrypt_password(password: str | None, seed: bytes) -> bytearray:
         """Send an SHA-2 encrypted password: XOR(SHA256(password), SHA256(seed, SHA256(SHA256(password))))"""
-        if password is None or password == "":
+        if password is None or password == "":  # nosec B105
             return bytearray(b'')
         
         # Convert password to bytes
@@ -85,12 +84,16 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
                     seed_cycle = (self.seed * ((len(password_bytes) // len(self.seed)) + 1))[:len(password_bytes)]
                     password_bytes = bytes(a ^ b for a, b in zip(password_bytes, seed_cycle))
                 
-                # Encrypt with RSA OAEP padding
+                # Encrypt with RSA OAEP padding. SHA1 is the OAEP/MGF1 digest
+                # required by the server's caching_sha2_password public-key
+                # exchange (MySQL/MariaDB use RSA_PKCS1_OAEP_PADDING, whose
+                # default digest is SHA1); it is dictated by interoperability,
+                # not chosen for its cryptographic strength.
                 encrypted: bytes = public_key.encrypt(
                     password_bytes,
                     padding.OAEP(
-                        mgf=padding.MGF1(algorithm=hashes.SHA1()),
-                        algorithm=hashes.SHA1(),
+                        mgf=padding.MGF1(algorithm=hashes.SHA1()),  # nosec B303
+                        algorithm=hashes.SHA1(),  # nosec B303
                         label=None
                     )
                 )

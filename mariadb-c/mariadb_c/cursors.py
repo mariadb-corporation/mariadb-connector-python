@@ -431,7 +431,8 @@ class Cursor(StmtReuseMixin, CCursor):
 
         if mode == "relative":
             rownumber = self.rownumber
-            assert rownumber is not None  # field_count != 0 guarantees a result set
+            if not (rownumber is not None):  # field_count != 0 guarantees a result set
+                raise AssertionError
             if rownumber + value < 0 or \
                rownumber + value > self.rowcount:
                 raise ProgrammingError("Position value "

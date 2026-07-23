@@ -26,13 +26,17 @@ class NativePasswordPlugin(AuthenticationPlugin):
     @staticmethod
     def encrypt_password(password: str | None, seed: bytes) -> bytearray:
         """Encrypts a password using MySQL native password algorithm"""
-        if password is None or password == "":
+        if password is None or password == "":  # nosec B105
             return bytearray(b'')
         
         password_bytes = password.encode('utf-8')
-        stage1 = hashlib.sha1(password_bytes).digest()
-        stage2 = hashlib.sha1(stage1).digest()
-        digest = hashlib.sha1()
+        # SHA1 is mandated by the mysql_native_password wire protocol; it is a
+        # protocol building block, not a security choice by the connector. Kept
+        # under the default usedforsecurity=True so a FIPS build still enforces
+        # its policy (the call raises there rather than silently running).
+        stage1 = hashlib.sha1(password_bytes).digest()  # nosec B324
+        stage2 = hashlib.sha1(stage1).digest()  # nosec B324
+        digest = hashlib.sha1()  # nosec B324
         digest.update(seed)
         digest.update(stage2)
         stage3 = digest.digest()
@@ -88,6 +92,7 @@ class NativePasswordPlugin(AuthenticationPlugin):
         if password is None:
             return None
         password_bytes = password.encode('utf-8')
-        stage1 = hashlib.sha1(password_bytes).digest()
-        stage2 = hashlib.sha1(stage1).digest()       
+        # Protocol-mandated SHA1 (see encrypt_password); not a security choice.
+        stage1 = hashlib.sha1(password_bytes).digest()  # nosec B324
+        stage2 = hashlib.sha1(stage1).digest()  # nosec B324
         return stage2

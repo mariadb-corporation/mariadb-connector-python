@@ -119,9 +119,10 @@ class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # 
             return
 
         if not self._closed:
+            # Ignore errors while closing; the finally clause still marks the connection closed.
             try:
                 await self._client.close()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             finally:
                 self._closed = True

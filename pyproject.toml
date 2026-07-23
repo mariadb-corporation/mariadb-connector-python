@@ -67,6 +67,7 @@ dev = [
     "black",
     "flake8",
     "mypy",
+    "bandit[toml]",
 ]
 test = [
     "pytest>=6.0",
@@ -237,3 +238,30 @@ ignore = [
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["F401", "F811"]
+
+# Bandit SAST configuration (CONPY-373).
+# Scans every shipped Python tree (mariadb, mariadb_shared, and the Python in
+# mariadb-c / mariadb-pool). Only non-shipped trees (tests, benchmarks, build
+# artifacts, tooling) are excluded so findings stay actionable. CI and the
+# pre-commit hook report AND fail on all severities; nothing is globally
+# skipped. Every suppression is a justified inline `# nosec <id>` marker:
+#   * B324 / B303 -- protocol-mandated weak hashes (mysql_native_password /
+#     caching_sha2_password), kept under the default usedforsecurity=True so
+#     FIPS enforcement is preserved;
+#   * B105 -- false positives (comparisons of a password against "");
+#   * B404 / B603 -- the intentional, shell-free subprocess used at build time
+#     to query mariadb_config.
+# try/except/pass with a finally / bare except / multiple handlers also carry a
+# justified `# nosec B110`; the rest were refactored to contextlib.suppress.
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    "benchmarks",
+    "build",
+    "docs",
+    "helper",
+    "scripts",
+    "tools",
+    "testing",
+    ".git",
+]

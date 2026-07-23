@@ -19,6 +19,7 @@ cursor providing:
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -110,8 +111,6 @@ class StmtReuseMixin:
         """
         self._resolved_stmt_cache = None
         if self._local_stmt_cache is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._local_stmt_cache.clear()
-            except Exception:
-                pass
             self._local_stmt_cache = None

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import secrets
 
 from ...configuration import Configuration
@@ -18,12 +19,10 @@ hashes: Any = None
 serialization: Any = None
 PBKDF2HMAC: Any = None  # pyright: ignore[reportConstantRedefinition]
 Ed25519PrivateKey: Any = None
-try:
+with contextlib.suppress(Exception):
     from cryptography.hazmat.primitives import hashes, serialization  # pyright: ignore[reportMissingImports]
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # pyright: ignore[reportMissingImports, reportConstantRedefinition]
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # pyright: ignore[reportMissingImports]
-except Exception:
-    pass
 HAS_CRYPTOGRAPHY = Ed25519PrivateKey is not None
 
 

@@ -9,6 +9,7 @@ import threading
 import asyncio
 import time
 import collections
+import contextlib
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Callable, Optional, Iterator, AsyncIterator, Literal, TYPE_CHECKING
@@ -132,11 +133,9 @@ class PooledConnection(BasePooledConnection):
         self.pool.release(self)
 
     def closeSilently(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.connection._set_pooled_connection(None)
             self.connection.close()
-        except Exception:
-            pass
 
     def __getattr__(self, name: str) -> Any:
         """Proxy attribute access to underlying connection"""
@@ -164,11 +163,9 @@ class AsyncPooledConnection(BasePooledConnection):
         await self.pool.release(self)
 
     async def closeSilently(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self.connection._set_pooled_connection(None)
             await self.connection.close()
-        except Exception:
-            pass
 
     def __getattr__(self, name: str) -> Any:
         """Proxy attribute access to underlying connection"""
@@ -314,6 +311,9 @@ class ConnectionPool:
             if self._acquiring > 0:
                 return
             self._acquiring += 1
+            # A connection could not be created right now; swallow the error so the
+            # pool keeps operating with whatever capacity it has, while the finally
+            # clause still restores the _acquiring counter.
             try:
                 conn = self.connection_factory(**self.connection_params)
                 pooled_conn = PooledConnection(conn, self)
@@ -322,7 +322,7 @@ class ConnectionPool:
                 pooled_conn.mark_idle()
                 self._free.append(pooled_conn)
                 self._cond.notify()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             finally:
                 self._acquiring -= 1
@@ -656,6 +656,9 @@ class AsyncConnectionPool:
             if self._acquiring > 0:
                 return
             self._acquiring += 1
+            # A connection could not be created right now; swallow the error so the
+            # pool keeps operating with whatever capacity it has, while the finally
+            # clause still restores the _acquiring counter.
             try:
                 conn = await self.connection_factory(**self.connection_params)
                 pooled_conn = AsyncPooledConnection(conn, self)
@@ -664,7 +667,7 @@ class AsyncConnectionPool:
                 pooled_conn.mark_idle()
                 self._free.append(pooled_conn)
                 self._cond.notify()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             finally:
                 self._acquiring -= 1

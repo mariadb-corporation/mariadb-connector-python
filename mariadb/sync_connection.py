@@ -105,9 +105,11 @@ class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # typ
             return
 
         if not self._closed:
+            # Ignore errors during close; the connection is being torn down and
+            # the finally block still marks it closed regardless of failure.
             try:
                 self._client.close()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             finally:
                 self._closed = True

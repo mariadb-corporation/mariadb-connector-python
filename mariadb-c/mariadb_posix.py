@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import subprocess
+import subprocess  # nosec B404
 from packaging import version
 import sys
 import os
@@ -16,17 +16,7 @@ class MariaDBConfiguration():
     extra_link_args = []
 
 
-def mariadb_config(config, option):
-    from os import popen
-    file = popen("%s --%s" % (config, option))
-    data = file.read().strip().split()
-    rc = file.close()
-    if rc:
-        if rc / 256:
-            data = []
-        if rc / 256 > 1:
-            raise EnvironmentError(
-                """mariadb_config not found.
+_MARIADB_CONFIG_NOT_FOUND = """mariadb_config not found.
 
 This error typically indicates that MariaDB Connector/C, a dependency which
 must be preinstalled, is not found.
@@ -34,7 +24,24 @@ If MariaDB Connector/C is not installed, see installation instructions
 If MariaDB Connector/C is installed, either set the environment variable
 MARIADB_CONFIG or edit the configuration file 'site.cfg' to set the
  'mariadb_config' option to the file location of the mariadb_config utility.
-""")
+"""
+
+
+def mariadb_config(config, option):
+    try:
+        proc = subprocess.run(  # nosec B603
+            [config, "--%s" % option],
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+    except OSError:
+        raise EnvironmentError(_MARIADB_CONFIG_NOT_FOUND)
+    data = proc.stdout.strip().split()
+    rc = proc.returncode
+    if rc:
+        data = []
+        if rc != 1:
+            raise EnvironmentError(_MARIADB_CONFIG_NOT_FOUND)
 
     return data
 
@@ -54,7 +61,7 @@ def get_config(options):
             config_prg = os.environ["MARIADB_CONFIG"]
         except KeyError:
             config_prg = options["mariadb_config"]
-        subprocess.call([config_prg, "--cc_version"])
+        subprocess.call([config_prg, "--cc_version"])  # nosec B603
     except FileNotFoundError:
         # using default from path
         config_prg = "mariadb_config"

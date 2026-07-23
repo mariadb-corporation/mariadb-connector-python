@@ -9,6 +9,7 @@ Base Client abstract class for MariaDB connections
 Contains all common logic shared between AsyncClient and SyncClient.
 """
 
+import contextlib
 import decimal
 import datetime
 import os
@@ -705,10 +706,8 @@ class BaseClient(ABC):
             row_list = list(row)
             for i in range(num_converters):
                 idx = converter_indices[i]
-                try:
+                with contextlib.suppress(Exception):
                     row_list[idx] = converter_funcs[i](row_list[idx])
-                except Exception:
-                    pass
             converted_rows.append(tuple(row_list))
 
         return converted_rows

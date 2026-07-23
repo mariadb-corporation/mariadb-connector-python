@@ -3,3 +3,16 @@ repos:
     rev: '5.0.4'  # pick a git hash / tag to point to
     hooks:
     -   id: flake8
+-   repo: https://github.com/PyCQA/bandit
+    rev: '1.9.4'
+    hooks:
+    -   id: bandit
+        # Report every finding at every severity/confidence level, matching the
+        # CI scan. nosec markers still apply, so acknowledged protocol
+        # constraints (native_password / caching_sha2 hashes) stay green.
+        args: ["-c", "pyproject.toml",
+               "--severity-level", "all", "--confidence-level", "all"]
+        additional_dependencies: ["bandit[toml]"]
+        # All shipped Python trees (pure-Python library, shared helpers, the
+        # C-extension package's Python, and the pooling package).
+        files: '^(mariadb|mariadb_shared|mariadb-c|mariadb-pool)/.*\.py$'

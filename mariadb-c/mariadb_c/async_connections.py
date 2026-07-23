@@ -315,7 +315,8 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         loop = self._loop
         fd = self._socket_fd
         # Both are set during _connect, before any wait can run.
-        assert loop is not None and fd is not None
+        if not (loop is not None and fd is not None):
+            raise AssertionError
         writing = False
 
         if wait_status & MYSQL_WAIT_READ:
@@ -374,7 +375,8 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             
             # Check for timeout
             if timeout is not None:
-                assert start_time is not None  # set together with timeout above
+                if not (start_time is not None):  # set together with timeout above
+                    raise AssertionError
                 elapsed = asyncio.get_event_loop().time() - start_time
                 if elapsed >= timeout:
                     return MYSQL_WAIT_TIMEOUT

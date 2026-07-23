@@ -98,15 +98,19 @@ class HandshakeResponse(ClientMessage):
         # SHA1(password) XOR SHA1(scramble + SHA1(SHA1(password)))
         
         password_bytes = self.configuration.password.encode('utf-8')
-        
+
+        # SHA1 here is fixed by the mysql_native_password wire protocol; it is a
+        # protocol building block, not a security choice by the connector. Kept
+        # under the default usedforsecurity=True so a FIPS build still enforces
+        # its policy.
         # SHA1(password)
-        sha1_password = hashlib.sha1(password_bytes).digest()
-        
+        sha1_password = hashlib.sha1(password_bytes).digest()  # nosec B324
+
         # SHA1(SHA1(password))
-        sha1_sha1_password = hashlib.sha1(sha1_password).digest()
-        
+        sha1_sha1_password = hashlib.sha1(sha1_password).digest()  # nosec B324
+
         # SHA1(scramble + SHA1(SHA1(password)))
-        scramble_hash = hashlib.sha1(auth_data + sha1_sha1_password).digest()
+        scramble_hash = hashlib.sha1(auth_data + sha1_sha1_password).digest()  # nosec B324
         
         # XOR SHA1(password) with scramble_hash
         result = bytes(a ^ b for a, b in zip(sha1_password, scramble_hash))

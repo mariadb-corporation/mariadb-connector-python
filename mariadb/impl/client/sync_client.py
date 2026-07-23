@@ -13,6 +13,7 @@ import socket
 import ssl
 import struct
 import copy
+import contextlib
 import sys
 from typing import List, Any, overload, cast
 import threading
@@ -402,10 +403,8 @@ class SyncClient(BaseClient):
             raise
         except Exception as e:
             if self.socket:
-                try:
+                with contextlib.suppress(Exception):
                     self.socket.close()
-                except Exception:
-                    pass
             self.socket = None  # type: ignore[assignment]
             # Use errno 2002 for connection errors (Can't connect to server)
             raise self.exception_factory.create_exception(
@@ -558,10 +557,9 @@ class SyncClient(BaseClient):
 
             # Drain any active streaming result before executing new command
             if self._active_streaming_result is not None:
-                try:
+                # Ignore errors during draining
+                with contextlib.suppress(Exception):
                     self._active_streaming_result.fetch_remaining()
-                except Exception:
-                    pass  # Ignore errors during draining
                 self._active_streaming_result = None
 
             try:
@@ -715,7 +713,8 @@ class SyncClient(BaseClient):
             # Parse column count from first packet
             parser = PayloadReader(packet)
             column_count = parser.read_length_encoded_int()
-            assert column_count is not None
+            if not (column_count is not None):
+                raise AssertionError
 
             # Cache EOF deprecated flag once
             eof_deprecated = context.isEofDeprecated()
@@ -858,7 +857,8 @@ class SyncClient(BaseClient):
 
                 parser = PayloadReader(packet)
                 column_count = parser.read_length_encoded_int()
-                assert column_count is not None
+                if not (column_count is not None):
+                    raise AssertionError
                 eof_deprecated = context.isEofDeprecated()
 
                 if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
@@ -899,7 +899,8 @@ class SyncClient(BaseClient):
         """Drain a streaming result when a cursor is closed mid-stream."""
         if (result is self._active_streaming_result
                 and isinstance(result, SyncStreamingResult)):
-            try:
+            # Ignore errors during close
+            with contextlib.suppress(Exception):
                 result.fetch_remaining()
                 if first_only:
                     return
@@ -909,8 +910,6 @@ class SyncClient(BaseClient):
                     if not isinstance(next_result, SyncStreamingResult):
                         break
                     next_result.fetch_remaining()
-            except Exception:
-                pass  # Ignore errors during close
             self._active_streaming_result = None
 
     def _handle_local_infile(self, packet: memoryview, sql: str | None, remaining_packets: list[tuple[int, int]] | None) -> tuple[OkPacket, list[tuple[int, int]] | None]:
@@ -1055,12 +1054,10 @@ class SyncClient(BaseClient):
 
             # Send COM_QUIT packet to gracefully close the connection
             if self.connected and self.socket:
-                try:
+                # Ignore errors when sending quit - connection may already be broken
+                with contextlib.suppress(Exception):
                     message = QuitPacket()
                     self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
-                except Exception:
-                    # Ignore errors when sending quit - connection may already be broken
-                    pass
             self.closed = True
             self.connected = False
             self._cleanup_connection()
@@ -1095,19 +1092,15 @@ class SyncClient(BaseClient):
         """Get the peer's certificate as the decoded dict from ssl.getpeercert(), 
         or None when no peer cert is available."""
         if self.socket and isinstance(self.socket, ssl.SSLSocket):
-            try:
+            with contextlib.suppress(Exception):
                 return self.socket.getpeercert()
-            except Exception:
-                pass
         return None
 
     def _cleanup_connection(self) -> None:
         """Cleanup socket and stream resources"""
         if hasattr(self, 'socket') and self.socket:
-            try:
+            with contextlib.suppress(Exception):
                 self.socket.close()
-            except Exception:
-                pass
             self.socket = None  # type: ignore[assignment]
         # Read buffer cleanup handled by garbage collection
 
@@ -1184,12 +1177,10 @@ class SyncClient(BaseClient):
 
     def _close_prepared_statement(self, stmt: PrepareStmtPacket) -> None:
         """Close prepared statement on server (for cache eviction callback)"""
-        try:
+        # Ignore errors when closing
+        with contextlib.suppress(Exception):
             if not self.closed:
                 from ..message.client.stmt_close_packet import StmtClosePacket
                 message = StmtClosePacket(stmt.statement_id)
                 self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
-        except Exception:
-            # Ignore errors when closing
-            pass
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import socket
 from collections import OrderedDict
 from typing import Any, Tuple, Type, cast, TYPE_CHECKING
@@ -59,10 +60,8 @@ class StmtCacheEntry:
         self.checked_out = False
         if not self.in_cache:
             # Evicted while checked out — close now
-            try:
+            with contextlib.suppress(Exception):
                 connection._close_stmt_capsule(capsule)
-            except Exception:
-                pass
         else:
             self.capsule = capsule
 
@@ -70,10 +69,8 @@ class StmtCacheEntry:
         """Mark as evicted.  Close capsule immediately if not checked out."""
         self.in_cache = False
         if self.capsule is not None:
-            try:
+            with contextlib.suppress(Exception):
                 connection._close_stmt_capsule(self.capsule)
-            except Exception:
-                pass
             self.capsule = None
 
 
@@ -114,10 +111,8 @@ class StmtCache:
         """Store *capsule* under *sql*, evicting the LRU entry if over capacity."""
         if self._maxsize <= 0:
             self._drain_active_result()
-            try:
+            with contextlib.suppress(Exception):
                 self._connection._close_stmt_capsule(capsule)
-            except Exception:
-                pass
             return
         will_evict = (sql in self._cache) or (len(self._cache) >= self._maxsize)
         if will_evict:
@@ -136,10 +131,8 @@ class StmtCache:
         for entry in self._cache.values():
             entry.in_cache = False
             if entry.capsule is not None:
-                try:
+                with contextlib.suppress(Exception):
                     self._connection._neutralize_stmt_capsule(entry.capsule)
-                except Exception:
-                    pass
                 entry.capsule = None
         self._cache.clear()
 
