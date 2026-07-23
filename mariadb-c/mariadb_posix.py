@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import annotations
+
 import subprocess  # nosec B404
 from packaging import version
 import sys
@@ -7,13 +9,13 @@ import os
 
 
 class MariaDBConfiguration():
-    lib_dirs = []
-    libs = []
-    version = []
-    includes = []
-    extra_objects = []
-    extra_compile_args = []
-    extra_link_args = []
+    lib_dirs: list[str] = []
+    libs: list[str] = []
+    version: str = ""
+    includes: list[str] = []
+    extra_objects: list[str] = []
+    extra_compile_args: list[str] = []
+    extra_link_args: list[str] = []
 
 
 _MARIADB_CONFIG_NOT_FOUND = """mariadb_config not found.
@@ -27,7 +29,7 @@ MARIADB_CONFIG or edit the configuration file 'site.cfg' to set the
 """
 
 
-def mariadb_config(config, option):
+def mariadb_config(config: str, option: str) -> list[str]:
     try:
         proc = subprocess.run(  # nosec B603
             [config, "--%s" % option],
@@ -46,13 +48,13 @@ def mariadb_config(config, option):
     return data
 
 
-def dequote(s):
+def dequote(s: str) -> str:
     if s[0] in "\"'" and s[0] == s[-1]:
         s = s[1:-1]
     return s
 
 
-def get_config(options):
+def get_config(options: dict[str, str]) -> MariaDBConfiguration:
     required_version = "3.3.1"
     static = options["link_static"]
 

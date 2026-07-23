@@ -2,6 +2,8 @@
 # Windows configuration
 #
 
+from __future__ import annotations
+
 import os
 import platform
 import sys
@@ -12,16 +14,16 @@ from winreg import ConnectRegistry, OpenKey, QueryValueEx,\
 
 
 class MariaDBConfiguration():
-    lib_dirs = []
-    libs = []
-    version = []
-    includes = []
-    extra_objects = []
-    extra_compile_args = []
-    extra_link_args = []
+    lib_dirs: list[str] = []
+    libs: list[str] = []
+    version: str = ""
+    includes: list[str] = []
+    extra_objects: list[str] = []
+    extra_compile_args: list[str] = []
+    extra_link_args: list[str] = []
 
 
-def get_config(options):
+def get_config(options: dict[str, str]) -> MariaDBConfiguration:
     static = options["link_static"]
     mariadb_dir = options["install_dir"]
     required_version = "3.2.4"
