@@ -1,0 +1,10 @@
+name: "CodeQL config (CONPY-373)"
+
+paths-ignore:
+  - testing
+  - benchmarks
+  - docs
+
+query-filters:
+  - exclude:
+      id: py/weak-sensitive-data-hashing

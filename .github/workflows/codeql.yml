@@ -54,19 +54,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
-          # security-extended adds the deeper taint/dataflow query suite.
-          queries: security-extended
-
-      # ---- Manual build for the C extension (c-cpp only) ----
-      # CodeQL's tracer wraps the compiler while the extension is built, so the
-      # native sources under mariadb/ get analyzed. This mirrors the C build in
-      # ci.yml: libmariadb (Connector/C) is compiled and installed to /usr,
-      # then setup.py compiles the extension against it.
       - name: Set up Python
         if: matrix.build-mode == 'manual'
         uses: actions/setup-python@v5
@@ -84,6 +71,16 @@ jobs:
           make -j"$(nproc)"
           sudo make install
 
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+          # security-extended adds the deeper taint/dataflow query suite.
+          queries: security-extended
+
+      # ---- Traced build: ONLY the extension's own C sources (mariadb/) ----
       - name: Build the C extension
         if: matrix.build-mode == 'manual'
         run: |
