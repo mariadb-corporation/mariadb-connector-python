@@ -40,6 +40,55 @@ jobs:
         with:
           additional-matrix: '[{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.9"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.10"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.11"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.12"},{"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.13"}, {"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "3.14"}, {"name": "MariaDB 11.4", "os": "windows-latest", "db-type": "community", "db-tag": "11.4", "python": "3.14"}, {"name": "MariaDB 11.4", "os": "ubuntu-latest", "db-type": "community", "db-tag": "11.4", "python": "pypy3.11", "continue-on-error": true}]'
 
+  bandit:
+    name: Security lint (bandit)
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'schedule' ||
+      github.ref == 'refs/heads/1.1' ||
+      github.ref == 'refs/heads/1.0' ||
+      github.ref == 'refs/heads/2.0'
+    permissions:
+      contents: read
+      # Required to upload the SARIF report to the code-scanning API.
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bandit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'bandit[toml,sarif]'
+
+      - name: Run bandit (SARIF, all severities)
+        # Report every finding at every severity and confidence level.
+        # --exit-zero keeps this step green; findings are surfaced as
+        # code-scanning alerts (uploaded below).
+        run: |
+          bandit -c pyproject.toml -r mariadb \
+            --severity-level all --confidence-level all \
+            -f sarif -o bandit-results.sarif --exit-zero
+
+      - name: Upload bandit SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: ${{ !cancelled() }}
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit
+
+      - name: Fail on any finding (all severities)
+        # The 1.1 baseline is clean (auth/protocol crypto is in the C
+        # extension, not Python), so any new finding at any severity fails
+        # the build. The SARIF above still records everything in the
+        # Security tab.
+        run: |
+          bandit -c pyproject.toml -r mariadb \
+            --severity-level all --confidence-level all
+
   ci:
     name: ${{ matrix.name }} ${{ matrix.python != '' && format(' - python {0}', matrix.python) || '' }}
     needs: setup

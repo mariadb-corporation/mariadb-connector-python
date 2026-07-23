@@ -1,0 +1,97 @@
+---
+name: "CodeQL"
+
+# Static application security testing (SAST) via CodeQL — deep taint and
+# dataflow analysis, the Python/C equivalent of the analyzers used by the
+# Java, C and Node.js connectors (CONPY-373, mirrors CONJS-357).
+#
+# On 1.1 the connector is a single package: `mariadb/` holds both the
+# pure-Python API and the C extension sources, so two language packs are
+# scanned:
+#   * python  — mariadb/*.py
+#   * c-cpp   — the C extension under mariadb/*.c
+#
+# Results are uploaded to the repository's code-scanning (Security) tab.
+
+on:
+  push:
+    branches: ['1.1', '1.1-georg', '1.0', 'sqlalchemy']
+  pull_request:
+    branches: ['1.1', '1.1-georg', '1.0', 'sqlalchemy']
+  schedule:
+    # Weekly deep scan, Monday 06:00 UTC (offset from the main CI cron).
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      # Required to upload results to the code-scanning API.
+      security-events: write
+      # Only needed for workflows in private repositories.
+      actions: read
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Pure-Python analysis needs no build.
+          - language: python
+            build-mode: none
+          # The C extension must be compiled so CodeQL can trace it.
+          - language: c-cpp
+            build-mode: manual
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # security-extended adds the deeper taint/dataflow query suite.
+          queries: security-extended
+
+      # ---- Manual build for the C extension (c-cpp only) ----
+      # CodeQL's tracer wraps the compiler while the extension is built, so the
+      # native sources under mariadb/ get analyzed. This mirrors the C build in
+      # ci.yml: libmariadb (Connector/C) is compiled and installed to /usr,
+      # then setup.py compiles the extension against it.
+      - name: Set up Python
+        if: matrix.build-mode == 'manual'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build libmariadb (MariaDB Connector/C)
+        if: matrix.build-mode == 'manual'
+        run: |
+          git clone --depth 1 --branch 3.4 \
+            https://github.com/mariadb-corporation/mariadb-connector-c.git
+          cd mariadb-connector-c
+          cmake . -DCMAKE_BUILD_TYPE=Release -DWITH_EXTERNAL_ZLIB=On \
+            -DCMAKE_INSTALL_PREFIX=/usr
+          make -j"$(nproc)"
+          sudo make install
+
+      - name: Build the C extension
+        if: matrix.build-mode == 'manual'
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python setup.py build_ext --inplace --force \
+            --build-temp build-codeql
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

@@ -3,3 +3,14 @@ repos:
     rev: '5.0.4'  # pick a git hash / tag to point to
     hooks:
     -   id: flake8
+-   repo: https://github.com/PyCQA/bandit
+    rev: '1.9.4'
+    hooks:
+    -   id: bandit
+        # Report every finding at every severity/confidence level, matching the
+        # CI scan.
+        args: ["-c", "pyproject.toml",
+               "--severity-level", "all", "--confidence-level", "all"]
+        additional_dependencies: ["bandit[toml]"]
+        # Only lint the shipped pure-Python library.
+        files: '^mariadb/.*\.py$'

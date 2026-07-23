@@ -4,3 +4,25 @@ requires = [
   "setuptools",
   "packaging",
 ]
+
+# Bandit SAST configuration (CONPY-373).
+# Scans the shipped pure-Python library (mariadb/). Non-shipped trees (tests,
+# benchmarks, tooling, build artifacts) are excluded so findings stay
+# actionable. CI and the pre-commit hook report AND fail on all severities;
+# nothing is globally skipped. The 1.1 baseline is clean (the auth/protocol
+# crypto lives in the C extension / libmariadb, not in Python), so there are no
+# inline suppressions.
+[tool.bandit]
+exclude_dirs = [
+    "testing",
+    "tests",
+    "benchmarks",
+    "build",
+    "helper",
+    "docs",
+    "include",
+    "mariadb-c",
+    "mariadb-pool",
+    "mariadb_shared",
+    ".git",
+]
