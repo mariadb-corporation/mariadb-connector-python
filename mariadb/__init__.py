@@ -88,6 +88,7 @@ def connect(*args, connectionclass=mariadb.connections.Connection, **kwargs):
                 pool = mariadb.ConnectionPool(**kwargs)
             else:
                 pool = mariadb._CONNECTION_POOLS[kwargs["pool_name"]]
+                pool._check_conn_args(kwargs)
             c = pool.get_connection()
             return c
 

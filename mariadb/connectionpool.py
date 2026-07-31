@@ -21,9 +21,34 @@ import mariadb
 import _thread
 import time
 
+from typing import Any, Dict, Mapping
+
 from mariadb.constants import STATUS
 
 MAX_POOL_SIZE = 64
+
+_POOL_KEYWORDS = ("pool_name", "pool_size", "pool_reset_connection",
+                  "pool_validation_interval")
+
+_CONN_ALIASES = (("username", "user"), ("passwd", "password"),
+                 ("db", "database"))
+
+
+def _connection_args(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
+    """
+    Returns the connection relevant keyword arguments: pool keyword arguments
+    are removed, unset (None) values are ignored and aliases are resolved, so
+    that two sets of keyword arguments describing the same connection
+    compare equal.
+    """
+
+    args = {key: value for (key, value) in kwargs.items() if value is not None}
+    for key in _POOL_KEYWORDS:
+        args.pop(key, None)
+    for (alias, key) in _CONN_ALIASES:
+        if alias in args:
+            args[key] = args.pop(alias)
+    return args
 
 
 class ConnectionPool(object):
@@ -66,13 +91,10 @@ class ConnectionPool(object):
         """
         self._connections_free = []
         self._connections_used = []
-        self._pool_args = {}
-        self._conn_args = {}
+        self._pool_args: Dict[str, Any] = {}
+        self._conn_args: Dict[str, Any] = {}
         self._lock_pool = _thread.RLock()
         self.__closed = 0
-
-        key_words = ["pool_name", "pool_size", "pool_reset_connection",
-                     "pool_validation_interval"]
 
         # check if pool_name was provided
         if kwargs and "pool_name" in kwargs:
@@ -99,7 +121,7 @@ class ConnectionPool(object):
 
         # store pool and connection arguments
         self._conn_args = kwargs.copy()
-        for key in key_words:
+        for key in _POOL_KEYWORDS:
             if key in self._conn_args:
                 del self._conn_args[key]
 
@@ -126,6 +148,28 @@ class ConnectionPool(object):
 
         # store connection pool in _CONNECTION_POOLS
         mariadb._CONNECTION_POOLS[self._pool_args["name"]] = self
+
+    def _check_conn_args(self, kwargs: Mapping[str, Any]) -> None:
+        """
+        Checks if the given connection arguments match the connection
+        configuration of the pool and raises a PoolError if they don't.
+
+        All connection arguments of the pool have to be provided: the order
+        of the arguments, aliases (username, passwd, db) and pool keyword
+        arguments don't matter, everything else has to be identical.
+
+        Internally used by mariadb.connect() method.
+        """
+
+        args = _connection_args(kwargs)
+        pool_args = _connection_args(self._conn_args)
+        if args != pool_args:
+            diff = sorted(key for key in set(args) | set(pool_args)
+                          if args.get(key) != pool_args.get(key))
+            raise mariadb.PoolError(
+                "Connection argument(s) %s don't match the connection "
+                "configuration of pool '%s'"
+                % (", ".join(diff), self._pool_args["name"]))
 
     def _replace_connection(self, connection):
         """
@@ -239,7 +283,7 @@ class ConnectionPool(object):
                     connection.__last_used = time.perf_counter_ns()
                     self._connections_free.append(connection)
 
-    def set_config(self, **kwargs):
+    def set_config(self, **kwargs: Any) -> None:
         """
         Sets the connection configuration for the connection pool.
         For valid connection arguments, check the mariadb.connect() method.
