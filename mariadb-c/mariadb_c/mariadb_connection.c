@@ -29,6 +29,7 @@ char *dsn_keys[]= {
     "username", "db", "passwd",
     "status_callback", "tls_version",
     "tls_fp", "tls_fp_list", "protocol",
+    "max_allowed_columns",
     NULL
 };
 
@@ -422,13 +423,15 @@ MrdbConnection_Initialize(MrdbConnection *self,
     unsigned int local_infile= 0xFF;
     unsigned int connect_timeout=10, read_timeout=0, write_timeout=0,
                  compress= 0, ssl_verify_cert= 1;
+    /* keep in sync with Configuration.max_allowed_columns (pure Python) */
+    int max_allowed_columns= 65535;
     PyObject *status_callback= NULL;
 
     /* Initialize all fields first */
     MrdbConnection_init_fields(self);
 
     if (!PyArg_ParseTupleAndKeywords(args, dsnargs,
-                "|zzzzziziiibbzzzzzzzzzzibizzzzOzzzi:connect",
+                "|zzzzziziiibbzzzzzzzzzzibizzzzOzzzii:connect",
                 dsn_keys,
                 &dsn, &host, &user, &password, &schema, &port, &socket,
                 &connect_timeout, &read_timeout, &write_timeout,
@@ -439,7 +442,8 @@ MrdbConnection_Initialize(MrdbConnection *self,
                 &ssl_verify_cert, &ssl_enforce,
                 &client_flags, &plugin_dir,
                 &user, &schema, &password, &status_callback,
-                &tls_version, &tls_fp, &tls_fp_list, &protocol))
+                &tls_version, &tls_fp, &tls_fp_list, &protocol,
+                &max_allowed_columns))
     {
         return -1;
     }
@@ -448,6 +452,14 @@ MrdbConnection_Initialize(MrdbConnection *self,
     {
         mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
                 "dsn keyword is not supported");
+        return -1;
+    }
+
+    if (max_allowed_columns < 1)
+    {
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 1,
+                "Invalid value for max_allowed_columns: %d "
+                "(must be greater than 0)", max_allowed_columns);
         return -1;
     }
 
@@ -547,6 +559,19 @@ MrdbConnection_Initialize(MrdbConnection *self,
         if (mysql_options(self->mysql, MYSQL_OPT_PROTOCOL, &protocol))
           goto end;
     }
+
+    /* Bound the column count a server may announce for a result set, so a
+       malicious proxy can't make libmariadb allocate the metadata of an
+       arbitrary number of columns (CONPY-377). */
+/* MARIADB_OPT_MAX_COLUMNS was added in C/C 3.3.20 and 3.4.10 */
+#if MARIADB_PACKAGE_VERSION_ID >= 30410 || \
+    (MARIADB_PACKAGE_VERSION_ID >= 30320 && MARIADB_PACKAGE_VERSION_ID < 30400)
+    {
+        unsigned int max_columns= (unsigned int)max_allowed_columns;
+        if (mysql_optionsv(self->mysql, MARIADB_OPT_MAX_COLUMNS, &max_columns))
+          goto end;
+    }
+#endif
 
     /* set TLS/SSL options */
     if (ssl_enforce || ssl_key || ssl_ca || ssl_cert || ssl_capath || ssl_cipher || tls_version ||

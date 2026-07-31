@@ -51,6 +51,11 @@ class Configuration:
     query_timeout: int = 0  # No timeout
     max_allowed_packet: int = 16777216  # 16MB
 
+    # Upper bound for the column count a server announces for a result set,
+    # checked before the column metadata is allocated. Same value as the C
+    # extension passes to MARIADB_OPT_MAX_COLUMNS.
+    max_allowed_columns: int = 65535
+
     # Initialization command
     init_command: str | None = None
 
@@ -210,6 +215,8 @@ class Configuration:
             config.query_timeout = int(params['query_timeout'])
         if 'max_allowed_packet' in params:
             config.max_allowed_packet = int(params['max_allowed_packet'])
+        if 'max_allowed_columns' in params:
+            config.max_allowed_columns = int(params['max_allowed_columns'])
         
         # Initialization command
         if 'init_command' in params:
@@ -251,7 +258,7 @@ class Configuration:
             'ssl_cipher', 'ssl_capath', 'ssl_crlpath', 'ssl_verify_cert', 'tls_version',
             'autocommit', 'read_only',
             'compress', 'binary', 'local_infile',
-            'query_timeout', 'max_allowed_packet',
+            'query_timeout', 'max_allowed_packet', 'max_allowed_columns',
             'init_command', 'default_file', 'default_group',
             'converter', 'named_tuple', 'dictionary', 'native_object',
             'cache_prep_stmts', 'prep_stmt_cache_size', 'pipeline', 'client_flag'

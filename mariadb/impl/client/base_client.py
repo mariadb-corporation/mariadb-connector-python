@@ -641,6 +641,33 @@ class BaseClient(ABC):
         """Get host address"""
         return self.host_address
 
+    def _abort_connection(self) -> None:
+        """
+        Close the connection without talking to the server, for use when the
+        protocol stream can't be trusted any more. Implemented by both clients
+        (synchronously, so it can be called from shared code).
+        """
+        raise NotImplementedError
+
+    def _check_column_count(self, column_count: int) -> None:
+        """
+        Reject a column count announced by the server that exceeds
+        max_allowed_columns, before any column metadata is allocated.
+
+        The column count of a result set is a length encoded integer, so a
+        malicious proxy could announce an arbitrarily large number of columns to
+        make the client allocate the corresponding metadata and run out of
+        memory. The announced column definition packets have not been read at
+        this point, so the connection is left desynchronized and is closed.
+        """
+        max_columns = self.configuration.max_allowed_columns
+        if column_count > max_columns:
+            self._abort_connection()
+            raise OperationalError(
+                f"Number of columns in result set ({column_count}) exceeds "
+                f"the maximum allowed number of columns ({max_columns}). "
+                "Use the max_allowed_columns option to change the limit.")
+
     # =========================================================================
     # Authentication Helper Methods
     # =========================================================================

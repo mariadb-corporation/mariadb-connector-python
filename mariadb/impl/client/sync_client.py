@@ -715,6 +715,7 @@ class SyncClient(BaseClient):
             column_count = parser.read_length_encoded_int()
             if not (column_count is not None):
                 raise AssertionError
+            self._check_column_count(column_count)
 
             # Cache EOF deprecated flag once
             eof_deprecated = context.isEofDeprecated()
@@ -859,6 +860,7 @@ class SyncClient(BaseClient):
                 column_count = parser.read_length_encoded_int()
                 if not (column_count is not None):
                     raise AssertionError
+                self._check_column_count(column_count)
                 eof_deprecated = context.isEofDeprecated()
 
                 if context.has_capability(constants.CAPABILITY.CACHE_METDATA) and parser.read_byte() == 0:
@@ -1096,6 +1098,12 @@ class SyncClient(BaseClient):
                 return self.socket.getpeercert()
         return None
 
+    def _abort_connection(self) -> None:
+        """Close the connection without sending COM_QUIT"""
+        self.closed = True
+        self.connected = False
+        self._cleanup_connection()
+
     def _cleanup_connection(self) -> None:
         """Cleanup socket and stream resources"""
         if hasattr(self, 'socket') and self.socket:
@@ -1161,6 +1169,7 @@ class SyncClient(BaseClient):
             # Read column metadata if present
             if prepare_stmt_packet.column_count > 0:
                 col_count = prepare_stmt_packet.column_count
+                self._check_column_count(col_count)
                 columns = ColumnsDefinition(col_count)
                 for i in range(col_count):
                     columns.decode_column(i, self.read_payload(), self.context)
