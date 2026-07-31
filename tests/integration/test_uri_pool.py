@@ -81,8 +81,9 @@ class TestURIPool(unittest.TestCase):
                 result = cursor1.fetchone()
                 self.assertEqual(result[0], 1)
         
-        # Get another connection from same pool (reuse)
-        with mariadb.connect(pool_name="test_uri_pool_1") as conn2:
+        # Get another connection from same pool (reuse): the connection
+        # arguments have to match the configuration of the pool
+        with mariadb.connect(uri, pool_name="test_uri_pool_1") as conn2:
             self.assertIsNotNone(conn2)
             
             # Verify second connection works
@@ -177,8 +178,8 @@ class TestURIPool(unittest.TestCase):
         
         # Create pool and get connections
         with mariadb.connect(uri, pool_name="test_uri_pool_6") as conn1:
-            with mariadb.connect(pool_name="test_uri_pool_6") as conn2:
-                with mariadb.connect(pool_name="test_uri_pool_6") as conn3:
+            with mariadb.connect(uri, pool_name="test_uri_pool_6") as conn2:
+                with mariadb.connect(uri, pool_name="test_uri_pool_6") as conn3:
                     # Verify all connections work
                     for i, conn in enumerate([conn1, conn2, conn3], 1):
                         with conn.cursor() as cursor:

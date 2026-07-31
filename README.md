@@ -189,28 +189,6 @@ with pool.acquire() as conn:
 
 ```
 
-### Named Pools with mariadb.connect()
-
-```python
-import mariadb
-
-# First connection creates the pool
-with mariadb.connect(
-    "mariadb://user:password@localhost:3306/mydb",
-    pool_name="mypool"
-) as conn:
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT COUNT(*) FROM users")
-        count = cursor.fetchone()[0]
-        print(f"Total users: {count}")
-
-# Subsequent connections reuse the pool
-with mariadb.connect(pool_name="mypool") as conn:
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT * FROM users LIMIT 5")
-        for row in cursor.fetchall():
-            print(row)
-```
 
 ### Dictionary and Named Tuple Cursors
 

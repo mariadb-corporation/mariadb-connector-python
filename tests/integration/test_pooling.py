@@ -302,7 +302,8 @@ class TestPooling(unittest.TestCase):
         try:
             for i in range(1, 6):
                 pool.add_connection()
-            conn = mariadb.connect(pool_name="test_conpy69")
+            conn = mariadb.connect(pool_name="test_conpy69",
+                                   **default_conf)
             conn.autocommit = True
             cursor = conn.cursor()
             cursor.execute("select database()")
@@ -321,7 +322,7 @@ class TestPooling(unittest.TestCase):
     def test__CONNECTION_POOLS(self):
         default_conf = conf()
         pool = mariadb.ConnectionPool(pool_name="test_use", acquire_timeout=1, **default_conf)
-        conn = mariadb.connect(pool_name="test_use")
+        conn = mariadb.connect(pool_name="test_use", **default_conf)
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         row = cursor.fetchone()
@@ -386,7 +387,7 @@ class TestPooling(unittest.TestCase):
         cursor.execute("SELECT 1")
         cursor.close()
         conn.close()
-        conn = mariadb.connect(pool_name="reset_test")
+        conn = mariadb.connect(pool_name="reset_test", **default_conf)
         cursor = conn.cursor()
         cursor.execute("SELECT 2")
         row = cursor.fetchone()
@@ -479,6 +480,77 @@ class TestPooling(unittest.TestCase):
         
         # Clean up
         pool.close()
+
+    def test_connection_args(self):
+        from mariadb_pool.connection_pool_wrapper import connection_args
+
+        # pool_name and pool configuration keywords are not part of the
+        # connection arguments, unset values are ignored and aliases are
+        # resolved, so both describe the same connection
+        self.assertEqual(connection_args({"user": "u", "password": "p",
+                                          "host": "h", "database": "d",
+                                          "port": None}),
+                         connection_args({"username": "u", "passwd": "p",
+                                          "host": "h", "db": "d",
+                                          "pool_name": "x", "pool_size": 2,
+                                          "pool_reset_connection": False,
+                                          "acquire_timeout": 1}))
+
+        # different values or additional arguments don't match
+        self.assertNotEqual(connection_args({"host": "h", "password": "p"}),
+                            connection_args({"host": "h", "password": "x"}))
+        self.assertNotEqual(connection_args({"host": "h"}),
+                            connection_args({"host": "h", "port": 3307}))
+        self.assertEqual(connection_args({"pool_name": "x"}), {})
+
+    def test_connect_pool_name_deprecated(self):
+        default_conf = conf()
+        with self.assertWarns(DeprecationWarning):
+            conn = mariadb.connect(pool_name="test_deprecated",
+                                   pool_size=1, acquire_timeout=1,
+                                   **default_conf)
+        conn.close()
+        with self.assertWarns(DeprecationWarning):
+            conn = mariadb.connect(pool_name="test_deprecated",
+                                   **default_conf)
+        conn.close()
+        mariadb._CONNECTION_POOLS["test_deprecated"].close()
+
+    def test_pool_connection_args(self):
+        default_conf = conf()
+        pool = mariadb.ConnectionPool(pool_name="test_conn_args",
+                                      pool_size=1, acquire_timeout=1,
+                                      **default_conf)
+        try:
+            # identical connection arguments: pool keyword arguments are
+            # ignored, so they can be passed as well
+            conn = mariadb.connect(pool_name="test_conn_args", pool_size=1,
+                                   **default_conf)
+            conn.close()
+
+            # pool_name alone is not enough, all connection arguments of
+            # the pool have to be provided
+            self.assertRaises(mariadb.PoolError, mariadb.connect,
+                              pool_name="test_conn_args")
+
+            # different value for a connection argument
+            other_conf = default_conf.copy()
+            other_conf["database"] = "test_conn_args_other_db"
+            self.assertRaises(mariadb.PoolError, mariadb.connect,
+                              pool_name="test_conn_args", **other_conf)
+
+            # additional connection argument
+            self.assertRaises(mariadb.PoolError, mariadb.connect,
+                              pool_name="test_conn_args", autocommit=True,
+                              **default_conf)
+
+            # missing connection argument
+            reduced_conf = default_conf.copy()
+            del reduced_conf["host"]
+            self.assertRaises(mariadb.PoolError, mariadb.connect,
+                              pool_name="test_conn_args", **reduced_conf)
+        finally:
+            pool.close()
 
 if __name__ == '__main__':
     unittest.main()

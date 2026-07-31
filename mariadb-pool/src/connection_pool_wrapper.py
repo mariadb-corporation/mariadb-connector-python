@@ -33,6 +33,37 @@ if TYPE_CHECKING:
     from mariadb_shared.sync_connection_common import SyncConnectionCommon
 MAX_POOL_SIZE = 64
 
+# Keyword arguments which configure the pool itself: everything else is passed
+# to the connection factory and is therefore part of the connection
+# configuration.
+POOL_CONFIG_KEYS = frozenset({
+    'pool_size', 'pool_reset_connection', 'pool_validation_interval',
+    'min_size', 'max_size', 'acquire_timeout', 'ping_threshold'
+})
+
+# Keyword aliases accepted by connect(). The alias takes precedence over its
+# canonical counterpart, like in Configuration.from_dict().
+_CONN_ALIASES = (('username', 'user'), ('passwd', 'password'),
+                 ('db', 'database'))
+
+
+def connection_args(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Returns the connection relevant keyword arguments: pool_name and pool
+    configuration keywords are removed, unset (None) values are ignored and
+    aliases are resolved, so that two sets of keyword arguments describing the
+    same connection compare equal.
+    """
+
+    args = {key: value for (key, value) in kwargs.items()
+            if value is not None and key != 'pool_name'
+            and key not in POOL_CONFIG_KEYS}
+    for (alias, key) in _CONN_ALIASES:
+        if alias in args:
+            args[key] = args.pop(alias)
+    return args
+
+
 class ConnectionPoolWrapper:
     """
     Compatibility wrapper for mariadb_pool.ConnectionPool
@@ -61,15 +92,11 @@ class ConnectionPoolWrapper:
         self.connection_factory = connection_factory
         
         # Separate pool config from connection params
-        pool_config_keys = {
-            'pool_size', 'pool_reset_connection', 'pool_validation_interval',
-            'min_size', 'max_size', 'acquire_timeout', 'ping_threshold'
-        }
         pool_kwargs = {}
         conn_kwargs = {}
-        
+
         for key, value in kwargs.items():
-            if key in pool_config_keys:
+            if key in POOL_CONFIG_KEYS:
                 pool_kwargs[key] = value
             else:
                 conn_kwargs[key] = value
@@ -121,6 +148,30 @@ class ConnectionPoolWrapper:
         if pool_name is not None:
             self._registry[pool_name] = self
     
+    def _check_conn_args(self, kwargs: Dict[str, Any]) -> None:
+        """
+        Check that the given connection arguments match the connection
+        configuration of the pool and raise a PoolError if they don't.
+
+        All connection arguments of the pool have to be provided: the order of
+        the arguments, aliases (username, passwd, db) and pool keyword
+        arguments don't matter, everything else has to be identical.
+
+        Internally used by mariadb.connect() when a connection is requested
+        from an already existing pool.
+        """
+
+        args = connection_args(kwargs)
+        pool_args = connection_args(self._pool.connection_params)
+        if args != pool_args:
+            # report the names of the differing arguments, but not their
+            # values, since these can contain the password
+            diff = sorted(key for key in set(args) | set(pool_args)
+                          if args.get(key) != pool_args.get(key))
+            raise PoolError(
+                f"Connection argument(s) {', '.join(diff)} don't match the "
+                f"connection configuration of pool '{self.pool_name}'")
+
     def get_connection(self) -> 'SyncConnectionCommon':
         """Get a connection from the pool"""
         pool_conn = self._pool._acquire()

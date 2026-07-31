@@ -7,6 +7,8 @@ This is a pure Python implementation. For better performance, install the
 optional C extension: pip install mariadb-python[c-extension]
 '''
 
+import warnings
+
 from typing import Any, Dict, TYPE_CHECKING, cast
 
 # Import exceptions from shared package to avoid circular dependencies
@@ -169,8 +171,17 @@ def connect(*args: Any, connectionclass: type | None = None, **kwargs: Any) -> S
     # Check if pool_name is specified
     pool_name = kwargs.get('pool_name')
     if pool_name:
+        # 1.1 compatibility feature: the pool is registered globally and is
+        # not owned by the caller
+        warnings.warn(
+            "The pool_name argument of connect() is deprecated and will be "
+            "removed in 2.1. Use mariadb.ConnectionPool() or "
+            "mariadb.create_pool() and obtain connections with their "
+            "get_connection() method instead.",
+            DeprecationWarning, stacklevel=2)
         if pool_name in _CONNECTION_POOLS:
             pool = _CONNECTION_POOLS[pool_name]
+            pool._check_conn_args(kwargs)
         else:
             pool = _get_connection_pool_class()(**kwargs)
         return pool.get_connection()
@@ -280,14 +291,15 @@ async def asyncConnect(*args: Any, connectionclass: type | None = None, **kwargs
                 kwargs["ssl_%s" % key] = ssl[key]
         kwargs["ssl"] = True
 
-    # Check if pool_name is specified
-    pool_name = kwargs.get('pool_name')
-    if pool_name:
-        if pool_name in _ASYNC_CONNECTION_POOLS:
-            pool = _ASYNC_CONNECTION_POOLS[pool_name]
-        else:
-            pool = _get_async_connection_pool_class()(**kwargs)
-        return await pool.get_connection()
+    # Pools are not supported here: a named pool would either be created as a
+    # side effect of connecting, or the connection arguments would be ignored
+    # in favour of the configuration of an already existing pool.
+    if 'pool_name' in kwargs:
+        raise ProgrammingError(
+            "pool_name is not supported by asyncConnect(). Use "
+            "mariadb.create_async_pool() or mariadb.AsyncConnectionPool() and "
+            "obtain connections with their get_connection() method."
+        )
 
     # Use AsyncConnection if no custom class specified
     if connectionclass is None:
