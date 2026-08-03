@@ -23,4 +23,4 @@ class ParsecPasswordPluginFactory(AuthenticationPluginFactory):
     
     def initialize(self, authentication_data: str | None, seed: bytes,
                   conf: "Configuration", host_address: "HostAddress") -> AuthenticationPlugin:
-        return ParsecPasswordPlugin(authentication_data, seed)
+        return ParsecPasswordPlugin(authentication_data, seed, conf)

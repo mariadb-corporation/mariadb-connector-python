@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import contextlib
+import math
 import secrets
 
 from ...configuration import Configuration
@@ -25,6 +26,10 @@ with contextlib.suppress(Exception):
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # pyright: ignore[reportMissingImports]
 HAS_CRYPTOGRAPHY = Ed25519PrivateKey is not None
 
+PBKDF2_ROUNDS_PER_MS = 262144 / 225
+
+SERVER_CONNECT_TIMEOUT_DEFAULT = 10.0
+
 
 class ParsecPasswordPlugin(AuthenticationPlugin):
     """
@@ -38,20 +43,54 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20
     ])
     
-    def __init__(self, authentication_data: str | None, seed: bytes):
+    def __init__(self, authentication_data: str | None, seed: bytes, conf: Configuration):
         """Initialize plugin with authentication data and seed"""
         self.authentication_data = authentication_data
         self.seed = seed
+        self.conf: Configuration = conf
         self._hash = None
-    
+
+    def _time_budget(self) -> float:
+        """Connection time budget in seconds, falling back to the default"""
+        connect_timeout = self.conf.connect_timeout
+        if connect_timeout is not None and connect_timeout > 0:
+            return float(connect_timeout)
+        return SERVER_CONNECT_TIMEOUT_DEFAULT
+
+    def _max_iteration_factor(self) -> int:
+        """Highest iteration factor whose derivation fits the time budget."""
+        affordable_rounds = PBKDF2_ROUNDS_PER_MS * self._time_budget() * 1000 / 1024
+        if affordable_rounds <= 0:
+            return 0
+        return max(0, math.floor(math.log2(affordable_rounds)))
+
+    def _validate_format(self, first_byte: int, iterations_exp: int) -> None:
+        """Reject a non-PBKDF2 algorithm or an unaffordable iteration factor"""
+        if first_byte != 0x50:  # 'P' for PBKDF2
+            raise OperationalError(
+                "Wrong parsec authentication format: expected 'P' for KDF algorithm")
+
+        max_iterations_exp = self._max_iteration_factor()
+        if iterations_exp > max_iterations_exp:
+            raise OperationalError(
+                f"Wrong parsec authentication format: server requires parsec iteration "
+                f"factor {iterations_exp}, above the maximum factor "
+                f"{max_iterations_exp} ({1024 << max_iterations_exp} PBKDF2 "
+                f"rounds) that fits the {self._time_budget():g}s connection time budget. "
+                f"Raise connect_timeout to permit a higher factor.")
+
     def _derive_key_and_sign(self, salt: bytes, iterations_exp: int) -> tuple[bytes, bytes, bytes]:
         """Derive key using PBKDF2 and create signature"""
         # Derive key using PBKDF2
         password = self.authentication_data or ""
         password_bytes = password.encode('utf-8')
-        
+
         iterations = 1024 << iterations_exp  # 1024 * 2^iterations_exp
-        
+
+        # cryptography rather than hashlib.pbkdf2_hmac: same primitive and same
+        # output, but it derives faster against its bundled OpenSSL. This needs
+        # cryptography >= 50.0.0, the first release to drop the GIL during the
+        # derivation -- older ones stall every other thread for its duration.
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA512(),
             length=32,  # 256 bits
@@ -59,7 +98,7 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
             iterations=iterations,
         )
         derived_key = kdf.derive(password_bytes)
-        
+
         # Create Ed25519 private key from derived key
         private_key = Ed25519PrivateKey.from_private_bytes(derived_key)
         public_key = private_key.public_key()
@@ -118,14 +157,13 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         first_byte = parser.read_byte()
         iterations_exp = parser.read_byte()
         salt = parser.read_remaining()
-        
+
         # Validate format
-        if first_byte != 0x50 or iterations_exp > 3:  # 'P' for PBKDF2, Maximum iteration of 8192 (2^13 = 1024 << 3)
-            raise OperationalError("Wrong parsec authentication format: expected 'P' for KDF algorithm or iteration count too high")
+        self._validate_format(first_byte, iterations_exp)
 
         # Derive key and create signature
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
-        
+
         # Send client scramble + signature to server
         payload = bytearray(b'\0\0\0\0')
         payload.extend(client_scramble)
@@ -165,11 +203,10 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
         first_byte = parser.read_byte()
         iterations_exp = parser.read_byte()
         salt = parser.read_remaining()
-        
+
         # Validate format
-        if first_byte != 0x50 or iterations_exp > 3:  # 'P' for PBKDF2, Maximum iteration of 8192 (2^13 = 1024 << 3)
-            raise OperationalError("Wrong parsec authentication format: expected 'P' for KDF algorithm or iteration count too high")
-        
+        self._validate_format(first_byte, iterations_exp)
+
         # Derive key and create signature
         client_scramble, signature, _ = self._derive_key_and_sign(salt, iterations_exp)
         

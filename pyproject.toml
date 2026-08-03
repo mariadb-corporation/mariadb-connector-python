@@ -41,7 +41,9 @@ classifiers = [
 ]
 dependencies = [
     "packaging",
-    "cryptography>=3.0.0",
+    # 50.0.0 is the first release that releases the GIL during PBKDF2
+    # derivation, which parsec authentication relies on (CONPY-372).
+    "cryptography>=50.0.0",
     "cachetools>=5.0.0",
 ]
 
