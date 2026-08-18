@@ -343,6 +343,7 @@ static int MrdbCursor_traverse(
 {
     Py_VISIT(self->connection);
     Py_VISIT(self->data);
+    Py_VISIT(self->sequence_type);
     return 0;
 }
 
@@ -352,6 +353,7 @@ static int MrdbCursor_tpclear(MrdbCursor *self)
         Py_CLEAR(self->connection);
     if (self->data)
         Py_CLEAR(self->data);
+    Py_CLEAR(self->sequence_type);
     return 0;
 }
 
@@ -490,6 +492,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
     }
     self->fetched= 0;
 
+    Py_CLEAR(self->sequence_type);
     if (self->sequence_fields)
     {
         MARIADB_FREE_MEM(self->sequence_fields);
@@ -689,6 +692,7 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
 
 PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
 {
+    Py_CLEAR(self->sequence_type);
     MARIADB_FREE_MEM(self->sequence_fields);
     MARIADB_FREE_MEM(self->values);
 
