@@ -119,6 +119,7 @@ strncpy((a)->statement, (s), (l));\
 
 static char *mariadb_named_tuple_name= "mariadb_c.Row";
 static char *mariadb_named_tuple_desc= "Named tupled row";
+static char *mariadb_named_tuple_field_names= "_mariadb_field_names";
 static PyObject *Mariadb_row_count(MrdbCursor *self);
 static PyObject *Mariadb_row_number(MrdbCursor *self);
 static PyObject *MrdbCursor_warnings(MrdbCursor *self);
@@ -871,10 +872,25 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
         if (self->result_format == RESULT_NAMED_TUPLE) {
             unsigned int i;
             PyStructSequence_Desc sequence_desc;
+            PyObject *field_names;
+            char *p, *key;
+            size_t names_size= 0, key_len;
+            int rc;
+
+            for (i=0; i < self->field_count; i++)
+            {
+                names_size+= strlen(self->fields[i].name) + 1;
+            }
+
+            if (!(field_names= PyBytes_FromStringAndSize(NULL,
+                            (Py_ssize_t)names_size))) {
+                return 1;
+            }
 
             if (!(self->sequence_fields= (PyStructSequence_Field *)
                         PyMem_RawCalloc(self->field_count + 1,
                             sizeof(PyStructSequence_Field)))) {
+                Py_DECREF(field_names);
                 PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sequence fields");
                 return 1;
             }
@@ -884,18 +900,45 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             sequence_desc.n_in_sequence= self->field_count;
 
 
+            p= PyBytes_AS_STRING(field_names);
             for (i=0; i < self->field_count; i++)
             {
-                self->sequence_fields[i].name= self->fields[i].name;
+                size_t len= strlen(self->fields[i].name) + 1;
+
+                memcpy(p, self->fields[i].name, len);
+                self->sequence_fields[i].name= p;
+                p+= len;
             }
             self->sequence_type= PyStructSequence_NewType(&sequence_desc);
             if (!self->sequence_type) {
+                Py_DECREF(field_names);
                 MARIADB_FREE_MEM(self->sequence_fields);
                 return 1;
             }
 #if PY_VERSION_HEX < 0x03070000
             self->sequence_type->tp_flags|= Py_TPFLAGS_HEAPTYPE;
 #endif
+            key_len= strlen(mariadb_named_tuple_field_names);
+            if (!(key= (char *)PyMem_RawMalloc(key_len + self->field_count + 2))) {
+                Py_DECREF(field_names);
+                PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sequence fields");
+                return 1;
+            }
+            memcpy(key, mariadb_named_tuple_field_names, key_len + 1);
+
+            while (PyObject_HasAttrString((PyObject *)self->sequence_type, key))
+            {
+                key[key_len++]= '_';
+                key[key_len]= 0;
+            }
+
+            rc= PyObject_SetAttrString((PyObject *)self->sequence_type, key,
+                                       field_names);
+            PyMem_RawFree(key);
+            Py_DECREF(field_names);
+            if (rc) {
+                return 1;
+            }
         }
     }
     return 0;
