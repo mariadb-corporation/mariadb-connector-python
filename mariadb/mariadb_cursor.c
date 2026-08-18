@@ -706,11 +706,14 @@ PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
     {
         if (Mrdb_GetFieldInfo(self))
         {
-            return NULL;
+            goto error;
         }
 
         if (!(self->values= (PyObject**)PyMem_RawCalloc(self->field_count, sizeof(PyObject *))))
-            return NULL;
+        {
+            PyErr_SetNone(PyExc_MemoryError);
+            goto error;
+        }
         if (!self->parseinfo.is_text)
             mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
 
@@ -722,6 +725,17 @@ PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
     self->lastrow_id= CURSOR_INSERT_ID(self);
 
     Py_RETURN_NONE;
+
+error:
+    Py_XDECREF(MrdbCursor_clear_result(self));
+    Py_CLEAR(self->sequence_type);
+    MARIADB_FREE_MEM(self->sequence_fields);
+    MARIADB_FREE_MEM(self->values);
+    self->fields= NULL;
+    self->field_count= 0;
+    self->row_count= 0;
+    self->affected_rows= 0;
+    return NULL;
 }
 
 static int Mrdb_execute_direct(MrdbCursor *self, 
