@@ -620,8 +620,14 @@ class SyncClient(BaseClient):
                         # Pipeline mode: write prepare and all execute messages before reading
                         self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
 
-                        for message in messages:
-                            self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                        written = 0
+                        try:
+                            for message in messages:
+                                self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                                written += 1
+                        except Exception:
+                            self._discard_pipelined_responses(messages[:written], sql, config, buffered)
+                            raise
                         self.reset_buffer()
 
                         try:
@@ -1135,6 +1141,20 @@ class SyncClient(BaseClient):
     # =========================================================================
     # Prepared Statements
     # =========================================================================
+
+    def _discard_pipelined_responses(self, sent_messages: List[ClientMessage], sql: str,
+                                     config: Configuration, buffered: bool) -> None:
+        """Read and throw away the responses still owed after a pipelined prepare."""
+        self.reset_buffer()
+        prepare_result: PrepareStmtPacket | None = None
+        with contextlib.suppress(Exception):
+            prepare_result = self._parse_prepare_response(self.read_payload(), sql, None)
+        for message in sent_messages:
+            with contextlib.suppress(Exception):
+                self._read_result(message.is_binary(), config, buffered, prepare_result, sql)
+        if prepare_result is not None:
+            with contextlib.suppress(Exception):
+                prepare_result.close()
 
     def _parse_prepare_response(self, packet: memoryview, sql: str, cache: Any = None) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet

@@ -706,8 +706,14 @@ class AsyncClient(BaseClient):
                         # Pipeline mode: write prepare and all execute messages before reading
                         await self.write_payload(prepare_message.payload(self.context, self._payload_writer), prepare_message.type(), True)
 
-                        for message in messages:
-                            await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                        written = 0
+                        try:
+                            for message in messages:
+                                await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                                written += 1
+                        except Exception:
+                            await self._discard_pipelined_responses(messages[:written], sql, config, buffered)
+                            raise
                         self.reset_buffer()
 
                         try:
@@ -1199,6 +1205,20 @@ class AsyncClient(BaseClient):
     # Prepared Statements
     # =========================================================================
 
+
+    async def _discard_pipelined_responses(self, sent_messages: List[ClientMessage], sql: str,
+                                           config: Configuration, buffered: bool) -> None:
+        """Read and throw away the responses still owed after a pipelined prepare."""
+        self.reset_buffer()
+        prepare_result: PrepareStmtPacket | None = None
+        with contextlib.suppress(Exception):
+            prepare_result = await self._parse_prepare_response(await self.read_payload(), sql, None)
+        for message in sent_messages:
+            with contextlib.suppress(Exception):
+                await self._read_result(message.is_binary(), config, buffered, prepare_result, sql)
+        if prepare_result is not None:
+            with contextlib.suppress(Exception):
+                prepare_result.close()
 
     async def _parse_prepare_response(self, packet: memoryview, sql: str, cache: Any = None) -> PrepareStmtPacket:
         """Parse COM_STMT_PREPARE response packet asynchronously

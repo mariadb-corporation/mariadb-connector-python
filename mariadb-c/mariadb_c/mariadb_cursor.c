@@ -529,6 +529,7 @@ static void MrdbCursor_clearstmt(MrdbCursor *self)
   self->statement_len = 0;
   self->paramcount = 0;
   self->is_text = 0;
+  self->param_cb_active = 0;
 }
 
 /* Clear Python-level active-cursor tracking attributes on the connection.
@@ -1593,6 +1594,7 @@ MrdbCursor_execute_binary(MrdbCursor *self)
             goto error;
 
         /* Load values */
+        self->param_cb_active= 0;
         if (mariadb_param_update(self, self->params, 0))
             goto error;
     }
@@ -1646,6 +1648,8 @@ MrdbCursor_execute_text(MrdbCursor *self, PyObject *const *args, Py_ssize_t narg
     if (Py_TYPE(stmt) == &PyUnicode_Type)
     {
         send_buf = (char *)PyUnicode_AsUTF8AndSize(stmt, &send_len);
+        if (!send_buf)
+            return NULL;
     } else if (Py_TYPE(stmt) == &PyBytes_Type)
     {
         PyBytes_AsStringAndSize(stmt, &send_buf, &send_len);
@@ -1778,7 +1782,11 @@ MrdbCursor_execute_bulk(MrdbCursor *self)
 
     mysql_stmt_bind_param(self->stmt, self->params);
 
-    if ((rc= Mrdb_execute_direct(self, self->statement, self->statement_len)))
+    self->param_cb_active= 1;
+    rc= Mrdb_execute_direct(self, self->statement, self->statement_len);
+    self->param_cb_active= 0;
+
+    if (rc)
     {
          mariadb_throw_exception(self->stmt, NULL, 1, NULL);
          goto error;
@@ -1838,6 +1846,8 @@ MrdbCursor_prepare_bulk_only(MrdbCursor *self)
     mysql_stmt_attr_set(self->stmt, STMT_ATTR_ARRAY_SIZE, &self->array_size);
 
     mysql_stmt_bind_param(self->stmt, self->params);
+
+    self->param_cb_active= 1;
 
     Py_RETURN_NONE;
 }
@@ -1986,6 +1996,7 @@ MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args)
         if (mariadb_check_execute_parameters(self, self->data))
             return NULL;
 
+        self->param_cb_active= 0;
         if (mariadb_param_update(self, self->params, 0))
             return NULL;
     }
@@ -2098,6 +2109,7 @@ MrdbCursor_stmt_execute_start(MrdbCursor *self, PyObject *args)
 
     if (status == 0) {
         /* FAST PATH: Completed immediately - no event loop trip needed */
+        self->param_cb_active= 0;
         if (rc) {
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
             return NULL;
@@ -2134,6 +2146,7 @@ MrdbCursor_stmt_execute_cont(MrdbCursor *self, PyObject *args)
 
     if (status == 0) {
         /* Completed */
+        self->param_cb_active= 0;
         if (rc) {
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
             return NULL;

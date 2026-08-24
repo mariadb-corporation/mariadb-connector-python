@@ -186,7 +186,8 @@ class BulkExecutePacket(ClientMessage):
             # name table to a bound method).
             writer = getattr(self, self._WRITER_NAMES.get(max_type, '_write_string'))
             self.parameter_writers.append(writer)
-    
+
+
     def _get_wider_integer_type(self, type1: int, type2: int) -> int:
         """
         Get the wider of two integer types.
@@ -304,7 +305,7 @@ class BulkExecutePacket(ClientMessage):
         """Write BLOB as length-encoded bytes (or a float32 VECTOR array)."""
         if isinstance(param, array.array):
             # VECTOR: pack the float32 ('f') array as little-endian bytes.
-            if param.typecode == 'f' and len(param) > 0:
+            if param.typecode == 'f':
                 if HAS_NUMPY:
                     float_bytes = numpy.array(param, numpy.float32).tobytes()
                 else:

@@ -290,6 +290,7 @@ typedef struct {
     uint8_t fetched;
     uint8_t closed;
     uint8_t reprepare;
+    uint8_t param_cb_active;
 } MrdbCursor;
 
 typedef struct

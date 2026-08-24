@@ -13,6 +13,7 @@ Release date: ???. 2026
 
 **Bug fixes:**
 
+- [CONPY-382](https://jira.mariadb.org/browse/CONPY-382): Raise instead of crashing on a parameter that cannot be serialized 
 - [CONPY-358](https://jira.mariadb.org/browse/CONPY-358): Support `default_file` and `default_group` (option-file reading) in the pure-Python client
 - [CONPY-346](https://jira.mariadb.org/browse/CONPY-346): memory leaks correction
 - [CONPY-345](https://jira.mariadb.org/browse/CONPY-345): Report a clean PEP 440 `__version__` and identify the implementation via `__impl__`

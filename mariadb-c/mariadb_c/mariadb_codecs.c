@@ -3,6 +3,9 @@
 
 #include "mariadb_python.h"
 #include <datetime.h>
+#ifndef _WIN32
+#include <sys/socket.h>
+#endif
 
 #define CHARSET_BINARY 63
 #ifndef MYSQL_TYPE_VECTOR
@@ -1038,6 +1041,9 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
         paraminfo->type= MYSQL_TYPE_DATETIME;
         return 0;
    } else if (CHECK_TYPE(obj, &PyUnicode_Type)) {
+        Py_ssize_t len;
+        if (!PyUnicode_AsUTF8AndSize(obj, &len))
+            return 1;
         paraminfo->type= MYSQL_TYPE_VAR_STRING;
         return 0;
     } else if (obj == Py_None) {
@@ -1567,12 +1573,16 @@ mariadb_param_to_bind(MrdbCursor *self,
                Py_buffer v;
 
                bind->buffer= NULL;
+               bind->buffer_length= 0;
                if (PyObject_GetBuffer(value->value, &v, PyBUF_CONTIG_RO) < 0)
+               {
+                 rc= 1;
                  goto end;
+               }
 
                if (!v.len) {
                  PyBuffer_Release(&v);
-                 goto end;
+                 break;
                }
 
                bind->buffer_length= (unsigned long)v.len;
@@ -1619,6 +1629,12 @@ mariadb_param_to_bind(MrdbCursor *self,
 
                 if (CHECK_TYPE(value->value, &PyUnicode_Type)) {
                   bind->buffer= (void *)PyUnicode_AsUTF8AndSize(value->value, &len);
+                  if (!bind->buffer)
+                  {
+                    bind->buffer_length= 0;
+                    rc= 1;
+                    goto end;
+                  }
                   bind->buffer_length= (unsigned long)len;
                 } else {
                   PyObject *obj= PyObject_Str(value->value);
@@ -1632,8 +1648,16 @@ mariadb_param_to_bind(MrdbCursor *self,
                   }
 
                   p= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
-                  if (!(bind->buffer= value->buffer= PyMem_RawCalloc(1, len)))
+                  if (!p)
                   {
+                      Py_DECREF(obj);
+                      bind->buffer_length= 0;
+                      rc= 1;
+                      goto end;
+                  }
+                  if (!(bind->buffer= value->buffer= PyMem_RawCalloc(1, len ? (size_t)len : 1)))
+                  {
+                      Py_DECREF(obj);
                       mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
                           "Not enough memory (tried to allocated %lld bytes)", len);
                       return 1;
@@ -1653,6 +1677,24 @@ mariadb_param_to_bind(MrdbCursor *self,
     }
 end:
     return rc;
+}
+
+static void ma_abort_connection(MrdbCursor *self)
+{
+    my_socket sock;
+
+    if (!self->connection || !self->connection->mysql)
+        return;
+
+    sock= mysql_get_socket(self->connection->mysql);
+    if (sock == MARIADB_INVALID_SOCKET)
+        return;
+
+#ifdef _WIN32
+    shutdown(sock, SD_BOTH);
+#else
+    shutdown(sock, SHUT_RDWR);
+#endif
 }
 
 /*
@@ -1698,6 +1740,8 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     }
     rc= 0;
 end:
+    if (rc && self->param_cb_active)
+        ma_abort_connection(self);
     PyGILState_Release(gstate);
     return rc;
 }
