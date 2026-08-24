@@ -3,6 +3,7 @@
 
 import datetime
 import unittest
+import gc
 
 from test.base_test import create_connection, is_maxscale
 
@@ -14,6 +15,7 @@ class CursorMySQLTest(unittest.TestCase):
 
     def tearDown(self):
         del self.connection
+        gc.collect()
 
     def test_parameter(self):
         if is_maxscale():

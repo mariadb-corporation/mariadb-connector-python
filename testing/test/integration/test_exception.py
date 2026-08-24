@@ -5,6 +5,7 @@ import unittest
 from datetime import datetime
 import mariadb
 import sys, traceback
+import gc
 
 from test.base_test import create_connection
 
@@ -16,6 +17,7 @@ class TestException(unittest.TestCase):
 
     def tearDown(self):
         del self.connection
+        gc.collect()
 
     def test_exception(self):
         cursor = self.connection.cursor()

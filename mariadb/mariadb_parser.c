@@ -75,13 +75,23 @@ MrdbParser_end(MrdbParser* p)
         if (p->keys)
         {
             uint32_t i;
-            for (i=0; i < p->param_count; i++)
+            /* Use key_count if tracked, or check key pointers safely */
+            for (i = 0; i < p->param_count; i++)
             {
-                MARIADB_FREE_MEM(p->keys[i].str);
+                if (p->keys[i].str)
+                {
+                    MARIADB_FREE_MEM(p->keys[i].str);
+                }
             }
             MARIADB_FREE_MEM(p->keys);
         }
+        
         MARIADB_FREE_MEM(p->statement.str);
+
+        /* Release list reference if parse failed before ownership transfer */
+        Py_CLEAR(p->param_list);
+
+        /* Free the parser struct itself using PyMem_RawFree / MARIADB_FREE_MEM */
         MARIADB_FREE_MEM(p);
     }
 }
@@ -96,19 +106,25 @@ MrdbParser_init(MYSQL *mysql, const char *statement, size_t length)
         return NULL;
     }
 
-    if ((p= PyMem_RawCalloc(1, sizeof(MrdbParser))))
-    { 
+    if ((p = PyMem_RawCalloc(1, sizeof(MrdbParser))))
+    {
         if (!(p->statement.str = (char *)PyMem_RawCalloc(1, length + 1)))
         {
             MARIADB_FREE_MEM(p);
             return NULL;
         }
         memcpy(p->statement.str, statement, length);
-        p->statement.length= length;
-        p->mysql= mysql;
-        p->param_count= 0;
+        p->statement.length = length;
+        p->mysql = mysql;
+        p->param_count = 0;
+
+        if (!(p->param_list = PyList_New(0)))
+        {
+            MARIADB_FREE_MEM(p->statement.str);
+            MARIADB_FREE_MEM(p);
+            return NULL;
+        }
     }
-    p->param_list= PyList_New(0);
     return p;
 }
 
@@ -129,7 +145,6 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
 {
     char *a, *end;
     char lastchar = 0;
-    uint8_t i;
     PyObject *tmp;
 
     if (errmsg_len)

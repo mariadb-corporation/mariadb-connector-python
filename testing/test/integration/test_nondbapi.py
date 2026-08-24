@@ -4,6 +4,7 @@
 
 import unittest
 import mariadb
+import gc
 
 from test.base_test import create_connection, is_skysql, is_maxscale, is_mysql, get_host_suffix
 from test.conf_test import conf
@@ -16,6 +17,7 @@ class CursorTest(unittest.TestCase):
 
     def tearDown(self):
         del self.connection
+        gc.collect()
 
     def test_ping(self):
         if is_maxscale():

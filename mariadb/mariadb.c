@@ -111,6 +111,7 @@ static void mariadb_add_exception(PyObject *module,
 PyMODINIT_FUNC PyInit__mariadb(void)
 {
     PyObject *module= PyModule_Create(&mariadb_module);
+    PyObject *decimal_name= NULL;
 
     /* check if client library is compatible */
     if (mysql_get_client_version() < MARIADB_PACKAGE_VERSION_ID)
@@ -140,22 +141,37 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     }
 
     /* Import Decimal support (CONPY-49) */
-    if (!(decimal_module= PyImport_ImportModule("decimal")) ||
-        !(decimal_type= PyObject_GetAttr(decimal_module, PyUnicode_FromString("Decimal"))))
+    if (!(decimal_module= PyImport_ImportModule("decimal")))
+    {
+      goto error;
+    }
+
+    if (!(decimal_name= PyUnicode_FromString("Decimal")))
+    {
+      goto error;
+    }
+
+    decimal_type= PyObject_GetAttr(decimal_module, decimal_name);
+    Py_CLEAR(decimal_name);
+
+    if (!decimal_type)
     {
         goto error;
     }
+    Py_CLEAR(decimal_module);
 
     if (!(socket_module= PyImport_ImportModule("socket")))
     {
         goto error;
     }
+    Py_DECREF(socket_module);
 
     Py_SET_TYPE(&MrdbCursor_Type, &PyType_Type);
     if (PyType_Ready(&MrdbCursor_Type) == -1)
     {
         goto error;
     }
+    Py_INCREF(&MrdbCursor_Type);
     PyModule_AddObject(module, "cursor", (PyObject *)&MrdbCursor_Type);
 
     /* optional (MariaDB specific) globals */
@@ -200,8 +216,8 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 
     Py_INCREF(&MrdbConnection_Type);
     PyModule_AddObject(module, "connection", (PyObject *)&MrdbConnection_Type);
-    PyModule_AddObject(module, "_have_asan", HAVE_ASAN);
     Py_INCREF(HAVE_ASAN);
+    PyModule_AddObject(module, "_have_asan", HAVE_ASAN);
 
     return module;
 error:

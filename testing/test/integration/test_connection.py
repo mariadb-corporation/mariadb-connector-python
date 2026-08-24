@@ -5,6 +5,7 @@ import os
 import unittest
 
 import mariadb
+import gc
 
 from test.base_test import create_connection, is_skysql, is_maxscale, get_host_suffix
 from test.conf_test import conf
@@ -22,6 +23,7 @@ class TestConnection(unittest.TestCase):
 
     def tearDown(self):
         del self.connection
+        gc.collect()
 
     def test_conpy36(self):
         if platform.system() == "Windows":

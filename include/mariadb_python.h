@@ -357,8 +357,15 @@ typedef struct {
     uint8_t closed;
     uint8_t reprepare;
     enum enum_paramstyle paramstyle;
+    PyObject *sequence_capsule;
+    PyObject *metadata_dict;
     PyObject *weakreflist;
 } MrdbCursor;
+
+typedef struct {
+    char **names;
+    unsigned int count;
+} MrdbFieldNamesPayload;
 
 typedef struct
 {

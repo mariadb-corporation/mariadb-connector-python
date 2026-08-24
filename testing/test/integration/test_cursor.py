@@ -17,6 +17,11 @@ from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR
 
 from test.base_test import create_connection, is_maxscale, is_mysql
 
+try:
+    import tracemalloc
+except ImportError:
+    tracemalloc = None
+
 server_indicator_version = 100206
 
 
@@ -33,6 +38,7 @@ class TestCursor(unittest.TestCase):
     def tearDown(self):
         self.connection.close()
         del self.connection
+        gc.collect()
 
     def test_conpy251(self):
         cursor = self.connection.cursor()
@@ -44,6 +50,143 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.close()
         del cursor
+
+    @unittest.skipIf(
+        os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
+        "sys.getrefcount() is CPython only"
+    )
+    @unittest.skipIf(
+        sys.version_info < (3,10),
+        "Test requires Python >= 3.10"
+    )
+    def test_named_tuple_uaf_after_cursor_clear(self):
+        """Verify field names remain valid when cursor clears old result sets."""
+        cursor = self.connection.cursor(named_tuple=True)
+
+        # Query 1: Fetch namedtuple row
+        cursor.execute("SELECT 1 AS col_a, 'foo' AS col_b")
+        rows_1 = cursor.fetchall()
+
+        # Query 2: Overwrite result set on same cursor (triggers MrdbCursor_clear)
+        cursor.execute("SELECT 99 AS completely_different_col, 2.5 AS val")
+        rows_2 = cursor.fetchall()
+
+        # Query 3: Different field count
+        cursor.execute("SELECT 1 AS x, 2 AS y, 3 AS z")
+        rows_3 = cursor.fetchall()
+
+        # Access attributes of rows from Query 1 (Must not crash or access freed memory)
+        self.assertEqual(rows_1[0].col_a, 1)
+        self.assertEqual(rows_1[0].col_b, "foo")
+        self.assertEqual(rows_1[0].__match_args__, ("col_a", "col_b"))
+
+        # Access Query 2 & 3
+        self.assertEqual(rows_2[0].completely_different_col, 99)
+        self.assertEqual(rows_2[0].val, 2.5)
+        self.assertEqual(rows_2[0].__match_args__, ("completely_different_col", "val"))
+        self.assertEqual(rows_3[0].__match_args__, ("x", "y", "z"))
+
+        cursor.close()
+
+    @unittest.skipIf(
+        os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
+        "sys.getrefcount() is CPython only"
+    )
+    @unittest.skipIf(
+        sys.version_info < (3,10),
+        "Test requires Python >= 3.10"
+    )
+    def test_named_tuple_uaf_after_cursor_and_conn_destroyed(self):
+        """Verify namedtuples stay valid after Cursor and Connection objects are destroyed."""
+        conn = create_connection()
+        cursor = conn.cursor(named_tuple=True)
+        cursor.execute("SELECT 100 AS id, 'alice' AS username, 'admin' AS role")
+        row = cursor.fetchone()
+
+        # Close and delete cursor and connection objects completely
+        cursor.close()
+        del cursor
+        conn.close()
+        del conn
+
+        # Force garbage collection cycle
+        gc.collect()
+
+        # Field names and tuple attributes must remain intact
+        self.assertEqual(row.id, 100)
+        self.assertEqual(row.username, "alice")
+        self.assertEqual(row.role, "admin")
+        self.assertEqual(row.__match_args__, ("id", "username", "role"))
+
+    @unittest.skipIf(
+        os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
+        "sys.getrefcount() is CPython only"
+    )
+    @unittest.skipIf(
+        sys.version_info < (3,10),
+        "Test requires Python >= 3.10"
+    )
+    def test_named_tuple_memory_leak(self):
+        """Verify allocation and destruction of PyStructSequence_Type payload does not leak memory."""
+        cursor = self.connection.cursor(named_tuple=True)
+
+        gc.collect()
+        tracemalloc.start()
+
+        # Warmup phase to stabilize Python memory allocator
+        for _ in range(50):
+            cursor.execute("SELECT 1 AS a, 'test' AS b, 3.14 AS c")
+            _ = cursor.fetchall()
+
+        gc.collect()
+        snapshot_before = tracemalloc.take_snapshot()
+
+        # Stress test loop (10,000 result sets created and cleared)
+        iterations = 10000
+        for i in range(iterations):
+            cursor.execute(f"SELECT {i} AS num_col, 'string_data_{i}' AS str_col")
+            _ = cursor.fetchall()
+
+        gc.collect()
+        snapshot_after = tracemalloc.take_snapshot()
+        tracemalloc.stop()
+
+        cursor.close()
+
+        # Measure leaked memory
+        stats = snapshot_after.compare_to(snapshot_before, 'lineno')
+        total_leak_bytes = sum(stat.size_diff for stat in stats if stat.size_diff > 0)
+
+        # Allow < 50KB threshold for minor Python interpreter internal variations
+        self.assertLess(
+            total_leak_bytes,
+            50 * 1024,
+            f"Possible memory leak detected! Leaked {total_leak_bytes} bytes across {iterations} queries."
+        )
+
+    @unittest.skipIf(
+        os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
+        "sys.getrefcount() is CPython only"
+    )
+    @unittest.skipIf(
+        sys.version_info < (3,10),
+        "Test requires Python >= 3.10"
+    )
+    def test_named_tuple_long_column_names(self):
+        """Verify strdup allocation and payload handling for long column names."""
+        cursor = self.connection.cursor(named_tuple=True)
+        long_col_1 = "a" * 255
+        long_col_2 = "b" * 255
+
+        query = f"SELECT 1 AS `{long_col_1}`, 2 AS `{long_col_2}`"
+        cursor.execute(query)
+        row = cursor.fetchone()
+
+        self.assertEqual(getattr(row, long_col_1), 1)
+        self.assertEqual(getattr(row, long_col_2), 2)
+        self.assertEqual(row.__match_args__, (long_col_1, long_col_2))
+
+        cursor.close()
 
     @unittest.skipIf(
         os.environ.get('PYTHON_VERSION', '').startswith('pypy'),

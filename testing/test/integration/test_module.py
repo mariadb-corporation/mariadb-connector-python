@@ -4,6 +4,7 @@
 import unittest
 
 import mariadb
+import gc
 
 from test.base_test import create_connection
 
@@ -15,6 +16,7 @@ class TestConnection(unittest.TestCase):
 
     def tearDown(self):
         del self.connection
+        gc.collect()
 
     def test_conpy_63(self):
         version = mariadb.__version__

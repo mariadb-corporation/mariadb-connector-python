@@ -22,6 +22,7 @@ import unittest
 
 import mariadb
 import datetime
+import gc
 
 # $Log$
 # Revision 1.1.2.1  2006/02/25 03:44:32  adustman
@@ -144,6 +145,7 @@ class DatabaseAPI20Test(unittest.TestCase):
         finally:
             cur.close()
             con.close()
+            gc.collect()
 
     def _connect(self):
         try:

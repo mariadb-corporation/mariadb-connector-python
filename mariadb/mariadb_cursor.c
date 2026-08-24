@@ -54,6 +54,9 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *stmt);
 static PyObject *
 MrdbCursor_description(MrdbCursor *self);
 
+static void
+MrdbCursor_CleanupSequenceFields(MrdbCursor *self);
+
 static PyObject *
 MrdbCursor_fetchone(MrdbCursor *self);
 
@@ -340,6 +343,7 @@ static int MrdbCursor_traverse(
         visitproc visit,
         void *arg)
 {
+    Py_VISIT(self->metadata_dict);
     Py_VISIT(self->connection);
     Py_VISIT(self->data);
     return 0;
@@ -347,6 +351,7 @@ static int MrdbCursor_traverse(
 
 static int MrdbCursor_tpclear(MrdbCursor *self)
 {
+    Py_CLEAR(self->metadata_dict);
     if (self->connection)
         Py_CLEAR(self->connection);
     if (self->data)
@@ -399,12 +404,14 @@ PyTypeObject MrdbCursor_Type =
 
 void MrdbCursor_clearparseinfo(MrdbParseInfo *parseinfo)
 {
-  if (parseinfo->statement)
-    MARIADB_FREE_MEM(parseinfo->statement);
-  Py_XDECREF(parseinfo->keys);
-  if (parseinfo->paramlist)
-    Py_XDECREF(parseinfo->paramlist);
-  memset(parseinfo, 0, sizeof(MrdbParseInfo));
+    if (parseinfo->statement) {
+        MARIADB_FREE_MEM(parseinfo->statement);
+        parseinfo->statement= NULL;
+    }
+    /* Safely decref Python objects and nullify fields */
+    Py_CLEAR(parseinfo->keys);
+    Py_CLEAR(parseinfo->paramlist);
+    memset(parseinfo, 0, sizeof(MrdbParseInfo));
 }
 
 /* {{{ MrdbCursor_clear_result(MrdbCursor *self)
@@ -461,6 +468,26 @@ static void MrdbCursor_FreeValues(MrdbCursor *self)
   MARIADB_FREE_MEM(self->value);
 }
 
+static void
+MrdbCursor_CleanupSequenceFields(MrdbCursor *self)
+{
+    if (self->sequence_fields) {
+        PyMem_RawFree(self->sequence_fields);
+        self->sequence_fields = NULL;
+    }
+
+    /* 
+     * Releasing self->sequence_type drops the cursor's reference to the type object.
+     * When all row instances holding references to sequence_type are garbage collected,
+     * CPython clears sequence_type's dict, releasing the capsule and calling 
+     * MrdbFieldNames_CapsuleDestructor automatically.
+     */
+    Py_XDECREF(self->sequence_type);
+    self->sequence_type = NULL;
+}
+
+
+
 /* {{{ MrdbCursor_clear
    Resets statement attributes  and frees
    associated memory
@@ -491,7 +518,7 @@ void MrdbCursor_clear(MrdbCursor *self, uint8_t new_stmt)
 
     if (self->sequence_fields)
     {
-        MARIADB_FREE_MEM(self->sequence_fields);
+        MrdbCursor_CleanupSequenceFields(self);
     }
     self->fields= NULL;
     self->row_count= 0;
@@ -575,15 +602,36 @@ static void MrdbCursor_finalize(MrdbCursor *self)
 }
 /* }}} */
 
-static int Mrdb_GetFieldInfo(MrdbCursor *self)
+static void
+MrdbFieldNames_CapsuleDestructor(PyObject *capsule)
 {
-    self->row_number= 0;
+    MrdbFieldNamesPayload *payload = 
+        (MrdbFieldNamesPayload *)PyCapsule_GetPointer(capsule, "mariadb.field_names");
+    if (payload) {
+        if (payload->names) {
+            for (unsigned int i = 0; i < payload->count; i++) {
+                if (payload->names[i]) {
+                    free(payload->names[i]);
+                }
+            }
+            free(payload->names);
+        }
+        free(payload);
+    }
+}
+
+static int
+Mrdb_GetFieldInfo(MrdbCursor *self)
+{
+    MrdbFieldNamesPayload *payload = NULL;
+
+    self->row_number = 0;
 
     if (self->field_count)
     {
         if (self->parseinfo.is_text)
         {
-            self->result= (self->is_buffered) ? mysql_store_result(self->connection->mysql) :
+            self->result = (self->is_buffered) ? mysql_store_result(self->connection->mysql) :
                 mysql_use_result(self->connection->mysql);
             if (!self->result)
             {
@@ -600,41 +648,110 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             }
         }
 
-        self->affected_rows= CURSOR_AFFECTED_ROWS(self);
+        self->affected_rows = CURSOR_AFFECTED_ROWS(self);
 
-        self->fields= (self->parseinfo.is_text) ? mysql_fetch_fields(self->result) :
+        self->fields = (self->parseinfo.is_text) ? mysql_fetch_fields(self->result) :
             mariadb_stmt_fetch_fields(self->stmt);
 
         if (self->result_format == RESULT_NAMED_TUPLE) {
-            unsigned int i;
             PyStructSequence_Desc sequence_desc;
+            PyObject *capsule = NULL;
 
-            if (!(self->sequence_fields= (PyStructSequence_Field *)
-                        PyMem_RawCalloc(self->field_count + 1,
-                            sizeof(PyStructSequence_Field))))
+            self->sequence_fields = (PyStructSequence_Field *)PyMem_RawCalloc(
+                self->field_count + 1, sizeof(PyStructSequence_Field)
+            );
+            if (!self->sequence_fields) {
+                PyErr_NoMemory();
                 return 1;
-            sequence_desc.name= mariadb_named_tuple_name;
-            sequence_desc.doc= mariadb_named_tuple_desc;
-            sequence_desc.fields= self->sequence_fields;
-            sequence_desc.n_in_sequence= self->field_count;
-
-
-            for (i=0; i < self->field_count; i++)
-            {
-                self->sequence_fields[i].name= self->fields[i].name;
             }
-            self->sequence_type= PyStructSequence_NewType(&sequence_desc);
-#if PY_VERSION_HEX < 0x03070000
-            self->sequence_type->tp_flags|= Py_TPFLAGS_HEAPTYPE;
-#endif
+
+            payload = (MrdbFieldNamesPayload *)malloc(sizeof(MrdbFieldNamesPayload));
+            if (!payload) {
+                PyErr_NoMemory();
+                goto error;
+            }
+            payload->count = self->field_count;
+
+            /* Use calloc so unallocated slots remain NULL for safe error-path cleanup */
+            payload->names = (char **)calloc(self->field_count, sizeof(char *));
+            if (!payload->names) {
+                PyErr_NoMemory();
+                goto error;
+            }
+
+            for (uint32_t i = 0; i < self->field_count; i++) {
+                if (self->fields[i].name) {
+                    payload->names[i] = strdup(self->fields[i].name);
+                    if (!payload->names[i]) {
+                        PyErr_NoMemory();
+                        goto error;
+                    }
+                    self->sequence_fields[i].name = payload->names[i];
+                }
+            }
+
+            sequence_desc.name = mariadb_named_tuple_name;
+            sequence_desc.doc = mariadb_named_tuple_desc;
+            sequence_desc.fields = self->sequence_fields;
+            sequence_desc.n_in_sequence = self->field_count;
+
+            self->sequence_type = PyStructSequence_NewType(&sequence_desc);
+
+            /* Free temporary fields descriptor array immediately */
+            PyMem_RawFree(self->sequence_fields);
+            self->sequence_fields = NULL;
+
+            if (!self->sequence_type) {
+                goto error;
+            }
+
+            capsule = PyCapsule_New(payload, "mariadb.field_names", MrdbFieldNames_CapsuleDestructor);
+            if (!capsule) {
+                goto error;
+            }
+
+            PyObject *dict = ((PyTypeObject *)self->sequence_type)->tp_dict;
+            if (!dict || PyDict_SetItemString(dict, "_field_names_capsule", capsule) < 0) {
+                /* If SetAttr/SetItem fails, decref capsule, which runs destructor immediately */
+                Py_DECREF(capsule);
+                payload = NULL;
+                goto error;
+            }
+
+            /* PyDict_SetItemString increments refcount; release local capsule reference */
+            Py_DECREF(capsule);
+
+            /* Payload ownership completely transferred to capsule destructor */
+            payload = NULL;
         }
     }
     return 0;
+
+error:
+    if (payload) {
+        if (payload->names) {
+            for (uint32_t i = 0; i < payload->count; i++) {
+                if (payload->names[i]) {
+                    free(payload->names[i]);
+                }
+            }
+            free(payload->names);
+        }
+        free(payload);
+    }
+    if (self->sequence_fields) {
+        PyMem_RawFree(self->sequence_fields);
+        self->sequence_fields = NULL;
+    }
+    Py_CLEAR(self->sequence_type);
+    return 1;
 }
+
 
 PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
 {
-    MARIADB_FREE_MEM(self->sequence_fields);
+    Py_CLEAR(self->metadata_dict);
+    MrdbCursor_CleanupSequenceFields(self);
     MARIADB_FREE_MEM(self->values);
 
     if (self->result)
@@ -705,66 +822,119 @@ end:
    return rc;
 }
 
+static PyObject *metadata_keys[13] = {NULL};
+static const char *metadata_key_names[13] = {
+    "catalog", "schema", "field", "org_field", "table",
+    "org_table", "type", "charset", "length",
+    "max_length", "decimals", "flags", "ext_type_or_format"
+};
+
+int init_metadata_keys(void)
+{
+    for (int i = 0; i < 13; i++) {
+        if (!metadata_keys[i]) {
+            metadata_keys[i] = PyUnicode_InternFromString(metadata_key_names[i]);
+            if (!metadata_keys[i]) {
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 /* {{{ MrdbCursor_metadata */
 static PyObject *MrdbCursor_metadata(MrdbCursor *self)
 {
     uint32_t i;
     PyObject *dict = NULL;
-    const char *keys[14]= {"catalog", "schema", "field", "org_field", "table",
-                           "org_table", "type", "charset", "length",
-                           "max_length", "decimals", "flags", "ext_type_or_format"};
-    PyObject *tuple[14]= {0};
-    Mrdb_ExtFieldType *ext_field_type= NULL;
+    PyObject *tuple[13] = {0};
+    Mrdb_ExtFieldType *ext_field_type = NULL;
 
-    if (!self->field_count)
+    if (!self->field_count || !self->fields)
         Py_RETURN_NONE;
+
+    /* Ensure pre-interned keys exist */
+    if (init_metadata_keys() < 0)
+        return NULL;
+
+    /* Return cached dict if already built for this result set */
+    if (self->metadata_dict) {
+        Py_INCREF(self->metadata_dict);
+        return self->metadata_dict;
+    }
 
     if (PyErr_Occurred())
         return NULL;
 
-    for (i=0; i < 13; i++)
-      if (!(tuple[i] = PyTuple_New(self->field_count)))
-        goto error;
-
-
-    for (i=0; i < self->field_count; i++)
-    {
-      PyTuple_SetItem(tuple[0], i, PyUnicode_FromString(self->fields[i].catalog));
-      PyTuple_SetItem(tuple[1], i, PyUnicode_FromString(self->fields[i].db));
-      PyTuple_SetItem(tuple[2], i, PyUnicode_FromString(self->fields[i].name));
-      PyTuple_SetItem(tuple[3], i, PyUnicode_FromString(self->fields[i].org_name));
-      PyTuple_SetItem(tuple[4], i, PyUnicode_FromString(self->fields[i].table));
-      PyTuple_SetItem(tuple[5], i, PyUnicode_FromString(self->fields[i].org_table));
-      PyTuple_SetItem(tuple[6], i, PyLong_FromLong((long)self->fields[i].type));
-      PyTuple_SetItem(tuple[7], i, PyLong_FromLong((long)self->fields[i].charsetnr));
-      PyTuple_SetItem(tuple[8], i, PyLong_FromLongLong((long long)self->fields[i].max_length));
-      PyTuple_SetItem(tuple[9], i, PyLong_FromLongLong((long long)self->fields[i].length));
-      PyTuple_SetItem(tuple[10], i, PyLong_FromLong((long)self->fields[i].decimals));
-      PyTuple_SetItem(tuple[11], i, PyLong_FromLong((long)self->fields[i].flags));
-
-      if ((ext_field_type= mariadb_extended_field_type(&self->fields[i])))
-          PyTuple_SetItem(tuple[12], i, PyLong_FromLong((long)ext_field_type->ext_type));
-      else
-          PyTuple_SetItem(tuple[12], i, PyLong_FromLong((long)EXT_TYPE_NONE));
-    }
-
-    if (!(dict =PyDict_New()))
-        goto error;
-
-    for (i=0; i < 13; i++)
-    {
-        if (PyDict_SetItemString(dict, keys[i], tuple[i]))
+    for (i = 0; i < 13; i++) {
+        if (!(tuple[i] = PyTuple_New(self->field_count)))
             goto error;
-        Py_DECREF(tuple[i]);
-        tuple[i]= NULL;
     }
-    return dict;
+
+    for (i = 0; i < self->field_count; i++)
+    {
+        PyObject *val;
+
+#define SET_TUPLE_STR(idx, field_str) \
+        val = PyUnicode_FromString((field_str) ? (field_str) : ""); \
+        if (!val) goto error; \
+        PyTuple_SET_ITEM(tuple[idx], i, val);
+
+#define SET_TUPLE_INT(idx, int_val) \
+        val = PyLong_FromLong((long)(int_val)); \
+        if (!val) goto error; \
+        PyTuple_SET_ITEM(tuple[idx], i, val);
+
+#define SET_TUPLE_LONGLONG(idx, ll_val) \
+        val = PyLong_FromLongLong((long long)(ll_val)); \
+        if (!val) goto error; \
+        PyTuple_SET_ITEM(tuple[idx], i, val);
+
+        SET_TUPLE_STR(0, self->fields[i].catalog);
+        SET_TUPLE_STR(1, self->fields[i].db);
+        SET_TUPLE_STR(2, self->fields[i].name);
+        SET_TUPLE_STR(3, self->fields[i].org_name);
+        SET_TUPLE_STR(4, self->fields[i].table);
+        SET_TUPLE_STR(5, self->fields[i].org_table);
+        SET_TUPLE_INT(6, self->fields[i].type);
+        SET_TUPLE_INT(7, self->fields[i].charsetnr);
+        SET_TUPLE_LONGLONG(8, self->fields[i].max_length);
+        SET_TUPLE_LONGLONG(9, self->fields[i].length);
+        SET_TUPLE_INT(10, self->fields[i].decimals);
+        SET_TUPLE_INT(11, self->fields[i].flags);
+
+        if ((ext_field_type = mariadb_extended_field_type(&self->fields[i]))) {
+            SET_TUPLE_INT(12, ext_field_type->ext_type);
+        } else {
+            SET_TUPLE_INT(12, EXT_TYPE_NONE);
+        }
+
+#undef SET_TUPLE_STR
+#undef SET_TUPLE_INT
+#undef SET_TUPLE_LONGLONG
+    }
+
+    if (!(dict = PyDict_New()))
+        goto error;
+
+    for (i = 0; i < 13; i++)
+    {
+        /* Use pre-interned PyObject key rather than PyDict_SetItemString */
+        if (PyDict_SetItem(dict, metadata_keys[i], tuple[i]) < 0)
+            goto error;
+        Py_CLEAR(tuple[i]);
+    }
+
+    /* Cache dict on cursor instance */
+    self->metadata_dict = dict;
+    Py_INCREF(self->metadata_dict);
+    return self->metadata_dict;
+
 error:
-    for (i=0; i < 13; i++)
-        if (tuple[i])
-            Py_DECREF(tuple[i]);
-    if (dict)
-        Py_DECREF(dict);
+    for (i = 0; i < 13; i++) {
+        Py_CLEAR(tuple[i]);
+    }
+    Py_XDECREF(dict);
     return NULL;
 }
 /* }}}*/
@@ -1054,6 +1224,8 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *stmt)
     char errmsg[128];
     uint32_t old_paramcount= 0;
 
+    Py_CLEAR(self->metadata_dict);
+
     if (self->parseinfo.statement)
     {
       old_paramcount= self->parseinfo.paramcount;
@@ -1306,8 +1478,8 @@ static PyObject *
 MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
 {
     PyObject *List;
-    unsigned int field_count= self->field_count;
-    uint64_t row_count;
+    unsigned int field_count = self->field_count;
+    int64_t row_count;
 
     MARIADB_CHECK_STMT_FETCH(self);
 
@@ -1323,42 +1495,55 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
         return NULL;
     }
 
-    row_count= (uint64_t)PyLong_AsLongLong(rows);
+    row_count = PyLong_AsLongLong(rows);
+    if (PyErr_Occurred())
+        return NULL; /* Exception already set by PyLong_AsLongLong */
 
-    if (!(List= PyList_New(0)))
+    /* FIX: -1 (or any negative value) means fetch ALL remaining rows */
+    if (row_count < 0)
+        row_count = INT64_MAX;
+
+    if (!(List = PyList_New(0)))
     {
         return NULL;
     }
 
-    for (uint64_t i=0; i < row_count && !MrdbCursor_fetchinternal(self); i++)
+    for (int64_t i = 0; i < row_count && !MrdbCursor_fetchinternal(self); i++)
     {
         uint32_t j;
         PyObject *Row;
 
         self->row_number++;
 
-        if (!(Row= mariadb_get_sequence_or_tuple(self)))
+        if (!(Row = mariadb_get_sequence_or_tuple(self)))
         {
+            Py_DECREF(List);
             return NULL;
         }
 
-        for (j=0; j < field_count; j++)
+        for (j = 0; j < field_count; j++)
         {
             ma_set_result_column_value(self, Row, j);
 
             if (PyErr_Occurred()) {
-              Py_XDECREF(Row);
-              Py_XDECREF(List);
-              self->row_count= 0;
-              return NULL;
+                Py_DECREF(Row);
+                Py_DECREF(List);
+                self->row_count = 0;
+                return NULL;
             }
         }
 
-        PyList_Append(List, Row);
-        /* CONPY-99: Decrement Row to prevent memory leak */
+        if (PyList_Append(List, Row) < 0) {
+            Py_DECREF(Row);
+            Py_DECREF(List);
+            self->row_count = 0;
+            return NULL;
+        }
+
+        /* CONPY-99: Decrement local reference to Row after append */
         Py_DECREF(Row);
     }
-    self->row_count= CURSOR_NUM_ROWS(self);
+    self->row_count = CURSOR_NUM_ROWS(self);
     return List;
 }
 
@@ -1390,8 +1575,8 @@ MrdbCursor_check_text_types(MrdbCursor *self)
     if (PyDict_Check(self->data))
     {
       PyDict_Next(self->data, &ofs, NULL, &obj);
-    }    
-    else 
+    }
+    else
        obj= ListOrTuple_GetItem(self->data, i);
     if (PyBytes_Check(obj) ||
         PyByteArray_Check(obj) ||

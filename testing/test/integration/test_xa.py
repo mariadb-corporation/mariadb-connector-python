@@ -3,6 +3,7 @@
 
 import unittest
 import mariadb
+import gc
 
 from test.base_test import create_connection
 
@@ -15,6 +16,7 @@ class TestCA(unittest.TestCase):
 
     def tearDown(self):
         del self.connection
+        gc.collect()
 
     def test_xid(self):
         con = create_connection()

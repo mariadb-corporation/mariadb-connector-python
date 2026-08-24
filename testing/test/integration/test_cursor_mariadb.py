@@ -3,6 +3,7 @@
 
 import datetime
 import unittest
+import gc
 
 from test.base_test import create_connection
 
@@ -14,6 +15,7 @@ class CursorMariaDBTest(unittest.TestCase):
 
     def tearDown(self):
         del self.connection
+        gc.collect()
 
         def test_insert_parameter(self):
             cursor = self.connection.cursor()

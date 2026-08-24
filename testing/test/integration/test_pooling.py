@@ -5,6 +5,7 @@ import unittest
 
 import mariadb
 import platform
+import gc
 
 from test.base_test import create_connection, conf, is_skysql, is_maxscale
 
@@ -20,6 +21,7 @@ class TestPooling(unittest.TestCase):
     #         self.connection.autocommit = False
 
     def tearDown(self):
+        gc.collect()
         pass
 
     #         del self.connection

@@ -3,6 +3,7 @@
 
 import datetime
 import unittest
+import gc
 
 from mariadb.constants import FIELD_TYPE
 from test.base_test import create_connection
@@ -42,6 +43,7 @@ class TestConversion(unittest.TestCase):
 
     def tearDown(self):
         del self.connection
+        gc.collect()
 
     def test_convert_time(self):
         cursor = self.connection.cursor()
