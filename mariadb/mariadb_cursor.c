@@ -1133,7 +1133,9 @@ MrdbCursor_parse(MrdbCursor *self, PyObject *stmt)
       MrdbCursor_clearparseinfo(&self->parseinfo);
     }
  
-    statement = (char *)PyUnicode_AsUTF8AndSize(stmt, (Py_ssize_t *)&statement_len);
+    statement = PyUnicode_AsUTF8AndSize(stmt, &statement_len);
+    if (!statement)
+        return NULL;
 
     if (!(parser= MrdbParser_init(self->connection->mysql, statement, statement_len)))
     {
@@ -1254,6 +1256,8 @@ MrdbCursor_execute_text(MrdbCursor *self, PyObject *stmt)
     if (Py_TYPE(stmt) == &PyUnicode_Type)
     {
         statement = (char *)PyUnicode_AsUTF8AndSize(stmt, (Py_ssize_t *)&statement_len);
+        if (!statement)
+            return NULL;
     } else if (Py_TYPE(stmt) == &PyBytes_Type)
     {
         PyBytes_AsStringAndSize(stmt, &statement, (Py_ssize_t *)&statement_len);

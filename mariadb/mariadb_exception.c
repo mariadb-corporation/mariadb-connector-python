@@ -177,6 +177,9 @@ void mariadb_throw_exception(void *handle,
   PyObject *SqlState= 0;
   PyObject *Exception= 0;
 
+  if (PyErr_Occurred())
+    return;
+
   if (message)
   {
     ErrorNo= PyLong_FromLong(CR_UNKNOWN_ERROR);

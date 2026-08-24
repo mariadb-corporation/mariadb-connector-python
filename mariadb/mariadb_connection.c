@@ -632,6 +632,8 @@ MrdbConnection_executecommand(MrdbConnection *self,
   MARIADB_CHECK_CONNECTION(self, NULL);
 
   cmd= PyUnicode_AsUTF8AndSize(command, NULL);
+  if (!cmd)
+      return NULL;
 
   Py_BEGIN_ALLOW_THREADS;
   rc= mysql_send_query(self->mysql, cmd, (long)strlen(cmd));
@@ -964,7 +966,8 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
         PyObject *str)
 {
     PyObject *new_string= NULL;
-    size_t from_length, to_length;
+    Py_ssize_t from_length= 0;
+    size_t to_length;
     char *from, *to;
 
     /* escaping depends on the server status, so we need a valid
@@ -976,8 +979,11 @@ static PyObject *MrdbConnection_escape_string(MrdbConnection *self,
         return NULL;
     }
 
-    from= (char *)PyUnicode_AsUTF8AndSize(str, (Py_ssize_t *)&from_length);
-    if (!(to= (char *)PyMem_Calloc(1, from_length * 2 + 1)))
+    from= (char *)PyUnicode_AsUTF8AndSize(str, &from_length);
+    if (!from)
+        return NULL;
+
+    if (!(to= (char *)PyMem_Calloc(1, (size_t)from_length * 2 + 1)))
     {
         return NULL;
     }

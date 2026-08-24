@@ -1015,6 +1015,9 @@ mariadb_get_column_info(PyObject *obj, MrdbParamInfo *paraminfo)
         paraminfo->type= MYSQL_TYPE_DATETIME;
         return 0;
    } else if (CHECK_TYPE(obj, &PyUnicode_Type)) {
+        Py_ssize_t len;
+        if (!PyUnicode_AsUTF8AndSize(obj, &len))
+            return 1;
         paraminfo->type= MYSQL_TYPE_VAR_STRING;
         return 0;
     } else if (obj == Py_None) {
@@ -1211,7 +1214,7 @@ mariadb_get_parameter_info(MrdbCursor *self,
         if (mariadb_get_parameter(self, 1, i, column_nr, &paramvalue))
             return 1;
         memset(&pinfo, 0, sizeof(MrdbParamInfo));
-        if ((rc= mariadb_get_column_info(paramvalue.value, &pinfo) && !paramvalue.indicator))
+        if ((rc= mariadb_get_column_info(paramvalue.value, &pinfo)) && !paramvalue.indicator)
         {
             if (rc == 1)
             {
@@ -1547,11 +1550,18 @@ mariadb_param_to_bind(MrdbCursor *self,
                Py_buffer v;
 
                bind->buffer= NULL;
+               bind->buffer_length= 0;
                if (PyObject_GetBuffer(value->value, &v, PyBUF_CONTIG_RO) < 0)
+               {
+                 rc= 1;
                  goto end;
+               }
 
                if (!v.len)
-                 goto end;
+               {
+                 PyBuffer_Release(&v);
+                 break;
+               }
 
                bind->buffer_length= (unsigned long)v.len;
 #if PY_BIG_ENDIAN == 0
@@ -1597,6 +1607,12 @@ mariadb_param_to_bind(MrdbCursor *self,
 
                 if (CHECK_TYPE(value->value, &PyUnicode_Type)) {
                   bind->buffer= (void *)PyUnicode_AsUTF8AndSize(value->value, &len);
+                  if (!bind->buffer)
+                  {
+                    bind->buffer_length= 0;
+                    rc= 1;
+                    goto end;
+                  }
                   bind->buffer_length= (unsigned long)len;
                 } else {
                   PyObject *obj= PyObject_Str(value->value);
@@ -1610,8 +1626,16 @@ mariadb_param_to_bind(MrdbCursor *self,
                   }
 
                   p= (void *)PyUnicode_AsUTF8AndSize(obj, &len);
-                  if (!(bind->buffer= value->buffer= PyMem_RawCalloc(1, len)))
+                  if (!p)
                   {
+                      Py_DECREF(obj);
+                      bind->buffer_length= 0;
+                      rc= 1;
+                      goto end;
+                  }
+                  if (!(bind->buffer= value->buffer= PyMem_RawCalloc(1, len ? (size_t)len : 1)))
+                  {
+                      Py_DECREF(obj);
                       mariadb_throw_exception(NULL, Mariadb_InterfaceError, 0,
                           "Not enough memory (tried to allocated %lld bytes)", len);
                       return 1;
