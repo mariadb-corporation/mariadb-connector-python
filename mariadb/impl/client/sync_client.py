@@ -518,7 +518,7 @@ class SyncClient(BaseClient):
             # Validate SSL fingerprint if needed
             self.validate_ssl_fingerprint(ok_packet)
         elif packet_type == self.ERROR_PACKET:
-            raise _decode_error_packet(packet, self.context).toError(self.exception_factory)
+            raise self.build_auth_error(packet)
         elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
             # Auth switch - server requests different auth plugin
             self._handle_auth_switch(packet)

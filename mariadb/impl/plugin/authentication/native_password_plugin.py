@@ -9,6 +9,7 @@ from ...configuration import Configuration
 
 from typing import Callable, Awaitable
 from ...client.context import Context
+from ...fips import SHA1_DIGEST_LENGTH, is_fips_mode
 from ..authentication_plugin import AuthenticationPlugin
 
 
@@ -28,12 +29,24 @@ class NativePasswordPlugin(AuthenticationPlugin):
         """Encrypts a password using MySQL native password algorithm"""
         if password is None or password == "":  # nosec B105
             return bytearray(b'')
-        
+
+        if is_fips_mode():
+            # A FIPS-enforcing OpenSSL has no SHA-1, so this scramble cannot be
+            # computed at all. Returning an all-zero placeholder instead of
+            # raising keeps the handshake well-formed: the connector always
+            # names mysql_native_password in its handshake response, and only a
+            # complete handshake gets the authentication-switch request that
+            # moves the connection onto the FIPS-compliant plugin (parsec) the
+            # account actually uses. An account genuinely on
+            # mysql_native_password fails authentication here, which is correct:
+            # that plugin cannot be used under FIPS. See mariadb.impl.fips.
+            return bytearray(SHA1_DIGEST_LENGTH)
+
         password_bytes = password.encode('utf-8')
         # SHA1 is mandated by the mysql_native_password wire protocol; it is a
-        # protocol building block, not a security choice by the connector. Kept
-        # under the default usedforsecurity=True so a FIPS build still enforces
-        # its policy (the call raises there rather than silently running).
+        # protocol building block, not a security choice by the connector. It
+        # stays under the default usedforsecurity=True: a FIPS build must not
+        # compute it, which is what the is_fips_mode() branch above handles.
         stage1 = hashlib.sha1(password_bytes).digest()  # nosec B324
         stage2 = hashlib.sha1(stage1).digest()  # nosec B324
         digest = hashlib.sha1()  # nosec B324
@@ -90,6 +103,13 @@ class NativePasswordPlugin(AuthenticationPlugin):
         """Return hash for credential (double SHA1)"""
         password = conf.password
         if password is None:
+            return None
+        if is_fips_mode():
+            # No SHA-1 available, so no credential hash can be produced. The
+            # caller (self-signed-certificate fingerprint validation) treats a
+            # missing hash as a hard failure, so this fails closed with an
+            # explicit message instead of crashing. Unreachable in practice:
+            # native-password authentication cannot succeed under FIPS anyway.
             return None
         password_bytes = password.encode('utf-8')
         # Protocol-mandated SHA1 (see encrypt_password); not a security choice.

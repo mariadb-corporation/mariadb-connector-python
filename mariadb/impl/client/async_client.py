@@ -589,7 +589,7 @@ class AsyncClient(BaseClient):
             self.validate_ssl_fingerprint(ok_packet)
         elif packet_type == self.ERROR_PACKET:
             # Error packet - authentication failed
-            raise _decode_error_packet(auth_result, self.context).toError(self.exception_factory)
+            raise self.build_auth_error(auth_result)
         elif packet_type == self.AUTH_SWITCH_REQUEST_PACKET:
             # Auth switch request - server wants different plugin
             await self._handle_auth_switch(auth_result)

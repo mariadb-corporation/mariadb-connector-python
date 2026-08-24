@@ -25,3 +25,9 @@ class NativePasswordPluginFactory(AuthenticationPluginFactory):
     def initialize(self, authentication_data: str | None, seed: bytes,
                   conf: Configuration, host_address: HostAddress) -> AuthenticationPlugin:
         return NativePasswordPlugin(authentication_data, seed)
+
+    def fips_compliant(self) -> bool:
+        # The scramble is a SHA-1 construction, which a FIPS provider refuses.
+        # Stated explicitly (rather than inherited) because this is the plugin
+        # the whole FIPS handling exists for.
+        return False

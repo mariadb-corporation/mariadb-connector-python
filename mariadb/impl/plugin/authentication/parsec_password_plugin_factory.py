@@ -24,3 +24,10 @@ class ParsecPasswordPluginFactory(AuthenticationPluginFactory):
     def initialize(self, authentication_data: str | None, seed: bytes,
                   conf: "Configuration", host_address: "HostAddress") -> AuthenticationPlugin:
         return ParsecPasswordPlugin(authentication_data, seed, conf)
+
+    def fips_compliant(self) -> bool:
+        # PBKDF2-HMAC-SHA512 for key derivation and Ed25519 for the signature.
+        # Both are FIPS-approved (SP 800-132 and FIPS 186-5 respectively), and
+        # no SHA-1 is involved anywhere, so parsec is the plugin to grant an
+        # account that must authenticate under FIPS.
+        return True

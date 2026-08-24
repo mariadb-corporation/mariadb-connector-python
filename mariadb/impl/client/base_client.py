@@ -127,10 +127,12 @@ from ..host_address import HostAddress
 from ..message.server.column_definition_packet import ColumnsDefinition
 from ..message.server.prepare_stmt_packet import CachedPrepareStmtPacket
 from .exception_factory import ExceptionFactory
+from ..fips import is_fips_mode
 from ...exceptions import OperationalError
 from mariadb_shared.constants import FIELD_TYPE, FIELD_FLAG
 from mariadb_shared import constants
 from ..message.server.ok_packet import OkPacket
+from ..message.server.error_packet import ErrorPacket
 try:
     from cachetools import LRUCache
 except ImportError:
@@ -188,6 +190,9 @@ _BIN_SHORT_TYPES = frozenset((FIELD_TYPE.SHORT, FIELD_TYPE.YEAR))
 _BIN_DECIMAL_TYPES = frozenset((FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL))
 _BIN_DATE_TYPES = frozenset((FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE))
 _BIN_DATETIME_TYPES = frozenset((FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP))
+
+# ER_ACCESS_DENIED_ERROR / ER_ACCESS_DENIED_NO_PASSWORD_ERROR
+_ACCESS_DENIED_ERRORS = frozenset((1045, 1698))
 
 class BaseClient(ABC):
     """
@@ -372,6 +377,33 @@ class BaseClient(ABC):
                 "ssl_verify_cert=True, use a password with a MitM-proof authentication "
                 "plugin, or provide the server certificate to the client."
             )
+
+
+    def build_auth_error(self, packet: memoryview) -> Exception:
+        """Build the exception for an ERR packet received during authentication.
+
+        Under FIPS the handshake response carries an all-zero placeholder in
+        place of the mysql_native_password scramble (see
+        ``NativePasswordPlugin.encrypt_password``). An account that really is on
+        mysql_native_password therefore gets a plain "access denied" from the
+        server, with nothing pointing at the actual cause -- so the cause is
+        appended here. Only the initial handshake needs this; a switch to a
+        non-FIPS plugin is already refused by AuthenticationPluginLoader.get.
+        """
+        from ..plugin.authentication.native_password_plugin import NativePasswordPlugin
+
+        error_packet = ErrorPacket.decode(packet, self.context)
+        if (is_fips_mode()
+                and error_packet.error_code in _ACCESS_DENIED_ERRORS
+                and self.configuration.password
+                and isinstance(self.auth_plugin, NativePasswordPlugin)):
+            error_packet.error_message += (
+                " (FIPS-enabled crypto backend: mysql_native_password is a SHA-1 "
+                "construction and cannot be computed here, so no usable password "
+                "was sent. Grant this account a FIPS-compliant authentication "
+                "plugin such as parsec.)"
+            )
+        return error_packet.toError(self.exception_factory)
 
 
     def validate_ssl_fingerprint(self, ok_packet: OkPacket) -> None:

@@ -11,6 +11,7 @@ from ...host_address import HostAddress
 
 from typing import Any, Callable, Awaitable
 from ...client.context import Context
+from ...fips import is_fips_mode
 
 from ..authentication_plugin import AuthenticationPlugin
 from ....exceptions import OperationalError
@@ -67,6 +68,18 @@ class CachingSha2PasswordPlugin(AuthenticationPlugin):
     
     def _get_rsa_encrytped_pwd(self, public_key_pem: str) -> bytes:
         """Encrypt password using RSA public key """
+        if is_fips_mode():
+            # The server's public-key exchange is defined with RSA-OAEP over
+            # SHA-1 (see the padding below), which a FIPS provider refuses.
+            # Say so here: the alternative failure is an obscure error from
+            # `cryptography` deep inside the exchange.
+            raise OperationalError(
+                "Authentication plugin 'caching_sha2_password' cannot exchange the "
+                "server's RSA public key with a FIPS-enabled crypto backend: that "
+                "exchange is defined with RSA-OAEP over SHA-1. Enable TLS (ssl=True) "
+                "so the password is sent over the secure channel instead, or grant "
+                "this account a FIPS-compliant authentication plugin such as 'parsec'."
+            )
         try:
             # Load the public key
             public_key = serialization.load_pem_public_key(public_key_pem.encode('utf-8'))

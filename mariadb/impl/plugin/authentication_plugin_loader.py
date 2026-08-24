@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, Type
 from .authentication_plugin_factory import AuthenticationPluginFactory
+from ..fips import is_fips_mode
 from ...exceptions import OperationalError
 
 if TYPE_CHECKING:
@@ -49,14 +50,31 @@ class AuthenticationPluginLoader:
         #        )
         
         # Look for the plugin factory
-        if plugin_type in cls._plugin_factories:
-            factory_class = cls._plugin_factories[plugin_type]
-            return factory_class()
-        
-        # Plugin not found
-        raise OperationalError(
-            f"Client does not support authentication protocol requested by server. "
-            f"plugin type was = '{plugin_type}'",
-            1251
-        )
+        factory_class = cls._plugin_factories.get(plugin_type)
+        if factory_class is None:
+            # Plugin not found
+            raise OperationalError(
+                f"Client does not support authentication protocol requested by server. "
+                f"plugin type was = '{plugin_type}'",
+                1251
+            )
+
+        factory = factory_class()
+
+        # On a FIPS-enforcing crypto backend, refuse a plugin built on
+        # primitives the FIPS provider does not offer (SHA-1, for
+        # mysql_native_password) before it sends anything. Without this the
+        # failure surfaces either as an opaque hashlib error or, worse, as a
+        # bare "access denied" from the server. See mariadb.impl.fips.
+        if is_fips_mode() and not factory.fips_compliant():
+            raise OperationalError(
+                f"Authentication plugin '{plugin_type}' cannot be used with a "
+                f"FIPS-enabled crypto backend: it relies on primitives the FIPS "
+                f"provider refuses (SHA-1, in the case of mysql_native_password). "
+                f"Grant this account a FIPS-compliant authentication plugin such "
+                f"as 'parsec'.",
+                1251
+            )
+
+        return factory
     

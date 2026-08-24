@@ -27,3 +27,12 @@ class CachingSha2PasswordPluginFactory(AuthenticationPluginFactory):
     
     def require_ssl(self) -> bool:
         return False
+
+    def fips_compliant(self) -> bool:
+        # The scramble is SHA-256 based, and the clear-text-over-TLS follow-up
+        # uses no hash at all, so the plugin itself is FIPS-usable. Its one
+        # non-compliant branch is the RSA public-key exchange (defined with
+        # RSA-OAEP over SHA-1), which is refused separately in
+        # CachingSha2PasswordPlugin._get_rsa_encrytped_pwd rather than by
+        # rejecting the plugin as a whole.
+        return True

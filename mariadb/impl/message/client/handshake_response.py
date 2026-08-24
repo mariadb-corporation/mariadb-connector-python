@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
-import hashlib
-
 from ...client.context import Context
 from ...connection_attributes import get_default_connection_attributes, encode_connection_attributes
 from ..client_message import ClientMessage
@@ -83,39 +81,6 @@ class HandshakeResponse(ClientMessage):
             stream.write_bytes(attr_data)
         
         return stream.get_payload()
-    
-    def _calculate_auth_response(self, context: Context) -> bytes:
-        """Calculate authentication response"""
-        if not self.configuration.password:
-            return b''
-        
-        # Get auth data from context (scramble)
-        auth_data = getattr(context, 'auth_data', b'')
-        if not auth_data or len(auth_data) < 20:
-            raise IOError("Invalid or missing authentication data from server")
-        
-        # MySQL native password authentication
-        # SHA1(password) XOR SHA1(scramble + SHA1(SHA1(password)))
-        
-        password_bytes = self.configuration.password.encode('utf-8')
-
-        # SHA1 here is fixed by the mysql_native_password wire protocol; it is a
-        # protocol building block, not a security choice by the connector. Kept
-        # under the default usedforsecurity=True so a FIPS build still enforces
-        # its policy.
-        # SHA1(password)
-        sha1_password = hashlib.sha1(password_bytes).digest()  # nosec B324
-
-        # SHA1(SHA1(password))
-        sha1_sha1_password = hashlib.sha1(sha1_password).digest()  # nosec B324
-
-        # SHA1(scramble + SHA1(SHA1(password)))
-        scramble_hash = hashlib.sha1(auth_data + sha1_sha1_password).digest()  # nosec B324
-        
-        # XOR SHA1(password) with scramble_hash
-        result = bytes(a ^ b for a, b in zip(sha1_password, scramble_hash))
-        
-        return result
     
     def is_binary(self) -> bool:
         return False

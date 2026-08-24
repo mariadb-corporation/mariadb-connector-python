@@ -9,6 +9,7 @@ Release date: ???. 2026
 - [CONPY-340](https://jira.mariadb.org/browse/CONPY-340): Add a `protocol` parameter to control the transport method, with auto-detection of the default Unix socket path per Linux distribution
 - [CONPY-355](https://jira.mariadb.org/browse/CONPY-355): Support for the MySQL `VECTOR` data type
 - [CONPY-370](https://jira.mariadb.org/browse/CONPY-370): Accept a connection URI in `create_pool()` and `create_async_pool()`, with pool options readable from the URI query string.
+- [CONPY-384](https://jira.mariadb.org/browse/CONPY-384): Support FIPS-enforcing crypto backends in the pure-Python client: SHA-1 is never computed there, so an account on a FIPS-compliant authentication plugin (`parsec`) now connects instead of failing on `hashlib.sha1`, and a plugin that is not FIPS-compliant is refused with an explicit message. Detection is automatic and overridable with `MARIADB_FIPS_MODE`.
 
 **Bug fixes:**
 
