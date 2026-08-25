@@ -60,7 +60,7 @@ Release date: Jul 7 2025
 
 ## Notable changes
 
-- If a cursor will be reused, methods execute(), executemany() and callproc() will aways reset the cursor to avoid possible memory leaks
+- If a cursor will be reused, methods execute(), executemany() and callproc() will always reset the cursor to avoid possible memory leaks
 - Fixed various memory leaks in unittest suite
 
 ## Bug fixes
