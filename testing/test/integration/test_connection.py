@@ -23,6 +23,36 @@ class TestConnection(unittest.TestCase):
     def tearDown(self):
         del self.connection
 
+    def test_conpy331(self):
+        # A wrong type on an integer connection argument used to raise a bare
+        # "'str' object cannot be interpreted as an integer" from the C
+        # argument parser, naming neither the argument nor the expected type.
+        int_keywords = ("port", "connect_timeout", "read_timeout",
+                        "write_timeout", "local_infile", "compress",
+                        "ssl_verify_cert", "ssl", "client_flag", "pool_size",
+                        "pool_reset_connection")
+        for keyword in int_keywords:
+            with self.subTest(keyword=keyword):
+                with self.assertRaises(mariadb.ProgrammingError) as ctx:
+                    mariadb.connect(**{**conf(), keyword: "5"})
+                message = str(ctx.exception)
+                self.assertIn(keyword, message)
+                self.assertIn("int", message)
+                self.assertIn("str", message)
+
+    def test_conpy331_valid_values_still_accepted(self):
+        # Integers, booleans and the ssl dictionary form must keep working;
+        # ssl=0/ssl=1 were rejected before because any non-bool was treated as
+        # a mapping by the ssl compatibility branch.
+        for kwargs in ({"port": int(conf()["port"])}, {"ssl": False},
+                       {"ssl": 0}, {"compress": True},
+                       {"ssl": {"ca": None}}):
+            with self.subTest(kwargs=kwargs):
+                args = conf().copy()
+                args.update(kwargs)
+                connection = mariadb.connect(**args)
+                connection.close()
+
     def test_conpy36(self):
         if platform.system() == "Windows":
             self.skipTest("unix_socket not supported on Windows")

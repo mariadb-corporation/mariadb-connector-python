@@ -21,8 +21,24 @@ import mariadb
 import socket
 import mariadb.cursors
 
+from collections.abc import Mapping
 from mariadb.constants import STATUS, TPC_STATE, INFO
 from packaging import version
+
+# Connection keywords the C connect() reads with an integer format specifier.
+# Kept in step with the format string in mariadb_connection.c.
+_INT_KEYWORDS = ("port", "connect_timeout", "read_timeout", "write_timeout",
+                 "local_infile", "compress", "ssl_verify_cert", "ssl",
+                 "client_flag", "pool_size", "pool_reset_connection")
+
+
+def _check_int_arguments(kwargs):
+    for key in _INT_KEYWORDS:
+        if key in kwargs and not isinstance(kwargs[key], int):
+            raise mariadb.ProgrammingError(
+                "Connection argument '%s' must be of type int, not %s"
+                % (key, type(kwargs[key]).__name__))
+
 
 _DEFAULT_CHARSET = "utf8mb4"
 _DEFAULT_COLLATION = "utf8mb4_general_ci"
@@ -75,12 +91,14 @@ class Connection(mariadb._mariadb.connection):
 
         # compatibility feature: if SSL is provided as a dictionary,
         # we will map it's content
-        if "ssl" in kwargs and not isinstance(kwargs["ssl"], bool):
+        if "ssl" in kwargs and isinstance(kwargs["ssl"], Mapping):
             ssl = kwargs.pop("ssl", None)
             for key in ["ca", "cert", "capath", "key", "cipher"]:
                 if key in ssl:
                     kwargs["ssl_%s" % key] = ssl[key]
             kwargs["ssl"] = True
+
+        _check_int_arguments(kwargs)
 
         super().__init__(*args, **kwargs)
         self.autocommit = autocommit
