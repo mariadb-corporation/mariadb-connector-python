@@ -171,10 +171,14 @@ def _date_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
 
 def _datetime_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     # Use SQL TIMESTAMP literal so the server preserves DATETIME type on `SELECT ?`
+    if v.tzinfo is not None:
+        v = v.replace(tzinfo=None)
     return b"TIMESTAMP'" + str(v).encode('ascii') + QUOTE_BYTES
 
 def _time_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
     # Use SQL TIME literal so the server preserves TIME type on `SELECT ?`
+    if v.tzinfo is not None:
+        v = v.replace(tzinfo=None)
     return b"TIME'" + str(v).encode('ascii') + QUOTE_BYTES
 
 def _ipv4_to_bytes(v: Any, no_backslash_escapes: bool = False) -> bytes:
