@@ -933,8 +933,10 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
                 key[key_len]= 0;
             }
 
-            rc= PyObject_SetAttrString((PyObject *)self->sequence_type, key,
-                                       field_names);
+            rc= PyDict_SetItemString(self->sequence_type->tp_dict, key,
+                                     field_names);
+            if (!rc)
+                PyType_Modified(self->sequence_type);
             PyMem_RawFree(key);
             Py_DECREF(field_names);
             if (rc) {
