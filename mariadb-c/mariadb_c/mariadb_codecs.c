@@ -3,7 +3,13 @@
 
 #include "mariadb_python.h"
 #include <datetime.h>
-#ifndef _WIN32
+#ifdef _WIN32
+/* shutdown() comes from the winsock header windows.h already pulled in, but
+   SD_BOTH lives in winsock2.h, which cannot be included after windows.h. */
+#ifndef SD_BOTH
+#define SD_BOTH 0x02
+#endif
+#else
 #include <sys/socket.h>
 #endif
 
