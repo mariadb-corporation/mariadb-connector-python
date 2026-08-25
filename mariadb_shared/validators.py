@@ -34,3 +34,27 @@ def validate_bool(value: Any, name: str) -> bool:
         f"Invalid boolean value for option '{name}': {value!r}. "
         "Expected one of True/'true'/1 or False/'false'/0."
     )
+
+
+def validate_int(value: Any, name: str) -> int:
+    """Strictly parse an integer connection option.
+
+    Accepts an ``int`` or a string of digits (``3306`` or ``'3306'``), so an
+    option read from a config file or an environment variable works without the
+    caller converting it. Anything else raises ``ProgrammingError`` naming the
+    option, rather than the bare "'str' object cannot be interpreted as an
+    integer" the C argument parser produced (CONPY-331).
+    """
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        v = value.strip()
+        try:
+            return int(v)
+        except ValueError:
+            pass
+    raise ProgrammingError(
+        f"Invalid integer value for option '{name}': {value!r}."
+    )

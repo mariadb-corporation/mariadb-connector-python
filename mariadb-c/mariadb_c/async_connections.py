@@ -24,7 +24,7 @@ from mariadb_shared.exceptions import (
     ProgrammingError,
 )
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
-from mariadb_shared.validators import validate_bool
+from mariadb_shared.validators import validate_bool, validate_int
 
 # Import mariadbapi_version from C extension
 from mariadb_c._mariadb import mariadbapi_version
@@ -128,6 +128,11 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         for _bk in ("ssl", "ssl_verify_cert", "compress", "local_infile"):
             if _bk in kwargs and kwargs[_bk] is not None and not isinstance(kwargs[_bk], dict):
                 kwargs[_bk] = validate_bool(kwargs[_bk], _bk)
+
+        for _ik in ("port", "connect_timeout", "read_timeout",
+                    "write_timeout", "client_flag", "pool_size"):
+            if _ik in kwargs:
+                kwargs[_ik] = validate_int(kwargs[_ik], _ik)
 
         # Validate host parameter (same as sync)
         if "host" in kwargs:

@@ -4,7 +4,7 @@
 from typing import Callable, Dict, Any, List
 from dataclasses import dataclass, field
 from .host_address import HostAddress
-from mariadb_shared.validators import validate_bool
+from mariadb_shared.validators import validate_bool, validate_int
 
 
 @dataclass
@@ -142,7 +142,7 @@ class Configuration:
         if 'host' in params:
             config.host = params['host']
         if 'port' in params:
-            config.port = int(params['port'])
+            config.port = validate_int(params['port'], 'port')
         if 'user' in params or 'username' in params:
             config.user = params.get('user') or params.get('username')
         if 'password' in params or 'passwd' in params:
@@ -162,14 +162,14 @@ class Configuration:
             else:
                 config.protocol = int(v)
         if 'socket_timeout' in params:
-            config.socket_timeout = int(params['socket_timeout'])
+            config.socket_timeout = validate_int(params['socket_timeout'], 'socket_timeout')
         # read_timeout and write_timeout are C-extension parameters; map to socket_timeout
         if 'read_timeout' in params:
-            config.socket_timeout = int(params['read_timeout'])
+            config.socket_timeout = validate_int(params['read_timeout'], 'read_timeout')
         if 'write_timeout' in params:
-            config.socket_timeout = int(params['write_timeout'])
+            config.socket_timeout = validate_int(params['write_timeout'], 'write_timeout')
         if 'connect_timeout' in params:
-            config.connect_timeout = int(params['connect_timeout'])
+            config.connect_timeout = validate_int(params['connect_timeout'], 'connect_timeout')
         
         # SSL parameters
         if 'ssl' in params or 'use_ssl' in params:
@@ -212,11 +212,11 @@ class Configuration:
         
         # Timeouts
         if 'query_timeout' in params:
-            config.query_timeout = int(params['query_timeout'])
+            config.query_timeout = validate_int(params['query_timeout'], 'query_timeout')
         if 'max_allowed_packet' in params:
-            config.max_allowed_packet = int(params['max_allowed_packet'])
+            config.max_allowed_packet = validate_int(params['max_allowed_packet'], 'max_allowed_packet')
         if 'max_allowed_columns' in params:
-            config.max_allowed_columns = int(params['max_allowed_columns'])
+            config.max_allowed_columns = validate_int(params['max_allowed_columns'], 'max_allowed_columns')
         
         # Initialization command
         if 'init_command' in params:
@@ -238,7 +238,7 @@ class Configuration:
         if 'cache_prep_stmts' in params:
             config.cache_prep_stmts = validate_bool(params['cache_prep_stmts'], 'cache_prep_stmts')
         if 'prep_stmt_cache_size' in params:
-            config.prep_stmt_cache_size = int(params['prep_stmt_cache_size'])
+            config.prep_stmt_cache_size = validate_int(params['prep_stmt_cache_size'], 'prep_stmt_cache_size')
         
         # Pipeline option
         if 'pipeline' in params:
@@ -246,7 +246,7 @@ class Configuration:
         
         # Client capabilities
         if 'client_flag' in params:
-            config.client_flag = int(params['client_flag'])
+            config.client_flag = validate_int(params['client_flag'], 'client_flag')
         
         # Store any unmapped options
         valid_params = {
