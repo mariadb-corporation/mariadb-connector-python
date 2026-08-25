@@ -12,6 +12,7 @@ Base cursor implementation with common functionality for sync and async cursors
 
 import contextlib
 import copy
+import keyword
 import warnings
 from abc import ABC, abstractmethod
 from collections import namedtuple
@@ -627,7 +628,8 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         field_names: list[str] = []
         for i in range(columns.count):
             name = columns.get_name(i) or columns.get_org_name(i)
-            if not name or not name.isidentifier():
+            if (not name or not name.isidentifier() or keyword.iskeyword(name)
+                    or name.startswith('_')):
                 name = f'column_{len(field_names)}'
             original_name = name
             counter = 1
