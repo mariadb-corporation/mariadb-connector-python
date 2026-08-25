@@ -52,7 +52,7 @@ def _connection_args(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 class ConnectionPool(object):
-    """
+    r"""
     Class defining a pool of database connections
 
     MariaDB Connector/Python supports simple connection pooling.
