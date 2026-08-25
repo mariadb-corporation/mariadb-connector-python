@@ -319,6 +319,8 @@ static uint8_t check_date(uint16_t year, uint8_t month, uint8_t day)
       return 0;
   if (month < 1 || month > 12)
       return 0;
+  if (day < 1 || day > 31)
+      return 0;
   if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))
       is_leap= 1;
   if (month == 2)
@@ -778,7 +780,8 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 len= (uint8_t)mysql_net_field_length(row);
                 if (!len)
                 {
-                    self->values[column]= PyDateTime_FromDateAndTime(0,0,0,0,0,0,0);
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
                     break;
                 }
                 year= uint2korr(*row);
@@ -792,8 +795,22 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 }
                 if (len == 11)
                     second_part= uint4korr(*row + 7);
-                self->values[column]= PyDateTime_FromDateAndTime(year, month,
-                    day, hour, minute, second, second_part);
+                if (check_date(year, month, day))
+                {
+                    self->values[column]= PyDateTime_FromDateAndTime(year, month,
+                        day, hour, minute, second, second_part);
+                    if (!self->values[column])
+                    {
+                        PyErr_Clear();
+                        Py_INCREF(Py_None);
+                        self->values[column]= Py_None;
+                    }
+                }
+                else
+                {
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
+                }
                 *row+= len;
                 break;
             }
@@ -806,12 +823,28 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 
                 if (!len)
                 {
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
                     break;
                 }
                 year= uint2korr(*row);
                 month= uint1korr(*row + 2);
                 day= uint1korr(*row + 3);
-                self->values[column]= PyDate_FromDate(year, month, day);
+                if (check_date(year, month, day))
+                {
+                    self->values[column]= PyDate_FromDate(year, month, day);
+                    if (!self->values[column])
+                    {
+                        PyErr_Clear();
+                        Py_INCREF(Py_None);
+                        self->values[column]= Py_None;
+                    }
+                }
+                else
+                {
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
+                }
                 *row+= len;
                 break;
             }
