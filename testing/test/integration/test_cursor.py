@@ -299,15 +299,52 @@ class TestCursor(unittest.TestCase):
         cursor.execute("INSERT INTO test_zero_dates VALUES "
                        "(1, '2008-08-00', '2008-08-00 12:34:56', '0000-00-00 00:00:00')")
 
-        # Protocolo texto (execute sem parametros)
+        # text protocol (execute without parameters)
         cursor.execute("SELECT d, dt, ts FROM test_zero_dates WHERE id=1")
         row = cursor.fetchone()
         self.assertEqual(row, (None, None, None))
 
-        # Protocolo binario (prepared statement, com parametro)
+        # binary protocol (prepared statement, with a parameter)
         cursor.execute("SELECT d, dt, ts FROM test_zero_dates WHERE id=?", (1,))
         row = cursor.fetchone()
         self.assertEqual(row, (None, None, None))
+        cursor.close()
+
+    def test_conpy368_allow_invalid_dates(self):
+        # Under ALLOW_INVALID_DATES the server stores an impossible day as it
+        # was given instead of zeroing the date, so '2008-02-30' really reaches
+        # the client. A zero month or year does too. None of these have a
+        # Python equivalent and must come back as None on both protocols.
+        if is_mysql():
+            self.skipTest("MySQL rejects these date values")
+        cursor = self.connection.cursor()
+        cursor.execute("SET SESSION sql_mode='ALLOW_INVALID_DATES'")
+        cursor.execute("CREATE TEMPORARY TABLE test_invalid_dates("
+                       "id INT PRIMARY KEY, d DATE, dt DATETIME(6))")
+        cases = ("2008-02-30", "2009-02-29", "2008-04-31",
+                 "2008-00-15", "0000-08-15", "2008-00-00")
+        for i, value in enumerate(cases):
+            cursor.execute("INSERT INTO test_invalid_dates VALUES (?,?,?)",
+                           (i, value, "%s 12:34:56.789012" % value))
+
+        for i, value in enumerate(cases):
+            with self.subTest(value=value, protocol="text"):
+                cursor.execute("SELECT d, dt FROM test_invalid_dates "
+                               "WHERE id=%d" % i)
+                self.assertEqual(cursor.fetchone(), (None, None))
+            with self.subTest(value=value, protocol="binary"):
+                cursor.execute("SELECT d, dt FROM test_invalid_dates WHERE id=?",
+                               (i,))
+                self.assertEqual(cursor.fetchone(), (None, None))
+
+        # a genuinely valid leap day must still round-trip
+        cursor.execute("INSERT INTO test_invalid_dates VALUES "
+                       "(99, '2008-02-29', '2008-02-29 12:34:56.789012')")
+        cursor.execute("SELECT d, dt FROM test_invalid_dates WHERE id=?", (99,))
+        row = cursor.fetchone()
+        self.assertEqual(row[0], datetime.date(2008, 2, 29))
+        self.assertEqual(row[1],
+                         datetime.datetime(2008, 2, 29, 12, 34, 56, 789012))
         cursor.close()
 
     def test_numbers(self):

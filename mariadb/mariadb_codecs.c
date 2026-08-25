@@ -335,6 +335,20 @@ static uint8_t check_date(uint16_t year, uint8_t month, uint8_t day)
   return 1;
 }
 
+/* Store a converted temporal value, or None when Python cannot represent it. */
+static void ma_set_temporal_value(MrdbCursor *self, unsigned int column,
+                                  PyObject *value)
+{
+  if (!value)
+  {
+    if (PyErr_Occurred() && PyErr_ExceptionMatches(PyExc_ValueError))
+        PyErr_Clear();
+    Py_INCREF(Py_None);
+    value= Py_None;
+  }
+  self->values[column]= value;
+}
+
 static uint8_t check_time(MYSQL_TIME *tm)
 {
   if (tm->hour > 838)
@@ -574,36 +588,20 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
             Py_str_to_TIME(data, strlen(data), &tm);
             if (self->fields[column].type == MYSQL_TYPE_TIME)
             {
-                if (check_time(&tm))
-                {
-                      self->values[column]= Mrdb_GetTimeDelta(&tm);
-                }
-                else {
-                    Py_INCREF(Py_None);
-                    self->values[column]= Py_None;
-                }
+                ma_set_temporal_value(self, column,
+                    check_time(&tm) ? Mrdb_GetTimeDelta(&tm) : NULL);
             } else if (self->fields[column].type == MYSQL_TYPE_DATE)
             {
-                if (check_date(tm.year, tm.month, tm.day))
-                {
-                    self->values[column]= PyDate_FromDate(tm.year, tm.month, tm.day);
-                }
-                else {
-                    Py_INCREF(Py_None);
-                    self->values[column]= Py_None;
-                }
+                ma_set_temporal_value(self, column,
+                    check_date(tm.year, tm.month, tm.day)
+                        ? PyDate_FromDate(tm.year, tm.month, tm.day) : NULL);
             } else
             {
-                if (check_date(tm.year, tm.month, tm.day) &&
-                    check_time(&tm))
-                {
-                    self->values[column]= PyDateTime_FromDateAndTime(tm.year, tm.month,
-                               tm.day, tm.hour, tm.minute, tm.second, tm.second_part);
-                }
-                else {
-                    Py_INCREF(Py_None);
-                    self->values[column]= Py_None;
-                }
+                ma_set_temporal_value(self, column,
+                    (check_date(tm.year, tm.month, tm.day) && check_time(&tm))
+                        ? PyDateTime_FromDateAndTime(tm.year, tm.month, tm.day,
+                              tm.hour, tm.minute, tm.second, tm.second_part)
+                        : NULL);
             }
             break;
         case MYSQL_TYPE_TINY_BLOB:
@@ -795,22 +793,11 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 }
                 if (len == 11)
                     second_part= uint4korr(*row + 7);
-                if (check_date(year, month, day))
-                {
-                    self->values[column]= PyDateTime_FromDateAndTime(year, month,
-                        day, hour, minute, second, second_part);
-                    if (!self->values[column])
-                    {
-                        PyErr_Clear();
-                        Py_INCREF(Py_None);
-                        self->values[column]= Py_None;
-                    }
-                }
-                else
-                {
-                    Py_INCREF(Py_None);
-                    self->values[column]= Py_None;
-                }
+                ma_set_temporal_value(self, column,
+                    check_date(year, month, day)
+                        ? PyDateTime_FromDateAndTime(year, month, day,
+                              hour, minute, second, second_part)
+                        : NULL);
                 *row+= len;
                 break;
             }
@@ -830,21 +817,9 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                 year= uint2korr(*row);
                 month= uint1korr(*row + 2);
                 day= uint1korr(*row + 3);
-                if (check_date(year, month, day))
-                {
-                    self->values[column]= PyDate_FromDate(year, month, day);
-                    if (!self->values[column])
-                    {
-                        PyErr_Clear();
-                        Py_INCREF(Py_None);
-                        self->values[column]= Py_None;
-                    }
-                }
-                else
-                {
-                    Py_INCREF(Py_None);
-                    self->values[column]= Py_None;
-                }
+                ma_set_temporal_value(self, column,
+                    check_date(year, month, day)
+                        ? PyDate_FromDate(year, month, day) : NULL);
                 *row+= len;
                 break;
             }
