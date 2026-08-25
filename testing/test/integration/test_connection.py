@@ -23,6 +23,34 @@ class TestConnection(unittest.TestCase):
     def tearDown(self):
         del self.connection
 
+    def test_conpy364(self):
+        # A pooled connection sits in a reference cycle (the pool holds it, it
+        # holds the pool), so the cyclic collector reclaims it and clears its
+        # instance dict first. _closed lives in the C struct and survives that,
+        # so _check_closed() still passes and close() used to die on the missing
+        # _Connection__pool with an AttributeError. Clearing the dict here is
+        # what subtype_clear does, without waiting on a collection.
+        connection = create_connection()
+        self.assertIn("_Connection__pool", connection.__dict__)
+        connection.__dict__.clear()
+        self.assertFalse(connection._closed)
+        connection.close()
+        self.assertTrue(connection._closed)
+
+    def test_conpy364_pooled_connection_still_returns_to_pool(self):
+        # With the dict intact the pool path must be unchanged: close() returns
+        # the connection to the pool instead of closing it.
+        pool = mariadb.ConnectionPool(pool_name="test_conpy364", pool_size=1,
+                                      **conf())
+        try:
+            connection = pool.get_connection()
+            connection.close()
+            self.assertFalse(connection._closed)
+            # the only connection of the pool must be the one just returned
+            self.assertIs(pool.get_connection(), connection)
+        finally:
+            pool.close()
+
     def test_conpy331(self):
         # A wrong type on an integer connection argument used to raise a bare
         # "'str' object cannot be interpreted as an integer" from the C

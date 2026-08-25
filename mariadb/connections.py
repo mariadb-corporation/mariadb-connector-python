@@ -134,8 +134,9 @@ class Connection(mariadb._mariadb.connection):
 
     def close(self):
         self._check_closed()
-        if self._Connection__pool:
-            self._Connection__pool._close_connection(self)
+        pool = getattr(self, "_Connection__pool", None)
+        if pool:
+            pool._close_connection(self)
         else:
             super().close()
 
