@@ -415,10 +415,11 @@ def _pool_option_names() -> 'frozenset[str]':
     The set of pool option names, from the single table in mariadb_pool.
 
     Resolved lazily: mariadb-pool is an optional dependency, so this is only
-    reachable on the pool code paths.
+    reachable on the pool code paths. It is opaque to mypy (follow_imports =
+    "skip"), hence the cast.
     """
     from mariadb_pool import POOL_OPTION_NAMES  # pyright: ignore[reportMissingImports]
-    return POOL_OPTION_NAMES
+    return cast('frozenset[str]', POOL_OPTION_NAMES)
 
 
 def _resolve_pool_params(
