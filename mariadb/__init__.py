@@ -410,51 +410,15 @@ def __getattr__(name: str) -> Any:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
-def _coerce_bool(value: Any) -> bool:
+def _pool_option_names() -> 'frozenset[str]':
     """
-    Coerce a URI query-string value to a boolean.
+    The set of pool option names, from the single table in mariadb_pool.
 
-    ``parse_connection_uri`` already maps every recognised spelling
-    (``true``/``1``/``yes``/``on`` and ``false``/``0``/``no``/``off``) to a bool,
-    so anything else arriving here is a value it did not recognise. Reject it
-    rather than silently reading it as false.
+    Resolved lazily: mariadb-pool is an optional dependency, so this is only
+    reachable on the pool code paths.
     """
-    if isinstance(value, bool):
-        return value
-    raise ValueError(
-        f"Invalid boolean value: {value!r}. Expected one of "
-        "true/false, 1/0, yes/no, on/off."
-    )
-
-
-# Pool-configuration keys accepted both as keyword arguments and in the URI query
-# string, with the coercer used to type values coming from the URI. The generic
-# URI parser cannot be trusted to type these (e.g. it leaves ``ping_threshold`` a
-# string and turns ``min_size=0`` into ``False``), so they are coerced explicitly.
-_POOL_CONFIG_COERCERS: 'Dict[str, Any]' = {
-    'min_size': int,
-    'max_size': int,
-    'max_idle_time': float,
-    'max_lifetime': float,
-    'validation_interval': float,
-    'acquire_timeout': float,
-    'enable_health_check': _coerce_bool,
-    'reset_connection': _coerce_bool,
-    'ping_threshold': float,
-}
-
-# Effective defaults for pool configuration. ``min_size`` defaults to ``max_size``.
-_POOL_CONFIG_DEFAULTS: 'Dict[str, Any]' = {
-    'min_size': None,
-    'max_size': 10,
-    'max_idle_time': 600.0,
-    'max_lifetime': 3600.0,
-    'validation_interval': 30.0,
-    'acquire_timeout': 30.0,
-    'enable_health_check': True,
-    'reset_connection': False,
-    'ping_threshold': 0.25,
-}
+    from mariadb_pool import POOL_OPTION_NAMES  # pyright: ignore[reportMissingImports]
+    return POOL_OPTION_NAMES
 
 
 def _resolve_pool_params(
@@ -479,10 +443,11 @@ def _resolve_pool_params(
         A ``(pool_config_kwargs, connection_params)`` tuple.
 
     Raises:
-        ValueError: If ``uri`` is supplied but is not a connection URI, if a
-            pool option holds a value of the wrong type, or if ``pool_name`` is
-            supplied.
+        ValueError: If ``uri`` is supplied but is not a connection URI, or if
+            ``pool_name`` is supplied.
+        PoolError: If a pool option holds a value that cannot be converted.
     """
+    pool_options = _pool_option_names()
     uri_pool: 'Dict[str, Any]' = {}
     uri_conn: 'Dict[str, Any]' = {}
     if uri is not None:
@@ -494,19 +459,23 @@ def _resolve_pool_params(
                 "and pool options as keyword arguments instead."
             )
         for key, value in parse_connection_uri(uri).items():
-            if key in _POOL_CONFIG_COERCERS:
-                try:
-                    uri_pool[key] = _POOL_CONFIG_COERCERS[key](value)
-                except (TypeError, ValueError) as exc:
-                    raise ValueError(
-                        f"Invalid value for pool option {key!r} in the connection "
-                        f"URI: {exc}"
-                    ) from exc
+            # Pool options are typed by PoolConfig.from_options(); the generic
+            # URI parser must not touch them, since it leaves ping_threshold a
+            # string and turns min_size=0 into False.
+            if key in pool_options:
+                uri_pool[key] = value
             else:
                 uri_conn[key] = value
 
     # Connection params: explicit kwargs override URI values.
     uri_conn.update(connection_params)
+
+    # A pool option may also arrive through **connection_params: the factories
+    # name the canonical options in their signature, but the 1.1 spellings
+    # (pool_size, pool_reset_connection, pool_validation_interval) are accepted
+    # too rather than being forwarded to the connection factory and dropped.
+    for key in [key for key in uri_conn if key in pool_options]:
+        uri_pool[key] = uri_conn.pop(key)
 
     # pool_name would be handed to the connection factory, and connect() treats it
     # as a request for a named pool — so every connection this pool created would
@@ -518,19 +487,12 @@ def _resolve_pool_params(
             "mariadb.ConnectionPool(pool_name=...) if you want a named pool."
         )
 
-    # Pool config: explicit kwarg (not None) > URI query > default.
-    resolved: 'Dict[str, Any]' = {}
-    for key, default in _POOL_CONFIG_DEFAULTS.items():
-        if explicit.get(key) is not None:
-            resolved[key] = explicit[key]
-        elif key in uri_pool:
-            resolved[key] = uri_pool[key]
-        else:
-            resolved[key] = default
-
-    # min_size defaults to max_size when not otherwise specified.
-    if resolved['min_size'] is None:
-        resolved['min_size'] = resolved['max_size']
+    # Pool config: explicit keyword argument > **kwargs spelling > URI query.
+    # An option left unset is omitted entirely, so PoolConfig.from_options()
+    # applies the default and reconciles the size bounds.
+    resolved: 'Dict[str, Any]' = dict(uri_pool)
+    resolved.update({key: value for key, value in explicit.items()
+                     if value is not None})
 
     return resolved, uri_conn
 
@@ -542,7 +504,6 @@ def create_pool(
     max_size: int | None = None,
     max_idle_time: float | None = None,
     max_lifetime: float | None = None,
-    validation_interval: float | None = None,
     acquire_timeout: float | None = None,
     enable_health_check: bool | None = None,
     reset_connection: bool | None = None,
@@ -562,15 +523,20 @@ def create_pool(
     option is: explicit keyword argument > URI value > default.
 
     Pool Configuration Parameters (keyword-only, or URI query string):
+        pool_size (int): 1.1 spelling of a fixed-size pool; sets min_size and
+            max_size together, an explicitly given bound wins over it
         min_size (int): Minimum number of connections in the pool (default: same as max_size)
         max_size (int): Maximum number of connections in the pool (default: 10)
         max_idle_time (float): Maximum time (seconds) a connection can be idle (default: 600.0)
         max_lifetime (float): Maximum lifetime (seconds) of a connection (default: 3600.0)
-        validation_interval (float): Interval (seconds) between health checks (default: 30.0)
         acquire_timeout (float): Timeout (seconds) when acquiring a connection (default: 30.0)
         enable_health_check (bool): Enable periodic health checks (default: True)
-        reset_connection (bool): Reset connection state on release (default: False)
-        ping_threshold (float): Ping if connection idle > threshold seconds (default: 0.25, 0 = disabled)
+        reset_connection (bool): Reset connection state on release (default: False),
+            also accepted as 1.1's pool_reset_connection, whose 1.1 default was True
+        ping_threshold (float): When taking a connection from the pool, ping it
+            only if it has been idle longer than this (milliseconds,
+            default: 500, 0 = always ping). This is 1.1's
+            pool_validation_interval, under which name it is also accepted.
 
     Connection Parameters:
         uri (str): Optional connection URI (first positional argument)
@@ -590,7 +556,7 @@ def create_pool(
             database='test',
             min_size=5,
             max_size=20,
-            ping_threshold=0.25
+            ping_threshold=500
         )
 
         # or with a URI (pool options may live in the query string)
@@ -621,7 +587,6 @@ def create_pool(
             'max_size': max_size,
             'max_idle_time': max_idle_time,
             'max_lifetime': max_lifetime,
-            'validation_interval': validation_interval,
             'acquire_timeout': acquire_timeout,
             'enable_health_check': enable_health_check,
             'reset_connection': reset_connection,
@@ -629,7 +594,7 @@ def create_pool(
         },
         connection_params,
     )
-    pool_config = PoolConfig(**pool_config_kwargs)
+    pool_config = PoolConfig.from_options(**pool_config_kwargs)
 
     # Create pool with mariadb.connect as factory
     return cast('_ConnectionPoolImpl', ConnectionPool(
@@ -646,7 +611,6 @@ async def create_async_pool(
     max_size: int | None = None,
     max_idle_time: float | None = None,
     max_lifetime: float | None = None,
-    validation_interval: float | None = None,
     acquire_timeout: float | None = None,
     enable_health_check: bool | None = None,
     reset_connection: bool | None = None,
@@ -668,15 +632,20 @@ async def create_async_pool(
     option is: explicit keyword argument > URI value > default.
 
     Pool Configuration Parameters (keyword-only, or URI query string):
+        pool_size (int): 1.1 spelling of a fixed-size pool; sets min_size and
+            max_size together, an explicitly given bound wins over it
         min_size (int): Minimum number of connections in the pool (default: same as max_size)
         max_size (int): Maximum number of connections in the pool (default: 10)
         max_idle_time (float): Maximum time (seconds) a connection can be idle (default: 600.0)
         max_lifetime (float): Maximum lifetime (seconds) of a connection (default: 3600.0)
-        validation_interval (float): Interval (seconds) between health checks (default: 30.0)
         acquire_timeout (float): Timeout (seconds) when acquiring a connection (default: 30.0)
         enable_health_check (bool): Enable periodic health checks (default: True)
-        reset_connection (bool): Reset connection state on release (default: False)
-        ping_threshold (float): Ping if connection idle > threshold seconds (default: 0.25, 0 = disabled)
+        reset_connection (bool): Reset connection state on release (default: False),
+            also accepted as 1.1's pool_reset_connection, whose 1.1 default was True
+        ping_threshold (float): When taking a connection from the pool, ping it
+            only if it has been idle longer than this (milliseconds,
+            default: 500, 0 = always ping). This is 1.1's
+            pool_validation_interval, under which name it is also accepted.
 
     Connection Parameters:
         uri (str): Optional connection URI (first positional argument)
@@ -697,7 +666,7 @@ async def create_async_pool(
                 database='test',
                 min_size=5,
                 max_size=20,
-                ping_threshold=0.25
+                ping_threshold=500
             )
 
             # or with a URI (pool options may live in the query string)
@@ -731,7 +700,6 @@ async def create_async_pool(
             'max_size': max_size,
             'max_idle_time': max_idle_time,
             'max_lifetime': max_lifetime,
-            'validation_interval': validation_interval,
             'acquire_timeout': acquire_timeout,
             'enable_health_check': enable_health_check,
             'reset_connection': reset_connection,
@@ -739,7 +707,7 @@ async def create_async_pool(
         },
         connection_params,
     )
-    pool_config = PoolConfig(**pool_config_kwargs)
+    pool_config = PoolConfig.from_options(**pool_config_kwargs)
 
     # Create pool with mariadb.asyncConnect as factory
     pool = AsyncConnectionPool(

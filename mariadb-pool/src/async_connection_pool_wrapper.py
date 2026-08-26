@@ -11,6 +11,7 @@ from typing import Awaitable, Callable, Any, Dict, Optional, Type, TYPE_CHECKING
 
 from mariadb import AsyncConnection
 from .pool import AsyncConnectionPool as _AsyncPoolImpl, PoolConfig
+from .connection_pool_wrapper import POOL_CONFIG_KEYS
 
 # Import PoolError from shared exceptions
 try:
@@ -23,8 +24,6 @@ if TYPE_CHECKING:
         from mariadb.async_connection import AsyncConnection
     except ImportError:
         AsyncConnection = Any
-
-MAX_POOL_SIZE = 64
 
 
 class AsyncConnectionPoolWrapper:
@@ -67,55 +66,17 @@ class AsyncConnectionPoolWrapper:
         self.connection_factory = connection_factory
         
         # Separate pool config from connection params
-        pool_config_keys = {
-            'pool_size', 'pool_reset_connection', 'pool_validation_interval',
-            'min_size', 'max_size', 'acquire_timeout', 'ping_threshold'
-        }
         pool_kwargs = {}
         conn_kwargs = {}
         
         for key, value in kwargs.items():
-            if key in pool_config_keys:
+            if key in POOL_CONFIG_KEYS:
                 pool_kwargs[key] = value
             else:
                 conn_kwargs[key] = value
         
-        # Create pool configuration
-        config = PoolConfig()
-        
-        # Track which size parameters were explicitly set
-        has_pool_size = 'pool_size' in pool_kwargs
-        has_min_size = 'min_size' in pool_kwargs
-        has_max_size = 'max_size' in pool_kwargs
-        
-        if has_pool_size:
-            config.max_size = pool_kwargs['pool_size']
-            config.min_size = pool_kwargs['pool_size']
-        if has_min_size:
-            config.min_size = pool_kwargs['min_size']
-        if has_max_size:
-            config.max_size = pool_kwargs['max_size']
-            
-        # If only min_size or max_size is set (but not both), make them equal
-        if has_min_size and not has_max_size and not has_pool_size:
-            config.max_size = config.min_size
-        elif has_max_size and not has_min_size and not has_pool_size:
-            config.min_size = config.max_size
-            
-        if 'acquire_timeout' in pool_kwargs:
-            config.acquire_timeout = pool_kwargs['acquire_timeout']
-        if 'pool_validation_interval' in pool_kwargs:
-            config.validation_interval = pool_kwargs['pool_validation_interval']
-        if 'ping_threshold' in pool_kwargs:
-            config.ping_threshold = pool_kwargs['ping_threshold']
+        config = PoolConfig.from_options(**pool_kwargs)
 
-        if (config.max_size >= MAX_POOL_SIZE):
-            config.max_size = MAX_POOL_SIZE
-        if (config.min_size >= MAX_POOL_SIZE):
-            config.min_size = MAX_POOL_SIZE
-            
-        config.reset_connection = bool(pool_kwargs.get('pool_reset_connection', True))
-        
         # Create the actual async pool
         self._pool = _AsyncPoolImpl(
             connection_factory=connection_factory,

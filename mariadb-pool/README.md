@@ -47,7 +47,7 @@ pool = mariadb.create_pool(
     database="mydb",
     min_size=5,
     max_size=10,
-    ping_threshold=0.25,  # Only ping connections idle > 250ms
+    ping_threshold=500,  # Only ping connections idle > 500ms on borrow
     max_idle_time=600.0,
     reset_connection=True
 )
@@ -111,7 +111,7 @@ async def main():
         database="mydb",
         min_size=5,
         max_size=20,
-        ping_threshold=0.25,  # Only ping connections idle > 250ms
+        ping_threshold=500,  # Only ping connections idle > 500ms
         max_idle_time=600.0,
         reset_connection=True
     )
@@ -138,18 +138,21 @@ The pool accepts the following configuration parameters:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `min_size` | int | 10 | Minimum number of connections to maintain |
-| `max_size` | int | 10 | Maximum number of connections allowed (max: 64) |
+| `max_size` | int | 10 | Maximum number of connections allowed (0 = unlimited) |
 | `max_idle_time` | float | 600.0 | Maximum idle time (seconds) before closing connection |
 | `max_lifetime` | float | 3600.0 | Maximum lifetime (seconds) of a connection |
-| `validation_interval` | float | 30.0 | Interval (seconds) between connection validations |
+| `ping_threshold` | float | 500 | On borrow, ping only if the connection was idle longer than this (milliseconds, 0 = always ping). 1.1's `pool_validation_interval` |
 | `acquire_timeout` | float | 30.0 | Timeout (seconds) when acquiring a connection |
 | `enable_health_check` | bool | True | Enable periodic health checks on idle connections |
 | `reset_connection` | bool | False | Reset connection state when returned to pool |
-| `ping_threshold` | float | 0.25 | Only ping connections idle > threshold seconds (0 = always ping) |
 
-**Performance Tip:** The `ping_threshold` option significantly improves performance by avoiding unnecessary database pings. Connections that have been idle for less than the threshold (default: 250ms) are assumed healthy and returned immediately. Only connections idle longer than the threshold are verified with a ping. Set to `0` to ensure checking connection states.
+**Performance Tip:** The `ping_threshold` option significantly improves performance by avoiding unnecessary database pings. Connections that have been idle for less than the threshold (default: 500 ms, as in 1.1) are assumed healthy and returned immediately. Only connections idle longer than the threshold are verified with a ping. Set to `0` to ping every time.
 
-**Note:** If you set only `min_size` or only `max_size` (without setting the other), both will be set to the same value to create a fixed-size pool.
+**Note:** If you set only `min_size` or only `max_size` (without setting the other), both will be set to the same value to create a fixed-size pool. Pool sizes are not capped.
+
+**Note:** the period of the background sweep that reaps idle and expired connections is not an option — it is fixed at 30 seconds. It is only the resolution at which `max_idle_time` and `max_lifetime` are noticed for connections nobody is using; a connection returned to the pool is checked against both immediately.
+
+**Note:** every option below is accepted identically by `create_pool()`, `create_async_pool()`, `mariadb.ConnectionPool` and a URI query string: naming, typing and size reconciliation all happen in one place (`PoolConfig.from_options()`).
 
 ### mariadb.ConnectionPool Parameters
 
@@ -158,6 +161,7 @@ Additional parameters supported by `mariadb.ConnectionPool`:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `pool_name` | str | Required | Unique name for the pool |
-| `pool_reset_connection` | bool | True | Alias for reset_connection (mapped by wrapper) |
-| `pool_validation_interval` | float | - | Alias for validation_interval (mapped by wrapper) |
+| `pool_size` | int | - | Fixed-size pool: sets `min_size` and `max_size` together |
+| `pool_validation_interval` | float | 500 | 1.1 name for `ping_threshold` (milliseconds) |
+| `pool_reset_connection` | bool | False | Alias for `reset_connection` (1.1 defaulted this to True) |
 

@@ -12,7 +12,8 @@ import collections
 import contextlib
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Callable, Optional, Iterator, AsyncIterator, Literal, TYPE_CHECKING
+from typing import (Any, Callable, Dict, Optional, Iterator, AsyncIterator,
+                    Literal, Tuple, TYPE_CHECKING)
 from contextlib import contextmanager, asynccontextmanager
 
 # Import PoolError from shared exceptions
@@ -44,6 +45,99 @@ if TYPE_CHECKING:
     from mariadb_shared.sync_connection_common import SyncConnectionCommon
 
 
+# The module's public surface. Spelled out because PoolError is imported rather
+# than defined here, and a name merely imported into a module of a py.typed
+# package is not treated as re-exported from it.
+__all__ = [
+    'ConnectionPool',
+    'AsyncConnectionPool',
+    'PooledConnection',
+    'AsyncPooledConnection',
+    'PoolConfig',
+    'PoolError',
+    'POOL_OPTIONS',
+    'POOL_OPTION_NAMES',
+    'MAINTENANCE_INTERVAL_SECONDS',
+]
+
+MAINTENANCE_INTERVAL_SECONDS = 30.0
+
+_TRUE_STRINGS = frozenset({'1', 'true', 'yes', 'on'})
+_FALSE_STRINGS = frozenset({'0', 'false', 'no', 'off'})
+
+
+def _to_bool(value: Any, option: str) -> bool:
+    """
+    Interpret a pool option as a boolean.
+
+    A URI query string and an option file deliver values as text, so
+    ``?reset_connection=false`` has to become ``False`` rather than the truthy
+    string it literally is.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in _TRUE_STRINGS:
+            return True
+        if lowered in _FALSE_STRINGS:
+            return False
+        raise PoolError(
+            f"Invalid value {value!r} for pool option {option!r}: expected a "
+            "boolean")
+    return bool(value)
+
+
+def _to_number(value: Any, option: str, kind: Callable[[Any], Any]) -> Any:
+    """
+    Convert a numeric pool option, naming the option if it cannot be.
+
+    A bool is accepted: the generic URI parser turns ``min_size=0`` into
+    ``False`` before it reaches here, and ``int(False)`` recovers the 0 the
+    caller wrote.
+    """
+    try:
+        return kind(value)
+    except (TypeError, ValueError) as exc:
+        raise PoolError(
+            f"Invalid value {value!r} for pool option {option!r}: {exc}") from exc
+
+
+def _to_int(value: Any, option: str) -> int:
+    return int(_to_number(value, option, int))
+
+
+def _to_float(value: Any, option: str) -> float:
+    return float(_to_number(value, option, float))
+
+
+# Pool options: name -> (PoolConfig attribute, converter). This is the single
+# place where a pool option is named and typed, so every entry point --
+# create_pool(), the ConnectionPool compatibility classes, a URI query string --
+# accepts the same set and interprets it identically. A ``None`` attribute marks
+# an option reconciled by hand in from_options(). Names not listed here are
+# connection arguments.
+POOL_OPTIONS: 'Dict[str, Tuple[Optional[str], Callable[[Any, str], Any]]]' = {
+    'min_size': ('min_size', _to_int),
+    'max_size': ('max_size', _to_int),
+    'max_idle_time': ('max_idle_time', _to_float),
+    'max_lifetime': ('max_lifetime', _to_float),
+    'acquire_timeout': ('acquire_timeout', _to_float),
+    'ping_threshold': ('ping_threshold', _to_float),
+    'enable_health_check': ('enable_health_check', _to_bool),
+    'reset_connection': ('reset_connection', _to_bool),
+    # 1.1 spellings, accepted everywhere the canonical name is
+    'pool_size': (None, _to_int),
+    'pool_reset_connection': ('reset_connection', _to_bool),
+    # 1.1's pool_validation_interval is the borrow-time ping threshold, which is
+    # ping_threshold here -- not the maintenance sweep period
+    'pool_validation_interval': ('ping_threshold', _to_float),
+}
+
+# Everything in here configures the pool; anything else is a connection argument.
+POOL_OPTION_NAMES: 'frozenset[str]' = frozenset(POOL_OPTIONS)
+
+
 @dataclass
 class PoolConfig:
     """
@@ -52,22 +146,75 @@ class PoolConfig:
 
     Attributes:
         min_size: Minimum number of connections in the pool
-        max_size: Maximum number of connections in the pool
+        max_size: Maximum number of connections in the pool (0 = unlimited)
         max_idle_time: Maximum time (seconds) a connection can be idle before being closed
         max_lifetime: Maximum lifetime (seconds) of a connection
-        validation_interval: Interval (seconds) between connection validations
+        ping_threshold: When a connection is taken from the pool, ping it only
+            if it has been idle longer than this (milliseconds, 0 = always
+            ping). This is 1.1's pool_validation_interval, and Connector/J's
+            poolValidMinDelay.
         acquire_timeout: Timeout (seconds) when acquiring a connection
-        enable_health_check: Enable periodic health checks on idle connections
+        enable_health_check: Run the background sweep at all
+        reset_connection: Reset a connection before returning it to the pool
     """
     min_size: int = 10
     max_size: int = 10
     max_idle_time: float = 600.0  # 10 minutes
     max_lifetime: float = 3600.0  # 1 hour
-    validation_interval: float = 30.0  # 30 seconds
+    ping_threshold: float = 500.0  # 1.1's pool_validation_interval default, ms
     acquire_timeout: float = 30.0  # 30 seconds
     enable_health_check: bool = True
     reset_connection: bool = False
-    ping_threshold: float = 0.25  # Ping if connection idle > 250ms (0 = disabled)
+
+    @property
+    def ping_threshold_seconds(self) -> float:
+        """ping_threshold in seconds, for comparing against time.time()."""
+        return self.ping_threshold / 1000.0
+
+    @classmethod
+    def from_options(cls, **options: Any) -> 'PoolConfig':
+        """
+        Build a PoolConfig from pool options in any accepted spelling.
+
+        Values may be strings, since a URI query string or an option file
+        provides them that way; they are converted here. Options whose value is
+        ``None`` are treated as not supplied and keep their default.
+
+        ``pool_size`` sets min_size and max_size together; an explicitly given
+        min_size or max_size wins over it. Giving only one of the two bounds
+        makes a fixed-size pool. ``pool_validation_interval`` is 1.1's name for
+        ``ping_threshold``, and ``pool_reset_connection`` for
+        ``reset_connection``.
+        """
+        unknown = sorted(set(options) - POOL_OPTION_NAMES)
+        if unknown:
+            raise PoolError(
+                f"Unknown pool option(s): {', '.join(unknown)}. Valid options: "
+                f"{', '.join(sorted(POOL_OPTION_NAMES))}")
+
+        given = {name: value for name, value in options.items()
+                 if value is not None}
+
+        config = cls()
+        for name, value in given.items():
+            attribute, convert = POOL_OPTIONS[name]
+            if attribute is not None:
+                setattr(config, attribute, convert(value, name))
+
+        has_min = 'min_size' in given
+        has_max = 'max_size' in given
+        if 'pool_size' in given:
+            pool_size = _to_int(given['pool_size'], 'pool_size')
+            if not has_min:
+                config.min_size = pool_size
+            if not has_max:
+                config.max_size = pool_size
+        elif has_min and not has_max:
+            config.max_size = config.min_size
+        elif has_max and not has_min:
+            config.min_size = config.max_size
+
+        return config
 
 
 class BasePooledConnection:
@@ -278,7 +425,8 @@ class ConnectionPool:
             self._cleanup_expired_connections()
             self._ensure_min_connections()
             # Use event.wait() instead of time.sleep() for immediate shutdown
-            if self._shutdown_event.wait(timeout=self.config.validation_interval):
+            if self._shutdown_event.wait(
+                    timeout=MAINTENANCE_INTERVAL_SECONDS):
                 break  # Event was set, exit immediately
 
     def _fill_free_pool(self, override_min: bool = False) -> None:
@@ -377,7 +525,8 @@ class ConnectionPool:
                     pooled_conn = self._free.popleft()
 
                     # Selective health check: only ping if connection has been idle too long
-                    if self.config.ping_threshold == 0 or time.time() - pooled_conn.last_used > self.config.ping_threshold:
+                    if (self.config.ping_threshold == 0 or time.time() - pooled_conn.last_used
+                            > self.config.ping_threshold_seconds):
                         # Connection idle too long, verify it's still alive
                         if not pooled_conn.is_healthy():
                             # Connection dead, close and try again
@@ -619,7 +768,7 @@ class AsyncConnectionPool:
     async def _maintenance_loop(self) -> None:
         """Background task for pool maintenance"""
         while not self._closed:
-            await asyncio.sleep(self.config.validation_interval)
+            await asyncio.sleep(MAINTENANCE_INTERVAL_SECONDS)
             await self._cleanup_expired_connections()
             await self._ensure_min_connections()
 
@@ -723,7 +872,8 @@ class AsyncConnectionPool:
                     pooled_conn = self._free.popleft()
 
                     # Selective health check: only ping if connection has been idle too long
-                    if self.config.ping_threshold == 0 or time.time() - pooled_conn.last_used > self.config.ping_threshold:
+                    if (self.config.ping_threshold == 0 or time.time() - pooled_conn.last_used
+                            > self.config.ping_threshold_seconds):
                         # Connection idle too long, verify it's still alive
                         if not await pooled_conn.is_healthy():
                             # Connection dead, close and try again

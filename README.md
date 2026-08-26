@@ -165,13 +165,13 @@ pool = mariadb.create_pool(
     database="mydb",
     min_size=5,
     max_size=10,
-    ping_threshold=0.25  # only check health of idle connections after 0.25 seconds of inactivity
+    ping_threshold=500  # only ping idle connections after 500 ms of inactivity
 )
 
 # ... or from a URI.
 pool = mariadb.create_pool(
     "mariadb://user:password@localhost:3306/mydb"
-    "?min_size=5&max_size=10&ping_threshold=0.25"
+    "?min_size=5&max_size=10&ping_threshold=500"
 )
 
 # Get connection from pool

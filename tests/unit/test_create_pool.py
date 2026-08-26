@@ -1,7 +1,9 @@
 """
-Unit tests for create_pool / create_async_pool min_size defaulting behaviour.
+Unit tests for create_pool / create_async_pool option handling.
 
-These tests mock mariadb_pool so no real database or pool package is required.
+The pool classes are stubbed so no server is involved, but the real PoolConfig
+is used: naming, typing and size reconciliation of pool options all live in
+PoolConfig.from_options(), so stubbing it out would hide what is under test.
 """
 
 from __future__ import annotations
@@ -9,16 +11,17 @@ from __future__ import annotations
 import sys
 import types
 import unittest
+
+import mariadb
 from unittest.mock import MagicMock, patch, AsyncMock
 
 
-def _make_mariadb_pool_mock() -> types.ModuleType:
-    """Build a minimal mariadb_pool stub that records PoolConfig construction args."""
-    mod = types.ModuleType("mariadb_pool")
+from mariadb_pool import PoolConfig, POOL_OPTION_NAMES
 
-    class PoolConfig:
-        def __init__(self, **kwargs: object) -> None:
-            self.kwargs = kwargs
+
+def _make_mariadb_pool_mock() -> types.ModuleType:
+    """Stub the pool classes only; the real PoolConfig does the option work."""
+    mod = types.ModuleType("mariadb_pool")
 
     class ConnectionPool:
         def __init__(self, connection_factory: object, config: PoolConfig, **kwargs: object) -> None:
@@ -34,6 +37,7 @@ def _make_mariadb_pool_mock() -> types.ModuleType:
             pass
 
     mod.PoolConfig = PoolConfig  # type: ignore[attr-defined]
+    mod.POOL_OPTION_NAMES = POOL_OPTION_NAMES  # type: ignore[attr-defined]
     mod.ConnectionPool = ConnectionPool  # type: ignore[attr-defined]
     mod.AsyncConnectionPool = AsyncConnectionPool  # type: ignore[attr-defined]
     return mod
@@ -58,30 +62,30 @@ class TestCreatePoolMinSize(unittest.TestCase):
     def test_min_size_defaults_to_max_size(self) -> None:
         """When min_size is omitted, it must equal max_size."""
         pool = self._create_pool(max_size=15)
-        self.assertEqual(pool.config.kwargs["min_size"], 15)
-        self.assertEqual(pool.config.kwargs["max_size"], 15)
+        self.assertEqual(pool.config.min_size, 15)
+        self.assertEqual(pool.config.max_size, 15)
 
     def test_min_size_explicit_respected(self) -> None:
         """When min_size is provided explicitly it must not be overridden."""
         pool = self._create_pool(min_size=3, max_size=15)
-        self.assertEqual(pool.config.kwargs["min_size"], 3)
-        self.assertEqual(pool.config.kwargs["max_size"], 15)
+        self.assertEqual(pool.config.min_size, 3)
+        self.assertEqual(pool.config.max_size, 15)
 
     def test_min_size_equal_max_size_explicit(self) -> None:
         """Explicit min_size == max_size is fine and must be preserved."""
         pool = self._create_pool(min_size=10, max_size=10)
-        self.assertEqual(pool.config.kwargs["min_size"], 10)
+        self.assertEqual(pool.config.min_size, 10)
 
     def test_default_max_size_used_when_neither_given(self) -> None:
         """With no arguments, both default to the built-in max_size default (10)."""
         pool = self._create_pool()
-        self.assertEqual(pool.config.kwargs["min_size"], pool.config.kwargs["max_size"])
-        self.assertEqual(pool.config.kwargs["max_size"], 10)
+        self.assertEqual(pool.config.min_size, pool.config.max_size)
+        self.assertEqual(pool.config.max_size, 10)
 
     def test_min_size_zero_is_respected(self) -> None:
         """Explicit min_size=0 must not be treated as 'not set'."""
         pool = self._create_pool(min_size=0, max_size=5)
-        self.assertEqual(pool.config.kwargs["min_size"], 0)
+        self.assertEqual(pool.config.min_size, 0)
 
 
 class TestCreateAsyncPoolMinSize(unittest.IsolatedAsyncioTestCase):
@@ -100,30 +104,30 @@ class TestCreateAsyncPoolMinSize(unittest.IsolatedAsyncioTestCase):
     async def test_min_size_defaults_to_max_size(self) -> None:
         """When min_size is omitted, it must equal max_size."""
         pool = await self._create_async_pool(max_size=20)
-        self.assertEqual(pool.config.kwargs["min_size"], 20)
-        self.assertEqual(pool.config.kwargs["max_size"], 20)
+        self.assertEqual(pool.config.min_size, 20)
+        self.assertEqual(pool.config.max_size, 20)
 
     async def test_min_size_explicit_respected(self) -> None:
         """When min_size is provided explicitly it must not be overridden."""
         pool = await self._create_async_pool(min_size=4, max_size=20)
-        self.assertEqual(pool.config.kwargs["min_size"], 4)
-        self.assertEqual(pool.config.kwargs["max_size"], 20)
+        self.assertEqual(pool.config.min_size, 4)
+        self.assertEqual(pool.config.max_size, 20)
 
     async def test_min_size_equal_max_size_explicit(self) -> None:
         """Explicit min_size == max_size is fine and must be preserved."""
         pool = await self._create_async_pool(min_size=8, max_size=8)
-        self.assertEqual(pool.config.kwargs["min_size"], 8)
+        self.assertEqual(pool.config.min_size, 8)
 
     async def test_default_max_size_used_when_neither_given(self) -> None:
         """With no arguments, both default to the built-in max_size default (10)."""
         pool = await self._create_async_pool()
-        self.assertEqual(pool.config.kwargs["min_size"], pool.config.kwargs["max_size"])
-        self.assertEqual(pool.config.kwargs["max_size"], 10)
+        self.assertEqual(pool.config.min_size, pool.config.max_size)
+        self.assertEqual(pool.config.max_size, 10)
 
     async def test_min_size_zero_is_respected(self) -> None:
         """Explicit min_size=0 must not be treated as 'not set'."""
         pool = await self._create_async_pool(min_size=0, max_size=5)
-        self.assertEqual(pool.config.kwargs["min_size"], 0)
+        self.assertEqual(pool.config.min_size, 0)
 
 
 class TestCreatePoolUri(unittest.TestCase):
@@ -157,8 +161,8 @@ class TestCreatePoolUri(unittest.TestCase):
     def test_uri_and_pool_config_coexist(self) -> None:
         """Pool-config kwargs and a URI can be combined."""
         pool = self._create_pool("mariadb://root@dbhost/mydb", min_size=3, max_size=7)
-        self.assertEqual(pool.config.kwargs["min_size"], 3)
-        self.assertEqual(pool.config.kwargs["max_size"], 7)
+        self.assertEqual(pool.config.min_size, 3)
+        self.assertEqual(pool.config.max_size, 7)
         self.assertEqual(pool.conn_kwargs["host"], "dbhost")
 
     def test_no_uri_leaves_params_untouched(self) -> None:
@@ -170,8 +174,8 @@ class TestCreatePoolUri(unittest.TestCase):
     def test_pool_config_from_uri_query(self) -> None:
         """Pool-config keys in the URI query string configure the pool, not connect()."""
         pool = self._create_pool("mariadb://root@dbhost/mydb?min_size=5&max_size=20")
-        self.assertEqual(pool.config.kwargs["min_size"], 5)
-        self.assertEqual(pool.config.kwargs["max_size"], 20)
+        self.assertEqual(pool.config.min_size, 5)
+        self.assertEqual(pool.config.max_size, 20)
         # and they must NOT leak into the connection params
         self.assertNotIn("min_size", pool.conn_kwargs)
         self.assertNotIn("max_size", pool.conn_kwargs)
@@ -182,28 +186,28 @@ class TestCreatePoolUri(unittest.TestCase):
         pool = self._create_pool(
             "mariadb://root@dbhost/mydb?ping_threshold=0.5&enable_health_check=false&min_size=0"
         )
-        self.assertEqual(pool.config.kwargs["ping_threshold"], 0.5)
-        self.assertIsInstance(pool.config.kwargs["ping_threshold"], float)
-        self.assertIs(pool.config.kwargs["enable_health_check"], False)
+        self.assertEqual(pool.config.ping_threshold, 0.5)
+        self.assertIsInstance(pool.config.ping_threshold, float)
+        self.assertIs(pool.config.enable_health_check, False)
         # min_size=0 must survive as int 0, not be mis-parsed as False
-        self.assertEqual(pool.config.kwargs["min_size"], 0)
-        self.assertIsInstance(pool.config.kwargs["min_size"], int)
+        self.assertEqual(pool.config.min_size, 0)
+        self.assertIsInstance(pool.config.min_size, int)
 
     def test_kwarg_overrides_uri_pool_config(self) -> None:
         """Explicit pool-config kwarg wins over the URI query value."""
         pool = self._create_pool("mariadb://root@dbhost/mydb?max_size=20", max_size=99)
-        self.assertEqual(pool.config.kwargs["max_size"], 99)
+        self.assertEqual(pool.config.max_size, 99)
 
     def test_uri_min_size_defaults_to_uri_max_size(self) -> None:
         """min_size still defaults to max_size when only max_size is in the URI."""
         pool = self._create_pool("mariadb://root@dbhost/mydb?max_size=15")
-        self.assertEqual(pool.config.kwargs["min_size"], 15)
-        self.assertEqual(pool.config.kwargs["max_size"], 15)
+        self.assertEqual(pool.config.min_size, 15)
+        self.assertEqual(pool.config.max_size, 15)
 
     def test_mysql_scheme_accepted(self) -> None:
         """The mysql:// scheme is a connection URI too."""
         pool = self._create_pool("mysql://root@dbhost/mydb?max_size=4")
-        self.assertEqual(pool.config.kwargs["max_size"], 4)
+        self.assertEqual(pool.config.max_size, 4)
         self.assertEqual(pool.conn_kwargs["host"], "dbhost")
 
     def test_non_uri_positional_rejected(self) -> None:
@@ -226,46 +230,45 @@ class TestCreatePoolUri(unittest.TestCase):
         """Every float-typed pool option is read and coerced from the query string."""
         pool = self._create_pool(
             "mariadb://root@dbhost/mydb"
-            "?max_idle_time=90&max_lifetime=120&validation_interval=15&acquire_timeout=5"
+            "?max_idle_time=90&max_lifetime=120&ping_threshold=15&acquire_timeout=5"
         )
         for key, expected in (
             ("max_idle_time", 90.0),
             ("max_lifetime", 120.0),
-            ("validation_interval", 15.0),
+            ("ping_threshold", 15.0),  # milliseconds
             ("acquire_timeout", 5.0),
         ):
-            self.assertEqual(pool.config.kwargs[key], expected)
-            self.assertIsInstance(pool.config.kwargs[key], float)
+            self.assertEqual(getattr(pool.config, key), expected)
+            self.assertIsInstance(getattr(pool.config, key), float)
             self.assertNotIn(key, pool.conn_kwargs)
 
     def test_defaults_when_nothing_supplied(self) -> None:
         """With neither URI nor kwargs, the documented defaults apply."""
         pool = self._create_pool()
-        self.assertEqual(pool.config.kwargs["max_size"], 10)
-        self.assertEqual(pool.config.kwargs["min_size"], 10)
-        self.assertEqual(pool.config.kwargs["max_idle_time"], 600.0)
-        self.assertEqual(pool.config.kwargs["max_lifetime"], 3600.0)
-        self.assertEqual(pool.config.kwargs["validation_interval"], 30.0)
-        self.assertEqual(pool.config.kwargs["acquire_timeout"], 30.0)
-        self.assertIs(pool.config.kwargs["enable_health_check"], True)
-        self.assertIs(pool.config.kwargs["reset_connection"], False)
-        self.assertEqual(pool.config.kwargs["ping_threshold"], 0.25)
+        self.assertEqual(pool.config.max_size, 10)
+        self.assertEqual(pool.config.min_size, 10)
+        self.assertEqual(pool.config.max_idle_time, 600.0)
+        self.assertEqual(pool.config.max_lifetime, 3600.0)
+        self.assertEqual(pool.config.acquire_timeout, 30.0)
+        self.assertIs(pool.config.enable_health_check, True)
+        self.assertIs(pool.config.reset_connection, False)
+        self.assertEqual(pool.config.ping_threshold, 500.0)
 
     def test_invalid_numeric_uri_value_names_the_option(self) -> None:
         """A non-numeric pool value is rejected, and the error names the option."""
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(mariadb.PoolError) as ctx:
             self._create_pool("mariadb://root@dbhost/mydb?max_size=abc")
         self.assertIn("max_size", str(ctx.exception))
 
     def test_invalid_bool_uri_value_rejected(self) -> None:
         """An unrecognised boolean must not silently read as False."""
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(mariadb.PoolError) as ctx:
             self._create_pool("mariadb://root@dbhost/mydb?enable_health_check=maybe")
         self.assertIn("enable_health_check", str(ctx.exception))
 
     def test_blank_bool_uri_value_rejected(self) -> None:
         """A valueless flag is not a boolean either."""
-        with self.assertRaises(ValueError):
+        with self.assertRaises(mariadb.PoolError):
             self._create_pool("mariadb://root@dbhost/mydb?reset_connection=")
 
     def test_pool_name_in_uri_rejected(self) -> None:
@@ -311,15 +314,15 @@ class TestCreateAsyncPoolUri(unittest.IsolatedAsyncioTestCase):
     async def test_uri_and_pool_config_coexist(self) -> None:
         """Pool-config kwargs and a URI can be combined."""
         pool = await self._create_async_pool("mariadb://root@dbhost/mydb", min_size=3, max_size=7)
-        self.assertEqual(pool.config.kwargs["min_size"], 3)
-        self.assertEqual(pool.config.kwargs["max_size"], 7)
+        self.assertEqual(pool.config.min_size, 3)
+        self.assertEqual(pool.config.max_size, 7)
         self.assertEqual(pool.conn_kwargs["host"], "dbhost")
 
     async def test_pool_config_from_uri_query(self) -> None:
         """Pool-config keys in the URI query string configure the pool, not connect()."""
         pool = await self._create_async_pool("mariadb://root@dbhost/mydb?min_size=5&max_size=20")
-        self.assertEqual(pool.config.kwargs["min_size"], 5)
-        self.assertEqual(pool.config.kwargs["max_size"], 20)
+        self.assertEqual(pool.config.min_size, 5)
+        self.assertEqual(pool.config.max_size, 20)
         self.assertNotIn("min_size", pool.conn_kwargs)
         self.assertNotIn("max_size", pool.conn_kwargs)
 
@@ -328,14 +331,14 @@ class TestCreateAsyncPoolUri(unittest.IsolatedAsyncioTestCase):
         pool = await self._create_async_pool(
             "mariadb://root@dbhost/mydb?ping_threshold=0.5&reset_connection=true&min_size=0"
         )
-        self.assertEqual(pool.config.kwargs["ping_threshold"], 0.5)
-        self.assertIs(pool.config.kwargs["reset_connection"], True)
-        self.assertEqual(pool.config.kwargs["min_size"], 0)
+        self.assertEqual(pool.config.ping_threshold, 0.5)
+        self.assertIs(pool.config.reset_connection, True)
+        self.assertEqual(pool.config.min_size, 0)
 
     async def test_kwarg_overrides_uri_pool_config(self) -> None:
         """Explicit pool-config kwarg wins over the URI query value."""
         pool = await self._create_async_pool("mariadb://root@dbhost/mydb?max_size=20", max_size=99)
-        self.assertEqual(pool.config.kwargs["max_size"], 99)
+        self.assertEqual(pool.config.max_size, 99)
 
     async def test_no_uri_leaves_params_untouched(self) -> None:
         """Without a URI, keyword connection params pass through unchanged."""
@@ -346,8 +349,8 @@ class TestCreateAsyncPoolUri(unittest.IsolatedAsyncioTestCase):
     async def test_uri_min_size_defaults_to_uri_max_size(self) -> None:
         """min_size still defaults to max_size when only max_size is in the URI."""
         pool = await self._create_async_pool("mariadb://root@dbhost/mydb?max_size=15")
-        self.assertEqual(pool.config.kwargs["min_size"], 15)
-        self.assertEqual(pool.config.kwargs["max_size"], 15)
+        self.assertEqual(pool.config.min_size, 15)
+        self.assertEqual(pool.config.max_size, 15)
 
     async def test_non_uri_positional_rejected(self) -> None:
         """A first positional argument that is not a URI must not be silently dropped."""
@@ -362,13 +365,13 @@ class TestCreateAsyncPoolUri(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_bool_uri_value_rejected(self) -> None:
         """An unrecognised boolean must not silently read as False."""
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(mariadb.PoolError) as ctx:
             await self._create_async_pool("mariadb://root@dbhost/mydb?reset_connection=maybe")
         self.assertIn("reset_connection", str(ctx.exception))
 
     async def test_invalid_numeric_uri_value_names_the_option(self) -> None:
         """A non-numeric pool value is rejected, and the error names the option."""
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(mariadb.PoolError) as ctx:
             await self._create_async_pool("mariadb://root@dbhost/mydb?max_size=abc")
         self.assertIn("max_size", str(ctx.exception))
 

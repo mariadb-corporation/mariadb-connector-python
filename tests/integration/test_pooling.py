@@ -356,7 +356,7 @@ class TestPooling(unittest.TestCase):
             self.assertEqual(p.pool_reset_connection,
                              default_conf["pool_reset_connection"])
         else:
-            self.assertEqual(p.pool_reset_connection, True)
+            self.assertEqual(p.pool_reset_connection, False)
         self.assertEqual(p.max_size, 4)
         mariadb._CONNECTION_POOLS["getter_test"].close()
         self.assertEqual(mariadb._CONNECTION_POOLS, {})
@@ -368,13 +368,13 @@ class TestPooling(unittest.TestCase):
                           pool_size=124, **default_conf)
         p = mariadb._CONNECTION_POOLS["getter_test"]
         self.assertEqual(p.pool_name, "getter_test")
-        self.assertEqual(p.pool_size, 64)
+        self.assertEqual(p.pool_size, 124)
         if "pool_reset_connection" in default_conf:
             self.assertEqual(p.pool_reset_connection,
                              default_conf["pool_reset_connection"])
         else:
-            self.assertEqual(p.pool_reset_connection, True)
-        self.assertEqual(p.max_size, 64)
+            self.assertEqual(p.pool_reset_connection, False)
+        self.assertEqual(p.max_size, 124)
         mariadb._CONNECTION_POOLS["getter_test"].close()
         self.assertEqual(mariadb._CONNECTION_POOLS, {})
 
@@ -454,14 +454,14 @@ class TestPooling(unittest.TestCase):
             ssl=default_conf.get('ssl', False),
             min_size=5,
             max_size=10,
-            ping_threshold=0.25,
+            ping_threshold=250,
             max_idle_time=300.0
         )
         
         # Verify pool configuration
         self.assertEqual(pool.config.min_size, 5)
         self.assertEqual(pool.config.max_size, 10)
-        self.assertEqual(pool.config.ping_threshold, 0.25)
+        self.assertEqual(pool.config.ping_threshold, 250.0)
         self.assertEqual(pool.config.max_idle_time, 300.0)
         
         # Test getting a connection

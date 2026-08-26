@@ -8,7 +8,8 @@ Matches the C extension API for connection pooling.
 
 from types import TracebackType
 from typing import Callable, Any, Dict, Literal, Optional, Type, TYPE_CHECKING
-from .pool import ConnectionPool as _PoolImpl, PoolConfig
+from .pool import (ConnectionPool as _PoolImpl, PoolConfig,
+                   POOL_OPTION_NAMES)
 
 # Import PoolError from shared exceptions
 try:
@@ -31,15 +32,11 @@ if TYPE_CHECKING:
 
     # Shared ABC implemented by both pure-Python and C connections.
     from mariadb_shared.sync_connection_common import SyncConnectionCommon
-MAX_POOL_SIZE = 64
-
 # Keyword arguments which configure the pool itself: everything else is passed
 # to the connection factory and is therefore part of the connection
-# configuration.
-POOL_CONFIG_KEYS = frozenset({
-    'pool_size', 'pool_reset_connection', 'pool_validation_interval',
-    'min_size', 'max_size', 'acquire_timeout', 'ping_threshold'
-})
+# configuration. Naming, typing and reconciliation live in
+# PoolConfig.from_options(), so every entry point behaves identically.
+POOL_CONFIG_KEYS = POOL_OPTION_NAMES
 
 # Keyword aliases accepted by connect(). The alias takes precedence over its
 # canonical counterpart, like in Configuration.from_dict().
@@ -101,42 +98,8 @@ class ConnectionPoolWrapper:
             else:
                 conn_kwargs[key] = value
         
-        # Create pool configuration
-        config = PoolConfig()
-        
-        # Track which size parameters were explicitly set
-        has_pool_size = 'pool_size' in pool_kwargs
-        has_min_size = 'min_size' in pool_kwargs
-        has_max_size = 'max_size' in pool_kwargs
-        
-        if has_pool_size:
-            config.max_size = pool_kwargs['pool_size']
-            config.min_size = pool_kwargs['pool_size']
-        if has_min_size:
-            config.min_size = pool_kwargs['min_size']
-        if has_max_size:
-            config.max_size = pool_kwargs['max_size']
-            
-        # If only min_size or max_size is set (but not both), make them equal
-        if has_min_size and not has_max_size and not has_pool_size:
-            config.max_size = config.min_size
-        elif has_max_size and not has_min_size and not has_pool_size:
-            config.min_size = config.max_size
-            
-        if 'acquire_timeout' in pool_kwargs:
-            config.acquire_timeout = pool_kwargs['acquire_timeout']
-        if 'pool_validation_interval' in pool_kwargs:
-            config.validation_interval = pool_kwargs['pool_validation_interval']
-        if 'ping_threshold' in pool_kwargs:
-            config.ping_threshold = pool_kwargs['ping_threshold']
+        config = PoolConfig.from_options(**pool_kwargs)
 
-        if (config.max_size >= MAX_POOL_SIZE):
-            config.max_size = MAX_POOL_SIZE
-        if (config.min_size >= MAX_POOL_SIZE):
-            config.min_size = MAX_POOL_SIZE
-            
-        config.reset_connection = bool(pool_kwargs.get('pool_reset_connection', True))
-        
         # Create the actual pool
         self._pool = _PoolImpl(
             connection_factory=connection_factory,
