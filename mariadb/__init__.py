@@ -476,9 +476,9 @@ def _resolve_pool_params(
     # in fact be borrowed from a second, registered pool.
     if 'pool_name' in uri_conn:
         raise ValueError(
-            "pool_name is not supported by create_pool()/create_async_pool(), which "
-            "return the pool object directly instead of registering it by name. Use "
-            "mariadb.ConnectionPool(pool_name=...) if you want a named pool."
+            "pool_name is not supported by create_pool()/create_async_pool(), "
+            "which return the pool object directly instead of registering it "
+            "by name. Naming a pool is deprecated; keep the returned object."
         )
 
     # Pool config: explicit keyword argument > **kwargs spelling > URI query.
@@ -742,18 +742,16 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
             Args:
                 uri_or_pool_name: Either a URI string or pool_name (first positional argument)
                 uri: Optional URI string for connection parameters (deprecated, use first arg)
-                pool_name: Name of the pool (can be in URI query params or as kwarg)
+                pool_name: Optional name of the pool, deprecated (can be in URI
+                    query params or as kwarg)
                 **kwargs: Connection parameters and pool configuration
 
             Examples:
-                # URI with pool_name in query params
-                pool = ConnectionPool("mariadb://user:pass@host/db?pool_name=mypool")
+                pool = ConnectionPool("mariadb://user:pass@host/db")
 
-                # Traditional style
-                pool = ConnectionPool(pool_name="mypool", uri="mariadb://user:pass@host/db")
+                pool = ConnectionPool(uri="mariadb://user:pass@host/db")
 
-                # pool_name as first arg, connection params as kwargs
-                pool = ConnectionPool("mypool", host="localhost", user="root", database="test")
+                pool = ConnectionPool(host="localhost", user="root", database="test")
             """
             # Handle first positional argument
             if uri_or_pool_name is not None:
@@ -787,6 +785,17 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
             # pool_name is optional - if not provided, pool can be used directly
             # but won't be registered in _CONNECTION_POOLS
             if pool_name is not None:
+                # Naming a pool registers it globally, so any code in the
+                # process can obtain a connection from it just by knowing the
+                # name. Warned about here rather than in the base class, so the
+                # reported location is the caller's and not this file's.
+                warnings.warn(
+                    "The pool_name argument is deprecated and will be removed "
+                    "in 2.1, together with the pool registry it fills: a named "
+                    "pool can be reached by any code in the process that knows "
+                    "the name. Keep the pool object instead, or create it with "
+                    "mariadb.create_pool().",
+                    DeprecationWarning, stacklevel=2)
                 if pool_name in _CONNECTION_POOLS:
                     raise PoolError(f"Pool '{pool_name}' already exists")
 

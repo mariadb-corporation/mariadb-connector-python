@@ -3,6 +3,7 @@
 
 import unittest
 import os
+import warnings
 import mariadb
 import platform
 
@@ -515,6 +516,22 @@ class TestPooling(unittest.TestCase):
                                    **default_conf)
         conn.close()
         mariadb._CONNECTION_POOLS["test_deprecated"].close()
+
+    def test_connection_pool_pool_name_deprecated(self):
+        # CONPY-377: naming a pool registers it globally, so any code in the
+        # process can obtain a connection from it by knowing the name. The
+        # argument stays optional and keeps working until 2.1.
+        with self.assertWarns(DeprecationWarning):
+            pool = mariadb.ConnectionPool(pool_name="test_pool_deprecated")
+        pool.close()
+
+        # no name, no warning
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            pool = mariadb.ConnectionPool(min_size=0)
+        pool.close()
+        self.assertEqual([w for w in caught
+                          if issubclass(w.category, DeprecationWarning)], [])
 
     def test_async_connection_pool_removed(self):
         # CONPY-377: ConnectionPool mirrors the 1.1 pool API, which never had

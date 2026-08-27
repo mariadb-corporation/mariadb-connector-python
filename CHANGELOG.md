@@ -10,7 +10,7 @@ Release date: ???. 2026
 - [CONPY-355](https://jira.mariadb.org/browse/CONPY-355): Support for the MySQL `VECTOR` data type
 - [CONPY-370](https://jira.mariadb.org/browse/CONPY-370): Accept a connection URI in `create_pool()` and `create_async_pool()`, with pool options readable from the URI query string.
 - [CONPY-384](https://jira.mariadb.org/browse/CONPY-384): Support FIPS-enforcing crypto backends in the pure-Python client: SHA-1 is never computed there, so an account on a FIPS-compliant authentication plugin (`parsec`) now connects instead of failing on `hashlib.sha1`, and a plugin that is not FIPS-compliant is refused with an explicit message. Detection is automatic and overridable with `MARIADB_FIPS_MODE`.
-- [CONPY-377](https://jira.mariadb.org/browse/CONPY-377): Remove `mariadb.AsyncConnectionPool`. `ConnectionPool` exists to mirror the 1.1 pool API, which had no async counterpart; use `mariadb.create_async_pool()` and obtain connections from the returned pool with its `acquire()` method.
+- [CONPY-377](https://jira.mariadb.org/browse/CONPY-377): Deprecate naming a connection pool. `pool_name` on `mariadb.ConnectionPool()` and on `connect()` now raises a `DeprecationWarning`: a named pool is registered process-wide. Both the argument and the registry will be removed in 2.1. Use `mariadb.create_pool()` and keep the returned pool object.
 
 **Bug fixes:**
 
