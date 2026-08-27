@@ -516,6 +516,12 @@ class TestPooling(unittest.TestCase):
         conn.close()
         mariadb._CONNECTION_POOLS["test_deprecated"].close()
 
+    def test_async_connection_pool_removed(self):
+        # CONPY-377: ConnectionPool mirrors the 1.1 pool API, which never had
+        # an async counterpart -- create_async_pool() builds an async pool
+        with self.assertRaises(AttributeError):
+            mariadb.AsyncConnectionPool
+
     def test_pool_connection_args(self):
         default_conf = conf()
         pool = mariadb.ConnectionPool(pool_name="test_conn_args",

@@ -50,13 +50,11 @@ from .pool import (
     POOL_OPTION_NAMES,
 )
 from .connection_pool_wrapper import ConnectionPoolWrapper
-from .async_connection_pool_wrapper import AsyncConnectionPoolWrapper
 
 __all__ = [
     'ConnectionPool',
     'AsyncConnectionPool',
     'ConnectionPoolWrapper',
-    'AsyncConnectionPoolWrapper',
     'PoolConfig',
     'PoolError',
     'POOL_OPTION_NAMES'

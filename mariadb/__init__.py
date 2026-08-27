@@ -46,7 +46,7 @@ from . import impl_selector  # noqa: F401 import early to stabilize side effects
 if TYPE_CHECKING:
     # mariadb_pool is optional, so we import its types only for type checking
     from mariadb_shared.pool_types import (
-        ConnectionPoolWrapper, AsyncConnectionPoolWrapper,
+        ConnectionPoolWrapper,
         ConnectionPool as _ConnectionPoolImpl,
         AsyncConnectionPool as _AsyncConnectionPoolImpl,
     )
@@ -298,8 +298,8 @@ async def asyncConnect(*args: Any, connectionclass: type | None = None, **kwargs
     if 'pool_name' in kwargs:
         raise ProgrammingError(
             "pool_name is not supported by asyncConnect(). Use "
-            "mariadb.create_async_pool() or mariadb.AsyncConnectionPool() and "
-            "obtain connections with their get_connection() method."
+            "mariadb.create_async_pool() and obtain connections from the "
+            "returned pool with its acquire() method."
         )
 
     # Use AsyncConnection if no custom class specified
@@ -382,11 +382,9 @@ __version_info__ : tuple[int, int, int, str] | tuple[int, int, int] = _parse_ver
 
 # Connection pool support (lazy import)
 _CONNECTION_POOLS: 'Dict[str, ConnectionPoolWrapper]' = {}
-_ASYNC_CONNECTION_POOLS: 'Dict[str, AsyncConnectionPoolWrapper]' = {}
 
 # Cache for pool classes (lazy loaded)
 _ConnectionPoolClass = None
-_AsyncConnectionPoolClass = None
 
 # Dynamic version properties that reflect the actual implementation being used
 def __getattr__(name: str) -> Any:
@@ -394,18 +392,13 @@ def __getattr__(name: str) -> Any:
     Dynamic attribute access for version info and optional pooling support.
     Returns version information based on the actual implementation being used.
     """
-    global _ConnectionPoolClass, _AsyncConnectionPoolClass
+    global _ConnectionPoolClass
 
     if name == 'ConnectionPool':
         # Lazy import and cache compatibility wrapper
         if _ConnectionPoolClass is None:
             _ConnectionPoolClass = _get_connection_pool_class()
         return _ConnectionPoolClass
-    elif name == 'AsyncConnectionPool':
-        # Lazy import and cache async connection pool
-        if _AsyncConnectionPoolClass is None:
-            _AsyncConnectionPoolClass = _get_async_connection_pool_class()
-        return _AsyncConnectionPoolClass
     else:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
@@ -814,99 +807,6 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
                 del _CONNECTION_POOLS[pool_name]
 
     return ConnectionPool
-
-
-def _get_async_connection_pool_class() -> type['AsyncConnectionPoolWrapper']:
-    """
-    Get AsyncConnectionPool class from mariadb_pool package.
-    """
-    try:
-        from mariadb_pool import AsyncConnectionPoolWrapper  # pyright: ignore[reportMissingImports]
-    except ImportError:
-        raise AttributeError(
-            "AsyncConnectionPool is not available. "
-            "Install mariadb-pool: pip install mariadb[pool]"
-        )
-
-    # Create a wrapper class that injects mariadb.asyncConnect and manages _CONNECTION_POOLS
-    class AsyncConnectionPool(AsyncConnectionPoolWrapper):
-        """
-        Wrapper around AsyncConnectionPoolWrapper that automatically uses mariadb.asyncConnect
-
-        Supports pool_name for registry in mariadb._CONNECTION_POOLS
-        """
-
-        def __init__(self, uri_or_pool_name: str | None = None, uri: str | None = None, pool_name: Any = None, **kwargs: Any) -> None:
-            """Initialize with mariadb.asyncConnect as factory and register in _CONNECTION_POOLS
-
-            Args:
-                uri_or_pool_name: Either a URI string or pool_name (first positional argument)
-                uri: Optional URI string for connection parameters (deprecated, use first arg)
-                pool_name: Name of the pool (can be in URI query params or as kwarg)
-                **kwargs: Connection parameters and pool configuration
-
-            Examples:
-                # URI with pool_name in query params
-                pool = AsyncConnectionPool("mariadb://user:pass@host/db?pool_name=mypool")
-
-                # Traditional style
-                pool = AsyncConnectionPool(pool_name="mypool", uri="mariadb://user:pass@host/db")
-
-                # pool_name as first arg, connection params as kwargs
-                pool = AsyncConnectionPool("mypool", host="localhost", user="root", database="test")
-            """
-            # Handle first positional argument
-            if uri_or_pool_name is not None:
-                from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
-                if is_connection_uri(uri_or_pool_name):
-                    # First arg is a URI
-                    uri_params = parse_connection_uri(uri_or_pool_name)
-                    # Extract pool_name from URI params if present
-                    if 'pool_name' in uri_params and pool_name is None:
-                        pool_name = uri_params.pop('pool_name')
-                    # Merge with kwargs, giving priority to kwargs
-                    uri_params.update(kwargs)
-                    kwargs = uri_params
-                else:
-                    # First arg is pool_name
-                    if pool_name is None:
-                        pool_name = uri_or_pool_name
-
-            # Parse URI parameter if provided (backward compatibility)
-            if uri is not None:
-                from mariadb_shared.uri_parser import is_connection_uri, parse_connection_uri
-                if is_connection_uri(uri):
-                    uri_params = parse_connection_uri(uri)
-                    # Extract pool_name from URI params if present
-                    if 'pool_name' in uri_params and pool_name is None:
-                        pool_name = uri_params.pop('pool_name')
-                    # Merge with kwargs, giving priority to kwargs
-                    uri_params.update(kwargs)
-                    kwargs = uri_params
-
-            # pool_name is optional - if not provided, pool can be used directly
-            # but won't be registered in _CONNECTION_POOLS
-            if pool_name is not None:
-                if pool_name in _ASYNC_CONNECTION_POOLS:
-                    raise PoolError(f"Pool '{pool_name}' already exists")
-
-            # Remove pool_name from kwargs if present (to avoid duplicate argument)
-            kwargs.pop('pool_name', None)
-
-            super().__init__(connection_factory=asyncConnect, pool_name=pool_name, **kwargs)
-
-            # Only register named pools
-            if pool_name is not None:
-                _ASYNC_CONNECTION_POOLS[pool_name] = self
-
-        async def close(self) -> None:
-            """Close and unregister from _CONNECTION_POOLS"""
-            pool_name = self.pool_name
-            await super().close()
-            if pool_name in _ASYNC_CONNECTION_POOLS:
-                del _ASYNC_CONNECTION_POOLS[pool_name]
-
-    return AsyncConnectionPool
 
 
 # Implementation selection is handled by impl_selector module at import time
