@@ -710,6 +710,9 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     Py_XDECREF(self->values[column]);
     self->values[column]= NULL;
 
+    if (PyErr_Occurred())
+        goto end;
+
     ext_field_type= mariadb_extended_field_type(&self->fields[column]);
 
     if (!row)
@@ -899,7 +902,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                     self->values[column]= Py_None;
                 } else {
                     PyErr_SetString(PyExc_ValueError, "Invalid or out-of-bounds decimal length encountered");
-                    return;
+                    goto end;
                 }
                 *row+= length;
                 break;
