@@ -12,6 +12,11 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
+      connector_c_version:
+        description: 'MariaDB Connector/C version to build against'
+        required: false
+        default: '3.4.9'
+        type: string
       publish_to:
         description: 'Publish to'
         required: true
@@ -23,7 +28,7 @@ on:
           - none
 
 env:
-  MARIADB_CONNECTOR_C_VERSION: 3.4.8
+  MARIADB_CONNECTOR_C_VERSION: ${{ github.event.inputs.connector_c_version || '3.4.9' }}
   MYSQL_TEST_HOST: mariadb.example.com
   MYSQL_TEST_PORT: 3306
   MYSQL_TEST_USER: root
@@ -94,7 +99,7 @@ jobs:
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
-          user: ${{ env.MYSQL_TEST_USER }}
+          user: 'myUser'
           password: ${{ env.MYSQL_TEST_PASSWD }}
           database: ${{ env.MYSQL_TEST_DB }}
 
