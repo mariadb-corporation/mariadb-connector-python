@@ -877,6 +877,45 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             char *p, *key;
             size_t names_size= 0, key_len;
             int rc;
+            PyObject *seen;
+
+            /* All column names are known now: a struct sequence can't carry
+               the same member twice, the second one would silently shadow
+               the first. */
+            if (!(seen= PySet_New(NULL)))
+            {
+                return 1;
+            }
+            for (i=0; i < self->field_count; i++)
+            {
+                PyObject *name;
+                int found;
+
+                if (!(name= PyUnicode_FromString(self->fields[i].name)))
+                {
+                    Py_DECREF(seen);
+                    return 1;
+                }
+                found= PySet_Contains(seen, name);
+                if (found == 0)
+                {
+                    found= PySet_Add(seen, name) < 0 ? -1 : 0;
+                }
+                Py_DECREF(name);
+                if (found)
+                {
+                    Py_DECREF(seen);
+                    if (found > 0)
+                    {
+                        mariadb_throw_exception(NULL, Mariadb_ProgrammingError,
+                            0, "Duplicate column name '%s' in result set: a "
+                            "named_tuple cursor requires unique column names",
+                            self->fields[i].name);
+                    }
+                    return 1;
+                }
+            }
+            Py_DECREF(seen);
 
             for (i=0; i < self->field_count; i++)
             {
@@ -964,6 +1003,12 @@ PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
     {
         if (Mrdb_GetFieldInfo(self))
         {
+            /* The result set was already stored when this failed. Drop it and
+               the field count, so a fetch on the cursor reports that there is
+               no result set instead of walking one whose values array was
+               never allocated. */
+            MrdbCursor_clear_result(self);
+            self->field_count= 0;
             return NULL;
         }
 
