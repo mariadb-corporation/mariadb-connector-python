@@ -50,7 +50,11 @@ class InvalidParamBindingTest(unittest.TestCase):
         self.connection = create_connection()
         self.cursor = self.connection.cursor()
         self.cursor.execute("DROP TABLE IF EXISTS conpy382")
-        self.cursor.execute("CREATE TABLE conpy382 (a TEXT)")
+        # utf8mb4 explicitly: test_valid_strings_still_bind stores a
+        # 4-byte character, which a server defaulting to utf8mb3
+        # rejects.
+        self.cursor.execute("CREATE TABLE conpy382 (a TEXT) "
+                            "CHARACTER SET utf8mb4")
 
     def tearDown(self):
         try:

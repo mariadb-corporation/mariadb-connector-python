@@ -41,6 +41,7 @@ on:
         type: boolean
 
 env:
+  OPENSSL_VERSION: 3.5.8
   MYSQL_TEST_HOST: mariadb.example.com
   MYSQL_TEST_PORT: 3306
   MYSQL_TEST_USER: root
@@ -167,7 +168,7 @@ jobs:
 
       - name: Setup MariaDB Server
         id: setup-mariadb-linux
-        uses: rusher/action-setup-mariadb@v1.6
+        uses: rusher/action-setup-mariadb@master
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
@@ -176,12 +177,12 @@ jobs:
           database: ${{ env.MYSQL_TEST_DB }}
 
       - name: Set up QEMU for multi-arch build
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           image: tonistiigi/binfmt:qemu-v8.1.5
 
       - name: Cache MariaDB Connector/C build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/mariadb-connector-c.build
           key: mariadb-connector-c-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.MARIADB_CONNECTOR_C_VERSION }}
@@ -261,13 +262,18 @@ jobs:
   # Build mariadb-binary (binary wheels) - macOS
   build-mariadb-binary-macos:
     name: Build mariadb-binary (macOS ${{ matrix.arch }} ${{ matrix.pyver }})
-    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13-xlarge' || 'macos-latest' }}
+    # Both arches build here: GitHub retired the Intel macOS runners, so
+    # x86_64 is cross-compiled on the arm64 image
+    runs-on: macos-latest
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb_binary == 'true')
     strategy:
       fail-fast: false
       matrix:
         arch: [x86_64, arm64]
         pyver: [cp310, cp311, cp312, cp313, cp314]
+
+    env:
+      HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
 
     steps:
       - name: Checkout repos
@@ -281,7 +287,7 @@ jobs:
 
       - name: Setup MariaDB Server
         id: setup-mariadb-macos
-        uses: rusher/action-setup-mariadb@v1.6
+        uses: rusher/action-setup-mariadb@master
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
@@ -290,10 +296,10 @@ jobs:
           database: ${{ env.MYSQL_TEST_DB }}
 
       - name: Cache MariaDB Connector/C build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
-          path: /tmp/mariadb-connector-c-${{ matrix.arch }}.build
-          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-${{ matrix.arch }}
+          path: /tmp/mariadb-deps-${{ matrix.arch }}.build
+          key: mariadb-deps-macos-${{ matrix.arch }}-cc${{ env.MARIADB_CONNECTOR_C_VERSION }}-ssl${{ env.OPENSSL_VERSION }}
 
       - name: Create the binary package source tree
         run: python3 ./tools/ci/copy_to_binary.py
@@ -311,40 +317,26 @@ jobs:
           CIBW_BUILD: ${{matrix.pyver}}-macosx_${{matrix.arch}}
           CIBW_ARCHS_MACOS: ${{matrix.arch}}
           MACOSX_ARCHITECTURE: ${{matrix.arch}}
-          CIBW_BEFORE_ALL_MACOS: |
-            # Build MariaDB Connector/C from source (native architecture)
-            if [ ! -d "/tmp/mariadb-connector-c-${{matrix.arch}}.build" ]; then
-              brew install cmake openssl@3
-              cd /tmp
-              echo "Using MariaDB Connector/C version: $MARIADB_CONNECTOR_C_VERSION"
-              git clone --depth 1 --branch v$MARIADB_CONNECTOR_C_VERSION https://github.com/mariadb-corporation/mariadb-connector-c.git mariadb-connector-c-${{matrix.arch}}
-              cd mariadb-connector-c-${{matrix.arch}}
-              cmake -DCMAKE_BUILD_TYPE=Release \
-                    -DCMAKE_INSTALL_PREFIX=/tmp/mariadb-connector-c-${{matrix.arch}}.build \
-                    -DCMAKE_OSX_ARCHITECTURES=${{matrix.arch}} \
-                    -DWITH_EXTERNAL_ZLIB=On \
-                    -DWITH_SSL=OPENSSL \
-                    -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3) .
-              make -j$(sysctl -n hw.ncpu)
-              make install
-            fi
+          CIBW_BEFORE_ALL_MACOS: ./tools/ci/build_deps_macos.sh
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
-            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib:/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/mariadb:$DYLD_LIBRARY_PATH"
-            delocate-wheel --require-archs {delocate_archs} --require-target-macos-version ${{ matrix.arch == 'arm64' && '15.0' || '13.0' }} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
+            DYLD_LIBRARY_PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/lib:/tmp/mariadb-deps-${{matrix.arch}}.build/lib/mariadb:$DYLD_LIBRARY_PATH"
+            delocate-wheel --require-archs {delocate_archs} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
           CIBW_BEFORE_TEST_MACOS: >-
             pip install {project}/mariadb-pool
           CIBW_TEST_REQUIRES: pytest cachetools
           CIBW_TEST_COMMAND: >-
             pytest {project}/tests/integration --color yes -v
-          CIBW_ENVIRONMENT_PASS_MACOS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD
+          CIBW_ENVIRONMENT_PASS_MACOS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION OPENSSL_VERSION
+          # No MACOSX_DEPLOYMENT_TARGET on purpose: cibuildwheel sets the right
+          # floor per interpreter. Pinning one value tagged the wheels
+          # macosx_15_0, which pip will not install on macOS 11-14.
           CIBW_ENVIRONMENT_MACOS: >-
             MARIADB_IMPL=binary
             LOCAL_DB=${{ steps.setup-mariadb-macos.outputs.database-type }}
-            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{matrix.arch}}.build
-            PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/bin:$PATH"
-            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib:/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/mariadb"
-            PKG_CONFIG_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/pkgconfig"
-            MACOSX_DEPLOYMENT_TARGET=${{ matrix.arch == 'arm64' && '15.0' || '13.0' }}
+            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-deps-${{matrix.arch}}.build
+            PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/bin:$PATH"
+            DYLD_LIBRARY_PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/lib:/tmp/mariadb-deps-${{matrix.arch}}.build/lib/mariadb"
+            PKG_CONFIG_PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/lib/pkgconfig"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -378,7 +370,7 @@ jobs:
 
       - name: Setup MariaDB Server
         id: setup-mariadb-windows
-        uses: rusher/action-setup-mariadb@v1.6
+        uses: rusher/action-setup-mariadb@master
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
@@ -390,7 +382,7 @@ jobs:
         run: python3 ./tools/ci/copy_to_binary.py
 
       - name: Cache MariaDB Connector/C build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: C:\mariadb-connector-c.build
           key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-windows-amd64-v3
@@ -490,7 +482,7 @@ jobs:
 
       - name: Download artifacts
         if: steps.check.outputs.should_publish == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact }}
           path: dist/
@@ -548,7 +540,7 @@ jobs:
 
       - name: Download artifacts
         if: steps.check.outputs.should_publish == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact }}
           path: dist/
