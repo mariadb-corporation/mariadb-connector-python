@@ -42,12 +42,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -68,7 +68,7 @@ jobs:
           python -m build --sdist --outdir dist/
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mariadb-sdist
           path: dist/
@@ -85,7 +85,7 @@ jobs:
         platform: [manylinux, musllinux]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -173,7 +173,7 @@ jobs:
             LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib/mariadb:/host/tmp/mariadb-connector-c.build/lib64"
             PKG_CONFIG_PATH="/host/tmp/mariadb-connector-c.build/lib/pkgconfig"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{matrix.pyver}}-${{matrix.platform}}_${{matrix.arch}}
           path: ./wheelhouse/*.whl
@@ -190,7 +190,7 @@ jobs:
 
     steps:
       - name: Checkout repos
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -258,7 +258,7 @@ jobs:
             MACOSX_DEPLOYMENT_TARGET=${{ matrix.arch == 'arm64' && '15.0' || '13.0' }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-${{matrix.pyver}}-${{matrix.arch}}
           path: ./wheelhouse/*.whl
@@ -278,7 +278,7 @@ jobs:
         shell: bash
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -327,7 +327,7 @@ jobs:
             MARIADB_CC_INSTALL_DIR=C:\\mariadb-connector-c.build
             PATH="C:\\mariadb-connector-c.build\\bin;$PATH"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-${{matrix.pyver}}-${{matrix.arch}}
           path: ./wheelhouse/*.whl
@@ -340,7 +340,7 @@ jobs:
 
     steps:
       - name: Merge artifacts
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v7
         with:
           name: mariadb-wheels
           pattern: "{linux,macos,windows}-*"

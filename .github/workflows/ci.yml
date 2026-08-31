@@ -33,7 +33,7 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.final-matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: set-matrix
         name: build matrix
         uses: mariadb-corporation/connector-ci-build-matrix@main
@@ -53,9 +53,9 @@ jobs:
       # Required to upload the SARIF report to the code-scanning API.
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -99,7 +99,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.continue-on-error || false }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Test Environment
         id: setup-env
@@ -117,7 +117,7 @@ jobs:
           os: ${{ matrix.os }}
           init-script-folder: ${{ format('{0}/.github/workflows/init', github.workspace) }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         id: setup-python
         with:
           python-version: ${{ matrix.python || '3.13' }}
