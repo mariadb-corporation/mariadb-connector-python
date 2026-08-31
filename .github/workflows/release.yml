@@ -191,6 +191,9 @@ jobs:
         arch: [x86_64, arm64]
         pyver: [cp310, cp311, cp312, cp313, cp314]
 
+    env:
+      HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
+
     steps:
       - name: Checkout repos
         uses: actions/checkout@v7

@@ -16,7 +16,11 @@
 #
 # MACOSX_ARCHITECTURE selects the target architecture, so x86_64 can be
 # cross-compiled on an arm64 runner - GitHub has retired the Intel macOS
-# runners.
+# runners. Nothing may come from Homebrew during that build: its libraries are
+# arm64 only, and the linker refuses them for an x86_64 target. Hence the
+# ignored paths, and zstd off - the compression plugin is the one optional
+# dependency Homebrew satisfies. It is a standalone plugin module that the
+# wheel never links, so no wheel has ever shipped it, on any platform.
 #
 # Reads OPENSSL_VERSION and MARIADB_CONNECTOR_C_VERSION from the environment.
 
@@ -77,7 +81,8 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -DWITH_EXTERNAL_ZLIB=On \
       -DWITH_SSL=OPENSSL \
       -DOPENSSL_ROOT_DIR="${prefix}" \
-      -DCMAKE_IGNORE_PATH=/opt/homebrew/opt/openssl@3\;/usr/local/opt/openssl@3 \
+      -DCLIENT_PLUGIN_ZSTD=OFF \
+      -DCMAKE_IGNORE_PATH="/opt/homebrew/lib;/opt/homebrew/include;/usr/local/lib;/usr/local/include" \
       .
 make -j"$(sysctl -n hw.ncpu)"
 make install
