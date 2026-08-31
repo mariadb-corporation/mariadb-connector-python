@@ -29,6 +29,7 @@ on:
 
 env:
   MARIADB_CONNECTOR_C_VERSION: ${{ github.event.inputs.connector_c_version || '3.4.9' }}
+  OPENSSL_VERSION: 3.5.8
   MYSQL_TEST_HOST: mariadb.example.com
   MYSQL_TEST_PORT: 3306
   MYSQL_TEST_USER: root
@@ -181,7 +182,9 @@ jobs:
   # Binary wheels - macOS
   build-wheels-macos:
     name: Build mariadb wheel (macOS ${{ matrix.arch }} ${{ matrix.pyver }})
-    runs-on: ${{ matrix.arch == 'x86_64' && 'macos-13-xlarge' || 'macos-latest' }}
+    # Both arches build here: GitHub retired the Intel macOS runners, so
+    # x86_64 is cross-compiled on the arm64 image
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
@@ -208,11 +211,11 @@ jobs:
           password: ${{ env.MYSQL_TEST_PASSWD }}
           database: ${{ env.MYSQL_TEST_DB }}
 
-      - name: Cache MariaDB Connector/C build
+      - name: Cache the dependency build
         uses: actions/cache@v4
         with:
-          path: /tmp/mariadb-connector-c-${{ matrix.arch }}.build
-          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-macos-${{ matrix.arch }}
+          path: /tmp/mariadb-deps-${{ matrix.arch }}.build
+          key: mariadb-deps-macos-${{ matrix.arch }}-cc${{ env.MARIADB_CONNECTOR_C_VERSION }}-ssl${{ env.OPENSSL_VERSION }}
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.2.1
@@ -225,37 +228,24 @@ jobs:
           CIBW_BUILD: ${{matrix.pyver}}-macosx_${{matrix.arch}}
           CIBW_ARCHS_MACOS: ${{matrix.arch}}
           MACOSX_ARCHITECTURE: ${{matrix.arch}}
-          CIBW_BEFORE_ALL_MACOS: |
-            # Build MariaDB Connector/C from source (native architecture)
-            if [ ! -d "/tmp/mariadb-connector-c-${{matrix.arch}}.build" ]; then
-              brew install cmake openssl@3
-              cd /tmp
-              echo "Using MariaDB Connector/C version: $MARIADB_CONNECTOR_C_VERSION"
-              git clone --depth 1 --branch v$MARIADB_CONNECTOR_C_VERSION https://github.com/mariadb-corporation/mariadb-connector-c.git mariadb-connector-c-${{matrix.arch}}
-              cd mariadb-connector-c-${{matrix.arch}}
-              cmake -DCMAKE_BUILD_TYPE=Release \
-                    -DCMAKE_INSTALL_PREFIX=/tmp/mariadb-connector-c-${{matrix.arch}}.build \
-                    -DCMAKE_OSX_ARCHITECTURES=${{matrix.arch}} \
-                    -DWITH_EXTERNAL_ZLIB=On \
-                    -DWITH_SSL=OPENSSL \
-                    -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3) .
-              make -j$(sysctl -n hw.ncpu)
-              make install
-            fi
+          CIBW_BEFORE_ALL_MACOS: ./tools/ci/build_deps_macos.sh
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: >-
-            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib:/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/mariadb:$DYLD_LIBRARY_PATH"
-            delocate-wheel --require-archs {delocate_archs} --require-target-macos-version ${{ matrix.arch == 'arm64' && '15.0' || '13.0' }} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
+            DYLD_LIBRARY_PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/lib:/tmp/mariadb-deps-${{matrix.arch}}.build/lib/mariadb:$DYLD_LIBRARY_PATH"
+            delocate-wheel --require-archs {delocate_archs} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
           CIBW_TEST_REQUIRES: pytest
           CIBW_TEST_COMMAND: >-
             pytest {project}/testing/test/integration --color yes -v
-          CIBW_ENVIRONMENT_PASS_MACOS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION
+          CIBW_ENVIRONMENT_PASS_MACOS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION OPENSSL_VERSION
+          # No MACOSX_DEPLOYMENT_TARGET on purpose: cibuildwheel sets the right
+          # floor per interpreter (11.0 on arm64, 10.9/10.13/10.15 on x86_64
+          # depending on the CPython version). Pinning one value tagged the
+          # wheels macosx_15_0, which pip will not install on macOS 11-14.
           CIBW_ENVIRONMENT_MACOS: >-
             LOCAL_DB=${{ steps.setup-mariadb-macos.outputs.database-type }}
-            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-connector-c-${{matrix.arch}}.build
-            PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/bin:$PATH"
-            DYLD_LIBRARY_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib:/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/mariadb"
-            PKG_CONFIG_PATH="/tmp/mariadb-connector-c-${{matrix.arch}}.build/lib/pkgconfig"
-            MACOSX_DEPLOYMENT_TARGET=${{ matrix.arch == 'arm64' && '15.0' || '13.0' }}
+            MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-deps-${{matrix.arch}}.build
+            PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/bin:$PATH"
+            DYLD_LIBRARY_PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/lib:/tmp/mariadb-deps-${{matrix.arch}}.build/lib/mariadb"
+            PKG_CONFIG_PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/lib/pkgconfig"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
