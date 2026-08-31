@@ -389,16 +389,24 @@ class Cursor(mariadb._mariadb.cursor):
         # by looping
         # TODO: insert/replace statements are not optimized yet
         #       rowcount updating
-        if not (self.connection.extended_server_capabilities &
-                (CAPABILITY.BULK_OPERATIONS >> 32)):
+        use_bulk = bool(self.connection.extended_server_capabilities &
+                        (CAPABILITY.BULK_OPERATIONS >> 32))
+
+        if use_bulk:
+            # parse statement
+            self._parse_execute(statement, parameters[0], is_bulk=True)
+            # CONPY-152: a statement without placeholders has nothing to
+            # send in bulk, so run it in a loop like for a server which
+            # doesn't support bulk operations.
+            use_bulk = self.paramcount > 0
+
+        if not use_bulk:
             count = 0
             for row in parameters:
                 self.execute(statement, row)
                 count += self.rowcount
             self._rowcount = count
         else:
-            # parse statement
-            self._parse_execute(statement, parameters[0], is_bulk=True)
             self._data = parameters
             self.is_text = False
             self._rowcount = 0
