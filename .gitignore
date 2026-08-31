@@ -30,6 +30,9 @@
 build/
 dist/
 
+# Auto-generated version files
+mariadb/release_info.py
+
 # Cache
 __pycache__
 
