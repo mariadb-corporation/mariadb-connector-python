@@ -41,7 +41,8 @@ class TestInvalidParamBinding(unittest.TestCase):
         self.connection = create_connection()
         self.cursor = self.connection.cursor()
         self.cursor.execute("DROP TABLE IF EXISTS conpy382")
-        self.cursor.execute("CREATE TABLE conpy382 (a TEXT)")
+        self.cursor.execute("CREATE TABLE conpy382 (a TEXT) "
+                            "CHARACTER SET utf8mb4")
 
     def tearDown(self):
         try:

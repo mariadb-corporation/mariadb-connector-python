@@ -96,7 +96,7 @@ jobs:
 
       - name: Setup MariaDB Server
         id: setup-mariadb-linux
-        uses: rusher/action-setup-mariadb@v1.6
+        uses: rusher/action-setup-mariadb@master
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
@@ -105,12 +105,12 @@ jobs:
           database: ${{ env.MYSQL_TEST_DB }}
 
       - name: Set up QEMU for multi-arch build
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           image: tonistiigi/binfmt:qemu-v8.1.5
 
       - name: Cache MariaDB Connector/C build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/mariadb-connector-c.build
           key: mariadb-connector-c-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.MARIADB_CONNECTOR_C_VERSION }}
@@ -203,7 +203,7 @@ jobs:
 
       - name: Setup MariaDB Server
         id: setup-mariadb-macos
-        uses: rusher/action-setup-mariadb@v1.6
+        uses: rusher/action-setup-mariadb@master
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
@@ -212,7 +212,7 @@ jobs:
           database: ${{ env.MYSQL_TEST_DB }}
 
       - name: Cache the dependency build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/mariadb-deps-${{ matrix.arch }}.build
           key: mariadb-deps-macos-${{ matrix.arch }}-cc${{ env.MARIADB_CONNECTOR_C_VERSION }}-ssl${{ env.OPENSSL_VERSION }}
@@ -278,7 +278,7 @@ jobs:
 
       - name: Setup MariaDB Server
         id: setup-mariadb-windows
-        uses: rusher/action-setup-mariadb@v1.6
+        uses: rusher/action-setup-mariadb@master
         with:
           tag: '11.4'
           root-password: ${{ env.MYSQL_TEST_PASSWD }}
@@ -287,7 +287,7 @@ jobs:
           database: ${{ env.MYSQL_TEST_DB }}
 
       - name: Cache MariaDB Connector/C build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: C:\mariadb-connector-c.build
           key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-windows-amd64
@@ -350,7 +350,7 @@ jobs:
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: mariadb-*
           merge-multiple: true
@@ -378,7 +378,7 @@ jobs:
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: mariadb-*
           merge-multiple: true
