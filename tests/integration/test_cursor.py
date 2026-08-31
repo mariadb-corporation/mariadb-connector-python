@@ -2536,5 +2536,25 @@ class TestCursor(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             self.assertRaises(mariadb.ProgrammingError, cursor.execute, "CANNOT BE PREPARED WHERE 1=?", (1,))
 
+    def test_executemany_empty_parameters(self):
+        """CONPY-152: executemany with empty parameter tuples (no parameters)"""
+        with create_connection() as connection:
+            cursor = connection.cursor()
+
+            cursor.execute("DROP TABLE IF EXISTS t1")
+            cursor.execute("CREATE TABLE t1 (a int not null auto_increment "
+                           "primary key, b int default 3)")
+
+            # a statement without placeholders has nothing to send in bulk
+            cursor.executemany("INSERT INTO t1 (b) VALUES (DEFAULT)",
+                               [(), (), ()])
+            self.assertEqual(cursor.rowcount, 3)
+            cursor.execute("SELECT count(*), min(b), max(b) FROM t1")
+            self.assertEqual(cursor.fetchone(), (3, 3, 3))
+
+            cursor.execute("DROP TABLE IF EXISTS t1")
+            del cursor
+
+
 if __name__ == '__main__':
     unittest.main()

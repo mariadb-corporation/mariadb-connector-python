@@ -290,11 +290,13 @@ class Cursor(StmtReuseMixin, CCursor):
                 reordered.append([row.get(name) for name in param_names])
             parameters = reordered
 
+        has_parameters = any(len(row) > 0 if hasattr(row, '__len__') else True for row in parameters)
         first_row = parameters[0] if hasattr(parameters, '__getitem__') else next(iter(parameters))
 
         if not (self.connection.extended_server_capabilities &
-                (CAPABILITY.BULK_OPERATIONS >> 32)) or isinstance(first_row, dict):
-            # PYFORMAT/FORMAT or server without bulk support: row-by-row loop
+                (CAPABILITY.BULK_OPERATIONS >> 32)) or not has_parameters or isinstance(first_row, dict):
+            # PYFORMAT/FORMAT, no placeholders, or server without bulk
+            # support: row-by-row loop
             count = 0
             for row in parameters:
                 self.execute(normalized_sql, row)
