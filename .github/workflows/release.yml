@@ -243,11 +243,13 @@ jobs:
           CIBW_BEFORE_TEST_LINUX: >-
             pip install {project}/mariadb-pool
           CIBW_TEST_REQUIRES: pytest cachetools
+          # -o addopts= : pyproject sets addopts "-ra -q --tb=short", whose -q
+          # cancels the -v below, so a crash is reported as an anonymous dot
           CIBW_TEST_COMMAND: >-
-            pytest {project}/tests/integration --color yes -v
+            pytest {project}/tests/integration --color yes -v -o addopts=
           CIBW_ENVIRONMENT_PASS_LINUX: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION
           CIBW_ENVIRONMENT: >-
-            MARIADB_IMPL=binary
+            PYTHONFAULTHANDLER=1
             LOCAL_DB=${{ steps.setup-mariadb-linux.outputs.database-type }}
             MARIADB_CONNECTOR_C_DIR=/host/tmp/mariadb-connector-c.build
             PATH="/host/tmp/mariadb-connector-c.build/bin:$PATH"
@@ -324,14 +326,16 @@ jobs:
           CIBW_BEFORE_TEST_MACOS: >-
             pip install {project}/mariadb-pool
           CIBW_TEST_REQUIRES: pytest cachetools
+          # -o addopts= : pyproject sets addopts "-ra -q --tb=short", whose -q
+          # cancels the -v below, so a crash is reported as an anonymous dot
           CIBW_TEST_COMMAND: >-
-            pytest {project}/tests/integration --color yes -v
+            pytest {project}/tests/integration --color yes -v -o addopts=
           CIBW_ENVIRONMENT_PASS_MACOS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION OPENSSL_VERSION
           # No MACOSX_DEPLOYMENT_TARGET on purpose: cibuildwheel sets the right
           # floor per interpreter. Pinning one value tagged the wheels
           # macosx_15_0, which pip will not install on macOS 11-14.
           CIBW_ENVIRONMENT_MACOS: >-
-            MARIADB_IMPL=binary
+            PYTHONFAULTHANDLER=1
             LOCAL_DB=${{ steps.setup-mariadb-macos.outputs.database-type }}
             MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-deps-${{matrix.arch}}.build
             PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/bin:$PATH"
@@ -408,11 +412,13 @@ jobs:
           CIBW_BEFORE_TEST_WINDOWS: >-
             pip install {project}/mariadb-pool
           CIBW_TEST_REQUIRES: pytest cachetools
+          # -o addopts= : pyproject sets addopts "-ra -q --tb=short", whose -q
+          # cancels the -v below, so a crash is reported as an anonymous dot
           CIBW_TEST_COMMAND: >-
-            pytest {project}/tests/integration --color yes -v
+            pytest {project}/tests/integration --color yes -v -o addopts=
           CIBW_ENVIRONMENT_PASS_WINDOWS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CC_INSTALL_DIR MARIADB_CONNECTOR_C_VERSION
           CIBW_ENVIRONMENT_WINDOWS: >-
-            MARIADB_IMPL=binary
+            PYTHONFAULTHANDLER=1
             LOCAL_DB=${{ steps.setup-mariadb-windows.outputs.database-type }}
             MARIADB_CC_INSTALL_DIR=C:\\mariadb-connector-c.build
             PATH="C:\\mariadb-connector-c.build\\bin;$PATH"

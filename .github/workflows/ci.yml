@@ -659,15 +659,11 @@ jobs:
       - name: Build mariadb (pure Python) package
         run: |
           python -m build --sdist --wheel --outdir dist/
-        env:
-          MARIADB_IMPL: pure
 
       - name: Build mariadb-c (C extension) package
         run: |
           cd mariadb-c
           python -m build --sdist --outdir ../dist/
-        env:
-          MARIADB_IMPL: c
 
       - name: Build mariadb-pool package
         run: |
