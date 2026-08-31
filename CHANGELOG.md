@@ -2,7 +2,7 @@
 
 ## MariaDB Connector/Python 2.0.0rc3
 
-Release date: ???. 2026
+Release date: sep. 2026
 
 **Notable changes:**
 
@@ -11,6 +11,10 @@ Release date: ???. 2026
 - [CONPY-370](https://jira.mariadb.org/browse/CONPY-370): Accept a connection URI in `create_pool()` and `create_async_pool()`, with pool options readable from the URI query string.
 - [CONPY-384](https://jira.mariadb.org/browse/CONPY-384): Support FIPS-enforcing crypto backends in the pure-Python client: SHA-1 is never computed there, so an account on a FIPS-compliant authentication plugin (`parsec`) now connects instead of failing on `hashlib.sha1`, and a plugin that is not FIPS-compliant is refused with an explicit message. Detection is automatic and overridable with `MARIADB_FIPS_MODE`.
 - [CONPY-377](https://jira.mariadb.org/browse/CONPY-377): Deprecate naming a connection pool. `pool_name` on `mariadb.ConnectionPool()` and on `connect()` now raises a `DeprecationWarning`: a named pool is registered process-wide. Both the argument and the registry will be removed in 2.1. Use `mariadb.create_pool()` and keep the returned pool object.
+- [CONPY-361](https://jira.mariadb.org/browse/CONPY-361): Ship PEP 561 `py.typed` markers so the connector's inline type hints reach downstream users
+- [CONPY-366](https://jira.mariadb.org/browse/CONPY-366): Restore the 1.x `prepared` cursor option for migration compatibility. It is deprecated and will be removed.
+- [CONPY-362](https://jira.mariadb.org/browse/CONPY-362): Disable the shared prepared-statement cache by default
+- [CONPY-373](https://jira.mariadb.org/browse/CONPY-373): Add Python SAST (CodeQL and Bandit) to CI
 
 **Bug fixes:**
 
@@ -28,6 +32,14 @@ Release date: ???. 2026
 - [CONPY-356](https://jira.mariadb.org/browse/CONPY-356): Enable TCP keep-alive by default
 - [CONPY-349](https://jira.mariadb.org/browse/CONPY-349): Use a constant-time comparison for the TLS fingerprint validation hash
 - [CONPY-342](https://jira.mariadb.org/browse/CONPY-342): Enforce the connection charset and close the connection on a charset mismatch
+- [CONPY-339](https://jira.mariadb.org/browse/CONPY-339): Fix 100% CPU usage caused by `_on_socket_writable` firing continuously on idle async connections
+- [CONPY-363](https://jira.mariadb.org/browse/CONPY-363): Stop native async TLS connections logging "returning true from eof_received() has no effect when using ssl"
+- [CONPY-386](https://jira.mariadb.org/browse/CONPY-386): `cursor(named_tuple=True)` no longer drops a column when two columns share a name: the result set is refused instead
+- [CONPY-385](https://jira.mariadb.org/browse/CONPY-385): `cursor(named_tuple=True)` no longer raises when a column name is a Python keyword
+- [CONPY-368](https://jira.mariadb.org/browse/CONPY-368): Return `None` for DATE/DATETIME values Python cannot represent, instead of raising `SystemError`
+- [CONPY-365](https://jira.mariadb.org/browse/CONPY-365): Refuse an out-of-bounds decimal length in the result metadata instead of reading past the buffer
+- [CONPY-152](https://jira.mariadb.org/browse/CONPY-152): `executemany()` accepts a statement without placeholders again, such as `INSERT ... VALUES (DEFAULT)`
+- [CONPY-331](https://jira.mariadb.org/browse/CONPY-331): Name the argument in the error raised when a connection keyword has the wrong type
 
 
 ## MariaDB Connector/Python 2.0.0rc2
