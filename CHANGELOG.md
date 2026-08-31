@@ -1,5 +1,44 @@
 # Release history
 
+## MariaDB Connector/Python 1.1.15
+
+Release date: sep. 2026
+
+**Notable changes:**
+
+- [CONPY-319](https://jira.mariadb.org/browse/CONPY-319): Add the SQLAlchemy test suite to the GitHub Actions CI
+- [CONPY-373](https://jira.mariadb.org/browse/CONPY-373): Add Python SAST (CodeQL and Bandit) to CI
+
+**Bug fixes:**
+
+- [CONPY-152](https://jira.mariadb.org/browse/CONPY-152): `executemany()` accepts a statement without placeholders again, such as `INSERT ... VALUES (DEFAULT)`
+- [CONPY-328](https://jira.mariadb.org/browse/CONPY-328): Fix the unsigned conversion for `TINYINT`
+- [CONPY-329](https://jira.mariadb.org/browse/CONPY-329): Fix the date conversion in the binary protocol
+- [CONPY-331](https://jira.mariadb.org/browse/CONPY-331): Name the argument in the error raised when a connection keyword has the wrong type
+- [CONPY-332](https://jira.mariadb.org/browse/CONPY-332): Fix the backslash escapes in the `ConnectionPool` docstring
+- [CONPY-334](https://jira.mariadb.org/browse/CONPY-334): Identify the parameters of a statement containing literals correctly
+- [CONPY-347](https://jira.mariadb.org/browse/CONPY-347): Fix memory leaks when raising exceptions and when reading cursor metadata
+- [CONPY-364](https://jira.mariadb.org/browse/CONPY-364): Fix an exception raised during the recycle phase of a connection pool
+- [CONPY-365](https://jira.mariadb.org/browse/CONPY-365): Refuse an out-of-bounds decimal length in the result metadata instead of reading past the buffer
+- [CONPY-368](https://jira.mariadb.org/browse/CONPY-368): Return `None` for DATE/DATETIME values Python cannot represent, instead of raising `SystemError`
+- [CONPY-369](https://jira.mariadb.org/browse/CONPY-369): Fix an intermittent segmentation fault in the CPython GC when traversing a SQLAlchemy `_ConnectionRecord` wrapping a connection
+- [CONPY-371](https://jira.mariadb.org/browse/CONPY-371): Fix the converter leaking the pre-conversion value of every converted column
+- [CONPY-374](https://jira.mariadb.org/browse/CONPY-374): Fix the C cursor `PyMemberDef` widths not matching the struct fields, which wrote out of bounds
+- [CONPY-381](https://jira.mariadb.org/browse/CONPY-381): Fix the memory growth on long-lived `named_tuple=True` cursors
+- [CONPY-386](https://jira.mariadb.org/browse/CONPY-386): `cursor(named_tuple=True)` no longer drops a column when two columns share a name: the result set is refused instead
+- [CONPY-387](https://jira.mariadb.org/browse/CONPY-387): Fix the leak of every raised exception
+
+
+## MariaDB Connector/Python 1.1.14
+
+Release date: Oct. 2025
+
+**Bug fixes:**
+
+- [CONPY-318](https://jira.mariadb.org/browse/CONPY-318): Fix a segmentation fault introduced in 1.1.13
+- [CONPY-321](https://jira.mariadb.org/browse/CONPY-321): `ConnectionPool.__init__` now closes every connection it opened when it fails, instead of raising `IndexError`
+
+
 ## MariaDB Connector/Python 1.1.13
 
 Release date: Jul 7 2025
