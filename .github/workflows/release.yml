@@ -113,10 +113,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: /tmp/mariadb-connector-c.build
-          key: mariadb-connector-c-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.MARIADB_CONNECTOR_C_VERSION }}
+          key: mariadb-connector-c-${{ matrix.platform }}-${{ matrix.arch }}-cc${{ env.MARIADB_CONNECTOR_C_VERSION }}-ssl${{ env.OPENSSL_VERSION }}
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.2.1
+        uses: pypa/cibuildwheel@v4.2.0
         env:
           TEST_DB_USER: 'root'
           TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
@@ -129,12 +129,22 @@ jobs:
           CIBW_ARCHS_LINUX: auto aarch64
           CIBW_CONTAINER_ENGINE: "docker; create_args: --network=host --add-host=mariadb.example.com:127.0.0.1"
           CIBW_BEFORE_ALL_LINUX: |
+            # Fail on the first error: a failed package install would otherwise
+            # be ignored, and the missing OpenSSL headers only surface two
+            # minutes later as "unknown type name MA_HASH_CTX".
+            set -e
             # Build MariaDB Connector/C from source
             if [ ! -d "/host/tmp/mariadb-connector-c.build" ]; then
               # Detect package manager (yum for manylinux, apk for musllinux)
               if command -v yum &> /dev/null; then
-                # manylinux (CentOS/RHEL)
-                yum install -y git gcc gcc-c++ make openssl-devel zlib-devel
+                # manylinux (CentOS/RHEL). Retried once: the el7 mirrors drop
+                # connections often enough to break the aarch64 leg.
+                # perl-core: building OpenSSL 3 needs several Perl modules that
+                # el7 does not install by default (IPC::Cmd, Time::Piece,
+                # Data::Dumper). openssl-devel is deliberately absent, see the
+                # source build below.
+                PKGS="git gcc gcc-c++ make zlib-devel perl-core perl-IPC-Cmd perl-Data-Dumper perl-Time-Piece"
+                yum install -y $PKGS || { sleep 10; yum install -y $PKGS; }
                 # Try cmake3 first, fall back to cmake
                 if yum install -y cmake3 2>/dev/null; then
                   CMAKE_CMD=cmake3
@@ -142,10 +152,33 @@ jobs:
                   yum install -y cmake
                   CMAKE_CMD=cmake
                 fi
+
+                # CentOS 7 ships OpenSSL 1.0.2k, which went end of life in 2019
+                # and is what auditwheel would otherwise bundle into the wheel.
+                # Build a current one into the same prefix. Alpine's openssl-dev
+                # is already current, so musllinux keeps the system package.
+                cd /tmp
+                # -f: without it curl saves the error page on a 404 and the
+                # failure only shows up as "stdin: not in gzip format"
+                : "${OPENSSL_VERSION:?not passed into the container}"
+                curl -fsSL -o openssl.tar.gz \
+                  "https://github.com/openssl/openssl/releases/download/openssl-$OPENSSL_VERSION/openssl-$OPENSSL_VERSION.tar.gz"
+                tar xzf openssl.tar.gz
+                cd openssl-$OPENSSL_VERSION
+                # no-tests/build_sw: the default target also builds OpenSSL's
+                # test programs, which we never run - minutes of QEMU time on
+                # the aarch64 leg for nothing.
+                ./config --prefix=/host/tmp/mariadb-connector-c.build \
+                         --openssldir=/host/tmp/mariadb-connector-c.build/ssl \
+                         --libdir=lib no-docs no-tests shared
+                make -j$(nproc) build_sw
+                make install_sw
+                SSL_ROOT=/host/tmp/mariadb-connector-c.build
               elif command -v apk &> /dev/null; then
-                # musllinux (Alpine)
+                # musllinux (Alpine) - its OpenSSL is current
                 apk add --no-cache git cmake gcc g++ make openssl-dev zlib-dev linux-headers
                 CMAKE_CMD=cmake
+                SSL_ROOT=
               fi
 
               cd /tmp
@@ -153,21 +186,30 @@ jobs:
               git clone --depth 1 --branch v$MARIADB_CONNECTOR_C_VERSION https://github.com/mariadb-corporation/mariadb-connector-c.git
               cd mariadb-connector-c
 
-              # Disable parsec plugin - requires OpenSSL 1.1.1+ (manylinux2014 has 1.0.2k)
+              # Without OpenSSL headers Connector/C configures with no crypto
+              # backend and fails on MA_HASH_CTX. Say so here instead.
+              test -f "${SSL_ROOT:-/usr}/include/openssl/ssl.h"
+
+              # parsec is built now: the wheel ships an OpenSSL new enough for it
               $CMAKE_CMD -DCMAKE_BUILD_TYPE=Release \
                          -DCMAKE_INSTALL_PREFIX=/host/tmp/mariadb-connector-c.build \
                          -DWITH_EXTERNAL_ZLIB=On \
-                         -DPLUGIN_PARSEC=OFF .
+                         ${SSL_ROOT:+-DOPENSSL_ROOT_DIR=$SSL_ROOT} .
               make -j$(nproc)
               make install
             fi
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: >-
             LD_LIBRARY_PATH="/host/tmp/mariadb-connector-c.build/lib:/host/tmp/mariadb-connector-c.build/lib/mariadb:$LD_LIBRARY_PATH" auditwheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
+          # -o addopts= : pyproject sets addopts "-ra -q --tb=short", whose -q
+          # cancels the -v below, so a crash is reported as an anonymous dot.
+          # -s : pytest captures stderr at the file-descriptor level, so an
+          # abort's message would otherwise die in the capture buffer.
           CIBW_TEST_COMMAND: >-
-            pytest {project}/testing/test/integration --color yes -v
-          CIBW_ENVIRONMENT_PASS_LINUX: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION
+            pytest {project}/testing/test/integration --color yes -v -s -o addopts=
+          CIBW_ENVIRONMENT_PASS_LINUX: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION OPENSSL_VERSION
           CIBW_ENVIRONMENT: >-
+            PYTHONFAULTHANDLER=1
             LOCAL_DB=${{ steps.setup-mariadb-linux.outputs.database-type }}
             MARIADB_CONNECTOR_C_DIR=/host/tmp/mariadb-connector-c.build
             PATH="/host/tmp/mariadb-connector-c.build/bin:$PATH"
@@ -221,7 +263,7 @@ jobs:
           key: mariadb-deps-macos-${{ matrix.arch }}-cc${{ env.MARIADB_CONNECTOR_C_VERSION }}-ssl${{ env.OPENSSL_VERSION }}
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.2.1
+        uses: pypa/cibuildwheel@v4.2.0
         env:
           TEST_DB_USER: 'root'
           TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
@@ -236,14 +278,19 @@ jobs:
             DYLD_LIBRARY_PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/lib:/tmp/mariadb-deps-${{matrix.arch}}.build/lib/mariadb:$DYLD_LIBRARY_PATH"
             delocate-wheel --require-archs {delocate_archs} --ignore-missing-dependencies -w {dest_dir} -v {wheel}
           CIBW_TEST_REQUIRES: pytest
+          # -o addopts= : pyproject sets addopts "-ra -q --tb=short", whose -q
+          # cancels the -v below, so a crash is reported as an anonymous dot.
+          # -s : pytest captures stderr at the file-descriptor level, so an
+          # abort's message would otherwise die in the capture buffer.
           CIBW_TEST_COMMAND: >-
-            pytest {project}/testing/test/integration --color yes -v
+            pytest {project}/testing/test/integration --color yes -v -s -o addopts=
           CIBW_ENVIRONMENT_PASS_MACOS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CONNECTOR_C_VERSION OPENSSL_VERSION
           # No MACOSX_DEPLOYMENT_TARGET on purpose: cibuildwheel sets the right
           # floor per interpreter (11.0 on arm64, 10.9/10.13/10.15 on x86_64
           # depending on the CPython version). Pinning one value tagged the
           # wheels macosx_15_0, which pip will not install on macOS 11-14.
           CIBW_ENVIRONMENT_MACOS: >-
+            PYTHONFAULTHANDLER=1
             LOCAL_DB=${{ steps.setup-mariadb-macos.outputs.database-type }}
             MARIADB_CONNECTOR_C_DIR=/tmp/mariadb-deps-${{matrix.arch}}.build
             PATH="/tmp/mariadb-deps-${{matrix.arch}}.build/bin:$PATH"
@@ -296,7 +343,7 @@ jobs:
           key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-windows-amd64
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.2.1
+        uses: pypa/cibuildwheel@v4.2.0
         env:
           TEST_DB_USER: 'root'
           TEST_DB_HOST: ${{ env.MYSQL_TEST_HOST }}
@@ -307,15 +354,18 @@ jobs:
           CIBW_ARCHS_WINDOWS: AMD64
           CIBW_BEFORE_ALL_WINDOWS: >-
             cmd /c "{project}\tools\ci\build_connector_c_windows.bat"
-          CIBW_BEFORE_BUILD_WINDOWS: >-
-            pip install delvewheel
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
             delvewheel repair -w {dest_dir} {wheel}
           CIBW_TEST_REQUIRES: pytest
+          # -o addopts= : pyproject sets addopts "-ra -q --tb=short", whose -q
+          # cancels the -v below, so a crash is reported as an anonymous dot.
+          # -s : pytest captures stderr at the file-descriptor level, so an
+          # abort's message would otherwise die in the capture buffer.
           CIBW_TEST_COMMAND: >-
-            pytest {project}/testing/test/integration --color yes -v
+            pytest {project}/testing/test/integration --color yes -v -s -o addopts=
           CIBW_ENVIRONMENT_PASS_WINDOWS: TEST_DB_USER TEST_DB_HOST TEST_DB_DATABASE TEST_DB_PORT TEST_DB_PASSWORD MARIADB_CC_INSTALL_DIR MARIADB_CONNECTOR_C_VERSION
           CIBW_ENVIRONMENT_WINDOWS: >-
+            PYTHONFAULTHANDLER=1
             LOCAL_DB=${{ steps.setup-mariadb-windows.outputs.database-type }}
             MARIADB_CC_INSTALL_DIR=C:\\mariadb-connector-c.build
             PATH="C:\\mariadb-connector-c.build\\bin;$PATH"
