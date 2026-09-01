@@ -686,6 +686,31 @@ field_fetch_fromtext(MrdbCursor *self, char *data, unsigned int column)
     }
 }
 
+/* 3.14.1: PyUnstable_ThreadState_SetStackProtection() was added in the
+   first patch release, not in 3.14.0. */
+#if PY_VERSION_HEX >= 0x030e0100
+#define MRDB_STACK_WINDOW (128 * 1024)
+
+static void mrdb_stack_guard_enter(void *frame)
+{
+    /* In integer space: subtracting from a pointer to a local is arithmetic
+       outside that object, which the compiler warns about and may act on. */
+    uintptr_t here= (uintptr_t)frame;
+
+    PyUnstable_ThreadState_SetStackProtection(PyThreadState_Get(),
+                                              (void *)(here - MRDB_STACK_WINDOW),
+                                              MRDB_STACK_WINDOW);
+}
+
+static void mrdb_stack_guard_leave(void)
+{
+    PyUnstable_ThreadState_ResetStackProtection(PyThreadState_Get());
+}
+#else
+#define mrdb_stack_guard_enter(frame) ((void)(frame))
+#define mrdb_stack_guard_leave() ((void)0)
+#endif
+
 /* field_fetch_callback
    This function was previously registered with mysql_stmt_attr_set and
    STMT_ATTR_FIELD_FETCH_CALLBACK parameter. Instead of filling a bind
@@ -706,6 +731,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 
     /* Acquire the GIL */
     gstate = PyGILState_Ensure();
+    mrdb_stack_guard_enter(&gstate);
 
     Py_XDECREF(self->values[column]);
     self->values[column]= NULL;
@@ -977,6 +1003,7 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
 
 end:
   /* Release the GIL */
+  mrdb_stack_guard_leave();
   PyGILState_Release(gstate);
 }
 
@@ -1727,6 +1754,8 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     uint8_t rc= 1;
     PyGILState_STATE gstate = PyGILState_Ensure();
 
+    mrdb_stack_guard_enter(&gstate);
+
     for (i=0; i < self->paramcount; i++)
     {
         if (mariadb_get_parameter(self, (self->array_size > 0),
@@ -1750,6 +1779,7 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
 end:
     if (rc && self->param_cb_active)
         ma_abort_connection(self);
+    mrdb_stack_guard_leave();
     PyGILState_Release(gstate);
     return rc;
 }

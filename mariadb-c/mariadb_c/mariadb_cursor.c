@@ -436,9 +436,8 @@ static int MrdbCursor_traverse(
     Py_VISIT(self->connection);
     Py_VISIT(self->data);
     Py_VISIT(self->sequence_type);
-    // Visit all values in the values array
-    if (self->values && self->field_count > 0) {
-        for (uint32_t i = 0; i < self->field_count; i++) {
+    if (self->values && self->values_count > 0) {
+        for (uint32_t i = 0; i < self->values_count; i++) {
             Py_VISIT(self->values[i]);
         }
     }
@@ -460,9 +459,9 @@ static int MrdbCursor_tpclear(MrdbCursor *self)
     Py_CLEAR(self->sequence_type);
     MARIADB_FREE_MEM(self->sequence_fields);
     self->sequence_fields= NULL;
-    // Clear all values in the values array
-    if (self->values && self->field_count > 0) {
-        for (uint32_t i = 0; i < self->field_count; i++) {
+    // Clear all values in the values array - values_count for the same reason
+    if (self->values && self->values_count > 0) {
+        for (uint32_t i = 0; i < self->values_count; i++) {
             Py_CLEAR(self->values[i]);
         }
     }

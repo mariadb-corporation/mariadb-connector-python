@@ -344,6 +344,13 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         row = await self.cursor.fetchone()
         if not row or row[1].upper() != 'YES':
             self.skipTest("SSL is not enabled on the server (have_ssl != YES)")
+
+        # Unlike the other parsec tests, this one always goes through the pure
+        # Python client: the C extension delegates async connect() to it when
+        # SSL is enabled, so its parsec plugin - and cryptography - is needed
+        # whatever the implementation.
+        if not self.has_cryptography:
+            self.skipTest("parsec over TLS needs the cryptography package")
         
         test_password = "Ssl_Parsec_Test_789!"
         
@@ -360,6 +367,7 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         conn_config['user'] = 'parsec_test_user'
         conn_config['password'] = test_password
         conn_config['ssl'] = True
+        conn_config['ssl_verify_cert'] = False
         
         parsec_ssl_conn = await mariadb.AsyncConnection.connect(**conn_config)
         self.assertIsNotNone(parsec_ssl_conn)
