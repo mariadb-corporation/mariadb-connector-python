@@ -89,12 +89,12 @@ class BaseConnection(ABC, Generic[TClient]):
         self.tpc_state = TPC_STATE.NONE
 
         # Store connection parameters
-        self._user = kwargs.get('user') or kwargs.get('username')
         self._database = kwargs.get('database') or kwargs.get('db')
         self._connection_params = kwargs
 
         # Create configuration and host address
         self._configuration: Configuration = Configuration.from_dict(kwargs)
+        self._user = self._configuration.user
 
         # Client will be set by subclass (SyncClient or AsyncClient)
         self._client: TClient = None  # type: ignore[assignment]

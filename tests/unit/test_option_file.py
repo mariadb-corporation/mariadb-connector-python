@@ -21,7 +21,7 @@ skip_on_windows = pytest.mark.skipif(
 )
 
 from mariadb.impl.option_file import read_option_files
-from mariadb.impl.configuration import Configuration
+from mariadb.impl.configuration import Configuration, default_os_user
 
 
 @pytest.fixture
@@ -129,7 +129,9 @@ def test_no_default_params_means_no_file_read(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".my.cnf").write_text("[client]\nuser = fromhome\n")
     cfg = Configuration.from_dict({"host": "h"})
-    assert cfg.user is None  # default, .my.cnf NOT read
+    # .my.cnf NOT read: the user falls back to the OS login name, not the file value
+    assert cfg.user != "fromhome"
+    assert cfg.user == default_os_user()
 
 
 def test_missing_file_is_silent(tmp_path):
@@ -144,7 +146,9 @@ def test_default_file_none_reads_nothing(tmp_path, monkeypatch):
     # false, nothing read - not a search-path scan.
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".my.cnf").write_text("[client]\nuser = fromhome\n")
-    assert Configuration.from_dict({"default_file": None}).user is None
+    cfg = Configuration.from_dict({"default_file": None})
+    assert cfg.user != "fromhome"
+    assert cfg.user == default_os_user()
 
 
 @skip_on_windows

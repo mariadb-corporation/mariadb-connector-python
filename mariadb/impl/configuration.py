@@ -1,10 +1,58 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+import os
+import sys
 from typing import Callable, Dict, Any, List
 from dataclasses import dataclass, field
 from .host_address import HostAddress
 from mariadb_shared.validators import validate_bool, validate_int
+
+
+def default_os_user() -> str:
+    """Return the user name to authenticate with when none was configured.
+
+    Mirrors libmariadb's ``read_user_name`` (mariadb_lib.c), which the C
+    connector falls back to when the ``user`` option is unset or empty, so a
+    bare ``mariadb.connect()`` authenticates as the same account with either
+    implementation:
+
+    - Windows: the ``USERNAME`` environment variable, else ``"ODBC"``.
+    - Elsewhere: ``"root"`` when running as euid 0, otherwise the passwd entry
+      of the effective uid, then ``getlogin()``, then the ``USER`` /
+      ``LOGNAME`` / ``LOGIN`` environment variables, else ``"UNKNOWN_USER"``.
+    """
+    if sys.platform.startswith('win'):
+        return os.environ.get('USERNAME') or 'ODBC'
+
+    geteuid = getattr(os, 'geteuid', None)
+    euid = geteuid() if geteuid is not None else None
+    if euid == 0:
+        return 'root'
+
+    if euid is not None:
+        try:
+            import pwd
+            name = pwd.getpwuid(euid).pw_name
+            if name:
+                return name
+        except (ImportError, KeyError, OSError):
+            pass
+
+    getlogin = getattr(os, 'getlogin', None)
+    if getlogin is not None:
+        try:
+            login: str = getlogin()
+            if login:
+                return login
+        except OSError:
+            pass
+
+    for var in ('USER', 'LOGNAME', 'LOGIN'):
+        env_name = os.environ.get(var)
+        if env_name:
+            return env_name
+    return 'UNKNOWN_USER'
 
 
 @dataclass
@@ -145,6 +193,8 @@ class Configuration:
             config.port = validate_int(params['port'], 'port')
         if 'user' in params or 'username' in params:
             config.user = params.get('user') or params.get('username')
+        if not config.user:
+            config.user = default_os_user()
         if 'password' in params or 'passwd' in params:
             config.password = params.get('password') or params.get('passwd')
         if 'database' in params or 'db' in params:
