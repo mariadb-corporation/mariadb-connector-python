@@ -23,6 +23,7 @@ from numbers import Number
 from mariadb.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
 from typing import Sequence
 import decimal
+from collections import namedtuple
 
 PARAMSTYLE_QMARK = 1
 PARAMSTYLE_FORMAT = 2
@@ -47,6 +48,8 @@ SQL_OTHER = 255
 
 ROWS_EOF = -1
 
+def _get_namedtuple_cls(field_names: tuple):
+    return namedtuple("Row", field_names, rename=True)
 
 class Cursor(mariadb._mariadb.cursor):
     """
@@ -461,6 +464,18 @@ class Cursor(mariadb._mariadb.cursor):
             self.check_closed()
 
         row = self._fetch_row()
+        if row is None:
+            return None
+
+        if self._resulttype == RESULT_NAMEDTUPLE:
+            col_names = tuple(col[0] for col in self.description)
+            row_cls = _get_namedtuple_cls(col_names)
+            return row_cls(*row)
+
+        elif self._resulttype == RESULT_DICTIONARY:
+            col_names = [col[0] for col in self.description]
+            return dict(zip(col_names, row))
+
         return row
 
     def fetchmany(self, size: int = 0):
@@ -485,7 +500,17 @@ class Cursor(mariadb._mariadb.cursor):
         if size == 0:
             size = self.arraysize
 
-        return super().fetchrows(size)
+        rows = super().fetchrows(size)
+
+        if self._resulttype ==  RESULT_NAMEDTUPLE:
+            col_names = tuple(col[0] for col in self.description)
+            row_cls = _get_namedtuple_cls(col_names)
+            return [row_cls(*row) for row in rows]
+        elif self._resulttype == RESULT_DICTIONARY:
+            col_names = [col[0] for col in self.description]
+            return [dict(zip(col_names, row)) for row in rows]
+
+        return rows
 
     def fetchall(self):
         """
@@ -498,7 +523,17 @@ class Cursor(mariadb._mariadb.cursor):
 
         if not (self.buffered and self._text):
             self.check_closed()
-        return super().fetchrows(ROWS_EOF)
+        rows = super().fetchrows(ROWS_EOF)
+
+        if self._resulttype ==  RESULT_NAMEDTUPLE:
+            col_names = tuple(col[0] for col in self.description)
+            row_cls = _get_namedtuple_cls(col_names)
+            return [row_cls(*row) for row in rows]
+        elif self._resulttype == RESULT_DICTIONARY:
+            col_names = [col[0] for col in self.description]
+            return [dict(zip(col_names, row)) for row in rows]
+
+        return rows
 
     def __iter__(self):
         return iter(self.fetchone, None)

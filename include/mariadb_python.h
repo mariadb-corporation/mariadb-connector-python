@@ -340,8 +340,6 @@ typedef struct {
     char *statement;
     size_t statement_len;
     PyObject **values;
-    PyStructSequence_Field *sequence_fields;
-    PyTypeObject *sequence_type;
     MrdbParseInfo parseinfo;
     unsigned long prefetch_rows;
     unsigned long cursor_type;
@@ -357,13 +355,9 @@ typedef struct {
     uint8_t closed;
     uint8_t reprepare;
     enum enum_paramstyle paramstyle;
+    PyObject *metadata_dict;
     PyObject *weakreflist;
 } MrdbCursor;
-
-typedef struct
-{
-    PyObject_HEAD
-} Mariadb_Fieldinfo;
 
 typedef struct {
     ps_field_fetch_func func;
