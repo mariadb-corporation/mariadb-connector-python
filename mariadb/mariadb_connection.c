@@ -269,8 +269,10 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
       MARIADB_CONST_STRING *key= va_arg(ap, MARIADB_CONST_STRING *);
       MARIADB_CONST_STRING *val= va_arg(ap, MARIADB_CONST_STRING *);
 
-      if (key->length == strlen("character_set_client") &&
-          !strncmp(key->str, "character_set_client", key->length) &&
+      if (((key->length == strlen("character_set_client") &&
+            !strncmp(key->str, "character_set_client", key->length)) ||
+           (key->length == strlen("character_set_results") &&
+            !strncmp(key->str, "character_set_results", key->length))) &&
           (val->length != strlen("utf8mb4") ||
            strncmp(val->str, "utf8mb4", val->length)))
       {
