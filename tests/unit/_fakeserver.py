@@ -40,6 +40,7 @@ COM_QUIT = 0x01
 COM_QUERY = 0x03
 COM_STMT_PREPARE = 0x16
 COM_STMT_EXECUTE = 0x17
+COM_STMT_CLOSE = 0x19
 COM_STMT_BULK_EXECUTE = 0xFA
 
 _STATUS_AUTOCOMMIT = 0x0002
@@ -318,6 +319,8 @@ def scripted_handler(on_query=None, on_prepare=None, on_execute=None, on_bulk=No
             com = payload[0]
             if com == COM_QUIT:
                 return
+            if com == COM_STMT_CLOSE:           # has no response
+                continue
             cb = {COM_QUERY: on_query, COM_STMT_PREPARE: on_prepare,
                   COM_STMT_EXECUTE: on_execute, COM_STMT_BULK_EXECUTE: on_bulk}.get(com)
             if cb is None:
