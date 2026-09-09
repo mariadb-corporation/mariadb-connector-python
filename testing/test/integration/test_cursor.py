@@ -45,10 +45,8 @@ class TestCursor(unittest.TestCase):
         cursor.close()
         del cursor
 
-    @unittest.skipIf(
-        os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
-        "sys.getrefcount() is CPython only"
-    )
+    @unittest.skipUnless(hasattr(sys, "getrefcount"),
+                         "sys.getrefcount() is CPython only")
     def test_conpy369_cursor_owns_connection_ref(self):
         connection = create_connection()
         try:
@@ -63,10 +61,8 @@ class TestCursor(unittest.TestCase):
         finally:
             connection.close()
 
-    @unittest.skipIf(
-        os.environ.get('PYTHON_VERSION', '').startswith('pypy'),
-        "sys.getrefcount() is CPython only"
-    )
+    @unittest.skipUnless(hasattr(sys, "getrefcount"),
+                         "sys.getrefcount() is CPython only")
     def test_conpy369_gc_collected_cursor(self):
         # Reclaiming a cursor through the cyclic collector must leave the
         # connection's refcount untouched. If the cursor's reference is borrowed
