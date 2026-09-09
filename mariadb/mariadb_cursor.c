@@ -715,14 +715,22 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
                     key[key_len]= 0;
                 }
 
-                rc= PyObject_SetAttrString((PyObject *)self->sequence_type,
-                                           key, field_names);
+                /* The type owns the buffer its member names point into.
+                   Written to the type dict rather than via setattr():
+                   PyPy's struct sequence types are not heap types, so
+                   setattr() refuses them with "cannot set attribute of
+                   immutable type". The type is created by us and not yet
+                   visible to anyone, so nothing can have cached a lookup
+                   on it. */
+                rc= PyDict_SetItemString(self->sequence_type->tp_dict, key,
+                                         field_names);
                 PyMem_RawFree(key);
                 Py_DECREF(field_names);
                 if (rc)
                 {
                     return 1;
                 }
+                PyType_Modified(self->sequence_type);
             }
         }
     }
