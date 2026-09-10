@@ -87,7 +87,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         # _waiter holds the Future for an in-flight wait (None when idle);
         # _reader_armed tracks whether the persistent reader is registered.
         self._loop: asyncio.AbstractEventLoop | None = None
-        self._waiter: asyncio.Future | None = None
+        self._waiter: asyncio.Future[int] | None = None
         self._reader_armed = False
         
         # Extract parameters that need special handling (use .pop() like sync)
@@ -148,7 +148,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         CConnection._init_fields_only(self)
     
     @classmethod
-    async def connect(cls, *args: Any, **kwargs: Any) -> Any:
+    async def connect(cls, *args: Any, **kwargs: Any) -> AsyncConnectionCommon:
         """
         Create and connect an async connection (classmethod).
         
@@ -339,12 +339,12 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             # No read or write requested
             return wait_status
 
-        waiter = loop.create_future()
+        waiter: asyncio.Future[int] = loop.create_future()
         self._waiter = waiter
         try:
             if timeout is not None:
-                return cast(int, await asyncio.wait_for(waiter, timeout=timeout))
-            return cast(int, await waiter)
+                return await asyncio.wait_for(waiter, timeout=timeout)
+            return await waiter
         except asyncio.TimeoutError:
             return MYSQL_WAIT_TIMEOUT
         finally:

@@ -85,7 +85,14 @@ class cursor:
     paramcount: int
     _data: Any
     _cursor_type: int
-    buffered: bool
+    # A T_BOOL member in C. Declared as a read/write property, which is what
+    # a member looks like from the outside, so that a subclass may replace
+    # it with a Python property (async_cursors.AsyncCursor does, to keep
+    # the user's preference apart from the C cursor's internal state).
+    @property
+    def buffered(self) -> bool: ...
+    @buffered.setter
+    def buffered(self, value: bool) -> None: ...
     arraysize: int
     field_count: int
     affected_rows: int

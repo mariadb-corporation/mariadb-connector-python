@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
 class SyncConnectionCommon(ABC):
 
+    if TYPE_CHECKING:
+        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
     @abstractmethod
     def _check_closed(self) -> None:
         """

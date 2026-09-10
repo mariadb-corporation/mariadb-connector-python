@@ -6,6 +6,7 @@ A tiny in-process MySQL/MariaDB wire-protocol fake server for unit tests.
 """
 
 import socket
+from typing import Any
 import struct
 import threading
 import time
@@ -383,7 +384,7 @@ class FakeServer:
         return False
 
 
-def fake_conf(port, **extra):
+def fake_conf(port: int, **extra: Any) -> dict[str, Any]:
     """Connection kwargs targeting the fake server: plaintext, blind auth."""
     c = dict(user="u", password="p", host="127.0.0.1", port=port,
              ssl=False, connect_timeout=5)

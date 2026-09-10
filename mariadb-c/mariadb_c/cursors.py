@@ -41,11 +41,12 @@ ROWS_EOF = -1
 
 
 # Import the C cursor base class
+from mariadb_shared.sync_cursor_common import SyncCursorCommon
 from mariadb_c._mariadb import cursor as CCursor
 from .stmt_reuse_mixin import StmtReuseMixin
 
 
-class Cursor(StmtReuseMixin, CCursor):
+class Cursor(StmtReuseMixin, CCursor, SyncCursorCommon):
     """
     MariaDB Connector/Python Cursor Object
     """
@@ -139,7 +140,7 @@ class Cursor(StmtReuseMixin, CCursor):
         return None
 
 
-    def callproc(self, sp: str, data: Sequence = ()) -> None:
+    def callproc(self, procname: str, args: Sequence[Any] = ()) -> None:
         """
         Executes a stored procedure sp. The data sequence must contain an
         entry for each parameter the procedure expects.
@@ -149,14 +150,14 @@ class Cursor(StmtReuseMixin, CCursor):
         contains output parameters.
 
         Arguments:
-            - sp: Name of stored procedure.
-            - data: Optional sequence containing data for placeholder
+            - procname: Name of stored procedure.
+            - args: Optional sequence containing data for placeholder
                     substitution.
         """
         params = ""
-        if data and len(data):
-            params = ("?," * len(data))[:-1]
-        self.execute("CALL %s(%s)" % (sp, params), data, _force_binary=True)
+        if args and len(args):
+            params = ("?," * len(args))[:-1]
+        self.execute("CALL %s(%s)" % (procname, params), args, _force_binary=True)
 
     def nextset(self) -> bool | None:
         """
@@ -167,7 +168,7 @@ class Cursor(StmtReuseMixin, CCursor):
         self.check_closed()
         return super()._nextset()
 
-    def execute(self, statement: str, data: Sequence[Any] | dict[str, Any] = (), buffered: bool | None = None, _force_binary: bool = False) -> None:
+    def execute(self, sql: str, data: Sequence[Any] | dict[str, Any] | None = None, buffered: bool | None = None, _force_binary: bool = False) -> None:
         """
         Prepare and execute a SQL statement.
 
@@ -184,12 +185,12 @@ class Cursor(StmtReuseMixin, CCursor):
             raise ProgrammingError("Cursor cannot be used anymore (it was already closed before).")
         self._connection._check_closed()
 
-        # 1.x "prepared" cursor: reuse the first statement, ignoring this SQL.
+        # 1.x "prepared" cursor: reuse the first sql, ignoring this SQL.
         if self._prepared:
             if self._prepared_sql is not None:
-                statement = self._prepared_sql
-            elif statement:
-                self._prepared_sql = statement
+                sql = self._prepared_sql
+            elif sql:
+                self._prepared_sql = sql
 
         if buffered is not None:
             self.buffered = buffered
@@ -217,9 +218,9 @@ class Cursor(StmtReuseMixin, CCursor):
                     if type(val) is float or type(val) is _Decimal:
                         _check(val)
                 # Binary protocol: server parses placeholders during prepare
-                if self.statement != statement:
-                    super()._set_statement(statement, len(data))
-                    hit = self._restore_stmt_from_cache(statement)
+                if self.statement != sql:
+                    super()._set_statement(sql, len(data))
+                    hit = self._restore_stmt_from_cache(sql)
                     self._reprepare = not hit
                     if not hit and self._local_stmt_cache is not None:
                         self._local_stmt_cache.clear()
@@ -230,18 +231,18 @@ class Cursor(StmtReuseMixin, CCursor):
                 # Text protocol: shared parser handles placeholder discovery,
                 # validation, and value conversion in a single pass.
                 no_backslash = bool(self.connection.server_status & _NO_BACKSLASH_ESCAPES)
-                self._transformed_statement = b"".join(substitute_params(statement, self._data, no_backslash))
-                self._sync_execute_text(self._transformed_statement, statement)
+                self._transformed_statement = b"".join(substitute_params(sql, self._data, no_backslash))
+                self._sync_execute_text(self._transformed_statement, sql)
                 self._sync_readresponse()
         else:
             # No parameters — always text protocol
-            self._sync_execute_text(statement)
+            self._sync_execute_text(sql)
             self._sync_readresponse()
 
         self._initresult()
         self._bulk = 0
 
-    def executemany(self, statement: str, parameters: Sequence[Sequence[Any] | dict[str, Any]]) -> None:
+    def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: bool | None = None) -> None:
         """
         Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE
         statement) and execute it against all parameter found in sequence.
@@ -254,22 +255,24 @@ class Cursor(StmtReuseMixin, CCursor):
         returns a result set containing the values for columns listed in the
         RETURNING clause.
         """
+        if buffered is not None:
+            self.buffered = buffered
 
         self.check_closed()
         self._reset()
 
-        # Check if parameters is None or not an array-like type
-        if parameters is None or not hasattr(parameters, '__iter__') or isinstance(parameters, (str, bytes)):
+        # Check if data is None or not an array-like type
+        if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):  # pyright: ignore[reportUnnecessaryComparison]
             raise ProgrammingError("No data provided")
 
-        self.connection._last_executed_statement = statement
+        self.connection._last_executed_statement = sql
 
         # clear pending results
         if self.field_count:
             self._clear_result()
 
-        # If parameters is an empty list/tuple, return early with rowcount=0
-        if not len(parameters):
+        # If data is an empty list/tuple, return early with rowcount=0
+        if not len(data):
             self.buffered = True
             self._rowcount = 0
             return
@@ -279,26 +282,26 @@ class Cursor(StmtReuseMixin, CCursor):
         # TODO: insert/replace statements are not optimized yet
         #       rowcount updating
 
-        normalized_sql, param_names = normalize_to_qmark(statement)
+        normalized_sql, param_names = normalize_to_qmark(sql)
 
         if param_names is not None:
-            # Named/pyformat parameters — reorder each row dict into a list
-            reordered: list = []
-            for row in parameters:
+            # Named/pyformat data — reorder each row dict into a list
+            reordered: list[list[Any]] = []
+            for row in data:
                 if not isinstance(row, dict):
                     raise ProgrammingError("Named placeholders require dict parameters")
                 reordered.append([row.get(name) for name in param_names])
-            parameters = reordered
+            data = reordered
 
-        has_parameters = any(len(row) > 0 if hasattr(row, '__len__') else True for row in parameters)
-        first_row = parameters[0] if hasattr(parameters, '__getitem__') else next(iter(parameters))
+        has_parameters = any(len(row) > 0 if hasattr(row, '__len__') else True for row in data)
+        first_row = data[0] if hasattr(data, '__getitem__') else next(iter(data))
 
         if not (self.connection.extended_server_capabilities &
                 (CAPABILITY.BULK_OPERATIONS >> 32)) or not has_parameters or isinstance(first_row, dict):
             # PYFORMAT/FORMAT, no placeholders, or server without bulk
             # support: row-by-row loop
             count = 0
-            for row in parameters:
+            for row in data:
                 self.execute(normalized_sql, row)
                 count += self.rowcount
             self._rowcount = count
@@ -310,7 +313,7 @@ class Cursor(StmtReuseMixin, CCursor):
                 self._reprepare = True
             else:
                 self._reprepare = False
-            self._data = parameters
+            self._data = data
             self._text = False
             self._rowcount = 0
             self._execute_bulk()
@@ -362,7 +365,7 @@ class Cursor(StmtReuseMixin, CCursor):
         
         return super().fetchone()
 
-    def fetchmany(self, size: int = 0) -> List[Any]:
+    def fetchmany(self, size: int | None = None) -> List[Any]:
         """
         Fetch the next set of rows of a query result, returning a sequence
         of sequences (e.g. a list of tuples). An empty sequence is returned
@@ -381,7 +384,7 @@ class Cursor(StmtReuseMixin, CCursor):
         if not (self.buffered and self._text):
             self.check_closed()
 
-        if size == 0:
+        if not size:
             size = self.arraysize
 
         rows: List[Any] = super().fetchrows(size)
@@ -527,7 +530,7 @@ class Cursor(StmtReuseMixin, CCursor):
         self.check_closed()
 
         id: int | None = self.insert_id
-        if id is not None and id > 0:
+        if id is not None and id > 0:  # pyright: ignore[reportUnnecessaryComparison]
             return id
         return None
 

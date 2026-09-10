@@ -134,7 +134,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         return None
 
 
-    async def callproc(self, sp: str, data: Sequence = ()) -> None:
+    async def callproc(self, procname: str, args: Sequence[Any] = ()) -> None:
         """
         Executes a stored procedure sp. The data sequence must contain an
         entry for each parameter the procedure expects.
@@ -144,14 +144,14 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         contains output parameters.
 
         Arguments:
-            - sp: Name of stored procedure.
-            - data: Optional sequence containing data for placeholder
+            - procname: Name of stored procedure.
+            - args: Optional sequence containing data for placeholder
                     substitution.
         """
         params = ""
-        if data and len(data):
-            params = ("?," * len(data))[:-1]
-        await self.execute("CALL %s(%s)" % (sp, params), data, _force_binary=True)
+        if args and len(args):
+            params = ("?," * len(args))[:-1]
+        await self.execute("CALL %s(%s)" % (procname, params), args, _force_binary=True)
 
     async def nextset(self) -> bool | None:
         """
@@ -188,7 +188,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
             self.connection._active_async_cursor = self
         return True
 
-    async def execute(self, statement: str, data: Sequence = (), buffered: bool | None = None, _force_binary: bool = False) -> None:
+    async def execute(self, sql: str, data: Sequence[Any] | dict[str, Any] | None = None, buffered: bool | None = None, _force_binary: bool = False) -> None:
         """
         Prepare and execute a SQL statement asynchronously.
 
@@ -244,9 +244,9 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
                     if type(val) is float or type(val) is _Decimal:
                         _check(val)
                 # Binary protocol: server parses placeholders during prepare
-                if self.statement != statement:
-                    super()._set_statement(statement, len(data))
-                    hit = self._restore_stmt_from_cache(statement)
+                if self.statement != sql:
+                    super()._set_statement(sql, len(data))
+                    hit = self._restore_stmt_from_cache(sql)
                     self._reprepare = not hit
                     if not hit and self._local_stmt_cache is not None:
                         self._local_stmt_cache.clear()
@@ -257,11 +257,11 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
                 # Text protocol: shared parser handles placeholder discovery,
                 # validation, and value conversion in a single pass.
                 no_backslash = bool(self.connection.server_status & _NO_BACKSLASH_ESCAPES)
-                self._transformed_statement = b"".join(substitute_params(statement, self._data, no_backslash))
-                await self._execute_text_async(self._transformed_statement, statement)
+                self._transformed_statement = b"".join(substitute_params(sql, self._data, no_backslash))
+                await self._execute_text_async(self._transformed_statement, sql)
         else:
             # No parameters — always text protocol
-            await self._execute_text_async(statement)
+            await self._execute_text_async(sql)
 
         self._initresult()
         self._bulk = 0
@@ -336,7 +336,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
 
         # Field count is already set by the C extension after stmt execution
 
-    async def executemany(self, statement: str, parameters: Sequence[Sequence[Any] | dict[str, Any]]) -> None:
+    async def executemany(self, sql: str, data: Sequence[Sequence[Any] | dict[str, Any]], buffered: bool | None = None) -> None:
         """
         Prepare a database operation (INSERT,UPDATE,REPLACE or DELETE
         statement) and execute it against all parameter found in sequence.
@@ -349,6 +349,8 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         returns a result set containing the values for columns listed in the
         RETURNING clause.
         """
+        if buffered is not None:
+            self.buffered = buffered
 
         self.check_closed()
         self._reset()
@@ -357,11 +359,11 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         self._buffered_rows = None
         self._row_index = 0
 
-        # Check if parameters is None or not an array-like type
-        if parameters is None or not hasattr(parameters, '__iter__') or isinstance(parameters, (str, bytes)):
+        # Check if data is None or not an array-like type
+        if data is None or not hasattr(data, '__iter__') or isinstance(data, (str, bytes)):  # pyright: ignore[reportUnnecessaryComparison]
             raise ProgrammingError("No data provided")
 
-        self.connection._last_executed_statement = statement
+        self.connection._last_executed_statement = sql
 
         # Consume any remaining rows from other cursors to avoid "Commands out of sync"
         await self._consume_active_result()
@@ -370,43 +372,43 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         if not self._user_buffered:
             self.connection._active_async_cursor = self
 
-        # If parameters is an empty list/tuple, return early with rowcount=0
-        if not len(parameters):
+        # If data is an empty list/tuple, return early with rowcount=0
+        if not len(data):
             self.buffered = True
             self._rowcount = 0
             return
 
         # If the server doesn't support bulk operations, we need to emulate
-        # by looping through the parameters and executing each one individually.
-        normalized_sql, param_names = normalize_to_qmark(statement)
+        # by looping through the data and executing each one individually.
+        normalized_sql, param_names = normalize_to_qmark(sql)
 
         if param_names is not None:
-            reordered: list = []
-            for row in parameters:
+            reordered: list[list[Any]] = []
+            for row in data:
                 if not isinstance(row, dict):
                     raise ProgrammingError("Named placeholders require dict parameters")
                 reordered.append([row.get(name) for name in param_names])
-            parameters = reordered
+            data = reordered
 
-        has_parameters = any(len(row) > 0 if hasattr(row, '__len__') else True for row in parameters)
-        first_row = parameters[0] if hasattr(parameters, '__getitem__') else next(iter(parameters))
+        has_parameters = any(len(row) > 0 if hasattr(row, '__len__') else True for row in data)
+        first_row = data[0] if hasattr(data, '__getitem__') else next(iter(data))
 
         if not (self.connection.extended_server_capabilities &
                 (CAPABILITY.BULK_OPERATIONS >> 32)) or not has_parameters or isinstance(first_row, dict):
             count = 0
             accumulated_results: List[Any] = []
 
-            for i, row in enumerate(parameters):
+            for i, row in enumerate(data):
                 await self.execute(normalized_sql, row)
                 count += self.rowcount
                 
-                # If this statement has a RETURNING clause, accumulate buffered results
+                # If this sql has a RETURNING clause, accumulate buffered results
                 # BEFORE the next execute() clears them. (cast: execute() above
                 # repopulates _buffered_rows, which mypy can't see — it still has
                 # it narrowed to None from the reset at the top of executemany.)
-                buffered = cast(List[Any] | None, self._buffered_rows)
-                if self.field_count > 0 and buffered is not None:
-                    accumulated_results.extend(buffered)
+                returned_rows = cast(List[Any] | None, self._buffered_rows)
+                if self.field_count > 0 and returned_rows is not None:
+                    accumulated_results.extend(returned_rows)
             
             self._rowcount = count
             
@@ -423,7 +425,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
                 self._reprepare = True
             else:
                 self._reprepare = False
-            self._data = parameters
+            self._data = data
             self._text = False
             self._rowcount = 0
             try:
@@ -552,7 +554,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         row = await self._fetch_row_unbuffered()
         return row
 
-    async def fetchmany(self, size: int = 0) -> List[Any]:
+    async def fetchmany(self, size: int | None = None) -> List[Any]:
         """
         Fetch the next set of rows of a query result, returning a sequence
         of sequences (e.g. a list of tuples). An empty sequence is returned
@@ -575,7 +577,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         if self.field_count == 0:
             raise ProgrammingError("Cursor doesn't have a result set")
 
-        if size == 0:
+        if not size:
             size = self.arraysize
 
         # Lazy buffering: buffer rows if needed (e.g., after nextset())
@@ -585,7 +587,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         # If buffered mode, serve from buffer
         if self._user_buffered and self._buffered_rows is not None:
             end_index = min(self._row_index + size, len(self._buffered_rows))
-            rows = self._buffered_rows[self._row_index:end_index]
+            rows: List[Any] = self._buffered_rows[self._row_index:end_index]
             self._row_index = end_index
             return rows
 
@@ -623,7 +625,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
         
         # If buffered mode, serve remaining rows from buffer
         if self._user_buffered and self._buffered_rows is not None:
-            rows = self._buffered_rows[self._row_index:]
+            rows: List[Any] = self._buffered_rows[self._row_index:]
             self._row_index = len(self._buffered_rows)
             return rows
         

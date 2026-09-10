@@ -22,6 +22,23 @@ from .exceptions import ProgrammingError, Error
 
 class AsyncConnectionCommon(ABC):
 
+    if TYPE_CHECKING:
+        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+    @classmethod
+    @abstractmethod
+    async def connect(cls, *args: Any, **kwargs: Any) -> 'AsyncConnectionCommon':
+        """
+        Create a connection with the given parameters and connect it.
+
+        This is the way to open an async connection (the constructor alone
+        does not connect).
+
+        Returns:
+            The connected connection
+        """
+        ...
+
     @abstractmethod
     def _check_closed(self) -> None:
         """
@@ -129,6 +146,10 @@ class AsyncConnectionCommon(ABC):
             pooled_connection: PooledConnection wrapper object
         """
         self._pooled_connection = pooled_connection
+
+    async def __aenter__(self) -> 'AsyncConnectionCommon':
+        """Async context manager entry: the connection itself"""
+        return self
 
     async def __aexit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: TracebackType | None) -> None:
         """Async context manager exit"""

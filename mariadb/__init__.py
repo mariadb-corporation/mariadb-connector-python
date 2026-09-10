@@ -39,6 +39,8 @@ from mariadb_shared import constants
 # connect()/asyncConnect() may return either depending on the selected impl.
 from mariadb_shared.sync_connection_common import SyncConnectionCommon
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
+from mariadb_shared.sync_cursor_common import SyncCursorCommon
+from mariadb_shared.async_cursor_common import AsyncCursorCommon
 
 # Import implementation selector early
 from . import impl_selector  # noqa: F401 import early to stabilize side effects
@@ -54,24 +56,13 @@ if TYPE_CHECKING:
 
 
 # Re-export the selected implementation classes and implementation info.
-# Annotate the type: impl_selector exposes these as Any, but a concrete class
-# type lets callers like connect() narrow correctly — assigning an Any into a
-# `type | None` target would otherwise re-widen it back to include None.
-# Handle both pure Python (has SyncConnection) and C extension (has Connection)
-SyncConnection: type[SyncConnectionCommon]
-if hasattr(impl_selector.sync_connection, 'SyncConnection'):
-    SyncConnection = impl_selector.sync_connection.SyncConnection
-else:
-    # C extension uses Connection instead of SyncConnection
-    SyncConnection = impl_selector.sync_connection.Connection
-
-if impl_selector.async_connection:
-    AsyncConnection = impl_selector.async_connection.AsyncConnection
-else:
-    AsyncConnection = None
-
-SyncCursor = impl_selector.SyncCursor
-AsyncCursor = impl_selector.AsyncCursor
+# impl_selector types them against the mariadb_shared interfaces every
+# implementation derives from, so callers (connect() and asyncConnect()
+# included) see concrete class types, never Any nor None.
+SyncConnection: type[SyncConnectionCommon] = impl_selector.SyncConnection
+AsyncConnection: type[AsyncConnectionCommon] = impl_selector.AsyncConnection
+SyncCursor: type[SyncCursorCommon] = impl_selector.SyncCursor
+AsyncCursor: type[AsyncCursorCommon] = impl_selector.AsyncCursor
 __impl__ = impl_selector.__impl__
 
 # Implementation selection happens at import time in impl_selector
@@ -84,7 +75,7 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "connect", "asyncConnect", "create_pool", "create_async_pool", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
            "apilevel", "paramstyle", "threadsafety"]
 
-def connect(*args: Any, connectionclass: type | None = None, **kwargs: Any) -> SyncConnectionCommon:
+def connect(*args: Any, connectionclass: type[SyncConnectionCommon] | None = None, **kwargs: Any) -> SyncConnectionCommon:
     """
     Creates a MariaDB Connection object (synchronous).
 
@@ -191,11 +182,10 @@ def connect(*args: Any, connectionclass: type | None = None, **kwargs: Any) -> S
     if connectionclass is None:
         connectionclass = SyncConnection
 
-    connection = connectionclass(*args, **kwargs)
-    return cast(SyncConnectionCommon, connection)
+    return connectionclass(*args, **kwargs)
 
 
-async def asyncConnect(*args: Any, connectionclass: type | None = None, **kwargs: Any) -> AsyncConnectionCommon:
+async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] | None = None, **kwargs: Any) -> AsyncConnectionCommon:
     """
     Creates a MariaDB AsyncConnection object and connects asynchronously.
 
@@ -229,18 +219,10 @@ async def asyncConnect(*args: Any, connectionclass: type | None = None, **kwargs
 
     Note: Pool connections are not supported with asyncConnect.
     """
-    # Check if AsyncConnection is available
-    if AsyncConnection is None:
-        raise NotSupportedError(
-            "AsyncConnection is not available. "
-            "This may occur if the pure Python async implementation could not be imported. "
-            "Ensure Python 3.7+ is installed and the mariadb package is properly installed."
-        )
-
     # Windows + SSL: Force pure Python async due to SCHANNEL buffering issues
     # This workaround is needed until MariaDB Connector/C properly supports async SSL on Windows
     import platform
-    connection_class = AsyncConnection
+    connection_class: type[AsyncConnectionCommon] = AsyncConnection
     if platform.system() == "Windows" and __impl__ != "python":
         # Check if SSL is enabled in kwargs (check all SSL-related parameters)
         ssl_param = kwargs.get('ssl', False)
@@ -307,7 +289,7 @@ async def asyncConnect(*args: Any, connectionclass: type | None = None, **kwargs
         connectionclass = connection_class  # Use the class selected by Windows+SSL workaround
 
     # Connect asynchronously using the classmethod
-    return cast(AsyncConnectionCommon, await connectionclass.connect(*args, **kwargs))  # type: ignore[union-attr]
+    return await connectionclass.connect(*args, **kwargs)
 
 
 # Stub for ASAN detection
@@ -357,7 +339,7 @@ def _parse_version_info(version_string: str) -> tuple[tuple[int, int, int, str] 
 # when a native implementation (C extension or binary wheel) is loaded; those
 # modules re-export the value from their _mariadb C extension. The pure Python
 # connector has no libmariadb, so it stays None.
-mariadbapi_version = getattr(impl_selector.sync_connection, "mariadbapi_version", None)
+mariadbapi_version: str | None = impl_selector.mariadbapi_version
 
 # Load base version from release_info.py (generated at build time)
 try:
