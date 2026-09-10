@@ -488,3 +488,122 @@ class AsyncConnectionCommon(ABC):
             await cursor.execute("XA RECOVER")
             result = await cursor.fetchall()
             return result
+
+    # ------------------------------------------------------------------------
+    # Connection and server information every implementation exposes
+    # ------------------------------------------------------------------------
+    @property
+    @abstractmethod
+    def server_version(self) -> int:
+        """Server version as a number, e.g. 110402 for 11.4.2"""
+        ...
+
+    @property
+    @abstractmethod
+    def server_version_info(self) -> tuple[int, int, int]:
+        """Server version as a (major, minor, patch) tuple"""
+        ...
+
+    @property
+    @abstractmethod
+    def connection_id(self) -> int:
+        """Server-side id of this connection (its thread id)"""
+        ...
+
+    @property
+    @abstractmethod
+    def server_mariadb(self) -> bool:
+        """Whether the server is MariaDB (as opposed to MySQL)"""
+        ...
+
+    @property
+    @abstractmethod
+    def user(self) -> str | None:
+        """User name of the connection"""
+        ...
+
+    @property
+    @abstractmethod
+    def server_name(self) -> str | None:
+        """Host name or IP address the connection was made to"""
+        ...
+
+    @property
+    @abstractmethod
+    def unix_socket(self) -> str | None:
+        """Path of the unix socket in use, None over TCP/IP"""
+        ...
+
+    @property
+    @abstractmethod
+    def character_set(self) -> str:
+        """Character set of the connection"""
+        ...
+
+    @property
+    @abstractmethod
+    def server_port(self) -> int:
+        """TCP port the connection was made to"""
+        ...
+
+    @property
+    @abstractmethod
+    def server_info(self) -> str:
+        """Server version string as reported by the server"""
+        ...
+
+    @property
+    @abstractmethod
+    def tls_version(self) -> str | None:
+        """TLS protocol version in use, None over a plain connection"""
+        ...
+
+    @property
+    @abstractmethod
+    def tls_peer_cert_info(self) -> dict[str, Any] | None:
+        """Information about the server certificate, None over a plain connection"""
+        ...
+
+    @property
+    @abstractmethod
+    def tls_cipher(self) -> str | None:
+        """TLS cipher in use, None over a plain connection"""
+        ...
+
+    @property
+    @abstractmethod
+    def server_capabilities(self) -> int:
+        """Capability flags announced by the server"""
+        ...
+
+    @property
+    @abstractmethod
+    def client_capabilities(self) -> int:
+        """Capability flags negotiated by the client"""
+        ...
+
+    @property
+    @abstractmethod
+    def collation(self) -> str:
+        """Collation of the connection"""
+        ...
+
+    @abstractmethod
+    def escape_string(self, string: str, /) -> str:
+        """Escape a string for use inside an SQL literal"""
+        ...
+
+    @abstractmethod
+    async def select_db(self, database: str, /) -> None:
+        """Change the default database"""
+        ...
+
+    @abstractmethod
+    def get_server_version(self) -> tuple[int, int, int]:
+        """Server version as a (major, minor, patch) tuple"""
+        ...
+
+    @abstractmethod
+    async def dump_debug_info(self) -> None:
+        """Ask the server to write debug information to its error log"""
+        ...

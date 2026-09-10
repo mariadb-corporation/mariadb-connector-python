@@ -323,11 +323,11 @@ class Connection(CConnection, SyncConnectionCommon):
         return cast(str, self._mariadb_get_info(INFO.SCHEMA))
 
     @database.setter
-    def database(self, schema: str) -> None:
+    def database(self, value: str) -> None:
         """Set default database."""
         self._check_closed()
         with self.cursor() as cursor:
-            cursor.execute("USE %s" % str(schema))
+            cursor.execute("USE %s" % str(value))
 
     @property
     def user(self) -> str:

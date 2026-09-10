@@ -94,8 +94,10 @@ class cursor:
     @buffered.setter
     def buffered(self, value: bool) -> None: ...
     arraysize: int
-    field_count: int
-    affected_rows: int
+    @property
+    def field_count(self) -> int: ...
+    @property
+    def affected_rows(self) -> int: ...
     _rownumber: int
     insert_id: int
 
