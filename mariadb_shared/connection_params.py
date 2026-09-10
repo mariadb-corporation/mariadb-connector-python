@@ -22,8 +22,11 @@ keeps them in sync with their sources.
 from typing import Any, Callable, Dict, TypedDict
 
 
-class ConnectionParams(TypedDict, total=False):
-    """Keyword arguments of connect() / asyncConnect(); every key is optional."""
+class ConnectionOptions(TypedDict, total=False):
+    """Connection keyword arguments other than the two that decide the row
+    shape (``dictionary``, ``named_tuple``). The ``connect()`` / ``cursor()``
+    overloads name those explicitly to type the rows, and a TypedDict may not
+    overlap a named parameter; ConnectionParams adds them back."""
 
     # --- server / credentials -------------------------------------------------
     dsn: str
@@ -36,7 +39,7 @@ class ConnectionParams(TypedDict, total=False):
     database: str | None
     db: str | None  # alias of database
     unix_socket: str | None
-    protocol: int  # 0=DEFAULT, 1=TCP, 2=SOCKET (mysql_protocol_type)
+    protocol: int | str  # 0/"DEFAULT", 1/"TCP", 2/"SOCKET" (mysql_protocol_type)
     default_file: str | None
     default_group: str | None
     plugin_dir: str | None
@@ -73,8 +76,6 @@ class ConnectionParams(TypedDict, total=False):
     autocommit: bool
     read_only: bool
     binary: bool
-    named_tuple: bool
-    dictionary: bool
     native_object: bool
     converter: Dict[int, Callable[[Any], Any]] | None
     cache_prep_stmts: bool
@@ -88,10 +89,18 @@ class ConnectionParams(TypedDict, total=False):
     pool_validation_interval: float
 
 
-class ConnectParams(ConnectionParams, total=False):
-    """Keyword arguments of connect(): the connection parameters plus the pool
-    options it still accepts for 1.1 compatibility (a named pool is created,
-    or looked up, and a connection borrowed from it)."""
+class ConnectionParams(ConnectionOptions, total=False):
+    """Keyword arguments of asyncConnect() and of the connection classes;
+    every key is optional."""
+
+    dictionary: bool  # rows as dicts (column name -> value)
+    named_tuple: bool  # rows as named tuples
+
+
+class ConnectOptions(ConnectionOptions, total=False):
+    """ConnectionOptions plus the pool options connect() alone still accepts
+    for 1.1 compatibility (a named pool is created, or looked up, and a
+    connection borrowed from it)."""
 
     pool_name: str
     min_size: int
@@ -102,3 +111,10 @@ class ConnectParams(ConnectionParams, total=False):
     ping_threshold: float
     enable_health_check: bool
     reset_connection: bool
+
+
+class ConnectParams(ConnectOptions, total=False):
+    """Keyword arguments of connect(): ConnectOptions plus the row-shape keys."""
+
+    dictionary: bool
+    named_tuple: bool

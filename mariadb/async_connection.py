@@ -19,7 +19,7 @@ from .impl.client.async_client import AsyncClient
 from .async_cursor import AsyncCursor
 
 
-class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon):  # type: ignore[misc, override]
+class AsyncConnection(BaseConnection['AsyncClient'], AsyncConnectionCommon[Any]):  # type: ignore[misc, override]
     """
     Asynchronous MariaDB connection
 

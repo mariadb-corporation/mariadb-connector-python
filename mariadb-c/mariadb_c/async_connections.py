@@ -44,7 +44,7 @@ MYSQL_WAIT_TIMEOUT = 8
 # Import the C connection base class
 from mariadb_c._mariadb import connection as CConnection
 
-class AsyncConnection(CConnection, AsyncConnectionCommon):
+class AsyncConnection(CConnection, AsyncConnectionCommon[Any]):
     """
     MariaDB Connector/Python Async Connection Object
 
@@ -148,7 +148,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         CConnection._init_fields_only(self)
     
     @classmethod
-    async def connect(cls, *args: Any, **kwargs: Any) -> AsyncConnectionCommon:
+    async def connect(cls, *args: Any, **kwargs: Any) -> AsyncConnectionCommon[Any]:
         """
         Create and connect an async connection (classmethod).
         

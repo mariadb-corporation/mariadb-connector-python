@@ -62,7 +62,7 @@ class ConnectionPoolWrapper:
     # Class-level registry for pools
     _registry: Dict[str, 'ConnectionPoolWrapper'] = {}
     
-    def __init__(self, connection_factory: Callable[..., 'SyncConnectionCommon'], pool_name: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(self, connection_factory: Callable[..., 'SyncConnectionCommon[Any]'], pool_name: Optional[str] = None, **kwargs: Any) -> None:
         """
         Initialize connection pool
         
@@ -127,12 +127,12 @@ class ConnectionPoolWrapper:
                 f"Connection argument(s) {', '.join(diff)} don't match the "
                 f"connection configuration of pool '{self.pool_name}'")
 
-    def get_connection(self) -> 'SyncConnectionCommon':
+    def get_connection(self) -> 'SyncConnectionCommon[Any]':
         """Get a connection from the pool"""
         pool_conn = self._pool._acquire()
         return pool_conn.connection
     
-    def add_connection(self, connection: Optional['SyncConnectionCommon'] = None) -> None:
+    def add_connection(self, connection: Optional['SyncConnectionCommon[Any]'] = None) -> None:
         """Add a connection to the pool
         
         Args:

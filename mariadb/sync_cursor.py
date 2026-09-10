@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from .impl.result import SyncCompleteResult
     from .impl.message.server.column_definition_packet import ColumnsDefinition
 
-class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon):
+class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon[Any]):
     """
     Synchronous MariaDB Cursor Object
 

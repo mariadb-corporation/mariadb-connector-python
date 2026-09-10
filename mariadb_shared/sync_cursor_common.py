@@ -4,13 +4,16 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Dict, List, Sequence, Type
+from typing import TYPE_CHECKING, Any, Generic, Iterator, List, Sequence, Type
+
+from .rows import RowT_co
 
 if TYPE_CHECKING:
     from types import TracebackType
 
 
-class SyncCursorCommon(ABC):
+class SyncCursorCommon(ABC, Generic[RowT_co]):
+    """Cursor interface, generic over the row type it produces (see rows.py)."""
     """
     Synchronous MariaDB Cursor Interface
     """
@@ -25,7 +28,7 @@ class SyncCursorCommon(ABC):
         """
         ...
 
-    def __enter__(self) -> SyncCursorCommon:
+    def __enter__(self) -> SyncCursorCommon[RowT_co]:
         return self
 
     def __exit__(
@@ -82,8 +85,13 @@ class SyncCursorCommon(ABC):
     # =========================================================================
     # Result Fetching Methods
     # =========================================================================
-    @abstractmethod    
-    def fetchone(self) -> tuple[Any, ...] | Dict[str, Any] | None:
+    @abstractmethod
+    def __iter__(self) -> Iterator[RowT_co]:
+        """Iterate over the remaining rows of the current result set"""
+        ...
+
+    @abstractmethod
+    def fetchone(self) -> RowT_co | None:
         """Fetch the next row of a query result set
         
         Returns:
@@ -95,12 +103,12 @@ class SyncCursorCommon(ABC):
         ...
 
     @abstractmethod
-    def fetchmany(self, size: int | None = None) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
+    def fetchmany(self, size: int | None = None) -> List[RowT_co]:
         """Fetch the next set of rows of a query result"""
         ...
         
     @abstractmethod
-    def fetchall(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
+    def fetchall(self) -> List[RowT_co]:
         """Fetch all remaining rows of a query result"""
         ...
     

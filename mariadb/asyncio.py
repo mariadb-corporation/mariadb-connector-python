@@ -17,7 +17,7 @@ Usage with SQLAlchemy:
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from mariadb_shared.async_connection_common import AsyncConnectionCommon
@@ -42,7 +42,7 @@ threadsafety = 1  # Threads may share the module, but not connections
 paramstyle = "qmark"
 
 
-async def connect(*args: Any, **kwargs: Any) -> "AsyncConnectionCommon":
+async def connect(*args: Any, **kwargs: Any) -> "AsyncConnectionCommon[Any]":
     """
     Create an async database connection.
     
@@ -64,7 +64,7 @@ async def connect(*args: Any, **kwargs: Any) -> "AsyncConnectionCommon":
     # - MARIADB_PYTHON_CONNECTOR environment variable
     # - Implementation selection (C extension vs pure Python)
     # - Proper connection and initialization
-    return await mariadb.asyncConnect(*args, **kwargs)
+    return cast("AsyncConnectionCommon[Any]", await mariadb.asyncConnect(*args, **kwargs))
 
 
 # For compatibility with some tools that check __all__

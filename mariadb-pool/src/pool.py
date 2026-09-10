@@ -246,7 +246,7 @@ class PooledConnection(BasePooledConnection):
     """Sync pooled connection wrapper"""
 
     if TYPE_CHECKING:
-        connection: 'SyncConnectionCommon'
+        connection: 'SyncConnectionCommon[Any]'
 
     def is_healthy(self) -> bool:
         """
@@ -276,7 +276,7 @@ class AsyncPooledConnection(BasePooledConnection):
     """Async pooled connection wrapper"""
 
     if TYPE_CHECKING:
-        connection: 'AsyncConnectionCommon'
+        connection: 'AsyncConnectionCommon[Any]'
 
     async def is_healthy(self) -> bool:
         """
@@ -475,7 +475,7 @@ class ConnectionPool:
                     self._free.rotate()
                 n += 1
 
-    def acquire(self, timeout: Optional[float] = None) -> 'SyncConnectionCommon':
+    def acquire(self, timeout: Optional[float] = None) -> 'SyncConnectionCommon[Any]':
         return self._acquire(timeout).connection
 
     def _acquire(self, timeout: Optional[float] = None) -> PooledConnection:
@@ -597,7 +597,7 @@ class ConnectionPool:
                     self._cond.notify()
 
     @contextmanager
-    def connection(self, timeout: Optional[float] = None) -> Generator['SyncConnectionCommon', None, None]:
+    def connection(self, timeout: Optional[float] = None) -> Generator['SyncConnectionCommon[Any]', None, None]:
         """
         Context manager for acquiring and releasing connections
 
@@ -821,7 +821,7 @@ class AsyncConnectionPool:
                     self._free.rotate()
                 n += 1
 
-    async def acquire(self, timeout: Optional[float] = None) -> 'AsyncConnectionCommon':
+    async def acquire(self, timeout: Optional[float] = None) -> 'AsyncConnectionCommon[Any]':
         pooled_conn = await self._acquire(timeout)
         return pooled_conn.connection
 
@@ -954,7 +954,7 @@ class AsyncConnectionPool:
                     self._cond.notify()
 
     @asynccontextmanager
-    async def connection(self, timeout: Optional[float] = None) -> AsyncGenerator['AsyncConnectionCommon', None]:
+    async def connection(self, timeout: Optional[float] = None) -> AsyncGenerator['AsyncConnectionCommon[Any]', None]:
         """
         Async context manager for acquiring and releasing connections
 

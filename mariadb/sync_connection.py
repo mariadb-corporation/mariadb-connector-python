@@ -19,7 +19,7 @@ from .impl.client.sync_client import SyncClient
 from .sync_cursor import SyncCursor
 
 
-class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon):  # type: ignore[misc]
+class SyncConnection(BaseConnection['SyncClient'], SyncConnectionCommon[Any]):  # type: ignore[misc]
     """
     Synchronous MariaDB connection
     

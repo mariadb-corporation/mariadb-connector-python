@@ -33,7 +33,7 @@ RESULT_DICTIONARY = 2
 from mariadb_c._mariadb import cursor as CCursor
 from .stmt_reuse_mixin import StmtReuseMixin
 
-class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
+class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon[Any]):
     """
     MariaDB Connector/Python Async Cursor Object
     """

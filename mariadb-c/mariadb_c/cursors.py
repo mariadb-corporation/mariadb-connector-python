@@ -46,7 +46,7 @@ from mariadb_c._mariadb import cursor as CCursor
 from .stmt_reuse_mixin import StmtReuseMixin
 
 
-class Cursor(StmtReuseMixin, CCursor, SyncCursorCommon):
+class Cursor(StmtReuseMixin, CCursor, SyncCursorCommon[Any]):
     """
     MariaDB Connector/Python Cursor Object
     """

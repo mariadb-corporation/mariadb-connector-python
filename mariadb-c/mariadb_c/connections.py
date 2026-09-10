@@ -145,7 +145,7 @@ class StmtCache:
 # Import the C connection base class
 from mariadb_c._mariadb import connection as CConnection
 
-class Connection(CConnection, SyncConnectionCommon):
+class Connection(CConnection, SyncConnectionCommon[Any]):
     """
     MariaDB Connector/Python Connection Object
 

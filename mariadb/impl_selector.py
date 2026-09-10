@@ -9,7 +9,7 @@ every implementation derives from, so callers never deal with ``Any``.
 
 import os
 import sys
-from typing import cast
+from typing import cast, Any
 
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
@@ -18,10 +18,10 @@ from mariadb_shared.sync_cursor_common import SyncCursorCommon
 
 
 __impl__: str = ""
-SyncConnection: type[SyncConnectionCommon]
-AsyncConnection: type[AsyncConnectionCommon]
-SyncCursor: type[SyncCursorCommon]
-AsyncCursor: type[AsyncCursorCommon]
+SyncConnection: type[SyncConnectionCommon[Any]]
+AsyncConnection: type[AsyncConnectionCommon[Any]]
+SyncCursor: type[SyncCursorCommon[Any]]
+AsyncCursor: type[AsyncCursorCommon[Any]]
 # Version of the underlying MariaDB Connector/C library; None for the pure
 # Python implementation, which has no such dependency.
 mariadbapi_version: str | None = None
@@ -62,7 +62,7 @@ def _select_implementation() -> None:
             msg = f"couldn't import requested mariadb '{name}' implementation: {e}"
             raise ImportError(msg) from e
 
-    def python_async() -> tuple[type[AsyncConnectionCommon], type[AsyncCursorCommon]]:
+    def python_async() -> tuple[type[AsyncConnectionCommon[Any]], type[AsyncCursorCommon[Any]]]:
         """The pure Python async implementation, also the fallback of the
         native implementations when they have no async support of their own."""
         from .async_connection import AsyncConnection as PythonAsyncConnection
@@ -96,15 +96,15 @@ def _select_implementation() -> None:
         try:
             import mariadb_binary.connections # pyright: ignore[reportMissingImports]
             import mariadb_binary.cursors # pyright: ignore[reportMissingImports]
-            SyncConnection = cast(type[SyncConnectionCommon], mariadb_binary.connections.Connection) # pyright: ignore[reportUnknownMemberType]
-            SyncCursor = cast(type[SyncCursorCommon], mariadb_binary.cursors.Cursor) # pyright: ignore[reportUnknownMemberType]
+            SyncConnection = cast(type[SyncConnectionCommon[Any]], mariadb_binary.connections.Connection) # pyright: ignore[reportUnknownMemberType]
+            SyncCursor = cast(type[SyncCursorCommon[Any]], mariadb_binary.cursors.Cursor) # pyright: ignore[reportUnknownMemberType]
             mariadbapi_version = cast(str | None, getattr(mariadb_binary.connections, "mariadbapi_version", None)) # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
             # Native async implementation first, pure Python async otherwise
             try:
                 import mariadb_binary.async_connections # pyright: ignore[reportMissingImports]
                 import mariadb_binary.async_cursors # pyright: ignore[reportMissingImports]
-                AsyncConnection = cast(type[AsyncConnectionCommon], mariadb_binary.async_connections.AsyncConnection) # pyright: ignore[reportUnknownMemberType]
-                AsyncCursor = cast(type[AsyncCursorCommon], mariadb_binary.async_cursors.AsyncCursor) # pyright: ignore[reportUnknownMemberType]
+                AsyncConnection = cast(type[AsyncConnectionCommon[Any]], mariadb_binary.async_connections.AsyncConnection) # pyright: ignore[reportUnknownMemberType]
+                AsyncCursor = cast(type[AsyncCursorCommon[Any]], mariadb_binary.async_cursors.AsyncCursor) # pyright: ignore[reportUnknownMemberType]
             except Exception:
                 AsyncConnection, AsyncCursor = python_async()
             __impl__ = "binary"

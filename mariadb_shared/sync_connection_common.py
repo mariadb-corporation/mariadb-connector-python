@@ -9,19 +9,37 @@ connection implementations.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Type, TYPE_CHECKING
+from typing import Any, List, Type, TYPE_CHECKING, Generic, Literal, overload, ClassVar
 
 from .sync_cursor_common import SyncCursorCommon
 from .constants import STATUS, TPC_STATE
+from .rows import DictRow, RowT_co
 from .xid import Xid
 from .exceptions import ProgrammingError, Error
+from . import exceptions as _exc
 
 if TYPE_CHECKING:
     from types import TracebackType
     from typing_extensions import Unpack
     from .connection_params import ConnectionParams
 
-class SyncConnectionCommon(ABC):
+class SyncConnectionCommon(ABC, Generic[RowT_co]):
+    """Connection interface, generic over the row type of its default cursors
+    (tuples unless opened with dictionary=True or named_tuple=True)."""
+
+    # PEP 249 optional extension: the exception classes are also reachable as
+    # attributes of the connection (both implementations provide them).
+    Warning: ClassVar[type[_exc.Warning]] = _exc.Warning
+    Error: ClassVar[type[_exc.Error]] = _exc.Error
+    InterfaceError: ClassVar[type[_exc.InterfaceError]] = _exc.InterfaceError
+    DatabaseError: ClassVar[type[_exc.DatabaseError]] = _exc.DatabaseError
+    DataError: ClassVar[type[_exc.DataError]] = _exc.DataError
+    OperationalError: ClassVar[type[_exc.OperationalError]] = _exc.OperationalError
+    IntegrityError: ClassVar[type[_exc.IntegrityError]] = _exc.IntegrityError
+    InternalError: ClassVar[type[_exc.InternalError]] = _exc.InternalError
+    ProgrammingError: ClassVar[type[_exc.ProgrammingError]] = _exc.ProgrammingError
+    NotSupportedError: ClassVar[type[_exc.NotSupportedError]] = _exc.NotSupportedError
+
 
     if TYPE_CHECKING:
         def __init__(self, *args: Any, **kwargs: Unpack[ConnectionParams]) -> None: ...
@@ -42,8 +60,16 @@ class SyncConnectionCommon(ABC):
         """Whether the connection has been closed."""
         ...
 
+    @overload
+    def cursor(self, cursor_class: type | None = None, *, dictionary: Literal[True], named_tuple: bool = False, **kwargs: Any) -> SyncCursorCommon[DictRow]: ...
+    @overload
+    def cursor(self, cursor_class: type | None = None, *, named_tuple: Literal[True], **kwargs: Any) -> SyncCursorCommon[Any]: ...
+    @overload
+    def cursor(self, cursor_class: type | None = None, *, dictionary: Literal[False] = ..., named_tuple: Literal[False] = ..., **kwargs: Any) -> SyncCursorCommon[RowT_co]: ...
+    @overload
+    def cursor(self, cursor_class: type | None = None, **kwargs: Any) -> SyncCursorCommon[Any]: ...
     @abstractmethod
-    def cursor(self, cursor_class: type | None = None, **kwargs: Any) -> SyncCursorCommon:
+    def cursor(self, cursor_class: type | None = None, **kwargs: Any) -> SyncCursorCommon[Any]:
         """
         Create a new cursor object for executing queries
         
@@ -244,7 +270,7 @@ class SyncConnectionCommon(ABC):
                 cursor.execute(f"SET autocommit={1 if bool(value) else 0}")
 
     
-    def show_warnings(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]] | None:
+    def show_warnings(self) -> List[RowT_co] | None:
         """
         Get warnings from the last executed command
         
@@ -252,7 +278,7 @@ class SyncConnectionCommon(ABC):
             List of warning tuples (level, code, message), or None if no warnings
         """
         self._check_closed()
-        if not self.warnings:  # type: ignore[attr-defined]
+        if not self.warnings:
             return None
         with self.cursor() as cursor:
             cursor.execute("SHOW WARNINGS")
@@ -429,7 +455,7 @@ class SyncConnectionCommon(ABC):
         self._xid = None
         self.tpc_state = TPC_STATE.NONE
 
-    def tpc_recover(self) -> List[tuple[Any, ...]] | List[Dict[str, Any]]:
+    def tpc_recover(self) -> List[RowT_co]:
         """
         Returns a list of pending transaction IDs suitable for use with
         tpc_commit(xid) or .tpc_rollback(xid).
@@ -444,7 +470,7 @@ class SyncConnectionCommon(ABC):
     # ------------------------------------------------------------------------
     # Connection and server information every implementation exposes
     # ------------------------------------------------------------------------
-    def __enter__(self) -> 'SyncConnectionCommon':
+    def __enter__(self) -> 'SyncConnectionCommon[RowT_co]':
         """Context manager entry: the connection itself"""
         return self
 

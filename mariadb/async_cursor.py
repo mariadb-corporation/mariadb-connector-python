@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from .impl.message.server.column_definition_packet import ColumnsDefinition
     from .impl.result import AsyncCompleteResult
 
-class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon):
+class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon[Any]):
     """
     Asynchronous MariaDB Cursor Object
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import warnings
 
-from typing import Any, Dict, TYPE_CHECKING, cast
+from typing import Any, Dict, Literal, TYPE_CHECKING, cast, overload, Protocol
 
 # Import exceptions from shared package to avoid circular dependencies
 from mariadb_shared.exceptions import (
@@ -43,7 +43,8 @@ from mariadb_shared.sync_connection_common import SyncConnectionCommon
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
 from mariadb_shared.sync_cursor_common import SyncCursorCommon
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
-from mariadb_shared.connection_params import ConnectionParams, ConnectParams
+from mariadb_shared.connection_params import ConnectionOptions, ConnectionParams, ConnectOptions, ConnectParams
+from mariadb_shared.rows import DictRow, TupleRow
 
 if TYPE_CHECKING:
     from typing_extensions import Unpack
@@ -59,16 +60,24 @@ if TYPE_CHECKING:
         AsyncConnectionPool as _AsyncConnectionPoolImpl,
     )
 
+    class _ConnectionPoolFactory(Protocol):
+        """Static view of the class ``mariadb.ConnectionPool`` resolves to at
+        runtime (see ``__getattr__`` / ``_get_connection_pool_class``)."""
+        def __call__(self, uri_or_pool_name: str | None = None, uri: str | None = None,
+                     pool_name: Any = None, **kwargs: Any) -> ConnectionPoolWrapper: ...
+
+    ConnectionPool: _ConnectionPoolFactory
+
 
 
 # Re-export the selected implementation classes and implementation info.
 # impl_selector types them against the mariadb_shared interfaces every
 # implementation derives from, so callers (connect() and asyncConnect()
 # included) see concrete class types, never Any nor None.
-SyncConnection: type[SyncConnectionCommon] = impl_selector.SyncConnection
-AsyncConnection: type[AsyncConnectionCommon] = impl_selector.AsyncConnection
-SyncCursor: type[SyncCursorCommon] = impl_selector.SyncCursor
-AsyncCursor: type[AsyncCursorCommon] = impl_selector.AsyncCursor
+SyncConnection: type[SyncConnectionCommon[Any]] = impl_selector.SyncConnection
+AsyncConnection: type[AsyncConnectionCommon[Any]] = impl_selector.AsyncConnection
+SyncCursor: type[SyncCursorCommon[Any]] = impl_selector.SyncCursor
+AsyncCursor: type[AsyncCursorCommon[Any]] = impl_selector.AsyncCursor
 __impl__ = impl_selector.__impl__
 
 # Implementation selection happens at import time in impl_selector
@@ -81,7 +90,15 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "connect", "asyncConnect", "create_pool", "create_async_pool", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
            "apilevel", "paramstyle", "threadsafety"]
 
-def connect(*args: Any, connectionclass: type[SyncConnectionCommon] | None = None, **kwargs: Unpack[ConnectParams]) -> SyncConnectionCommon:
+@overload
+def connect(*args: Any, connectionclass: type[SyncConnectionCommon[Any]] | None = None, dictionary: Literal[True], named_tuple: bool = False, **kwargs: Unpack[ConnectOptions]) -> SyncConnectionCommon[DictRow]: ...
+@overload
+def connect(*args: Any, connectionclass: type[SyncConnectionCommon[Any]] | None = None, named_tuple: Literal[True], **kwargs: Unpack[ConnectOptions]) -> SyncConnectionCommon[Any]: ...
+@overload
+def connect(*args: Any, connectionclass: type[SyncConnectionCommon[Any]] | None = None, dictionary: Literal[False] = ..., named_tuple: Literal[False] = ..., **kwargs: Unpack[ConnectOptions]) -> SyncConnectionCommon[TupleRow]: ...
+@overload
+def connect(*args: Any, connectionclass: type[SyncConnectionCommon[Any]] | None = None, **kwargs: Unpack[ConnectParams]) -> SyncConnectionCommon[Any]: ...
+def connect(*args: Any, connectionclass: type[SyncConnectionCommon[Any]] | None = None, **kwargs: Unpack[ConnectParams]) -> SyncConnectionCommon[Any]:
     """
     Creates a MariaDB Connection object (synchronous).
 
@@ -183,7 +200,7 @@ def connect(*args: Any, connectionclass: type[SyncConnectionCommon] | None = Non
             pool._check_conn_args(params)  # pyright: ignore[reportPrivateUsage]
         else:
             pool = _get_connection_pool_class()(**params)
-        return pool.get_connection()
+        return pool.get_connection()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
     # Use SyncConnection if no custom class specified
     if connectionclass is None:
@@ -192,7 +209,15 @@ def connect(*args: Any, connectionclass: type[SyncConnectionCommon] | None = Non
     return connectionclass(*args, **params)
 
 
-async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] | None = None, **kwargs: Unpack[ConnectionParams]) -> AsyncConnectionCommon:
+@overload
+async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon[Any]] | None = None, dictionary: Literal[True], named_tuple: bool = False, **kwargs: Unpack[ConnectionOptions]) -> AsyncConnectionCommon[DictRow]: ...
+@overload
+async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon[Any]] | None = None, named_tuple: Literal[True], **kwargs: Unpack[ConnectionOptions]) -> AsyncConnectionCommon[Any]: ...
+@overload
+async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon[Any]] | None = None, dictionary: Literal[False] = ..., named_tuple: Literal[False] = ..., **kwargs: Unpack[ConnectionOptions]) -> AsyncConnectionCommon[TupleRow]: ...
+@overload
+async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon[Any]] | None = None, **kwargs: Unpack[ConnectionParams]) -> AsyncConnectionCommon[Any]: ...
+async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon[Any]] | None = None, **kwargs: Unpack[ConnectionParams]) -> AsyncConnectionCommon[Any]:
     """
     Creates a MariaDB AsyncConnection object and connects asynchronously.
 
@@ -230,7 +255,7 @@ async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] 
     # Windows + SSL: Force pure Python async due to SCHANNEL buffering issues
     # This workaround is needed until MariaDB Connector/C properly supports async SSL on Windows
     import platform
-    connection_class: type[AsyncConnectionCommon] = AsyncConnection
+    connection_class: type[AsyncConnectionCommon[Any]] = AsyncConnection
     if platform.system() == "Windows" and __impl__ != "python":
         # Check if SSL is enabled in params (check all SSL-related parameters)
         ssl_param = params.get('ssl', False)
@@ -297,7 +322,9 @@ async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] 
         connectionclass = connection_class  # Use the class selected by Windows+SSL workaround
 
     # Connect asynchronously using the classmethod
-    return await connectionclass.connect(*args, **params)
+    # The overloads of connect() cannot be resolved from a plain dict of
+    # parameters: the row type is whatever the caller asked for, hence Any.
+    return cast(AsyncConnectionCommon[Any], await connectionclass.connect(*args, **params))
 
 
 # Stub for ASAN detection

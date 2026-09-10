@@ -23,7 +23,7 @@ class Error(Exception):
     You can use this to catch all errors with one single except statement.
     """
     
-    def __init__(self, msg: object = None, errno: object = None, sqlstate: object = None) -> None:
+    def __init__(self, msg: str | None = None, errno: int | None = None, sqlstate: str | None = None) -> None:
         """
         Initialize error with message, error number, and SQL state.
         
@@ -33,12 +33,12 @@ class Error(Exception):
             sqlstate: SQL state code (5 characters)
         """
         super().__init__(msg)
-        self._msg: object = msg or ""
-        self._errno: object = errno or 0
-        self._sqlstate: object = sqlstate or "HY000"
+        self._msg: str = msg or ""
+        self._errno: int = errno or 0
+        self._sqlstate: str = sqlstate or "HY000"
 
     @property
-    def errmsg(self) -> object:
+    def errmsg(self) -> str:
         """Get error message"""
         return self._msg
     
@@ -48,7 +48,7 @@ class Error(Exception):
         self._msg = value
     
     @property
-    def msg(self) -> object:
+    def msg(self) -> str:
         """Get error message (alias for errmsg)"""
         return self._msg
     
@@ -58,22 +58,22 @@ class Error(Exception):
         self._msg = value
     
     @property
-    def errno(self) -> object:
+    def errno(self) -> int:
         """Get error number"""
         return self._errno
     
     @errno.setter
-    def errno(self, value: object) -> None:
+    def errno(self, value: int | None) -> None:
         """Set error number"""
         self._errno = value if value is not None else 0
     
     @property
-    def sqlstate(self) -> object:
+    def sqlstate(self) -> str:
         """Get SQL state"""
         return self._sqlstate
     
     @sqlstate.setter
-    def sqlstate(self, value: object) -> None:
+    def sqlstate(self, value: str | None) -> None:
         """Set SQL state"""
         self._sqlstate = value if value is not None else "HY000"
     
