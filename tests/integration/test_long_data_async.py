@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 """
 Integration tests for handling long data (>16MB) over the async client.
 
@@ -33,7 +35,9 @@ class LongDataAsyncTest(unittest.IsolatedAsyncioTestCase):
 
         # A multipart payload must fit within the server's max_allowed_packet.
         await self.cursor.execute("SELECT @@max_allowed_packet")
-        self.max_allowed_packet = (await self.cursor.fetchone())[0]
+        row = await self.cursor.fetchone()
+        assert row is not None
+        self.max_allowed_packet = row[0]
         self.min_required = 32 * 1024 * 1024
         if self.max_allowed_packet < self.min_required:
             self.skipTest(
@@ -65,6 +69,7 @@ class LongDataAsyncTest(unittest.IsolatedAsyncioTestCase):
         await self.cursor.execute(
             "SELECT data FROM test_long_varchar_async WHERE id = ?", (1,))
         result = await self.cursor.fetchone()
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
         self.assertEqual(result[0], test_data)
@@ -87,6 +92,7 @@ class LongDataAsyncTest(unittest.IsolatedAsyncioTestCase):
             await cursor.execute(
                 "SELECT data FROM test_long_blob_async WHERE id = ?", (1,))
             result = await cursor.fetchone()
+            assert result is not None
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
         self.assertEqual(result[0], test_data)
@@ -113,6 +119,7 @@ class LongDataAsyncTest(unittest.IsolatedAsyncioTestCase):
         await self.cursor.execute(
             "SELECT data1, data2, data3 FROM test_multi_long_async WHERE id = ?", (1,))
         result = await self.cursor.fetchone()
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertEqual(result[0], d1)
         self.assertEqual(result[1], d2)
@@ -137,6 +144,7 @@ class LongDataAsyncTest(unittest.IsolatedAsyncioTestCase):
         await self.cursor.execute(
             "SELECT data FROM test_long_unicode_async WHERE id = ?", (1,))
         result = await self.cursor.fetchone()
+        assert result is not None
         self.assertIsNotNone(result)
         self.assertEqual(result[0], test_data)
 

@@ -1,13 +1,20 @@
+
 """
 Integration tests for URI connection strings
 """
+from __future__ import annotations
 
 import unittest
+from typing import TYPE_CHECKING
 import mariadb
 from tests.conftest import get_test_config
 
+if TYPE_CHECKING:
+    from tests.conftest import TestConfig
 
-def build_uri(config, scheme='mariadb', database=None, query_params=None):
+
+def build_uri(config: TestConfig, scheme: str = 'mariadb', database: str | None = None,
+              query_params: str | None = None) -> str:
     """Helper function to build URI from config with optional password"""
     user = config.get('user', 'root')
     password = config.get('password', '')
@@ -57,6 +64,7 @@ class TestURIConnection(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         result = cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 1)
         
         cursor.close()
@@ -97,6 +105,7 @@ class TestURIConnection(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         result = cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 1)
         
         cursor.close()
@@ -120,6 +129,7 @@ class TestURIConnection(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT DATABASE()")
         result = cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], config['database'])
         
         cursor.close()
@@ -141,6 +151,7 @@ class TestURIConnection(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT @@character_set_client")
         result = cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 'utf8mb4')
         
         cursor.close()
@@ -161,6 +172,7 @@ class TestURIConnection(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         result = cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 1)
         
         cursor.close()
@@ -200,6 +212,7 @@ class TestURIConnection(unittest.TestCase):
                 test_cursor = test_conn.cursor()
                 test_cursor.execute("SELECT USER()")
                 result = test_cursor.fetchone()
+                assert result is not None
                 self.assertIn(test_user, result[0])
                 
                 test_cursor.close()

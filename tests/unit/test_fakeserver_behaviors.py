@@ -1,5 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# The rows read here are asserted by the test itself: an unexpected None fails it at runtime,
+# so the Optional narrowing pyright asks for would only duplicate the assertion.
 
 """
 Connector behaviors exercised against the in-process MySQL/MariaDB wire fake
@@ -45,7 +47,9 @@ class TestFakeServerCodecs(unittest.TestCase):
             con = mariadb.connect(**fake_conf(s.port))
             cur = con.cursor()
             cur.execute(f"SELECT j FROM {_MARKER}")
-            self.assertEqual(cur.fetchone()[0], payload)
+            row = cur.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], payload)
             con.close()
 
     def test_json_binary_decode_fake(self):
@@ -59,7 +63,9 @@ class TestFakeServerCodecs(unittest.TestCase):
             con = mariadb.connect(**fake_conf(s.port))
             cur = con.cursor(binary=True)
             cur.execute(f"SELECT j FROM {_MARKER} WHERE j > ?", (0,))
-            self.assertEqual(cur.fetchone()[0], payload)
+            row = cur.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], payload)
             con.close()
 
 
@@ -113,9 +119,13 @@ class TestCExtAsyncCont(unittest.IsolatedAsyncioTestCase):
             con = await mariadb.asyncConnect(**fake_conf(s.port))
             cur = con.cursor(buffered=False)
             await cur.execute(f"SELECT v FROM {_MARKER}")
-            self.assertEqual((await cur.fetchone())[0], 100)
+            row = await cur.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], 100)
             self.assertTrue(await cur.nextset())
-            self.assertEqual((await cur.fetchone())[0], 200)
+            row = await cur.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], 200)
             await con.close()
 
     async def test_connection_op_conts(self):

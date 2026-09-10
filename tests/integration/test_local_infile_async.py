@@ -1,6 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
 import os
 import sys
 import tempfile
@@ -12,7 +13,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import mariadb
-from ..base_test import is_maxscale, is_native
+from ..base_test import is_maxscale
 from ..conftest import get_test_config as conf
 
 def create_async_connection_url():
@@ -152,7 +153,9 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             await cursor.execute(sql)
             
             await cursor.execute("SELECT COUNT(*) FROM local_infile_empty_async")
-            count = (await cursor.fetchone())[0]
+            row = await cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 0)
             
             await cursor.close()
@@ -180,6 +183,7 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             # Connection should still be valid
             await cursor.execute("SELECT 1")
             result = await cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             await cursor.close()
             await conn.close()
@@ -206,7 +210,9 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             await cursor.execute(sql)
             
             await cursor.execute("SELECT COUNT(*) FROM local_infile_test_async")
-            count = (await cursor.fetchone())[0]
+            row = await cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, row_count)
             
             # Verify some rows
@@ -314,12 +320,15 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             
             # Verify data was loaded
             await cursor.execute("SELECT COUNT(*) FROM local_infile_test_async")
-            count = (await cursor.fetchone())[0]
+            row = await cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 1)
             
             # Connection should still be valid
             await cursor.execute("SELECT 1")
             result = await cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             
             await cursor.close()
@@ -349,13 +358,14 @@ class TestLocalInfileAsync(unittest.IsolatedAsyncioTestCase):
             try:
                 await cursor.execute(sql)
                 self.fail("Should have raised an error when local_infile=False")
-            except (mariadb.ProgrammingError, mariadb.DatabaseError) as e:
+            except (mariadb.ProgrammingError, mariadb.DatabaseError):
                 # Should get error - either from client or server
                 pass
             
             # Connection should still be valid after error
             await cursor.execute("SELECT 1")
             result = await cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             
             await cursor.close()

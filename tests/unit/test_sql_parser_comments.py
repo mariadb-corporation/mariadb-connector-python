@@ -3,13 +3,14 @@
 
 import unittest
 from mariadb_shared.text_protocol import substitute_params, normalize_to_qmark
+from typing import Any, Mapping, Sequence
 
 
-def _subst(sql, params):
+def _subst(sql: str, params: Mapping[str, Any] | Sequence[Any]) -> str:
     return b"".join(substitute_params(sql, params)).decode("utf-8")
 
 
-def _norm(sql):
+def _norm(sql: str) -> str:
     norm, _names = normalize_to_qmark(sql)
     return norm.decode("utf-8") if isinstance(norm, (bytes, bytearray)) else norm
 

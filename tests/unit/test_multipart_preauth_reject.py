@@ -20,6 +20,7 @@ import pytest
 import mariadb
 from tests.base_test import is_native
 from tests.unit._fakeserver import FakeServer, fake_conf
+import socket
 
 # The guard lives in the pure-Python Reader.read_payload(); the C extension
 # (libmariadb) has its own equivalent, so run these only on the native impl.
@@ -30,7 +31,7 @@ py_only = pytest.mark.skipif(not is_native(),
 _MAX = 0xFFFFFF  # 16 MB - 1: the "more fragments follow" fragment length
 
 
-def _rogue_multipart_handshake(conn):
+def _rogue_multipart_handshake(conn: socket.socket) -> None:
     """Send, as the very first (handshake, seq 0) packet, a full max-length
     (0xFFFFFF) fragment -> the protocol's "more fragments follow" marker, plus the
     header of a second fragment. The client buffers the one 16 MB fragment, then

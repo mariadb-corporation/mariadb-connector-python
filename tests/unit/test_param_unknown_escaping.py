@@ -16,6 +16,7 @@ every placeholder style and under NO_BACKSLASH_ESCAPES.
 
 import unittest
 from mariadb_shared.text_protocol import substitute_params
+from typing import Any, Mapping, Sequence
 
 
 class _Evil:
@@ -30,7 +31,7 @@ class _Benign:
         return "5"
 
 
-def _subst(sql, params, no_backslash_escapes=False):
+def _subst(sql: str, params: Mapping[str, Any] | Sequence[Any], no_backslash_escapes: bool = False) -> str:
     return b"".join(substitute_params(sql, params, no_backslash_escapes)).decode("utf-8")
 
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 """
 Async integration tests for connection options and configuration
 """
@@ -107,7 +109,7 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
         conn = await mariadb.AsyncConnection.connect(**config)
         server_name = conn.server_name
         
-        self.assertIsInstance(server_name, str)
+        assert isinstance(server_name, str)
         self.assertGreater(len(server_name), 0)
         
         await conn.close()
@@ -207,6 +209,7 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
         # Verify init command was executed
         await cursor.execute("SELECT @test_var")
         result = await cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 'initialized')
         
         await cursor.close()
@@ -230,6 +233,7 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
             cursor = conn.cursor()
             await cursor.execute("SELECT 1")
             result = await cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             await cursor.close()
         
@@ -325,7 +329,7 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
         
         # Get warnings
         warnings = await conn.show_warnings()
-        self.assertIsInstance(warnings, list)
+        assert isinstance(warnings, list)
         
         if len(warnings) > 0:
             # Each warning should be a tuple (level, code, message)
@@ -364,7 +368,9 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
             await conn.commit()
         
         await cursor.execute("SELECT COUNT(*) FROM test_multi_commit")
-        count = (await cursor.fetchone())[0]
+        row = await cursor.fetchone()
+        assert row is not None
+        count = row[0]
         self.assertEqual(count, 5)
         
         await cursor.close()
@@ -382,7 +388,9 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("SELECT @@transaction_isolation")
         else:
             await cursor.execute("SELECT @@tx_isolation")
-        isolation = (await cursor.fetchone())[0]
+        row = await cursor.fetchone()
+        assert row is not None
+        isolation = row[0]
         self.assertIsInstance(isolation, str)
         
         await cursor.close()
@@ -399,10 +407,10 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
         # Try to change charset (if supported)
         try:
             if initial_charset.lower() == 'utf8mb4':
-                await conn.set_character_set('utf8')
+                await conn.set_character_set('utf8')  # pyright: ignore  # probing a method the connection may not have
                 self.assertEqual(conn.character_set.lower(), 'utf8')
             else:
-                await conn.set_character_set('utf8mb4')
+                await conn.set_character_set('utf8mb4')  # pyright: ignore  # probing a method the connection may not have
                 self.assertEqual(conn.character_set.lower(), 'utf8mb4')
         except AttributeError:
             # set_character_set may not be implemented
@@ -421,6 +429,7 @@ class AsyncConnectionOptionsTest(unittest.IsolatedAsyncioTestCase):
         
         # Get last insert id
         last_id = cursor.lastrowid
+        assert last_id is not None
         self.assertGreaterEqual(last_id, 1)
         
         await cursor.close()

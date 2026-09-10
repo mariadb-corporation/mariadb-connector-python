@@ -1,5 +1,9 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# White-box unit test: it exercises private helpers of the implementation on purpose.
+# pyright: reportPrivateUsage=false
+# Duck-typed stand-ins replace the real objects here; pyright cannot see that they are compatible.
+# pyright: reportArgumentType=false
 
 """
 Unit tests for authentication on a FIPS-enforcing crypto backend.
@@ -44,6 +48,8 @@ from mariadb.impl.plugin.authentication.caching_sha2_password_plugin import (
 )
 from mariadb.impl.plugin.authentication.native_password_plugin import NativePasswordPlugin
 from mariadb_shared.constants import CAPABILITY
+from mariadb.impl.host_address import HostAddress
+from mariadb.impl.plugin.authentication_plugin import AuthenticationPlugin
 
 _SEED = b"\x01" * 20
 _PASSWORD = "secret"  # nosec B105 - test fixture
@@ -116,7 +122,9 @@ class NativePasswordUnderFipsTest(_FipsModeTestCase):
         fips.set_fips_mode(True)
         self.assertIsNone(plugin.hash(conf))
         fips.set_fips_mode(False)
-        self.assertEqual(fips.SHA1_DIGEST_LENGTH, len(plugin.hash(conf)))
+        digest = plugin.hash(conf)
+        assert digest is not None
+        self.assertEqual(fips.SHA1_DIGEST_LENGTH, len(digest))
 
 
 class HandshakeResponseUnderFipsTest(_FipsModeTestCase):
@@ -152,7 +160,8 @@ class _CustomPluginFactory(AuthenticationPluginFactory):
     def type(self):
         return "unit_test_custom_plugin"
 
-    def initialize(self, authentication_data, seed, conf, host_address):
+    def initialize(self, authentication_data: str | None, seed: bytes, conf: Configuration,
+                   host_address: HostAddress) -> AuthenticationPlugin:
         raise AssertionError("must be refused before initialize()")
 
 
@@ -161,7 +170,7 @@ class PluginLoaderFipsGateTest(_FipsModeTestCase):
     def setUp(self):
         self.conf = Configuration()
 
-    def _get(self, plugin_type):
+    def _get(self, plugin_type: str) -> AuthenticationPluginFactory:
         return AuthenticationPluginLoader.get(plugin_type, self.conf)
 
     def test_native_password_refused_under_fips(self):
@@ -227,7 +236,7 @@ class _ErrPacketClient:
 
     build_auth_error = BaseClient.build_auth_error
 
-    def __init__(self, password=_PASSWORD, plugin=None):
+    def __init__(self, password: str = _PASSWORD, plugin: AuthenticationPlugin | None = None) -> None:
         self.configuration = Configuration()
         self.configuration.password = password
         self.auth_plugin = plugin if plugin is not None else NativePasswordPlugin(password, _SEED)
@@ -235,7 +244,7 @@ class _ErrPacketClient:
         self.exception_factory = ExceptionFactory()
 
 
-def _err_packet(errno, sql_state, message):
+def _err_packet(errno: int, sql_state: str, message: str) -> memoryview:
     return memoryview(b"\xff" + errno.to_bytes(2, "little")
                       + b"#" + sql_state.encode("ascii") + message.encode("utf-8"))
 
@@ -247,7 +256,7 @@ class AuthErrorAnnotationTest(_FipsModeTestCase):
     def test_access_denied_explains_fips(self):
         fips.set_fips_mode(True)
         error = _ErrPacketClient().build_auth_error(self._ACCESS_DENIED)
-        self.assertIsInstance(error, mariadb.OperationalError)
+        assert isinstance(error, mariadb.OperationalError)
         self.assertEqual(1045, error.errno)
         self.assertIn("Access denied", str(error))
         self.assertIn("FIPS", str(error))

@@ -1,6 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
 import unittest
 from datetime import datetime
 import mariadb
@@ -35,13 +36,16 @@ class TestException(unittest.TestCase):
 
     def test_db_unknown_exception(self):
 
+        ending_error: BaseException | None = None
         try:
             create_connection({"database": "unknown"})
         except mariadb.OperationalError as err:
             ending_error = err.__cause__
+            assert isinstance(ending_error, mariadb.Error)
         except mariadb.ProgrammingError as err:
             ending_error = err
 
+        assert isinstance(ending_error, mariadb.Error)
         self.assertEqual(ending_error.sqlstate, "42000")
         self.assertEqual(ending_error.errno, 1049)
         self.assertTrue(ending_error.errmsg.find("Unknown database 'unknown'") > -1)
@@ -56,6 +60,7 @@ class TestException(unittest.TestCase):
         except mariadb.OperationalError as err:
             if (err.__cause__):
                 ending_error = err.__cause__
+                assert isinstance(ending_error, mariadb.Error)
             else:
                 ending_error = err
             self.assertEqual(ending_error.sqlstate, "HY000")

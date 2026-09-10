@@ -4,7 +4,7 @@
 import datetime
 import unittest
 
-from ..base_test import create_connection, is_maxscale, is_native
+from ..base_test import create_connection, is_maxscale
 
 
 class CursorMySQLTest(unittest.TestCase):
@@ -24,7 +24,7 @@ class CursorMySQLTest(unittest.TestCase):
                        "a int auto_increment primary key not "
                        "null, b int, c int, d varchar(20),e date)")
         cursor.execute("SET @@autocommit=0")
-        list_in = []
+        list_in: list[tuple[int, int, int, str, datetime.date]] = []
         for i in range(1, 30000):
             row = (i, i, i, "bar", datetime.date(2019, 1, 1))
             list_in.append(row)

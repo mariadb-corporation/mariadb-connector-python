@@ -116,7 +116,7 @@ class TestHexDump(unittest.TestCase):
         
         # Should have one data line with padding
         lines = result.split("\n")
-        data_line = [line for line in lines if "|000000|" in line][0]
+        _data_line = [line for line in lines if "|000000|" in line][0]
         
         # Should have spaces for missing bytes
         # Count the hex part (should have spaces for 4 missing bytes)

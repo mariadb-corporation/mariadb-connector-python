@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+# Plugin factories are exercised directly with None in place of the
+# configuration and host address they do not need here.
+# pyright: reportArgumentType=false
+
 """
 Authentication Plugin Tests for MariaDB Connector/Python
 
@@ -12,7 +17,6 @@ Tests for various authentication plugins including:
 import unittest
 import os
 import sys
-import pytest
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -20,6 +24,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import mariadb
 from tests.base_test import create_connection, is_maxscale, is_native, get_host_suffix
 from tests.conftest import get_test_config
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
+from mariadb_shared.sync_cursor_common import SyncCursorCommon
+from mariadb_shared.rows import TupleRow
 
 
 @unittest.skipIf(is_maxscale(), "PARSEC authentication plugin not available through MaxScale")
@@ -30,7 +37,7 @@ class TestParsecAuthentication(unittest.TestCase):
     def setUpClass(cls):
         """Set up test class - check if PARSEC authentication is available"""
         try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
             cls.has_cryptography = True
         except ImportError:
             cls.has_cryptography = False
@@ -91,6 +98,7 @@ class TestParsecAuthentication(unittest.TestCase):
         parsec_cursor = parsec_conn.cursor()
         parsec_cursor.execute("SELECT USER()")
         user_result = parsec_cursor.fetchone()
+        assert user_result is not None
         self.assertIn('parsec_test_user', user_result[0])
         
         parsec_cursor.close()
@@ -128,6 +136,7 @@ class TestParsecAuthentication(unittest.TestCase):
         parsec_cursor = parsec_conn.cursor()
         parsec_cursor.execute("SELECT 1")
         result = parsec_cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 1)
         
         parsec_cursor.close()
@@ -182,6 +191,7 @@ class TestParsecAuthentication(unittest.TestCase):
         parsec_cursor = parsec_conn.cursor()
         parsec_cursor.execute("SELECT DATABASE()")
         db_result = parsec_cursor.fetchone()
+        assert db_result is not None
         self.assertEqual(db_result[0], get_test_config()["database"])
         
         parsec_cursor.close()
@@ -213,6 +223,7 @@ class TestParsecAuthentication(unittest.TestCase):
         parsec_cursor = parsec_conn.cursor()
         parsec_cursor.execute("SELECT 'Unicode test'")
         result = parsec_cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 'Unicode test')
         
         parsec_cursor.close()
@@ -235,24 +246,28 @@ class TestParsecAuthentication(unittest.TestCase):
         conn_config['password'] = test_password
         
         # Create multiple connections
-        connections = []
+        connections: list[tuple[SyncConnectionCommon[TupleRow], SyncCursorCommon[TupleRow]]] = []
         try:
-            for i in range(5):
+            for _ in range(5):
                 conn = mariadb.connect(**conn_config)
                 self.assertIsNotNone(conn)
                 
                 cursor = conn.cursor()
                 cursor.execute("SELECT CONNECTION_ID()")
-                conn_id = cursor.fetchone()[0]
+                row = cursor.fetchone()
+                assert row is not None
+                conn_id = row[0]
                 self.assertIsNotNone(conn_id)
                 
                 connections.append((conn, cursor))
             
             # Verify all connections are independent
-            conn_ids = set()
+            conn_ids: set[int] = set()
             for conn, cursor in connections:
                 cursor.execute("SELECT CONNECTION_ID()")
-                conn_ids.add(cursor.fetchone()[0])
+                row = cursor.fetchone()
+                assert row is not None
+                conn_ids.add(row[0])
             
             self.assertEqual(len(conn_ids), 5, "All connections should have unique IDs")
             
@@ -282,7 +297,9 @@ class TestParsecAuthentication(unittest.TestCase):
         conn1 = mariadb.connect(**conn_config)
         cursor1 = conn1.cursor()
         cursor1.execute("SELECT 1")
-        self.assertEqual(cursor1.fetchone()[0], 1)
+        row = cursor1.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 1)
         cursor1.close()
         conn1.close()
         
@@ -290,7 +307,9 @@ class TestParsecAuthentication(unittest.TestCase):
         conn2 = mariadb.connect(**conn_config)
         cursor2 = conn2.cursor()
         cursor2.execute("SELECT 2")
-        self.assertEqual(cursor2.fetchone()[0], 2)
+        row = cursor2.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 2)
         cursor2.close()
         conn2.close()
         
@@ -298,7 +317,9 @@ class TestParsecAuthentication(unittest.TestCase):
         conn3 = mariadb.connect(**conn_config)
         cursor3 = conn3.cursor()
         cursor3.execute("SELECT 3")
-        self.assertEqual(cursor3.fetchone()[0], 3)
+        row = cursor3.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 3)
         cursor3.close()
         conn3.close()
 
@@ -309,7 +330,7 @@ class TestAuthenticationPluginFactory(unittest.TestCase):
     def test_parsec_plugin_available(self):
         """Test that PARSEC plugin is available in the plugin registry"""
         try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
             has_cryptography = True
         except ImportError:
             has_cryptography = False
@@ -329,7 +350,7 @@ class TestAuthenticationPluginFactory(unittest.TestCase):
     def test_parsec_plugin_creation(self):
         """Test creating PARSEC plugin instance"""
         try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
             has_cryptography = True
         except ImportError:
             has_cryptography = False

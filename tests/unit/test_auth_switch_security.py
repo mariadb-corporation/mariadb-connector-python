@@ -1,5 +1,11 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# White-box unit test: it exercises private helpers of the implementation on purpose.
+# pyright: reportPrivateUsage=false
+# _Factory / _Plugin are deliberately duck-typed doubles of the plugin ABCs: only the
+# two methods the gate reads exist, so pyright cannot match them to the parameter types.
+# pyright: reportArgumentType=false
+
 
 """
 Unit tests for the authentication-switch security gates.
@@ -23,6 +29,7 @@ from mariadb.impl.client.base_client import BaseClient, PROTOCOL_TCP, PROTOCOL_D
 from mariadb.impl.plugin.authentication.caching_sha2_password_plugin import (
     CachingSha2PasswordPlugin,
 )
+from typing import Any
 
 # Arbitrary non-empty placeholder. The checks never open the path, so the value
 # is irrelevant and must NOT be a real system socket path.
@@ -32,8 +39,8 @@ _LOOPBACK = "127.0.0.1"
 
 
 class _Cfg:
-    def __init__(self, ssl=False, unix_socket=None, password="secret",
-                 protocol=PROTOCOL_DEFAULT):
+    def __init__(self, ssl: bool | dict[str, Any] = False, unix_socket: str | None = None,
+                 password: str | None = "secret", protocol: int = PROTOCOL_DEFAULT) -> None:
         self.ssl = ssl
         self.unix_socket = unix_socket
         self.password = password
@@ -41,13 +48,13 @@ class _Cfg:
 
 
 class _Host:
-    def __init__(self, host):
+    def __init__(self, host: str) -> None:
         self.host = host
 
 
 class _Validator:
     """Stand-in for SSLFingerprintValidator with a captured fingerprint."""
-    def __init__(self, fingerprint=b"\xaa" * 32):
+    def __init__(self, fingerprint: bytes = b"\xaa" * 32) -> None:
         self._fp = fingerprint
 
     def get_fingerprint(self):
@@ -55,7 +62,7 @@ class _Validator:
 
 
 class _Factory:
-    def __init__(self, require_ssl=False):
+    def __init__(self, require_ssl: bool = False) -> None:
         self._require_ssl = require_ssl
 
     def require_ssl(self):
@@ -63,7 +70,7 @@ class _Factory:
 
 
 class _Plugin:
-    def __init__(self, mitm_proof=True):
+    def __init__(self, mitm_proof: bool = True) -> None:
         self._mitm = mitm_proof
 
     def is_mitm_proof(self):
@@ -77,7 +84,7 @@ class _FakeClient:
     is_local_connection = BaseClient.is_local_connection
     _uses_unix_socket = BaseClient._uses_unix_socket
 
-    def __init__(self, cfg, validator=None, host=_REMOTE):
+    def __init__(self, cfg: _Cfg, validator: _Validator | None = None, host: str = _REMOTE) -> None:
         self.configuration = cfg
         self.cert_fingerprint_validator = validator
         self.host_address = _Host(host)

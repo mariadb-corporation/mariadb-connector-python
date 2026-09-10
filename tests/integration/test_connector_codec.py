@@ -20,6 +20,7 @@ tests/unit/test_fakeserver_behaviors.py.
 import array
 import datetime
 import unittest
+from typing import TYPE_CHECKING, Any
 
 import mariadb
 from tests.base_test import is_native
@@ -27,9 +28,16 @@ from tests.base_test import is_native
 from ..conftest import get_test_config as conf
 
 
-class _SharedConnectorCodecs:
+if TYPE_CHECKING:
+    _MixinBase = unittest.TestCase
+else:
+    _MixinBase = object
+
+
+class _SharedConnectorCodecs(_MixinBase):
     """Mixin of behaviors that must be identical on both implementations.
     Concrete TestCases provide ``self.conn`` via setUp."""
+    conn: Any
 
     def test_connection_repr(self):
         self.assertIsInstance(repr(self.conn), str)
@@ -174,11 +182,11 @@ class TestCExtOnly(unittest.TestCase):
 
     def test_auto_reconnect_getter(self):
         # MrdbConnection_getreconnect
-        self.assertIn(self.conn.auto_reconnect, (True, False))
+        self.assertIn(self.conn.auto_reconnect, (True, False))  # pyright: ignore  # C implementation only
 
     def test_get_timeout_value(self):
         # MrdbConnection_get_timeout_value -> mysql_get_timeout_value (float)
-        self.assertIsInstance(self.conn.get_timeout_value(), float)
+        self.assertIsInstance(self.conn.get_timeout_value(), float)  # pyright: ignore  # C implementation only
 
     def test_session_tracking(self):
         # MrdbConnection_process_status_info: the libmariadb status callback only
@@ -186,9 +194,12 @@ class TestCExtOnly(unittest.TestCase):
         # enable every tracker, then trigger system-variable, schema and
         # transaction-state changes so the OK packets carry SESSION_TRACK info.
         db = conf().get("database") or "testp"
-        received = []
-        cfg = dict(conf())
-        cfg["status_callback"] = lambda connection, data: received.append(data)
+        received: list[Any] = []
+
+        def on_status(connection: Any, data: Any) -> None:
+            received.append(data)
+
+        cfg = conf(status_callback=on_status)
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")     # RuntimeWarning if C lib < 3.3.2

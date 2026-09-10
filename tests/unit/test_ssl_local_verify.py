@@ -1,5 +1,11 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# Duck-typed stand-ins replace the real objects here; pyright cannot see that they are compatible.
+# pyright: reportArgumentType=false
+# cryptography is imported under try/except and the whole module is skipped
+# without it, so the names are bound whenever a test runs.
+# pyright: reportPossiblyUnboundVariable=false
+
 
 """
 Unit tests for local-connection TLS verification.
@@ -24,10 +30,11 @@ try:
     from cryptography.hazmat.primitives.asymmetric import ec
     HAS_CRYPTOGRAPHY = True
 except ImportError:
-    HAS_CRYPTOGRAPHY = False
+    HAS_CRYPTOGRAPHY = False  # pyright: ignore[reportConstantRedefinition]
 
 from mariadb.impl.configuration import Configuration
 from mariadb.impl.client.ssl.ssl_utility import SSLUtility
+from typing import Any
 
 
 class _Ver:
@@ -35,7 +42,7 @@ class _Ver:
     # isolates the local-connection branches under test.
     is_mariadb = False
 
-    def version_greater_or_equal(self, *_a):
+    def version_greater_or_equal(self, *_a: Any) -> bool:
         return False
 
 
@@ -78,7 +85,7 @@ class LocalVerifyTest(unittest.TestCase):
         except OSError:
             pass
 
-    def _prepare(self, *, local, **conf_kw):
+    def _prepare(self, *, local: bool, **conf_kw: Any):
         conf = Configuration(ssl=True, **conf_kw)
         return SSLUtility.prepare_ssl_context(conf, _Ctx(), local)
 

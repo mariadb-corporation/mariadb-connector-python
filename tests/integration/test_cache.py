@@ -1,17 +1,47 @@
+# White-box tests of the pure-Python statement cache: they read private
+# attributes of the connection and the client on purpose (see the accessors below).
+# pyright: reportPrivateUsage=false
+
 """
 Tests for prepared statement cache functionality
 """
 
 import unittest
 import mariadb
+from typing import Any
+
+from mariadb.async_connection import AsyncConnection as PyAsyncConnection
+from mariadb.impl.client.async_client import AsyncClient
+from mariadb.impl.client.sync_client import SyncClient
+from mariadb.impl.configuration import Configuration
+from mariadb.sync_connection import SyncConnection as PySyncConnection
+from mariadb_shared.async_connection_common import AsyncConnectionCommon
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
 from tests.base_test import is_mysql, is_native
 from ..conftest import get_test_config as conf
 
 try:
-    import cachetools as _cachetools  # noqa: F401
+    import cachetools as _cachetools  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
     HAS_CACHETOOLS = True
 except ImportError:
-    HAS_CACHETOOLS = False
+    HAS_CACHETOOLS = False  # pyright: ignore[reportConstantRedefinition]
+
+
+def _client(conn: SyncConnectionCommon[Any] | AsyncConnectionCommon[Any]) -> SyncClient | AsyncClient:
+    """The pure-Python client behind a connection (these are white-box tests)."""
+    assert isinstance(conn, (PySyncConnection, PyAsyncConnection))
+    return conn._client
+
+
+def _configuration(conn: SyncConnectionCommon[Any] | AsyncConnectionCommon[Any]) -> Configuration:
+    """The pure-Python configuration behind a connection."""
+    assert isinstance(conn, (PySyncConnection, PyAsyncConnection))
+    return conn._configuration
+
+
+def _local_cache(cursor: Any) -> Any:
+    """The per-cursor statement cache; both implementations keep one, under the same name."""
+    return getattr(cursor, "_local_stmt_cache")
 
 
 def _percursor_reuse_supported():
@@ -29,7 +59,7 @@ class TestPreparedStatementCache(unittest.TestCase):
     def setUp(self):
         """Set up test database and table"""
         # The shared connection-level cache is opt-in; enable it for this suite.
-        self.conn = mariadb.connect(**conf(), cache_prep_stmts=True)
+        self.conn = mariadb.connect(**conf(cache_prep_stmts=True))
         cursor = self.conn.cursor()
         cursor.execute("DROP TABLE IF EXISTS cache_test")
         cursor.execute("CREATE TABLE cache_test (id INT, name VARCHAR(100))")
@@ -47,27 +77,28 @@ class TestPreparedStatementCache(unittest.TestCase):
     def test_cache_disabled_by_default(self):
         """The shared connection-level cache is opt-in: off unless requested."""
         conn = mariadb.connect(**conf())
-        self.assertFalse(conn._configuration.cache_prep_stmts)
-        self.assertIsNone(conn._client.prepared_statement_cache)
+        self.assertFalse(_configuration(conn).cache_prep_stmts)
+        self.assertIsNone(_client(conn).prepared_statement_cache)
         conn.close()
     
     def test_cache_disabled(self):
         """Test that cache can be disabled"""
-        conn = mariadb.connect(**conf(), cache_prep_stmts=False)
+        conn = mariadb.connect(**conf(cache_prep_stmts=False))
         try:
-            self.assertFalse(conn._configuration.cache_prep_stmts)
+            self.assertFalse(_configuration(conn).cache_prep_stmts)
 
             # Use binary cursor to force prepared statements
             cursor = conn.cursor(binary=True)
             try:
                 # Execute same query multiple times
-                for i in range(5):
+                for _ in range(5):
                     cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
                     row = cursor.fetchone()
+                    assert row is not None
                     self.assertEqual(row[0], 1)
 
                 # Cache is None when disabled (not an empty dict)
-                self.assertIsNone(conn._client.prepared_statement_cache)
+                self.assertIsNone(_client(conn).prepared_statement_cache)
             finally:
                 cursor.close()
         finally:
@@ -75,9 +106,9 @@ class TestPreparedStatementCache(unittest.TestCase):
     
     def test_cache_custom_size(self):
         """Test custom cache size"""
-        conn = mariadb.connect(**conf(), cache_prep_stmts=True, prep_stmt_cache_size=10)
-        self.assertEqual(conn._configuration.prep_stmt_cache_size, 10)
-        self.assertEqual(conn._client.prepared_statement_cache.maxsize, 10)
+        conn = mariadb.connect(**conf(cache_prep_stmts=True, prep_stmt_cache_size=10))
+        self.assertEqual(_configuration(conn).prep_stmt_cache_size, 10)
+        self.assertEqual(_client(conn).prepared_statement_cache.maxsize, 10)
         conn.close()
     
     def test_cache_reuse_same_sql(self):
@@ -87,21 +118,21 @@ class TestPreparedStatementCache(unittest.TestCase):
         # First execution - should prepare and cache
         cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
         cursor.fetchone()
-        self.assertEqual(len(self.conn._client.prepared_statement_cache), 1)
+        self.assertEqual(len(_client(self.conn).prepared_statement_cache), 1)
         
         # Get the cached statement
-        cache_key = (self.conn._client.context.database, "SELECT * FROM cache_test WHERE id = ?")
-        cached = self.conn._client.prepared_statement_cache.get(cache_key)
+        cache_key = (_client(self.conn).context.database, "SELECT * FROM cache_test WHERE id = ?")
+        cached = _client(self.conn).prepared_statement_cache.get(cache_key)
         self.assertIsNotNone(cached)
         first_stmt_id = cached.statement_id
         
         # Second execution - should reuse cached statement
         cursor.execute("SELECT * FROM cache_test WHERE id = ?", (2,))
         cursor.fetchone()
-        self.assertEqual(len(self.conn._client.prepared_statement_cache), 1)
+        self.assertEqual(len(_client(self.conn).prepared_statement_cache), 1)
         
         # Should be same statement ID
-        cached = self.conn._client.prepared_statement_cache.get(cache_key)
+        cached = _client(self.conn).prepared_statement_cache.get(cache_key)
         self.assertEqual(cached.statement_id, first_stmt_id)
         
         cursor.close()
@@ -120,7 +151,7 @@ class TestPreparedStatementCache(unittest.TestCase):
         cursor.fetchall()
         
         # Should have 3 different cached statements
-        self.assertEqual(len(self.conn._client.prepared_statement_cache), 3)
+        self.assertEqual(len(_client(self.conn).prepared_statement_cache), 3)
         
         cursor.close()
     
@@ -143,7 +174,7 @@ class TestPreparedStatementCache(unittest.TestCase):
         cursor3.fetchone()
         
         # Should only have 1 cached statement (shared)
-        self.assertEqual(len(self.conn._client.prepared_statement_cache), 1)
+        self.assertEqual(len(_client(self.conn).prepared_statement_cache), 1)
         
         cursor1.close()
         cursor2.close()
@@ -162,7 +193,7 @@ class TestPreparedStatementCache(unittest.TestCase):
         
         # Cursor1 still holds reference, cursor2 should get new prepare
         # (because cursor1 hasn't released yet by changing SQL)
-        initial_cache_size = len(self.conn._client.prepared_statement_cache)
+        _initial_cache_size = len(_client(self.conn).prepared_statement_cache)
         
         # Cursor1 changes to different SQL - releases the statement
         cursor1.execute("SELECT * FROM cache_test WHERE name = ?", ("test1",))
@@ -182,7 +213,7 @@ class TestPreparedStatementCache(unittest.TestCase):
         
         # Check if server supports BULK_UNIT_RESULTS (MariaDB 11.5+)
         from mariadb_shared import constants
-        if not self.conn._client.context.has_capability(constants.CAPABILITY.BULK_UNIT_RESULTS):
+        if not _client(self.conn).context.has_capability(constants.CAPABILITY.BULK_UNIT_RESULTS):
             self.skipTest("Server doesn't support BULK_UNIT_RESULTS (MariaDB < 11.5)")
         
         cursor = self.conn.cursor()
@@ -191,15 +222,15 @@ class TestPreparedStatementCache(unittest.TestCase):
         cursor.executemany("INSERT INTO cache_test VALUES (?, ?)", data)
         
         # Should have cached the INSERT statement
-        self.assertGreater(len(self.conn._client.prepared_statement_cache), 0)
+        self.assertGreater(len(_client(self.conn).prepared_statement_cache), 0)
         
         # Execute again with different data
         data2 = [(20, 'test20'), (21, 'test21')]
         cursor.executemany("INSERT INTO cache_test VALUES (?, ?)", data2)
         
         # Should still be same cached statement
-        cache_key = (self.conn._client.context.database, "INSERT INTO cache_test VALUES (?, ?)")
-        self.assertIn(cache_key, self.conn._client.prepared_statement_cache)
+        cache_key = (_client(self.conn).context.database, "INSERT INTO cache_test VALUES (?, ?)")
+        self.assertIn(cache_key, _client(self.conn).prepared_statement_cache)
         
         cursor.close()
     
@@ -221,8 +252,8 @@ class TestPreparedStatementCache(unittest.TestCase):
                 cursor.callproc("test_proc", (i, 0))
 
             # Should have cached the CALL statement
-            cache_key = (self.conn._client.context.database, "CALL test_proc(?, ?)")
-            self.assertIn(cache_key, self.conn._client.prepared_statement_cache)
+            cache_key = (_client(self.conn).context.database, "CALL test_proc(?, ?)")
+            self.assertIn(cache_key, _client(self.conn).prepared_statement_cache)
 
             cursor.execute("DROP PROCEDURE test_proc")
         finally:
@@ -236,8 +267,8 @@ class TestPreparedStatementCache(unittest.TestCase):
         cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
         cursor.fetchone()
         
-        db1 = self.conn._client.context.database
-        cache_size_db1 = len(self.conn._client.prepared_statement_cache)
+        db1 = _client(self.conn).context.database
+        _cache_size_db1 = len(_client(self.conn).prepared_statement_cache)
         
         # Create and switch to different database
         cursor.execute("CREATE DATABASE IF NOT EXISTS test_cache_db2")
@@ -248,10 +279,11 @@ class TestPreparedStatementCache(unittest.TestCase):
         # Execute same SQL in different database
         cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[1], 'db2_test')
         
         # Should have 2 cached statements (one per database)
-        self.assertEqual(len(self.conn._client.prepared_statement_cache), 2)
+        self.assertEqual(len(_client(self.conn).prepared_statement_cache), 2)
         
         # Switch back to original database
         cursor.execute(f"USE {db1}")
@@ -259,6 +291,7 @@ class TestPreparedStatementCache(unittest.TestCase):
         # Execute again - should use cached statement from db1
         cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[1], 'test1')
         
         # Clean up
@@ -268,7 +301,7 @@ class TestPreparedStatementCache(unittest.TestCase):
     def test_cache_eviction(self):
         """Test LRU eviction when cache is full"""
         # Create connection with small cache
-        conn = mariadb.connect(**conf(), cache_prep_stmts=True, prep_stmt_cache_size=3)
+        conn = mariadb.connect(**conf(cache_prep_stmts=True, prep_stmt_cache_size=3))
         cursor = conn.cursor(binary=True)
         
         # Fill cache with 3 statements
@@ -281,28 +314,28 @@ class TestPreparedStatementCache(unittest.TestCase):
         cursor.execute("SELECT id FROM cache_test WHERE id > ?", (0,))
         cursor.fetchall()
         
-        self.assertEqual(len(conn._client.prepared_statement_cache), 3)
+        self.assertEqual(len(_client(conn).prepared_statement_cache), 3)
         
         # Add 4th statement - should evict least recently used
         cursor.execute("SELECT name FROM cache_test WHERE name LIKE ?", ("%test%",))
         cursor.fetchall()
         
         # Cache should still be at max size
-        self.assertEqual(len(conn._client.prepared_statement_cache), 3)
+        self.assertEqual(len(_client(conn).prepared_statement_cache), 3)
         
         cursor.close()
         conn.close()
     
     def test_cache_clear_on_close(self):
         """Test that cache is cleared when connection closes"""
-        conn = mariadb.connect(**conf(), cache_prep_stmts=True)
+        conn = mariadb.connect(**conf(cache_prep_stmts=True))
         try:
             cursor = conn.cursor(binary=True)
             try:
                 cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
                 cursor.fetchone()
 
-                self.assertGreater(len(conn._client.prepared_statement_cache), 0)
+                self.assertGreater(len(_client(conn).prepared_statement_cache), 0)
             finally:
                 cursor.close()
         finally:
@@ -321,7 +354,7 @@ class TestPreparedStatementCache(unittest.TestCase):
             cursor.fetchone()
         
         # Should have cached the statement
-        self.assertEqual(len(self.conn._client.prepared_statement_cache), 1)
+        self.assertEqual(len(_client(self.conn).prepared_statement_cache), 1)
 
         cursor.close()
 
@@ -329,28 +362,30 @@ class TestPreparedStatementCache(unittest.TestCase):
         """With the connection cache off, a binary cursor keeps its own single
         prepared statement: reused while the SQL is unchanged, replaced (old one
         closed) when the SQL changes."""
-        conn = mariadb.connect(**conf(), cache_prep_stmts=False)
+        conn = mariadb.connect(**conf(cache_prep_stmts=False))
         try:
             # Connection-level cache stays disabled.
-            self.assertIsNone(conn._client.prepared_statement_cache)
+            self.assertIsNone(_client(conn).prepared_statement_cache)
 
             cursor = conn.cursor(binary=True)
             try:
-                key = (conn._client.context.database,
+                key = (_client(conn).context.database,
                        "SELECT * FROM cache_test WHERE id = ?")
 
                 cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
                 cursor.fetchone()
 
                 # A per-cursor single-statement cache was created lazily.
-                local = cursor._local_stmt_cache
+                local = _local_cache(cursor)
                 self.assertIsNotNone(local)
                 self.assertEqual(len(local), 1)
                 first_id = local[key].statement_id
 
                 # Same SQL again -> reused, not re-prepared (same statement id).
                 cursor.execute("SELECT * FROM cache_test WHERE id = ?", (2,))
-                self.assertEqual(cursor.fetchone()[0], 2)
+                row = cursor.fetchone()
+                assert row is not None
+                self.assertEqual(row[0], 2)
                 self.assertEqual(len(local), 1)
                 self.assertEqual(local[key].statement_id, first_id)
 
@@ -368,7 +403,7 @@ class TestPreparedStatementCache(unittest.TestCase):
     def test_local_reuse_is_per_cursor(self):
         """Each cursor keeps its own statement slot (not shared) when the
         connection cache is disabled."""
-        conn = mariadb.connect(**conf(), cache_prep_stmts=False)
+        conn = mariadb.connect(**conf(cache_prep_stmts=False))
         try:
             c1 = conn.cursor(binary=True)
             c2 = conn.cursor(binary=True)
@@ -378,9 +413,9 @@ class TestPreparedStatementCache(unittest.TestCase):
                 c2.execute("SELECT * FROM cache_test WHERE id = ?", (2,))
                 c2.fetchone()
 
-                self.assertIsNotNone(c1._local_stmt_cache)
-                self.assertIsNotNone(c2._local_stmt_cache)
-                self.assertIsNot(c1._local_stmt_cache, c2._local_stmt_cache)
+                self.assertIsNotNone(_local_cache(c1))
+                self.assertIsNotNone(_local_cache(c2))
+                self.assertIsNot(_local_cache(c1), _local_cache(c2))
             finally:
                 c1.close()
                 c2.close()
@@ -389,15 +424,15 @@ class TestPreparedStatementCache(unittest.TestCase):
 
     def test_local_stmt_released_on_cursor_close(self):
         """Closing the cursor drops its per-cursor statement slot."""
-        conn = mariadb.connect(**conf(), cache_prep_stmts=False)
+        conn = mariadb.connect(**conf(cache_prep_stmts=False))
         try:
             cursor = conn.cursor(binary=True)
             cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
             cursor.fetchone()
-            self.assertIsNotNone(cursor._local_stmt_cache)
+            self.assertIsNotNone(_local_cache(cursor))
 
             cursor.close()
-            self.assertIsNone(cursor._local_stmt_cache)
+            self.assertIsNone(_local_cache(cursor))
         finally:
             conn.close()
 
@@ -409,7 +444,7 @@ class TestPreparedStatementCacheAsync(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         """Set up test database and table"""
         # The shared connection-level cache is opt-in; enable it for this suite.
-        self.conn = await mariadb.AsyncConnection.connect(**conf(), cache_prep_stmts=True)
+        self.conn = await mariadb.AsyncConnection.connect(**conf(cache_prep_stmts=True))
         cursor = self.conn.cursor()
         await cursor.execute("DROP TABLE IF EXISTS cache_test")
         await cursor.execute("CREATE TABLE cache_test (id INT, name VARCHAR(100))")
@@ -432,34 +467,35 @@ class TestPreparedStatementCacheAsync(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
         await cursor.fetchone()
         
-        cache_size = len(self.conn._client.prepared_statement_cache)
+        cache_size = len(_client(self.conn).prepared_statement_cache)
         self.assertEqual(cache_size, 1)
         
         # Second execution - should reuse
         await cursor.execute("SELECT * FROM cache_test WHERE id = ?", (2,))
         await cursor.fetchone()
         
-        self.assertEqual(len(self.conn._client.prepared_statement_cache), cache_size)
+        self.assertEqual(len(_client(self.conn).prepared_statement_cache), cache_size)
         
         await cursor.close()
     
     async def test_async_cache_disabled(self):
         """Test async with cache disabled"""
-        conn = await mariadb.AsyncConnection.connect(**conf(), cache_prep_stmts=False)
+        conn = await mariadb.AsyncConnection.connect(**conf(cache_prep_stmts=False))
         try:
-            self.assertFalse(conn._configuration.cache_prep_stmts)
+            self.assertFalse(_configuration(conn).cache_prep_stmts)
 
             # Use binary cursor to force prepared statements
             cursor = conn.cursor(binary=True)
             try:
                 # Execute same query multiple times
-                for i in range(5):
+                for _ in range(5):
                     await cursor.execute("SELECT * FROM cache_test WHERE id = ?", (1,))
                     row = await cursor.fetchone()
+                    assert row is not None
                     self.assertEqual(row[0], 1)
 
                 # Cache is None when disabled (not an empty dict)
-                self.assertIsNone(conn._client.prepared_statement_cache)
+                self.assertIsNone(_client(conn).prepared_statement_cache)
             finally:
                 await cursor.close()
         finally:
@@ -483,8 +519,8 @@ class TestPreparedStatementCacheAsync(unittest.IsolatedAsyncioTestCase):
             await cursor.callproc("async_test_proc", (i, 0))
         
         # Should be cached
-        cache_key = (self.conn._client.context.database, "CALL async_test_proc(?, ?)")
-        self.assertIn(cache_key, self.conn._client.prepared_statement_cache)
+        cache_key = (_client(self.conn).context.database, "CALL async_test_proc(?, ?)")
+        self.assertIn(cache_key, _client(self.conn).prepared_statement_cache)
         
         await cursor.execute("DROP PROCEDURE async_test_proc")
         await cursor.close()
@@ -503,7 +539,7 @@ class TestPreparedStatementCacheAsync(unittest.IsolatedAsyncioTestCase):
         await cursor2.fetchone()
         
         # Should share cached statement
-        self.assertEqual(len(self.conn._client.prepared_statement_cache), 1)
+        self.assertEqual(len(_client(self.conn).prepared_statement_cache), 1)
         
         await cursor1.close()
         await cursor2.close()
@@ -521,7 +557,7 @@ class TestPerCursorStmtReuse(unittest.TestCase):
     """
 
     def setUp(self):
-        self.conn = mariadb.connect(**conf(), cache_prep_stmts=False)
+        self.conn = mariadb.connect(**conf(cache_prep_stmts=False))
         cursor = self.conn.cursor()
         cursor.execute("DROP TABLE IF EXISTS percursor_test")
         cursor.execute("CREATE TABLE percursor_test (id INT, name VARCHAR(100))")
@@ -546,13 +582,15 @@ class TestPerCursorStmtReuse(unittest.TestCase):
             # statement. (Pure-Python keeps the active statement in the cache;
             # the C connector keeps it attached to the cursor and the cache may
             # be momentarily empty — both satisfy "at most one".)
-            self.assertIsNotNone(cursor._local_stmt_cache)
-            self.assertLessEqual(len(cursor._local_stmt_cache), 1)
+            self.assertIsNotNone(_local_cache(cursor))
+            self.assertLessEqual(len(_local_cache(cursor)), 1)
 
             # Switching SQL still never accumulates statements.
             cursor.execute("SELECT id FROM percursor_test WHERE name = ?", ("b",))
-            self.assertEqual(cursor.fetchone()[0], 2)
-            self.assertLessEqual(len(cursor._local_stmt_cache), 1)
+            row = cursor.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], 2)
+            self.assertLessEqual(len(_local_cache(cursor)), 1)
         finally:
             cursor.close()
 
@@ -565,9 +603,9 @@ class TestPerCursorStmtReuse(unittest.TestCase):
             c2.execute("SELECT name FROM percursor_test WHERE id = ?", (2,))
             c2.fetchone()
 
-            self.assertIsNotNone(c1._local_stmt_cache)
-            self.assertIsNotNone(c2._local_stmt_cache)
-            self.assertIsNot(c1._local_stmt_cache, c2._local_stmt_cache)
+            self.assertIsNotNone(_local_cache(c1))
+            self.assertIsNotNone(_local_cache(c2))
+            self.assertIsNot(_local_cache(c1), _local_cache(c2))
         finally:
             c1.close()
             c2.close()
@@ -576,10 +614,10 @@ class TestPerCursorStmtReuse(unittest.TestCase):
         cursor = self.conn.cursor(binary=True)
         cursor.execute("SELECT name FROM percursor_test WHERE id = ?", (1,))
         cursor.fetchone()
-        self.assertIsNotNone(cursor._local_stmt_cache)
+        self.assertIsNotNone(_local_cache(cursor))
 
         cursor.close()
-        self.assertIsNone(cursor._local_stmt_cache)
+        self.assertIsNone(_local_cache(cursor))
 
 
 if __name__ == '__main__':

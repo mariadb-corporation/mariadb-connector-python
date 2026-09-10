@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 import os
 import sys
 import tempfile
@@ -12,8 +14,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import mariadb
-from ..base_test import create_connection, is_maxscale, is_native
-from ..conftest import get_test_config as conf
+from ..base_test import create_connection, is_maxscale
 
 
 @unittest.skipIf(is_maxscale(), "LOAD DATA LOCAL INFILE not supported through MaxScale")
@@ -176,7 +177,9 @@ class TestLocalInfile(unittest.TestCase):
             cursor.execute(sql)
             
             cursor.execute("SELECT COUNT(*) FROM local_infile_empty")
-            count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 0)
             
             cursor.close()
@@ -203,6 +206,7 @@ class TestLocalInfile(unittest.TestCase):
             # Connection should still be valid
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             cursor.close()
             conn.close()
@@ -258,7 +262,9 @@ class TestLocalInfile(unittest.TestCase):
             cursor.execute(sql)
             
             cursor.execute("SELECT COUNT(*) FROM local_infile_test")
-            count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, row_count)
             
             # Verify some rows
@@ -365,7 +371,9 @@ class TestLocalInfile(unittest.TestCase):
             cursor.execute(sql)
             
             cursor.execute("SELECT COUNT(*) FROM local_infile_test")
-            count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 1)
             
             cursor.close()
@@ -396,12 +404,15 @@ class TestLocalInfile(unittest.TestCase):
             
             # Verify data was loaded
             cursor.execute("SELECT COUNT(*) FROM local_infile_test")
-            count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 1)
             
             # Connection should still be valid
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             
             cursor.close()
@@ -430,12 +441,13 @@ class TestLocalInfile(unittest.TestCase):
             try:
                 cursor.execute(sql)
                 self.fail("Should have raised ProgrammingError when local_infile=False")
-            except (mariadb.ProgrammingError, mariadb.OperationalError, mariadb.DatabaseError) as e:
+            except (mariadb.ProgrammingError, mariadb.OperationalError, mariadb.DatabaseError):
                 pass    
             
             # Connection should still be valid after error
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             
             cursor.close()

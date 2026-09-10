@@ -1,6 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
 import os
 import unittest
 import platform
@@ -21,6 +22,8 @@ from packaging import version
 
 from ..base_test import is_mysql, is_skysql, is_maxscale, is_native, is_async_native, get_host_suffix
 from ..conftest import get_test_config as conf
+from mariadb_shared.async_connection_common import AsyncConnectionCommon
+from mariadb_shared.rows import TupleRow
 
 class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
 
@@ -99,8 +102,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(conn.autocommit, True)
 
     async def test_local_infile(self):
-        default_conf = conf()
-        new_conn = await mariadb.asyncConnect(**default_conf, local_infile=False)
+        new_conn = await mariadb.asyncConnect(**conf(local_infile=False))
         cursor = new_conn.cursor()
         await cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
         try:
@@ -117,11 +119,11 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
     async def test_tls_version(self):
         if is_maxscale():
             self.skipTest("MAXSCALE test has no SSL on port by default")
-        default_conf = conf()
-        conn = await mariadb.asyncConnect(**default_conf, tls_version="TLSv1.2", ssl_verify_cert=False)
+        conn = await mariadb.asyncConnect(**conf(tls_version="TLSv1.2", ssl_verify_cert=False))
         cursor = conn.cursor()
         await cursor.execute("SHOW STATUS LIKE 'ssl_version'")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[1], "TLSv1.2")
         await cursor.close()
         await conn.close()
@@ -129,31 +131,31 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
     async def test_tls_version_list(self):
         if is_maxscale():
             self.skipTest("MAXSCALE test has no SSL on port by default")
-        default_conf = conf()
-        conn = await mariadb.asyncConnect(**default_conf, tls_version="TLSv1.2,TLSv1.3", ssl_verify_cert=False)
+        conn = await mariadb.asyncConnect(**conf(tls_version="TLSv1.2,TLSv1.3", ssl_verify_cert=False))
         cursor = conn.cursor()
         await cursor.execute("SHOW STATUS LIKE 'ssl_version'")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertIn(row[1], ["TLSv1.2", "TLSv1.3"])
         await cursor.close()
         await conn.close()
 
     async def test_init_command(self):
-        default_conf = conf()
-        new_conn = await mariadb.asyncConnect(**default_conf, init_command="SET @a:=1")
+        new_conn = await mariadb.asyncConnect(**conf(init_command="SET @a:=1"))
         cursor = new_conn.cursor()
         await cursor.execute("SELECT @a")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         await cursor.close()
         await new_conn.close()
 
     async def test_compress(self):
-        default_conf = conf()
-        new_conn = await mariadb.asyncConnect(**default_conf, compress=True)
+        new_conn = await mariadb.asyncConnect(**conf(compress=True))
         cursor = new_conn.cursor()
         await cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
         row = await cursor.fetchone()
+        assert row is not None
         if is_maxscale() or is_async_native():
             self.assertEqual(row[1], "OFF")
         else:
@@ -301,6 +303,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             cursor = con.cursor()
             await cursor.execute("SELECT 'foo'")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "foo")
             await cursor.close()
             
@@ -318,7 +321,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         c1 = await mariadb.asyncConnect(**default_conf)
         self.assertEqual(c1.autocommit, False)
         await c1.close()
-        c1 = await mariadb.asyncConnect(**default_conf, autocommit=True)
+        c1 = await mariadb.asyncConnect(**conf(autocommit=True))
         self.assertEqual(c1.autocommit, True)
         await c1.close()
 
@@ -328,6 +331,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             cursor = con.cursor()
             await cursor.execute("drop schema if exists test123")
             db = con.database
+            assert db is not None
             try:
                 await cursor.execute("create schema test123")
             except mariadb.Error:
@@ -335,10 +339,12 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             await con.select_db("test123")
             await cursor.execute("select database()")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "test123")
             await con.select_db(db)
             await cursor.execute("select database()")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], db)
             self.assertEqual(row[0], con.database)
             await cursor.execute("drop schema test123")
@@ -384,14 +390,14 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         try:
             await mariadb.asyncConnect(**default_conf)
         except mariadb.ProgrammingError:
-            self.assertLess(parse_version(mariadb.mariadbapi_version),
+            self.assertLess(parse_version(str(mariadb.mariadbapi_version)),
                             parse_version('3.3.0'))
             pass
 
     async def test_no_timeout(self):
         default_conf = conf()
         default_conf["connect_timeout"] = 0
-        async with await mariadb.asyncConnect(**default_conf) as conn:
+        async with await mariadb.asyncConnect(**default_conf) as _conn:
             pass
 
     async def test_tls_verification(self):
@@ -403,18 +409,19 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         default_conf = conf()
         default_conf["ssl"] = False
         conn = await mariadb.asyncConnect(**default_conf)
-        self.assertEqual(conn._tls_verify_status, None)
+        self.assertEqual(conn._tls_verify_status, None)  # pyright: ignore  # white-box: implementation attribute
         await conn.close()
         default_conf = conf()
         default_conf["ssl"] = True
         default_conf["ssl_verify_cert"] = False
         conn = await mariadb.asyncConnect(**default_conf)
-        self.assertNotEqual(conn._tls_verify_status, None)
+        self.assertNotEqual(conn._tls_verify_status, None)  # pyright: ignore  # white-box: implementation attribute
         
         # Verify SSL is actually being used after connection
         cursor = conn.cursor()
         await cursor.execute("SHOW STATUS LIKE 'Ssl_cipher'")
         row = await cursor.fetchone()
+        assert row is not None
         await cursor.close()
         self.assertIsNotNone(row, "Ssl_cipher status should be available")
         self.assertNotEqual(row[1], '', "Ssl_cipher should not be empty when SSL is enabled")
@@ -432,7 +439,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         default_conf["ssl_verify_cert"] = False
 
         conn = await mariadb.asyncConnect(**default_conf)
-        self.assertEqual(conn._tls, True)
+        self.assertEqual(conn._tls, True)  # pyright: ignore  # white-box: implementation attribute
         
         # Verify TLS cipher and version are set
         self.assertIsNotNone(conn.tls_cipher)
@@ -448,8 +455,9 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         default_conf = conf()
         default_conf["tls_fp"] = fp
         conn = await mariadb.asyncConnect(**default_conf)
-        self.assertEqual(conn._tls, True)
+        self.assertEqual(conn._tls, True)  # pyright: ignore  # white-box: implementation attribute
         x509_info = conn.tls_peer_cert_info
+        assert x509_info is not None
         self.assertEqual(fp, x509_info["fingerprint"])
         await conn.close()
 
@@ -462,10 +470,10 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         
         try:
             # Test _tls property - should be False for non-SSL connection
-            self.assertFalse(conn._tls)
+            self.assertFalse(conn._tls)  # pyright: ignore  # white-box: implementation attribute
             
             # Test _tls_verify_status - should be None for non-SSL connection
-            self.assertIsNone(conn._tls_verify_status)
+            self.assertIsNone(conn._tls_verify_status)  # pyright: ignore  # white-box: implementation attribute
             
             # Test tls_version - should be None for non-SSL connection
             self.assertIsNone(conn.tls_version)
@@ -506,6 +514,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             # Verify data is visible in same transaction
             await cursor.execute("SELECT * FROM test_begin_async")
             result = await cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             self.assertEqual(result[1], 'test')
             
@@ -514,7 +523,9 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             
             # Verify table still exists but data is rolled back
             await cursor.execute("SELECT COUNT(*) FROM test_begin_async")
-            count = (await cursor.fetchone())[0]
+            row = await cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 0)
             
             # Test 2: Multiple begin() calls should work
@@ -526,7 +537,9 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             
             # Verify both inserts are committed
             await cursor.execute("SELECT COUNT(*) FROM test_begin_async")
-            count = (await cursor.fetchone())[0]
+            row = await cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 2)
             
             await cursor.close()
@@ -551,7 +564,9 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             await conn.rollback()
             
             await cursor.execute("SELECT COUNT(*) FROM test_begin_autocommit_async")
-            count = (await cursor.fetchone())[0]
+            row = await cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 0)
             
             await cursor.close()
@@ -567,7 +582,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         # Check if cryptography package is available for PARSEC
         has_cryptography = False
         try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
             has_cryptography = True
         except ImportError:
             pass
@@ -654,6 +669,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                     cursor = conn.cursor()
                     await cursor.execute("SELECT 1")
                     result = await cursor.fetchone()
+                    assert result is not None
                     self.assertEqual(result[0], 1, 
                         f"Connection with {plugin} and fingerprint validation should work")
                     await cursor.close()
@@ -706,11 +722,11 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             # Cleanup: Drop test users
             for username, _, _ in test_users:
                 try:
-                    await cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                    await cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")  # pyright: ignore[reportPossiblyUnboundVariable]  # bound in the try above
                 except:
                     pass
             
-            await cursor.close()
+            await cursor.close()  # pyright: ignore[reportPossiblyUnboundVariable]  # bound in the try above
 
     async def test_pre41_error_format(self):
         """Test handling of pre-4.1 error format when max connections is reached"""
@@ -728,6 +744,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         cursor = self.connection.cursor()
         await cursor.execute("SELECT @@max_connections")
         result = await cursor.fetchone()
+        assert result is not None
         max_connections = result[0]
         await cursor.close()
         
@@ -738,7 +755,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
         if max_connections >= 1000:
             self.skipTest(f"max_connections too high ({max_connections}), skipping test")
         
-        connections = []
+        connections: list[AsyncConnectionCommon[TupleRow]] = []
         try:
             # Try to create max_connections + 2 connections to exceed the limit
             # Note: max_connections reserves 1 extra slot for SUPER/CONNECTION_ADMIN users
@@ -749,6 +766,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                     cursor = conn.cursor()
                     await cursor.execute(f"SELECT {i}")
                     result = await cursor.fetchone()
+                    assert result is not None
                     if result[0] != i:
                         raise RuntimeError(f"Query returned {result[0]}, expected {i}")
                     await cursor.close()
@@ -806,6 +824,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             cursor = conn.cursor()
             await cursor.execute("SHOW STATUS LIKE 'Ssl_cipher'")
             result = await cursor.fetchone()
+            assert result is not None
             self.assertIsNotNone(result)
             self.assertNotEqual(result[1], '', "SSL cipher should not be empty")
             await cursor.close()
@@ -874,7 +893,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
             # This might succeed if server supports SSL without client certs
             conn = await mariadb.asyncConnect(**test_conf3)
             # If it succeeds, verify SSL is enabled
-            self.assertTrue(conn._tls or True)  # Connection succeeded
+            self.assertTrue(conn._tls or True)  # Connection succeeded  # pyright: ignore  # white-box: implementation attribute
             await conn.close()
         except (mariadb.OperationalError, mariadb.DatabaseError):
             # Expected if server doesn't support SSL or requires certs
@@ -908,6 +927,7 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 c = conn.cursor()
                 await c.execute("SELECT 1")
                 row = await c.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], 1)
                 await c.close()
             finally:
@@ -938,13 +958,14 @@ class AsyncTestConnection(unittest.IsolatedAsyncioTestCase):
                 f"TO 'lenenc_async_cu_user'{get_host_suffix()}"
             )
             # ssl disabled: change_user re-auth can't re-validate a self-signed (zero-conf) cert
-            conn = await mariadb.asyncConnect(**{**conf(), 'ssl': False})
+            conn = await mariadb.asyncConnect(**conf(ssl=False))
             try:
                 await conn.change_user('lenenc_async_cu_user', long_password, conf()['database'])
                 self.assertEqual(conn.user, 'lenenc_async_cu_user')
                 c = conn.cursor()
                 await c.execute("SELECT 1")
                 row = await c.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], 1)
                 await c.close()
             finally:

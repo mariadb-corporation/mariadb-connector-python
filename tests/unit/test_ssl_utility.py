@@ -1,3 +1,5 @@
+# White-box unit test: it exercises private helpers of the implementation on purpose.
+# pyright: reportPrivateUsage=false
 """
 Unit tests for SSLUtility class
 """

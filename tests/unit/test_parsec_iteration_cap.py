@@ -1,5 +1,12 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# White-box unit test: it exercises private helpers of the implementation on purpose.
+# pyright: reportPrivateUsage=false
+# _Conf and the other stand-ins are deliberately minimal doubles of the real
+# configuration objects: only what the plugin reads exists on them.
+# pyright: reportArgumentType=false, reportFunctionMemberAccess=false
+
+
 
 """
 CONPY-372: the parsec iteration factor a server announces must be bounded by
@@ -35,9 +42,11 @@ from mariadb.impl.plugin.authentication.parsec_password_plugin import (
 )
 from tests.base_test import is_native
 from tests.unit._fakeserver import (
+    Handler,
     COM_QUIT, FakeServer, fake_conf, handshake_greeting, ok, pkt,
     recv_one_packet,
 )
+import socket
 
 # 32-byte extended salt, as the server sends after the salt request.
 _SALT = bytes(range(32))
@@ -59,11 +68,11 @@ _FACTOR_ABOVE_OLD_LIMIT = 4
 class _Conf:
     """Stand-in for Configuration: the plugin only reads connect_timeout."""
 
-    def __init__(self, connect_timeout):
+    def __init__(self, connect_timeout: float | None) -> None:
         self.connect_timeout = connect_timeout
 
 
-def _salt_response(iterations_exp, algorithm=0x50):
+def _salt_response(iterations_exp: int, algorithm: int = 0x50) -> memoryview:
     """Server reply to PARSEC_REQUEST_SALT: algorithm, factor, extended salt."""
     return memoryview(bytes([algorithm, iterations_exp]) + _SALT)
 
@@ -71,26 +80,26 @@ def _salt_response(iterations_exp, algorithm=0x50):
 class _Exchange:
     """Records what the plugin writes and feeds it the scripted salt response."""
 
-    def __init__(self, response):
+    def __init__(self, response: memoryview) -> None:
         self._response = response
-        self.written = []
+        self.written: list[str] = []
         self._reads = 0
 
-    def read_sync(self):
+    def read_sync(self) -> memoryview:
         self._reads += 1
         return self._response
 
-    def write_sync(self, payload, tag, compress):
+    def write_sync(self, payload: bytearray, tag: str, compress: bool) -> None:
         self.written.append(tag)
 
-    async def read_async(self):
+    async def read_async(self) -> memoryview:
         return self.read_sync()
 
-    async def write_async(self, payload, tag, compress):
+    async def write_async(self, payload: bytearray, tag: str, compress: bool) -> None:
         self.write_sync(payload, tag, compress)
 
 
-def _run_sync(plugin, response):
+def _run_sync(plugin: ParsecPasswordPlugin, response: memoryview) -> _Exchange:
     exchange = _Exchange(response)
     try:
         plugin.processSync(exchange.read_sync, exchange.write_sync, None)
@@ -99,7 +108,7 @@ def _run_sync(plugin, response):
     return exchange
 
 
-def _run_async(plugin, response):
+def _run_async(plugin: ParsecPasswordPlugin, response: memoryview) -> _Exchange:
     exchange = _Exchange(response)
     try:
         asyncio.run(
@@ -153,7 +162,7 @@ class TestParsecIterationCap(unittest.TestCase):
 class TestParsecIterationEnforcement(unittest.TestCase):
     """The cap as enforced on the wire, sync and async."""
 
-    def _plugin(self, connect_timeout=10):
+    def _plugin(self, connect_timeout: float = 10) -> ParsecPasswordPlugin:
         return ParsecPasswordPlugin("password", bytes(32), _Conf(connect_timeout))
 
     def test_factor_above_cap_rejected_before_credentials_are_sent(self):
@@ -187,8 +196,9 @@ class TestParsecIterationEnforcement(unittest.TestCase):
                 self.assertEqual(["PARSEC_REQUEST_SALT", "PARSEC_AUTH"],
                                  exchange.written)
                 # 'P' + factor + salt + 32-byte Ed25519 public key
-                self.assertEqual(bytes([0x50, _FACTOR_ABOVE_OLD_LIMIT]) + _SALT,
-                                 plugin.hash(None)[:34])
+                digest = plugin.hash(None)
+                assert digest is not None
+                self.assertEqual(bytes([0x50, _FACTOR_ABOVE_OLD_LIMIT]) + _SALT, digest[:34])
 
     def test_non_pbkdf2_algorithm_still_rejected(self):
         plugin = self._plugin()
@@ -202,7 +212,9 @@ class TestParsecIterationEnforcement(unittest.TestCase):
         # two must agree bit for bit or authentication fails.
         plugin = ParsecPasswordPlugin("password", bytes(32), _Conf(10))
         plugin._derive_key_and_sign(_SALT, _FACTOR_ABOVE_OLD_LIMIT)
-        derived_public_key = plugin.hash(None)[34:]
+        digest = plugin.hash(None)
+        assert digest is not None
+        derived_public_key = digest[34:]
 
         reference = hashlib.pbkdf2_hmac(
             'sha512', b"password", _SALT, 1024 << _FACTOR_ABOVE_OLD_LIMIT, dklen=32)
@@ -224,13 +236,13 @@ class TestParsecIterationEnforcement(unittest.TestCase):
             "for the duration of the PBKDF2 derivation")
 
 
-def _parsec_server(iterations_exp, captured):
+def _parsec_server(iterations_exp: int, captured: dict[str, bytes | None]) -> Handler:
     """Fake server that switches the client to parsec and drives the exchange.
 
     Sequence ids continue the handshake: the auth-switch request is 2, the
     client's salt request 3, the salt response 4, its scramble/signature 5.
     """
-    def handler(conn):
+    def handler(conn: socket.socket) -> None:
         conn.sendall(handshake_greeting())
         recv_one_packet(conn)                                  # handshake response
         conn.sendall(pkt(2, b"\xfe" + b"parsec\x00" + _SEED))  # auth switch
@@ -251,7 +263,7 @@ def _parsec_server(iterations_exp, captured):
     return handler
 
 
-def _verify_signature(auth, iterations_exp, password=b"p"):
+def _verify_signature(auth: bytes, iterations_exp: int, password: bytes = b"p") -> None:
     """Re-derive the key server-side and check the client's Ed25519 signature.
 
     Proves the whole pure-Python path ran: the derivation used the salt and
@@ -278,18 +290,20 @@ class TestParsecOverPurePythonClient(unittest.TestCase):
     """
 
     def test_connect_succeeds_above_the_old_hardcoded_limit(self):
-        captured = {}
+        captured: dict[str, bytes | None] = {}
         # connect_timeout 10 -> cap 13, so factor 4 is comfortably affordable
         # while staying cheap enough to derive in a unit test.
         with FakeServer(_parsec_server(_FACTOR_ABOVE_OLD_LIMIT, captured)) as server:
             con = mariadb.connect(**fake_conf(server.port, connect_timeout=10))
             con.close()
         self.assertIsNone(server.error)
-        self.assertEqual(96, len(captured['auth']))  # 32-byte scramble + 64-byte signature
-        _verify_signature(captured['auth'], _FACTOR_ABOVE_OLD_LIMIT)
+        auth = captured['auth']
+        assert auth is not None
+        self.assertEqual(96, len(auth))  # 32-byte scramble + 64-byte signature
+        _verify_signature(auth, _FACTOR_ABOVE_OLD_LIMIT)
 
     def test_connect_rejects_a_factor_above_the_budget(self):
-        captured = {}
+        captured: dict[str, bytes | None] = {}
         # connect_timeout 2 -> cap 11, so the server demanding 12 is refused.
         with FakeServer(_parsec_server(12, captured)) as server:
             with self.assertRaises(OperationalError) as ctx:
@@ -304,7 +318,7 @@ class TestParsecOverPurePythonClient(unittest.TestCase):
         # Same server, same factor: refused on a 2s budget, accepted on 10s.
         # This is what the plugin can only get from the Configuration, so it
         # fails if the factory stops passing conf through.
-        captured = {}
+        captured: dict[str, bytes | None] = {}
         with FakeServer(_parsec_server(12, captured)) as server:
             with self.assertRaises(OperationalError):
                 mariadb.connect(**fake_conf(server.port, connect_timeout=2))

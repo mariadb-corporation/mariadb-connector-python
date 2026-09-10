@@ -1,5 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# White-box unit test: it exercises private helpers of the implementation on purpose.
+# pyright: reportPrivateUsage=false
 
 """
 Regression test: the server-initiated LOAD DATA LOCAL INFILE handler must FAIL
@@ -15,6 +17,7 @@ no SQL to validate against (sql is None), and when the filename does not match.
 import unittest
 import mariadb
 from mariadb.impl.client.sync_client import SyncClient
+from typing import Any
 
 
 class _Cfg:
@@ -28,14 +31,14 @@ class _FakeClient:
     _validate_local_filename = SyncClient._validate_local_filename
 
     def __init__(self):
-        self.sent = []
+        self.sent: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
-    def write_payload(self, *args, **kwargs):
+    def write_payload(self, *args: Any, **kwargs: Any) -> None:
         # the handler writes an empty packet to keep the stream sane before raising
         self.sent.append((args, kwargs))
 
 
-def _request(filename):
+def _request(filename: str) -> memoryview:
     # 0xFB marker + NUL-terminated filename, as the server sends it
     return memoryview(bytearray([0xFB]) + filename.encode("utf-8") + b"\x00")
 

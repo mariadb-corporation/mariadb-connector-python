@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# The DB-API compliance suite checks runtime types and class hierarchies on purpose.
+# pyright: reportUnnecessaryIsInstance=false
+
+
 
 ''' Python DB API 2.0 driver compliance unit test suite.
 
@@ -72,6 +76,8 @@ import datetime
 from ..conftest import get_test_config as conf
 
 from ..base_test import is_maxscale
+from typing import Any
+from mariadb_shared.sync_cursor_common import SyncCursorCommon
 
 
 class DatabaseAPI20Test(unittest.TestCase):
@@ -113,10 +119,10 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     # Some drivers may need to override these helpers, for example adding
     # a 'commit' after the execute.
-    def executeDDL1(self, cursor):
+    def executeDDL1(self, cursor: SyncCursorCommon[Any]) -> None:
         cursor.execute(self.ddl1)
 
-    def executeDDL2(self, cursor):
+    def executeDDL2(self, cursor: SyncCursorCommon[Any]) -> None:
         cursor.execute(self.ddl2)
 
     def setUp(self):
@@ -131,8 +137,8 @@ class DatabaseAPI20Test(unittest.TestCase):
             The default drops the tables that may be created.
         '''
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             for ddl in (self.xddl1, self.xddl2):
                 try:
                     cur.execute(ddl)
@@ -247,19 +253,17 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_cursor(self):
         con = self._connect()
-        try:
-            cur = con.cursor()
-        finally:
-            cur.close()
-            con.close()
+        cur = con.cursor()
+        cur.close()
+        con.close()
 
     def test_cursor_isolation(self):
         con = self._connect()
+        # Make sure cursors created from the same connection have
+        # the documented transaction isolation level
+        cur1 = con.cursor()
+        cur2 = con.cursor()
         try:
-            # Make sure cursors created from the same connection have
-            # the documented transaction isolation level
-            cur1 = con.cursor()
-            cur2 = con.cursor()
             self.executeDDL1(cur1)
             cur1.execute("insert into %sbooze values ('Victoria Bitter')" % (
                 self.table_prefix
@@ -276,8 +280,8 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_description(self):
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             self.executeDDL1(cur)
             self.assertEqual(cur.description, None,
                              'cursor.description should be none after '
@@ -285,6 +289,7 @@ class DatabaseAPI20Test(unittest.TestCase):
                              'rows (such as DDL)'
                              )
             cur.execute('select name from %sbooze' % self.table_prefix)
+            assert cur.description is not None
             self.assertEqual(len(cur.description), 1,
                              'cursor.description describes too many columns'
                              )
@@ -331,8 +336,8 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_rowcount(self):
         con = self._connect()
+        cur = con.cursor(buffered=True)
         try:
-            cur = con.cursor(buffered=True)
             self.executeDDL1(cur)
             self.assertEqual(cur.rowcount, 0,
                              'cursor.rowcount should be 0 after executing '
@@ -357,10 +362,8 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_close(self):
         con = self._connect()
-        try:
-            cur = con.cursor()
-        finally:
-            con.close()
+        cur = con.cursor()
+        con.close()
         
         # cursor.execute should raise an Error if called after connection
         # closed
@@ -375,13 +378,13 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_execute(self):
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             self._paraminsert(cur)
         finally:
             con.close()
 
-    def _paraminsert(self, cur):
+    def _paraminsert(self, cur: SyncCursorCommon[Any]) -> None:
         self.executeDDL1(cur)
         cur.execute("insert into %sbooze values ('Victoria Bitter')" % (
             self.table_prefix
@@ -435,8 +438,8 @@ class DatabaseAPI20Test(unittest.TestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             self.executeDDL1(cur)
             largs = [("Cooper's",), ("Boag's",)]
             margs = [{'beer': "Cooper's"}, {'beer': "Boag's"}]
@@ -489,8 +492,8 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_fetchone(self):
         con = self._connect()
+        cur = con.cursor(buffered=True)
         try:
-            cur = con.cursor(buffered=True)
 
             # cursor.fetchone should raise an Error if called before
             # executing a select-type query
@@ -517,6 +520,7 @@ class DatabaseAPI20Test(unittest.TestCase):
 
             cur.execute('select name from %sbooze' % self.table_prefix)
             r = cur.fetchone()
+            assert r is not None
             self.assertEqual(len(r), 1,
                              'cursor.fetchone should have retrieved a single '
                              ' row'
@@ -553,8 +557,8 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_fetchmany(self):
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
 
             # cursor.fetchmany should raise an Error if called without
             # issuing a query
@@ -639,8 +643,8 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_fetchall(self):
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             # cursor.fetchall should raise an Error if called
             # without executing a query that may return rows (such
             # as a select)
@@ -688,16 +692,18 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_mixedfetch(self):
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             self.executeDDL1(cur)
             for sql in self._populate():
                 cur.execute(sql)
 
             cur.execute('select name from %sbooze' % self.table_prefix)
             rows1 = cur.fetchone()
+            assert rows1 is not None
             rows23 = cur.fetchmany(2)
             rows4 = cur.fetchone()
+            assert rows4 is not None
             rows56 = cur.fetchall()
             self.assertTrue(cur.rowcount in (-1, 6))
             self.assertEqual(len(rows23), 2,
@@ -719,7 +725,7 @@ class DatabaseAPI20Test(unittest.TestCase):
         finally:
             con.close()
 
-    def help_nextset_setUp(self, cur):
+    def help_nextset_setUp(self, cur: SyncCursorCommon[Any]) -> None:
         ''' Should create a procedure called deleteme
             that returns two result sets, first the
       number of rows in booze then "name from booze"
@@ -734,7 +740,7 @@ class DatabaseAPI20Test(unittest.TestCase):
         # """
         # cur.execute(sql)
 
-    def help_nextset_tearDown(self, cur):
+    def help_nextset_tearDown(self, cur: SyncCursorCommon[Any]) -> None:
         'If cleaning up is needed after nextSetTest'
         raise NotImplementedError('Helper not implemented')
         # cur.execute("drop procedure deleteme")
@@ -742,8 +748,8 @@ class DatabaseAPI20Test(unittest.TestCase):
     def test_arraysize(self):
         # Not much here - rest of the tests for this are in test_fetchmany
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             self.assertTrue(hasattr(cur, 'arraysize'),
                             'cursor.arraysize must be defined'
                             )
@@ -752,8 +758,8 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_setinputsizes(self):
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             cur.setinputsizes((25,))
             self._paraminsert(cur)  # Make sure cursor still works
         finally:
@@ -761,8 +767,8 @@ class DatabaseAPI20Test(unittest.TestCase):
 
     def test_None(self):
         con = self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             self.executeDDL1(cur)
             cur.execute('insert into %sbooze values (NULL)'
                         % self.table_prefix)

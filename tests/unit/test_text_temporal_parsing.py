@@ -51,7 +51,7 @@ EXPECTED = [expected for _, expected in CASES]
 
 
 def _responder():
-    def on_query(payload):
+    def on_query(payload: bytes) -> bytes:
         if _MARKER in query_text(payload):
             return text_resultset(COLS, ROWS)
         return ok()
@@ -98,7 +98,7 @@ TIME_EXPECTED = [(expected,) for _, expected in TIME_CASES]
 
 
 def _time_responder():
-    def on_query(payload):
+    def on_query(payload: bytes) -> bytes:
         if _MARKER in query_text(payload):
             return text_resultset(TIME_COLS, TIME_ROWS)
         return ok()

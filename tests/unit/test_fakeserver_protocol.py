@@ -16,17 +16,19 @@ import pytest
 import mariadb
 from tests.base_test import is_native
 from tests.unit._fakeserver import (
+    ColumnSpec, Responder, Row,
     FakeServer, scripted_handler, query_text, fake_conf,
     text_resultset, binary_resultset, ok, prepare_ok,
     MARIADB_CLIENT_BULK_UNIT_RESULTS, MARIADB_CLIENT_STMT_BULK_OPERATIONS,
     MYSQL_TYPE_LONG, MYSQL_TYPE_VAR_STRING,
 )
+from typing import Sequence
 
 _MARKER = "fake_table_marker"
 
 
-def _text_responder(columns, rows):
-    def on_query(payload):
+def _text_responder(columns: Sequence[ColumnSpec], rows: Sequence[Row]) -> Responder:
+    def on_query(payload: bytes) -> bytes:
         sql = query_text(payload)
         if _MARKER in sql:
             return text_resultset(columns, rows)
@@ -34,14 +36,14 @@ def _text_responder(columns, rows):
     return on_query
 
 
-def _prepare_responder(columns, num_params):
-    def on_prepare(payload):
+def _prepare_responder(columns: Sequence[ColumnSpec], num_params: int) -> Responder:
+    def on_prepare(payload: bytes) -> bytes:
         return prepare_ok(stmt_id=1, columns=columns, num_params=num_params)
     return on_prepare
 
 
-def _binary_exec_responder(columns, rows):
-    def on_execute(payload):
+def _binary_exec_responder(columns: Sequence[ColumnSpec], rows: Sequence[Row]) -> Responder:
+    def on_execute(payload: bytes) -> bytes:
         return binary_resultset(columns, rows)
     return on_execute
 
@@ -168,7 +170,7 @@ py_only = pytest.mark.skipif(not is_native(),
 
 
 def _multi_responder():
-    def on_query(payload):
+    def on_query(payload: bytes) -> bytes:
         if _MARKER in query_text(payload):
             return text_multi_resultset(_MULTI_SETS)
         return ok()

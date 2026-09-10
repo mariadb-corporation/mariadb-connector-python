@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+# Plugin factories are exercised directly with None in place of the
+# configuration and host address they do not need here.
+# pyright: reportArgumentType=false
+
 """
 Async Authentication Plugin Tests for MariaDB Connector/Python
 
@@ -12,7 +17,6 @@ Tests for various authentication plugins including:
 import unittest
 import os
 import sys
-import pytest
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -20,6 +24,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import mariadb
 from tests.base_test import is_maxscale, is_native, get_host_suffix
 from tests.conftest import get_test_config
+from mariadb_shared.async_connection_common import AsyncConnectionCommon
+from mariadb_shared.async_cursor_common import AsyncCursorCommon
+from mariadb_shared.rows import TupleRow
 
 @unittest.skipIf(is_maxscale(), "PARSEC authentication plugin not available through MaxScale")
 class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
@@ -29,7 +36,7 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
     def setUpClass(cls):
         """Set up test class - check if PARSEC authentication is available"""
         try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
             cls.has_cryptography = True
         except ImportError:
             cls.has_cryptography = False
@@ -100,6 +107,7 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         parsec_cursor = parsec_conn.cursor()
         await parsec_cursor.execute("SELECT USER()")
         user_result = await parsec_cursor.fetchone()
+        assert user_result is not None
         self.assertIn('parsec_test_user', user_result[0])
         
         await parsec_cursor.close()
@@ -130,6 +138,7 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         parsec_cursor = parsec_conn.cursor()
         await parsec_cursor.execute("SELECT 1")
         result = await parsec_cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 1)
         
         await parsec_cursor.close()
@@ -184,6 +193,7 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         parsec_cursor = parsec_conn.cursor()
         await parsec_cursor.execute("SELECT DATABASE()")
         db_result = await parsec_cursor.fetchone()
+        assert db_result is not None
         self.assertEqual(db_result[0], get_test_config()["database"])
         
         await parsec_cursor.close()
@@ -215,6 +225,7 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         parsec_cursor = parsec_conn.cursor()
         await parsec_cursor.execute("SELECT 'Unicode test'")
         result = await parsec_cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 'Unicode test')
         
         await parsec_cursor.close()
@@ -248,6 +259,7 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         parsec_cursor = parsec_conn.cursor()
         await parsec_cursor.execute("SELECT VERSION()")
         version = await parsec_cursor.fetchone()
+        assert version is not None
         self.assertIsNotNone(version[0])
         
         await parsec_cursor.close()
@@ -270,24 +282,28 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         conn_config['password'] = test_password
         
         # Create multiple connections
-        connections = []
+        connections: list[tuple[AsyncConnectionCommon[TupleRow], AsyncCursorCommon[TupleRow]]] = []
         try:
-            for i in range(5):
+            for _ in range(5):
                 conn = await mariadb.AsyncConnection.connect(**conn_config)
                 self.assertIsNotNone(conn)
                 
                 cursor = conn.cursor()
                 await cursor.execute("SELECT CONNECTION_ID()")
-                conn_id = (await cursor.fetchone())[0]
+                row = await cursor.fetchone()
+                assert row is not None
+                conn_id = row[0]
                 self.assertIsNotNone(conn_id)
                 
                 connections.append((conn, cursor))
             
             # Verify all connections are independent
-            conn_ids = set()
+            conn_ids: set[int] = set()
             for conn, cursor in connections:
                 await cursor.execute("SELECT CONNECTION_ID()")
-                conn_ids.add((await cursor.fetchone())[0])
+                row = await cursor.fetchone()
+                assert row is not None
+                conn_ids.add(row[0])
             
             self.assertEqual(len(conn_ids), 5, "All connections should have unique IDs")
             
@@ -317,7 +333,9 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         conn1 = await mariadb.AsyncConnection.connect(**conn_config)
         cursor1 = conn1.cursor()
         await cursor1.execute("SELECT 1")
-        self.assertEqual((await cursor1.fetchone())[0], 1)
+        row = await cursor1.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 1)
         await cursor1.close()
         await conn1.close()
         
@@ -325,7 +343,9 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         conn2 = await mariadb.AsyncConnection.connect(**conn_config)
         cursor2 = conn2.cursor()
         await cursor2.execute("SELECT 2")
-        self.assertEqual((await cursor2.fetchone())[0], 2)
+        row = await cursor2.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 2)
         await cursor2.close()
         await conn2.close()
         
@@ -333,7 +353,9 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         conn3 = await mariadb.AsyncConnection.connect(**conn_config)
         cursor3 = conn3.cursor()
         await cursor3.execute("SELECT 3")
-        self.assertEqual((await cursor3.fetchone())[0], 3)
+        row = await cursor3.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 3)
         await cursor3.close()
         await conn3.close()
     
@@ -376,17 +398,20 @@ class AsyncTestParsecAuthentication(unittest.IsolatedAsyncioTestCase):
         parsec_cursor = parsec_ssl_conn.cursor()
         await parsec_cursor.execute("SHOW STATUS LIKE 'Ssl_cipher'")
         ssl_row = await parsec_cursor.fetchone()
+        assert ssl_row is not None
         self.assertIsNotNone(ssl_row, "Ssl_cipher status should be available")
         self.assertNotEqual(ssl_row[1], '', "Ssl_cipher should not be empty when SSL is enabled")
         
         # Verify PARSEC authentication worked
         await parsec_cursor.execute("SELECT USER()")
         user_result = await parsec_cursor.fetchone()
+        assert user_result is not None
         self.assertIn('parsec_test_user', user_result[0])
         
         # Execute a query to ensure connection is fully functional
         await parsec_cursor.execute("SELECT 'SSL + PARSEC test'")
         result = await parsec_cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 'SSL + PARSEC test')
         
         await parsec_cursor.close()
@@ -399,7 +424,7 @@ class TestAuthenticationPluginFactory(unittest.TestCase):
     def test_parsec_plugin_available(self):
         """Test that PARSEC plugin is available in the plugin registry"""
         try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
             has_cryptography = True
         except ImportError:
             has_cryptography = False
@@ -419,7 +444,7 @@ class TestAuthenticationPluginFactory(unittest.TestCase):
     def test_parsec_plugin_creation(self):
         """Test creating PARSEC plugin instance"""
         try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
             has_cryptography = True
         except ImportError:
             has_cryptography = False

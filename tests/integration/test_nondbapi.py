@@ -2,7 +2,6 @@
 
 # -*- coding: utf-8 -*-
 
-import os
 import unittest
 import mariadb
 
@@ -33,7 +32,7 @@ class CursorTest(unittest.TestCase):
         # is native connector doesn't implement auto_reconnect
         if not is_native():
             new_conn = create_connection()
-            new_conn.auto_reconnect = True
+            new_conn.auto_reconnect = True  # pyright: ignore  # C implementation only
             id = new_conn.connection_id
             self.connection.kill(id)
             new_conn.ping()
@@ -146,7 +145,7 @@ class CursorTest(unittest.TestCase):
     def test_escape(self):
         cursor = self.connection.cursor()
         cursor.execute("CREATE TEMPORARY TABLE test_escape (a varchar(100))")
-        str = 'This is a \ and a \"'  # noqa: W605
+        str = 'This is a \\ and a "'
         cmd = "INSERT INTO test_escape VALUES('%s')" % str
 
         try:

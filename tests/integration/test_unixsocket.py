@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+
 """
 Unix Socket Connection Tests
 
@@ -11,17 +12,13 @@ Based on mariadb-connector-j UnixsocketTest.java
 """
 
 import os
-import sys
 import unittest
 import platform
 
 from ..conftest import get_test_config
 from ..base_test import create_connection, is_maxscale
 
-try:
-    import mariadb
-except ImportError:
-    mariadb = None
+import mariadb
 
 
 def is_windows():
@@ -34,12 +31,11 @@ def is_local_test():
     local_env = os.getenv("LOCAL_DB", "")
     return local_env == "local" or local_env == ""
 
-def generate_long_text(length):
+def generate_long_text(length: int) -> str:
     """Generate a long text string for testing"""
     return 'a' * length
 
 
-@unittest.skipIf(mariadb is None, "mariadb module not available")
 @unittest.skipIf(is_maxscale(), "Unix socket connections not supported through MaxScale")
 class TestUnixSocket(unittest.TestCase):
     """Test Unix socket connections"""
@@ -59,7 +55,7 @@ class TestUnixSocket(unittest.TestCase):
                 ")"
             )
             cursor.close()
-        except Exception as e:
+        except Exception:
             if hasattr(cls, 'conn'):
                 cls.conn.close()
             raise
@@ -143,6 +139,7 @@ class TestUnixSocket(unittest.TestCase):
             # Query the data
             socket_cursor.execute("SELECT * FROM test_unixsocket_table")
             result = socket_cursor.fetchone()
+            assert result is not None
             
             # Verify data
             self.assertIsNotNone(result)
@@ -171,7 +168,7 @@ class TestUnixSocket(unittest.TestCase):
         conf.pop('port', None)
         
         # Try to connect multiple times to check for resource leaks
-        for i in range(10):
+        for _ in range(10):
             with self.assertRaises(mariadb.OperationalError):
                 mariadb.connect(**conf)
         
@@ -221,6 +218,7 @@ class TestUnixSocket(unittest.TestCase):
             cursor = socket_conn.cursor()
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             cursor.close()
             
@@ -267,6 +265,7 @@ class TestUnixSocket(unittest.TestCase):
             # First test a simple query to verify connection works
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1, "Simple query should work")
             
             # Test multiple inserts using string formatting (avoid parameterized queries for now)
@@ -333,7 +332,9 @@ class TestUnixSocket(unittest.TestCase):
                              f"Expected unix_socket to be auto-detected as {detected}")
             cursor = conn.cursor()
             cursor.execute("SELECT 1")
-            self.assertEqual(cursor.fetchone()[0], 1)
+            row = cursor.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], 1)
             cursor.close()
         finally:
             conn.close()
@@ -356,7 +357,7 @@ class TestUnixSocket(unittest.TestCase):
         conf = get_test_config()
         conf.pop('unix_socket', None)
         conf['host'] = 'localhost'
-        conf['protocol'] = 'TCP'
+        conf['protocol'] = 'TCP'  # pyright: ignore  # deliberately invalid configuration
         # This checks socket routing, not TLS. Under secure-by-default a forced
         # TCP connection to 'localhost' is classified remote (matching libmariadb),
         # so a self-signed server would otherwise fail certificate verification.
@@ -370,7 +371,9 @@ class TestUnixSocket(unittest.TestCase):
                                 "server_port should be non-zero for a TCP connection")
             cursor = conn.cursor()
             cursor.execute("SELECT 1")
-            self.assertEqual(cursor.fetchone()[0], 1)
+            row = cursor.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], 1)
             cursor.close()
         finally:
             conn.close()

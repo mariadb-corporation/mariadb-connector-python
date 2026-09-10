@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 import unittest
 import mariadb
 from tests.base_test import is_native
@@ -52,9 +54,13 @@ class TestStreaming(unittest.TestCase):
         try:
             cursor = con.cursor(buffered=False)
             cursor.execute("CALL p_sync_stream_multi()")
-            self.assertEqual(cursor.fetchone()[0], 100)
+            row = cursor.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], 100)
             self.assertTrue(cursor.nextset())
-            self.assertEqual(cursor.fetchone()[0], 200)
+            row = cursor.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], 200)
             while cursor.nextset() is not None:
                 pass
             cursor.close()
@@ -75,11 +81,15 @@ class TestStreaming(unittest.TestCase):
         try:
             cursor = con.cursor(buffered=False)
             cursor.execute("CALL p_sync_close_multi()")
-            self.assertEqual(cursor.fetchone()[0], 1)
+            row = cursor.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], 1)
             cursor.close()
             c2 = con.cursor()
             c2.execute("SELECT 42")
-            self.assertEqual(c2.fetchone()[0], 42)
+            row = c2.fetchone()
+            assert row is not None
+            self.assertEqual(row[0], 42)
             c2.close()
         finally:
             cleanup = con.cursor()
@@ -94,13 +104,16 @@ class TestStreaming(unittest.TestCase):
 
         # Fetch a few rows
         row1 = cursor.fetchone()
+        assert row1 is not None
         self.assertEqual(row1[0], 1)
         row2 = cursor.fetchone()
+        assert row2 is not None
         self.assertEqual(row2[0], 2)
 
         cursor.execute("SELECT 10")
 
         row1 = cursor.fetchone()
+        assert row1 is not None
         self.assertEqual(row1[0], 10)
         cursor.close()
 
@@ -111,12 +124,15 @@ class TestStreaming(unittest.TestCase):
 
         # Fetch a few rows
         row1 = cursor.fetchone()
+        assert row1 is not None
         self.assertEqual(row1[0], 1)
         row2 = cursor.fetchone()
+        assert row2 is not None
         self.assertEqual(row2[0], 2)
 
         cursor.execute("SELECT 10")
         row1 = cursor.fetchone()
+        assert row1 is not None
         self.assertEqual(row1[0], 10)
         cursor.close()
 
@@ -128,21 +144,25 @@ class TestStreaming(unittest.TestCase):
         # Scroll forward 5 rows
         cursor.scroll(5, mode='relative')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 6)
 
         # Scroll forward 3 more rows
         cursor.scroll(3, mode='relative')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 10)
 
         # Scroll backward 5 rows
         cursor.scroll(-5, mode='relative')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 6)
 
         # Scroll 0 (no movement)
         cursor.scroll(0, mode='relative')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 7)
 
         cursor.close()
@@ -155,16 +175,19 @@ class TestStreaming(unittest.TestCase):
         # Scroll to position 10 (0-indexed, so row 10)
         cursor.scroll(10, mode='absolute')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 11)
 
         # Scroll to position 0 (before first row)
         cursor.scroll(0, mode='absolute')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
 
         # Scroll to position 15
         cursor.scroll(15, mode='absolute')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 16)
 
         cursor.close()
@@ -205,22 +228,26 @@ class TestStreaming(unittest.TestCase):
 
         # Fetch first row
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
 
         # Scroll forward 5 rows (skips rows 2-6)
         if is_native():
             cursor.scroll(5, mode='relative')
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 7)
 
             # Scroll forward 3 more rows (skips rows 8-10)
             cursor.scroll(3, mode='relative')
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 11)
 
             # Scroll 0 (no movement)
             cursor.scroll(0, mode='relative')
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 12)
 
         cursor.close()
@@ -249,7 +276,7 @@ class TestStreaming(unittest.TestCase):
         cursor.fetchone()
 
         # Negative scroll should raise ValueError
-        with self.assertRaises(mariadb.ProgrammingError) as cm:
+        with self.assertRaises(mariadb.ProgrammingError):
             cursor.scroll(-1, mode='relative')
 
         cursor.close()
@@ -263,7 +290,7 @@ class TestStreaming(unittest.TestCase):
         cursor.fetchone()
 
         # Try to scroll past end
-        with self.assertRaises(mariadb.ProgrammingError) as cm:
+        with self.assertRaises(mariadb.ProgrammingError):
             cursor.scroll(10, mode='relative')
 
         cursor.close()
@@ -274,7 +301,7 @@ class TestStreaming(unittest.TestCase):
         cursor.execute("SELECT * FROM test_streaming ORDER BY id")
 
         # Invalid mode should raise ValueError
-        with self.assertRaises(mariadb.ProgrammingError) as cm:
+        with self.assertRaises(mariadb.ProgrammingError):
             cursor.scroll(5, mode='invalid')
 
         cursor.close()
@@ -293,6 +320,7 @@ class TestStreaming(unittest.TestCase):
         # Execute new query - should consume remaining rows from first query
         cursor.execute("SELECT COUNT(*) FROM test_streaming")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 20)
 
         cursor.close()

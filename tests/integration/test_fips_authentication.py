@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+
 """
 End-to-end authentication tests against a real server with FIPS mode forced on.
 
@@ -26,6 +28,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import mariadb
 from tests.base_test import create_connection, is_maxscale, is_native, get_host_suffix
 from tests.conftest import get_test_config
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
+from mariadb_shared.rows import TupleRow
 
 _PASSWORD = "Fips_Test_Password_123!"  # nosec B105 - test fixture
 _PARSEC_USER = "fips_parsec_user"
@@ -41,7 +45,7 @@ class TestFipsAuthentication(unittest.TestCase):
     def setUp(self):
         try:
             from cryptography.hazmat.primitives.asymmetric.ed25519 import (  # noqa: F401
-                Ed25519PrivateKey,
+                Ed25519PrivateKey,  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
             )
         except ImportError:
             self.skipTest("cryptography library required for PARSEC authentication")
@@ -82,7 +86,7 @@ class TestFipsAuthentication(unittest.TestCase):
         self.cursor.close()
         self.connection.close()
 
-    def _connect_as(self, user):
+    def _connect_as(self, user: str) -> SyncConnectionCommon[TupleRow]:
         config = get_test_config().copy()
         config['user'] = user
         config['password'] = _PASSWORD
@@ -94,7 +98,9 @@ class TestFipsAuthentication(unittest.TestCase):
         try:
             cursor = conn.cursor()
             cursor.execute("SELECT USER()")
-            self.assertIn(_PARSEC_USER, cursor.fetchone()[0])
+            row = cursor.fetchone()
+            assert row is not None
+            self.assertIn(_PARSEC_USER, row[0])
             cursor.close()
         finally:
             conn.close()
@@ -116,7 +122,9 @@ class TestFipsAuthentication(unittest.TestCase):
             try:
                 cursor = conn.cursor()
                 cursor.execute("SELECT USER()")
-                self.assertIn(user, cursor.fetchone()[0])
+                row = cursor.fetchone()
+                assert row is not None
+                self.assertIn(user, row[0])
                 cursor.close()
             finally:
                 conn.close()

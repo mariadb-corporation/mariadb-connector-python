@@ -1,26 +1,29 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 import datetime
 import unittest
 
 from mariadb.constants import FIELD_TYPE
 from ..base_test import create_connection
+from typing import Any
 
 
 class foo(int):
     def bar(self): pass
 
 
-def timedelta_to_time(s):
+def timedelta_to_time(s: datetime.timedelta) -> datetime.time:
     return (datetime.datetime.min + s).time()
 
 
-def long_minus(s):
+def long_minus(s: int) -> int:
     return s - 1
 
 
-def none_to_string(s):
+def none_to_string(s: Any) -> Any:
     if s is None:
         return "None"
     return s
@@ -48,6 +51,7 @@ class TestConversion(unittest.TestCase):
         a = datetime.time(12, 29, 21)
         cursor.execute("SELECT cast(? as time)", (a,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], a)
         del cursor
 
@@ -56,6 +60,7 @@ class TestConversion(unittest.TestCase):
         a = 12345
         cursor.execute("SELECT CAST(? AS SIGNED)", (12345,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], a - 1)
         del cursor
 
@@ -63,9 +68,11 @@ class TestConversion(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.execute("SELECT NULL")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "None")
         cursor.execute("SELECT ?", (None,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "None")
         del cursor
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
 """
 Integration tests for handling long data (>16MB)
 
@@ -11,6 +12,7 @@ import os
 import unittest
 from mariadb_shared.sync_cursor_common import SyncCursorCommon
 from ..base_test import create_connection, varied_bytes, varied_text
+from typing import Any
 
 
 class LongDataTest(unittest.TestCase):
@@ -27,7 +29,9 @@ class LongDataTest(unittest.TestCase):
         
         # Check current max_allowed_packet setting
         self.cursor.execute("SELECT @@max_allowed_packet")
-        self.max_allowed_packet = self.cursor.fetchone()[0]
+        row = self.cursor.fetchone()
+        assert row is not None
+        self.max_allowed_packet = row[0]
         
         # Minimum required: 32MB for our tests
         self.min_required = 32 * 1024 * 1024
@@ -68,7 +72,7 @@ class LongDataTest(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             self.insert_long_varchar(test_data, data_size, cursor)
     
-    def insert_long_varchar(self, test_data: str, data_size: int, cursor):    
+    def insert_long_varchar(self, test_data: str, data_size: int, cursor: SyncCursorCommon[Any]) -> None:    
         # Insert long data
         cursor.execute(
             "INSERT INTO test_long_varchar (data) VALUES (?)",
@@ -79,6 +83,7 @@ class LongDataTest(unittest.TestCase):
         # Retrieve and verify
         cursor.execute("SELECT data FROM test_long_varchar WHERE id = ?", (1,))
         result = cursor.fetchone()
+        assert result is not None
         
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
@@ -105,7 +110,7 @@ class LongDataTest(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             self.insert_long_blob(test_data, data_size, cursor)
 
-    def insert_long_blob(self, test_data: bytes, data_size: int, cursor: SyncCursorCommon):
+    def insert_long_blob(self, test_data: bytes, data_size: int, cursor: SyncCursorCommon[Any]):
         # Insert long data
         cursor.execute(
             "INSERT INTO test_long_blob (data) VALUES (?)",
@@ -116,6 +121,7 @@ class LongDataTest(unittest.TestCase):
         # Retrieve and verify
         cursor.execute("SELECT data FROM test_long_blob WHERE id = ?", (1,))
         result = cursor.fetchone()
+        assert result is not None
         
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
@@ -148,7 +154,7 @@ class LongDataTest(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             self.insert_multiple_long_columns(test_data1, test_data2, test_data3, data_size, cursor)
     
-    def insert_multiple_long_columns(self, test_data1: str, test_data2: str, test_data3: bytes, data_size: int, cursor: SyncCursorCommon):
+    def insert_multiple_long_columns(self, test_data1: str, test_data2: str, test_data3: bytes, data_size: int, cursor: SyncCursorCommon[Any]):
         # Insert long data
         cursor.execute(
             "INSERT INTO test_multiple_long (data1, data2, data3) VALUES (?, ?, ?)",
@@ -196,7 +202,7 @@ class LongDataTest(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             self.executemany_with_long_data(rows, data_size, cursor)
     
-    def executemany_with_long_data(self, rows: list[tuple[str, bytes]], data_size: int, cursor):
+    def executemany_with_long_data(self, rows: list[tuple[str, str]], data_size: int, cursor: SyncCursorCommon[Any]) -> None:
         # Insert multiple rows with long data
         cursor.executemany(
             "INSERT INTO test_executemany_long (name, data) VALUES (?, ?)",
@@ -235,7 +241,7 @@ class LongDataTest(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             self.prepared_statement_with_long_data(test_data, data_size, cursor)
     
-    def prepared_statement_with_long_data(self, test_data: str, data_size: int, cursor):
+    def prepared_statement_with_long_data(self, test_data: str, data_size: int, cursor: SyncCursorCommon[Any]) -> None:
         # Use prepared statement
         cursor.execute(
             "INSERT INTO test_prepared_long (data) VALUES (?)",
@@ -246,6 +252,7 @@ class LongDataTest(unittest.TestCase):
         # Retrieve using prepared statement
         cursor.execute("SELECT data FROM test_prepared_long WHERE id = ?", (1,))
         result = cursor.fetchone()
+        assert result is not None
         
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
@@ -267,7 +274,7 @@ class LongDataTest(unittest.TestCase):
         repetitions = (17 * 1024 * 1024) // len(base_string.encode('utf-8'))
         test_data = base_string * repetitions
         
-        actual_size = len(test_data.encode('utf-8'))
+        _actual_size = len(test_data.encode('utf-8'))
         
         # Insert long Unicode data
         self.cursor.execute(
@@ -279,6 +286,7 @@ class LongDataTest(unittest.TestCase):
         # Retrieve and verify
         self.cursor.execute("SELECT data FROM test_long_unicode WHERE id = ?", (1,))
         result = self.cursor.fetchone()
+        assert result is not None
         
         self.assertIsNotNone(result)
         self.assertEqual(result[0], test_data)
@@ -310,6 +318,7 @@ class LongDataTest(unittest.TestCase):
         # Verify update
         self.cursor.execute("SELECT data FROM test_update_long WHERE id = ?", (1,))
         result = self.cursor.fetchone()
+        assert result is not None
         
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), data_size)
@@ -347,6 +356,7 @@ class LongDataTest(unittest.TestCase):
             (test_data,)
         )
         result = self.cursor.fetchone()
+        assert result is not None
         
         self.assertIsNotNone(result)
         self.assertEqual(result[0], 'found')
@@ -375,6 +385,7 @@ class LongDataTest(unittest.TestCase):
         # Retrieve and verify
         self.cursor.execute("SELECT data FROM test_boundary WHERE id = ?", (1,))
         result = self.cursor.fetchone()
+        assert result is not None
         
         self.assertIsNotNone(result)
         self.assertEqual(len(result[0]), len(test_data))

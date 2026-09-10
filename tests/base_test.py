@@ -1,5 +1,9 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+
+
+from __future__ import annotations
+
 import os
 import sys
 from pathlib import Path
@@ -8,7 +12,12 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+from typing import Any, cast
+
 import mariadb
+from mariadb_shared.connection_params import ConnectionOptions
+from mariadb_shared.rows import TupleRow
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
 
 try:
     from .conftest import get_test_config as conf
@@ -17,13 +26,16 @@ except ImportError:
     from conftest import get_test_config as conf
 
 
-def is_skysql():
+def is_skysql() -> bool:
     if conf()["host"][-13:] == "db.skysql.net":
         return True
     return False
 
 
-def is_maxscale(conn=None):
+def is_maxscale(conn: SyncConnectionCommon[Any] | None = None) -> bool:
+    """Whether the tests run against MaxScale: asked to the server through
+    ``conn`` when one is given (MaxScale 23.08+ banner), else from the
+    environment (MAXSCALE_TAG, or the legacy srv variable)."""
     # Detection from server banner (MaxScale 23.08+)
     if conn is not None:
         try:
@@ -45,10 +57,10 @@ def is_maxscale(conn=None):
     return (os.environ.get('srv') == "maxscale" or
             os.environ.get('srv') == 'skysql-ha')
 
-def is_native():
+def is_native() -> bool:
     return mariadb.__impl__ == 'python'
 
-def is_async_native():
+def is_async_native() -> bool:
     """
     Check if pure Python implementation is being used for async operations.
     
@@ -59,7 +71,7 @@ def is_async_native():
     even when mariadb-c is installed, so we need to check the actual implementation.
     """
     # Check if AsyncConnection is from pure Python or C extension
-    if hasattr(mariadb, 'AsyncConnection') and mariadb.AsyncConnection is not None:
+    if hasattr(mariadb, 'AsyncConnection'):
         module = mariadb.AsyncConnection.__module__
         # Pure Python async: mariadb.async_connection
         # C extension async: mariadb_c.async_connections
@@ -68,29 +80,26 @@ def is_async_native():
     # If no AsyncConnection, fall back to general is_native() check
     return is_native()
 
-def is_mysql():
-    mysql_server = 1
+def is_mysql() -> bool:
+    """Whether the server under test is MySQL rather than MariaDB"""
     conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute("select version()")
-    row = cursor.fetchone()
-    if "MARIADB" in row[0].upper():
-        mysql_server = 0
-    conn.close()
-    del cursor, conn
-    return mysql_server
+    try:
+        cursor = conn.cursor()
+        cursor.execute("select version()")
+        row = cursor.fetchone()
+        assert row is not None
+        return "MARIADB" not in str(row[0]).upper()
+    finally:
+        conn.close()
 
-def get_host_suffix():
+def get_host_suffix() -> str:
     return "@'localhost'" if os.getenv("LOCAL_DB", "container") == "local" else "@'%'"
 
-def create_connection(additional_conf=None):
-    default_conf = conf()
+def create_connection(additional_conf: ConnectionOptions | None = None) -> SyncConnectionCommon[TupleRow]:
     if additional_conf is None:
-        c = {key: value for (key, value) in (default_conf.items())}
-    else:
-        c = {key: value for (key, value) in (list(default_conf.items()) + list(
-            additional_conf.items()))}
-    return mariadb.connect(**c)
+        return mariadb.connect(**conf())
+    merged = cast(ConnectionOptions, {**conf(), **additional_conf})
+    return mariadb.connect(**merged)
 
 
 # ---------------------------------------------------------------------------

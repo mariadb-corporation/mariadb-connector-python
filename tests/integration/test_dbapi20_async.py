@@ -1,5 +1,9 @@
+# The DB-API compliance suite checks runtime types and class hierarchies on purpose.
+# pyright: reportUnnecessaryIsInstance=false
 #\!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
+
 
 ''' Python DB API 2.0 driver compliance unit test suite - Async version.
 
@@ -20,6 +24,8 @@ import datetime
 
 from ..conftest import get_test_config as conf
 from ..base_test import is_maxscale
+from typing import Any
+from mariadb_shared.async_cursor_common import AsyncCursorCommon
 
 class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
     ''' Test a database driver for DB API 2.0 compatibility - Async version.
@@ -38,10 +44,10 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     lowerfunc = 'lower'
 
-    async def executeDDL1(self, cursor):
+    async def executeDDL1(self, cursor: AsyncCursorCommon[Any]) -> None:
         await cursor.execute(self.ddl1)
 
-    async def executeDDL2(self, cursor):
+    async def executeDDL2(self, cursor: AsyncCursorCommon[Any]) -> None:
         await cursor.execute(self.ddl2)
 
     async def asyncSetUp(self):
@@ -49,8 +55,8 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self):
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             for ddl in (self.xddl1, self.xddl2):
                 try:
                     await cur.execute(ddl)
@@ -137,17 +143,15 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_cursor(self):
         con = await self._connect()
-        try:
-            cur = con.cursor()
-        finally:
-            await cur.close()
-            await con.close()
+        cur = con.cursor()
+        await cur.close()
+        await con.close()
 
     async def test_cursor_isolation(self):
         con = await self._connect()
+        cur1 = con.cursor()
+        cur2 = con.cursor()
         try:
-            cur1 = con.cursor()
-            cur2 = con.cursor()
             await self.executeDDL1(cur1)
             await cur1.execute("insert into %sbooze values ('Victoria Bitter')" % self.table_prefix)
             await cur2.execute("select name from %sbooze" % self.table_prefix)
@@ -162,11 +166,12 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_description(self):
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             await self.executeDDL1(cur)
             self.assertEqual(cur.description, None)
             await cur.execute('select name from %sbooze' % self.table_prefix)
+            assert cur.description is not None
             self.assertEqual(len(cur.description), 1)
             self.assertEqual(len(cur.description[0]), 11)
             self.assertEqual(cur.description[0][0].lower(), 'name')
@@ -182,8 +187,8 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_rowcount(self):
         con = await self._connect()
+        cur = con.cursor(buffered=True)
         try:
-            cur = con.cursor(buffered=True)
             await self.executeDDL1(cur)
             self.assertEqual(cur.rowcount, 0)
             await cur.execute("insert into %sbooze values ('Victoria Bitter')" % self.table_prefix)
@@ -200,10 +205,8 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_close(self):
         con = await self._connect()
-        try:
-            cur = con.cursor()
-        finally:
-            await con.close()
+        cur = con.cursor()
+        await con.close()
         
         with self.assertRaises(self.driver.Error):
             await self.executeDDL1(cur)
@@ -215,13 +218,13 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_execute(self):
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             await self._paraminsert(cur)
         finally:
             await con.close()
 
-    async def _paraminsert(self, cur):
+    async def _paraminsert(self, cur: AsyncCursorCommon[Any]) -> None:
         await self.executeDDL1(cur)
         await cur.execute("insert into %sbooze values ('Victoria Bitter')" % self.table_prefix)
         self.assertTrue(cur.rowcount in (-1, 1))
@@ -252,8 +255,8 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't support BULK yet")
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             await self.executeDDL1(cur)
             largs = [("Cooper's",), ("Boag's",)]
             margs = [{'beer': "Cooper's"}, {'beer': "Boag's"}]
@@ -282,8 +285,8 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_fetchone(self):
         con = await self._connect()
+        cur = con.cursor(buffered=True)
         try:
-            cur = con.cursor(buffered=True)
 
             with self.assertRaises(self.driver.Error):
                 await cur.fetchone()
@@ -302,6 +305,7 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
             await cur.execute('select name from %sbooze' % self.table_prefix)
             r = await cur.fetchone()
+            assert r is not None
             self.assertEqual(len(r), 1)
             self.assertEqual(r[0], 'Victoria Bitter')
             self.assertEqual(await cur.fetchone(), None)
@@ -316,8 +320,8 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_fetchmany(self):
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
 
             with self.assertRaises(self.driver.Error):
                 await cur.fetchmany(4)
@@ -374,8 +378,8 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_fetchall(self):
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             with self.assertRaises(self.driver.Error):
                 await cur.fetchall()
 
@@ -409,16 +413,18 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_mixedfetch(self):
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             await self.executeDDL1(cur)
             for sql in self._populate():
                 await cur.execute(sql)
 
             await cur.execute('select name from %sbooze' % self.table_prefix)
             rows1 = await cur.fetchone()
+            assert rows1 is not None
             rows23 = await cur.fetchmany(2)
             rows4 = await cur.fetchone()
+            assert rows4 is not None
             rows56 = await cur.fetchall()
             self.assertTrue(cur.rowcount in (-1, 6))
             self.assertEqual(len(rows23), 2)
@@ -436,16 +442,16 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_arraysize(self):
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             self.assertTrue(hasattr(cur, 'arraysize'))
         finally:
             await con.close()
 
     async def test_setinputsizes(self):
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             cur.setinputsizes((25,))
             await self._paraminsert(cur)
         finally:
@@ -453,8 +459,8 @@ class AsyncDatabaseAPI20Test(unittest.IsolatedAsyncioTestCase):
 
     async def test_None(self):
         con = await self._connect()
+        cur = con.cursor()
         try:
-            cur = con.cursor()
             await self.executeDDL1(cur)
             await cur.execute('insert into %sbooze values (NULL)' % self.table_prefix)
             await cur.execute('select name from %sbooze' % self.table_prefix)

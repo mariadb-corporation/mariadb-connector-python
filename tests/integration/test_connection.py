@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 import os
 import unittest
 import platform
@@ -20,6 +22,8 @@ from packaging import version
 
 from ..base_test import create_connection, is_mysql, is_skysql, is_maxscale, is_native, get_host_suffix
 from ..conftest import get_test_config as conf
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
+from mariadb_shared.rows import TupleRow
 
 
 class TestConnection(unittest.TestCase):
@@ -78,8 +82,7 @@ class TestConnection(unittest.TestCase):
         self.assertEqual(conn.autocommit, True)
 
     def test_local_infile(self):
-        default_conf = conf()
-        new_conn = mariadb.connect(**default_conf, local_infile=False)
+        new_conn = mariadb.connect(**conf(local_infile=False))
         cursor = new_conn.cursor()
         cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
         try:
@@ -96,31 +99,31 @@ class TestConnection(unittest.TestCase):
     def test_tls_version(self):
         if is_maxscale():
             self.skipTest("MAXSCALE test has no SSL on port by default")
-        default_conf = conf()
-        conn = mariadb.connect(**default_conf, tls_version="TLSv1.2", ssl_verify_cert=False)
+        conn = mariadb.connect(**conf(tls_version="TLSv1.2", ssl_verify_cert=False))
         cursor = conn.cursor()
         cursor.execute("SHOW STATUS LIKE 'ssl_version'")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[1], "TLSv1.2")
         cursor.close()
         conn.close()
 
     def test_init_command(self):
-        default_conf = conf()
-        new_conn = mariadb.connect(**default_conf, init_command="SET @a:=1")
+        new_conn = mariadb.connect(**conf(init_command="SET @a:=1"))
         cursor = new_conn.cursor()
         cursor.execute("SELECT @a")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         del cursor
         del new_conn
 
     def test_compress(self):
-        default_conf = conf()
-        new_conn = mariadb.connect(**default_conf, compress=True)
+        new_conn = mariadb.connect(**conf(compress=True))
         cursor = new_conn.cursor()
         cursor.execute("SHOW SESSION STATUS LIKE 'compression'")
         row = cursor.fetchone()
+        assert row is not None
         if is_maxscale() or is_native():
             self.assertEqual(row[1], "OFF")
         else:
@@ -262,6 +265,7 @@ class TestConnection(unittest.TestCase):
             with con.cursor() as cursor:
                 cursor.execute("SELECT 'foo'")
                 row = cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], "foo")
             try:
                 cursor.execute("SELECT 'bar'")
@@ -277,7 +281,7 @@ class TestConnection(unittest.TestCase):
         c1 = mariadb.connect(**default_conf)
         self.assertEqual(c1.autocommit, False)
         c1.close()
-        c1 = mariadb.connect(**default_conf, autocommit=True)
+        c1 = mariadb.connect(**conf(autocommit=True))
         self.assertEqual(c1.autocommit, True)
         c1.close()
 
@@ -286,6 +290,7 @@ class TestConnection(unittest.TestCase):
              with con.cursor() as cursor:
                  cursor.execute("drop schema if exists test123")
                  db = con.database
+                 assert db is not None
                  try:
                      cursor.execute("create schema test123")
                  except mariadb.Error:
@@ -293,10 +298,12 @@ class TestConnection(unittest.TestCase):
                  con.database = "test123"
                  cursor.execute("select database()", buffered=True)
                  row = cursor.fetchone()
+                 assert row is not None
                  self.assertEqual(row[0], "test123")
                  con.database = db
                  cursor.execute("select database()", buffered=True)
                  row = cursor.fetchone()
+                 assert row is not None
                  self.assertEqual(row[0], db)
                  self.assertEqual(row[0], con.database)
                  cursor.execute("drop schema test123")
@@ -341,7 +348,7 @@ class TestConnection(unittest.TestCase):
         try:
             mariadb.connect(**default_conf)
         except mariadb.ProgrammingError:
-            self.assertLess(parse_version(mariadb.mariadbapi_version),
+            self.assertLess(parse_version(str(mariadb.mariadbapi_version)),
                             parse_version('3.3.0'))
             pass
 
@@ -354,13 +361,13 @@ class TestConnection(unittest.TestCase):
         default_conf= conf()
         default_conf["ssl"] = False
         conn= mariadb.connect(**default_conf)
-        self.assertEqual(conn._tls_verify_status, None)
+        self.assertEqual(conn._tls_verify_status, None)  # pyright: ignore  # white-box: implementation attribute
         conn.close()
         default_conf= conf()
         default_conf["ssl"] = True
         default_conf["ssl_verify_cert"] = False
         conn= mariadb.connect(**default_conf)
-        self.assertNotEqual(conn._tls_verify_status, None)
+        self.assertNotEqual(conn._tls_verify_status, None)  # pyright: ignore  # white-box: implementation attribute
         conn.close()
 
     def test_tls_fp(self):
@@ -373,7 +380,7 @@ class TestConnection(unittest.TestCase):
         default_conf["ssl"] = True
         default_conf["ssl_verify_cert"] = False
         conn= mariadb.connect(**default_conf)
-        self.assertEqual(conn._tls, True)
+        self.assertEqual(conn._tls, True)  # pyright: ignore  # white-box: implementation attribute
 
         # Verify TLS cipher and version are set
         self.assertIsNotNone(conn.tls_cipher)
@@ -389,13 +396,14 @@ class TestConnection(unittest.TestCase):
         default_conf= conf()
         default_conf["tls_fp"] = fp
         conn= mariadb.connect(**default_conf)
-        self.assertEqual(conn._tls, True)
+        self.assertEqual(conn._tls, True)  # pyright: ignore  # white-box: implementation attribute
         
         # Verify TLS cipher and version are set on reconnection
         self.assertIsNotNone(conn.tls_cipher)
         self.assertIsNotNone(conn.tls_version)
         
         x509_info= conn.tls_peer_cert_info
+        assert x509_info is not None
         self.assertEqual(fp, x509_info["fingerprint"])
         conn.close()
 
@@ -407,7 +415,7 @@ class TestConnection(unittest.TestCase):
         with create_connection({"reconnect" : True}) as conn:
             old_id= conn.connection_id
             try:
-                conn.kill("a")
+                conn.kill("a")  # pyright: ignore  # deliberately invalid
             except mariadb.ProgrammingError:
                 pass
 
@@ -449,10 +457,10 @@ class TestConnection(unittest.TestCase):
         
         try:
             # Test _tls property - should be False for non-SSL connection
-            self.assertFalse(conn._tls)
+            self.assertFalse(conn._tls)  # pyright: ignore  # white-box: implementation attribute
             
             # Test _tls_verify_status - should be None for non-SSL connection
-            self.assertIsNone(conn._tls_verify_status)
+            self.assertIsNone(conn._tls_verify_status)  # pyright: ignore  # white-box: implementation attribute
             
             # Test tls_version - should be None for non-SSL connection
             self.assertIsNone(conn.tls_version)
@@ -523,6 +531,7 @@ class TestConnection(unittest.TestCase):
             # Verify data is visible in same transaction
             cursor.execute("SELECT * FROM test_begin")
             result = cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             self.assertEqual(result[1], 'test')
             
@@ -531,7 +540,9 @@ class TestConnection(unittest.TestCase):
             
             # Verify table still exists but data is rolled back
             cursor.execute("SELECT COUNT(*) FROM test_begin")
-            count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 0)
             
             # Test 2: Multiple begin() calls should work
@@ -543,7 +554,9 @@ class TestConnection(unittest.TestCase):
             
             # Verify both inserts are committed
             cursor.execute("SELECT COUNT(*) FROM test_begin")
-            count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 2)
             
             cursor.close()
@@ -568,7 +581,9 @@ class TestConnection(unittest.TestCase):
             conn.rollback()
             
             cursor.execute("SELECT COUNT(*) FROM test_begin_autocommit")
-            count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            assert row is not None
+            count = row[0]
             self.assertEqual(count, 0)
             
             cursor.close()
@@ -583,6 +598,7 @@ class TestConnection(unittest.TestCase):
         cursor = new_conn.cursor()
         cursor.execute("SELECT 1")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         del cursor
         del new_conn
@@ -645,7 +661,7 @@ class TestConnection(unittest.TestCase):
             # This might succeed if server supports SSL without client certs
             conn = mariadb.connect(**test_conf3)
             # If it succeeds, verify SSL is enabled
-            self.assertTrue(conn._tls or True)  # Connection succeeded
+            self.assertTrue(conn._tls or True)  # Connection succeeded  # pyright: ignore  # white-box: implementation attribute
             conn.close()
         except (mariadb.OperationalError, mariadb.DatabaseError):
             # Expected if server doesn't support SSL or requires certs
@@ -660,7 +676,7 @@ class TestConnection(unittest.TestCase):
         # Check if cryptography package is available for PARSEC
         has_cryptography = False
         try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: F401  # pyright: ignore[reportUnusedImport]  (availability probe)
             has_cryptography = True
         except ImportError:
             pass
@@ -741,6 +757,7 @@ class TestConnection(unittest.TestCase):
                     cursor = conn.cursor()
                     cursor.execute("SELECT 1")
                     result = cursor.fetchone()
+                    assert result is not None
                     self.assertEqual(result[0], 1, 
                         f"Connection with {plugin} and fingerprint validation should work")
                     cursor.close()
@@ -793,11 +810,11 @@ class TestConnection(unittest.TestCase):
             # Cleanup: Drop test users
             for username, _, _ in test_users:
                 try:
-                    cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")
+                    cursor.execute(f"DROP USER IF EXISTS '{username}'@'%'")  # pyright: ignore[reportPossiblyUnboundVariable]  # bound in the try above
                 except:
                     pass
             
-            cursor.close()
+            cursor.close()  # pyright: ignore[reportPossiblyUnboundVariable]  # bound in the try above
 
     def test_pre41_error_format(self):
         """Test handling of pre-4.1 error format when max connections is reached"""
@@ -812,6 +829,7 @@ class TestConnection(unittest.TestCase):
         cursor = self.connection.cursor()
         cursor.execute("SELECT @@max_connections")
         result = cursor.fetchone()
+        assert result is not None
         max_connections = result[0]
         cursor.close()
         
@@ -819,10 +837,10 @@ class TestConnection(unittest.TestCase):
         if max_connections >= 1000:
             self.skipTest(f"max_connections too high ({max_connections}), skipping test")
         
-        connections = []
+        connections: list[SyncConnectionCommon[TupleRow]] = []
         try:
             # Try to create max_connections connections
-            for i in range(max_connections + 1):
+            for _ in range(max_connections + 1):
                 try:
                     conn = mariadb.connect(**conf())
                     connections.append(conn)
@@ -878,6 +896,7 @@ class TestConnection(unittest.TestCase):
             cursor = conn.cursor()
             cursor.execute("SHOW STATUS LIKE 'Ssl_cipher'")
             result = cursor.fetchone()
+            assert result is not None
             self.assertIsNotNone(result)
             self.assertNotEqual(result[1], '', "SSL cipher should not be empty")
             cursor.close()
@@ -940,7 +959,9 @@ class TestConnection(unittest.TestCase):
             try:
                 c = conn.cursor()
                 c.execute("SELECT 1")
-                self.assertEqual(c.fetchone()[0], 1)
+                row = c.fetchone()
+                assert row is not None
+                self.assertEqual(row[0], 1)
                 c.close()
             finally:
                 conn.close()
@@ -975,7 +996,9 @@ class TestConnection(unittest.TestCase):
                 self.assertEqual(conn.user, 'lenenc_cu_user')
                 c = conn.cursor()
                 c.execute("SELECT 1")
-                self.assertEqual(c.fetchone()[0], 1)
+                row = c.fetchone()
+                assert row is not None
+                self.assertEqual(row[0], 1)
                 c.close()
             finally:
                 conn.close()

@@ -21,6 +21,7 @@ import mariadb
 from mariadb.impl.configuration import Configuration
 from tests.base_test import is_native
 from tests.unit._fakeserver import (
+    Responder,
     FakeServer, scripted_handler, query_text, fake_conf, lenenc_int, pkt,
     text_resultset, ok, MYSQL_TYPE_VAR_STRING,
 )
@@ -33,13 +34,13 @@ py_only = pytest.mark.skipif(
            "MARIADB_OPT_MAX_COLUMNS in libmariadb")
 
 
-def _announce_columns(column_count):
+def _announce_columns(column_count: int) -> Responder:
     """Reply to the marker query with a column count only, no column packets.
 
     A client that trusts the count allocates the metadata of column_count
     columns before reading a single column definition packet.
     """
-    def on_query(payload):
+    def on_query(payload: bytes) -> bytes:
         if _MARKER in query_text(payload):
             return pkt(1, lenenc_int(column_count))
         return ok()
@@ -90,7 +91,7 @@ def test_limit_can_be_lowered():
 def test_column_count_within_limit_is_accepted():
     columns = [("a", MYSQL_TYPE_VAR_STRING), ("b", MYSQL_TYPE_VAR_STRING)]
 
-    def on_query(payload):
+    def on_query(payload: bytes) -> bytes:
         if _MARKER in query_text(payload):
             return text_resultset(columns, [("1", "x")])
         return ok()
@@ -118,7 +119,7 @@ class TestMaxAllowedColumnsAsync(unittest.IsolatedAsyncioTestCase):
     async def test_column_count_within_limit_is_accepted_async(self):
         columns = [("a", MYSQL_TYPE_VAR_STRING)]
 
-        def on_query(payload):
+        def on_query(payload: bytes) -> bytes:
             if _MARKER in query_text(payload):
                 return text_resultset(columns, [("1",)])
             return ok()

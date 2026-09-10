@@ -1,10 +1,12 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 import unittest
 import mariadb
 from mariadb.constants import CAPABILITY as CLIENT
-from ..base_test import is_native, is_async_native
+from ..base_test import is_async_native
 
 from ..conftest import get_test_config as conf
 
@@ -60,11 +62,13 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
                 await cursor.execute("CALL p_stream_multi()")
 
                 row = await cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], 100)
 
                 self.assertTrue(await cursor.nextset())
 
                 row = await cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], 200)
 
                 while await cursor.nextset() is not None:
@@ -92,13 +96,16 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
                 # Read only one row of the first set, leaving rows + a whole
                 # trailing result set unread, then close without draining.
                 row = await cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], 1)
                 await cursor.close()
 
                 # The connection must still be usable for a new command.
                 cursor2 = con.cursor()
                 await cursor2.execute("SELECT 42")
-                self.assertEqual((await cursor2.fetchone())[0], 42)
+                row = await cursor2.fetchone()
+                assert row is not None
+                self.assertEqual(row[0], 42)
                 await cursor2.close()
             finally:
                 cleanup = con.cursor()
@@ -108,10 +115,12 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
     async def test_streaming_resultless_ok_midstream(self):
         if not is_async_native():
             self.skipTest("multi-statement requires the pure-Python async client")
-        async with await mariadb.asyncConnect(**conf(), client_flag=CLIENT.MULTI_STATEMENTS) as con:
+        async with await mariadb.asyncConnect(**conf(client_flag=CLIENT.MULTI_STATEMENTS)) as con:
             cursor = con.cursor(buffered=False)
             await cursor.execute("SELECT 100 AS a; SET @x:=1; SELECT 200 AS b")
-            values = [(await cursor.fetchone())[0]]
+            row = await cursor.fetchone()
+            assert row is not None
+            values = [row[0]]
             while await cursor.nextset() is not None:
                 if cursor.field_count:
                     row = await cursor.fetchone()
@@ -127,13 +136,16 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
 
         # Fetch a few rows
         row1 = await cursor.fetchone()
+        assert row1 is not None
         self.assertEqual(row1[0], 1)
         row2 = await cursor.fetchone()
+        assert row2 is not None
         self.assertEqual(row2[0], 2)
 
         await cursor.execute("SELECT 10")
 
         row1 = await cursor.fetchone()
+        assert row1 is not None
         self.assertEqual(row1[0], 10)
         await cursor.close()
 
@@ -144,12 +156,15 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
 
         # Fetch a few rows
         row1 = await cursor.fetchone()
+        assert row1 is not None
         self.assertEqual(row1[0], 1)
         row2 = await cursor.fetchone()
+        assert row2 is not None
         self.assertEqual(row2[0], 2)
 
         await cursor.execute("SELECT 10")
         row1 = await cursor.fetchone()
+        assert row1 is not None
         self.assertEqual(row1[0], 10)
         await cursor.close()
 
@@ -161,21 +176,25 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         # Scroll forward 5 rows
         await cursor.scroll(5, mode='relative')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 6)
 
         # Scroll forward 3 more rows
         await cursor.scroll(3, mode='relative')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 10)
 
         # Scroll backward 5 rows
         await cursor.scroll(-5, mode='relative')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 6)
 
         # Scroll 0 (no movement)
         await cursor.scroll(0, mode='relative')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 7)
 
         await cursor.close()
@@ -188,16 +207,19 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         # Scroll to position 10 (0-indexed, so row 10)
         await cursor.scroll(10, mode='absolute')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 11)
 
         # Scroll to position 0 (before first row)
         await cursor.scroll(0, mode='absolute')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
 
         # Scroll to position 15
         await cursor.scroll(15, mode='absolute')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 16)
 
         await cursor.close()
@@ -238,22 +260,26 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
 
         # Fetch first row
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
 
         # Scroll forward 5 rows (skips rows 2-6)
         if is_async_native():
             await cursor.scroll(5, mode='relative')
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 7)
 
             # Scroll forward 3 more rows (skips rows 8-10)
             await cursor.scroll(3, mode='relative')
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 11)
 
             # Scroll 0 (no movement)
             await cursor.scroll(0, mode='relative')
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 12)
 
         await cursor.close()
@@ -282,7 +308,7 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         await cursor.fetchone()
 
         # Negative scroll should raise ValueError
-        with self.assertRaises(mariadb.ProgrammingError) as cm:
+        with self.assertRaises(mariadb.ProgrammingError):
             await cursor.scroll(-1, mode='relative')
 
         await cursor.close()
@@ -296,7 +322,7 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         await cursor.fetchone()
 
         # Try to scroll past end
-        with self.assertRaises(mariadb.ProgrammingError) as cm:
+        with self.assertRaises(mariadb.ProgrammingError):
             await cursor.scroll(10, mode='relative')
 
         await cursor.close()
@@ -307,7 +333,7 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("SELECT * FROM test_streaming_async ORDER BY id")
 
         # Invalid mode should raise ValueError
-        with self.assertRaises(mariadb.ProgrammingError) as cm:
+        with self.assertRaises(mariadb.ProgrammingError):
             await cursor.scroll(5, mode='invalid')
 
         await cursor.close()
@@ -326,6 +352,7 @@ class TestStreamingAsync(unittest.IsolatedAsyncioTestCase):
         # Execute new query - should consume remaining rows from first query
         await cursor.execute("SELECT COUNT(*) FROM test_streaming_async")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 20)
 
         await cursor.close()

@@ -1,3 +1,7 @@
+# These tests pass wrongly typed arguments on purpose, to check the validation
+# the constructor performs at runtime.
+# pyright: reportArgumentType=false
+
 """
 Unit tests for Xid class
 """

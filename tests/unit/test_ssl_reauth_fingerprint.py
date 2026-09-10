@@ -1,5 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# Duck-typed stand-ins replace the real objects here; pyright cannot see that they are compatible.
+# pyright: reportArgumentType=false, reportUnknownLambdaType=false
 
 """
 The self-signed (zero-config) fingerprint check must run only at the INITIAL
@@ -19,7 +21,7 @@ import mariadb
 from mariadb.impl.client.base_client import BaseClient
 
 
-def _validator(fingerprint_ok, period_error=None):
+def _validator(fingerprint_ok: bool, period_error: Exception | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         get_fingerprint=lambda: b"deadbeef",
         check_certificate_period=lambda: period_error,
@@ -27,7 +29,7 @@ def _validator(fingerprint_ok, period_error=None):
     )
 
 
-def _client(connected, fingerprint_ok):
+def _client(connected: bool, fingerprint_ok: bool) -> SimpleNamespace:
     # Duck-typed stand-in providing only what validate_ssl_fingerprint touches.
     return SimpleNamespace(
         connected=connected,

@@ -1,5 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# White-box tests of the C implementation statement cache: they read its private attributes on purpose.
+# pyright: reportPrivateUsage=false
 
 """
 Integration tests for the prepared statement cache.
@@ -23,8 +25,16 @@ from __future__ import annotations
 import multiprocessing
 import unittest
 
-import mariadb
 from ..base_test import create_connection, is_native
+from typing import Any, TYPE_CHECKING, cast
+from mariadb_shared.sync_cursor_common import SyncCursorCommon
+from mariadb_shared.connection_params import ConnectionOptions
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
+
+if TYPE_CHECKING:
+    from typing_extensions import Unpack
+
+    from mariadb_c.connections import Connection as CImplConnection
 
 _is_native = is_native()
 _skip_native = unittest.skipIf(
@@ -33,18 +43,19 @@ _skip_native = unittest.skipIf(
 )
 
 
-def _cache_conn(**extra: object) -> mariadb.Connection:
-    """Helper: open a connection with stmt caching enabled."""
-    return create_connection({
-        "cache_prep_stmts": True,
-        "prep_stmt_cache_size": 10,
-        **extra,
-    })
+def _cache_conn(**extra: Unpack[ConnectionOptions]) -> CImplConnection:
+    """Helper: open a connection with stmt caching enabled.
+
+    These tests only run on the C implementation (see ``_skip_native``), whose
+    connection class is the one exposing the ``_stmt_cache`` internals.
+    """
+    conf: ConnectionOptions = {"cache_prep_stmts": True, "prep_stmt_cache_size": 10}
+    return cast("CImplConnection", create_connection(cast(ConnectionOptions, {**conf, **extra})))
 
 
 def _fork_child_gc_test(
-    conn: mariadb.Connection,
-    q: object,
+    conn: SyncConnectionCommon[Any],
+    q: Any,
 ) -> None:
     """Target for the forked child in test_gc_finalize_in_forked_child_*.
 
@@ -86,6 +97,8 @@ class TestStmtCacheSequential(unittest.TestCase):
         cur_a.close()
 
         cache = self.connection._stmt_cache
+
+        assert cache is not None
         self.assertEqual(len(cache), 1)
 
         cur_b = self.connection.cursor(binary=True)
@@ -154,6 +167,7 @@ class TestStmtCacheConcurrent(unittest.TestCase):
         """After the first cursor closes, the template is available again."""
         sql = "SELECT ? AS v"
         cache = self.connection._stmt_cache
+        assert cache is not None
 
         cur_a = self.connection.cursor(binary=True)
         cur_a.execute(sql, (1,))
@@ -162,6 +176,7 @@ class TestStmtCacheConcurrent(unittest.TestCase):
 
         # Template is back in cache
         entry = cache.get(sql)
+        assert entry is not None
         self.assertIsNotNone(entry)
         self.assertIsNotNone(entry.capsule)
 
@@ -173,6 +188,7 @@ class TestStmtCacheConcurrent(unittest.TestCase):
             cur.execute(sql, (i,))
             self.assertEqual(cur.fetchone(), (i,))
             cur.close()
+        assert self.connection._stmt_cache is not None
         self.assertEqual(len(self.connection._stmt_cache), 1)
 
     def test_interleaved_different_queries(self) -> None:
@@ -191,6 +207,7 @@ class TestStmtCacheConcurrent(unittest.TestCase):
 
         cur1.close()
         cur2.close()
+        assert self.connection._stmt_cache is not None
         self.assertEqual(len(self.connection._stmt_cache), 2)
 
 
@@ -210,6 +227,7 @@ class TestStmtCacheEviction(unittest.TestCase):
     def test_eviction_on_overflow(self) -> None:
         """Inserting more stmts than cache size evicts the LRU entry."""
         cache = self.connection._stmt_cache
+        assert cache is not None
         queries = [f"SELECT {i} + ? AS v" for i in range(5)]
 
         for q in queries:
@@ -224,6 +242,7 @@ class TestStmtCacheEviction(unittest.TestCase):
     def test_eviction_lru_order(self) -> None:
         """LRU order: accessing an entry promotes it; oldest is evicted."""
         cache = self.connection._stmt_cache
+        assert cache is not None
         q1, q2, q3, q4 = (f"SELECT {i} + ? AS v" for i in range(4))
 
         # Fill cache: q1, q2, q3
@@ -257,6 +276,7 @@ class TestStmtCacheEviction(unittest.TestCase):
         """If an entry is evicted while its template is checked out,
         the close is deferred until the cursor returns it."""
         cache = self.connection._stmt_cache
+        assert cache is not None
         q1, q2, q3, q4 = (f"SELECT {i} + ? AS v" for i in range(4))
 
         # Fill cache: q1, q2, q3
@@ -309,6 +329,8 @@ class TestStmtCacheDisabled(unittest.TestCase):
         cur.close()
 
         cache = self.connection._stmt_cache
+
+        assert cache is not None
         self.assertEqual(len(cache), 0)
 
     def test_sequential_works_without_cache(self) -> None:
@@ -337,6 +359,8 @@ class TestStmtCacheConnectionClose(unittest.TestCase):
             cur.close()
 
         cache = conn._stmt_cache
+
+        assert cache is not None
         self.assertGreater(len(cache), 0)
 
         conn.close()
@@ -371,6 +395,7 @@ class TestStmtCacheMixedProtocol(unittest.TestCase):
     def test_text_query_does_not_cache(self) -> None:
         """A plain text-protocol query must not populate the cache."""
         cache = self.connection._stmt_cache
+        assert cache is not None
 
         cur = self.connection.cursor()
         cur.execute("SELECT 1")
@@ -381,6 +406,7 @@ class TestStmtCacheMixedProtocol(unittest.TestCase):
     def test_text_then_binary_same_sql(self) -> None:
         """Text query followed by binary on the same SQL: only binary caches."""
         cache = self.connection._stmt_cache
+        assert cache is not None
         sql = "SELECT 1 AS v"
 
         cur_t = self.connection.cursor()
@@ -398,6 +424,7 @@ class TestStmtCacheMixedProtocol(unittest.TestCase):
     def test_binary_then_text_same_cursor(self) -> None:
         """Switch from binary to text on the same cursor: cache the binary stmt."""
         cache = self.connection._stmt_cache
+        assert cache is not None
 
         cur = self.connection.cursor(binary=True)
         cur.execute("SELECT ? AS v", (1,))
@@ -442,7 +469,9 @@ class TestStmtCacheExecuteMany(unittest.TestCase):
         # Verify data
         cur3 = self.connection.cursor()
         cur3.execute("SELECT COUNT(*) FROM t_cache_batch")
-        self.assertEqual(cur3.fetchone()[0], 4)
+        row = cur3.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 4)
         cur3.close()
 
 
@@ -461,6 +490,7 @@ class TestStmtCacheMultipleDistinctSQL(unittest.TestCase):
     def test_distinct_queries_fill_cache(self) -> None:
         """Each unique SQL string creates a separate cache entry."""
         cache = self.connection._stmt_cache
+        assert cache is not None
         queries = [f"SELECT {i} + ? AS v" for i in range(5)]
 
         for q in queries:
@@ -474,6 +504,7 @@ class TestStmtCacheMultipleDistinctSQL(unittest.TestCase):
     def test_same_query_reuses_slot(self) -> None:
         """Re-executing the same SQL reuses the existing cache entry."""
         cache = self.connection._stmt_cache
+        assert cache is not None
         sql = "SELECT ? AS v"
 
         for _ in range(10):
@@ -500,6 +531,7 @@ class TestStmtCacheSwitchStatement(unittest.TestCase):
     def test_cursor_alternates_two_queries(self) -> None:
         """One cursor alternating between two SQL strings should cache both."""
         cache = self.connection._stmt_cache
+        assert cache is not None
         sql_a = "SELECT ? + 0 AS a"
         sql_b = "SELECT ? + 0 AS b"
 
@@ -515,6 +547,7 @@ class TestStmtCacheSwitchStatement(unittest.TestCase):
     def test_cursor_cycles_through_many_queries(self) -> None:
         """Cursor cycling through N queries caches all of them."""
         cache = self.connection._stmt_cache
+        assert cache is not None
         queries = [f"SELECT {i} + ? AS v" for i in range(5)]
 
         cur = self.connection.cursor(binary=True)
@@ -551,6 +584,7 @@ class TestStmtCacheStress(unittest.TestCase):
     def test_many_distinct_queries_cause_churn(self) -> None:
         """Many unique queries exceed cache size, causing continuous eviction."""
         cache = self.connection._stmt_cache
+        assert cache is not None
         for i in range(50):
             cur = self.connection.cursor(binary=True)
             cur.execute(f"SELECT {i} + ? AS v", (0,))
@@ -563,7 +597,7 @@ class TestStmtCacheStress(unittest.TestCase):
     def test_rapid_open_close_no_leak(self) -> None:
         """Rapidly opening/closing cursors must not leak statements."""
         sql = "SELECT ? AS v"
-        cursors = []
+        cursors: list[SyncCursorCommon[Any]] = []
         for i in range(20):
             cur = self.connection.cursor(binary=True)
             cur.execute(sql, (i,))
@@ -680,6 +714,7 @@ class TestEvictionWithActiveStream(unittest.TestCase):
         # Reuse self.conn so the temp table is visible; temporarily set
         # cache maxsize to 0 to exercise the immediate-close path.
         conn = self.conn
+        assert conn._stmt_cache is not None
         orig_maxsize = conn._stmt_cache._maxsize
         conn._stmt_cache._maxsize = 0
         try:
@@ -758,7 +793,7 @@ class TestGCFinalizeWithActiveStream(unittest.TestCase):
         verify = self.conn.cursor()
         verify.execute("SELECT COUNT(*) FROM t_gc_stream")
         row = verify.fetchone()
-        self.assertIsNotNone(row)
+        assert row is not None
         self.assertEqual(row[0], 10)
         verify.close()
 
@@ -886,7 +921,7 @@ class TestGCFinalizeWithActiveStream(unittest.TestCase):
         except ValueError:
             self.skipTest("fork start method not available on this platform")
 
-        result_queue: multiprocessing.Queue = ctx.Queue()
+        result_queue: multiprocessing.Queue[str] = ctx.Queue()
         proc = ctx.Process(
             target=_fork_child_gc_test,
             args=(self.conn, result_queue),

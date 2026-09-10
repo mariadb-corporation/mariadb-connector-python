@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # Copyright (c) 2020-2025 MariaDB Corporation Ab
 
+
+
 """
 Async Unix Socket Connection Tests
 
@@ -14,7 +16,7 @@ import os
 import unittest
 import platform
 import mariadb
-from tests.base_test import is_maxscale, is_native
+from tests.base_test import is_maxscale
 from ..conftest import get_test_config
 
 
@@ -28,7 +30,7 @@ def is_local_test():
     local_env = os.getenv("LOCAL_DB", "")
     return local_env == "local" or local_env == ""
 
-def generate_long_text(length):
+def generate_long_text(length: int) -> str:
     """Generate a long text string for testing"""
     return 'a' * length
 
@@ -120,6 +122,7 @@ class TestAsyncUnixSocket(unittest.IsolatedAsyncioTestCase):
             # Query the data
             await socket_cursor.execute("SELECT * FROM test_async_unixsocket_table")
             result = await socket_cursor.fetchone()
+            assert result is not None
             
             # Verify data
             self.assertIsNotNone(result)
@@ -147,7 +150,7 @@ class TestAsyncUnixSocket(unittest.IsolatedAsyncioTestCase):
         conf.pop('port', None)
         
         # Try to connect multiple times to check for resource leaks
-        for i in range(10):
+        for _ in range(10):
             with self.assertRaises(mariadb.OperationalError):
                 await mariadb.AsyncConnection.connect(**conf)
         
@@ -197,6 +200,7 @@ class TestAsyncUnixSocket(unittest.IsolatedAsyncioTestCase):
             cursor = socket_conn.cursor()
             await cursor.execute("SELECT 1")
             result = await cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             await cursor.close()
             
@@ -243,6 +247,7 @@ class TestAsyncUnixSocket(unittest.IsolatedAsyncioTestCase):
             # First test a simple query to verify connection works
             await cursor.execute("SELECT 1")
             result = await cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1, "Simple query should work")
             
             # Test multiple inserts using string formatting (avoid parameterized queries for now)

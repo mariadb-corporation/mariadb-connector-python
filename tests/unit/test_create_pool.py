@@ -1,3 +1,6 @@
+# mariadb_pool is importable only through the editable finder, so pyright cannot resolve it:
+# everything that comes from it is Unknown.
+# pyright: reportMissingImports=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false, reportPossiblyUnboundVariable=false
 """
 Unit tests for create_pool / create_async_pool option handling.
 
@@ -11,9 +14,9 @@ from __future__ import annotations
 import sys
 import types
 import unittest
+from typing import Any
 
 import mariadb
-from unittest.mock import MagicMock, patch, AsyncMock
 
 
 from mariadb_pool import PoolConfig, POOL_OPTION_NAMES
@@ -24,12 +27,12 @@ def _make_mariadb_pool_mock() -> types.ModuleType:
     mod = types.ModuleType("mariadb_pool")
 
     class ConnectionPool:
-        def __init__(self, connection_factory: object, config: PoolConfig, **kwargs: object) -> None:
+        def __init__(self, connection_factory: object, config: PoolConfig, **kwargs: Any) -> None:
             self.config = config
             self.conn_kwargs = kwargs
 
     class AsyncConnectionPool:
-        def __init__(self, connection_factory: object, config: PoolConfig, **kwargs: object) -> None:
+        def __init__(self, connection_factory: object, config: PoolConfig, **kwargs: Any) -> None:
             self.config = config
             self.conn_kwargs = kwargs
 
@@ -55,7 +58,7 @@ class TestCreatePoolMinSize(unittest.TestCase):
     def tearDown(self) -> None:
         sys.modules.pop("mariadb_pool", None)
 
-    def _create_pool(self, **kwargs: object) -> object:
+    def _create_pool(self, **kwargs: Any) -> Any:
         import mariadb
         return mariadb.create_pool(**kwargs)
 
@@ -97,7 +100,7 @@ class TestCreateAsyncPoolMinSize(unittest.IsolatedAsyncioTestCase):
     def tearDown(self) -> None:
         sys.modules.pop("mariadb_pool", None)
 
-    async def _create_async_pool(self, **kwargs: object) -> object:
+    async def _create_async_pool(self, **kwargs: Any) -> Any:
         import mariadb
         return await mariadb.create_async_pool(**kwargs)
 
@@ -139,7 +142,7 @@ class TestCreatePoolUri(unittest.TestCase):
     def tearDown(self) -> None:
         sys.modules.pop("mariadb_pool", None)
 
-    def _create_pool(self, *args: object, **kwargs: object) -> object:
+    def _create_pool(self, *args: Any, **kwargs: Any) -> Any:
         import mariadb
         return mariadb.create_pool(*args, **kwargs)
 
@@ -292,7 +295,7 @@ class TestCreateAsyncPoolUri(unittest.IsolatedAsyncioTestCase):
     def tearDown(self) -> None:
         sys.modules.pop("mariadb_pool", None)
 
-    async def _create_async_pool(self, *args: object, **kwargs: object) -> object:
+    async def _create_async_pool(self, *args: Any, **kwargs: Any) -> Any:
         import mariadb
         return await mariadb.create_async_pool(*args, **kwargs)
 

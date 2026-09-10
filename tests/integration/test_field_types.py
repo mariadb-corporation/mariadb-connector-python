@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 """
 Integration tests for field types and field metadata
 """
@@ -9,8 +11,6 @@ import unittest
 import mariadb
 from mariadb import fieldinfo
 from mariadb_shared import constants
-from decimal import Decimal
-import datetime
 from ..base_test import create_connection, is_mysql
 
 
@@ -35,6 +35,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.fetchone()
         
         fi = fieldinfo()
+        assert self.cursor.description is not None
         field_type = fi.type(self.cursor.description[0])
         self.assertIn(field_type, ['DECIMAL', 'NEWDECIMAL'])
 
@@ -46,6 +47,7 @@ class FieldTypesTest(unittest.TestCase):
         
         fi = fieldinfo()
         descriptions = self.cursor.description
+        assert descriptions is not None
         
         self.assertEqual(fi.type(descriptions[0]), 'TINY')
         self.assertEqual(fi.type(descriptions[1]), 'SHORT')
@@ -64,6 +66,7 @@ class FieldTypesTest(unittest.TestCase):
         
         fi = fieldinfo()
         descriptions = self.cursor.description
+        assert descriptions is not None
         
         self.assertEqual(fi.type(descriptions[0]), 'FLOAT')
         self.assertEqual(fi.type(descriptions[1]), 'DOUBLE')
@@ -76,6 +79,7 @@ class FieldTypesTest(unittest.TestCase):
         
         fi = fieldinfo()
         descriptions = self.cursor.description
+        assert descriptions is not None
         
         self.assertEqual(fi.type(descriptions[0]), 'DATE')
         self.assertEqual(fi.type(descriptions[1]), 'TIME')
@@ -104,16 +108,19 @@ class FieldTypesTest(unittest.TestCase):
         # Retrieve and verify
         self.cursor.execute("SELECT y FROM test_year2")
         result = self.cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 75)
         
         # Test field type
         fi = fieldinfo()
+        assert self.cursor.description is not None
         field_type = fi.type(self.cursor.description[0])
         self.assertIn(field_type, ['YEAR', 'SHORT'])
 
         with self.connection.cursor(binary=True) as cursor:
             cursor.execute("SELECT y FROM test_year2")
             result = cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 75)
 
     def test_field_info_string_types(self):
@@ -131,6 +138,7 @@ class FieldTypesTest(unittest.TestCase):
         
         fi = fieldinfo()
         descriptions = self.cursor.description
+        assert descriptions is not None
         
         # VARCHAR
         self.assertIn(fi.type(descriptions[0]), ['VARCHAR', 'VAR_STRING'])
@@ -153,6 +161,7 @@ class FieldTypesTest(unittest.TestCase):
         
         fi = fieldinfo()
         descriptions = self.cursor.description
+        assert descriptions is not None
         
         # All BLOB types should be identified
         for desc in descriptions:
@@ -165,6 +174,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_bit LIMIT 0")
         
         fi = fieldinfo()
+        assert self.cursor.description is not None
         field_type = fi.type(self.cursor.description[0])
         self.assertEqual(field_type, 'BIT')
 
@@ -180,6 +190,7 @@ class FieldTypesTest(unittest.TestCase):
         
         fi = fieldinfo()
         descriptions = self.cursor.description
+        assert descriptions is not None
         
         self.assertIn(fi.type(descriptions[0]), ['ENUM', 'STRING', 'VAR_STRING'])
         self.assertIn(fi.type(descriptions[1]), ['SET', 'STRING', 'VAR_STRING'])
@@ -194,6 +205,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_not_null LIMIT 0")
         
         fi = fieldinfo()
+        assert self.cursor.description is not None
         flags = fi.flag(self.cursor.description[0])
         self.assertIn('NOT_NULL', flags)
 
@@ -207,6 +219,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_pk LIMIT 0")
         
         fi = fieldinfo()
+        assert self.cursor.description is not None
         flags = fi.flag(self.cursor.description[0])
         self.assertIn('PRIMARY_KEY', flags)
         self.assertIn('NOT_NULL', flags)
@@ -221,6 +234,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_auto LIMIT 0")
         
         fi = fieldinfo()
+        assert self.cursor.description is not None
         flags = fi.flag(self.cursor.description[0])
         self.assertIn('AUTO_INCREMENT', flags)
 
@@ -234,6 +248,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_unsigned LIMIT 0")
         
         fi = fieldinfo()
+        assert self.cursor.description is not None
         flags = fi.flag(self.cursor.description[0])
         self.assertIn('UNSIGNED', flags)
 
@@ -247,6 +262,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_zerofill LIMIT 0")
         
         fi = fieldinfo()
+        assert self.cursor.description is not None
         flags = fi.flag(self.cursor.description[0])
         self.assertIn('ZEROFILL', flags)
         self.assertIn('UNSIGNED', flags)  # ZEROFILL implies UNSIGNED
@@ -261,6 +277,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_binary LIMIT 0")
         
         fi = fieldinfo()
+        assert self.cursor.description is not None
         flags = fi.flag(self.cursor.description[0])
         self.assertIn('BINARY', flags)
 
@@ -276,6 +293,7 @@ class FieldTypesTest(unittest.TestCase):
         
         fi = fieldinfo()
         # Check unique key column
+        assert self.cursor.description is not None
         flags = fi.flag(self.cursor.description[1])
         self.assertIn('UNIQUE_KEY', flags)
 
@@ -293,7 +311,9 @@ class FieldTypesTest(unittest.TestCase):
         
         fi = fieldinfo()
         # Columns in composite index should have PART_KEY flag
+        assert self.cursor.description is not None
         flags_a = fi.flag(self.cursor.description[1])
+        assert self.cursor.description is not None
         flags_b = fi.flag(self.cursor.description[2])
         
         # At least one should have PART_KEY
@@ -311,7 +331,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_desc LIMIT 0")
         
         # Description should be a sequence of 7-item sequences
-        self.assertIsNotNone(self.cursor.description)
+        assert self.cursor.description is not None
         self.assertEqual(len(self.cursor.description), 3)
         
         for desc in self.cursor.description:
@@ -332,6 +352,8 @@ class FieldTypesTest(unittest.TestCase):
         """)
         self.cursor.fetchone()
         
+        assert self.cursor.description is not None
+        
         names = [desc[0] for desc in self.cursor.description]
         self.assertEqual(names, ['col1', 'col2', 'col3'])
 
@@ -346,7 +368,9 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_null LIMIT 0")
         
         # Index 6 is null_ok flag
+        assert self.cursor.description is not None
         not_null_desc = self.cursor.description[0]
+        assert self.cursor.description is not None
         nullable_desc = self.cursor.description[1]
         
         # NOT NULL column should have null_ok = 0 or False
@@ -359,6 +383,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT CAST(123.45 AS DECIMAL(10,2)) as val")
         self.cursor.fetchone()
         
+        assert self.cursor.description is not None
         desc = self.cursor.description[0]
         # Index 4 is precision, index 5 is scale
         precision = desc[4]
@@ -399,6 +424,7 @@ class FieldTypesTest(unittest.TestCase):
         self.cursor.execute("SELECT * FROM test_multi_flags LIMIT 0")
         
         fi = fieldinfo()
+        assert self.cursor.description is not None
         flags = fi.flag(self.cursor.description[0])
         
         # Should have multiple flags

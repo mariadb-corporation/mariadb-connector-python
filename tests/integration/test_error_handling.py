@@ -1,5 +1,9 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# These tests hand the API deliberately invalid arguments to check the error raised.
+# pyright: reportArgumentType=false, reportCallIssue=false
+
+
 
 """
 Integration tests for error handling and edge cases
@@ -115,6 +119,7 @@ class ErrorHandlingTest(unittest.TestCase):
         self.cursor.execute("SET sql_mode=''")
         self.cursor.execute("SELECT 1/0")
         result = self.cursor.fetchone()
+        assert result is not None
         self.assertIsNone(result[0])
 
     def test_execute_without_connection(self):
@@ -194,7 +199,7 @@ class ErrorHandlingTest(unittest.TestCase):
             self.skipTest("only native test, mariadb C with no host behavior vary")
 
         config = get_test_config()
-        config['host'] = None
+        config['host'] = None  # pyright: ignore  # deliberately invalid configuration
         config['connect_timeout'] = 2
         
         with self.assertRaises(mariadb.OperationalError):
@@ -280,6 +285,7 @@ class ErrorHandlingTest(unittest.TestCase):
         # Verify
         cursor1.execute("SELECT val FROM test_trans WHERE id = 1")
         result = cursor1.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 200)
         
         cursor1.close()
@@ -325,6 +331,7 @@ class ErrorHandlingTest(unittest.TestCase):
             self.cursor.execute("SELECT 1; SELECT 2")
             # If it succeeds, verify only first statement executed
             result = self.cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
         except mariadb.ProgrammingError:
             pass  # Expected for some implementations

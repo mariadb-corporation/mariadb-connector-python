@@ -1,6 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
 import unittest
 
 from packaging import version
@@ -40,9 +41,9 @@ class TestVersion(unittest.TestCase):
         """First three elements of __version_info__ must be non-negative integers."""
         version_info = mariadb.__version_info__
         for i in range(3):
-            self.assertIsInstance(version_info[i], int,
-                                  f"version_info[{i}] must be int, got {type(version_info[i])}")
-            self.assertGreaterEqual(version_info[i], 0,
+            element = version_info[i]
+            assert isinstance(element, int), f"version_info[{i}] must be int, got {type(element)}"
+            self.assertGreaterEqual(element, 0,
                                     f"version_info[{i}] must be >= 0")
 
     def test_version_info_suffix(self):
@@ -69,7 +70,7 @@ class TestVersion(unittest.TestCase):
         # then verify any trailing suffix against version_info[3] (str).
         import re as _re
         patch_match = _re.match(r'^(\d+)([a-zA-Z].*)?$', patch_str)
-        self.assertIsNotNone(patch_match, f"Unparseable patch segment: {patch_str!r}")
+        assert patch_match is not None, f"Unparseable patch segment: {patch_str!r}"
         patch_num = int(patch_match.group(1))
         patch_suffix = patch_match.group(2) or None
         
@@ -84,8 +85,8 @@ class TestVersion(unittest.TestCase):
         self.assertEqual(patch_num, version_info[2],
                          f"Patch mismatch: {patch_str!r} vs {version_info[2]}")
         if patch_suffix:
-            self.assertGreater(len(version_info), 3,
-                               f"version_info has no suffix element for patch suffix {patch_suffix!r}")
+            assert len(version_info) == 4, \
+                f"version_info has no suffix element for patch suffix {patch_suffix!r}"
             self.assertEqual(patch_suffix, version_info[3],
                              f"Patch suffix mismatch: {patch_suffix!r} vs {version_info[3]!r}")
 
@@ -110,6 +111,7 @@ class TestVersion(unittest.TestCase):
             self.assertIsInstance(
                 api_version, str,
                 f"{impl} implementation must expose a libmariadb version string")
+            assert isinstance(api_version, str)  # narrows for the type checker
             self.assertTrue(len(api_version) > 0, "mariadbapi_version must not be empty")
             # Must be a parseable version (e.g. "3.4.9").
             self.assertGreaterEqual(version.parse(api_version), version.parse('3.0.0'))

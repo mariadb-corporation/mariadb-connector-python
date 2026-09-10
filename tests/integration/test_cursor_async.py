@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 import datetime
 import unittest
 import os
@@ -8,14 +10,14 @@ import decimal
 import json
 from decimal import Decimal
 import array
-import time
 
 import mariadb
 from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CAPABILITY as CLIENT
-from tests.integration.test_pooling_async import create_async_connection
 
 from ..base_test import is_maxscale, is_mysql, is_native, is_async_native
 from ..conftest import get_test_config as conf
+from typing import Any
+from mariadb_shared.async_cursor_common import AsyncCursorCommon
 
 server_indicator_version = 100206
 
@@ -89,26 +91,26 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         async with await mariadb.asyncConnect(**conf()) as conn:
 
             cursor= conn.cursor(named_tuple=True)
-            self.assertEqual(cursor._resulttype, 1)
+            self.assertEqual(cursor._resulttype, 1)  # pyright: ignore  # white-box: implementation attribute
             await cursor.close()
             
             cursor= conn.cursor()
-            self.assertEqual(cursor._resulttype, 0)
+            self.assertEqual(cursor._resulttype, 0)  # pyright: ignore  # white-box: implementation attribute
             await cursor.close()
 
             cursor= conn.cursor(dictionary=True)
-            self.assertEqual(cursor._resulttype, 2)
+            self.assertEqual(cursor._resulttype, 2)  # pyright: ignore  # white-box: implementation attribute
             await cursor.execute("select 1 as A union SELECT 2 as A")
             row= await cursor.fetchone()
             self.assertEqual(row, {'A' : 1})
-            self.assertEqual(cursor._resulttype, 2)
+            self.assertEqual(cursor._resulttype, 2)  # pyright: ignore  # white-box: implementation attribute
             await cursor.scroll(-1)
-            self.assertEqual(cursor._resulttype, 2)
+            self.assertEqual(cursor._resulttype, 2)  # pyright: ignore  # white-box: implementation attribute
             row= await cursor.fetchone()
             self.assertEqual(row, {'A' : 1})
             row= await cursor.fetchone()
             self.assertEqual(row, {'A' : 2})
-            self.assertEqual(cursor._resulttype, 2)
+            self.assertEqual(cursor._resulttype, 2)  # pyright: ignore  # white-box: implementation attribute
             await cursor.close()
 
     async def test_conpy295(self):
@@ -146,6 +148,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("INSERT INTO t_vector VALUES (?,?)", (1, data))
         await cursor.execute("SELECT id, v, Vec_ToText(v) FROM t_vector")
         row= await cursor.fetchone()
+        assert row is not None
         await self.connection.commit()
         check_data= [row[1], array.array('f', eval(row[2]))]
 
@@ -176,6 +179,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await cursor.execute("SELECT c1,c2,c3,c4 FROM test_date")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], datetime.timedelta(seconds=44551,
                                                     microseconds=123456))
@@ -201,6 +205,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await cursor.execute("select * from test_numbers")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], c2)
         self.assertEqual(row[2], c3)
@@ -228,6 +233,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await cursor.execute("SELECT * from test_string")
         row = await cursor.fetchone()
+        assert row is not None
         
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], c2)
@@ -253,6 +259,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await cursor.execute("SELECT * FROM test_blob")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], c2)
         self.assertEqual(row[2], c3)
@@ -276,6 +283,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await cursor.execute("SELECT name FROM test_inserttuple ORDER BY id DESC")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual("Andrey", row[0])
         await cursor.close()
 
@@ -350,7 +358,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(mariadb.Error):
             await cursor.fetchmany(1)
         await cursor.execute("SELECT id, name, city FROM test_fetchmany2 ORDER BY id")
-        row = await cursor.fetchmany(1)
+        await cursor.fetchmany(1)
         await cursor.close()
         with self.assertRaises(mariadb.Error):
             await cursor.fetchmany(1)
@@ -443,9 +451,11 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute(sql)
         await cursor.execute("call p1()")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         await cursor.nextset()
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 2)
         await cursor.close()
 
@@ -455,6 +465,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cursor.rowcount, 3)
         await cursor.scroll(1)
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 2)
         await cursor.close()
 
@@ -496,6 +507,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                        "k geometrycollection)")
         await cursor.execute("SELECT a,b,c,d,e,f,g,h,i,j,k FROM t1")
         metadata = cursor.metadata
+        assert metadata is not None
         
         # JSON
         self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
@@ -557,6 +569,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(info, None)
         await cursor.execute("SELECT * FROM test_xfield_types")
         info = cursor.description
+        assert info is not None
         self.assertEqual(fieldinfo.type(info[0]), "TINY")
         self.assertEqual(fieldinfo.type(info[1]), "SHORT")
         self.assertEqual(fieldinfo.type(info[2]), "LONG")
@@ -614,6 +627,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("commit")
         await cursor.execute("SELECT name FROM pyformat WHERE id=5")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "Andrey")
 
     async def test_format(self):
@@ -633,6 +647,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("commit")
         await cursor.execute("SELECT name FROM pyformat WHERE id=5")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "Andrey")
 
     async def test_conpy214(self):
@@ -663,8 +678,9 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                            params)
         await cursor.execute("SELECT * FROM test_named_tuple ORDER BY id")
         row = await cursor.fetchone()
+        assert row is not None
         if not is_async_native():
-            self.assertEqual(cursor.statement,
+            self.assertEqual(cursor.statement,  # pyright: ignore  # C implementation only
                          "SELECT * FROM test_named_tuple ORDER BY id")
         self.assertEqual(row.id, 1)
         self.assertEqual(row.name, "Jack")
@@ -681,7 +697,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("CREATE TEMPORARY TABLE test_laststatement ("
                        "id int, name varchar(64), "
                        "city varchar(64))")
-        self.assertEqual(cursor.statement,
+        self.assertEqual(cursor.statement,  # pyright: ignore  # C implementation only
                          "CREATE TEMPORARY TABLE test_laststatement "
                          "(id int, name varchar(64), city varchar(64))")
 
@@ -693,7 +709,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.executemany("INSERT INTO test_laststatement VALUES (?,?,?)",
                            params)
         await cursor.execute("SELECT * FROM test_laststatement ORDER BY id")
-        self.assertEqual(cursor.statement,
+        self.assertEqual(cursor.statement,  # pyright: ignore  # C implementation only
                          "SELECT * FROM test_laststatement ORDER BY id")
         await cursor.close()
 
@@ -713,7 +729,9 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         for i in range(0, 8):
             self.assertEqual(cursor1.rownumber, i)
             row1 = await cursor1.fetchone()
+            assert row1 is not None
             row2 = await cursor2.fetchone()
+            assert row2 is not None
             self.assertEqual(cursor1.rownumber, cursor2.rownumber)
             self.assertEqual(row1[0] + row2[0], 9)
 
@@ -722,7 +740,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
     async def test_connection_attr(self):
         cursor = self.connection.cursor()
-        self.assertEqual(cursor.connection, self.connection)
+        self.assertEqual(cursor.connection, self.connection)  # pyright: ignore  # attribute of both implementations, not of the shared interface
         await cursor.close()
 
     async def test_dbapi_type(self):
@@ -741,6 +759,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             mariadb.NUMBER
         ]
         await cursor.fetchone()
+        assert cursor.description is not None
         typecodes = [row[1] for row in cursor.description]
         self.assertEqual(expected_typecodes, typecodes)
         await cursor.close()
@@ -770,10 +789,12 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
         await cursor.execute("SELECT a, b, c FROM ind1")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         self.assertEqual(row[1], 4)
         self.assertEqual(row[2], 3)
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], None)
         self.assertEqual(row[1], 2)
         self.assertEqual(row[2], 3)
@@ -791,6 +812,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("insert into test_fake_pickle values (?)", (k,))
         await cursor.execute("select * from test_fake_pickle")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], k)
         await cursor.close()
 
@@ -829,6 +851,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await cursor.nextset()
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 2)
         await cursor.close()
 
@@ -848,6 +871,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("INSERT INTO t1 VALUES (?, ?, ?)", values)
         await cursor.execute("SELECT a,b,c FROM t1")
         row= await cursor.fetchone()
+        assert row is not None
         
         self.assertEqual(row[0], values[0].__str__())
         self.assertEqual(row[1], values[1].__str__())
@@ -882,6 +906,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         # Test text protocol (default behavior - returns strings)
         await cursor_default.execute("SELECT a, b, c FROM t1")
         row = await cursor_default.fetchone()
+        assert row is not None
         
         self.assertIsInstance(row[0], str, "INET6 should be string by default")
         self.assertIsInstance(row[1], str, "INET4 should be string by default")
@@ -895,6 +920,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         cursor_default = self.connection.cursor(binary=True)
         await cursor_default.execute("SELECT a, b, c FROM t1")
         row = await cursor_default.fetchone()
+        assert row is not None
         
         # Binary protocol returns bytes for these types by default
         self.assertIsInstance(row[0], (str, bytes), "INET6 should be string or bytes by default")
@@ -909,6 +935,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         # Test text protocol with native_object
         await cursor_native.execute("SELECT a, b, c FROM t1")
         row = await cursor_native.fetchone()
+        assert row is not None
         
         self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
                             "INET6 should be ipaddress object with native_object=True")
@@ -925,6 +952,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         cursor_native = self.connection.cursor(native_object=True, binary=True)
         await cursor_native.execute("SELECT a, b, c FROM t1")
         row = await cursor_native.fetchone()
+        assert row is not None
         
         self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
                             "INET6 should be ipaddress object with native_object=True (binary)")
@@ -940,6 +968,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor_native.execute("INSERT INTO t1 VALUES (NULL, NULL, NULL)")
         await cursor_native.execute("SELECT a, b, c FROM t1 WHERE a IS NULL")
         row = await cursor_native.fetchone()
+        assert row is not None
         
         self.assertIsNone(row[0], "NULL INET6 should be None")
         self.assertIsNone(row[1], "NULL INET4 should be None")
@@ -950,9 +979,8 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor_native.close()
         
         # Test native_object at connection level
-        from ..base_test import create_connection
         
-        async with await mariadb.asyncConnect(**{**conf(), **{"native_object": True}}) as conn_native:
+        async with await mariadb.asyncConnect(**conf(native_object=True)) as conn_native:
             cursor_conn = conn_native.cursor()
             
             await cursor_conn.execute("DROP TABLE IF EXISTS t1")
@@ -963,6 +991,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             # Connection-level native_object should apply to all cursors
             await cursor_conn.execute("SELECT a, b, c FROM t1")
             row = await cursor_conn.fetchone()
+            assert row is not None
             
             self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address), 
                                 "INET6 should be ipaddress object with connection-level native_object=True")
@@ -978,6 +1007,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             cursor_override = conn_native.cursor(native_object=False)
             await cursor_override.execute("SELECT a, b, c FROM t1")
             row = await cursor_override.fetchone()
+            assert row is not None
             
             self.assertIsInstance(row[0], str, 
                                 "INET6 should be string when cursor overrides connection-level native_object")
@@ -1007,6 +1037,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("INSERT INTO t1 VALUES (?, ?, ?)", values)
         await cursor.execute("SELECT a,b,c FROM t1")
         row= await cursor.fetchone()
+        assert row is not None
 
         self.assertEqual(row[0], values[0].__str__())
         self.assertEqual(row[1], values[1].__str__())
@@ -1041,12 +1072,15 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await cursor.scroll(2, mode='relative')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 3)
         await cursor.scroll(-3, mode='relative')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         await cursor.scroll(1)
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 3)
 
         try:
@@ -1056,10 +1090,12 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         await cursor.scroll(0, mode='absolute')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
 
         await cursor.scroll(2, mode='absolute')
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 3)
 
         try:
@@ -1069,7 +1105,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
         try:
             await cursor.scroll(1, mode='Wrong')
-        except mariadb.ProgrammingError as e:
+        except mariadb.ProgrammingError:
             pass
 
         await cursor.execute(stmt)
@@ -1095,6 +1131,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("SELECT a,b,c FROM test_compy_9")
         await cursor.fetchone()
         d = cursor.description
+        assert d is not None
         self.assertEqual(d[0][2], 20)  # 20 code points
         self.assertEqual(d[0][3], 80)  # 80 characters
         self.assertEqual(d[1][2], 6)  # length=precision +  1
@@ -1114,6 +1151,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(cursor.lastrowid, 1)
         await cursor.execute("SELECT LAST_INSERT_ID()")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         vals = [(3, "bar"), (4, "this")]
         await cursor.executemany("INSERT INTO test_conpy_15 VALUES (?,?)", vals)
@@ -1222,6 +1260,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("INSERT INTO test_utf8 VALUES (?)", ("😎🌶🎤🥂",))
             await cursor.execute("SELECT * FROM test_utf8")
             row = await cursor.fetchone()
+            assert row is not None
             e = b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82"
             self.assertEqual(row[0], e)
             await cursor.close()
@@ -1282,6 +1321,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("CREATE PROCEDURE p1( )\nBEGIN\n SELECT 1;\nEND")
             await cursor.callproc("p1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cursor.execute("DROP PROCEDURE IF EXISTS p1")
 
@@ -1299,6 +1339,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.callproc("p2", ("foo", "bar", 1))
             self.assertEqual(cursor.sp_outparams, True)
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "foobar")
             await cursor.nextset()
             await cursor.close()
@@ -1307,6 +1348,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
             self.assertEqual(cursor.sp_outparams, True)
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "foobar")
             await cursor.execute("DROP PROCEDURE IF EXISTS p2")
             await cursor.close()
@@ -1328,10 +1370,12 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.callproc("p3", ("foo", "bar", 1))
             self.assertEqual(cursor.sp_outparams, False)
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "1")
             await cursor.nextset()
             self.assertEqual(cursor.sp_outparams, True)
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "foobar")
             await cursor.execute("DROP PROCEDURE IF EXISTS p3")
             await cursor.close()
@@ -1346,6 +1390,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                            "(PointFromText('point(1 1)'))")
             await cursor.execute("SELECT a FROM conpy42")
             row = await cursor.fetchone()
+            assert row is not None
             expected = b'' . join([b'\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00',
                                    b'\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00',
                                    b'\x00\xf0?'])
@@ -1379,6 +1424,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                            "'2020-10-10 14:12:24.123456')")
             await cursor.execute("SELECT a,b FROM t1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0],
                              datetime.timedelta(seconds=47544, microseconds=51000))
             self.assertEqual(row[1],
@@ -1390,6 +1436,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             async with con.cursor() as cursor:
                 await cursor.execute("SELECT 'foo'")
                 row = await cursor.fetchone()
+                assert row is not None
             self.assertEqual(row[0], "foo")
             try:
                 await cursor.execute("SELECT 'bar'")
@@ -1401,9 +1448,11 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             cursor = con.cursor(buffered=True)
             await cursor.execute("SELECT ?", (True, ))
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cursor.execute("SELECT ?", (False,))
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 0)
             await cursor.close()
 
@@ -1412,13 +1461,16 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             cur = con.cursor()
             await cur.execute("select %s", [True])
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cur.execute("create temporary table t1 (a int)")
             await cur.executemany("insert into t1 values (%s)", [[1], (2,)])
             await cur.execute("select a from t1")
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 2)
             await cur.close()
 
@@ -1462,6 +1514,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.execute("insert into t1 values (?)", (Decimal('10.2'),))
             await cur.execute("select a from t1")
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], Decimal('10.20'))
             await cur.close()
 
@@ -1470,6 +1523,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             cur = con.cursor(dictionary=True)
             await cur.execute("select 'foo' as bar, 'bar' as foo")
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row["foo"], "bar")
             self.assertEqual(row["bar"], "foo")
             await cur.close()
@@ -1479,9 +1533,11 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             cur = con.cursor()
             await cur.execute("select 1", ())
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cur.execute("select 1", [])
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cur.close()
 
@@ -1490,6 +1546,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             cursor = con.cursor()
             await cursor.execute("SELECT %(val)s", {"val": 3})
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 3)
             await cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
             await cursor.executemany("INSERT INTO t1 VALUES (%(val)s)",
@@ -1507,6 +1564,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("INSERT INTO t1 VALUES('0000-01-01')")
             await cursor.execute("SELECT a FROM t1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], None)
             await cursor.close()
 
@@ -1525,8 +1583,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
             await cursor.execute("SELECT a, b, c FROM ind1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], None)
             await cursor.execute("DELETE FROM ind1")
             vals = [(1, 4, 3), (INDICATOR.NULL, INDICATOR.DEFAULT, None)]
@@ -1534,8 +1594,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
             await cursor.execute("SELECT a, b, c FROM ind1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], None)
             self.assertEqual(row[1], 2)
             self.assertEqual(row[2], None)
@@ -1547,6 +1609,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             query = "select round(.75 * (? / 3), 2) as val"
             await cur.execute(query, [5])
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], Decimal(1.25))
             del cur
 
@@ -1574,6 +1637,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.execute("insert into t1 values (?,?,?)", (-1, -300, -2147483649))
             await cur.execute("select a, b, c FROM t1")
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], -1)
             self.assertEqual(row[1], -300)
             self.assertEqual(row[2], -2147483649)
@@ -1597,9 +1661,11 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cur.execute("INSERT INTO t1 VALUES(1)")
             await cur.execute("SELECT a FROM t1")
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cur.execute("SELECT a FROM t1 WHERE 1=?", (1,))
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             del cur
 
@@ -1609,6 +1675,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             a = foo(2)
             await cur.execute("SELECT ?", (a,))
             row = await cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 2)
             del cur
 
@@ -1617,6 +1684,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             cursor = con.cursor()
             await cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], b'foo')
             await cursor.close()
 
@@ -1630,17 +1698,19 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("INSERT INTO t1 VALUES(?)", (json.dumps(content),))
             await cursor.execute("SELECT a FROM t1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], json.dumps(content))
             await cursor.close()
 
     async def test_conpy123(self):
-        async with await mariadb.asyncConnect(**{**conf(), **{"client_flag": CLIENT.MULTI_STATEMENTS}}) as con:
+        async with await mariadb.asyncConnect(**conf(client_flag=CLIENT.MULTI_STATEMENTS)) as con:
             cursor1 = con.cursor()
             await cursor1.execute("SELECT 1; SELECT 2")
             await cursor1.close()
             cursor2 = con.cursor()
             await cursor2.execute("SELECT 1")
             row = await cursor2.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cursor2.close()
 
@@ -1651,6 +1721,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.executemany("INSERT INTO t1 VALUES (?)", [[decimal.Decimal(1)]])
             await cursor.execute("SELECT a FROM t1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], decimal.Decimal(1))
             await cursor.close()
 
@@ -1681,6 +1752,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             x = os.urandom(32)
             await cursor.execute("SELECT cast(? as binary) as a", (x,))
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], x)
             await cursor.close()
 
@@ -1692,37 +1764,41 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             cursor = conn.cursor()
             await cursor.execute("SELECT /*! ? */", (1,))
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cursor.close()
 
             cursor = conn.cursor()
             await cursor.execute("SELECT /*M! ? */", (1,))
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cursor.close()
 
             cursor = conn.cursor()
             await cursor.execute("SELECT /*M!50601 ? */", (1,))
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cursor.close()
 
             cursor = conn.cursor()
             await cursor.execute("SELECT /*!40301 ? */", (1,))
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cursor.close()
 
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute("SELECT /*!50701 ? */", (1,))
-                except mariadb.ProgrammingError as e:
+                except mariadb.ProgrammingError:
                     pass
 
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute("SELECT /*!250701 ? */", (1,))
-                except mariadb.ProgrammingError as e:
+                except mariadb.ProgrammingError:
                     pass
 
     async def check_closed(self):
@@ -1796,9 +1872,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                            "BEGIN\nSET o1:=CAST(CONCAT(s1,s2) AS "
                            "char CHARACTER SET utf8mb4);\nEND")
 
-            for i in range(0, 500):
+            for _ in range(0, 500):
                 await cursor.callproc("p2", ("foo", "bar", 1))
                 row = await cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], expected)
 
     async def test_conpy205(self):
@@ -1807,11 +1884,13 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
             await cursor.execute("select %(name)s", {"name": "Marc"})
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "Marc")
 
             await cursor.execute("select %(name)s", {"name": "Marc",
                                                "noname": "unknown"})
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "Marc")
 
             try:
@@ -1901,7 +1980,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                                        b'\'col_Unit\xc3\xa9ble_id_seq\'',
                                        b' and TABLE_SCHEMA=\'foobar\''])
             await cursor.execute(sql, data)
-            self.assertEqual(transformed, cursor._transformed_statement)
+            self.assertEqual(transformed, cursor._transformed_statement)  # pyright: ignore  # white-box: implementation attribute
             await cursor.close()
 
     async def test_conpy277(self):
@@ -1910,18 +1989,20 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("SET session sql_mode='TRADITIONAL,ANSI_QUOTES,ONLY_FULL_GROUP_BY,PIPES_AS_CONCAT'")
             await cursor.execute('select ? as x', ('hi',))
             row= await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 'hi')
             await cursor.close()
 
     async def test_conpy213(self):
         conversions = {**{FIELD_TYPE.NEWDECIMAL: float}}
-        async with await mariadb.asyncConnect(**{**conf(), **{"converter": conversions}}) as conn:
+        async with await mariadb.asyncConnect(**conf(converter=conversions)) as conn:
             cursor = conn.cursor()
             await cursor.execute("SELECT 1.1")
             rows = await cursor.fetchall()
             self.assertEqual(rows[0][0], 1.1)
             await cursor.execute("SELECT 1.1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1.1)
             await cursor.close()
 
@@ -1930,15 +2011,19 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             cursor = conn.cursor()
             await cursor.execute("SELECT 1",  None)
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             await cursor.execute("SELECT 2",  ())
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 2)
             await cursor.execute("SELECT 3",  [])
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 3)
             await cursor.execute("SELECT 4",  {})
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 4)
             await cursor.close()
 
@@ -1983,6 +2068,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("SELECT name FROM test_inserttuple ORDER BY id DESC")
 
         row = await cursor.fetchone()
+        assert row is not None
 
         self.assertEqual("Andrey", row[0])
 
@@ -2023,11 +2109,13 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
             # text protocol
             await cursor.execute("select a from t1")
+            assert cursor.description is not None
             self.assertEqual(cursor.description[0][1], mariadb.STRING);
             await cursor.fetchall()
 
             # binary protcol
             await cursor.execute("select a from t1 WHERE 1=?", (1,))
+            assert cursor.description is not None
             self.assertEqual(cursor.description[0][1], mariadb.STRING);
             await cursor.fetchall()
 
@@ -2050,16 +2138,18 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("INSERT INTO t1 VALUES(123)")
             await cursor.execute("SELECT a FROM t1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 123)
             await cursor.close()
             cursor = connection.cursor(binary=True)
             await cursor.execute("SELECT a FROM t1")
             row = await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 123)
             await cursor.close()
 
     async def test_conpy291(self):
-        if is_mysql:
+        if is_mysql():
             self.skipTest("Skip (MySQL doesn't support batch/indicators)")
         async with await mariadb.asyncConnect(**conf()) as connection:
             cursor = connection.cursor()
@@ -2082,17 +2172,19 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4")
 
             row= await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             rows= await cursor.fetchall()
             self.assertEqual(rows, [(2,),(3,),(4,)])
             await cursor.scroll(0, "absolute")
             row= await cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             self.assertEqual(cursor.rowcount, 4)
             await cursor.close()
 
     async def test_conpy289(self):
-        if is_mysql:
+        if is_mysql():
             self.skipTest("Skip (MySQL doesn't support batch)")
         async with await mariadb.asyncConnect(**conf()) as conn:
             cursor= conn.cursor()
@@ -2214,7 +2306,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         
         # Test __iter__ raises TypeError
         with self.assertRaises(TypeError) as cm:
-            iter(cursor)
+            iter(cursor)  # pyright: ignore  # deliberate sync iteration of an async cursor
         self.assertIn("async for", str(cm.exception).lower())
         
         # Test __next__ raises TypeError
@@ -2259,7 +2351,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         
         # Attempting to use sync 'for' should raise TypeError
         with self.assertRaises(TypeError) as cm:
-            for row in cursor:
+            for row in cursor:  # pyright: ignore  # deliberate sync iteration of an async cursor
                 pass
         self.assertIn("async for", str(cm.exception).lower())
         
@@ -2281,6 +2373,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(info, None)
         await cursor.execute("SELECT * FROM test_xfield_types_binary WHERE 1=?", (1,))
         info = cursor.description
+        assert info is not None
         self.assertEqual(fieldinfo.type(info[0]), "TINY")
         self.assertEqual(fieldinfo.type(info[1]), "SHORT")
         self.assertEqual(fieldinfo.type(info[2]), "LONG")
@@ -2324,6 +2417,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                        "k geometrycollection)")
         await cursor.execute("SELECT a,b,c,d,e,f,g,h,i,j,k FROM t1_binary WHERE 1=?", (1,))
         metadata = cursor.metadata
+        assert metadata is not None
         
         # JSON
         self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
@@ -2386,6 +2480,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
 
             # binary protocol with parameters
             await cursor.execute("select a from t1_binary_270 WHERE 1=?", (1,))
+            assert cursor.description is not None
             self.assertEqual(cursor.description[0][1], mariadb.STRING)
             await cursor.fetchall()
 
@@ -2405,9 +2500,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             async with connection.cursor(binary=True) as cursor:
                 await self.field_info_integer_types_res(cursor)
         
-    async def field_info_integer_types_res(self, cursor):    
+    async def field_info_integer_types_res(self, cursor: AsyncCursorCommon[Any]) -> None:
         await cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         self.assertEqual(row[1], 2)
         self.assertEqual(row[2], 3)
@@ -2426,9 +2522,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             async with connection.cursor(binary=True) as cursor:
                 await self.field_info_integer_types_res_unsigned(cursor)
         
-    async def field_info_integer_types_res_unsigned(self, cursor):    
+    async def field_info_integer_types_res_unsigned(self, cursor: AsyncCursorCommon[Any]) -> None:
         await cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 255)
         self.assertEqual(row[1], 65535)
         self.assertEqual(row[2], 16777215)
@@ -2448,13 +2545,15 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
             async with connection.cursor(binary=True) as cursor:
                 await self.field_info_float_types_res(cursor)
         
-    async def field_info_float_types_res(self, cursor):    
+    async def field_info_float_types_res(self, cursor: AsyncCursorCommon[Any]) -> None:
         await cursor.execute("SELECT * FROM test_float_types WHERE 1=?", (1,))
         row = await cursor.fetchone()
+        assert row is not None
         self.assertAlmostEqual(row[0], 1.1, places=7)
         self.assertAlmostEqual(row[1], 2.2, places=7)
         await cursor.execute("SELECT * FROM test_float_types WHERE 1=?", (1,))
         row = await cursor.fetchone()
+        assert row is not None
         self.assertAlmostEqual(row[0], 1.1, places=7)
         self.assertAlmostEqual(row[1], 2.2, places=7)
 
@@ -2471,9 +2570,10 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
                 await self.field_json_types_res(cursor)
 
         
-    async def field_json_types_res(self, cursor):    
+    async def field_json_types_res(self, cursor: AsyncCursorCommon[Any]) -> None:
         await cursor.execute("SELECT * FROM test_json_types WHERE 1=?", (1,))
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], '{"age": 30, "email": "john.doe@example.com"}')
 
     async def test_prepare_error(self):
@@ -2503,6 +2603,7 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         # Verify 3 rows were inserted
         await cursor.execute("SELECT COUNT(*) FROM test_empty_params")
         count = await cursor.fetchone()
+        assert count is not None
         self.assertEqual(count[0], 3)
         
         # Verify default values were used

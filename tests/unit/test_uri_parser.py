@@ -1,3 +1,5 @@
+# These tests hand the API deliberately invalid arguments to check the error raised.
+# pyright: reportArgumentType=false, reportCallIssue=false
 """
 Unit tests for URI parser
 """

@@ -1,12 +1,13 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 """
 Integration tests for cursor features including named_tuple, dictionary, and buffered cursors
 """
 
 import unittest
-import mariadb
 from decimal import Decimal
 from ..base_test import create_connection
 
@@ -53,6 +54,7 @@ class CursorFeaturesTest(unittest.TestCase):
         cursor = self.connection.cursor(named_tuple=True)
         cursor.execute("SELECT id, name, value, active FROM test_cursor_features WHERE id = 1")
         row = cursor.fetchone()
+        assert row is not None
         
         # Test attribute access
         self.assertEqual(row.id, 1)
@@ -71,6 +73,7 @@ class CursorFeaturesTest(unittest.TestCase):
         cursor = self.connection.cursor(named_tuple=True)
         cursor.execute("SELECT id as user_id, name as user_name FROM test_cursor_features WHERE id = 2")
         row = cursor.fetchone()
+        assert row is not None
         
         # Test alias attribute access
         self.assertEqual(row.user_id, 2)
@@ -96,6 +99,7 @@ class CursorFeaturesTest(unittest.TestCase):
         cursor = self.connection.cursor(dictionary=True)
         cursor.execute("SELECT id, name, value, active FROM test_cursor_features WHERE id = 1")
         row = cursor.fetchone()
+        assert row is not None
         
         # Test dictionary access
         self.assertEqual(row['id'], 1)
@@ -104,6 +108,7 @@ class CursorFeaturesTest(unittest.TestCase):
         self.assertEqual(row['active'], True)
         
         # Test keys
+        assert row is not None
         self.assertIn('id', row)
         self.assertIn('name', row)
         
@@ -114,6 +119,7 @@ class CursorFeaturesTest(unittest.TestCase):
         cursor = self.connection.cursor(dictionary=True)
         cursor.execute("SELECT id as user_id, name as user_name FROM test_cursor_features WHERE id = 2")
         row = cursor.fetchone()
+        assert row is not None
         
         # Test alias dictionary access
         self.assertEqual(row['user_id'], 2)
@@ -155,6 +161,7 @@ class CursorFeaturesTest(unittest.TestCase):
         
         self.assertEqual(cursor.rowcount, 3)
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row.name, 'Alice')
         
         cursor.close()
@@ -166,6 +173,7 @@ class CursorFeaturesTest(unittest.TestCase):
         
         self.assertEqual(cursor.rowcount, 3)
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row['name'], 'Alice')
         
         cursor.close()
@@ -224,7 +232,7 @@ class CursorFeaturesTest(unittest.TestCase):
         cursor.execute("SELECT id, name, value FROM test_cursor_features LIMIT 1")
         
         # Description should be available
-        self.assertIsNotNone(cursor.description)
+        assert cursor.description is not None
         self.assertEqual(len(cursor.description), 3)
         
         # Check column names
@@ -239,7 +247,7 @@ class CursorFeaturesTest(unittest.TestCase):
         cursor.execute("SELECT id, name, value FROM test_cursor_features LIMIT 1")
         
         # Description should be available
-        self.assertIsNotNone(cursor.description)
+        assert cursor.description is not None
         self.assertEqual(len(cursor.description), 3)
         
         cursor.close()
@@ -278,6 +286,7 @@ class CursorFeaturesTest(unittest.TestCase):
         cursor = self.connection.cursor(named_tuple=True)
         cursor.execute("SELECT name, value, active FROM test_cursor_features WHERE name IS NULL")
         row = cursor.fetchone()
+        assert row is not None
         
         self.assertIsNone(row.name)
         self.assertIsNone(row.value)
@@ -293,6 +302,7 @@ class CursorFeaturesTest(unittest.TestCase):
         cursor = self.connection.cursor(dictionary=True)
         cursor.execute("SELECT name, value, active FROM test_cursor_features WHERE name IS NULL")
         row = cursor.fetchone()
+        assert row is not None
         
         self.assertIsNone(row['name'])
         self.assertIsNone(row['value'])
@@ -306,6 +316,7 @@ class CursorFeaturesTest(unittest.TestCase):
         # Use aliases with special characters that need sanitization
         cursor.execute("SELECT id as `user-id`, name as `user name` FROM test_cursor_features WHERE id = 1")
         row = cursor.fetchone()
+        assert row is not None
         
         # Should handle special characters in column names
         self.assertIsNotNone(row)
@@ -337,6 +348,7 @@ class CursorFeaturesTest(unittest.TestCase):
         with self.connection.cursor(named_tuple=True) as cursor:
             cursor.execute("SELECT id, name FROM test_cursor_features WHERE id = 1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row.name, 'Alice')
         
         # Cursor should be closed after context
@@ -353,8 +365,11 @@ class CursorFeaturesTest(unittest.TestCase):
         cursor3.execute("SELECT id, name FROM test_cursor_features WHERE id = 3")
         
         row1 = cursor1.fetchone()
+        assert row1 is not None
         row2 = cursor2.fetchone()
+        assert row2 is not None
         row3 = cursor3.fetchone()
+        assert row3 is not None
         
         # Each cursor should return data in its own format
         self.assertEqual(row1.name, 'Alice')  # named_tuple

@@ -1,21 +1,31 @@
+# mariadb_pool is importable only through the editable finder, so pyright cannot resolve it:
+# everything that comes from it is Unknown.
+# The pool registry mariadb._CONNECTION_POOLS is inspected on purpose.
+# pyright: reportMissingImports=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportPossiblyUnboundVariable=false, reportPrivateUsage=false
+
 """
 Integration tests for URI-based connection pools
 """
+from __future__ import annotations
 
 import unittest
+from typing import TYPE_CHECKING
 import mariadb
 from tests.conftest import get_test_config
 
+if TYPE_CHECKING:
+    from tests.conftest import TestConfig
+
 # Check if mariadb_pool is available and functional
 try:
-    from mariadb_pool import ConnectionPoolWrapper
     HAS_MARIADB_POOL = True
 except (ImportError, AttributeError):
-    HAS_MARIADB_POOL = False
+    HAS_MARIADB_POOL = False  # pyright: ignore[reportConstantRedefinition]
 
 @unittest.skipIf(not HAS_MARIADB_POOL,
                  "mariadb_pool package not installed")
-def build_uri(config, scheme='mariadb', database=None, query_params=None):
+def build_uri(config: TestConfig, scheme: str = 'mariadb', database: str | None = None,
+              query_params: str | None = None) -> str:
     """Helper function to build URI from config with optional password"""
     user = config.get('user', 'root')
     password = config.get('password', '')
@@ -55,7 +65,7 @@ class TestURIPool(unittest.TestCase):
     def tearDown(self):
         """Clean up any pools created during tests"""
         # Clean up mariadb pools
-        pools_to_remove = []
+        pools_to_remove: list[str] = []
         for pool_name in mariadb._CONNECTION_POOLS:
             if pool_name.startswith('test_uri_pool_'):
                 pools_to_remove.append(pool_name)
@@ -79,6 +89,7 @@ class TestURIPool(unittest.TestCase):
             with conn1.cursor() as cursor1:
                 cursor1.execute("SELECT 1")
                 result = cursor1.fetchone()
+                assert result is not None
                 self.assertEqual(result[0], 1)
         
         # Get another connection from same pool (reuse): the connection
@@ -90,6 +101,7 @@ class TestURIPool(unittest.TestCase):
             with conn2.cursor() as cursor2:
                 cursor2.execute("SELECT 2")
                 result = cursor2.fetchone()
+                assert result is not None
                 self.assertEqual(result[0], 2)
             
             # Verify pool is registered
@@ -113,6 +125,7 @@ class TestURIPool(unittest.TestCase):
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT 3")
                     result = cursor.fetchone()
+                    assert result is not None
                     self.assertEqual(result[0], 3)
         # Pool auto-closed by context manager
 
@@ -132,6 +145,7 @@ class TestURIPool(unittest.TestCase):
             with conn.cursor() as cursor:
                 cursor.execute("SELECT 4")
                 result = cursor.fetchone()
+                assert result is not None
                 self.assertEqual(result[0], 4)
         mariadb._CONNECTION_POOLS["test_uri_pool_3"].close()
     
@@ -152,6 +166,7 @@ class TestURIPool(unittest.TestCase):
             with conn.cursor() as cursor:
                 cursor.execute("SELECT 5")
                 result = cursor.fetchone()
+                assert result is not None
                 self.assertEqual(result[0], 5)
         mariadb._CONNECTION_POOLS["test_uri_pool_4"].close()
     
@@ -168,6 +183,7 @@ class TestURIPool(unittest.TestCase):
             with conn.cursor() as cursor:
                 cursor.execute("SELECT 6")
                 result = cursor.fetchone()
+                assert result is not None
                 self.assertEqual(result[0], 6)
         mariadb._CONNECTION_POOLS["test_uri_pool_5"].close()
     
@@ -185,6 +201,7 @@ class TestURIPool(unittest.TestCase):
                         with conn.cursor() as cursor:
                             cursor.execute(f"SELECT {i}")
                             result = cursor.fetchone()
+                            assert result is not None
                             self.assertEqual(result[0], i)
         mariadb._CONNECTION_POOLS["test_uri_pool_6"].close()
     
@@ -204,6 +221,7 @@ class TestURIPool(unittest.TestCase):
             with conn.cursor() as cursor:
                 cursor.execute("SELECT DATABASE()")
                 result = cursor.fetchone()
+                assert result is not None
                 self.assertEqual(result[0], config['database'])
         mariadb._CONNECTION_POOLS["test_uri_pool_7"].close()
     
@@ -213,7 +231,7 @@ class TestURIPool(unittest.TestCase):
         uri = build_uri(config)
         
         # First connection creates the pool
-        with mariadb.connect(uri, pool_name="test_uri_pool_dup", pool_size=3) as conn1:
+        with mariadb.connect(uri, pool_name="test_uri_pool_dup", pool_size=3) as _conn1:
             # Try to create another pool with same name
             with self.assertRaises(mariadb.PoolError) as cm:
                 mariadb.ConnectionPool(pool_name="test_uri_pool_dup", uri=uri)
@@ -241,6 +259,7 @@ class TestURIPool(unittest.TestCase):
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT 13")
                     result = cursor.fetchone()
+                    assert result is not None
                     self.assertEqual(result[0], 13)
     
     def test_pool_uri_with_pool_name_in_query(self):
@@ -260,6 +279,7 @@ class TestURIPool(unittest.TestCase):
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT 10")
                     result = cursor.fetchone()
+                    assert result is not None
                     self.assertEqual(result[0], 10)
 
     def test_pool_uri_first_arg_with_kwarg_pool_name(self): 
@@ -280,6 +300,7 @@ class TestURIPool(unittest.TestCase):
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT 11")
                     result = cursor.fetchone()
+                    assert result is not None
                     self.assertEqual(result[0], 11)
 
 
@@ -305,6 +326,7 @@ class TestURIPool(unittest.TestCase):
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT 12")
                     result = cursor.fetchone()
+                    assert result is not None
                     self.assertEqual(result[0], 12)
 
 if __name__ == '__main__':

@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import datetime
-import os
 import unittest
 
 from ..base_test import create_connection
@@ -21,7 +20,7 @@ class CursorMariaDBTest(unittest.TestCase):
         cursor.execute("CREATE TEMPORARY TABLE test_insert_parameter("
                         "a int not null auto_increment primary key,"
                         "b int, c int, d varchar(20),e date)")
-        list_in = []
+        list_in: list[tuple[int, int, int, str, datetime.date]] = []
         for i in range(1, 3001):
             row = (i, i, i, "bar", datetime.date(2019, 1, 1))
             list_in.append(row)
@@ -41,7 +40,7 @@ class CursorMariaDBTest(unittest.TestCase):
                         "a int not null auto_increment primary key,"
                         "b int, c int, d varchar(20),e date)")
         cursor.execute("set @@autocommit=0")
-        list_in = []
+        list_in: list[tuple[int, int, int, str, datetime.date]] = []
         for i in range(1, 3001):
             row = (i, i, i, "bar", datetime.date(2019, 1, 1))
             list_in.append(row)
@@ -50,7 +49,7 @@ class CursorMariaDBTest(unittest.TestCase):
         self.assertEqual(len(list_in), cursor.rowcount)
         self.connection.commit()
         cursor.close()
-        list_update = []
+        list_update: list[tuple[int, int]] = []
 
         cursor = self.connection.cursor()
         cursor.execute("set @@autocommit=0")
@@ -70,7 +69,7 @@ class CursorMariaDBTest(unittest.TestCase):
                         "a int not null auto_increment primary key,"
                         "b int, c int, d varchar(20),e date)")
         cursor.execute("set @@autocommit=0")
-        list_in = []
+        list_in: list[tuple[int, int, int, str, datetime.date]] = []
         for i in range(1, 3001):
             row = (i, i, i, "bar", datetime.date(2019, 1, 1))
             list_in.append(row)
@@ -79,7 +78,7 @@ class CursorMariaDBTest(unittest.TestCase):
         self.assertEqual(len(list_in), cursor.rowcount)
         self.connection.commit()
         cursor.close()
-        list_delete = []
+        list_delete: list[tuple[int]] = []
 
         cursor = self.connection.cursor()
         cursor.execute("set @@autocommit=0")

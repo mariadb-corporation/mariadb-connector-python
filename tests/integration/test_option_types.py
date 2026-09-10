@@ -17,22 +17,24 @@ Both drivers are exercised through the same tests so they cannot drift apart.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 import mariadb
 
 from ..conftest import get_test_config as conf
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
 
 INT_OPTIONS = ("port", "connect_timeout", "read_timeout", "write_timeout",
                "client_flag")
 
 
-def _connect(**overrides: Any) -> Any:
-    args = conf().copy()
-    args.update(overrides)
-    return mariadb.connect(**args)
+def _connect(**overrides: Any) -> SyncConnectionCommon[Any]:
+    # The overrides are deliberately of arbitrary types (that is what these
+    # tests check), so the merged mapping cannot be a ConnectionOptions.
+    args: dict[str, Any] = {**conf(), **overrides}
+    return cast(SyncConnectionCommon[Any], mariadb.connect(**args))
 
 
 @pytest.mark.parametrize("option", INT_OPTIONS)

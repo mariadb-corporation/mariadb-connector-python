@@ -3,7 +3,6 @@
 
 import unittest
 
-import mariadb
 
 from ..base_test import create_connection
 
@@ -25,13 +24,13 @@ class TestConnectionAttributes(unittest.TestCase):
 
     def test_user(self):
         """user must be a non-empty string."""
-        self.assertIsInstance(self.connection.user, str)
+        assert isinstance(self.connection.user, str)
         self.assertTrue(len(self.connection.user) > 0)
 
     def test_database(self):
         """database must be a string or None."""
         db = self.connection.database
-        self.assertTrue(db is None or isinstance(db, str))
+        self.assertTrue(db is None or isinstance(db, str))  # pyright: ignore[reportUnnecessaryIsInstance]
 
     def test_server_info(self):
         """server_info must be a non-empty string."""

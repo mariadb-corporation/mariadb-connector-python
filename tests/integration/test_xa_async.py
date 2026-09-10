@@ -1,5 +1,7 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# These tests hand the API deliberately invalid arguments to check the error raised.
+# pyright: reportArgumentType=false, reportCallIssue=false
 
 import unittest
 import mariadb

@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 """
 CONPY-382, async client: a parameter that cannot be serialized must leave the
 connection usable.
@@ -62,7 +64,9 @@ class AsyncInvalidParamBindingTest(unittest.IsolatedAsyncioTestCase):
                 # the unencodable row is never written; rows before it survive
                 # only on servers without the bulk protocol (row-by-row loop)
                 await self.cursor.execute("SELECT COUNT(*) FROM conpy382a")
-                self.assertLessEqual((await self.cursor.fetchone())[0],
+                row = await self.cursor.fetchone()
+                assert row is not None
+                self.assertLessEqual(row[0],
                                      len(rows) - 1)
 
     async def test_execute_unencodable_string_keeps_connection_usable(self):

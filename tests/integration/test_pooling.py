@@ -1,20 +1,24 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# mariadb_pool is importable only through the editable finder, so pyright cannot resolve it:
+# everything that comes from it is Unknown.
+# The pool registry mariadb._CONNECTION_POOLS is inspected on purpose.
+# pyright: reportMissingImports=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportPossiblyUnboundVariable=false, reportPrivateUsage=false
+
 
 import unittest
 import os
 import warnings
 import mariadb
-import platform
 
 from ..base_test import create_connection, conf, is_skysql, is_maxscale
+from typing import Any
 
 # Check if mariadb_pool is available and functional
 try:
-    from mariadb_pool import ConnectionPoolWrapper
     HAS_MARIADB_POOL = True
 except (ImportError, AttributeError):
-    HAS_MARIADB_POOL = False
+    HAS_MARIADB_POOL = False  # pyright: ignore[reportConstantRedefinition]
 
 
 
@@ -67,10 +71,10 @@ class TestPooling(unittest.TestCase):
         # test if a pooled connection will be roll backed
 
         default_conf = conf()
+        default_conf["pool_reset_connection"] = False
 
         pool = mariadb.ConnectionPool(pool_name="CONPY246",
                                         pool_size=1,
-                                        pool_reset_connection=False,
                                         acquire_timeout=1,
                                         **default_conf)
         conn = pool.get_connection()
@@ -91,9 +95,9 @@ class TestPooling(unittest.TestCase):
 
     def test_conpy250(self):
         default_conf = conf()
+        default_conf["pool_reset_connection"] = False
         pool = mariadb.ConnectionPool(pool_name="CONPY250",
                                         pool_size=8,
-                                        pool_reset_connection=False,
                                         pool_validation_interval=0,
                                         acquire_timeout=1,
                                         **default_conf)
@@ -103,9 +107,9 @@ class TestPooling(unittest.TestCase):
 
     def test_conpy247_1(self):
         default_conf = conf()
+        default_conf["pool_reset_connection"] = False
         pool = mariadb.ConnectionPool(pool_name="CONPY247_1",
                                         pool_size=1,
-                                        pool_reset_connection=False,
                                         pool_validation_interval=0,
                                         acquire_timeout=1,
                                         ping_threshold=0,
@@ -129,9 +133,9 @@ class TestPooling(unittest.TestCase):
 
     def test_conpy247_2(self):
         default_conf = conf()
+        default_conf["pool_reset_connection"] = True
         with mariadb.ConnectionPool(pool_name="CONPY247_2",
                                         pool_size=1,
-                                        pool_reset_connection=True,
                                         pool_validation_interval=0,
                                         acquire_timeout=1,
                                         **default_conf) as pool:
@@ -153,9 +157,9 @@ class TestPooling(unittest.TestCase):
 
     def test_conpy247_3(self):
         default_conf = conf()
+        default_conf["pool_reset_connection"] = True
         pool = mariadb.ConnectionPool(pool_name="CONPY247_3",
                                         pool_size=10,
-                                        pool_reset_connection=True,
                                         pool_validation_interval=0,
                                         acquire_timeout=10,
                                         **default_conf)
@@ -163,7 +167,7 @@ class TestPooling(unittest.TestCase):
         # service connection
         conn = create_connection()
         cursor = conn.cursor()
-        ids = []
+        ids: list[int] = []
         cursor.execute("DROP PROCEDURE IF EXISTS p1")
         sql = """CREATE PROCEDURE p1()
                  BEGIN
@@ -173,16 +177,16 @@ class TestPooling(unittest.TestCase):
 
         cursor.execute(sql)
         try:
-            for i in range(0, 10):
+            for _ in range(0, 10):
                 pconn = pool.get_connection()
                 ids.append(pconn.connection_id)
                 cursor.execute("KILL %s" % (pconn.connection_id,))
                 pconn.close()
 
-            new_ids = []
+            new_ids: list[int] = []
 
-            conns = []
-            for i in range(0, 10):
+            conns: list[Any] = []
+            for _ in range(0, 10):
                 pconn = pool.get_connection()
                 conns.append(pconn)
                 new_ids.append(pconn.connection_id)
@@ -193,7 +197,7 @@ class TestPooling(unittest.TestCase):
                 pcursor.close()
                 conn1.close()
 
-            for i in range(0, 10):
+            for _ in range(0, 10):
                 pconn = pool.get_connection()
                 self.assertEqual(pconn.connection_id in new_ids, True)
                 pconn.close()
@@ -217,12 +221,12 @@ class TestPooling(unittest.TestCase):
                                         pool_size=pool_size,
                                         acquire_timeout=1,
                                         **default_conf)
-        for i in range(0, iterations):
-            for j in range(0, pool_size):
+        for _ in range(0, iterations):
+            for _ in range(0, pool_size):
                 conn = pool.get_connection()
                 conn.close()
 
-        for i in range(0, pool_size):
+        for _ in range(0, pool_size):
             conn = pool.get_connection()
             self.assertEqual(conn._pooled_connection.use_count, iterations + 1)
             conn.close()
@@ -253,8 +257,8 @@ class TestPooling(unittest.TestCase):
         pool = mariadb.ConnectionPool(pool_name="test_max_size", pool_size=6, acquire_timeout=1,
                                         **default_conf)
         print(pool.pool_size)
-        connections = []
-        for i in range(0, 6):
+        connections: list[Any] = []
+        for _ in range(0, 6):
             connections.append(pool.get_connection())
         self.assertRaises(mariadb.PoolError, lambda:pool.get_connection())
 
@@ -272,7 +276,7 @@ class TestPooling(unittest.TestCase):
             pool.close()
             raise
 
-        for i in range(1, 6):
+        for _ in range(1, 6):
             pool.add_connection()
         try:
             pool.add_connection()
@@ -301,7 +305,7 @@ class TestPooling(unittest.TestCase):
             raise
 
         try:
-            for i in range(1, 6):
+            for _ in range(1, 6):
                 pool.add_connection()
             conn = mariadb.connect(pool_name="test_conpy69",
                                    **default_conf)
@@ -309,12 +313,14 @@ class TestPooling(unittest.TestCase):
             cursor = conn.cursor()
             cursor.execute("select database()")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "中文考试")
             cursor.execute("CREATE TEMPORARY TABLE t1 "
                            "(a varchar(255)) character set utf8mb4")
             cursor.execute("insert into t1 values (?)", ("123.45 中文考试",))
             cursor.execute("select a from t1", buffered=True)
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "123.45 中文考试")
             cursor1.execute("DROP SCHEMA 中文考试")
         finally:
@@ -327,6 +333,7 @@ class TestPooling(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         del cursor
         pool.close()
@@ -392,6 +399,7 @@ class TestPooling(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT 2")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 2)
         mariadb._CONNECTION_POOLS["reset_test"].close()
 
@@ -410,7 +418,7 @@ class TestPooling(unittest.TestCase):
             pool.close()
             raise
 
-        for j in range(3):
+        for _ in range(3):
             c = mariadb.connect(**default_conf)
             pool.add_connection(c)
         pool.close()
@@ -426,11 +434,11 @@ class TestPooling(unittest.TestCase):
 
     def test_conpy256(self):
         size = 10
-        connections = []
+        connections: list[Any] = []
         default_conf = conf()
         pool = mariadb.ConnectionPool(pool_name="test_conpy256",
                                         pool_size=size, acquire_timeout=1, **default_conf)
-        for i in range(size):
+        for _ in range(size):
             c= pool.get_connection()
             self.assertNotEqual(c in connections, True)
             connections.append(c)
@@ -473,6 +481,7 @@ class TestPooling(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT 1 as test")
         result = cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 1)
         cursor.close()
         
@@ -563,13 +572,13 @@ class TestPooling(unittest.TestCase):
                               pool_name="test_conn_args", **other_conf)
 
             # additional connection argument
-            self.assertRaises(mariadb.PoolError, mariadb.connect,
+            self.assertRaises(mariadb.PoolError, mariadb.connect,  # pyright: ignore  # deliberately invalid: pool options on a plain connection
                               pool_name="test_conn_args", autocommit=True,
                               **default_conf)
 
             # missing connection argument
             reduced_conf = default_conf.copy()
-            del reduced_conf["host"]
+            del reduced_conf["host"]  # pyright: ignore  # deliberately invalid configuration
             self.assertRaises(mariadb.PoolError, mariadb.connect,
                               pool_name="test_conn_args", **reduced_conf)
         finally:

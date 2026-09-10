@@ -1,12 +1,15 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# These tests hand the API deliberately invalid arguments to check the error raised.
+# pyright: reportArgumentType=false, reportCallIssue=false
+
+
 
 """
 Integration tests for async error handling and edge cases
 """
 
 import unittest
-import asyncio
 import mariadb
 from ..base_test import is_native
 from ..conftest import get_test_config
@@ -115,6 +118,7 @@ class AsyncErrorHandlingTest(unittest.IsolatedAsyncioTestCase):
         await self.cursor.execute("SET sql_mode=''")
         await self.cursor.execute("SELECT 1/0")
         result = await self.cursor.fetchone()
+        assert result is not None
         self.assertIsNone(result[0])
 
     async def test_execute_without_connection(self):
@@ -193,9 +197,9 @@ class AsyncErrorHandlingTest(unittest.IsolatedAsyncioTestCase):
         """Test connection with invalid host"""
         if not is_native():
             self.skipTest("only native test, mariadb C with no host behavior vary")
-        
+
         config = get_test_config()
-        config['host'] = None
+        config['host'] = None  # pyright: ignore  # deliberately invalid configuration
         config['connect_timeout'] = 2
         
         with self.assertRaises(mariadb.OperationalError):
@@ -283,6 +287,7 @@ class AsyncErrorHandlingTest(unittest.IsolatedAsyncioTestCase):
         # Verify
         await cursor1.execute("SELECT val FROM test_trans WHERE id = 1")
         result = await cursor1.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 200)
         
         await cursor1.close()
@@ -329,6 +334,7 @@ class AsyncErrorHandlingTest(unittest.IsolatedAsyncioTestCase):
             await self.cursor.execute("SELECT 1; SELECT 2")
             # If it succeeds, verify only first statement executed
             result = await self.cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
         except mariadb.ProgrammingError:
             pass  # Expected for some implementations

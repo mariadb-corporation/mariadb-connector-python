@@ -2,11 +2,10 @@
 
 # -*- coding: utf-8 -*-
 
-import os
 import unittest
 import mariadb
 
-from ..base_test import create_connection, is_skysql, is_maxscale, is_mysql, is_native, is_async_native, get_host_suffix
+from ..base_test import is_skysql, is_maxscale, is_mysql, is_async_native, get_host_suffix
 from ..conftest import get_test_config as conf
 
 class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
@@ -36,7 +35,7 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
         if is_maxscale():
             self.skipTest("MAXSCALE doesn't get new user immediately")
         if self.connection.server_name == "localhost":
-            curs = await self.connection.cursor(buffered=True)
+            curs = self.connection.cursor(buffered=True)
             await curs.execute("select * from information_schema.plugins "
                          "where plugin_name='unix_socket' "
                          "and plugin_status='ACTIVE'")
@@ -61,7 +60,7 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
             await cursor.execute("GRANT ALL on `" + default_conf["database"] +
                            "`.* TO foo"+get_host_suffix())
         # ssl disabled: change_user re-auth can't re-validate a self-signed (zero-conf) cert
-        new_conn = await mariadb.AsyncConnection.connect(**{**conf(), 'ssl': False})
+        new_conn = await mariadb.AsyncConnection.connect(**conf(ssl=False))
         await new_conn.change_user("foo", "heyPassw-!µ20§rd", "")
         self.assertEqual("foo", new_conn.user)
         await cursor.execute("drop user foo"+get_host_suffix())
@@ -143,7 +142,7 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
     async def test_escape(self):
         cursor = self.connection.cursor()
         await cursor.execute("CREATE TEMPORARY TABLE test_escape (a varchar(100))")
-        str = 'This is a \ and a \"'  # noqa: W605
+        str = 'This is a \\ and a "'
         cmd = "INSERT INTO test_escape VALUES('%s')" % str
 
         try:
@@ -158,7 +157,7 @@ class AsyncCursorTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy279(self):
         # ssl disabled: change_user re-auth can't re-validate a self-signed (zero-conf) cert
-        conn = await mariadb.AsyncConnection.connect(**{**conf(), 'ssl': False})
+        conn = await mariadb.AsyncConnection.connect(**conf(ssl=False))
         default_conf = conf()
         if "password" not in default_conf:
             default_conf["password"] = None

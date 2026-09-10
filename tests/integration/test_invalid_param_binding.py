@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 """
 CONPY-382: values that cannot be serialized must raise, not crash the process.
 
@@ -32,6 +34,7 @@ import unittest
 
 import mariadb
 from ..base_test import create_connection, is_mysql
+from typing import Any, Sequence
 
 # str values that have no UTF-8 encoding, from the two sources named in the
 # ticket plus the bare literal.
@@ -100,7 +103,9 @@ class InvalidParamBindingTest(unittest.TestCase):
                                     [('valid',), ('\ud800',)])
         self.assert_connection_usable()
         self.cursor.execute("SELECT COUNT(*) FROM conpy382")
-        self.assertLessEqual(self.cursor.fetchone()[0], 1)
+        row = self.cursor.fetchone()
+        assert row is not None
+        self.assertLessEqual(row[0], 1)
 
     def test_database_setter_rejects_unencodable_string(self):
         with self.assertRaises(_RAISES):
@@ -174,7 +179,7 @@ class EmptyVectorBindingTest(unittest.TestCase):
         self.assertEqual((1,), cursor.fetchone())
         cursor.close()
 
-    def _executemany(self, rows):
+    def _executemany(self, rows: Sequence[Sequence[Any]]) -> None:
         """Run the batch, tolerating the server's refusal of the empty vector.
 
         Both implementations send it as a zero-length value, which the server

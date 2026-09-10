@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 """
 Integration tests for connection options and configuration
 """
@@ -102,7 +104,7 @@ class ConnectionOptionsTest(unittest.TestCase):
         conn = create_connection()
         server_name = conn.server_name
         
-        self.assertIsInstance(server_name, str)
+        assert isinstance(server_name, str)
         self.assertGreater(len(server_name), 0)
         
         conn.close()
@@ -200,6 +202,7 @@ class ConnectionOptionsTest(unittest.TestCase):
         # Verify init command was executed
         cursor.execute("SELECT @test_var")
         result = cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 'initialized')
         
         cursor.close()
@@ -223,6 +226,7 @@ class ConnectionOptionsTest(unittest.TestCase):
             cursor = conn.cursor()
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
+            assert result is not None
             self.assertEqual(result[0], 1)
             cursor.close()
         
@@ -314,7 +318,7 @@ class ConnectionOptionsTest(unittest.TestCase):
         
         # Get warnings
         warnings = conn.show_warnings()
-        self.assertIsInstance(warnings, list)
+        assert isinstance(warnings, list)
         
         if len(warnings) > 0:
             # Each warning should be a tuple (level, code, message)
@@ -351,7 +355,9 @@ class ConnectionOptionsTest(unittest.TestCase):
             conn.commit()
         
         cursor.execute("SELECT COUNT(*) FROM test_multi_commit")
-        count = cursor.fetchone()[0]
+        row = cursor.fetchone()
+        assert row is not None
+        count = row[0]
         self.assertEqual(count, 5)
         
         cursor.close()
@@ -368,7 +374,9 @@ class ConnectionOptionsTest(unittest.TestCase):
             cursor.execute("SELECT @@transaction_isolation")
         else:
             cursor.execute("SELECT @@tx_isolation")
-        isolation = cursor.fetchone()[0]
+        row = cursor.fetchone()
+        assert row is not None
+        isolation = row[0]
         self.assertIsInstance(isolation, str)
         
         cursor.close()
@@ -384,10 +392,10 @@ class ConnectionOptionsTest(unittest.TestCase):
         # Try to change charset (if supported)
         try:
             if initial_charset.lower() == 'utf8mb4':
-                conn.set_character_set('utf8')
+                conn.set_character_set('utf8')  # pyright: ignore  # probing a method the connection may not have
                 self.assertEqual(conn.character_set.lower(), 'utf8')
             else:
-                conn.set_character_set('utf8mb4')
+                conn.set_character_set('utf8mb4')  # pyright: ignore  # probing a method the connection may not have
                 self.assertEqual(conn.character_set.lower(), 'utf8mb4')
         except AttributeError:
             # set_character_set may not be implemented
@@ -405,6 +413,7 @@ class ConnectionOptionsTest(unittest.TestCase):
         
         # Get last insert id
         last_id = cursor.lastrowid
+        assert last_id is not None
         self.assertGreaterEqual(last_id, 1)
         
         cursor.close()

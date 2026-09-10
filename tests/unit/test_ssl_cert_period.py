@@ -1,5 +1,9 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# cryptography is imported under try/except and the whole module is skipped
+# without it, so the names are bound whenever a test runs.
+# pyright: reportPossiblyUnboundVariable=false
+
 
 """
 Unit tests for certificate validity-period enforcement on the fingerprint path.
@@ -21,12 +25,12 @@ try:
     from cryptography.hazmat.primitives.asymmetric import ec
     HAS_CRYPTOGRAPHY = True
 except ImportError:
-    HAS_CRYPTOGRAPHY = False
+    HAS_CRYPTOGRAPHY = False  # pyright: ignore[reportConstantRedefinition]
 
 from mariadb.impl.client.ssl.ssl_fingerprint_validator import SSLFingerprintValidator
 
 
-def _make_cert_der(not_before, not_after):
+def _make_cert_der(not_before: datetime.datetime, not_after: datetime.datetime) -> bytes:
     """Build a self-signed cert DER valid over [not_before, not_after)."""
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
@@ -51,7 +55,7 @@ class CertificatePeriodTest(unittest.TestCase):
         self.now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         self.day = datetime.timedelta(days=1)
 
-    def _validator(self, der):
+    def _validator(self, der: bytes) -> SSLFingerprintValidator:
         v = SSLFingerprintValidator()
         v.cert_der = der
         return v
@@ -63,13 +67,13 @@ class CertificatePeriodTest(unittest.TestCase):
     def test_expired_certificate_rejected(self):
         der = _make_cert_der(self.now - 2 * self.day, self.now - self.day)
         reason = self._validator(der).check_certificate_period()
-        self.assertIsNotNone(reason)
+        assert reason is not None
         self.assertIn("expired", reason)
 
     def test_not_yet_valid_certificate_rejected(self):
         der = _make_cert_der(self.now + self.day, self.now + 2 * self.day)
         reason = self._validator(der).check_certificate_period()
-        self.assertIsNotNone(reason)
+        assert reason is not None
         self.assertIn("not yet valid", reason)
 
     def test_no_certificate_is_noop(self):

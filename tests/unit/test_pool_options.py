@@ -1,5 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# mariadb_pool is importable only through the editable finder, so pyright cannot resolve it:
+# everything that comes from it is Unknown.
+# pyright: reportMissingImports=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportPossiblyUnboundVariable=false
 
 """
 Pool options are named, typed and reconciled in exactly one place.
@@ -26,7 +29,7 @@ try:
     from mariadb_pool import ConnectionPoolWrapper
     HAS_MARIADB_POOL = True
 except ImportError:
-    HAS_MARIADB_POOL = False
+    HAS_MARIADB_POOL = False  # pyright: ignore[reportConstantRedefinition]
 
 
 def _factory(**kwargs: Any) -> Any:
@@ -40,7 +43,7 @@ def _wrapper_config(**options: Any) -> Any:
         warnings.simplefilter("ignore", DeprecationWarning)
         pool = ConnectionPoolWrapper(connection_factory=_factory, **options)
     try:
-        return pool._pool.config
+        return pool._pool.config  # pyright: ignore[reportAttributeAccessIssue]  # white-box: the wrapped pool
     finally:
         pool.close()
 
@@ -203,7 +206,7 @@ def _wrapper_config_uri(uri: str) -> Any:
         warnings.simplefilter("ignore", DeprecationWarning)
         pool = mariadb.ConnectionPool(uri)
     try:
-        return pool._pool.config
+        return pool._pool.config  # pyright: ignore[reportAttributeAccessIssue]  # white-box: the wrapped pool
     finally:
         pool.close()
 

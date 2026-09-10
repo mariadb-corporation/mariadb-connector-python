@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 import datetime
 import unittest
 import os
@@ -8,12 +10,13 @@ import decimal
 import json
 from decimal import Decimal
 import array
-import time
 
 import mariadb
 from mariadb.constants import FIELD_TYPE, EXT_FIELD_TYPE, ERR, CURSOR, INDICATOR, CAPABILITY as CLIENT
 
 from ..base_test import create_connection, is_maxscale, is_mysql, is_native
+from typing import Any
+from mariadb_shared.sync_cursor_common import SyncCursorCommon
 
 server_indicator_version = 100206
 
@@ -34,7 +37,7 @@ class TestCursor(unittest.TestCase):
 
     def test_do1(self):
         cursor = self.connection.cursor()
-        for i in range(100000):
+        for _ in range(100000):
             cursor.execute("DO 1")
         cursor.close()
 
@@ -95,26 +98,26 @@ class TestCursor(unittest.TestCase):
         with create_connection() as conn:
 
             cursor= conn.cursor(named_tuple=True)
-            self.assertEqual(cursor._resulttype, 1)
+            self.assertEqual(cursor._resulttype, 1)  # pyright: ignore  # white-box: implementation attribute
             cursor.close()
 
             cursor= conn.cursor()
-            self.assertEqual(cursor._resulttype, 0)
+            self.assertEqual(cursor._resulttype, 0)  # pyright: ignore  # white-box: implementation attribute
             cursor.close()
 
             cursor= conn.cursor(dictionary=True)
-            self.assertEqual(cursor._resulttype, 2)
+            self.assertEqual(cursor._resulttype, 2)  # pyright: ignore  # white-box: implementation attribute
             cursor.execute("select 1 as A union SELECT 2 as A")
             row= cursor.fetchone()
             self.assertEqual(row, {'A' : 1})
-            self.assertEqual(cursor._resulttype, 2)
+            self.assertEqual(cursor._resulttype, 2)  # pyright: ignore  # white-box: implementation attribute
             cursor.scroll(-1)
-            self.assertEqual(cursor._resulttype, 2)
+            self.assertEqual(cursor._resulttype, 2)  # pyright: ignore  # white-box: implementation attribute
             row= cursor.fetchone()
             self.assertEqual(row, {'A' : 1})
             row= cursor.fetchone()
             self.assertEqual(row, {'A' : 2})
-            self.assertEqual(cursor._resulttype, 2)
+            self.assertEqual(cursor._resulttype, 2)  # pyright: ignore  # white-box: implementation attribute
             cursor.close()
 
     def test_conpy295(self):
@@ -160,6 +163,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("INSERT INTO t_vector VALUES (?,?)", (1, data))
         cursor.execute("SELECT id, v, Vec_ToText(v) FROM t_vector")
         row= cursor.fetchone()
+        assert row is not None
         self.connection.commit()
         check_data= [row[1], array.array('f', eval(row[2]))]
 
@@ -198,6 +202,7 @@ class TestCursor(unittest.TestCase):
 
         cursor.execute("SELECT c1,c2,c3,c4 FROM test_date")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], datetime.timedelta(seconds=44551,
                                                     microseconds=123456))
@@ -205,6 +210,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[3], c4)
 
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], c2_1)
         self.assertEqual(row[1], c2_2)
         self.assertEqual(row[2], c2_3)
@@ -214,12 +220,14 @@ class TestCursor(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             cursor.execute("SELECT c1,c2,c3,c4 FROM test_date WHERE 1 = ?", (1,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], c1)
             self.assertEqual(row[1], datetime.timedelta(seconds=44551,
                                                         microseconds=123456))
             self.assertEqual(row[2], c3)
             self.assertEqual(row[3], c4)
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], c2_1)
             self.assertEqual(row[1], c2_2)
             self.assertEqual(row[2], c2_3)
@@ -243,6 +251,7 @@ class TestCursor(unittest.TestCase):
 
         cursor.execute("select * from test_numbers")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], c2)
         self.assertEqual(row[2], c3)
@@ -270,6 +279,7 @@ class TestCursor(unittest.TestCase):
 
         cursor.execute("SELECT * from test_string")
         row = cursor.fetchone()
+        assert row is not None
 
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], c2)
@@ -282,6 +292,7 @@ class TestCursor(unittest.TestCase):
         with self.connection.cursor(binary=True) as cursor:
             cursor.execute("SELECT * from test_string WHERE 1 = ?", (1,))
             row = cursor.fetchone()
+            assert row is not None
 
             self.assertEqual(row[0], c1)
             self.assertEqual(row[1], c2)
@@ -307,6 +318,7 @@ class TestCursor(unittest.TestCase):
 
         cursor.execute("SELECT * FROM test_blob")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], c1)
         self.assertEqual(row[1], c2)
         self.assertEqual(row[2], c3)
@@ -330,6 +342,7 @@ class TestCursor(unittest.TestCase):
 
         cursor.execute("SELECT name FROM test_inserttuple ORDER BY id DESC")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual("Andrey", row[0])
         del cursor
 
@@ -402,7 +415,7 @@ class TestCursor(unittest.TestCase):
         self.assertRaises(mariadb.Error, cursor.fetchmany)
 
         cursor.execute("SELECT id, name, city FROM test_fetchmany2 ORDER BY id")
-        row = cursor.fetchmany(1)
+        cursor.fetchmany(1)
         cursor.close()
         self.assertRaises(mariadb.Error, cursor.fetchmany)
         cursor = con.cursor(buffered=False)
@@ -487,9 +500,11 @@ class TestCursor(unittest.TestCase):
         cursor.execute(sql)
         cursor.execute("call p1()")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         cursor.nextset()
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 2)
         del cursor
 
@@ -499,6 +514,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.rowcount, 3)
         cursor.scroll(1)
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 2)
         del cursor
 
@@ -540,6 +556,7 @@ class TestCursor(unittest.TestCase):
                        "k geometrycollection)")
         cursor.execute("SELECT a,b,c,d,e,f,g,h,i,j,k FROM t1")
         metadata = cursor.metadata
+        assert metadata is not None
 
         # JSON
         self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
@@ -601,6 +618,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(info, None)
         cursor.execute("SELECT * FROM test_xfield_types")
         info = cursor.description
+        assert info is not None
         self.assertEqual(fieldinfo.type(info[0]), "TINY")
         self.assertEqual(fieldinfo.type(info[1]), "SHORT")
         self.assertEqual(fieldinfo.type(info[2]), "LONG")
@@ -659,6 +677,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("commit")
         cursor.execute("SELECT name FROM pyformat WHERE id=5")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "Andrey")
 
     def test_format(self):
@@ -678,6 +697,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("commit")
         cursor.execute("SELECT name FROM pyformat WHERE id=5")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "Andrey")
 
     def test_conpy214(self):
@@ -708,8 +728,9 @@ class TestCursor(unittest.TestCase):
                            params)
         cursor.execute("SELECT * FROM test_named_tuple ORDER BY id")
         row = cursor.fetchone()
+        assert row is not None
         if not is_native():
-            self.assertEqual(cursor.statement,
+            self.assertEqual(cursor.statement,  # pyright: ignore  # C implementation only
                          "SELECT * FROM test_named_tuple ORDER BY id")
         self.assertEqual(row.id, 1)
         self.assertEqual(row.name, "Jack")
@@ -726,7 +747,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("CREATE TEMPORARY TABLE test_laststatement ("
                        "id int, name varchar(64), "
                        "city varchar(64))")
-        self.assertEqual(cursor.statement,
+        self.assertEqual(cursor.statement,  # pyright: ignore  # C implementation only
                          "CREATE TEMPORARY TABLE test_laststatement "
                          "(id int, name varchar(64), city varchar(64))")
 
@@ -738,7 +759,7 @@ class TestCursor(unittest.TestCase):
         cursor.executemany("INSERT INTO test_laststatement VALUES (?,?,?)",
                            params)
         cursor.execute("SELECT * FROM test_laststatement ORDER BY id")
-        self.assertEqual(cursor.statement,
+        self.assertEqual(cursor.statement,  # pyright: ignore  # C implementation only
                          "SELECT * FROM test_laststatement ORDER BY id")
         del cursor
 
@@ -758,7 +779,9 @@ class TestCursor(unittest.TestCase):
         for i in range(0, 8):
             self.assertEqual(cursor1.rownumber, i)
             row1 = cursor1.fetchone()
+            assert row1 is not None
             row2 = cursor2.fetchone()
+            assert row2 is not None
             self.assertEqual(cursor1.rownumber, cursor2.rownumber)
             self.assertEqual(row1[0] + row2[0], 9)
 
@@ -767,7 +790,7 @@ class TestCursor(unittest.TestCase):
 
     def test_connection_attr(self):
         cursor = self.connection.cursor()
-        self.assertEqual(cursor.connection, self.connection)
+        self.assertEqual(cursor.connection, self.connection)  # pyright: ignore  # attribute of both implementations, not of the shared interface
         del cursor
 
     def test_dbapi_type(self):
@@ -786,6 +809,7 @@ class TestCursor(unittest.TestCase):
             mariadb.NUMBER
         ]
         cursor.fetchone()
+        assert cursor.description is not None
         typecodes = [row[1] for row in cursor.description]
         self.assertEqual(expected_typecodes, typecodes)
         del cursor
@@ -815,10 +839,12 @@ class TestCursor(unittest.TestCase):
         cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
         cursor.execute("SELECT a, b, c FROM ind1")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         self.assertEqual(row[1], 4)
         self.assertEqual(row[2], 3)
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], None)
         self.assertEqual(row[1], 2)
         self.assertEqual(row[2], 3)
@@ -836,6 +862,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("insert into test_fake_pickle values (?)", (k,))
         cursor.execute("select * from test_fake_pickle")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], k)
         del cursor
 
@@ -874,6 +901,7 @@ class TestCursor(unittest.TestCase):
 
         cursor.nextset()
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 2)
         del cursor
 
@@ -893,6 +921,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("INSERT INTO t1 VALUES (?, ?, ?)", values)
         cursor.execute("SELECT a,b,c FROM t1")
         row= cursor.fetchone()
+        assert row is not None
 
         self.assertEqual(row[0], values[0].__str__())
         self.assertEqual(row[1], values[1].__str__())
@@ -918,6 +947,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("INSERT INTO t1 VALUES (?, ?, ?)", values)
         cursor.execute("SELECT a,b,c FROM t1")
         row= cursor.fetchone()
+        assert row is not None
 
         self.assertEqual(row[0], values[0].__str__())
         self.assertEqual(row[1], values[1].__str__())
@@ -952,6 +982,7 @@ class TestCursor(unittest.TestCase):
         # Test text protocol (default behavior - returns strings)
         cursor_default.execute("SELECT a, b, c FROM t1")
         row = cursor_default.fetchone()
+        assert row is not None
 
         self.assertIsInstance(row[0], str, "INET6 should be string by default")
         self.assertIsInstance(row[1], str, "INET4 should be string by default")
@@ -960,6 +991,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[1], str(test_ipv4))
         self.assertEqual(row[2], str(test_uuid))
         row = cursor_default.fetchone()
+        assert row is not None
         self.assertIsNone(row[0], "NULL INET6 should be None")
         self.assertIsNone(row[1], "NULL INET4 should be None")
         self.assertIsNone(row[2], "NULL UUID should be None")
@@ -969,12 +1001,14 @@ class TestCursor(unittest.TestCase):
         cursor_default = self.connection.cursor(binary=True)
         cursor_default.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_default.fetchone()
+        assert row is not None
 
         # Binary protocol returns bytes for these types by default
         self.assertIsInstance(row[0], (str, bytes), "INET6 should be string or bytes by default")
         self.assertIsInstance(row[1], (str, bytes), "INET4 should be string or bytes by default")
         self.assertIsInstance(row[2], (str, bytes), "UUID should be string or bytes by default")
         row = cursor_default.fetchone()
+        assert row is not None
         self.assertIsNone(row[0], "NULL INET6 should be None")
         self.assertIsNone(row[1], "NULL INET4 should be None")
         self.assertIsNone(row[2], "NULL UUID should be None")
@@ -987,6 +1021,7 @@ class TestCursor(unittest.TestCase):
         # Test text protocol with native_object
         cursor_native.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_native.fetchone()
+        assert row is not None
         self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address),
                             "INET6 should be ipaddress object with native_object=True")
         self.assertIsInstance(row[1], (ipaddress.IPv6Address, ipaddress.IPv4Address),
@@ -997,6 +1032,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[1], test_ipv4)
         self.assertEqual(row[2], test_uuid)
         row = cursor_native.fetchone()
+        assert row is not None
         self.assertIsNone(row[0], "NULL INET6 should be None")
         self.assertIsNone(row[1], "NULL INET4 should be None")
         self.assertIsNone(row[2], "NULL UUID should be None")
@@ -1005,6 +1041,7 @@ class TestCursor(unittest.TestCase):
         cursor_native = self.connection.cursor(native_object=True, binary=True)
         cursor_native.execute("SELECT a, b, c FROM t1 WHERE 1 = ?", (1,))
         row = cursor_native.fetchone()
+        assert row is not None
 
         self.assertIsInstance(row[0], (ipaddress.IPv6Address, ipaddress.IPv4Address),
                             "INET6 should be ipaddress object with native_object=True (binary)")
@@ -1016,6 +1053,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(row[1], test_ipv4)
         self.assertEqual(row[2], test_uuid)
         row = cursor_native.fetchone()
+        assert row is not None
         self.assertIsNone(row[0], "NULL INET6 should be None")
         self.assertIsNone(row[1], "NULL INET4 should be None")
         self.assertIsNone(row[2], "NULL UUID should be None")
@@ -1052,12 +1090,15 @@ class TestCursor(unittest.TestCase):
 
         cursor.scroll(2, mode='relative')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 3)
         cursor.scroll(-3, mode='relative')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         cursor.scroll(1)
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 3)
 
         try:
@@ -1067,10 +1108,12 @@ class TestCursor(unittest.TestCase):
 
         cursor.scroll(0, mode='absolute')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
 
         cursor.scroll(2, mode='absolute')
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 3)
 
         try:
@@ -1103,6 +1146,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT a,b,c FROM test_compy_9")
         cursor.fetchone()
         d = cursor.description
+        assert d is not None
         self.assertEqual(d[0][2], 20)  # 20 code points
         self.assertEqual(d[0][3], 80)  # 80 characters
         self.assertEqual(d[1][2], 6)  # length=precision +  1
@@ -1122,6 +1166,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(cursor.lastrowid, 1)
         cursor.execute("SELECT LAST_INSERT_ID()")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         vals = [(3, "bar"), (4, "this")]
         cursor.executemany("INSERT INTO test_conpy_15 VALUES (?,?)", vals)
@@ -1229,6 +1274,7 @@ class TestCursor(unittest.TestCase):
             cursor.execute("INSERT INTO test_utf8 VALUES (?)", ("😎🌶🎤🥂",))
             cursor.execute("SELECT * FROM test_utf8")
             row = cursor.fetchone()
+            assert row is not None
             e = b"\xf0\x9f\x98\x8e\xf0\x9f\x8c\xb6\xf0\x9f\x8e\xa4\xf0\x9f\xa5\x82"
             self.assertEqual(row[0], e)
             del cursor
@@ -1288,6 +1334,7 @@ class TestCursor(unittest.TestCase):
             cursor.execute("CREATE PROCEDURE p1( )\nBEGIN\n SELECT 1;\nEND")
             cursor.callproc("p1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             cursor.execute("DROP PROCEDURE IF EXISTS p1")
 
@@ -1305,6 +1352,7 @@ class TestCursor(unittest.TestCase):
             cursor.callproc("p2", ("foo", "bar", 1))
             self.assertEqual(cursor.sp_outparams, True)
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "foobar")
             cursor.nextset()
             del cursor
@@ -1313,6 +1361,7 @@ class TestCursor(unittest.TestCase):
             cursor.execute("CALL p2(?,?,?)", ("foo", "bar", 0))
             self.assertEqual(cursor.sp_outparams, True)
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "foobar")
             cursor.execute("DROP PROCEDURE IF EXISTS p2")
             del cursor
@@ -1334,10 +1383,12 @@ class TestCursor(unittest.TestCase):
             cursor.callproc("p3", ("foo", "bar", 1))
             self.assertEqual(cursor.sp_outparams, False)
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "1")
             cursor.nextset()
             self.assertEqual(cursor.sp_outparams, True)
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "foobar")
             cursor.execute("DROP PROCEDURE IF EXISTS p3")
             del cursor
@@ -1352,6 +1403,7 @@ class TestCursor(unittest.TestCase):
                            "(PointFromText('point(1 1)'))")
             cursor.execute("SELECT a FROM conpy42")
             row = cursor.fetchone()
+            assert row is not None
             expected = b'' . join([b'\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00',
                                    b'\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00',
                                    b'\x00\xf0?'])
@@ -1385,6 +1437,7 @@ class TestCursor(unittest.TestCase):
                            "'2020-10-10 14:12:24.123456')")
             cursor.execute("SELECT a,b FROM t1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0],
                              datetime.timedelta(seconds=47544, microseconds=51000))
             self.assertEqual(row[1],
@@ -1394,6 +1447,7 @@ class TestCursor(unittest.TestCase):
             with con.cursor(binary=True) as cursor:
                 cursor.execute("SELECT a,b FROM t1 WHERE 1 = ?", (1,))
                 row = cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0],
                                 datetime.timedelta(seconds=47544, microseconds=51000))
                 self.assertEqual(row[1],
@@ -1405,6 +1459,7 @@ class TestCursor(unittest.TestCase):
             with con.cursor() as cursor:
                 cursor.execute("SELECT 'foo'")
                 row = cursor.fetchone()
+                assert row is not None
             self.assertEqual(row[0], "foo")
             try:
                 cursor.execute("SELECT 'bar'")
@@ -1416,9 +1471,11 @@ class TestCursor(unittest.TestCase):
             cursor = con.cursor(buffered=True)
             cursor.execute("SELECT ?", (True, ))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             cursor.execute("SELECT ?", (False,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 0)
             cursor.close()
 
@@ -1431,18 +1488,21 @@ class TestCursor(unittest.TestCase):
             d = datetime.date(2012, 10, 15)
             cursor.execute("SELECT ?", (d,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], d)
             self.assertIsInstance(row[0], datetime.date)
 
             dt = datetime.datetime(2012, 10, 15, 12, 34, 56)
             cursor.execute("SELECT ?", (dt,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], dt)
             self.assertIsInstance(row[0], datetime.datetime)
 
             t = datetime.time(12, 34, 56)
             cursor.execute("SELECT ?", (t,))
             row = cursor.fetchone()
+            assert row is not None
             # TIME literal is returned as timedelta by the server
             self.assertEqual(
                 row[0],
@@ -1455,13 +1515,16 @@ class TestCursor(unittest.TestCase):
             cur = con.cursor()
             cur.execute("select %s", [True])
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             cur.execute("create temporary table t1 (a int)")
             cur.executemany("insert into t1 values (%s)", [[1], (2,)])
             cur.execute("select a from t1")
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 2)
             cur.close()
 
@@ -1505,11 +1568,13 @@ class TestCursor(unittest.TestCase):
             cur.execute("insert into t1 values (?)", (Decimal('10.2'),))
             cur.execute("select a from t1")
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], Decimal('10.20'))
             cur.close()
             with con.cursor(binary=True) as cur:
                 cur.execute("select a from t1 WHERE 1 = ?", (1,))
                 row = cur.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], Decimal('10.20'))
 
 
@@ -1518,12 +1583,14 @@ class TestCursor(unittest.TestCase):
             cur = con.cursor(dictionary=True)
             cur.execute("select 'foo' as bar, 'bar' as foo")
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row["foo"], "bar")
             self.assertEqual(row["bar"], "foo")
             cur.close()
             with con.cursor(dictionary=True, binary=True) as cur:
                 cur.execute("select 'foo' as bar, 'bar' as foo WHERE 1 = ?", (1,))
                 row = cur.fetchone()
+                assert row is not None
                 self.assertEqual(row["foo"], "bar")
                 self.assertEqual(row["bar"], "foo")
 
@@ -1532,9 +1599,11 @@ class TestCursor(unittest.TestCase):
             cur = con.cursor()
             cur.execute("select 1", ())
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             cur.execute("select 1", [])
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             cur.close()
 
@@ -1543,6 +1612,7 @@ class TestCursor(unittest.TestCase):
             cursor = con.cursor()
             cursor.execute("SELECT %(val)s", {"val": 3})
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 3)
             cursor.execute("CREATE TEMPORARY TABLE t1 (a int)")
             cursor.executemany("INSERT INTO t1 VALUES (%(val)s)",
@@ -1565,12 +1635,14 @@ class TestCursor(unittest.TestCase):
             cursor.execute("INSERT INTO t1 VALUES('0000-01-01')")
             cursor.execute("SELECT a FROM t1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], None)
             cursor.close()
 
             with con.cursor(binary=True) as cursor:
                 cursor.execute("SELECT a FROM t1 WHERE 1 = ?", (1,))
                 row = cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], None)
 
     def test_conpy61(self):
@@ -1588,8 +1660,10 @@ class TestCursor(unittest.TestCase):
             cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
             cursor.execute("SELECT a, b, c FROM ind1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], None)
             cursor.execute("DELETE FROM ind1")
             if not is_native():
@@ -1599,8 +1673,10 @@ class TestCursor(unittest.TestCase):
             cursor.executemany("INSERT INTO ind1 VALUES (?,?,?)", vals)
             cursor.execute("SELECT a, b, c FROM ind1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], None)
             self.assertEqual(row[1], 2)
             self.assertEqual(row[2], None)
@@ -1612,11 +1688,13 @@ class TestCursor(unittest.TestCase):
             query = "select round(.75 * (? / 3), 2) as val"
             cur.execute(query, [5])
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], Decimal(1.25))
             del cur
             with con.cursor(binary=True) as cur:
                 cur.execute(query, [5])
                 row = cur.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], Decimal(1.25))
 
     def test_conpy67(self):
@@ -1643,6 +1721,7 @@ class TestCursor(unittest.TestCase):
             cur.execute("insert into t1 values (?,?,?)", (-1, -300, -2147483649))
             cur.execute("select a, b, c FROM t1 WHERE 1 = ?", (1,))
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], -1)
             self.assertEqual(row[1], -300)
             self.assertEqual(row[2], -2147483649)
@@ -1650,6 +1729,7 @@ class TestCursor(unittest.TestCase):
             with con.cursor(binary=True) as cur:
                 cur.execute("select a, b, c FROM t1 WHERE 1 = ?", (1,))
                 row = cur.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], -1)
                 self.assertEqual(row[1], -300)
                 self.assertEqual(row[2], -2147483649)
@@ -1676,9 +1756,11 @@ class TestCursor(unittest.TestCase):
             cur.execute("INSERT INTO t1 VALUES(1)")
             cur.execute("SELECT a FROM t1")
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             cur.execute("SELECT a FROM t1 WHERE 1=?", (1,))
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             del cur
 
@@ -1688,6 +1770,7 @@ class TestCursor(unittest.TestCase):
             a = foo(2)
             cur.execute("SELECT ?", (a,))
             row = cur.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 2)
             del cur
 
@@ -1696,11 +1779,13 @@ class TestCursor(unittest.TestCase):
             cursor = con.cursor()
             cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], b'foo')
             del cursor
             with con.cursor(binary=True) as cursor:
                 cursor.execute("SELECT CAST('foo' AS BINARY) AS anon_1 WHERE 1 = ?", (1,))
                 row = cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], b'foo')
 
     def test_conpy68(self):
@@ -1713,6 +1798,7 @@ class TestCursor(unittest.TestCase):
             cursor.execute("INSERT INTO t1 VALUES(?)", (json.dumps(content),))
             cursor.execute("SELECT a FROM t1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], json.dumps(content))
             cursor.execute("TRUNCATE t1")
             del cursor
@@ -1721,6 +1807,7 @@ class TestCursor(unittest.TestCase):
                 cursor.execute("INSERT INTO t1 VALUES(?)", (json.dumps(content),))
                 cursor.execute("SELECT a FROM t1 WHERE 1 = ?", (1,))
                 row = cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], json.dumps(content))
 
     def test_conpy123(self):
@@ -1731,6 +1818,7 @@ class TestCursor(unittest.TestCase):
             cursor2 = con.cursor()
             cursor2.execute("SELECT 1")
             row = cursor2.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             cursor2.close()
 
@@ -1741,11 +1829,13 @@ class TestCursor(unittest.TestCase):
             cursor.executemany("INSERT INTO t1 VALUES (?)", [[decimal.Decimal(1)]])
             cursor.execute("SELECT a FROM t1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], decimal.Decimal(1))
             del cursor
             with con.cursor(binary=True) as cursor:
                 cursor.execute("SELECT a FROM t1 WHERE 1 = ?", (1,))
                 row = cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], decimal.Decimal(1))
 
     def test_conpy129(self):
@@ -1775,6 +1865,7 @@ class TestCursor(unittest.TestCase):
             x = os.urandom(32)
             cursor.execute("SELECT cast(? as binary) as a", (x,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], x)
             del cursor
 
@@ -1786,37 +1877,41 @@ class TestCursor(unittest.TestCase):
             cursor = conn.cursor()
             cursor.execute("SELECT /*! ? */", (1,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             del cursor
 
             cursor = conn.cursor()
             cursor.execute("SELECT /*M! ? */", (1,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             del cursor
 
             cursor = conn.cursor()
             cursor.execute("SELECT /*M!50601 ? */", (1,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             del cursor
 
             cursor = conn.cursor()
             cursor.execute("SELECT /*!40301 ? */", (1,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             del cursor
 
             with conn.cursor() as cursor:
                 try:
                     cursor.execute("SELECT /*!50701 ? */", (1,))
-                except mariadb.ProgrammingError as e:
+                except mariadb.ProgrammingError:
                     pass
 
             with conn.cursor() as cursor:
                 try:
                     cursor.execute("SELECT /*!250701 ? */", (1,))
-                except mariadb.ProgrammingError as e:
+                except mariadb.ProgrammingError:
                     pass
 
     def check_closed(self):
@@ -1890,9 +1985,10 @@ class TestCursor(unittest.TestCase):
                            "BEGIN\nSET o1:=CAST(CONCAT(s1,s2) AS "
                            "char CHARACTER SET utf8mb4);\nEND")
 
-            for i in range(0, 500):
+            for _ in range(0, 500):
                 cursor.callproc("p2", ("foo", "bar", 1))
                 row = cursor.fetchone()
+                assert row is not None
                 self.assertEqual(row[0], expected)
 
     def test_conpy205(self):
@@ -1901,11 +1997,13 @@ class TestCursor(unittest.TestCase):
 
             cursor.execute("select %(name)s", {"name": "Marc"})
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "Marc")
 
             cursor.execute("select %(name)s", {"name": "Marc",
                                                "noname": "unknown"})
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], "Marc")
 
             try:
@@ -1995,7 +2093,7 @@ class TestCursor(unittest.TestCase):
                                        b'\'col_Unit\xc3\xa9ble_id_seq\'',
                                        b' and TABLE_SCHEMA=\'foobar\''])
             cursor.execute(sql, data)
-            self.assertEqual(transformed, cursor._transformed_statement)
+            self.assertEqual(transformed, cursor._transformed_statement)  # pyright: ignore  # white-box: implementation attribute
             del cursor
 
     def test_conpy277(self):
@@ -2004,6 +2102,7 @@ class TestCursor(unittest.TestCase):
             cursor.execute("SET session sql_mode='TRADITIONAL,ANSI_QUOTES,ONLY_FULL_GROUP_BY,PIPES_AS_CONCAT'")
             cursor.execute('select ? as x', ('hi',))
             row= cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 'hi')
             cursor.close()
 
@@ -2016,6 +2115,7 @@ class TestCursor(unittest.TestCase):
             self.assertEqual(rows[0][0], 1.1)
             cursor.execute("SELECT 1.1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1.1)
             del cursor
 
@@ -2024,15 +2124,19 @@ class TestCursor(unittest.TestCase):
             cursor = conn.cursor()
             cursor.execute("SELECT 1",  None)
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 1)
             cursor.execute("SELECT 2",  ())
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 2)
             cursor.execute("SELECT 3",  [])
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 3)
             cursor.execute("SELECT 4",  {})
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 4)
             del cursor
 
@@ -2045,7 +2149,7 @@ class TestCursor(unittest.TestCase):
             cursor = conn.cursor()
             del cursor
             try:
-                cursor.close()   # noqa: F821
+                cursor.close()   # noqa: F821  # pyright: ignore  # deliberate use after del
             except Exception:
                 pass
 
@@ -2077,6 +2181,7 @@ class TestCursor(unittest.TestCase):
         cursor.execute("SELECT name FROM test_inserttuple ORDER BY id DESC")
 
         row = cursor.fetchone()
+        assert row is not None
 
         self.assertEqual("Andrey", row[0])
 
@@ -2117,11 +2222,13 @@ class TestCursor(unittest.TestCase):
 
             # text protocol
             cursor.execute("select a from t1")
+            assert cursor.description is not None
             self.assertEqual(cursor.description[0][1], mariadb.STRING);
             cursor.fetchall()
 
             # binary protcol
             cursor.execute("select a from t1 WHERE 1=?", (1,))
+            assert cursor.description is not None
             self.assertEqual(cursor.description[0][1], mariadb.STRING);
             cursor.fetchall()
 
@@ -2143,16 +2250,18 @@ class TestCursor(unittest.TestCase):
             cursor.execute("INSERT INTO t1 VALUES(123)")
             cursor.execute("SELECT a FROM t1")
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 123)
             cursor.close()
             cursor = connection.cursor(binary=True)
             cursor.execute("SELECT a FROM t1 WHERE 1 = ?", (1,))
             row = cursor.fetchone()
+            assert row is not None
             self.assertEqual(row[0], 123)
             cursor.close()
 
     def test_conpy291(self):
-        if is_mysql:
+        if is_mysql():
             self.skipTest("Skip (MySQL doesn't support batch/indicators)")
         with create_connection() as connection:
             cursor = connection.cursor()
@@ -2175,17 +2284,19 @@ class TestCursor(unittest.TestCase):
         connection.close()
 
         row= cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         rows= cursor.fetchall()
         self.assertEqual(rows, [(2,),(3,),(4,)])
         cursor.scroll(0, "absolute")
         row= cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         self.assertEqual(cursor.rowcount, 4)
         del cursor, connection
 
     def test_conpy289(self):
-        if is_mysql:
+        if is_mysql():
             self.skipTest("Skip (MySQL doesn't support batch)")
         with create_connection() as conn:
             cursor= conn.cursor()
@@ -2247,7 +2358,7 @@ class TestCursor(unittest.TestCase):
         cursor = self.connection.cursor()
 
         with self.assertRaises((mariadb.ProgrammingError, RuntimeError)):
-            result = cursor.fetchone()
+            cursor.fetchone()
 
         # Test 2: fetchone after closing cursor should raise an error
         cursor.execute("SELECT 1")
@@ -2338,6 +2449,7 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(info, None)
         cursor.execute("SELECT * FROM test_xfield_types_binary WHERE 1=?", (1,))
         info = cursor.description
+        assert info is not None
         self.assertEqual(fieldinfo.type(info[0]), "TINY")
         self.assertEqual(fieldinfo.type(info[1]), "SHORT")
         self.assertEqual(fieldinfo.type(info[2]), "LONG")
@@ -2381,6 +2493,7 @@ class TestCursor(unittest.TestCase):
                        "k geometrycollection)")
         cursor.execute("SELECT a,b,c,d,e,f,g,h,i,j,k FROM t1_binary WHERE 1=?", (1,))
         metadata = cursor.metadata
+        assert metadata is not None
 
         # JSON
         self.assertEqual(metadata["ext_type_or_format"][0], EXT_FIELD_TYPE.JSON)
@@ -2443,6 +2556,7 @@ class TestCursor(unittest.TestCase):
 
             # binary protocol with parameters
             cursor.execute("select a from t1_binary_270 WHERE 1=?", (1,))
+            assert cursor.description is not None
             self.assertEqual(cursor.description[0][1], mariadb.STRING)
             cursor.fetchall()
 
@@ -2461,9 +2575,10 @@ class TestCursor(unittest.TestCase):
             with connection.cursor(binary=True) as cursor:
                 self.field_info_integer_types_res(cursor)
 
-    def field_info_integer_types_res(self, cursor):
+    def field_info_integer_types_res(self, cursor: SyncCursorCommon[Any]) -> None:
         cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         self.assertEqual(row[1], 2)
         self.assertEqual(row[2], 3)
@@ -2482,9 +2597,10 @@ class TestCursor(unittest.TestCase):
             with connection.cursor(binary=True) as cursor:
                 self.field_info_integer_types_res_unsigned(cursor)
 
-    def field_info_integer_types_res_unsigned(self, cursor):
+    def field_info_integer_types_res_unsigned(self, cursor: SyncCursorCommon[Any]) -> None:
         cursor.execute("SELECT * FROM test_integer_types WHERE 1=?", (1,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 255)
         self.assertEqual(row[1], 65535)
         self.assertEqual(row[2], 16777215)
@@ -2504,13 +2620,15 @@ class TestCursor(unittest.TestCase):
             with connection.cursor(binary=True) as cursor:
                 self.field_info_float_types_res(cursor)
 
-    def field_info_float_types_res(self, cursor):
+    def field_info_float_types_res(self, cursor: SyncCursorCommon[Any]) -> None:
         cursor.execute("SELECT * FROM test_float_types WHERE 1=?", (1,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertAlmostEqual(row[0], 1.1, places=7)
         self.assertAlmostEqual(row[1], 2.2, places=7)
         cursor.execute("SELECT * FROM test_float_types WHERE 1=?", (1,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertAlmostEqual(row[0], 1.1, places=7)
         self.assertAlmostEqual(row[1], 2.2, places=7)
 
@@ -2527,9 +2645,10 @@ class TestCursor(unittest.TestCase):
                 self.field_json_types_res(cursor)
 
 
-    def field_json_types_res(self, cursor):
+    def field_json_types_res(self, cursor: SyncCursorCommon[Any]) -> None:
         cursor.execute("SELECT * FROM test_json_types WHERE 1=?", (1,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], '{"age": 30, "email": "john.doe@example.com"}')
 
     def test_prepare_error(self):

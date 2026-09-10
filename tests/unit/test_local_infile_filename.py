@@ -1,5 +1,9 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# White-box unit test: it exercises private helpers of the implementation on purpose.
+# pyright: reportPrivateUsage=false
+# Duck-typed stand-ins replace the real objects here; pyright cannot see that they are compatible.
+# pyright: reportArgumentType=false
 
 """
 Unit tests for LOAD DATA LOCAL INFILE filename validation.
@@ -17,7 +21,7 @@ from mariadb.impl.client.sync_client import SyncClient
 from mariadb.impl.client.async_client import AsyncClient
 
 
-def _validate(sql, filename):
+def _validate(sql: str, filename: str) -> bool:
     # _validate_local_filename does not use `self`; call it unbound on both
     # implementations to confirm they behave identically.
     sync = SyncClient._validate_local_filename(None, sql, filename)

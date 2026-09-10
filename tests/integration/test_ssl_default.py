@@ -12,6 +12,15 @@ implementations. A small fake server is used to prove that, when TLS is required
 than a silent plaintext fallback.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
+
+from mariadb_shared.connection_params import ConnectionOptions
+
+if TYPE_CHECKING:
+    from typing_extensions import Unpack
+
 import socket
 import struct
 import threading
@@ -20,19 +29,20 @@ import unittest
 import mariadb
 from tests.conftest import get_test_config
 from tests.base_test import is_maxscale
+from typing import Any
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
 
 
-def _base_conf(**overrides):
+def _base_conf(**overrides: Unpack[ConnectionOptions]) -> ConnectionOptions:
     """Test config with every ssl*/tls_version key stripped, so each test
     controls the TLS settings explicitly (and the connector default applies
     when a test sets nothing)."""
     conf = {k: v for k, v in get_test_config().items()
             if not (k == 'ssl' or k.startswith('ssl_') or k == 'tls_version')}
-    conf.update(overrides)
-    return conf
+    return cast(ConnectionOptions, {**conf, **overrides})
 
 
-def _ssl_cipher(conn):
+def _ssl_cipher(conn: SyncConnectionCommon[Any]) -> str:
     """The cipher the server negotiated: a non-empty string under TLS, '' in clear."""
     cur = conn.cursor()
     cur.execute("SHOW STATUS LIKE 'Ssl_cipher'")

@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 """
 Integration tests for the 'binary' protocol option at connection and cursor levels.
 
@@ -14,8 +16,10 @@ Tests verify:
 import unittest
 import datetime
 import decimal
-import mariadb
-from ..base_test import create_connection, is_native
+from ..base_test import create_connection
+from typing import Any, Sequence
+from mariadb_shared.sync_connection_common import SyncConnectionCommon
+from mariadb_shared.sync_cursor_common import SyncCursorCommon
 
 
 class TestBinaryOptionDefault(unittest.TestCase):
@@ -27,6 +31,7 @@ class TestBinaryOptionDefault(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT ? as val", (42,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
@@ -37,6 +42,7 @@ class TestBinaryOptionDefault(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT 1 as val")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         cursor.close()
         conn.close()
@@ -51,6 +57,7 @@ class TestBinaryOptionConnection(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT ? as val", (42,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
@@ -61,6 +68,7 @@ class TestBinaryOptionConnection(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT ? as val", ("hello",))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "hello")
         cursor.close()
         conn.close()
@@ -74,6 +82,7 @@ class TestBinaryOptionConnection(unittest.TestCase):
             (42, "hello", decimal.Decimal("3.14"))
         )
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         self.assertEqual(row[1], "hello")
         self.assertEqual(row[2], decimal.Decimal("3.14"))
@@ -86,6 +95,7 @@ class TestBinaryOptionConnection(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT 1 as val")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         cursor.close()
         conn.close()
@@ -96,6 +106,7 @@ class TestBinaryOptionConnection(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT ? as val", (42,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
@@ -110,6 +121,7 @@ class TestBinaryOptionCursor(unittest.TestCase):
         cursor = conn.cursor(binary=True)
         cursor.execute("SELECT ? as val", (42,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
@@ -120,6 +132,7 @@ class TestBinaryOptionCursor(unittest.TestCase):
         cursor = conn.cursor(binary=False)
         cursor.execute("SELECT ? as val", (42,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
@@ -131,6 +144,7 @@ class TestBinaryOptionCursor(unittest.TestCase):
         # Should use binary protocol (inherited from connection)
         cursor.execute("SELECT ? as val", (42,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
@@ -143,10 +157,12 @@ class TestBinaryOptionCursor(unittest.TestCase):
 
         cursor_text.execute("SELECT ? as val", (1,))
         row1 = cursor_text.fetchone()
+        assert row1 is not None
         cursor_text.close()
 
         cursor_bin.execute("SELECT ? as val", (2,))
         row2 = cursor_bin.fetchone()
+        assert row2 is not None
         cursor_bin.close()
 
         self.assertEqual(row1[0], 1)
@@ -163,6 +179,7 @@ class TestBinaryOptionDictParams(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT %(val)s as val", {"val": 42})
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
@@ -173,6 +190,7 @@ class TestBinaryOptionDictParams(unittest.TestCase):
         cursor = conn.cursor(binary=True)
         cursor.execute("SELECT %(val)s as val", {"val": 42})
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
@@ -183,6 +201,7 @@ class TestBinaryOptionDictParams(unittest.TestCase):
         cursor = conn.cursor(binary=True)
         cursor.execute("SELECT %(val)s as val", {"val": "hello"})
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "hello")
         cursor.close()
         conn.close()
@@ -193,6 +212,7 @@ class TestBinaryOptionDictParams(unittest.TestCase):
         cursor = conn.cursor(binary=True)
         cursor.execute("SELECT %(val)s as val", {"val": 42})
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
@@ -201,13 +221,14 @@ class TestBinaryOptionDictParams(unittest.TestCase):
 class TestBinaryOptionDataTypes(unittest.TestCase):
     """Test various data types work correctly with both protocols"""
 
-    def _test_roundtrip(self, binary, params, expected):
+    def _test_roundtrip(self, binary: bool, params: Sequence[Any], expected: Sequence[Any]) -> None:
         """Helper: execute with params and verify result"""
         conn = create_connection({"binary": binary})
         cursor = conn.cursor()
         placeholders = ", ".join(["?"] * len(params))
         cursor.execute(f"SELECT {placeholders}", params)
         row = cursor.fetchone()
+        assert row is not None
         for i, exp in enumerate(expected):
             self.assertEqual(row[i], exp, f"Mismatch at index {i}: {row[i]} != {exp}")
         cursor.close()
@@ -230,6 +251,7 @@ class TestBinaryOptionDataTypes(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT ?", (3.14,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertAlmostEqual(float(row[0]), 3.14, places=2)
         cursor.close()
         conn.close()
@@ -239,6 +261,7 @@ class TestBinaryOptionDataTypes(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT ?", (3.14,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertAlmostEqual(row[0], 3.14, places=2)
         cursor.close()
         conn.close()
@@ -262,6 +285,7 @@ class TestBinaryOptionDataTypes(unittest.TestCase):
         cursor = conn.cursor()
         cursor.execute("SELECT ?", (dt,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertIsInstance(row[0], datetime.datetime)
         self.assertEqual(row[0], dt)
         cursor.close()
@@ -280,6 +304,7 @@ class TestBinaryOptionDataTypes(unittest.TestCase):
         cursor.execute("INSERT INTO _test_bytes_text VALUES (?)", (b,))
         cursor.execute("SELECT v FROM _test_bytes_text")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], b)
         cursor.close()
         conn.close()
@@ -293,6 +318,7 @@ class TestBinaryOptionDataTypes(unittest.TestCase):
         cursor.execute("INSERT INTO _test_bytes_bin VALUES (?)", (b,))
         cursor.execute("SELECT v FROM _test_bytes_bin")
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], b)
         cursor.close()
         conn.close()
@@ -327,6 +353,7 @@ class TestBinaryOptionWithTable(unittest.TestCase):
         )
         cursor.execute("SELECT * FROM test_binary_opt WHERE id = ?", (1,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         self.assertEqual(row[1], "text_mode")
         self.assertEqual(row[2], decimal.Decimal("99.99"))
@@ -341,6 +368,7 @@ class TestBinaryOptionWithTable(unittest.TestCase):
         )
         cursor.execute("SELECT * FROM test_binary_opt WHERE id = ?", (2,))
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 2)
         self.assertEqual(row[1], "binary_mode")
         self.assertEqual(row[2], decimal.Decimal("88.88"))
@@ -358,6 +386,7 @@ class TestBinaryOptionWithTable(unittest.TestCase):
         cursor_bin = self.conn.cursor(binary=True)
         cursor_bin.execute("SELECT * FROM test_binary_opt WHERE id = ?", (3,))
         row = cursor_bin.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 3)
         self.assertEqual(row[1], "cross_mode")
         self.assertEqual(row[2], decimal.Decimal("77.77"))
@@ -378,6 +407,7 @@ class TestBinaryOptionWithTable(unittest.TestCase):
         )
         cursor.execute("SELECT * FROM test_binary_opt2 WHERE id = %(id)s", {"id": 1})
         row = cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 1)
         self.assertEqual(row[1], "dict_mode")
         cursor.close()
@@ -388,7 +418,7 @@ class TestPreparedOptionCompat(unittest.TestCase):
     """Test the deprecated 1.x 'prepared' cursor option."""
 
     @staticmethod
-    def _prepared_cursor(conn):
+    def _prepared_cursor(conn: SyncConnectionCommon[Any]) -> SyncCursorCommon[Any]:
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
@@ -406,9 +436,11 @@ class TestPreparedOptionCompat(unittest.TestCase):
         """cursor(prepared=True) runs via the binary (prepared statement) protocol"""
         conn = create_connection()  # binary=False default
         cursor = self._prepared_cursor(conn)
-        self.assertTrue(cursor._use_binary)
+        self.assertTrue(cursor._use_binary)  # pyright: ignore  # white-box: implementation attribute
         cursor.execute("SELECT ? as val", (42,))
-        self.assertEqual(cursor.fetchone()[0], 42)
+        row = cursor.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 42)
         cursor.close()
         conn.close()
 
@@ -418,13 +450,19 @@ class TestPreparedOptionCompat(unittest.TestCase):
         cursor = self._prepared_cursor(conn)
         # First execute() prepares "SELECT ? as val".
         cursor.execute("SELECT ? as val", (1,))
-        self.assertEqual(cursor.fetchone()[0], 1)
+        row = cursor.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 1)
         # A completely different SQL is ignored; the prepared statement runs.
         cursor.execute("SELECT ? + 999 as other", (2,))
-        self.assertEqual(cursor.fetchone()[0], 2)
+        row = cursor.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 2)
         # Even an empty SQL string is accepted and ignored.
         cursor.execute("", (3,))
-        self.assertEqual(cursor.fetchone()[0], 3)
+        row = cursor.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 3)
         cursor.close()
         conn.close()
 
@@ -433,9 +471,13 @@ class TestPreparedOptionCompat(unittest.TestCase):
         conn = create_connection()
         cursor = conn.cursor(binary=True)
         cursor.execute("SELECT ? as val", (1,))
-        self.assertEqual(cursor.fetchone()[0], 1)
+        row = cursor.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 1)
         cursor.execute("SELECT ? + 100 as val", (2,))
-        self.assertEqual(cursor.fetchone()[0], 102)
+        row = cursor.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 102)
         cursor.close()
         conn.close()
 
@@ -446,11 +488,15 @@ class TestPreparedOptionCompat(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             cursor = conn.cursor(prepared=False)
-        self.assertFalse(cursor._use_binary)
+        self.assertFalse(cursor._use_binary)  # pyright: ignore  # white-box: implementation attribute
         cursor.execute("SELECT ? as val", (7,))
-        self.assertEqual(cursor.fetchone()[0], 7)
+        row = cursor.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 7)
         cursor.execute("SELECT ? + 1 as val", (7,))
-        self.assertEqual(cursor.fetchone()[0], 8)
+        row = cursor.fetchone()
+        assert row is not None
+        self.assertEqual(row[0], 8)
         cursor.close()
         conn.close()
 

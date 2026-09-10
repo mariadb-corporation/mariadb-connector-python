@@ -1,6 +1,8 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 import unittest
 import mariadb
 from ..base_test import conf
@@ -57,12 +59,14 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         # Cursor1 executes and fetches only 1 row out of 20
         await cursor1.execute("SELECT * FROM test_multi_cursor_async ORDER BY id")
         row = await cursor1.fetchone()
+        assert row is not None
         self.assertIsNotNone(row)
         self.assertEqual(row[0], 0)
 
         # Cursor2 should be able to execute - connection should drain cursor1
         await cursor2.execute("SELECT COUNT(*) FROM test_multi_cursor_async")
         result = await cursor2.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 20)
 
         await cursor1.close()
@@ -78,11 +82,13 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         # First execute - fetch only 1 row
         await cursor.execute("SELECT * FROM test_multi_cursor_async ORDER BY id")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 0)
 
         # Re-execute on same cursor - should drain previous result
         await cursor.execute("SELECT COUNT(*) FROM test_multi_cursor_async")
         result = await cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 20)
 
         await cursor.close()
@@ -98,6 +104,7 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         # Cursor1 starts unbuffered and fetches partial
         await cursor1.execute("SELECT * FROM test_multi_cursor_async ORDER BY id")
         row = await cursor1.fetchone()
+        assert row is not None
         self.assertEqual(row[0], 0)
 
         # Explicitly close cursor1 (should drain remaining result)
@@ -106,6 +113,7 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         # Cursor2 executes - connection should be in good state
         await cursor2.execute("SELECT COUNT(*) FROM test_multi_cursor_async")
         result = await cursor2.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 20)
 
         await cursor2.close()
@@ -129,6 +137,7 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         # Cursor3 executes - should drain cursor2
         await cursor3.execute("SELECT COUNT(*) FROM test_multi_cursor_async")
         result = await cursor3.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 20)
 
         await cursor1.close()
@@ -148,6 +157,7 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         # Execute again - should drain previous result
         await cursor.execute("SELECT COUNT(*) FROM test_multi_cursor_async")
         result = await cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 20)
 
         await cursor.close()
@@ -167,6 +177,7 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         # Should be able to execute again without issues
         await cursor.execute("SELECT COUNT(*) FROM test_multi_cursor_async")
         result = await cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 20)
 
         await cursor.close()
@@ -189,6 +200,7 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         # Cursor2 should be able to execute without issues
         await cursor2.execute("SELECT COUNT(*) FROM test_multi_cursor_async")
         result = await cursor2.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 20)
 
         await cursor2.close()
@@ -211,6 +223,7 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         cursor2 = self.connection.cursor()
         await cursor2.execute("SELECT COUNT(*) FROM test_multi_cursor_async")
         result = await cursor2.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 20)
 
         await cursor2.close()
@@ -230,6 +243,7 @@ class TestMultiCursorUnbufferedAsync(unittest.IsolatedAsyncioTestCase):
         # Execute again - should drain remaining rows
         await cursor.execute("SELECT COUNT(*) FROM test_multi_cursor_async")
         result = await cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 20)
 
         await cursor.close()

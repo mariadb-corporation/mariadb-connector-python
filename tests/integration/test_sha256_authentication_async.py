@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+
 """
 Caching SHA2 Password Authentication Tests for MariaDB Connector/Python (Async)
 
@@ -15,7 +17,6 @@ import unittest
 import os
 import sys
 import platform
-import asyncio
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -23,6 +24,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import mariadb
 from tests.base_test import create_connection, get_host_suffix
 from tests.conftest import get_test_config
+from mariadb_shared.async_connection_common import AsyncConnectionCommon
+from mariadb_shared.rows import TupleRow
 
 
 class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
@@ -241,15 +244,16 @@ class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
         conn_config['password'] = '!Passw0rd3Works'
         conn_config['ssl'] = False  # caching_sha2 isn't MitM-proof; use RSA full-auth, not fingerprint-only TLS
         
-        connections = []
+        connections: list[AsyncConnectionCommon[TupleRow]] = []
         try:
             # Create multiple connections
-            for i in range(3):
+            for _ in range(3):
                 conn = await mariadb.AsyncConnection.connect(**conn_config)
                 self.assertIsNotNone(conn)
                 cursor = conn.cursor()
                 await cursor.execute("SELECT USER()")
                 user_result = await cursor.fetchone()
+                assert user_result is not None
                 self.assertIn('cachingSha256UserAsync4', user_result[0])
                 await cursor.close()
                 connections.append(conn)
@@ -301,11 +305,13 @@ class TestCachingSha256AuthenticationAsync(unittest.IsolatedAsyncioTestCase):
         # Check current user
         await cursor.execute("SELECT USER()")
         user_result = await cursor.fetchone()
+        assert user_result is not None
         self.assertIn('cachingSha256UserAsync', user_result[0])
         
         # Check current database operations work
         await cursor.execute("SELECT 1")
         result = await cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 1)
         
         await cursor.close()

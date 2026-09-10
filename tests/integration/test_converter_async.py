@@ -1,28 +1,30 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+
 import datetime
 import unittest
 
 import mariadb
 from mariadb.constants import FIELD_TYPE
-from tests.base_test import is_native
 from ..conftest import get_test_config as conf
+from typing import Any
 
 
 class foo(int):
     def bar(self): pass
 
 
-def timedelta_to_time(s):
+def timedelta_to_time(s: datetime.timedelta) -> datetime.time:
     return (datetime.datetime.min + s).time()
 
 
-def long_minus(s):
+def long_minus(s: int) -> int:
     return s - 1
 
 
-def none_to_string(s):
+def none_to_string(s: Any) -> Any:
     if s is None:
         return "None"
     return s
@@ -51,6 +53,7 @@ class AsyncTestConversion(unittest.IsolatedAsyncioTestCase):
         a = datetime.time(12, 29, 21)
         await cursor.execute("SELECT cast(? as time)", (a,))
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], a)
         await cursor.close()
 
@@ -59,6 +62,7 @@ class AsyncTestConversion(unittest.IsolatedAsyncioTestCase):
         a = 12345
         await cursor.execute("SELECT CAST(? AS SIGNED)", (12345,))
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], a - 1)
         await cursor.close()
 
@@ -66,9 +70,11 @@ class AsyncTestConversion(unittest.IsolatedAsyncioTestCase):
         cursor = self.connection.cursor()
         await cursor.execute("SELECT NULL")
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "None")
         await cursor.execute("SELECT ?", (None,))
         row = await cursor.fetchone()
+        assert row is not None
         self.assertEqual(row[0], "None")
         await cursor.close()
 

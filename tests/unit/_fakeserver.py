@@ -5,8 +5,15 @@
 A tiny in-process MySQL/MariaDB wire-protocol fake server for unit tests.
 """
 
+from __future__ import annotations
+
 import socket
-from typing import Any
+from typing import Any, Callable, Literal, Sequence, TYPE_CHECKING, cast
+
+from mariadb_shared.connection_params import ConnectionOptions
+
+if TYPE_CHECKING:
+    from typing_extensions import Unpack
 import struct
 import threading
 import time
@@ -50,16 +57,26 @@ COM_STMT_BULK_EXECUTE = 0xFA
 
 _STATUS_AUTOCOMMIT = 0x0002
 
+# A column spec is (name, field_type[, charset[, length]]); a row, one value per
+# column; a row encoder turns a row into its wire packet given the column types.
+ColumnSpec = Sequence[Any]
+Row = Sequence[Any]
+RowEncoder = Callable[[Sequence[Any], list[int]], bytes]
+# A responder maps a request payload to the response byte blob; a handler
+# serves one accepted socket end to end.
+Responder = Callable[[bytes], bytes]
+Handler = Callable[[socket.socket], None]
+
 
 # ---------------------------------------------------------------------------
 # Low-level encoders
 # ---------------------------------------------------------------------------
-def pkt(seq, body):
+def pkt(seq: int, body: bytes) -> bytes:
     """Frame a payload: 3-byte LE length + 1-byte sequence id."""
     return struct.pack("<I", len(body))[:3] + bytes([seq & 0xFF]) + body
 
 
-def lenenc_int(n):
+def lenenc_int(n: int) -> bytes:
     if n < 251:
         return bytes([n])
     if n < 65536:
@@ -69,28 +86,28 @@ def lenenc_int(n):
     return b"\xfe" + struct.pack("<Q", n)
 
 
-def lenenc_str(b):
+def lenenc_str(b: bytes | str) -> bytes:
     if isinstance(b, str):
         b = b.encode("utf-8")
     return lenenc_int(len(b)) + b
 
 
-def ok_body(affected_rows=0, last_insert_id=0, status=_STATUS_AUTOCOMMIT, warnings=0):
+def ok_body(affected_rows: int = 0, last_insert_id: int = 0, status: int = _STATUS_AUTOCOMMIT, warnings: int = 0) -> bytes:
     return (b"\x00" + lenenc_int(affected_rows) + lenenc_int(last_insert_id)
             + struct.pack("<HH", status, warnings))
 
 
-def eof_body(warnings=0, status=_STATUS_AUTOCOMMIT):
+def eof_body(warnings: int = 0, status: int = _STATUS_AUTOCOMMIT) -> bytes:
     # classic 5-byte EOF: 0xFE + warnings(2 LE) + status(2 LE)
     return b"\xfe" + struct.pack("<HH", warnings, status)
 
 
-def err_body(errno=1064, sqlstate="42000", message="fake error"):
+def err_body(errno: int = 1064, sqlstate: str = "42000", message: str = "fake error") -> bytes:
     return (b"\xff" + struct.pack("<H", errno) + b"#" + sqlstate.encode("ascii")
             + message.encode("utf-8"))
 
 
-def column_def(name, field_type, charset=33, length=255, flags=0, decimals=0):
+def column_def(name: str, field_type: int, charset: int = 33, length: int = 255, flags: int = 0, decimals: int = 0) -> bytes:
     """Protocol::ColumnDefinition41 (no extended metadata)."""
     return (lenenc_str("def") + lenenc_str("") + lenenc_str("") + lenenc_str("")
             + lenenc_str(name) + lenenc_str("")
@@ -98,7 +115,7 @@ def column_def(name, field_type, charset=33, length=255, flags=0, decimals=0):
             + b"\x00\x00")
 
 
-def text_value(v):
+def text_value(v: Any) -> bytes:
     """Encode one text-protocol column value (None -> the single 0xFB NULL byte)."""
     if v is None:
         return b"\xfb"
@@ -107,7 +124,7 @@ def text_value(v):
     return lenenc_str(str(v))
 
 
-def binary_value(v, field_type):
+def binary_value(v: Any, field_type: int) -> bytes:
     """Encode one binary-protocol column value (caller handles NULL via bitmap)."""
     if field_type == MYSQL_TYPE_TINY:
         return struct.pack("<b", int(v))
@@ -125,7 +142,7 @@ def binary_value(v, field_type):
     return lenenc_str(str(v))
 
 
-def binary_row(values, field_types):
+def binary_row(values: Sequence[Any], field_types: Sequence[int]) -> bytes:
     """A COM_STMT_EXECUTE binary row: 0x00 header + null bitmap (+2 offset) + values."""
     n = len(values)
     nb = (n + 9) >> 3
@@ -142,11 +159,11 @@ def binary_row(values, field_types):
 # ---------------------------------------------------------------------------
 # Higher-level response builders (return a full multi-packet byte blob)
 # ---------------------------------------------------------------------------
-def _resultset(columns, rows, row_encoder, start_seq=1, last=True):
+def _resultset(columns: Sequence[ColumnSpec], rows: Sequence[Row], row_encoder: RowEncoder, start_seq: int = 1, last: bool = True) -> tuple[bytes, int]:
     """columns: list of (name, field_type[, charset]); rows: list of value tuples."""
     out = pkt(start_seq, lenenc_int(len(columns)))
     seq = start_seq + 1
-    types = []
+    types: list[int] = []
     for col in columns:
         name, ftype = col[0], col[1]
         charset = col[2] if len(col) > 2 else (63 if ftype in (MYSQL_TYPE_BLOB,) else 33)
@@ -164,19 +181,19 @@ def _resultset(columns, rows, row_encoder, start_seq=1, last=True):
     return out, seq + 1
 
 
-def text_resultset(columns, rows, start_seq=1, last=True):
+def text_resultset(columns: Sequence[ColumnSpec], rows: Sequence[Row], start_seq: int = 1, last: bool = True) -> bytes:
     return _resultset(columns, rows,
                       lambda r, types: b"".join(text_value(v) for v in r),
                       start_seq=start_seq, last=last)[0]
 
 
-def binary_resultset(columns, rows, start_seq=1, last=True):
+def binary_resultset(columns: Sequence[ColumnSpec], rows: Sequence[Row], start_seq: int = 1, last: bool = True) -> bytes:
     return _resultset(columns, rows,
                       lambda r, types: binary_row(r, types),
                       start_seq=start_seq, last=last)[0]
 
 
-def text_multi_resultset(sets, start_seq=1):
+def text_multi_resultset(sets: Sequence[tuple[Sequence[ColumnSpec], Sequence[Row]]], start_seq: int = 1) -> bytes:
     """Concatenate several text result sets with continuous packet sequence ids;
     all but the last carry MORE_RESULTS_EXIST so nextset() must advance.
     sets: list of (columns, rows)."""
@@ -191,16 +208,16 @@ def text_multi_resultset(sets, start_seq=1):
     return out
 
 
-def ok(affected_rows=0, last_insert_id=0, warnings=0, start_seq=1, more_results=False):
+def ok(affected_rows: int = 0, last_insert_id: int = 0, warnings: int = 0, start_seq: int = 1, more_results: bool = False) -> bytes:
     status = _STATUS_AUTOCOMMIT | (0x0008 if more_results else 0)
     return pkt(start_seq, ok_body(affected_rows, last_insert_id, status, warnings))
 
 
-def error(errno=1064, sqlstate="42000", message="fake error", start_seq=1):
+def error(errno: int = 1064, sqlstate: str = "42000", message: str = "fake error", start_seq: int = 1) -> bytes:
     return pkt(start_seq, err_body(errno, sqlstate, message))
 
 
-def prepare_ok(stmt_id=1, columns=None, num_params=0, param_types=None, start_seq=1):
+def prepare_ok(stmt_id: int = 1, columns: Sequence[ColumnSpec] | None = None, num_params: int = 0, param_types: Sequence[int] | None = None, start_seq: int = 1) -> bytes:
     """COM_STMT_PREPARE response: head + (param defs + EOF) + (col defs + EOF)."""
     columns = columns or []
     num_cols = len(columns)
@@ -228,7 +245,7 @@ def prepare_ok(stmt_id=1, columns=None, num_params=0, param_types=None, start_se
 # ---------------------------------------------------------------------------
 # Handshake
 # ---------------------------------------------------------------------------
-def handshake_greeting(extended_caps=0):
+def handshake_greeting(extended_caps: int = 0) -> bytes:
     """Protocol-10 HandshakeV10 the fake server sends (seq 0).
 
     extended_caps: MariaDB extended capability bits (32..63), shifted down to a
@@ -262,7 +279,7 @@ def handshake_greeting(extended_caps=0):
 # ---------------------------------------------------------------------------
 # Packet reading
 # ---------------------------------------------------------------------------
-def _recv_exact(conn, n):
+def _recv_exact(conn: socket.socket, n: int) -> bytes | None:
     buf = b""
     while len(buf) < n:
         chunk = conn.recv(n - len(buf))
@@ -272,7 +289,7 @@ def _recv_exact(conn, n):
     return buf
 
 
-def recv_one_packet(conn):
+def recv_one_packet(conn: socket.socket) -> tuple[int, bytes] | tuple[None, None]:
     """Read one full protocol packet; returns (seq, payload) or (None, None)."""
     header = _recv_exact(conn, 4)
     if header is None:
@@ -288,7 +305,7 @@ def recv_one_packet(conn):
 # ---------------------------------------------------------------------------
 # Server + scripted handler
 # ---------------------------------------------------------------------------
-def send_chunked(conn, data, chunk_size=1, delay=0.002):
+def send_chunked(conn: socket.socket, data: bytes, chunk_size: int = 1, delay: float = 0.002) -> None:
     """Send data in small chunks with a delay between them, so the peer's
     non-blocking reads see only partial data. This forces async"""
     for i in range(0, len(data), chunk_size):
@@ -297,8 +314,9 @@ def send_chunked(conn, data, chunk_size=1, delay=0.002):
             time.sleep(delay)
 
 
-def scripted_handler(on_query=None, on_prepare=None, on_execute=None, on_bulk=None,
-                     extended_caps=0, slow=False, chunk_size=1, chunk_delay=0.002):
+def scripted_handler(on_query: Responder | None = None, on_prepare: Responder | None = None,
+                     on_execute: Responder | None = None, on_bulk: Responder | None = None,
+                     extended_caps: int = 0, slow: bool = False, chunk_size: int = 1, chunk_delay: float = 0.002) -> Handler:
     """Build a connection handler that performs the handshake then dispatches
     each client command to the matching callback. A callback receives the
     request payload (bytes) and returns the response byte blob (with packet
@@ -307,18 +325,18 @@ def scripted_handler(on_query=None, on_prepare=None, on_execute=None, on_bulk=No
 
     With slow=True, COMMAND responses are dripped in chunk_size-byte chunks
     (chunk_delay seconds apart) to exercise the async code paths."""
-    def send_response(conn, data):
+    def send_response(conn: socket.socket, data: bytes) -> None:
         if slow:
             send_chunked(conn, data, chunk_size, chunk_delay)
         else:
             conn.sendall(data)
 
-    def handler(conn):
+    def handler(conn: socket.socket) -> None:
         conn.sendall(handshake_greeting(extended_caps=extended_caps))
         recv_one_packet(conn)                       # client handshake response (discard)
         conn.sendall(ok(start_seq=2))               # accept auth
         while True:
-            seq, payload = recv_one_packet(conn)
+            _seq, payload = recv_one_packet(conn)
             if payload is None or not payload:
                 return
             com = payload[0]
@@ -335,7 +353,7 @@ def scripted_handler(on_query=None, on_prepare=None, on_execute=None, on_bulk=No
     return handler
 
 
-def query_text(payload):
+def query_text(payload: bytes) -> str:
     """Extract the SQL string from a COM_QUERY payload."""
     return payload[1:].decode("utf-8", "replace")
 
@@ -343,17 +361,17 @@ def query_text(payload):
 class FakeServer:
     """One-shot TCP fake server on a daemon thread; serves a single connection."""
 
-    def __init__(self, handler):
+    def __init__(self, handler: Handler) -> None:
         self._handler = handler
         self._srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._srv.bind(("127.0.0.1", 0))
         self._srv.listen(1)
         self.port = self._srv.getsockname()[1]
-        self._thread = None
-        self.error = None
+        self._thread: threading.Thread | None = None
+        self.error: Exception | None = None
 
-    def _serve(self):
+    def _serve(self) -> None:
         try:
             self._srv.settimeout(10)
             conn, _ = self._srv.accept()
@@ -373,20 +391,19 @@ class FakeServer:
             except OSError:
                 pass
 
-    def __enter__(self):
+    def __enter__(self) -> FakeServer:
         self._thread = threading.Thread(target=self._serve, daemon=True)
         self._thread.start()
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: object) -> Literal[False]:
         if self._thread is not None:
             self._thread.join(timeout=5)
         return False
 
 
-def fake_conf(port: int, **extra: Any) -> dict[str, Any]:
+def fake_conf(port: int, /, **extra: Unpack[ConnectionOptions]) -> ConnectionOptions:
     """Connection kwargs targeting the fake server: plaintext, blind auth."""
-    c = dict(user="u", password="p", host="127.0.0.1", port=port,
-             ssl=False, connect_timeout=5)
-    c.update(extra)
-    return c
+    c: ConnectionOptions = {"user": "u", "password": "p", "host": "127.0.0.1",
+                            "port": port, "ssl": False, "connect_timeout": 5}
+    return cast(ConnectionOptions, {**c, **extra})

@@ -1,26 +1,31 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
+
+from __future__ import annotations
+
+from typing import cast
+
+from mariadb_shared.async_connection_common import AsyncConnectionCommon
+from mariadb_shared.connection_params import ConnectionOptions
+from mariadb_shared.rows import TupleRow
+
 import unittest
 from datetime import datetime
 import mariadb
 import sys
 import traceback
 
-from tests.base_test import is_native
 
 from ..conftest import get_test_config as conf
 
 
-async def create_async_connection(additional_conf=None):
+async def create_async_connection(additional_conf: ConnectionOptions | None = None) -> AsyncConnectionCommon[TupleRow]:
     """Helper to create async connection with optional additional config"""
-    default_conf = conf()
     if additional_conf is None:
-        c = {key: value for (key, value) in (default_conf.items())}
-    else:
-        c = {key: value for (key, value) in (list(default_conf.items()) + list(
-            additional_conf.items()))}
-    return await mariadb.AsyncConnection.connect(**c)
+        return await mariadb.AsyncConnection.connect(**conf())
+    merged = cast(ConnectionOptions, {**conf(), **additional_conf})
+    return await mariadb.AsyncConnection.connect(**merged)
 
 class AsyncTestException(unittest.IsolatedAsyncioTestCase):
 
@@ -49,13 +54,16 @@ class AsyncTestException(unittest.IsolatedAsyncioTestCase):
 
     async def test_db_unknown_exception(self):
 
+        ending_error: BaseException | None = None
         try:
             await create_async_connection({"database": "unknown"})
         except mariadb.OperationalError as err:
             ending_error = err.__cause__
+            assert isinstance(ending_error, mariadb.Error)
         except mariadb.ProgrammingError as err:
             ending_error = err
 
+        assert isinstance(ending_error, mariadb.Error)
         self.assertEqual(ending_error.sqlstate, "42000")
         self.assertEqual(ending_error.errno, 1049)
         self.assertTrue(ending_error.errmsg.find("Unknown database 'unknown'") > -1)
@@ -70,6 +78,7 @@ class AsyncTestException(unittest.IsolatedAsyncioTestCase):
         except mariadb.OperationalError as err:
             if (err.__cause__):
                 ending_error = err.__cause__
+                assert isinstance(ending_error, mariadb.Error)
             else:
                 ending_error = err
             self.assertEqual(ending_error.sqlstate, "HY000")

@@ -1,5 +1,17 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
+# mariadb_pool is importable only through the editable finder, so pyright cannot resolve it:
+# everything that comes from it is Unknown.
+# pyright: reportMissingImports=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportPossiblyUnboundVariable=false
+
+
+from __future__ import annotations
+
+from typing import Any, cast
+
+from mariadb_shared.async_connection_common import AsyncConnectionCommon
+from mariadb_shared.connection_params import ConnectionOptions
+from mariadb_shared.rows import TupleRow
 
 import unittest
 
@@ -8,33 +20,31 @@ import mariadb
 from ..base_test import conf, is_native, is_skysql, is_maxscale
 
 # Helper to create async connection
-async def create_async_connection(additional_conf=None):
+async def create_async_connection(additional_conf: ConnectionOptions | None = None) -> AsyncConnectionCommon[TupleRow]:
     """Helper to create async connection with optional additional config"""
-    default_conf = conf()
     if additional_conf is None:
-        c = {key: value for (key, value) in (default_conf.items())}
-    else:
-        c = {key: value for (key, value) in (list(default_conf.items()) + list(
-            additional_conf.items()))}
-    return await mariadb.AsyncConnection.connect(**c)
+        return await mariadb.AsyncConnection.connect(**conf())
+    merged = cast(ConnectionOptions, {**conf(), **additional_conf})
+    return await mariadb.AsyncConnection.connect(**merged)
 
 # Check if mariadb_pool is available and functional
 try:
-    from mariadb_pool import AsyncConnectionPool
     HAS_MARIADB_POOL = True
 except (ImportError, AttributeError):
-    HAS_MARIADB_POOL = False
+    HAS_MARIADB_POOL = False  # pyright: ignore[reportConstantRedefinition]
 
 
 @unittest.skipIf(not HAS_MARIADB_POOL or not is_native(),
                  "AsyncConnection or mariadb_pool package not installed")
 class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
 
-    async def create_pool(self, **kwargs):
-        """Create an opened async pool over the test configuration"""
-        default_conf = conf()
-        default_conf.update(kwargs.pop("connection_conf", {}))
-        return await mariadb.create_async_pool(**default_conf, **kwargs)
+    async def create_pool(self, **kwargs: Any) -> Any:
+        """Create an opened async pool over the test configuration; the
+        connection_conf keyword overrides connection parameters, the others
+        are pool options."""
+        connection_conf: ConnectionOptions = kwargs.pop("connection_conf", {})
+        params = cast(ConnectionOptions, {**conf(), **connection_conf})
+        return await mariadb.create_async_pool(**params, **kwargs)
 
     async def test_async_connection_pool_removed(self):
         # CONPY-377: mariadb.ConnectionPool mirrors the 1.1 pool API, which
@@ -149,7 +159,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
         # service connection
         conn = await create_async_connection()
         cursor = conn.cursor()
-        ids = []
+        ids: list[int] = []
         await cursor.execute("DROP PROCEDURE IF EXISTS p1")
         sql = """CREATE PROCEDURE p1()
                  BEGIN
@@ -159,16 +169,16 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
 
         await cursor.execute(sql)
         try:
-            for i in range(0, 10):
+            for _ in range(0, 10):
                 pconn = await pool.acquire()
                 ids.append(pconn.connection_id)
                 await cursor.execute("KILL %s" % (pconn.connection_id,))
                 await pconn.close()
 
-            new_ids = []
+            new_ids: list[int] = []
 
-            conns = []
-            for i in range(0, 10):
+            conns: list[Any] = []
+            for _ in range(0, 10):
                 pconn = await pool.acquire()
                 conns.append(pconn)
                 new_ids.append(pconn.connection_id)
@@ -179,7 +189,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
                 await pcursor.close()
                 await conn1.close()
 
-            for i in range(0, 10):
+            for _ in range(0, 10):
                 pconn = await pool.acquire()
                 self.assertEqual(pconn.connection_id in new_ids, True)
                 await pconn.close()
@@ -195,12 +205,12 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
         iterations = 100
 
         pool = await self.create_pool(pool_size=pool_size, acquire_timeout=1)
-        for i in range(0, iterations):
-            for j in range(0, pool_size):
+        for _ in range(0, iterations):
+            for _ in range(0, pool_size):
                 conn = await pool.acquire()
                 await conn.close()
 
-        for i in range(0, pool_size):
+        for _ in range(0, pool_size):
             conn = await pool.acquire()
             self.assertEqual(conn._pooled_connection.use_count, iterations + 1)
             await conn.close()
@@ -209,8 +219,8 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
 
     async def test_connection_pool_maxconn(self):
         pool = await self.create_pool(pool_size=6, acquire_timeout=1)
-        connections = []
-        for i in range(0, 6):
+        connections: list[Any] = []
+        for _ in range(0, 6):
             connections.append(await pool.acquire())
 
         with self.assertRaises(mariadb.PoolError):
@@ -301,9 +311,9 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
 
     async def test_conpy256(self):
         size = 10
-        connections = []
+        connections: list[Any] = []
         pool = await self.create_pool(pool_size=size, acquire_timeout=1)
-        for i in range(size):
+        for _ in range(size):
             c = await pool.acquire()
             self.assertNotEqual(c in connections, True)
             connections.append(c)
@@ -332,6 +342,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
                 async with conn.cursor() as cursor:
                     await cursor.execute("SELECT 1")
                     result = await cursor.fetchone()
+                    assert result is not None
                     self.assertEqual(result[0], 1)
         finally:
             await pool.close()
@@ -347,6 +358,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
                 async with conn2.cursor() as cursor2:
                     await cursor2.execute("SELECT 2")
                     result2 = await cursor2.fetchone()
+                    assert result2 is not None
                     self.assertEqual(result2[0], 2)
         finally:
             await pool2.close()
@@ -365,6 +377,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
                 async with conn3.cursor() as cursor3:
                     await cursor3.execute("SELECT 3")
                     result3 = await cursor3.fetchone()
+                    assert result3 is not None
                     self.assertEqual(result3[0], 3)
         finally:
             await pool3.close()
@@ -374,7 +387,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
         # nothing to look up by name
         default_conf = conf()
         with self.assertRaises(ValueError) as ctx:
-            await mariadb.create_async_pool(pool_name="async_named",
+            await mariadb.create_async_pool(pool_name="async_named",  # pyright: ignore  # deliberately invalid: pool options on a plain connection
                                             **default_conf)
         self.assertIn("pool_name", str(ctx.exception))
 
@@ -413,6 +426,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
         cursor = conn.cursor()
         await cursor.execute("SELECT 1 as test")
         result = await cursor.fetchone()
+        assert result is not None
         self.assertEqual(result[0], 1)
         await cursor.close()
 
@@ -427,7 +441,7 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
         # as a side effect or ignore the given connection arguments
         default_conf = conf()
         with self.assertRaises(mariadb.ProgrammingError):
-            await mariadb.asyncConnect(pool_name="async_no_pool",
+            await mariadb.asyncConnect(pool_name="async_no_pool",  # pyright: ignore  # deliberately invalid: pool options on a plain connection
                                        **default_conf)
 
 if __name__ == '__main__':
