@@ -32,7 +32,7 @@ _STRUCT_TIME_NO_MICRO = struct.Struct('<BBIBBB')          # length + negative + 
 # numpy is an optional accelerator for float32 VECTOR encoding.
 numpy: Any = None
 try:
-    import numpy  # type: ignore[no-redef]  # pyright: ignore[reportMissingImports]
+    import numpy  # pyright: ignore[reportMissingImports]
 except ImportError:
     pass
 HAS_NUMPY = numpy is not None

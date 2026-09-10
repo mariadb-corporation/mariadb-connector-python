@@ -29,7 +29,7 @@ _MISSING: object = object()  # sentinel: distinguishes missing key from explicit
 # numpy is an optional accelerator for float32 VECTOR encoding.
 numpy: Any = None
 try:
-    import numpy  # type: ignore[no-redef]  # pyright: ignore[reportMissingImports]
+    import numpy  # pyright: ignore[reportMissingImports]
 except ImportError:
     pass
 HAS_NUMPY = numpy is not None

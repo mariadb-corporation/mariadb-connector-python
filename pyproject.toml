@@ -153,6 +153,8 @@ warn_unreachable = true
 strict_equality = true
 # The shipped pure-Python library. A bare `mypy` checks exactly these.
 files = ["mariadb", "mariadb_shared"]
+# Local stand-in stubs (see stubs/numpy/__init__.pyi): looked up before site-packages.
+mypy_path = "stubs"
 # Skip non-library trees so a recursive `mypy .` doesn't fail on the duplicate
 # `conftest` module (benchmarks/ and benchmarks/async/ and tests/ each define one,
 # and `benchmarks/async` can't be a package since `async` is a keyword) and

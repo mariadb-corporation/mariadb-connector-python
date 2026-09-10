@@ -4,7 +4,7 @@ MySQL databases, using an API which is compliant with the Python DB API 2.0
 (PEP-249).
 '''
 
-from typing import Any, cast
+from typing import Any
 
 # Import exceptions from shared package to avoid circular dependencies
 from mariadb_shared.exceptions import (
@@ -85,7 +85,7 @@ _base_version: str
 try:
     # generated at build time, so unknown to the type checker in the source tree
     from .release_info import __version__ as _release_version  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
-    _base_version = cast(str, _release_version)
+    _base_version = str(_release_version)  # pyright: ignore[reportUnknownArgumentType]
 except ImportError:
     try:
         from importlib.metadata import version
