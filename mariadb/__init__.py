@@ -7,6 +7,8 @@ This is a pure Python implementation. For better performance, install the
 optional C extension: pip install mariadb-python[c-extension]
 '''
 
+from __future__ import annotations
+
 import warnings
 
 from typing import Any, Dict, TYPE_CHECKING, cast
@@ -41,6 +43,10 @@ from mariadb_shared.sync_connection_common import SyncConnectionCommon
 from mariadb_shared.async_connection_common import AsyncConnectionCommon
 from mariadb_shared.sync_cursor_common import SyncCursorCommon
 from mariadb_shared.async_cursor_common import AsyncCursorCommon
+from mariadb_shared.connection_params import ConnectionParams, ConnectParams
+
+if TYPE_CHECKING:
+    from typing_extensions import Unpack
 
 # Import implementation selector early
 from . import impl_selector  # noqa: F401 import early to stabilize side effects
@@ -75,7 +81,7 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "connect", "asyncConnect", "create_pool", "create_async_pool", "mariadbapi_version", "client_version_info", "client_version", "_have_asan", "__impl__",
            "apilevel", "paramstyle", "threadsafety"]
 
-def connect(*args: Any, connectionclass: type[SyncConnectionCommon] | None = None, **kwargs: Any) -> SyncConnectionCommon:
+def connect(*args: Any, connectionclass: type[SyncConnectionCommon] | None = None, **kwargs: Unpack[ConnectParams]) -> SyncConnectionCommon:
     """
     Creates a MariaDB Connection object (synchronous).
 
@@ -137,6 +143,7 @@ def connect(*args: Any, connectionclass: type[SyncConnectionCommon] | None = Non
         - Not set - Default behavior (try C extension first, then binary, fallback to pure Python)
 
     """
+    params: Dict[str, Any] = dict(kwargs)
     # Parse URI if provided as first positional argument
     if args and len(args) > 0:
         first_arg = args[0]
@@ -145,23 +152,23 @@ def connect(*args: Any, connectionclass: type[SyncConnectionCommon] | None = Non
             if is_connection_uri(first_arg):
                 # Parse URI into parameters
                 uri_params = parse_connection_uri(first_arg)
-                # Merge with kwargs, giving priority to kwargs
-                uri_params.update(kwargs)
-                kwargs = uri_params
+                # Merge with params, giving priority to params
+                uri_params.update(params)
+                params = uri_params
                 # Remove the URI from args
                 args = args[1:]
 
     # Compatibility feature: if SSL is provided as a dictionary,
     # map its content to ssl_* parameters (mariadb-c compatibility).
-    if "ssl" in kwargs and isinstance(kwargs["ssl"], dict):
-        ssl = kwargs.pop("ssl")
+    if "ssl" in params and isinstance(params["ssl"], dict):
+        ssl = params.pop("ssl")
         for key in ["ca", "cert", "capath", "key", "cipher"]:
             if key in ssl:
-                kwargs["ssl_%s" % key] = ssl[key]
-        kwargs["ssl"] = True
+                params["ssl_%s" % key] = ssl[key]
+        params["ssl"] = True
 
     # Check if pool_name is specified
-    pool_name = kwargs.get('pool_name')
+    pool_name = params.get('pool_name')
     if pool_name:
         # 1.1 compatibility feature: the pool is registered globally and is
         # not owned by the caller
@@ -173,19 +180,19 @@ def connect(*args: Any, connectionclass: type[SyncConnectionCommon] | None = Non
             DeprecationWarning, stacklevel=2)
         if pool_name in _CONNECTION_POOLS:
             pool = _CONNECTION_POOLS[pool_name]
-            pool._check_conn_args(kwargs)
+            pool._check_conn_args(params)  # pyright: ignore[reportPrivateUsage]
         else:
-            pool = _get_connection_pool_class()(**kwargs)
+            pool = _get_connection_pool_class()(**params)
         return pool.get_connection()
 
     # Use SyncConnection if no custom class specified
     if connectionclass is None:
         connectionclass = SyncConnection
 
-    return connectionclass(*args, **kwargs)
+    return connectionclass(*args, **params)
 
 
-async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] | None = None, **kwargs: Any) -> AsyncConnectionCommon:
+async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] | None = None, **kwargs: Unpack[ConnectionParams]) -> AsyncConnectionCommon:
     """
     Creates a MariaDB AsyncConnection object and connects asynchronously.
 
@@ -219,25 +226,26 @@ async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] 
 
     Note: Pool connections are not supported with asyncConnect.
     """
+    params: Dict[str, Any] = dict(kwargs)
     # Windows + SSL: Force pure Python async due to SCHANNEL buffering issues
     # This workaround is needed until MariaDB Connector/C properly supports async SSL on Windows
     import platform
     connection_class: type[AsyncConnectionCommon] = AsyncConnection
     if platform.system() == "Windows" and __impl__ != "python":
-        # Check if SSL is enabled in kwargs (check all SSL-related parameters)
-        ssl_param = kwargs.get('ssl', False)
+        # Check if SSL is enabled in params (check all SSL-related parameters)
+        ssl_param = params.get('ssl', False)
         ssl_enabled = (
             ssl_param is True or
             isinstance(ssl_param, dict) or
-            kwargs.get('ssl_ca') or
-            kwargs.get('ssl_cert') or
-            kwargs.get('ssl_key') or
-            kwargs.get('ssl_capath') or
-            kwargs.get('ssl_cipher') or
-            kwargs.get('ssl_crlpath') or
-            kwargs.get('ssl_verify_cert') or
-            kwargs.get('tls_version') or
-            kwargs.get('tls_fp')
+            params.get('ssl_ca') or
+            params.get('ssl_cert') or
+            params.get('ssl_key') or
+            params.get('ssl_capath') or
+            params.get('ssl_cipher') or
+            params.get('ssl_crlpath') or
+            params.get('ssl_verify_cert') or
+            params.get('tls_version') or
+            params.get('tls_fp')
         )
         if ssl_enabled:
             # Import pure Python async implementation
@@ -257,9 +265,9 @@ async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] 
             if is_connection_uri(first_arg):
                 # Parse URI into parameters
                 uri_params = parse_connection_uri(first_arg)
-                # Merge with kwargs, giving priority to kwargs
-                uri_params.update(kwargs)
-                kwargs = uri_params
+                # Merge with params, giving priority to params
+                uri_params.update(params)
+                params = uri_params
                 # Remove the URI from args
                 args = args[1:]
 
@@ -267,17 +275,17 @@ async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] 
     # map its content to ssl_* parameters (mariadb-c compatibility). Only a dict
     # is expanded here; bool/int/str values flow through to the boolean validator
     # in Configuration.from_dict (pure-Python) / the mariadb_c wrapper (C ext).
-    if "ssl" in kwargs and isinstance(kwargs["ssl"], dict):
-        ssl = kwargs.pop("ssl")
+    if "ssl" in params and isinstance(params["ssl"], dict):
+        ssl = params.pop("ssl")
         for key in ["ca", "cert", "capath", "key", "cipher"]:
             if key in ssl:
-                kwargs["ssl_%s" % key] = ssl[key]
-        kwargs["ssl"] = True
+                params["ssl_%s" % key] = ssl[key]
+        params["ssl"] = True
 
     # Pools are not supported here: a named pool would either be created as a
     # side effect of connecting, or the connection arguments would be ignored
     # in favour of the configuration of an already existing pool.
-    if 'pool_name' in kwargs:
+    if 'pool_name' in params:
         raise ProgrammingError(
             "pool_name is not supported by asyncConnect(). Use "
             "mariadb.create_async_pool() and obtain connections from the "
@@ -289,7 +297,7 @@ async def asyncConnect(*args: Any, connectionclass: type[AsyncConnectionCommon] 
         connectionclass = connection_class  # Use the class selected by Windows+SSL workaround
 
     # Connect asynchronously using the classmethod
-    return await connectionclass.connect(*args, **kwargs)
+    return await connectionclass.connect(*args, **params)
 
 
 # Stub for ASAN detection
@@ -393,7 +401,7 @@ def _pool_option_names() -> 'frozenset[str]':
     reachable on the pool code paths. It is opaque to mypy (follow_imports =
     "skip"), hence the cast.
     """
-    from mariadb_pool import POOL_OPTION_NAMES  # pyright: ignore[reportMissingImports]
+    from mariadb_pool import POOL_OPTION_NAMES  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
     return cast('frozenset[str]', POOL_OPTION_NAMES)
 
 
@@ -484,7 +492,7 @@ def create_pool(
     enable_health_check: bool | None = None,
     reset_connection: bool | None = None,
     ping_threshold: float | None = None,
-    **connection_params: Any
+    **connection_params: Unpack[ConnectionParams]
 ) -> '_ConnectionPoolImpl':
     """
     Create a synchronous connection pool with clean separation of pool and connection options.
@@ -548,7 +556,7 @@ def create_pool(
         pool.close()
     """
     try:
-        from mariadb_pool import ConnectionPool, PoolConfig  # pyright: ignore[reportMissingImports]
+        from mariadb_pool import ConnectionPool, PoolConfig  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
     except ImportError:
         raise ImportError(
             "Connection pooling is not available. "
@@ -556,7 +564,7 @@ def create_pool(
         )
 
     # Resolve pool config and connection params from URI + kwargs.
-    pool_config_kwargs, connection_params = _resolve_pool_params(
+    pool_config_kwargs, conn_params = _resolve_pool_params(
         uri,
         {
             'min_size': min_size,
@@ -568,15 +576,15 @@ def create_pool(
             'reset_connection': reset_connection,
             'ping_threshold': ping_threshold,
         },
-        connection_params,
+        dict(connection_params),
     )
-    pool_config = PoolConfig.from_options(**pool_config_kwargs)
+    pool_config = PoolConfig.from_options(**pool_config_kwargs)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
     # Create pool with mariadb.connect as factory
     return cast('_ConnectionPoolImpl', ConnectionPool(
         connection_factory=connect,
         config=pool_config,
-        **connection_params
+        **conn_params
     ))
 
 
@@ -591,7 +599,7 @@ async def create_async_pool(
     enable_health_check: bool | None = None,
     reset_connection: bool | None = None,
     ping_threshold: float | None = None,
-    **connection_params: Any
+    **connection_params: Unpack[ConnectionParams]
 ) -> '_AsyncConnectionPoolImpl':
     """
     Create an asynchronous connection pool with clean separation of pool and connection options.
@@ -661,7 +669,7 @@ async def create_async_pool(
         asyncio.run(main())
     """
     try:
-        from mariadb_pool import AsyncConnectionPool, PoolConfig  # pyright: ignore[reportMissingImports]
+        from mariadb_pool import AsyncConnectionPool, PoolConfig  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
     except ImportError:
         raise ImportError(
             "Async connection pooling is not available. "
@@ -669,7 +677,7 @@ async def create_async_pool(
         )
 
     # Resolve pool config and connection params from URI + kwargs.
-    pool_config_kwargs, connection_params = _resolve_pool_params(
+    pool_config_kwargs, conn_params = _resolve_pool_params(
         uri,
         {
             'min_size': min_size,
@@ -681,19 +689,19 @@ async def create_async_pool(
             'reset_connection': reset_connection,
             'ping_threshold': ping_threshold,
         },
-        connection_params,
+        dict(connection_params),
     )
-    pool_config = PoolConfig.from_options(**pool_config_kwargs)
+    pool_config = PoolConfig.from_options(**pool_config_kwargs)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
 
     # Create pool with mariadb.asyncConnect as factory
-    pool = AsyncConnectionPool(
+    pool = AsyncConnectionPool(  # pyright: ignore[reportUnknownVariableType]
         connection_factory=asyncConnect,
         config=pool_config,
-        **connection_params
+        **conn_params
     )
 
     # Pre-fill the pool with connections
-    await pool.open()
+    await pool.open()  # pyright: ignore[reportUnknownMemberType]
 
     return cast('_AsyncConnectionPoolImpl', pool)
 
@@ -703,7 +711,7 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
     Get ConnectionPool class from mariadb_pool package.
     """
     try:
-        from mariadb_pool import ConnectionPoolWrapper  # pyright: ignore[reportMissingImports]
+        from mariadb_pool import ConnectionPoolWrapper  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
     except ImportError:
         raise AttributeError(
             "ConnectionPool is not available. "
@@ -711,7 +719,7 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
         )
 
     # Create a wrapper class that injects mariadb.connect and manages _CONNECTION_POOLS
-    class ConnectionPool(ConnectionPoolWrapper):
+    class ConnectionPool(ConnectionPoolWrapper):  # pyright: ignore[reportUntypedBaseClass]
         """
         Wrapper around ConnectionPoolWrapper that automatically uses mariadb.connect
 
@@ -784,7 +792,7 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
             # Remove pool_name from kwargs if present (to avoid duplicate argument)
             kwargs.pop('pool_name', None)
 
-            super().__init__(connection_factory=connect, pool_name=pool_name, **kwargs)
+            super().__init__(connection_factory=connect, pool_name=pool_name, **kwargs)  # pyright: ignore[reportUnknownMemberType]
 
             # Only register named pools
             if pool_name is not None:
@@ -792,8 +800,8 @@ def _get_connection_pool_class() -> type['ConnectionPoolWrapper']:
 
         def close(self) -> None:
             """Close and unregister from _CONNECTION_POOLS"""
-            pool_name = self.pool_name
-            super().close()
+            pool_name = self.pool_name  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            super().close()  # pyright: ignore[reportUnknownMemberType]
             if pool_name in _CONNECTION_POOLS:
                 del _CONNECTION_POOLS[pool_name]
 

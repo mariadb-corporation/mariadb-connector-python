@@ -18,11 +18,13 @@ from .exceptions import ProgrammingError, Error
 
 if TYPE_CHECKING:
     from types import TracebackType
+    from typing_extensions import Unpack
+    from .connection_params import ConnectionParams
 
 class SyncConnectionCommon(ABC):
 
     if TYPE_CHECKING:
-        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+        def __init__(self, *args: Any, **kwargs: Unpack[ConnectionParams]) -> None: ...
 
     @abstractmethod
     def _check_closed(self) -> None:

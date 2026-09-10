@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Dict, List
 
 if TYPE_CHECKING:
     from types import TracebackType
+    from typing_extensions import Unpack
+    from .connection_params import ConnectionParams
 
 from .async_cursor_common import AsyncCursorCommon
 from .constants import STATUS, TPC_STATE
@@ -23,11 +25,11 @@ from .exceptions import ProgrammingError, Error
 class AsyncConnectionCommon(ABC):
 
     if TYPE_CHECKING:
-        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+        def __init__(self, *args: Any, **kwargs: Unpack[ConnectionParams]) -> None: ...
 
     @classmethod
     @abstractmethod
-    async def connect(cls, *args: Any, **kwargs: Any) -> 'AsyncConnectionCommon':
+    async def connect(cls, *args: Any, **kwargs: Unpack[ConnectionParams]) -> 'AsyncConnectionCommon':
         """
         Create a connection with the given parameters and connect it.
 
