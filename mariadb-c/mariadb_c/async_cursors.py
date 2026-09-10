@@ -398,7 +398,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon):
             count = 0
             accumulated_results: List[Any] = []
 
-            for i, row in enumerate(data):
+            for row in data:
                 await self.execute(normalized_sql, row)
                 count += self.rowcount
                 

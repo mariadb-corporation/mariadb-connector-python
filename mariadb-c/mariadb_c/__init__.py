@@ -4,7 +4,7 @@ MySQL databases, using an API which is compliant with the Python DB API 2.0
 (PEP-249).
 '''
 
-from typing import Any
+from typing import Any, cast
 
 # Import exceptions from shared package to avoid circular dependencies
 from mariadb_shared.exceptions import (
@@ -66,7 +66,7 @@ def _parse_version_info(version_string: str) -> tuple[tuple[int, int, int, str] 
         suffix = match.group(5) or match.group(6)
         
         # Convert to tuple format - include suffix if present
-        version_tuple: tuple
+        version_tuple: tuple[int, int, int, str] | tuple[int, int, int]
         if suffix:
             version_tuple = (major, minor, patch, suffix)
         else:
@@ -81,8 +81,11 @@ def _parse_version_info(version_string: str) -> tuple[tuple[int, int, int, str] 
         return (0, 0, 0), 0
 
 # Load version from build-time generated release_info.py (ensures version sync)
+_base_version: str
 try:
-    from .release_info import __version__ as _base_version
+    # generated at build time, so unknown to the type checker in the source tree
+    from .release_info import __version__ as _release_version  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+    _base_version = cast(str, _release_version)
 except ImportError:
     try:
         from importlib.metadata import version
@@ -105,7 +108,7 @@ __all__ = ["DataError", "DatabaseError", "Error", "IntegrityError",
            "OperationalError", "ProgrammingError",
            "Warning", "SyncConnection", "AsyncConnection", "__version__", "__version_info__",
            "mariadbapi_version", "client_version", "client_version_info",
-           "__author__", "SyncCursor", "AsyncCursor", "fieldinfo", "_have_asan",
+           "__author__", "SyncCursor", "AsyncCursor",
            "connect", "asyncConnect", "__impl__",
            # Backward compatibility
            "Connection", "Cursor"]

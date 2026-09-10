@@ -42,7 +42,7 @@ RESULT_NAMEDTUPLE = 1
 RESULT_DICTIONARY = 2
 
 TResult = TypeVar('TResult', bound=Result)
-TConnection = TypeVar('TConnection', bound='BaseConnection')
+TConnection = TypeVar('TConnection', bound='BaseConnection[Any]')
 
 # One column's DB-API (PEP 249) description row. The first seven fields are the
 # standard ones (name, type_code, display_size, internal_size, precision, scale,

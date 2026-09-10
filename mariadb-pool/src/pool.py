@@ -12,37 +12,20 @@ import collections
 import contextlib
 from dataclasses import dataclass
 from types import TracebackType
-from typing import (Any, Callable, Dict, Optional, Iterator, AsyncIterator,
+from typing import (Any, AsyncGenerator, Callable, Dict, Generator, Optional,
                     Literal, Tuple, TYPE_CHECKING)
 from contextlib import contextmanager, asynccontextmanager
 
-# Import PoolError from shared exceptions
-try:
-    from mariadb_shared.exceptions import PoolError
-    from mariadb_shared.constants.STATUS import IN_TRANS
-except ImportError:
-    # Fallback for standalone usage
-    class PoolError(Exception):  # type: ignore[no-redef]
-        """Exception raised for pool-related errors"""
-        pass
+# mariadb_shared ships with this package (see pyproject.toml), so these are
+# plain imports: no standalone fallback to keep in sync.
+from mariadb_shared.exceptions import PoolError
+from mariadb_shared.constants.STATUS import IN_TRANS
 
-# Type hints for connection types
 if TYPE_CHECKING:
-    try:
-        from mariadb.sync_connection import SyncConnection
-        from mariadb.async_connection import AsyncConnection
-    except ImportError:
-        SyncConnection = Any
-        AsyncConnection = Any
-
-    try:
-        from mariadb_c import Connection as CConnection
-    except ImportError:
-        CConnection = Any
-
-    # Shared ABC implemented by BOTH pure-Python and C connections; a pool may
-    # hand out either, so this (a real type) is the honest connection type.
+    # Shared ABCs implemented by BOTH pure-Python and C connections; a pool may
+    # hand out either, so these (real types) are the honest connection types.
     from mariadb_shared.sync_connection_common import SyncConnectionCommon
+    from mariadb_shared.async_connection_common import AsyncConnectionCommon
 
 
 # The module's public surface. Spelled out because PoolError is imported rather
@@ -281,7 +264,7 @@ class PooledConnection(BasePooledConnection):
 
     def closeSilently(self) -> None:
         with contextlib.suppress(Exception):
-            self.connection._set_pooled_connection(None)
+            self.connection._set_pooled_connection(None)  # pyright: ignore[reportPrivateUsage]  # hook the interfaces declare for the pool
             self.connection.close()
 
     def __getattr__(self, name: str) -> Any:
@@ -293,7 +276,7 @@ class AsyncPooledConnection(BasePooledConnection):
     """Async pooled connection wrapper"""
 
     if TYPE_CHECKING:
-        connection: 'AsyncConnection'
+        connection: 'AsyncConnectionCommon'
 
     async def is_healthy(self) -> bool:
         """
@@ -311,7 +294,7 @@ class AsyncPooledConnection(BasePooledConnection):
 
     async def closeSilently(self) -> None:
         with contextlib.suppress(Exception):
-            self.connection._set_pooled_connection(None)
+            self.connection._set_pooled_connection(None)  # pyright: ignore[reportPrivateUsage]  # hook the interfaces declare for the pool
             await self.connection.close()
 
     def __getattr__(self, name: str) -> Any:
@@ -614,7 +597,7 @@ class ConnectionPool:
                     self._cond.notify()
 
     @contextmanager
-    def connection(self, timeout: Optional[float] = None) -> Iterator['SyncConnectionCommon']:
+    def connection(self, timeout: Optional[float] = None) -> Generator['SyncConnectionCommon', None, None]:
         """
         Context manager for acquiring and releasing connections
 
@@ -708,7 +691,7 @@ class AsyncConnectionPool:
         self._acquiring: int = 0
         self._all_connections: list[AsyncPooledConnection] = []
         self._closed: bool = False
-        self._maintenance_task: Optional[asyncio.Task] = None
+        self._maintenance_task: Optional[asyncio.Task[None]] = None
         self._opened: bool = False
 
     async def open(self) -> None:
@@ -838,7 +821,7 @@ class AsyncConnectionPool:
                     self._free.rotate()
                 n += 1
 
-    async def acquire(self, timeout: Optional[float] = None) -> 'AsyncConnection':
+    async def acquire(self, timeout: Optional[float] = None) -> 'AsyncConnectionCommon':
         pooled_conn = await self._acquire(timeout)
         return pooled_conn.connection
 
@@ -971,7 +954,7 @@ class AsyncConnectionPool:
                     self._cond.notify()
 
     @asynccontextmanager
-    async def connection(self, timeout: Optional[float] = None) -> AsyncIterator['AsyncConnection']:
+    async def connection(self, timeout: Optional[float] = None) -> AsyncGenerator['AsyncConnectionCommon', None]:
         """
         Async context manager for acquiring and releasing connections
 

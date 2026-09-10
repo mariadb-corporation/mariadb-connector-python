@@ -390,11 +390,11 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
             # Use 0 sleep since C extension now handles SSL efficiently
             await asyncio.sleep(0)
 
-    def cursor(self, cursorclass: type | None = None, **kwargs: Any) -> Any:
+    def cursor(self, cursor_class: type | None = None, **kwargs: Any) -> Any:
         """
         Returns a new async cursor object for the current connection.
 
-        If no cursorclass was specified, a cursor with default AsyncCursor class will be created.
+        If no cursor_class was specified, a cursor with default AsyncCursor class will be created.
 
         Optional keyword parameters:
 
@@ -405,10 +405,10 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         - **binary** (default: ``False``) - Always execute statement in MariaDB client/server binary protocol.
         """
         self._check_closed()
-        if cursorclass is None:
+        if cursor_class is None:
             from mariadb_c.async_cursors import AsyncCursor
-            cursorclass = AsyncCursor
-        cursor = cursorclass(self, **kwargs)
+            cursor_class = AsyncCursor
+        cursor = cursor_class(self, **kwargs)
         return cursor
     
     async def close(self) -> None:
@@ -478,7 +478,7 @@ class AsyncConnection(CConnection, AsyncConnectionCommon):
         return cast(str, self._mariadb_get_info(INFO.SCHEMA))
 
     @database.setter
-    def database(self, schema: str) -> None:
+    def database(self, value: str | None) -> None:
         """Set default database.
 
         Property setters cannot be async, so this raises an error.

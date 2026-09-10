@@ -52,8 +52,10 @@ class SSLFingerprintValidator:
         # Copy cipher settings if available
         # Ignore cipher-copy failures; the context is usable with defaults.
         try:
-            if hasattr(base_context, '_ciphers'):
-                context.set_ciphers(base_context._ciphers)
+            # CPython-internal attribute, absent from the SSLContext stubs
+            ciphers: str | None = getattr(base_context, '_ciphers', None)
+            if ciphers:
+                context.set_ciphers(ciphers)
         except:  # nosec B110
             pass
         

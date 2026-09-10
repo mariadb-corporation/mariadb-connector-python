@@ -65,7 +65,7 @@ class StmtCacheEntry:
         else:
             self.capsule = capsule
 
-    def evict(self, connection: "Connection") -> None:
+    def evict(self, connection: CConnection) -> None:
         """Mark as evicted.  Close capsule immediately if not checked out."""
         self.in_cache = False
         if self.capsule is not None:
@@ -83,10 +83,12 @@ class StmtCache:
 
     __slots__ = ("_cache", "_maxsize", "_connection")
 
-    def __init__(self, connection: "Connection", maxsize: int) -> None:
+    def __init__(self, connection: CConnection, maxsize: int) -> None:
+        # The C-level connection: the cache only needs its capsule helpers, and
+        # the sync and the async connection classes both derive from it.
         self._cache: OrderedDict[str, StmtCacheEntry] = OrderedDict()
         self._maxsize: int = maxsize
-        self._connection: "Connection" = connection
+        self._connection: CConnection = connection
 
     @property
     def enabled(self) -> bool:
@@ -181,7 +183,7 @@ class Connection(CConnection, SyncConnectionCommon):
         self.tpc_state = TPC_STATE.NONE
         self._xid = None
         self._pooled_connection: Any | None = None
-        self._active_streaming_result: "Cursor" | None = None
+        self._active_streaming_result: "Cursor | None" = None
 
         autocommit = validate_bool(kwargs.pop("autocommit", False), "autocommit")
         kwargs.pop("reconnect", None)
@@ -241,11 +243,11 @@ class Connection(CConnection, SyncConnectionCommon):
 
         self.autocommit = autocommit
 
-    def cursor(self, cursorclass: Type["Cursor"] | None = None, **kwargs: Any) -> "Cursor":
+    def cursor(self, cursor_class: Type["Cursor"] | None = None, **kwargs: Any) -> "Cursor":
         """
         Returns a new cursor object for the current connection.
 
-        If no cursorclass was specified, a cursor with default mariadb_c.Cursor class will be created.
+        If no cursor_class was specified, a cursor with default mariadb_c.Cursor class will be created.
 
         Optional keyword parameters:
 
@@ -262,9 +264,9 @@ class Connection(CConnection, SyncConnectionCommon):
         If cursor_type is set to CURSOR.READ_ONLY, a cursor is opened for the statement invoked with cursors execute() method.
         """
         self._check_closed()
-        if cursorclass is None:
-            cursorclass = _DefaultCursor
-        cursor = cursorclass(self, **kwargs)
+        if cursor_class is None:
+            cursor_class = _DefaultCursor
+        cursor = cursor_class(self, **kwargs)
         return cursor
 
     def close(self) -> None:

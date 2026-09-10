@@ -53,7 +53,9 @@ class ParsecPasswordPlugin(AuthenticationPlugin):
     def _time_budget(self) -> float:
         """Connection time budget in seconds, falling back to the default"""
         connect_timeout = self.conf.connect_timeout
-        if connect_timeout is not None and connect_timeout > 0:
+        # Deliberate guard: Configuration types it as float, but a stand-in
+        # configuration may leave it unset (see test_parsec_iteration_cap).
+        if connect_timeout is not None and connect_timeout > 0:  # pyright: ignore[reportUnnecessaryComparison]
             return float(connect_timeout)
         return SERVER_CONNECT_TIMEOUT_DEFAULT
 

@@ -7,7 +7,7 @@ Matches the C extension API for connection pooling.
 """
 
 from types import TracebackType
-from typing import Callable, Any, Dict, Literal, Optional, Type, TYPE_CHECKING
+from typing import Callable, Any, Dict, Literal, Optional, Type
 from .pool import (ConnectionPool as _PoolImpl, PoolConfig,
                    POOL_OPTION_NAMES)
 
@@ -18,17 +18,9 @@ except ImportError:
     # Fallback - import from pool module
     from .pool import PoolError
 
-# Type hints for connection types
-if TYPE_CHECKING:
-    try:
-        from mariadb.sync_connection import SyncConnection
-    except ImportError:
-        SyncConnection = Any
-    
-    try:
-        from mariadb_c import Connection as CConnection
-    except ImportError:
-        CConnection = Any
+# This 1.1-compatibility facade drives ConnectionPool through its protected
+# members by design (same package, same maintainers): not private usage.
+# pyright: reportPrivateUsage=false
 
     # Shared ABC implemented by both pure-Python and C connections.
     from mariadb_shared.sync_connection_common import SyncConnectionCommon

@@ -9,9 +9,14 @@ Connector/Python, including:
 - Connection lifecycle management
 """
 
+from typing import cast
+
 # Load version from build-time generated release_info.py (ensures version sync)
+_base_version: str
 try:
-    from .release_info import __version__ as _base_version
+    # generated at build time, so unknown to the type checker in the source tree
+    from .release_info import __version__ as _release_version  # pyright: ignore[reportMissingImports, reportUnknownVariableType]
+    _base_version = cast(str, _release_version)
 except ImportError:
     try:
         from importlib.metadata import version
