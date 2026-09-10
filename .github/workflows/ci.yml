@@ -199,9 +199,15 @@ jobs:
           # Skip problematic tests
           # VersioningTest: MariaDB 12.x raises errno 1020 directly instead of 0 rows affected,
           # so SQLAlchemy never sees StaleDataError. Server behavior change, not a connector bug.
-          DESELECT_PATTERN="not VersioningTest"
+          # ReturningGuardsTest.test_update_single: MariaDB 13.0 added UPDATE ... RETURNING, which
+          # the pinned SQLAlchemy rel_2_0 dialect does not know (update_returning stays False), so
+          # the test expects the server to reject the statement and it no longer does. Support is
+          # submitted upstream for 2.1 (https://github.com/sqlalchemy/sqlalchemy/pull/13576); note
+          # Drop this entry once the pinned SQLAlchemy carries the fix.
+          SKIP_TESTS="VersioningTest or (ReturningGuardsTest and test_update_single)"
+          DESELECT_PATTERN="not ($SKIP_TESTS)"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names) and not VersioningTest"
+            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or $SKIP_TESTS)"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only --ignore=test/aaa_profiling -k "$DESELECT_PATTERN"
         env:
@@ -231,9 +237,13 @@ jobs:
           # Exclude JSON decimal tests as they are "unexpected successes" (passing but marked as expected to fail)
           # Exclude ServerSideCursorsTest as it requires SQLAlchemy test suite modifications we can't ship
           # Exclude CTETest as it has teardown issues with foreign key constraints
-          DESELECT_PATTERN="Async and not ((JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+          # Exclude ReturningGuardsTest.test_update_single for the reason given in the sync step.
+          # Note that "-k Async" matches case-insensitively, so every test id of the
+          # mariadbconnector_async dialect is selected, not only the Async* classes.
+          SKIP_TESTS="(JSONTest and decimal1) or ServerSideCursorsTest or CTETest or (ReturningGuardsTest and test_update_single)"
+          DESELECT_PATTERN="Async and not ($SKIP_TESTS)"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or $SKIP_TESTS)"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN" test/dialect/test_suite.py
         env:
@@ -395,9 +405,11 @@ jobs:
           # the Python ecosystem (pymysql/mysqlclient/mysql-connector-python)
           # supports this pattern.  These tests profile SQLAlchemy itself, not
           # the connector, so they don't belong in connector CI.
-          DESELECT_PATTERN="not VersioningTest"
+          # ReturningGuardsTest.test_update_single: see the pure-Python sync step.
+          SKIP_TESTS="VersioningTest or (ReturningGuardsTest and test_update_single)"
+          DESELECT_PATTERN="not ($SKIP_TESTS)"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names) and not VersioningTest"
+            DESELECT_PATTERN="not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or $SKIP_TESTS)"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only --ignore=test/aaa_profiling -k "$DESELECT_PATTERN"
         env:
@@ -427,9 +439,13 @@ jobs:
           # Exclude JSON decimal tests as they are "unexpected successes" (passing but marked as expected to fail)
           # Exclude ServerSideCursorsTest as it requires SQLAlchemy test suite modifications we can't ship
           # Exclude CTETest as it has teardown issues with foreign key constraints
-          DESELECT_PATTERN="Async and not ((JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+          # Exclude ReturningGuardsTest.test_update_single for the reason given in the sync step.
+          # Note that "-k Async" matches case-insensitively, so every test id of the
+          # mariadbconnector_async dialect is selected, not only the Async* classes.
+          SKIP_TESTS="(JSONTest and decimal1) or ServerSideCursorsTest or CTETest or (ReturningGuardsTest and test_update_single)"
+          DESELECT_PATTERN="Async and not ($SKIP_TESTS)"
           if [[ "${{ matrix.os }}" == "windows-latest" || "${{ matrix.os }}" == "macos-latest" ]]; then
-            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or (JSONTest and decimal1) or ServerSideCursorsTest or CTETest)"
+            DESELECT_PATTERN="Async and not (test_reflect_case_insensitive or test_reflect_via_fk or test_case_sensitive_column_constraint_reflection or test_get_names or $SKIP_TESTS)"
           fi
           python -m pytest -xvs --dburi="$DBURI" --backend-only -k "$DESELECT_PATTERN" test/dialect/test_suite.py
         env:
