@@ -118,6 +118,40 @@ _unpack_BIBBBI = struct.Struct('<BIBBBI').unpack_from  # negative, days, hour, m
 _unpack_DATE_TEXT = struct.Struct('4s1s2s1s2s').unpack_from  # YYYY-MM-DD text protocol
 _unpack_DATETIME_TEXT = struct.Struct('4s1s2s1s2s1s2s1s2s1s2s').unpack_from  # YYYY-MM-DD HH:MM:SS text protocol
 
+
+_date_fromisoformat = datetime.date.fromisoformat
+_datetime_fromisoformat = datetime.datetime.fromisoformat
+
+_date = datetime.date
+_datetime = datetime.datetime
+_timedelta = datetime.timedelta
+_Decimal = decimal.Decimal
+
+
+def _text_date_slow(data_bytes: bytes, vstart: int) -> datetime.date | None:
+    """Field-by-field parser for a 10-byte 'YYYY-MM-DD'; None when invalid."""
+    try:
+        year_b, _, month_b, _, day_b = _unpack_DATE_TEXT(data_bytes, vstart)
+        return datetime.date(int(year_b), int(month_b), int(day_b))
+    except (ValueError, struct.error):
+        return None
+
+
+def _text_datetime_slow(data_bytes: bytes, vstart: int, pos: int, length: int) -> datetime.datetime | None:
+    """Field-by-field parser for 'YYYY-MM-DD HH:MM:SS[.f{1,6}]'; None when invalid."""
+    try:
+        year_b, _, month_b, _, day_b, _, hour_b, _, min_b, _, sec_b = _unpack_DATETIME_TEXT(data_bytes, vstart)
+        if length > 19 and data_bytes[vstart + 19] == 46:  # '.'
+            microseconds = int(data_bytes[vstart + 20:pos].ljust(6, b'0'))
+        else:
+            microseconds = 0
+        return datetime.datetime(
+            int(year_b), int(month_b), int(day_b),
+            int(hour_b), int(min_b), int(sec_b), microseconds
+        )
+    except (ValueError, struct.error):
+        return None
+
 # No longer need PacketBuffer import
 
 from .context import Context
@@ -820,7 +854,7 @@ class BaseClient(ABC):
                 if col_special_formats[i]:
                     ext_fmt = col_ext_type_formats[i]
                     if ext_fmt == b'json':
-                        row_values[i] = val.decode('utf-8', errors='ignore')
+                        row_values[i] = val.decode('utf-8', 'ignore')
                     else:
                         ext_name = col_ext_type_names[i]
                         if ext_name == b'inet6' or ext_name == b'inet4':
@@ -834,56 +868,46 @@ class BaseClient(ABC):
                 elif col_charsets[i] == 63:  # Binary charset
                     row_values[i] = val
                 else:
-                    row_values[i] = val.decode('utf-8', errors='ignore')
+                    row_values[i] = val.decode('utf-8', 'ignore')
             elif col_type in _TEXT_FLOAT_TYPES:
-                row_values[i] = float(data_bytes[vstart:pos].decode('ascii'))
+                row_values[i] = float(data_bytes[vstart:pos])  # float() accepts ASCII bytes
             elif col_type in _TEXT_DECIMAL_TYPES:
-                row_values[i] = decimal.Decimal(data_bytes[vstart:pos].decode('ascii'))
+                row_values[i] = _Decimal(data_bytes[vstart:pos].decode('ascii'))
             elif col_type in _TEXT_DATE_TYPES:
                 if length == 10:
                     try:
-                        year_b, _, month_b, _, day_b = _unpack_DATE_TEXT(data_bytes, vstart)
-                        row_values[i] = datetime.date(int(year_b), int(month_b), int(day_b))
-                    except (ValueError, struct.error):
-                        row_values[i] = None
+                        row_values[i] = _date_fromisoformat(data_bytes[vstart:pos].decode('ascii'))
+                    except ValueError:
+                        row_values[i] = _text_date_slow(data_bytes, vstart)
                 else:
                     row_values[i] = None
             elif col_type == FIELD_TYPE.TIME:
-                time_str = data_bytes[vstart:pos].decode('ascii')
-                negative = time_str[0] == '-'
-                if negative:
-                    time_str = time_str[1:]
-                parts = time_str.split(':')
+                # '[-]HHH:MM:SS[.ffffff]'; parsed on the bytes (int() accepts
+                # ASCII digits) and built with positional timedelta arguments,
+                # which are several times cheaper than keyword ones.
+                val = data_bytes[vstart:pos]
+                negative = val[0] == 45  # '-'
+                parts = (val[1:] if negative else val).split(b':')
                 if len(parts) == 3:
-                    hours = int(parts[0])
-                    minutes = int(parts[1])
-                    sec_parts = parts[2].split('.')
-                    seconds = int(sec_parts[0])
-                    microseconds = int(sec_parts[1].ljust(6, '0')) if len(sec_parts) > 1 else 0
-                    td = datetime.timedelta(hours=hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
+                    seconds, _, fraction = parts[2].partition(b'.')
+                    td = _timedelta(
+                        0, int(parts[0]) * 3600 + int(parts[1]) * 60 + int(seconds),
+                        int(fraction.ljust(6, b'0')) if fraction else 0)
                     row_values[i] = -td if negative else td
                 else:
                     row_values[i] = None
             elif col_type in _TEXT_DATETIME_TYPES:
                 if length >= 19:
                     try:
-                        year_b, _, month_b, _, day_b, _, hour_b, _, min_b, _, sec_b = _unpack_DATETIME_TEXT(data_bytes, vstart)
-                        if length > 19 and data_bytes[vstart+19] == 46:  # '.'
-                            microseconds = int(data_bytes[vstart+20:pos].ljust(6, b'0'))
-                        else:
-                            microseconds = 0
-                        row_values[i] = datetime.datetime(
-                            int(year_b), int(month_b), int(day_b),
-                            int(hour_b), int(min_b), int(sec_b), microseconds
-                        )
-                    except (ValueError, struct.error):
-                        row_values[i] = None
+                        row_values[i] = _datetime_fromisoformat(data_bytes[vstart:pos].decode('ascii'))
+                    except ValueError:
+                        row_values[i] = _text_datetime_slow(data_bytes, vstart, pos, length)
                 else:
                     row_values[i] = None
             elif col_type == FIELD_TYPE.NULL:
                 row_values[i] = None
             elif col_type == FIELD_TYPE.JSON:
-                row_values[i] = data_bytes[vstart:pos].decode('utf-8', errors='ignore')
+                row_values[i] = data_bytes[vstart:pos].decode('utf-8', 'ignore')
 
         return tuple(row_values)
 
@@ -987,17 +1011,16 @@ class BaseClient(ABC):
                 vstart = pos + 1
                 if length > 0:
                     pos = vstart + length
-                    row_values[i] = decimal.Decimal(data[vstart:pos].tobytes().decode('ascii'))
+                    row_values[i] = _Decimal(str(data[vstart:pos], 'ascii'))
                 else:
                     pos = vstart
-                    row_values[i] = decimal.Decimal('0')
+                    row_values[i] = _Decimal('0')
             elif field_type in _BIN_DATE_TYPES:
                 length_byte = data[pos]
                 pos += 1
                 if length_byte >= 4:
-                    year, month, day = _unpack_HBB(data, pos)
                     try:
-                        row_values[i] = datetime.date(year, month, day)
+                        row_values[i] = _date(*_unpack_HBB(data, pos))
                     except ValueError:
                         row_values[i] = None
                     pos += 4
@@ -1010,15 +1033,14 @@ class BaseClient(ABC):
                     # Time with microseconds
                     negative, days, hours, minutes, seconds, microseconds = _unpack_BIBBBI(data, pos)
                     pos += 12
-                    total_hours = days * 24 + hours
-                    td = datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds, microseconds=microseconds)
+                    td = _timedelta(days, hours * 3600 + minutes * 60 + seconds, microseconds)
                     row_values[i] = -td if negative else td
                 elif length_byte == 8:
                     # Time without microseconds
                     negative, days, hours, minutes, seconds = _unpack_BIBBB(data, pos)
                     pos += 8
-                    total_hours = days * 24 + hours
-                    row_values[i] = -datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds) if negative else datetime.timedelta(hours=total_hours, minutes=minutes, seconds=seconds)
+                    td = _timedelta(days, hours * 3600 + minutes * 60 + seconds)
+                    row_values[i] = -td if negative else td
                 else:
                     row_values[i] = None
             elif field_type in _BIN_DATETIME_TYPES:
@@ -1026,26 +1048,23 @@ class BaseClient(ABC):
                 pos += 1
                 if length_byte == 11:
                     # Datetime with microseconds
-                    year, month, day, hours, minutes, seconds, microseconds = _unpack_HBBBBBI(data, pos)
                     pos += 11
                     try:
-                        row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, microseconds)
+                        row_values[i] = _datetime(*_unpack_HBBBBBI(data, pos - 11))
                     except ValueError:
                         row_values[i] = None
                 elif length_byte == 7:
                     # Datetime without microseconds
-                    year, month, day, hours, minutes, seconds = _unpack_HBBBBB(data, pos)
                     pos += 7
                     try:
-                        row_values[i] = datetime.datetime(year, month, day, hours, minutes, seconds, 0)
+                        row_values[i] = _datetime(*_unpack_HBBBBB(data, pos - 7))
                     except ValueError:
                         row_values[i] = None
                 elif length_byte == 4:
                     # Date only
-                    year, month, day = _unpack_HBB(data, pos)
                     pos += 4
                     try:
-                        row_values[i] = datetime.datetime(year, month, day, 0, 0, 0, 0)
+                        row_values[i] = _datetime(*_unpack_HBB(data, pos - 4))
                     except ValueError:
                         row_values[i] = None
                 else:
