@@ -120,19 +120,16 @@ class CharsetMismatchError(OperationalError):
 
 
 def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None:
-    """Process session tracking data (separate function for better branch prediction)"""
-    while parser.has_remaining():
-        total_length = parser.read_length_encoded_int_not_null()
-        if total_length == 0:
-            break
+    total_length = parser.read_length_encoded_int_not_null()
+    block_end = parser.pos + total_length
 
-        start_pos = parser.pos
+    while parser.pos < block_end:
         tracking_type = parser.read_byte()
         data_length = parser.read_length_encoded_int_not_null()
+        entry_end = parser.pos + data_length
 
         if tracking_type == constants.SESSION_TRACK.SYSTEM_VARIABLES:
-            end_pos = start_pos + total_length
-            while parser.pos < end_pos:
+            while parser.pos < entry_end:
                 var_name_len = parser.read_length_encoded_int_not_null()
                 var_name = parser.read_bytes(var_name_len).decode('utf-8')
                 var_value_len = parser.read_length_encoded_int()
@@ -153,14 +150,13 @@ def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None
                 else:
                     if var_value_len:
                         parser.skip(var_value_len)
-                    
+
         elif tracking_type == constants.SESSION_TRACK.SCHEMA:
             schema_len = parser.read_length_encoded_int_not_null()
             context.database = parser.read_bytes(schema_len).decode('utf-8')
-    
+
         else:
             parser.skip(data_length)
-        
-        expected_pos = start_pos + total_length
-        if parser.pos < expected_pos:
-            parser.skip(expected_pos - parser.pos)
+
+        if parser.pos < entry_end:
+            parser.skip(entry_end - parser.pos)
