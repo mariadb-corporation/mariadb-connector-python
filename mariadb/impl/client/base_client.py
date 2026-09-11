@@ -103,6 +103,7 @@ if TYPE_CHECKING:
 # Cached unpack_from methods for row parsing performance (avoids attribute lookup overhead)
 _unpack_H = struct.Struct('<H').unpack_from  # unsigned short (2 bytes)
 _unpack_I = struct.Struct('<I').unpack_from  # unsigned int (4 bytes)
+_pack_I_into = struct.Struct('<I').pack_into
 _unpack_Q = struct.Struct('<Q').unpack_from  # unsigned long long (8 bytes)
 _unpack_b = struct.Struct('<b').unpack_from  # signed byte
 _unpack_h = struct.Struct('<h').unpack_from  # signed short
@@ -128,7 +129,7 @@ _timedelta = datetime.timedelta
 _Decimal = decimal.Decimal
 
 
-def _text_date_slow(data_bytes: bytes, vstart: int) -> datetime.date | None:
+def _text_date_slow(data_bytes: bytes | bytearray, vstart: int) -> datetime.date | None:
     """Field-by-field parser for a 10-byte 'YYYY-MM-DD'; None when invalid."""
     try:
         year_b, _, month_b, _, day_b = _unpack_DATE_TEXT(data_bytes, vstart)
@@ -137,7 +138,7 @@ def _text_date_slow(data_bytes: bytes, vstart: int) -> datetime.date | None:
         return None
 
 
-def _text_datetime_slow(data_bytes: bytes, vstart: int, pos: int, length: int) -> datetime.datetime | None:
+def _text_datetime_slow(data_bytes: bytes | bytearray, vstart: int, pos: int, length: int) -> datetime.datetime | None:
     """Field-by-field parser for 'YYYY-MM-DD HH:MM:SS[.f{1,6}]'; None when invalid."""
     try:
         year_b, _, month_b, _, day_b, _, hour_b, _, min_b, _, sec_b = _unpack_DATETIME_TEXT(data_bytes, vstart)
@@ -257,6 +258,12 @@ class BaseClient(ABC):
     SESSION_TRACK_TRANSACTION_CHARACTERISTICS = 4
     SESSION_TRACK_TRANSACTION_STATE = 5
 
+    # Receive buffer, owned and initialised by the concrete clients; declared here
+    # because the bulk row decoders and _decode_buffered_rows() work on it directly.
+    _recv_buf: bytearray
+    _recv_pos: int
+    _recv_len: int
+
     def __init__(self, configuration: Configuration) -> None:
         """
         Initialize base client
@@ -265,6 +272,8 @@ class BaseClient(ABC):
             configuration: Connection configuration
             host_address: Host address to connect to
         """
+        # Scratch buffer used to frame one row payload for the bulk decoders
+        self._row_frame: bytearray = bytearray(4)
         self.configuration: Configuration = configuration
         self.host_address: HostAddress = None  # type: ignore[assignment]
         self.sequence = [0]
@@ -809,15 +818,48 @@ class BaseClient(ABC):
     # Row Data Parsing Methods
     # =========================================================================
 
-    def _parse_text_row_data(self, data: memoryview, columns: 'ColumnsDefinition', config: 'Configuration', num_cols: int) -> tuple[Any, ...]:
-        """Parse text protocol row data using parallel arrays from ColumnsDefinition.
+    def _decode_buffered_rows(self, rows: list[tuple[Any, ...]], columns: 'ColumnsDefinition',
+                              column_count: int, config: 'Configuration', is_binary: bool) -> None:
+        """Streaming results' refill: decode every complete row packet already in
+        the receive buffer into *rows*, in one pass, without reading from the network."""
+        bulk = self._parse_binary_rows if is_binary else self._parse_text_rows
+        self._recv_pos, _ = bulk(self._recv_buf, self._recv_pos, self._recv_len, columns, config,
+                                 column_count, rows, 16777215 if self.context.isEofDeprecated() else 8)
 
-        Uses columns.types[], columns.charsets[], columns.special_formats[] etc.
-        directly from arrays — no per-column object attribute lookups.
+    def _decode_row_packet(self, data: memoryview, columns: 'ColumnsDefinition', config: 'Configuration',
+                           num_cols: int, is_binary: bool) -> tuple[Any, ...]:
+        """Decode one row payload that read_payload() already took out of the
+        buffer: a row completed from the network after the bulk decoder stopped
+        at its partial header, or a >16 MB row reassembled from several packets.
+        Frames it in the scratch buffer and runs the same bulk decoder, so there
+        is a single decoder per protocol."""
+        length = len(data)
+        buf = self._row_frame
+        # header: 3-byte length (0xFFFFFF marks a pre-assembled >16 MB payload,
+        # whose real size goes in single_length), sequence byte left at 0
+        _pack_I_into(buf, 0, length if length < 0xFFFFFF else 0xFFFFFF)
+        buf[4:] = data
+        rows: list[tuple[Any, ...]] = []
+        (self._parse_binary_rows if is_binary else self._parse_text_rows)(
+            buf, 0, 4 + length, columns, config, num_cols, rows, 0, length)
+        return rows[0]
+
+    def _parse_text_rows(self, buf: bytearray, pos: int, end: int, columns: 'ColumnsDefinition',
+                         config: 'Configuration', num_cols: int, rows: list[tuple[Any, ...]],
+                         eof_length_threshold: int, single_length: int = 0) -> tuple[int, bool]:
+        """Parse every complete text-protocol row packet in ``buf[pos:end]`` in one pass.
+
+        Framing and row decoding share one loop: no per-packet tuple, no
+        per-row view or copy, no per-row call, and the column arrays are
+        loaded once. Rows are appended to *rows*. Returns ``(new_pos, more)``:
+        ``more`` is True when the buffer ended inside a packet (read more and
+        call again), False when the packet at ``new_pos`` is not a plain row
+        (result-set terminator, error, empty or >16 MB packet) and must go
+        through read_payload(). _decode_row_packet() wraps this for one
+        framed payload, so this is the only text row decoder.
         """
-        row_values: list[Any] = [None] * num_cols
-        pos = 0
-        data_bytes = data.tobytes()  # Convert once for faster access
+        rows_append = rows.append
+        data_bytes = buf
 
         # Local references to parallel arrays
         col_types = columns.types
@@ -826,109 +868,130 @@ class BaseClient(ABC):
         col_ext_type_formats = columns.ext_type_formats
         col_ext_type_names = columns.ext_type_names
 
-        for i in range(num_cols):
-            # Read length-encoded integer for field length
-            length_byte = data_bytes[pos]
-            if (length_byte < 0xFB):
-                length = length_byte
-                vstart = pos + 1
-            elif (length_byte == 0xFB):
-                pos += 1
-                continue
-            elif length_byte == 0xFC:
-                length = _unpack_H(data_bytes, pos + 1)[0]
-                vstart = pos + 3
-            elif length_byte == 0xFD:
-                length = _unpack_I(data_bytes, pos + 1)[0] & 0xFFFFFF
-                vstart = pos + 4
+        header = -1  # header of the last row packet decoded (its sequence id is kept)
+        while end - pos >= 4:
+            hdr = _unpack_I(buf, pos)[0]
+            length = hdr & 0xFFFFFF
+            start = pos + 4
+            if length == 0xFFFFFF or length == 0:
+                # A >16 MB payload spans several wire packets and an empty
+                # packet is never a row: leave both to read_payload() -- unless
+                # the caller framed one pre-assembled payload (single_length).
+                if not single_length:
+                    if header >= 0:
+                        self.sequence[0] = header >> 24
+                    return pos, False
+                stop = start + single_length
             else:
-                length = _unpack_Q(data_bytes, pos + 1)[0]
-                vstart = pos + 9
-            pos = vstart + length
+                stop = start + length
+            if stop > end:
+                break
+            first = buf[start]
+            # ERR (0xFF) or the EOF/OK terminator (0xFE below the threshold)
+            if first >= 0xFE and (first == 0xFF or length < eof_length_threshold):
+                if header >= 0:
+                    self.sequence[0] = header >> 24
+                return pos, False
+            header = hdr
 
-            col_type = col_types[i]
-            if col_type in _TEXT_INT_TYPES:
-                row_values[i] = int(data_bytes[vstart:pos])
-            elif col_type in _TEXT_STRING_TYPES:
-                val = data_bytes[vstart:pos]
-                if col_special_formats[i]:
-                    ext_fmt = col_ext_type_formats[i]
-                    if ext_fmt == b'json':
-                        row_values[i] = val.decode('utf-8', 'ignore')
+            row_values: list[Any] = [None] * num_cols
+            pos = start
+            for i in range(num_cols):
+                # Read length-encoded integer for field length
+                length_byte = data_bytes[pos]
+                if (length_byte < 0xFB):
+                    length = length_byte
+                    vstart = pos + 1
+                elif (length_byte == 0xFB):
+                    pos += 1
+                    continue
+                elif length_byte == 0xFC:
+                    length = _unpack_H(data_bytes, pos + 1)[0]
+                    vstart = pos + 3
+                elif length_byte == 0xFD:
+                    length = _unpack_I(data_bytes, pos + 1)[0] & 0xFFFFFF
+                    vstart = pos + 4
+                else:
+                    length = _unpack_Q(data_bytes, pos + 1)[0]
+                    vstart = pos + 9
+                pos = vstart + length
+
+                col_type = col_types[i]
+                if col_type in _TEXT_INT_TYPES:
+                    row_values[i] = int(data_bytes[vstart:pos])
+                elif col_type in _TEXT_STRING_TYPES:
+                    val = data_bytes[vstart:pos]
+                    if col_special_formats[i]:
+                        ext_fmt = col_ext_type_formats[i]
+                        if ext_fmt == b'json':
+                            row_values[i] = val.decode('utf-8', 'ignore')
+                        else:
+                            ext_name = col_ext_type_names[i]
+                            if ext_name == b'inet6' or ext_name == b'inet4':
+                                row_values[i] = val.decode('ascii')
+                                if config.native_object:
+                                    row_values[i] = ipaddress.ip_address(row_values[i])
+                            elif ext_name == b'uuid':
+                                row_values[i] = val.decode('ascii')
+                                if config.native_object:
+                                    row_values[i] = uuid.UUID(row_values[i])
+                    elif col_charsets[i] == 63:  # Binary charset
+                        row_values[i] = bytes(val)
                     else:
-                        ext_name = col_ext_type_names[i]
-                        if ext_name == b'inet6' or ext_name == b'inet4':
-                            row_values[i] = val.decode('ascii')
-                            if config.native_object:
-                                row_values[i] = ipaddress.ip_address(row_values[i])
-                        elif ext_name == b'uuid':
-                            row_values[i] = val.decode('ascii')
-                            if config.native_object:
-                                row_values[i] = uuid.UUID(row_values[i])
-                elif col_charsets[i] == 63:  # Binary charset
-                    row_values[i] = val
-                else:
-                    row_values[i] = val.decode('utf-8', 'ignore')
-            elif col_type in _TEXT_DATETIME_TYPES:
-                if length >= 19:
-                    try:
-                        row_values[i] = _datetime_fromisoformat(data_bytes[vstart:pos].decode('ascii'))
-                    except ValueError:
-                        row_values[i] = _text_datetime_slow(data_bytes, vstart, pos, length)
-                else:
+                        row_values[i] = val.decode('utf-8', 'ignore')
+                elif col_type in _TEXT_DATETIME_TYPES:
+                    if length >= 19:
+                        try:
+                            row_values[i] = _datetime_fromisoformat(data_bytes[vstart:pos].decode('ascii'))
+                        except ValueError:
+                            row_values[i] = _text_datetime_slow(data_bytes, vstart, pos, length)
+                    else:
+                        row_values[i] = None
+                elif col_type in _TEXT_DECIMAL_TYPES:
+                    row_values[i] = _Decimal(data_bytes[vstart:pos].decode('ascii'))
+                elif col_type in _TEXT_DATE_TYPES:
+                    if length == 10:
+                        try:
+                            row_values[i] = _date_fromisoformat(data_bytes[vstart:pos].decode('ascii'))
+                        except ValueError:
+                            row_values[i] = _text_date_slow(data_bytes, vstart)
+                    else:
+                        row_values[i] = None
+                elif col_type in _TEXT_FLOAT_TYPES:
+                    row_values[i] = float(data_bytes[vstart:pos])  # float() accepts ASCII bytes
+                elif col_type == FIELD_TYPE.TIME:
+                    # '[-]HHH:MM:SS[.ffffff]'; parsed on the bytes (int() accepts
+                    # ASCII digits) and built with positional timedelta arguments,
+                    # which are several times cheaper than keyword ones.
+                    val = data_bytes[vstart:pos]
+                    negative = val[0] == 45  # '-'
+                    parts = (val[1:] if negative else val).split(b':')
+                    if len(parts) == 3:
+                        seconds, _, fraction = parts[2].partition(b'.')
+                        td = _timedelta(
+                            0, int(parts[0]) * 3600 + int(parts[1]) * 60 + int(seconds),
+                            int(fraction.ljust(6, b'0')) if fraction else 0)
+                        row_values[i] = -td if negative else td
+                    else:
+                        row_values[i] = None
+                elif col_type == FIELD_TYPE.NULL:
                     row_values[i] = None
-            elif col_type in _TEXT_DECIMAL_TYPES:
-                row_values[i] = _Decimal(data_bytes[vstart:pos].decode('ascii'))
-            elif col_type in _TEXT_DATE_TYPES:
-                if length == 10:
-                    try:
-                        row_values[i] = _date_fromisoformat(data_bytes[vstart:pos].decode('ascii'))
-                    except ValueError:
-                        row_values[i] = _text_date_slow(data_bytes, vstart)
-                else:
-                    row_values[i] = None
-            elif col_type in _TEXT_FLOAT_TYPES:
-                row_values[i] = float(data_bytes[vstart:pos])  # float() accepts ASCII bytes
-            elif col_type == FIELD_TYPE.TIME:
-                # '[-]HHH:MM:SS[.ffffff]'; parsed on the bytes (int() accepts
-                # ASCII digits) and built with positional timedelta arguments,
-                # which are several times cheaper than keyword ones.
-                val = data_bytes[vstart:pos]
-                negative = val[0] == 45  # '-'
-                parts = (val[1:] if negative else val).split(b':')
-                if len(parts) == 3:
-                    seconds, _, fraction = parts[2].partition(b'.')
-                    td = _timedelta(
-                        0, int(parts[0]) * 3600 + int(parts[1]) * 60 + int(seconds),
-                        int(fraction.ljust(6, b'0')) if fraction else 0)
-                    row_values[i] = -td if negative else td
-                else:
-                    row_values[i] = None
-            elif col_type == FIELD_TYPE.NULL:
-                row_values[i] = None
-            elif col_type == FIELD_TYPE.JSON:
-                row_values[i] = data_bytes[vstart:pos].decode('utf-8', 'ignore')
+                elif col_type == FIELD_TYPE.JSON:
+                    row_values[i] = data_bytes[vstart:pos].decode('utf-8', 'ignore')
+            rows_append(tuple(row_values))
+            pos = stop
 
-        return tuple(row_values)
+        if header >= 0:
+            self.sequence[0] = header >> 24
+        return pos, True
 
-    def _parse_binary_row_data(self, data: memoryview, columns: 'ColumnsDefinition', config: 'Configuration', num_cols: int) -> tuple[Any, ...]:
-        """Parse binary protocol row data using parallel arrays from ColumnsDefinition.
-
-        Uses columns.types[], columns.flags[], columns.charsets[] etc.
-        directly from arrays — no per-column object attribute lookups.
-        """
-        pos = 1  # Skip 0x00 header
-        # NULL bitmap: read once as an int, shifted so bit i is column i (the
-        # protocol reserves the two low bits). Rows without NULLs, the common
-        # case, then skip the per-column test with one truth check.
-        null_bitmap_length = (num_cols + 9) >> 3
-        if null_bitmap_length == 1:      # up to 6 columns
-            null_bits = data[pos] >> 2
-        elif null_bitmap_length == 2:    # 7 to 14 columns
-            null_bits = (data[pos] | (data[pos + 1] << 8)) >> 2
-        else:
-            null_bits = int.from_bytes(data[pos:pos + null_bitmap_length], 'little') >> 2
-        pos += null_bitmap_length
+    def _parse_binary_rows(self, buf: bytearray, pos: int, end: int, columns: 'ColumnsDefinition',
+                           config: 'Configuration', num_cols: int, rows: list[tuple[Any, ...]],
+                           eof_length_threshold: int, single_length: int = 0) -> tuple[int, bool]:
+        """Binary-protocol counterpart of _parse_text_rows (see there); the only
+        binary row decoder, _decode_row_packet() wraps it for one payload."""
+        rows_append = rows.append
+        data = buf
 
         # Local references to parallel arrays
         col_types = columns.types
@@ -939,143 +1002,181 @@ class BaseClient(ABC):
         col_ext_type_names = columns.ext_type_names
         _UNSIGNED = FIELD_FLAG.UNSIGNED
 
-        # Parse column values with inlined decoding
-        row_values: list[Any] = [None] * num_cols
+        header = -1  # header of the last row packet decoded (its sequence id is kept)
+        while end - pos >= 4:
+            hdr = _unpack_I(buf, pos)[0]
+            length = hdr & 0xFFFFFF
+            start = pos + 4
+            if length == 0xFFFFFF or length == 0:
+                # A >16 MB payload spans several wire packets and an empty
+                # packet is never a row: leave both to read_payload() -- unless
+                # the caller framed one pre-assembled payload (single_length).
+                if not single_length:
+                    if header >= 0:
+                        self.sequence[0] = header >> 24
+                    return pos, False
+                stop = start + single_length
+            else:
+                stop = start + length
+            if stop > end:
+                break
+            first = buf[start]
+            # ERR (0xFF) or the EOF/OK terminator (0xFE below the threshold)
+            if first >= 0xFE and (first == 0xFF or length < eof_length_threshold):
+                if header >= 0:
+                    self.sequence[0] = header >> 24
+                return pos, False
+            header = hdr
 
-        for i in range(num_cols):
-            if null_bits and (null_bits >> i) & 1:
-                continue
+            pos = start + 1  # Skip 0x00 header
+            null_bitmap_length = (num_cols + 9) >> 3
+            if null_bitmap_length == 1:      # up to 6 columns
+                null_bits = data[pos] >> 2
+            elif null_bitmap_length == 2:    # 7 to 14 columns
+                null_bits = (data[pos] | (data[pos + 1] << 8)) >> 2
+            else:
+                null_bits = int.from_bytes(data[pos:pos + null_bitmap_length], 'little') >> 2
+            pos += null_bitmap_length
 
-            # Decode based on field type
-            field_type = col_types[i]
-            if field_type in _BIN_INT32_TYPES:
-                if (col_flags[i] & _UNSIGNED) != 0:
-                    row_values[i] = _unpack_I(data, pos)[0]
-                else:
-                    row_values[i] = _unpack_i(data, pos)[0]
-                pos += 4
-            elif field_type in _BIN_STRING_TYPES:
-                # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
-                length = data[pos]
+            row_values: list[Any] = [None] * num_cols
+            for i in range(num_cols):
+                if null_bits and (null_bits >> i) & 1:
+                    continue
 
-                if (length < 0xFB):
-                    vstart = pos + 1
-                elif length == 0xFC:
-                    length = _unpack_H(data, pos + 1)[0]
-                    vstart = pos + 3
-                elif length == 0xFD:
-                    length = _unpack_I(data, pos + 1)[0] & 0xFFFFFF
-                    vstart = pos + 4
-                else:  # 0xFE
-                    length = _unpack_Q(data, pos + 1)[0]
-                    vstart = pos + 9
-                pos = vstart + length
-
-                if col_special_formats[i]:
-                    val = bytes(data[vstart:pos])
-                    if col_ext_type_formats[i] == b'json':
-                        row_values[i] = val.decode('utf-8')
-                    elif col_ext_type_names[i] == b'inet6' or col_ext_type_names[i] == b'inet4':
-                        row_values[i] = val.decode('ascii')
-                        if config.native_object:
-                            row_values[i] = ipaddress.ip_address(row_values[i])
-                    elif col_ext_type_names[i] == b'uuid':
-                        row_values[i] = val.decode('ascii')
-                        if config.native_object:
-                            row_values[i] = uuid.UUID(row_values[i])
-                elif field_type != FIELD_TYPE.JSON and col_charsets[i] == 63:  # Binary charset
-                    row_values[i] = bytes(data[vstart:pos])
-                else:
-                    row_values[i] = str(data[vstart:pos], 'utf-8', 'ignore')
-            elif field_type in _BIN_DATETIME_TYPES:
-                length_byte = data[pos]
-                pos += 1
-                if length_byte == 11:
-                    # Datetime with microseconds
-                    pos += 11
-                    try:
-                        row_values[i] = _datetime(*_unpack_HBBBBBI(data, pos - 11))
-                    except ValueError:
-                        row_values[i] = None
-                elif length_byte == 7:
-                    # Datetime without microseconds
-                    pos += 7
-                    try:
-                        row_values[i] = _datetime(*_unpack_HBBBBB(data, pos - 7))
-                    except ValueError:
-                        row_values[i] = None
-                elif length_byte == 4:
-                    # Date only
+                # Decode based on field type
+                field_type = col_types[i]
+                if field_type in _BIN_INT32_TYPES:
+                    if (col_flags[i] & _UNSIGNED) != 0:
+                        row_values[i] = _unpack_I(data, pos)[0]
+                    else:
+                        row_values[i] = _unpack_i(data, pos)[0]
                     pos += 4
-                    try:
-                        row_values[i] = _datetime(*_unpack_HBB(data, pos - 4))
-                    except ValueError:
-                        row_values[i] = None
-                else:
-                    row_values[i] = None
-            elif field_type in _BIN_DECIMAL_TYPES:
-                # Decimal as length-encoded string
-                length = data[pos]
-                vstart = pos + 1
-                if length > 0:
+                elif field_type in _BIN_STRING_TYPES:
+                    # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
+                    length = data[pos]
+
+                    if (length < 0xFB):
+                        vstart = pos + 1
+                    elif length == 0xFC:
+                        length = _unpack_H(data, pos + 1)[0]
+                        vstart = pos + 3
+                    elif length == 0xFD:
+                        length = _unpack_I(data, pos + 1)[0] & 0xFFFFFF
+                        vstart = pos + 4
+                    else:  # 0xFE
+                        length = _unpack_Q(data, pos + 1)[0]
+                        vstart = pos + 9
                     pos = vstart + length
-                    row_values[i] = _Decimal(str(data[vstart:pos], 'ascii'))
-                else:
-                    pos = vstart
-                    row_values[i] = _Decimal('0')
-            elif field_type == FIELD_TYPE.TINY:
-                if (col_flags[i] & _UNSIGNED) != 0:
-                    row_values[i] = data[pos]
-                else:
-                    row_values[i] = _unpack_b(data, pos)[0]
-                pos += 1
-            elif field_type == FIELD_TYPE.LONGLONG:
-                if (col_flags[i] & _UNSIGNED) != 0:
-                    row_values[i] = _unpack_Q(data, pos)[0]
-                else:
-                    row_values[i] = _unpack_q(data, pos)[0]
-                pos += 8
-            elif field_type in _BIN_SHORT_TYPES:
-                if (col_flags[i] & _UNSIGNED) != 0:
-                    row_values[i] = _unpack_H(data, pos)[0]
-                else:
-                    row_values[i] = _unpack_h(data, pos)[0]
-                pos += 2
-            elif field_type in _BIN_DATE_TYPES:
-                length_byte = data[pos]
-                pos += 1
-                if length_byte >= 4:
-                    try:
-                        row_values[i] = _date(*_unpack_HBB(data, pos))
-                    except ValueError:
-                        row_values[i] = None
-                    pos += 4
-                else:
-                    row_values[i] = None
-            elif field_type == FIELD_TYPE.DOUBLE:
-                row_values[i] = _unpack_d(data, pos)[0]
-                pos += 8
-            elif field_type == FIELD_TYPE.FLOAT:
-                row_values[i] = _unpack_f(data, pos)[0]
-                pos += 4
-            elif field_type == FIELD_TYPE.TIME:
-                length_byte = data[pos]
-                pos += 1
-                if length_byte == 12:
-                    # Time with microseconds
-                    negative, days, hours, minutes, seconds, microseconds = _unpack_BIBBBI(data, pos)
-                    pos += 12
-                    td = _timedelta(days, hours * 3600 + minutes * 60 + seconds, microseconds)
-                    row_values[i] = -td if negative else td
-                elif length_byte == 8:
-                    # Time without microseconds
-                    negative, days, hours, minutes, seconds = _unpack_BIBBB(data, pos)
-                    pos += 8
-                    td = _timedelta(days, hours * 3600 + minutes * 60 + seconds)
-                    row_values[i] = -td if negative else td
-                else:
-                    row_values[i] = None
 
-        return tuple(row_values)
+                    if col_special_formats[i]:
+                        val = bytes(data[vstart:pos])
+                        if col_ext_type_formats[i] == b'json':
+                            row_values[i] = val.decode('utf-8')
+                        elif col_ext_type_names[i] == b'inet6' or col_ext_type_names[i] == b'inet4':
+                            row_values[i] = val.decode('ascii')
+                            if config.native_object:
+                                row_values[i] = ipaddress.ip_address(row_values[i])
+                        elif col_ext_type_names[i] == b'uuid':
+                            row_values[i] = val.decode('ascii')
+                            if config.native_object:
+                                row_values[i] = uuid.UUID(row_values[i])
+                    elif field_type != FIELD_TYPE.JSON and col_charsets[i] == 63:  # Binary charset
+                        row_values[i] = bytes(data[vstart:pos])
+                    else:
+                        row_values[i] = str(data[vstart:pos], 'utf-8', 'ignore')
+                elif field_type in _BIN_DATETIME_TYPES:
+                    length_byte = data[pos]
+                    pos += 1
+                    if length_byte == 11:
+                        # Datetime with microseconds
+                        pos += 11
+                        try:
+                            row_values[i] = _datetime(*_unpack_HBBBBBI(data, pos - 11))
+                        except ValueError:
+                            row_values[i] = None
+                    elif length_byte == 7:
+                        # Datetime without microseconds
+                        pos += 7
+                        try:
+                            row_values[i] = _datetime(*_unpack_HBBBBB(data, pos - 7))
+                        except ValueError:
+                            row_values[i] = None
+                    elif length_byte == 4:
+                        # Date only
+                        pos += 4
+                        try:
+                            row_values[i] = _datetime(*_unpack_HBB(data, pos - 4))
+                        except ValueError:
+                            row_values[i] = None
+                    else:
+                        row_values[i] = None
+                elif field_type in _BIN_DECIMAL_TYPES:
+                    # Decimal as length-encoded string
+                    length = data[pos]
+                    vstart = pos + 1
+                    if length > 0:
+                        pos = vstart + length
+                        row_values[i] = _Decimal(str(data[vstart:pos], 'ascii'))
+                    else:
+                        pos = vstart
+                        row_values[i] = _Decimal('0')
+                elif field_type == FIELD_TYPE.TINY:
+                    if (col_flags[i] & _UNSIGNED) != 0:
+                        row_values[i] = data[pos]
+                    else:
+                        row_values[i] = _unpack_b(data, pos)[0]
+                    pos += 1
+                elif field_type == FIELD_TYPE.LONGLONG:
+                    if (col_flags[i] & _UNSIGNED) != 0:
+                        row_values[i] = _unpack_Q(data, pos)[0]
+                    else:
+                        row_values[i] = _unpack_q(data, pos)[0]
+                    pos += 8
+                elif field_type in _BIN_SHORT_TYPES:
+                    if (col_flags[i] & _UNSIGNED) != 0:
+                        row_values[i] = _unpack_H(data, pos)[0]
+                    else:
+                        row_values[i] = _unpack_h(data, pos)[0]
+                    pos += 2
+                elif field_type in _BIN_DATE_TYPES:
+                    length_byte = data[pos]
+                    pos += 1
+                    if length_byte >= 4:
+                        try:
+                            row_values[i] = _date(*_unpack_HBB(data, pos))
+                        except ValueError:
+                            row_values[i] = None
+                        pos += 4
+                    else:
+                        row_values[i] = None
+                elif field_type == FIELD_TYPE.DOUBLE:
+                    row_values[i] = _unpack_d(data, pos)[0]
+                    pos += 8
+                elif field_type == FIELD_TYPE.FLOAT:
+                    row_values[i] = _unpack_f(data, pos)[0]
+                    pos += 4
+                elif field_type == FIELD_TYPE.TIME:
+                    length_byte = data[pos]
+                    pos += 1
+                    if length_byte == 12:
+                        # Time with microseconds
+                        negative, days, hours, minutes, seconds, microseconds = _unpack_BIBBBI(data, pos)
+                        pos += 12
+                        td = _timedelta(days, hours * 3600 + minutes * 60 + seconds, microseconds)
+                        row_values[i] = -td if negative else td
+                    elif length_byte == 8:
+                        # Time without microseconds
+                        negative, days, hours, minutes, seconds = _unpack_BIBBB(data, pos)
+                        pos += 8
+                        td = _timedelta(days, hours * 3600 + minutes * 60 + seconds)
+                        row_values[i] = -td if negative else td
+                    else:
+                        row_values[i] = None
+            rows_append(tuple(row_values))
+            pos = stop
+
+        if header >= 0:
+            self.sequence[0] = header >> 24
+        return pos, True
 
 

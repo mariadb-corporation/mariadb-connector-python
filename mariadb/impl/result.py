@@ -282,7 +282,7 @@ class BaseStreamingResult(Result, Generic[_PayloadT]):
     
     Rows are fetched one at a time from the network as needed.
     """
-    __slots__ = ('read_payload_func', 'context', 'row_parser', '_row_count')
+    __slots__ = ('read_payload_func', 'context', 'row_parser', '_row_count', 'bulk_func', '_pending', '_pending_idx')
     
     def __repr__(self) -> str:
         """String representation for debugging"""
@@ -296,6 +296,7 @@ class BaseStreamingResult(Result, Generic[_PayloadT]):
         column_count: int,
         config: 'Configuration',
         row_parser: Callable[[memoryview, ColumnsDefinition, 'Configuration', int], tuple[Any, ...]],
+        bulk_func: Callable[[List[tuple[Any, ...]]], None] | None = None,
     ):
         """
         Initialize streaming result
@@ -307,11 +308,19 @@ class BaseStreamingResult(Result, Generic[_PayloadT]):
             column_count: Number of columns
             config: Configuration for parsing
             row_parser: Function to parse row packets (from Client)
+            bulk_func: Decodes every complete row packet already sitting in the
+                client's receive buffer into the given list, in one pass, without
+                reading from the network (from Client). Rows are then served from
+                that list; read_payload_func/row_parser handle the packet the bulk
+                decoder stopped at.
         """
         super().__init__(columns, column_count, config)
         self.read_payload_func: Callable[[], _PayloadT] = read_payload_func
         self.context: Context = context
         self.row_parser: Callable[[memoryview, ColumnsDefinition, 'Configuration', int], tuple[Any, ...]] = row_parser
+        self.bulk_func: Callable[[List[tuple[Any, ...]]], None] | None = bulk_func
+        self._pending: List[tuple[Any, ...]] = []   # rows decoded ahead by bulk_func
+        self._pending_idx: int = 0
         self.loaded: bool = False
         self._row_count: int = 0  # Track number of rows fetched
         
@@ -324,6 +333,23 @@ class BaseStreamingResult(Result, Generic[_PayloadT]):
     def _read_next_row_packet(self) -> memoryview | None:
         """Read next row packet from network (sync or async)"""
         pass
+
+    def _next_pending(self) -> tuple[Any, ...] | None:
+        """Next row decoded ahead of time, refilling from the receive buffer
+        when the batch is used up. None when nothing complete is buffered."""
+        pending = self._pending
+        idx = self._pending_idx
+        if idx >= len(pending):
+            if self.bulk_func is None:
+                return None
+            pending.clear()
+            self.bulk_func(pending)
+            if not pending:
+                return None
+            idx = 0
+        self._pending_idx = idx + 1
+        self._row_count += 1
+        return pending[idx]
     
     def get_row_count(self) -> int:
         """Get total row count"""
@@ -341,6 +367,9 @@ class SyncStreamingResult(BaseStreamingResult[memoryview], SyncResult):
     
     def fetch_one(self) -> tuple[Any, ...] | None:
         """Fetch next row"""
+        row = self._next_pending()
+        if row is not None:
+            return row
         if self.loaded:
             return None
         
@@ -365,10 +394,12 @@ class SyncStreamingResult(BaseStreamingResult[memoryview], SyncResult):
     def fetch_remaining(self) -> None:
         """Consume all remaining rows without processing them. Called when a new query needs to be executed."""
         if not self.loaded:
+            self._pending.clear()
+            self._pending_idx = 0
             while not self.loaded:
                 row_packet = self._read_next_row_packet()
                 if row_packet is not None:
-                    self._row_count += 1    
+                    self._row_count += 1
     
     def _read_next_row_packet(self) -> memoryview | None:
         """Read next row packet from network (synchronous). Returns row packet memoryview, or None if no more rows."""
@@ -411,6 +442,9 @@ class SyncStreamingResult(BaseStreamingResult[memoryview], SyncResult):
             return
         
         for _ in range(value):  # Skip 'value' rows by fetching and discarding them
+            if self._next_pending() is not None:
+                self.row_pointer += 1
+                continue
             if self.loaded:
                 raise ValueError("Cannot scroll past end of result set")
             row_packet = self._read_next_row_packet()
@@ -457,6 +491,9 @@ class AsyncStreamingResult(BaseStreamingResult[Awaitable[memoryview]], AsyncResu
     
     async def fetch_one(self) -> tuple[Any, ...] | None:
         """Fetch next row (async)"""
+        row = self._next_pending()
+        if row is not None:
+            return row
         if self.loaded:
             return None
         
@@ -481,6 +518,8 @@ class AsyncStreamingResult(BaseStreamingResult[Awaitable[memoryview]], AsyncResu
     async def fetch_remaining(self) -> None:
         """Consume all remaining rows without processing them (async). Called when a new query needs to be executed."""
         if not self.loaded:
+            self._pending.clear()
+            self._pending_idx = 0
             while not self.loaded:
                 row_packet = await self._read_next_row_packet()
                 if row_packet is not None:
@@ -498,6 +537,9 @@ class AsyncStreamingResult(BaseStreamingResult[Awaitable[memoryview]], AsyncResu
             return
         
         for _ in range(value):  # Skip 'value' rows by fetching and discarding them
+            if self._next_pending() is not None:
+                self.row_pointer += 1
+                continue
             if self.loaded:
                 raise ValueError("Cannot scroll past end of result set")
             row_packet = await self._read_next_row_packet()

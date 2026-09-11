@@ -9,6 +9,7 @@ Async Client implementation for MariaDB connections
 Uses asyncio for non-blocking I/O operations.
 """
 
+from functools import partial
 import asyncio
 import contextlib
 import socket
@@ -850,17 +851,12 @@ class AsyncClient(BaseClient):
                     await read_payload()  # Skip EOF packet
 
             # Select appropriate row parser based on protocol
-            row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+            row_parser = partial(self._decode_row_packet, is_binary=is_binary)
 
             # If unbuffered, create streaming result
             if not buffered:
-                streaming_result = AsyncStreamingResult(read_payload,
-                    context,
-                    columns,
-                    column_count,
-                    config,
-                    row_parser
-                )
+                streaming_result = AsyncStreamingResult(read_payload, context, columns, column_count, config, row_parser,
+                    partial(self._decode_buffered_rows, columns=columns, column_count=column_count, config=config, is_binary=is_binary))
 
                 # Register streaming result with client for tracking
                 self._active_streaming_result = streaming_result
@@ -878,8 +874,13 @@ class AsyncClient(BaseClient):
             eof_length_threshold = 16777215 if eof_deprecated else 8
 
             packets = None
+            bulk_rows = self._parse_binary_rows if is_binary else self._parse_text_rows
             while True:
-                packets = packets if packets else await read_payload(-1)
+                if not packets:
+                    self._recv_pos, need_more = bulk_rows(
+                        self._recv_buf, self._recv_pos, self._recv_len,
+                        columns, config, column_count, rows, eof_length_threshold)
+                    packets = await read_payload(1 if need_more else -1)
 
                 # Loop through the batch of packets
                 finish_result = False
@@ -924,6 +925,7 @@ class AsyncClient(BaseClient):
 
                 if finish_result:
                     break
+                packets = None
 
             if (context.server_status & _MORE_RESULTS_EXIST) == 0:
                 break
@@ -982,10 +984,10 @@ class AsyncClient(BaseClient):
                 if not eof_deprecated:
                     await read_payload()
 
-                row_parser = self._parse_binary_row_data if is_binary else self._parse_text_row_data
+                row_parser = partial(self._decode_row_packet, is_binary=is_binary)
 
-                streaming_result = AsyncStreamingResult(read_payload,
-                    context, columns, column_count, config, row_parser)
+                streaming_result = AsyncStreamingResult(read_payload, context, columns, column_count, config, row_parser,
+                    partial(self._decode_buffered_rows, columns=columns, column_count=column_count, config=config, is_binary=is_binary))
                 self._active_streaming_result = streaming_result
                 streaming_completion: OkPacket = OkPacket(0, 0, 0, 0, b'')
                 streaming_completion.result_set = streaming_result
