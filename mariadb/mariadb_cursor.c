@@ -854,8 +854,6 @@ PyObject *MrdbCursor_description(MrdbCursor *self)
                             self->fields[i].org_table)))
             {
                 Py_XDECREF(obj);
-                mariadb_throw_exception(NULL, Mariadb_OperationalError, 0,
-                         "Can't build descriptor record");
                 return NULL;
             }
             PyTuple_SetItem(obj, i, desc);
