@@ -514,24 +514,20 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
                     f"but got {len(param_set)} parameters in one of the parameter sets"
                 )
         
-        # Check each parameter position for type compatibility
+        # Check each parameter position for type compatibility: the non-None,
+        # non-Indicator values of a column must all share one exact type.
+        # Column-wise set(map(type, ...)) keeps the scan inside C for large batches.
         from mariadb_shared.constants.INDICATOR import MrdbIndicator
+        none_type = type(None)
         
-        for param_idx in range(num_params):
-            # Get the type of the first non-None, non-Indicator value at this position
-            reference_type = None
-            
-            for param_set in parameter_sets:
-                if param_idx < len(param_set):
-                    param = param_set[param_idx]
-                    # Skip None and Indicator types
-                    if param is not None and not isinstance(param, MrdbIndicator):
-                        if reference_type is None:
-                            # First real value found - set as reference
-                            reference_type = type(param) # pyright: ignore[reportUnknownVariableType]
-                        elif type(param) != reference_type:
-                            # Type mismatch found
-                            return False
+        for column in zip(*parameter_sets):
+            types = set(map(type, column))
+            types.discard(none_type)
+            if len(types) > 1:
+                types = {t for t in types if not issubclass(t, MrdbIndicator)}
+                if len(types) > 1:
+                    # Type mismatch found
+                    return False
         
         return True
     

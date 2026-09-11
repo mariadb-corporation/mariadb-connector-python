@@ -36,6 +36,10 @@ class PayloadWriter:
     def reset(self) -> None:
         """Reset writer by truncating to header size"""
         del self._buffer[4:]
+
+    def truncate(self, length: int) -> None:
+        """Drop everything written past *length* bytes (header included)"""
+        del self._buffer[length:]
     
     def write_byte(self, value: int) -> None:
         """Write a single byte"""
