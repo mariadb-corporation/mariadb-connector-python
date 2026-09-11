@@ -32,6 +32,10 @@ from ..message.client_message import ClientMessage
 from ..message.client.handshake_response import HandshakeResponse
 from ..message.client.query_packet import QueryPacket
 from ..message.client.quit_packet import QuitPacket
+
+# COM_QUIT as sent on the wire: 3-byte length (1), sequence 0, command byte.
+# (The pure-Python client never negotiates the compressed protocol.)
+_QUIT_PACKET = b'\x01\x00\x00\x00' + bytes((QuitPacket.COM_QUIT,))
 from ..message.client.change_user_packet import ChangeUserPacket
 from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..completion import Completion
@@ -1116,22 +1120,13 @@ class AsyncClient(BaseClient):
     async def close(self) -> None:
         """Close connection and cleanup resources asynchronously"""
         async with self.lock:
-            if self.closed:
-                return
-
-            if self.prepared_statement_cache is not None:
-                self.prepared_statement_cache.clear()
-
-            # Send COM_QUIT packet to gracefully close the connection
             if self.connected and self.writer:
                 # Ignore errors when sending quit - connection may already be broken
                 with contextlib.suppress(Exception):
-                    message = QuitPacket()
-                    await self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
-
-                    await self.writer.drain()
+                    self.writer.write(_QUIT_PACKET)
             self.closed = True
             self.connected = False
+            self.prepared_statement_cache = None
             await self._cleanup_connection()
 
     # =========================================================================
@@ -1190,15 +1185,19 @@ class AsyncClient(BaseClient):
 
     async def _cleanup_connection(self) -> None:
         """Cleanup socket and stream resources asynchronously"""
-        if hasattr(self, 'writer') and self.writer:
+        writer = self.writer
+        if writer:
             try:
-                self.writer.close()
-                await asyncio.wait_for(self.writer.wait_closed(), timeout=1.0)
+                transport = writer.transport
+                writer.close()
+                if self.configuration.ssl or transport.get_write_buffer_size():
+                    await asyncio.wait_for(writer.wait_closed(), timeout=1.0)
+                else:
+                    await writer.wait_closed()
             except (asyncio.TimeoutError, ssl.SSLError, Exception):
                 pass
             self.writer = None  # type: ignore[assignment]
-        if hasattr(self, 'reader'):
-            self.reader = None  # type: ignore[assignment]
+        self.reader = None  # type: ignore[assignment]
         # Read buffer cleanup handled by garbage collection
 
     # =========================================================================

@@ -33,6 +33,10 @@ from ..message.client.handshake_response import HandshakeResponse
 from ..message.client.query_packet import QueryPacket
 from ..message.client.ping_packet import PingPacket
 from ..message.client.quit_packet import QuitPacket
+
+# COM_QUIT as sent on the wire: 3-byte length (1), sequence 0, command byte.
+# (The pure-Python client never negotiates the compressed protocol.)
+_QUIT_PACKET = b'\x01\x00\x00\x00' + bytes((QuitPacket.COM_QUIT,))
 from ..message.client.change_user_packet import ChangeUserPacket
 from ..plugin.authentication_plugin_loader import AuthenticationPluginLoader
 from ..completion import Completion
@@ -1053,21 +1057,14 @@ class SyncClient(BaseClient):
     def close(self) -> None:
         """Close connection and cleanup resources"""
         with self.lock:
-            if self.closed:
-                return
-
-            # Clear prepared statement cache
-            if self.prepared_statement_cache is not None:
-                self.prepared_statement_cache.clear()
-
-            # Send COM_QUIT packet to gracefully close the connection
             if self.connected and self.socket:
-                # Ignore errors when sending quit - connection may already be broken
+                # Send COM_QUIT to gracefully close the connection
+                # Ignore errors when sending quit, connection may already be broken
                 with contextlib.suppress(Exception):
-                    message = QuitPacket()
-                    self.write_payload(message.payload(self.context, self._payload_writer), message.type(), True)
+                    self.socket.sendall(_QUIT_PACKET)
             self.closed = True
             self.connected = False
+            self.prepared_statement_cache = None
             self._cleanup_connection()
 
     # =========================================================================
