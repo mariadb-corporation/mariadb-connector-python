@@ -217,6 +217,90 @@ class AsyncTestPooling(unittest.IsolatedAsyncioTestCase):
 
         await pool.close()
 
+    async def test_waiters_are_served_in_order_by_handoff(self):
+        """Released connections go straight to the oldest waiter (FIFO), not
+        back to the free list where a newer acquire() could grab them."""
+        import asyncio
+        pool = await self.create_pool(pool_size=2, acquire_timeout=5)
+        held = [await pool.acquire() for _ in range(2)]
+        order: list[int] = []
+
+        async def waiter(i: int) -> None:
+            conn = await pool.acquire()
+            order.append(i)
+            await asyncio.sleep(0.01)
+            await conn.close()
+
+        tasks = [asyncio.create_task(waiter(i)) for i in range(6)]
+        await asyncio.sleep(0.05)   # all six are queued
+        for c in held:
+            await c.close()
+        await asyncio.gather(*tasks)
+        self.assertEqual(order, [0, 1, 2, 3, 4, 5])
+        self.assertEqual(len(pool._free), 2)   # pyright: ignore[reportPrivateUsage]
+        self.assertEqual(len(pool._used), 0)   # pyright: ignore[reportPrivateUsage]
+        self.assertEqual(len(pool._waiters), 0)  # pyright: ignore[reportPrivateUsage]
+        await pool.close()
+
+    async def test_cancelled_waiter_does_not_leak_connection(self):
+        """A waiter cancelled while queued, or right after a connection was
+        handed to it, must leave the connection available to others."""
+        import asyncio
+        pool = await self.create_pool(pool_size=1, acquire_timeout=5)
+        held = await pool.acquire()
+
+        # cancelled while still queued
+        t1 = asyncio.create_task(pool.acquire())
+        await asyncio.sleep(0.02)
+        t1.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await t1
+        self.assertEqual(len(pool._waiters), 0)  # pyright: ignore[reportPrivateUsage]
+
+        # cancelled after the hand-off but before it could run
+        t2 = asyncio.create_task(pool.acquire())
+        await asyncio.sleep(0.02)
+        await held.close()          # hands the connection to t2's future
+        t2.cancel()                 # t2 is cancelled before it resumes
+        with self.assertRaises(asyncio.CancelledError):
+            await t2
+        # the connection went back to the pool and can be acquired again
+        conn = await asyncio.wait_for(pool.acquire(), 2)
+        await conn.close()
+        self.assertEqual(len(pool._used), 0)   # pyright: ignore[reportPrivateUsage]
+        self.assertEqual(len(pool._all_connections), 1)  # pyright: ignore[reportPrivateUsage]
+        await pool.close()
+
+    async def test_acquire_timeout_then_recovery(self):
+        """A timed-out waiter raises PoolError and is removed from the queue;
+        the next release still reaches a live waiter."""
+        import asyncio
+        pool = await self.create_pool(pool_size=1, acquire_timeout=0.2)
+        held = await pool.acquire()
+        with self.assertRaises(mariadb.PoolError):
+            await pool.acquire()
+        self.assertEqual(len(pool._waiters), 0)  # pyright: ignore[reportPrivateUsage]
+        t = asyncio.create_task(pool.acquire(timeout=5))
+        await asyncio.sleep(0.02)
+        await held.close()
+        conn = await t
+        await conn.close()
+        await pool.close()
+
+    async def test_close_fails_pending_waiters(self):
+        """Closing the pool wakes queued waiters with PoolError instead of
+        leaving them hanging until their timeout."""
+        import asyncio
+        pool = await self.create_pool(pool_size=1, acquire_timeout=30)
+        held = await pool.acquire()
+        tasks = [asyncio.create_task(pool.acquire()) for _ in range(3)]
+        await asyncio.sleep(0.02)
+        await pool.close()
+        for t in tasks:
+            with self.assertRaises(mariadb.PoolError):
+                await t
+        await held.close()  # already closed by the pool: must be a harmless no-op
+
     async def test_connection_pool_maxconn(self):
         pool = await self.create_pool(pool_size=6, acquire_timeout=1)
         connections: list[Any] = []

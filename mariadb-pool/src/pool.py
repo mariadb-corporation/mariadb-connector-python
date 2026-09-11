@@ -686,6 +686,11 @@ class AsyncConnectionPool:
 
         # Use Condition + deque for better performance
         self._cond: asyncio.Condition = asyncio.Condition()
+        # Tasks waiting for a connection, oldest first. release() hands a
+        # connection straight to the first pending waiter instead of parking
+        # it in _free and notifying, so no wake-up is wasted on a connection a
+        # newer acquire() has already taken, and waiters are served in order.
+        self._waiters: collections.deque[asyncio.Future[Optional[AsyncPooledConnection]]] = collections.deque()
         self._free: collections.deque[AsyncPooledConnection] = collections.deque(maxlen=self.config.max_size or None)
         self._used: set[AsyncPooledConnection] = set()
         self._acquiring: int = 0
@@ -743,8 +748,7 @@ class AsyncConnectionPool:
                 try:
                     pooled_conn = await self._create_connection_unlocked()
                     pooled_conn.mark_idle()
-                    self._free.append(pooled_conn)
-                    self._cond.notify()
+                    self._hand_off_or_free(pooled_conn)
                 except Exception:
                     break
 
@@ -776,8 +780,7 @@ class AsyncConnectionPool:
                     conn._set_pooled_connection(pooled_conn)
                     self._all_connections.append(pooled_conn)
                     pooled_conn.mark_idle()
-                    self._free.append(pooled_conn)
-                    self._cond.notify()
+                    self._hand_off_or_free(pooled_conn)
                 except Exception:
                     break
                 finally:
@@ -797,8 +800,7 @@ class AsyncConnectionPool:
                 conn._set_pooled_connection(pooled_conn)
                 self._all_connections.append(pooled_conn)
                 pooled_conn.mark_idle()
-                self._free.append(pooled_conn)
-                self._cond.notify()
+                self._hand_off_or_free(pooled_conn)
             except Exception:  # nosec B110
                 pass
             finally:
@@ -825,9 +827,51 @@ class AsyncConnectionPool:
         pooled_conn = await self._acquire(timeout)
         return pooled_conn.connection
 
+    def _checkout(self, pooled_conn: AsyncPooledConnection) -> AsyncPooledConnection:
+        self._used.add(pooled_conn)
+        pooled_conn.mark_in_use()
+        return pooled_conn
+
+    def _hand_off_or_free(self, pooled_conn: AsyncPooledConnection) -> None:
+        """Give an idle connection to the oldest waiter, or park it in _free."""
+        waiters = self._waiters
+        while waiters:
+            fut = waiters.popleft()
+            if not fut.done():
+                fut.set_result(pooled_conn)
+                return
+        if pooled_conn not in self._free:
+            self._free.append(pooled_conn)
+
+    def _wake_one_waiter(self) -> None:
+        """A slot opened up (a connection was dropped): let one waiter retry,
+        so it can create a replacement instead of waiting for a release."""
+        waiters = self._waiters
+        while waiters:
+            fut = waiters.popleft()
+            if not fut.done():
+                fut.set_result(None)
+                return
+
+    def _forget_waiter(self, fut: 'asyncio.Future[Optional[AsyncPooledConnection]]') -> None:
+        """A waiter is leaving (timeout / cancellation). If a connection was
+        already handed to it, pass that connection on instead of leaking it."""
+        try:
+            self._waiters.remove(fut)
+        except ValueError:
+            if fut.done() and not fut.cancelled() and fut.exception() is None:
+                pooled_conn = fut.result()
+                if pooled_conn is not None:
+                    self._hand_off_or_free(pooled_conn)
+
     async def _acquire(self, timeout: Optional[float] = None) -> AsyncPooledConnection:
         """
-        Acquire a connection from the pool (optimized with asyncio.Condition)
+        Acquire a connection from the pool.
+
+        Free connections are taken directly; when the pool is exhausted the
+        task queues a future that release() resolves with the next returned
+        connection (direct hand-off, FIFO). The condition lock is only held
+        while creating connections.
 
         Args:
             timeout: Timeout in seconds (uses config default if None)
@@ -840,73 +884,85 @@ class AsyncConnectionPool:
 
         if timeout is None:
             timeout = self.config.acquire_timeout
+        cfg = self.config
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout if timeout else None
 
-        deadline = time.time() + timeout if timeout else None
+        while True:
+            if self._free:
+                pooled_conn = self._free.popleft()
 
-        async with self._cond:
-            while True:
-                # Only fill pool on first call or if we have capacity and no one else is acquiring
-                # This avoids holding the lock during I/O on every acquire
-                if len(self._all_connections) < self.config.min_size and self._acquiring == 0:
-                    await self._fill_free_pool(override_min=True)
-
-                if self._free:
-                    # Get connection from free pool
-                    pooled_conn = self._free.popleft()
-
-                    # Selective health check: only ping if connection has been idle too long
-                    if (self.config.ping_threshold == 0 or time.time() - pooled_conn.last_used
-                            > self.config.ping_threshold_seconds):
-                        # Connection idle too long, verify it's still alive
-                        if not await pooled_conn.is_healthy():
-                            # Connection dead, close and try again
-                            await pooled_conn.closeSilently()
-                            if pooled_conn in self._all_connections:
-                                self._all_connections.remove(pooled_conn)
-                            continue
-
-                    # Mark as in use and return
-                    self._used.add(pooled_conn)
-                    pooled_conn.mark_in_use()
-                    return pooled_conn
-
-                # Try to create a new connection if we're under max_size
-                if self.config.max_size and len(self._all_connections) < self.config.max_size:
-                    before = len(self._all_connections)
-                    await self._fill_free_pool()
-                    if self._free or len(self._all_connections) > before:
+                # Selective health check: only ping if connection has been idle too long
+                if (cfg.ping_threshold == 0 or time.time() - pooled_conn.last_used
+                        > cfg.ping_threshold_seconds):
+                    if not await pooled_conn.is_healthy():
+                        # Connection dead, close and try again
+                        await pooled_conn.closeSilently()
+                        if pooled_conn in self._all_connections:
+                            self._all_connections.remove(pooled_conn)
                         continue
+                return self._checkout(pooled_conn)
 
-                # No free connection (pool exhausted, or one could not be created
-                # right now) -- wait for a release, bounded by the acquire timeout.
-                if deadline:
-                    remaining = deadline - time.time()
-                    if remaining <= 0:
-                        raise PoolError(f"Timeout acquiring connection from pool (timeout={timeout}s)")
-                    try:
-                        await asyncio.wait_for(self._cond.wait(), timeout=remaining)
-                    except asyncio.TimeoutError:
-                        raise PoolError(f"Timeout acquiring connection from pool (timeout={timeout}s)")
-                else:
-                    await self._cond.wait()
+            # Nothing free: grow the pool if allowed (creation is serialised
+            # under the lock with the maintenance sweep)
+            if not cfg.max_size or len(self._all_connections) < cfg.max_size:
+                async with self._cond:
+                    before = len(self._all_connections)
+                    await self._fill_free_pool(override_min=len(self._all_connections) < cfg.min_size)
+                if self._free or len(self._all_connections) > before:
+                    continue
+
+            # Pool exhausted: wait for release() to hand a connection over,
+            # bounded by the acquire timeout.
+            fut: asyncio.Future[Optional[AsyncPooledConnection]] = loop.create_future()
+            self._waiters.append(fut)
+            timed_out = False
+            timer: Optional[asyncio.TimerHandle] = None
+            if deadline is not None:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    self._waiters.remove(fut)
+                    raise PoolError(f"Timeout acquiring connection from pool (timeout={timeout}s)")
+
+                def _on_timeout() -> None:
+                    nonlocal timed_out
+                    timed_out = True
+                    fut.cancel()
+                timer = loop.call_later(remaining, _on_timeout)
+            try:
+                handed = await fut
+            except asyncio.CancelledError:
+                self._forget_waiter(fut)
+                if timed_out:
+                    raise PoolError(f"Timeout acquiring connection from pool (timeout={timeout}s)") from None
+                raise
+            except BaseException:
+                self._forget_waiter(fut)
+                raise
+            finally:
+                if timer is not None:
+                    timer.cancel()
+            if handed is None:
+                continue  # a slot opened up: retry (create a connection)
+            # (close() fails every pending waiter with PoolError before closing
+            # the connections, so a hand-off never delivers a closed connection)
+            return self._checkout(handed)
 
     async def release(self, pool_conn: AsyncPooledConnection) -> None:
         """
-        Release a connection back to the pool (optimized with asyncio.Condition)
+        Release a connection back to the pool.
 
         Args:
-            connection: Connection to release
+            pool_conn: Connection to release
         """
         if self._closed:
             return
 
-        # Mark idle and remove from used set under lock to ensure atomicity
-        async with self._cond:
-            if pool_conn in self._used:
-                self._used.remove(pool_conn)
-            pool_conn.mark_idle()
+        self._used.discard(pool_conn)
+        pool_conn.mark_idle()
 
-        # Reset or rollback connection before returning to pool
+        # Reset or rollback connection before returning to pool. The
+        # connection is still ours here, so no lock is needed around the I/O.
         try:
             conn = pool_conn.connection
 
@@ -935,23 +991,24 @@ class AsyncConnectionPool:
                 await conn.rollback()
         except Exception:
             # If reset/rollback fails, close the connection
-            await pool_conn.closeSilently()
-            async with self._cond:
-                if pool_conn in self._all_connections:
-                    self._all_connections.remove(pool_conn)
+            await self._drop(pool_conn)
             return
 
-        # Check if connection should be kept and return to pool under lock
-        async with self._cond:
-            if pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
-                await pool_conn.closeSilently()
-                if pool_conn in self._all_connections:
-                    self._all_connections.remove(pool_conn)
-            else:
-                # Return to free pool and notify waiters
-                if pool_conn not in self._free:
-                    self._free.append(pool_conn)
-                    self._cond.notify()
+        if pool_conn.is_expired(self.config.max_lifetime, self.config.max_idle_time):
+            await self._drop(pool_conn)
+            return
+
+        # Hand it to the oldest waiter, or park it as free. No await between
+        # the bookkeeping steps, so no lock is needed.
+        self._hand_off_or_free(pool_conn)
+
+    async def _drop(self, pool_conn: AsyncPooledConnection) -> None:
+        """Close a connection that must not go back to the pool."""
+        await pool_conn.closeSilently()
+        if pool_conn in self._all_connections:
+            self._all_connections.remove(pool_conn)
+        # capacity freed: a waiter can create a replacement
+        self._wake_one_waiter()
 
     @asynccontextmanager
     async def connection(self, timeout: Optional[float] = None) -> AsyncGenerator['AsyncConnectionCommon[Any]', None]:
@@ -975,6 +1032,12 @@ class AsyncConnectionPool:
     async def close(self) -> None:
         """Close the pool and all connections"""
         self._closed = True
+
+        # Tasks still waiting for a connection get PoolError instead of hanging
+        while self._waiters:
+            fut = self._waiters.popleft()
+            if not fut.done():
+                fut.set_exception(PoolError("Pool is closed"))
 
         # Cancel maintenance task
         if self._maintenance_task:
