@@ -869,8 +869,14 @@ class BaseClient(ABC):
                     row_values[i] = val
                 else:
                     row_values[i] = val.decode('utf-8', 'ignore')
-            elif col_type in _TEXT_FLOAT_TYPES:
-                row_values[i] = float(data_bytes[vstart:pos])  # float() accepts ASCII bytes
+            elif col_type in _TEXT_DATETIME_TYPES:
+                if length >= 19:
+                    try:
+                        row_values[i] = _datetime_fromisoformat(data_bytes[vstart:pos].decode('ascii'))
+                    except ValueError:
+                        row_values[i] = _text_datetime_slow(data_bytes, vstart, pos, length)
+                else:
+                    row_values[i] = None
             elif col_type in _TEXT_DECIMAL_TYPES:
                 row_values[i] = _Decimal(data_bytes[vstart:pos].decode('ascii'))
             elif col_type in _TEXT_DATE_TYPES:
@@ -881,6 +887,8 @@ class BaseClient(ABC):
                         row_values[i] = _text_date_slow(data_bytes, vstart)
                 else:
                     row_values[i] = None
+            elif col_type in _TEXT_FLOAT_TYPES:
+                row_values[i] = float(data_bytes[vstart:pos])  # float() accepts ASCII bytes
             elif col_type == FIELD_TYPE.TIME:
                 # '[-]HHH:MM:SS[.ffffff]'; parsed on the bytes (int() accepts
                 # ASCII digits) and built with positional timedelta arguments,
@@ -894,14 +902,6 @@ class BaseClient(ABC):
                         0, int(parts[0]) * 3600 + int(parts[1]) * 60 + int(seconds),
                         int(fraction.ljust(6, b'0')) if fraction else 0)
                     row_values[i] = -td if negative else td
-                else:
-                    row_values[i] = None
-            elif col_type in _TEXT_DATETIME_TYPES:
-                if length >= 19:
-                    try:
-                        row_values[i] = _datetime_fromisoformat(data_bytes[vstart:pos].decode('ascii'))
-                    except ValueError:
-                        row_values[i] = _text_datetime_slow(data_bytes, vstart, pos, length)
                 else:
                     row_values[i] = None
             elif col_type == FIELD_TYPE.NULL:
@@ -918,9 +918,16 @@ class BaseClient(ABC):
         directly from arrays — no per-column object attribute lookups.
         """
         pos = 1  # Skip 0x00 header
-        # Read NULL bitmap
+        # NULL bitmap: read once as an int, shifted so bit i is column i (the
+        # protocol reserves the two low bits). Rows without NULLs, the common
+        # case, then skip the per-column test with one truth check.
         null_bitmap_length = (num_cols + 9) >> 3
-        null_bitmap = data[pos:pos + null_bitmap_length]
+        if null_bitmap_length == 1:      # up to 6 columns
+            null_bits = data[pos] >> 2
+        elif null_bitmap_length == 2:    # 7 to 14 columns
+            null_bits = (data[pos] | (data[pos + 1] << 8)) >> 2
+        else:
+            null_bits = int.from_bytes(data[pos:pos + null_bitmap_length], 'little') >> 2
         pos += null_bitmap_length
 
         # Local references to parallel arrays
@@ -936,7 +943,7 @@ class BaseClient(ABC):
         row_values: list[Any] = [None] * num_cols
 
         for i in range(num_cols):
-            if null_bitmap[(i + 2) >> 3] & (1 << ((i + 2) & 7)):
+            if null_bits and (null_bits >> i) & 1:
                 continue
 
             # Decode based on field type
@@ -947,12 +954,6 @@ class BaseClient(ABC):
                 else:
                     row_values[i] = _unpack_i(data, pos)[0]
                 pos += 4
-            elif field_type == FIELD_TYPE.LONGLONG:
-                if (col_flags[i] & _UNSIGNED) != 0:
-                    row_values[i] = _unpack_Q(data, pos)[0]
-                else:
-                    row_values[i] = _unpack_q(data, pos)[0]
-                pos += 8
             elif field_type in _BIN_STRING_TYPES:
                 # String types (VARCHAR, TEXT, BLOB, JSON, etc.) - length-encoded
                 length = data[pos]
@@ -986,63 +987,6 @@ class BaseClient(ABC):
                     row_values[i] = bytes(data[vstart:pos])
                 else:
                     row_values[i] = str(data[vstart:pos], 'utf-8', 'ignore')
-
-            elif field_type == FIELD_TYPE.TINY:
-                if (col_flags[i] & _UNSIGNED) != 0:
-                    row_values[i] = data[pos]
-                else:
-                    row_values[i] = _unpack_b(data, pos)[0]
-                pos += 1
-            elif field_type in _BIN_SHORT_TYPES:
-                if (col_flags[i] & _UNSIGNED) != 0:
-                    row_values[i] = _unpack_H(data, pos)[0]
-                else:
-                    row_values[i] = _unpack_h(data, pos)[0]
-                pos += 2
-            elif field_type == FIELD_TYPE.FLOAT:
-                row_values[i] = _unpack_f(data, pos)[0]
-                pos += 4
-            elif field_type == FIELD_TYPE.DOUBLE:
-                row_values[i] = _unpack_d(data, pos)[0]
-                pos += 8
-            elif field_type in _BIN_DECIMAL_TYPES:
-                # Decimal as length-encoded string
-                length = data[pos]
-                vstart = pos + 1
-                if length > 0:
-                    pos = vstart + length
-                    row_values[i] = _Decimal(str(data[vstart:pos], 'ascii'))
-                else:
-                    pos = vstart
-                    row_values[i] = _Decimal('0')
-            elif field_type in _BIN_DATE_TYPES:
-                length_byte = data[pos]
-                pos += 1
-                if length_byte >= 4:
-                    try:
-                        row_values[i] = _date(*_unpack_HBB(data, pos))
-                    except ValueError:
-                        row_values[i] = None
-                    pos += 4
-                else:
-                    row_values[i] = None
-            elif field_type == FIELD_TYPE.TIME:
-                length_byte = data[pos]
-                pos += 1
-                if length_byte == 12:
-                    # Time with microseconds
-                    negative, days, hours, minutes, seconds, microseconds = _unpack_BIBBBI(data, pos)
-                    pos += 12
-                    td = _timedelta(days, hours * 3600 + minutes * 60 + seconds, microseconds)
-                    row_values[i] = -td if negative else td
-                elif length_byte == 8:
-                    # Time without microseconds
-                    negative, days, hours, minutes, seconds = _unpack_BIBBB(data, pos)
-                    pos += 8
-                    td = _timedelta(days, hours * 3600 + minutes * 60 + seconds)
-                    row_values[i] = -td if negative else td
-                else:
-                    row_values[i] = None
             elif field_type in _BIN_DATETIME_TYPES:
                 length_byte = data[pos]
                 pos += 1
@@ -1067,6 +1011,68 @@ class BaseClient(ABC):
                         row_values[i] = _datetime(*_unpack_HBB(data, pos - 4))
                     except ValueError:
                         row_values[i] = None
+                else:
+                    row_values[i] = None
+            elif field_type in _BIN_DECIMAL_TYPES:
+                # Decimal as length-encoded string
+                length = data[pos]
+                vstart = pos + 1
+                if length > 0:
+                    pos = vstart + length
+                    row_values[i] = _Decimal(str(data[vstart:pos], 'ascii'))
+                else:
+                    pos = vstart
+                    row_values[i] = _Decimal('0')
+            elif field_type == FIELD_TYPE.TINY:
+                if (col_flags[i] & _UNSIGNED) != 0:
+                    row_values[i] = data[pos]
+                else:
+                    row_values[i] = _unpack_b(data, pos)[0]
+                pos += 1
+            elif field_type == FIELD_TYPE.LONGLONG:
+                if (col_flags[i] & _UNSIGNED) != 0:
+                    row_values[i] = _unpack_Q(data, pos)[0]
+                else:
+                    row_values[i] = _unpack_q(data, pos)[0]
+                pos += 8
+            elif field_type in _BIN_SHORT_TYPES:
+                if (col_flags[i] & _UNSIGNED) != 0:
+                    row_values[i] = _unpack_H(data, pos)[0]
+                else:
+                    row_values[i] = _unpack_h(data, pos)[0]
+                pos += 2
+            elif field_type in _BIN_DATE_TYPES:
+                length_byte = data[pos]
+                pos += 1
+                if length_byte >= 4:
+                    try:
+                        row_values[i] = _date(*_unpack_HBB(data, pos))
+                    except ValueError:
+                        row_values[i] = None
+                    pos += 4
+                else:
+                    row_values[i] = None
+            elif field_type == FIELD_TYPE.DOUBLE:
+                row_values[i] = _unpack_d(data, pos)[0]
+                pos += 8
+            elif field_type == FIELD_TYPE.FLOAT:
+                row_values[i] = _unpack_f(data, pos)[0]
+                pos += 4
+            elif field_type == FIELD_TYPE.TIME:
+                length_byte = data[pos]
+                pos += 1
+                if length_byte == 12:
+                    # Time with microseconds
+                    negative, days, hours, minutes, seconds, microseconds = _unpack_BIBBBI(data, pos)
+                    pos += 12
+                    td = _timedelta(days, hours * 3600 + minutes * 60 + seconds, microseconds)
+                    row_values[i] = -td if negative else td
+                elif length_byte == 8:
+                    # Time without microseconds
+                    negative, days, hours, minutes, seconds = _unpack_BIBBB(data, pos)
+                    pos += 8
+                    td = _timedelta(days, hours * 3600 + minutes * 60 + seconds)
+                    row_values[i] = -td if negative else td
                 else:
                     row_values[i] = None
 
