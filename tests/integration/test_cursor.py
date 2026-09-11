@@ -2674,6 +2674,46 @@ class TestCursor(unittest.TestCase):
             cursor.execute("DROP TABLE IF EXISTS t1")
             del cursor
 
+    def test_executemany_fractional_seconds(self):
+        """executemany() bulk path with datetime/time/timedelta values that
+        carry microseconds, mixed with NULLs (the microsecond layouts used to
+        be packed with a wrong struct format)."""
+        with create_connection() as connection:
+            cursor = connection.cursor()
+            cursor.execute("DROP TABLE IF EXISTS t_fract")
+            cursor.execute("CREATE TABLE t_fract (id INT PRIMARY KEY, dt DATETIME(6), "
+                           "t TIME(6), td TIME(6), d DATE)")
+            rows = [
+                (1, datetime.datetime(2024, 1, 2, 3, 4, 5, 678901),
+                 datetime.time(1, 2, 3, 400),
+                 datetime.timedelta(days=2, hours=3, seconds=7, microseconds=5),
+                 datetime.date(2024, 1, 2)),
+                (2, datetime.datetime(2024, 1, 2, 3, 4, 5), datetime.time(1, 2, 3),
+                 datetime.timedelta(seconds=-4000, microseconds=1), datetime.date(1999, 12, 31)),
+                (3, None, None, None, None),
+                (4, datetime.datetime(2000, 1, 1, 0, 0, 0, 1), datetime.time(23, 59, 59, 999999),
+                 datetime.timedelta(hours=800, microseconds=1), datetime.date(2000, 1, 1)),
+            ]
+            cursor.executemany("INSERT INTO t_fract VALUES (?, ?, ?, ?, ?)", rows)
+            self.assertEqual(cursor.rowcount, 4)
+            # one more row through a plain execute() (text protocol by default)
+            rows.append((5, datetime.datetime(2024, 6, 7, 8, 9, 10, 1), datetime.time(0, 0, 0, 1),
+                         datetime.timedelta(hours=-800, microseconds=1), datetime.date(2024, 6, 7)))
+            cursor.execute("INSERT INTO t_fract VALUES (?, ?, ?, ?, ?)", rows[-1])
+
+            cursor.execute("SELECT id, dt, t, td, d FROM t_fract ORDER BY id")
+            got = cursor.fetchall()
+            expected = []
+            for rid, dt, t, td, d in rows:
+                if t is not None:
+                    t = datetime.timedelta(hours=t.hour, minutes=t.minute,
+                                           seconds=t.second, microseconds=t.microsecond)
+                expected.append((rid, dt, t, td, d))
+            self.assertEqual(got, expected)
+
+            cursor.execute("DROP TABLE IF EXISTS t_fract")
+            del cursor
+
 
 if __name__ == '__main__':
     unittest.main()

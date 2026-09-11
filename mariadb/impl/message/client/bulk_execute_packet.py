@@ -23,11 +23,12 @@ _INT64_MAX = 0x7FFFFFFFFFFFFFFF
 _UNSIGNED_FLAG = 0x80
 
 # Composite struct formats for datetime/date/time
-_STRUCT_DATETIME_WITH_MICRO = struct.Struct('<BHHBBBBBI') # length + year(H) + 5 bytes + microsecond(I)
-_STRUCT_DATETIME_NO_MICRO = struct.Struct('<BHBBBBB')     # length + year(H) + 5 bytes
-_STRUCT_DATE = struct.Struct('<BHBB')                     # length + year(H) + month + day
-_STRUCT_TIME_WITH_MICRO = struct.Struct('<BBBIBBBI')      # length + negative + days(I) + 3 bytes + microsecond(I)
-_STRUCT_TIME_NO_MICRO = struct.Struct('<BBIBBB')          # length + negative + days(I) + 3 bytes
+_STRUCT_DATETIME_WITH_MICRO = struct.Struct('<BHBBBBBI')  # length(B) + year(H) + month(B) + day(B) + hour(B) + minute(B) + second(B) + microsecond(I)
+_STRUCT_DATETIME_NO_MICRO = struct.Struct('<BHBBBBB')     # length(B) + year(H) + month(B) + day(B) + hour(B) + minute(B) + second(B)
+
+_STRUCT_DATE = struct.Struct('<BHBB')                     # length(B) + year(H) + month(B) + day(B)
+_STRUCT_TIME_WITH_MICRO = struct.Struct('<BBIBBBI')       # length(B) + negative(B) + days(I) + hour(B) + minute(B) + second(B) + microsecond(I)
+_STRUCT_TIME_NO_MICRO = struct.Struct('<BBIBBB')          # length(B) + negative(B) + days(I) + hour(B) + minute(B) + second(B)
 
 # numpy is an optional accelerator for float32 VECTOR encoding.
 numpy: Any = None
@@ -40,6 +41,7 @@ HAS_NUMPY = numpy is not None
 from ...client.context import Context
 from mariadb_shared.constants import FIELD_TYPE
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
+from mariadb_shared.text_protocol import split_timedelta
 from ..client_message import ClientMessage
 from ..payload_writer import PayloadWriter
 from ....exceptions import NotSupportedError
@@ -334,17 +336,8 @@ class BulkExecutePacket(ClientMessage):
     def _write_time(self, stream: PayloadWriter, param: Any) -> None:
         """Write TIME in MySQL binary format"""
         if isinstance(param, datetime.timedelta):
-            total_seconds = int(param.total_seconds())
-            negative = total_seconds < 0
-            total_seconds = abs(total_seconds)
-            
-            days = total_seconds // 86400
-            remaining_seconds = total_seconds % 86400
-            hours = remaining_seconds // 3600
-            minutes = (remaining_seconds % 3600) // 60
-            seconds = remaining_seconds % 60
-            microseconds = param.microseconds
-            
+            negative, days, hours, minutes, seconds, microseconds = split_timedelta(param)
+
             if microseconds:
                 stream.write_bytes(_STRUCT_TIME_WITH_MICRO.pack(
                     12, 1 if negative else 0, days, hours, minutes, seconds, microseconds

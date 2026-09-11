@@ -2615,6 +2615,45 @@ class AsyncTestCursor(unittest.IsolatedAsyncioTestCase):
         await cursor.execute("DROP TABLE test_empty_params")
         await cursor.close()
 
+    async def test_executemany_fractional_seconds(self):
+        """executemany() bulk path with datetime/time/timedelta values that
+        carry microseconds, mixed with NULLs (the microsecond layouts used to
+        be packed with a wrong struct format)."""
+        cursor = self.connection.cursor()
+        await cursor.execute("DROP TABLE IF EXISTS t_fract_async")
+        await cursor.execute("CREATE TABLE t_fract_async (id INT PRIMARY KEY, dt DATETIME(6), "
+                             "t TIME(6), td TIME(6), d DATE)")
+        rows = [
+            (1, datetime.datetime(2024, 1, 2, 3, 4, 5, 678901),
+             datetime.time(1, 2, 3, 400),
+             datetime.timedelta(days=2, hours=3, seconds=7, microseconds=5),
+             datetime.date(2024, 1, 2)),
+            (2, datetime.datetime(2024, 1, 2, 3, 4, 5), datetime.time(1, 2, 3),
+             datetime.timedelta(seconds=-4000, microseconds=1), datetime.date(1999, 12, 31)),
+            (3, None, None, None, None),
+            (4, datetime.datetime(2000, 1, 1, 0, 0, 0, 1), datetime.time(23, 59, 59, 999999),
+             datetime.timedelta(hours=800, microseconds=1), datetime.date(2000, 1, 1)),
+        ]
+        await cursor.executemany("INSERT INTO t_fract_async VALUES (?, ?, ?, ?, ?)", rows)
+        self.assertEqual(cursor.rowcount, 4)
+        # one more row through a plain execute() (text protocol by default)
+        rows.append((5, datetime.datetime(2024, 6, 7, 8, 9, 10, 1), datetime.time(0, 0, 0, 1),
+                     datetime.timedelta(hours=-800, microseconds=1), datetime.date(2024, 6, 7)))
+        await cursor.execute("INSERT INTO t_fract_async VALUES (?, ?, ?, ?, ?)", rows[-1])
+
+        await cursor.execute("SELECT id, dt, t, td, d FROM t_fract_async ORDER BY id")
+        got = await cursor.fetchall()
+        expected = []
+        for rid, dt, t, td, d in rows:
+            if t is not None:
+                t = datetime.timedelta(hours=t.hour, minutes=t.minute,
+                                       seconds=t.second, microseconds=t.microsecond)
+            expected.append((rid, dt, t, td, d))
+        self.assertEqual(got, expected)
+
+        await cursor.execute("DROP TABLE IF EXISTS t_fract_async")
+        await cursor.close()
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -189,8 +189,10 @@ mariadb_pydelta_to_tm(PyObject *obj, MYSQL_TIME *tm)
     tm->second_part= 1000000 - tm->second_part;
   }
 
-  tm->hour= total_seconds / 3600;
-  remain= total_seconds % 3600;
+  tm->day= total_seconds / 86400;
+  remain= total_seconds % 86400;
+  tm->hour= remain / 3600;
+  remain= remain % 3600;
   tm->minute= remain / 60;
   tm->second= remain % 60;
 }

@@ -41,6 +41,7 @@ HAS_NUMPY = numpy is not None
 from ...client.context import Context
 from mariadb_shared.constants import FIELD_TYPE
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
+from mariadb_shared.text_protocol import split_timedelta
 from ..client_message import ClientMessage
 from ..payload_writer import PayloadWriter
 from ....exceptions import NotSupportedError
@@ -303,17 +304,8 @@ def _write_time(self: "ExecutePacket", stream: PayloadWriter, param: datetime.ti
 
 def _write_timedelta(self: "ExecutePacket", stream: PayloadWriter, param: datetime.timedelta) -> None:
     """Write timedelta as time in MySQL binary format"""
-    total_seconds = int(param.total_seconds())
-    negative = total_seconds < 0
-    total_seconds = abs(total_seconds)
-    
-    days = total_seconds // 86400
-    remaining_seconds = total_seconds % 86400
-    hours = remaining_seconds // 3600
-    minutes = (remaining_seconds % 3600) // 60
-    seconds = remaining_seconds % 60
-    microseconds = param.microseconds
-    
+    negative, days, hours, minutes, seconds, microseconds = split_timedelta(param)
+
     if microseconds:
         # 12 bytes: length(1) + negative(1) + days(4) + hour(1) + minute(1) + second(1) + microsecond(4)
         stream.write_bytes(_STRUCT_TIME_WITH_MICRO.pack(

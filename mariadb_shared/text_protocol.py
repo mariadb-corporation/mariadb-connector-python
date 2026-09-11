@@ -89,19 +89,39 @@ def escape_str(string: str, no_backslash_escapes: bool = False) -> bytearray:
     result[-1] = 39  # Single quote '
     return result
 
+def split_timedelta(val: datetime.timedelta) -> Tuple[bool, int, int, int, int, int]:
+    """Break a timedelta into (negative, days, hours, minutes, seconds, microseconds)
+    with every component non-negative, hours below 24 and the sign separate:
+    the shape the TIME literal and the binary TIME parameter both need.
+
+    timedelta normalises to days that may be negative with seconds and
+    microseconds always >= 0, so ``-1 microsecond`` is stored as
+    ``(-1 day, 86399 s, 999999 us)`` and the magnitude has to be rebuilt from
+    all three fields (int(total_seconds()) truncates the fraction and loses
+    precision on large values).
+    """
+    days = val.days
+    seconds = val.seconds
+    microseconds = val.microseconds
+    negative = days < 0
+    if negative:
+        total = -(days * 86400 + seconds)
+        if microseconds:
+            total -= 1
+            microseconds = 1000000 - microseconds
+    else:
+        total = days * 86400 + seconds
+    days, remainder = divmod(total, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return negative, days, hours, minutes, seconds, microseconds
+
+
 def timedelta_to_bytes(val: datetime.timedelta, no_backslash_escapes: bool = False) -> bytes:
-    total_seconds = int(val.total_seconds())
-    is_negative = total_seconds < 0
-    
-    # Work with absolute values
-    abs_seconds = abs(total_seconds)
-    hours = abs_seconds // 3600
-    minutes = (abs_seconds % 3600) // 60
-    seconds = abs_seconds % 60
-    microseconds = abs(val.microseconds)
-    
-    sign = '-' if is_negative else ''
-    return f"'{sign}{hours}:{minutes:02d}:{seconds:02d}.{microseconds}'".encode('ascii')
+    negative, days, hours, minutes, seconds, microseconds = split_timedelta(val)
+    sign = '-' if negative else ''
+    return (f"'{sign}{days * 24 + hours}:{minutes:02d}:{seconds:02d}.{microseconds:06d}'"
+            .encode('ascii'))
 
 _ESCAPE_BYTES_REGEX = re.compile(rb'[\\\'"\0]')
 _ESCAPE_BYTES_MAP = {b'\\': b'\\\\', b"'": b"\\'", b'"': b'\\"', b'\0': b'\\0'}
