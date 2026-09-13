@@ -47,6 +47,22 @@ This benchmark suite is modeled after the Java connector benchmarks and provides
 - **SQL**: `INSERT INTO perfTestTextBatch(t0) VALUES (?)` × 100
 - **Metrics**: Batch insert throughput
 
+### 7. **Batch INSERT 10k rows** (`test_bench_insert_batch_10k.py`)
+- **Purpose**: `executemany()` of 10,000 eight-column rows into a BLACKHOLE table
+- **Metrics**: statement building / bulk protocol cost without storage-engine work
+
+### 8. **Concurrent connections** (`test_bench_concurrent.py`)
+- **Purpose**: 50 threads at once, each doing connect + indexed single-row point query + close
+- **Metrics**: connection setup cost with many connections opened in parallel
+
+### 9. **Connection pool** (`test_bench_pool.py`)
+- **Purpose**: 500 point queries from 20 threads through a 5-20 connection pool (`mariadb.create_pool`, `mysql.connector.pooling.MySQLConnectionPool`; PyMySQL has no pool and is skipped)
+- **Metrics**: acquire/release cost and fairness under contention
+
+Scenarios 7-9 are the sync counterparts of the async suite's extra scenarios
+(threads stand in for asyncio tasks) and run fewer rounds than the
+micro-benchmarks.
+
 ## Setup
 
 ### Prerequisites
@@ -139,6 +155,49 @@ python run_benchmarks.py --compare --compare-files \
 Or automatically compare all `benchmark_*.json` files:
 ```bash
 python run_benchmarks.py --compare
+```
+
+## Async Benchmarks
+
+The `async/` folder holds the asyncio counterpart of the suite. It compares
+`mariadb.AsyncConnection` (pure Python and C extension) with
+[aiomysql](https://pypi.org/project/aiomysql/) and
+[asyncmy](https://pypi.org/project/asyncmy/) (Cython). Every driver connects
+over the same transport with TLS disabled (`mariadb` would otherwise negotiate
+TLS by default while aiomysql/asyncmy never do), so results compare
+protocol/parsing cost only. Driver differences (`?` vs `%s` placeholders,
+cursor/close/pool APIs, binary protocol selection) are abstracted in
+`async/asyncbench.py`.
+
+
+### Running
+
+```bash
+pip install aiomysql asyncmy          # also in requirements-bench.txt
+
+make bench-async                      # every async driver, then a comparison table
+make bench-async-asyncmy              # one driver -> benchmark_async_asyncmy.json
+make compare-async                    # table from existing benchmark_async_*.json
+
+# or directly
+python run_async_benchmarks.py --driver mariadb_c_async --json benchmark_async_mariadb_c_async.json
+python run_async_benchmarks.py --compare
+```
+
+The comparison table prints the median per-call time of each driver and its
+ratio to the fastest driver on that row (`1.00x`).
+
+## Row parser micro-benchmark (pure Python)
+
+`parser_field_bench.py` times the pure-Python row parsers alone, per column
+type and per protocol, on captured row packets (no network or cursor cost).
+Use it to measure a change to one branch of `_parse_text_row_data` /
+`_parse_binary_row_data` in `mariadb/impl/client/base_client.py`:
+
+```bash
+python parser_field_bench.py --save before.json
+# edit the parser
+python parser_field_bench.py --save after.json --compare before.json
 ```
 
 ## Using pytest-benchmark Directly

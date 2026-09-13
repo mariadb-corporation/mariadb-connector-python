@@ -50,6 +50,9 @@ def transport_args(driver_name: str) -> dict[str, Any]:
         args['unix_socket'] = _UNIX_SOCKET
     return args
 
+# Rows in perfTestMixed (see setup_database)
+MIXED_ROWS = 10000
+
 # Global variable to store mysql_connector implementation type
 _mysql_connector_impl: str | None = None
 
@@ -178,10 +181,19 @@ def connection(driver: ModuleType, driver_name: str, warmup_session: None) -> It
 
 
 @pytest.fixture(scope='session')
+def mixed_rows() -> int:
+    """Row count of perfTestMixed (see setup_database)."""
+    return MIXED_ROWS
+
+
+@pytest.fixture(scope='session')
 def setup_database() -> Iterator[None]:
     """Setup test database tables once per session."""
-    # Use mariadb for setup (doesn't matter which driver)
-    os.environ['MARIADB_PYTHON_CONNECTOR'] = 'python'
+    # Plain DDL, any implementation will do. Do NOT force
+    # MARIADB_PYTHON_CONNECTOR here: the implementation is chosen once, at the
+    # first ``import mariadb`` of the process, and this fixture may run before
+    # the ``driver`` fixture (e.g. when requested through ``usefixtures``),
+    # which would silently turn a mariadb_c run into a pure-Python one.
     import mariadb
     
     conn = mariadb.connect(**DB_CONFIG, **transport_args('mariadb'))
@@ -239,6 +251,50 @@ def setup_database() -> Iterator[None]:
         except:
             cursor.execute(create_mixed)
 
+        # perfTestMixed: realistic mixed-type rows (int / varchar / datetime /
+        # decimal / tinyint / text), indexed on user_id, for the point queries of
+        # the concurrent and pool scenarios. Same schema and row count as the async suite.
+        cursor.execute("DROP TABLE IF EXISTS perfTestMixed")
+        cursor.execute(
+            "CREATE TABLE perfTestMixed ("
+            "id INT NOT NULL AUTO_INCREMENT, "
+            "user_id INT NOT NULL, "
+            "username VARCHAR(50) NOT NULL, "
+            "email VARCHAR(100) NOT NULL, "
+            "created_at DATETIME NOT NULL, "
+            "updated_at DATETIME NOT NULL, "
+            "score DECIMAL(10,2) NOT NULL, "
+            "is_active TINYINT NOT NULL, "
+            "data TEXT, "
+            "PRIMARY KEY (id), INDEX idx_user_id (user_id)"
+            ") DEFAULT CHARSET=utf8mb4"
+        )
+        cursor.execute(
+            "INSERT INTO perfTestMixed "
+            "(user_id, username, email, created_at, updated_at, score, is_active, data) "
+            "SELECT seq % 1000, CONCAT('user_', seq), CONCAT('user_', seq, '@example.com'), "
+            "'2024-01-01 00:00:00' + INTERVAL seq SECOND, "
+            "'2024-01-01 00:00:00' + INTERVAL seq MINUTE, "
+            "seq * 1.23, seq % 2, CONCAT('Test data for row ', seq) "
+            f"FROM seq_1_to_{MIXED_ROWS}"
+        )
+
+        # perfTestMixedBatch: same columns, BLACKHOLE engine, for the 10k-row
+        # batch insert (measures the driver, not the storage engine).
+        cursor.execute("DROP TABLE IF EXISTS perfTestMixedBatch")
+        create_batch = (
+            "CREATE TABLE perfTestMixedBatch ("
+            "id INT NOT NULL AUTO_INCREMENT, user_id INT NOT NULL, "
+            "username VARCHAR(50) NOT NULL, email VARCHAR(100) NOT NULL, "
+            "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, "
+            "score DECIMAL(10,2) NOT NULL, is_active TINYINT NOT NULL, data TEXT, "
+            "PRIMARY KEY (id)) DEFAULT CHARSET=utf8mb4"
+        )
+        try:
+            cursor.execute(create_batch + " ENGINE = BLACKHOLE")
+        except Exception:
+            cursor.execute(create_batch)
+
         conn.commit()
     finally:
         cursor.close()
@@ -253,6 +309,8 @@ def setup_database() -> Iterator[None]:
         cursor.execute("DROP TABLE IF EXISTS test100")
         cursor.execute("DROP TABLE IF EXISTS perfTestTextBatch")
         cursor.execute("DROP TABLE IF EXISTS perfTestInsertTypes")
+        cursor.execute("DROP TABLE IF EXISTS perfTestMixed")
+        cursor.execute("DROP TABLE IF EXISTS perfTestMixedBatch")
         conn.commit()
     finally:
         cursor.close()

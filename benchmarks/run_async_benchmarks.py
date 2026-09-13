@@ -22,13 +22,18 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+ASYNC_DIR = 'async'
+
 ASYNC_BENCHMARKS = [
-    'test_bench_async_do_1.py',
-    'test_bench_async_select_1.py',
-    'test_bench_async_select_1000_rows.py',
-    'test_bench_async_select_100_cols.py',
-    'test_bench_async_do_1000_params.py',
-    'test_bench_async_insert_batch.py',
+    f'{ASYNC_DIR}/test_bench_async_do_1.py',
+    f'{ASYNC_DIR}/test_bench_async_select_1.py',
+    f'{ASYNC_DIR}/test_bench_async_select_1000_rows.py',
+    f'{ASYNC_DIR}/test_bench_async_select_100_cols.py',
+    f'{ASYNC_DIR}/test_bench_async_do_1000_params.py',
+    f'{ASYNC_DIR}/test_bench_async_insert_batch.py',
+    f'{ASYNC_DIR}/test_bench_async_insert_batch_10k.py',
+    f'{ASYNC_DIR}/test_bench_async_concurrent.py',
+    f'{ASYNC_DIR}/test_bench_async_pool.py',
 ]
 
 ASYNC_DRIVERS = ['mariadb_async', 'mariadb_c_async', 'aiomysql', 'asyncmy']
@@ -66,13 +71,20 @@ def run_async_benchmark(driver: Optional[str] = None,
     return result.returncode
 
 
+def _fmt_time(seconds: float) -> str:
+    """Format a per-call time in μs or ms depending on magnitude."""
+    if seconds < 1e-3:
+        return f"{seconds * 1e6:.1f}μs"
+    return f"{seconds * 1e3:.2f}ms"
+
+
 def generate_comparison(json_files: List[str]) -> None:
     """Generate comparison report from async benchmark JSON files."""
 
     results: Dict[str, Dict[str, Any]] = {}
     for jf in json_files:
-        if not os.path.exists(jf):
-            print(f"Warning: {jf} not found")
+        if not os.path.exists(jf) or os.path.getsize(jf) == 0:
+            print(f"Warning: {jf} not found or empty (driver run failed?)")
             continue
         with open(jf) as f:
             data = json.load(f)
@@ -94,18 +106,19 @@ def generate_comparison(json_files: List[str]) -> None:
 
     header = f"{'Benchmark':<35}" + "".join(f" {d:>20}" for d in drivers)
     print("\n" + "=" * len(header))
-    print("ASYNC BENCHMARK COMPARISON (median, μs)")
+    print("ASYNC BENCHMARK COMPARISON (median per call; fastest driver = 1.00x)")
     print("=" * len(header))
     print(header)
     print("-" * len(header))
 
     for bench in all_benchmarks:
         display = bench.replace('test_async_', '').replace('test_bench_async_', '')
+        medians = {d: results[d][bench]['median'] for d in drivers if bench in results[d]}
+        best = min(medians.values())
         row = f"{display:<35}"
         for d in drivers:
-            if bench in results[d]:
-                val = results[d][bench]['median'] * 1e6
-                row += f" {val:>18.1f}μs"
+            if d in medians:
+                row += f" {_fmt_time(medians[d]):>12} {medians[d] / best:>6.2f}x"
             else:
                 row += f" {'N/A':>20}"
         print(row)

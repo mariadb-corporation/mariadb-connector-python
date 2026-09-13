@@ -3,3 +3,6 @@ pytest>=7.0.0
 pytest-benchmark>=4.0.0
 pymysql>=1.0.0
 mysql-connector-python>=8.0.0
+# async drivers
+aiomysql>=0.2.0
+asyncmy>=0.2.13

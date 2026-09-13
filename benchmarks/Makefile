@@ -2,7 +2,7 @@
 # Copyright (c) 2012-2014 Monty Program Ab
 # Copyright (c) 2015-2025 MariaDB Corporation Ab
 
-.PHONY: help install bench bench-all bench-fast bench-mariadb bench-mariadb-c bench-pymysql bench-mysql-connector bench-mysql-connector-pure compare clean
+.PHONY: help install bench bench-all bench-fast bench-mariadb bench-mariadb-c bench-pymysql bench-mysql-connector bench-mysql-connector-pure compare bench-async bench-async-mariadb bench-async-mariadb-c bench-async-aiomysql bench-async-asyncmy compare-async clean
 
 help:
 	@echo "MariaDB Python Connector Benchmarks"
@@ -18,6 +18,12 @@ help:
 	@echo "  bench-mysql-connector - Run benchmarks for mysql-connector-python (C)"
 	@echo "  bench-mysql-connector-pure - Run benchmarks for mysql-connector-python (pure Python)"
 	@echo "  compare             - Generate comparison report from existing results"
+	@echo "  bench-async         - Run async benchmarks for every async driver and compare"
+	@echo "  bench-async-mariadb - Async benchmarks for mariadb (pure Python)"
+	@echo "  bench-async-mariadb-c - Async benchmarks for mariadb_c (C extension)"
+	@echo "  bench-async-aiomysql - Async benchmarks for aiomysql"
+	@echo "  bench-async-asyncmy - Async benchmarks for asyncmy"
+	@echo "  compare-async       - Comparison report from existing async results"
 	@echo "  clean               - Remove benchmark results"
 	@echo ""
 	@echo "Environment variables:"
@@ -57,9 +63,28 @@ bench-mysql-connector-pure:
 compare:
 	python run_benchmarks.py --compare
 
+bench-async:
+	python run_async_benchmarks.py --all
+
+bench-async-mariadb:
+	python run_async_benchmarks.py --driver mariadb_async --json benchmark_async_mariadb_async.json
+
+bench-async-mariadb-c:
+	python run_async_benchmarks.py --driver mariadb_c_async --json benchmark_async_mariadb_c_async.json
+
+bench-async-aiomysql:
+	python run_async_benchmarks.py --driver aiomysql --json benchmark_async_aiomysql.json
+
+bench-async-asyncmy:
+	python run_async_benchmarks.py --driver asyncmy --json benchmark_async_asyncmy.json
+
+compare-async:
+	python run_async_benchmarks.py --compare
+
 clean:
 	rm -rf results_*
 	rm -f benchmark_*.json
+	rm -rf async/__pycache__
 	rm -rf .benchmarks
 	rm -rf __pycache__
 	find . -name "*.pyc" -delete

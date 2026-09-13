@@ -1,0 +1,502 @@
+=== START ven. 11 sept 2026 12:09:51 CEST ===
+=== SYNC mariadb ven. 11 sept 2026 12:09:51 CEST ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=True min_rounds=1000 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/kolzeq/projects/mariadb-connector-python
+configfile: pyproject.toml
+plugins: cov-7.1.0, env-1.6.0, benchmark-5.2.3
+collected 60 items / 48 deselected / 12 selected
+
+test_bench_do_1.py .                                                     [  8%]
+test_bench_select_1.py .                                                 [ 16%]
+test_bench_select_1000_rows.py ..                                        [ 33%]
+test_bench_select_100_cols.py ..                                         [ 50%]
+test_bench_do_1000_params.py ..                                          [ 66%]
+test_bench_insert_batch.py .                                             [ 75%]
+test_bench_insert_row.py .                                               [ 83%]
+test_bench_select_mixed_rows.py ..                                       [100%]
+Wrote benchmark data in: <_io.BufferedWriter name='benchmark_mariadb.json'>
+
+
+
+------------------------------------------------------------------------------------------------------ benchmark: 12 tests -------------------------------------------------------------------------------------------------------
+Name (time in us)                                  Min                    Max                   Mean              StdDev                 Median                 IQR            Outliers          OPS            Rounds  Iterations
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_do_1[mariadb]                             11.9600 (1.0)         153.9400 (1.27)         13.1557 (1.0)        4.4948 (1.0)          12.5220 (1.0)        0.3110 (1.0)       199;558  76,012.6023 (1.0)        5455           1
+test_select_1[mariadb]                         22.7730 (1.90)        313.4070 (2.59)         26.3610 (2.00)       6.4732 (1.44)         24.7090 (1.97)       1.2000 (3.86)    2221;3901  37,934.7609 (0.50)      30543           1
+test_insert_row[mariadb]                       40.1920 (3.36)        120.8230 (1.0)          43.1660 (3.28)       6.0057 (1.34)         41.6500 (3.33)       1.2070 (3.88)       76;131  23,166.3863 (0.30)       1000           1
+test_select_100_cols_text[mariadb]            133.2910 (11.14)       434.4420 (3.60)        147.4470 (11.21)     18.4423 (4.10)        141.3650 (11.29)     13.2995 (42.76)     489;336   6,782.0966 (0.09)       4559           1
+test_select_100_cols_binary[mariadb]          163.7680 (13.69)     1,355.6080 (11.22)       184.0434 (13.99)     33.1568 (7.38)        173.9480 (13.89)     15.9310 (51.22)     293;365   5,433.5016 (0.07)       4050           1
+test_insert_batch[mariadb]                    185.9020 (15.54)       487.6730 (4.04)        209.3566 (15.91)     22.1298 (4.92)        203.1465 (16.22)     12.6995 (40.83)       70;73   4,776.5394 (0.06)       1000           1
+test_do_1000_params_text[mariadb]             231.6260 (19.37)     1,814.3080 (15.02)       262.0361 (19.92)     40.5272 (9.02)        254.8645 (20.35)     24.3680 (78.35)     177;149   3,816.2678 (0.05)       2480           1
+test_do_1000_params_binary[mariadb]           665.7380 (55.66)     1,065.9320 (8.82)        733.4426 (55.75)     42.0628 (9.36)        723.5910 (57.79)     46.5680 (149.73)     390;37   1,363.4333 (0.02)       1334           1
+test_select_1000_rows_text[mariadb]           859.7680 (71.89)     1,592.2290 (13.18)     1,006.2488 (76.49)     74.8329 (16.65)       989.8050 (79.05)     66.4680 (213.72)     158;52     993.7900 (0.01)       1000           1
+test_select_1000_rows_binary[mariadb]       1,072.6040 (89.68)     2,160.3690 (17.88)     1,180.2106 (89.71)     88.4008 (19.67)     1,158.1210 (92.49)     85.7995 (275.88)     114;44     847.3064 (0.01)       1000           1
+test_select_mixed_rows_text[mariadb]       25,899.1110 (>1000.0)  33,203.5030 (274.81)   26,856.1246 (>1000.0)  748.2428 (166.47)   26,673.1910 (>1000.0)  726.0060 (>1000.0)      25;7      37.2355 (0.00)        200           1
+test_select_mixed_rows_binary[mariadb]     34,321.5130 (>1000.0)  41,187.6300 (340.89)   35,185.7990 (>1000.0)  707.4439 (157.39)   35,032.7310 (>1000.0)  459.7205 (>1000.0)     24;17      28.4206 (0.00)        200           1
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+====================== 12 passed, 48 deselected in 24.94s ======================
+Running: /home/kolzeq/projects/mariadb-connector-python/.venv/bin/python -m pytest -v --benchmark-only --benchmark-disable-gc --benchmark-min-rounds=1000 test_bench_do_1.py test_bench_select_1.py test_bench_select_1000_rows.py test_bench_select_100_cols.py test_bench_do_1000_params.py test_bench_insert_batch.py test_bench_insert_row.py test_bench_select_mixed_rows.py -k mariadb and not mariadb_c --benchmark-json benchmark_mariadb.json
+Working directory: /home/kolzeq/projects/mariadb-connector-python/benchmarks
+MARIADB_PYTHON_CONNECTOR=python
+--------------------------------------------------------------------------------
+=== SYNC mariadb_c ven. 11 sept 2026 12:10:17 CEST ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=True min_rounds=1000 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/kolzeq/projects/mariadb-connector-python
+configfile: pyproject.toml
+plugins: cov-7.1.0, env-1.6.0, benchmark-5.2.3
+collected 60 items / 48 deselected / 12 selected
+
+test_bench_do_1.py .                                                     [  8%]
+test_bench_select_1.py .                                                 [ 16%]
+test_bench_select_1000_rows.py ..                                        [ 33%]
+test_bench_select_100_cols.py ..                                         [ 50%]
+test_bench_do_1000_params.py ..                                          [ 66%]
+test_bench_insert_batch.py .                                             [ 75%]
+test_bench_insert_row.py .                                               [ 83%]
+test_bench_select_mixed_rows.py ..                                       [100%]
+Wrote benchmark data in: <_io.BufferedWriter name='benchmark_mariadb_c.json'>
+
+
+
+------------------------------------------------------------------------------------------------------- benchmark: 12 tests -------------------------------------------------------------------------------------------------------
+Name (time in us)                                   Min                    Max                   Mean              StdDev                 Median                 IQR            Outliers          OPS            Rounds  Iterations
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_do_1[mariadb_c]                            12.2980 (1.0)         248.0440 (1.93)         18.2818 (1.0)        5.6289 (1.0)          19.6080 (1.21)       7.3823 (6.06)      992;192  54,699.0738 (1.0)        8541           1
+test_select_1[mariadb_c]                        15.2510 (1.24)        178.0730 (1.38)         18.6335 (1.02)       5.6348 (1.00)         16.1690 (1.0)        1.2190 (1.0)     8843;9388  53,666.8972 (0.98)      43400           1
+test_insert_row[mariadb_c]                      35.1370 (2.86)        128.7350 (1.0)          38.9855 (2.13)       6.1412 (1.09)         37.5040 (2.32)       1.7492 (1.43)      560;763  25,650.5922 (0.47)       6853           1
+test_select_100_cols_text[mariadb_c]            58.5140 (4.76)        242.0390 (1.88)         64.1700 (3.51)       8.7811 (1.56)         61.6620 (3.81)       3.5195 (2.89)      722;901  15,583.6058 (0.28)       6396           1
+test_select_100_cols_binary[mariadb_c]          82.8630 (6.74)        296.3500 (2.30)         91.3561 (5.00)      10.7270 (1.91)         87.9820 (5.44)       3.8635 (3.17)      533;818  10,946.1710 (0.20)       5633           1
+test_insert_batch[mariadb_c]                   133.5640 (10.86)       349.9340 (2.72)        149.0088 (8.15)      18.0310 (3.20)        143.5615 (8.88)      10.9970 (9.02)      312;305   6,711.0120 (0.12)       3396           1
+test_select_1000_rows_text[mariadb_c]          152.2550 (12.38)       455.8160 (3.54)        165.6720 (9.06)      15.9759 (2.84)        160.2410 (9.91)      14.5952 (11.97)     769;296   6,036.0236 (0.11)       5893           1
+test_select_1000_rows_binary[mariadb_c]        177.5510 (14.44)       448.4750 (3.48)        194.7855 (10.65)     19.8619 (3.53)        188.6770 (11.67)     15.8460 (13.00)     436;253   5,133.8531 (0.09)       4358           1
+test_do_1000_params_text[mariadb_c]            229.2320 (18.64)       538.9720 (4.19)        254.5116 (13.92)     26.2096 (4.66)        246.5385 (15.25)     27.2260 (22.33)     347;144   3,929.0933 (0.07)       3062           1
+test_do_1000_params_binary[mariadb_c]          345.3650 (28.08)       732.3730 (5.69)        387.1316 (21.18)     38.8182 (6.90)        377.6195 (23.35)     30.2320 (24.80)     174;122   2,583.1010 (0.05)       1550           1
+test_select_mixed_rows_binary[mariadb_c]     9,017.6660 (733.26)   10,260.4050 (79.70)     9,314.1315 (509.47)   203.5124 (36.15)     9,268.7575 (573.24)   222.0860 (182.19)       55;8     107.3637 (0.00)        200           1
+test_select_mixed_rows_text[mariadb_c]       9,788.8140 (795.97)   15,452.7650 (120.04)   10,275.6364 (562.07)   563.6322 (100.13)   10,160.8460 (628.42)   245.5875 (201.47)       9;18      97.3176 (0.00)        200           1
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+====================== 12 passed, 48 deselected in 13.27s ======================
+Running: /home/kolzeq/projects/mariadb-connector-python/.venv/bin/python -m pytest -v --benchmark-only --benchmark-disable-gc --benchmark-min-rounds=1000 test_bench_do_1.py test_bench_select_1.py test_bench_select_1000_rows.py test_bench_select_100_cols.py test_bench_do_1000_params.py test_bench_insert_batch.py test_bench_insert_row.py test_bench_select_mixed_rows.py -k mariadb_c --benchmark-json benchmark_mariadb_c.json
+Working directory: /home/kolzeq/projects/mariadb-connector-python/benchmarks
+MARIADB_PYTHON_CONNECTOR=c
+--------------------------------------------------------------------------------
+=== SYNC pymysql ven. 11 sept 2026 12:10:30 CEST ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=True min_rounds=1000 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/kolzeq/projects/mariadb-connector-python
+configfile: pyproject.toml
+plugins: cov-7.1.0, env-1.6.0, benchmark-5.2.3
+collected 60 items / 48 deselected / 12 selected
+
+test_bench_do_1.py .                                                     [  8%]
+test_bench_select_1.py .                                                 [ 16%]
+test_bench_select_1000_rows.py .s                                        [ 33%]
+test_bench_select_100_cols.py .s                                         [ 50%]
+test_bench_do_1000_params.py .s                                          [ 66%]
+test_bench_insert_batch.py .                                             [ 75%]
+test_bench_insert_row.py .                                               [ 83%]
+test_bench_select_mixed_rows.py .s                                       [100%]
+Wrote benchmark data in: <_io.BufferedWriter name='benchmark_pymysql.json'>
+
+
+
+------------------------------------------------------------------------------------------------------ benchmark: 8 tests ------------------------------------------------------------------------------------------------------
+Name (time in us)                                Min                    Max                   Mean              StdDev                 Median                 IQR            Outliers          OPS            Rounds  Iterations
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_do_1[pymysql]                           13.3230 (1.0)          95.5120 (1.0)          14.4438 (1.0)        2.3263 (1.0)          14.0710 (1.0)        0.2720 (1.0)       273;921  69,233.6720 (1.0)        7652           1
+test_select_1[pymysql]                       25.6470 (1.93)        313.2510 (3.28)         29.0724 (2.01)       5.7741 (2.48)         27.8780 (1.98)       1.2815 (4.71)    1782;2873  34,396.8518 (0.50)      28464           1
+test_insert_row[pymysql]                     40.7050 (3.06)        240.8060 (2.52)         55.6825 (3.86)      13.7675 (5.92)         56.4140 (4.01)      23.6400 (86.91)     1554;37  17,958.9625 (0.26)       6666           1
+test_insert_batch[pymysql]                  310.5460 (23.31)       837.9430 (8.77)        487.9704 (33.78)     39.1843 (16.84)       483.9670 (34.39)     41.5925 (152.91)     393;78   2,049.3045 (0.03)       1719           1
+test_select_100_cols_text[pymysql]          368.6810 (27.67)       762.0080 (7.98)        422.6288 (29.26)     36.1345 (15.53)       415.9890 (29.56)     37.9245 (139.43)     545;83   2,366.1424 (0.03)       1997           1
+test_do_1000_params_text[pymysql]           407.9460 (30.62)     1,851.5490 (19.39)       510.4723 (35.34)    117.4797 (50.50)       491.9590 (34.96)     55.1505 (202.76)     92;105   1,958.9700 (0.03)       2029           1
+test_select_1000_rows_text[pymysql]       1,726.1740 (129.56)    3,108.4200 (32.54)     1,855.5374 (128.47)    71.7218 (30.83)     1,840.4080 (130.79)    72.9945 (268.36)     152;32     538.9274 (0.01)       1000           1
+test_select_mixed_rows_text[pymysql]     59,121.1730 (>1000.0)  65,788.9660 (688.80)   60,174.7449 (>1000.0)  795.8528 (342.11)   59,978.9480 (>1000.0)  772.1700 (>1000.0)      30;8      16.6183 (0.00)        200           1
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+=========================== short test summary info ============================
+SKIPPED [1] test_bench_select_1000_rows.py:48: pymysql does not support binary protocol
+SKIPPED [1] test_bench_select_100_cols.py:42: pymysql does not support binary protocol
+SKIPPED [1] test_bench_do_1000_params.py:42: pymysql does not support binary protocol
+SKIPPED [1] test_bench_select_mixed_rows.py:54: pymysql does not support binary protocol
+================= 8 passed, 4 skipped, 48 deselected in 24.62s =================
+Running: /home/kolzeq/projects/mariadb-connector-python/.venv/bin/python -m pytest -v --benchmark-only --benchmark-disable-gc --benchmark-min-rounds=1000 test_bench_do_1.py test_bench_select_1.py test_bench_select_1000_rows.py test_bench_select_100_cols.py test_bench_do_1000_params.py test_bench_insert_batch.py test_bench_insert_row.py test_bench_select_mixed_rows.py -k pymysql --benchmark-json benchmark_pymysql.json
+Working directory: /home/kolzeq/projects/mariadb-connector-python/benchmarks
+--------------------------------------------------------------------------------
+=== SYNC mysql_connector ven. 11 sept 2026 12:10:55 CEST ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=True min_rounds=1000 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/kolzeq/projects/mariadb-connector-python
+configfile: pyproject.toml
+plugins: cov-7.1.0, env-1.6.0, benchmark-5.2.3
+collected 60 items / 48 deselected / 12 selected
+
+test_bench_do_1.py .                                                     [  8%]
+test_bench_select_1.py .                                                 [ 16%]
+test_bench_select_1000_rows.py ..                                        [ 33%]
+test_bench_select_100_cols.py ..                                         [ 50%]
+test_bench_do_1000_params.py ..                                          [ 66%]
+test_bench_insert_batch.py .                                             [ 75%]
+test_bench_insert_row.py .                                               [ 83%]
+test_bench_select_mixed_rows.py ..                                       [100%]
+Wrote benchmark data in: <_io.BufferedWriter name='benchmark_mysql_connector.json'>
+
+
+
+------------------------------------------------------------------------------------------------------------ benchmark: 12 tests -------------------------------------------------------------------------------------------------------------
+Name (time in us)                                              Min                    Max                   Mean              StdDev                 Median                 IQR            Outliers          OPS            Rounds  Iterations
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_do_1[mysql_connector (C)]                             25.9870 (1.0)         162.7620 (1.22)         28.1737 (1.0)        4.9164 (1.0)          27.2220 (1.0)        1.1450 (1.0)       290;413  35,494.0895 (1.0)        4405           1
+test_select_1[mysql_connector (C)]                         36.7550 (1.41)        201.9950 (1.52)         45.9560 (1.63)      11.3188 (2.30)         40.0120 (1.47)      13.1300 (11.47)    4513;380  21,759.9515 (0.61)      19486           1
+test_insert_row[mysql_connector (C)]                       39.1540 (1.51)        133.3070 (1.0)          43.5566 (1.55)       6.7300 (1.37)         41.8690 (1.54)       1.5640 (1.37)      559;932  22,958.6297 (0.65)       7101           1
+test_select_100_cols_text[mysql_connector (C)]            144.8090 (5.57)        298.5580 (2.24)        157.7706 (5.60)      15.0403 (3.06)        152.5820 (5.61)      13.3932 (11.70)     482;210   6,338.3164 (0.18)       3533           1
+test_select_100_cols_binary[mysql_connector (C)]          193.5560 (7.45)        465.6100 (3.49)        220.4627 (7.83)      28.2824 (5.75)        208.1800 (7.65)      23.8712 (20.85)     607;385   4,535.9152 (0.13)       3675           1
+test_do_1000_params_text[mysql_connector (C)]             326.5130 (12.56)       699.8860 (5.25)        369.4579 (13.11)     27.6908 (5.63)        363.0400 (13.34)     24.3630 (21.28)     298;122   2,706.6685 (0.08)       2041           1
+test_insert_batch[mysql_connector (C)]                    375.4890 (14.45)       688.6940 (5.17)        454.8446 (16.14)     38.4011 (7.81)        448.3650 (16.47)     31.6380 (27.63)      226;81   2,198.5530 (0.06)       1589           1
+test_select_1000_rows_text[mysql_connector (C)]           512.6100 (19.73)       885.5340 (6.64)        590.5705 (20.96)     44.2277 (9.00)        586.6250 (21.55)     65.3930 (57.11)      463;18   1,693.2778 (0.05)       1645           1
+test_select_1000_rows_binary[mysql_connector (C)]         647.5840 (24.92)     1,257.3670 (9.43)        742.5041 (26.35)     60.4649 (12.30)       749.7350 (27.54)     86.6233 (75.65)      396;19   1,346.7939 (0.04)       1345           1
+test_do_1000_params_binary[mysql_connector (C)]        12,070.7900 (464.49)   16,055.4570 (120.44)   12,763.3136 (453.02)   366.0391 (74.45)    12,660.3235 (465.08)   533.8090 (466.21)      285;6      78.3496 (0.00)       1000           1
+test_select_mixed_rows_text[mysql_connector (C)]       19,463.6460 (748.98)   21,686.7190 (162.68)   20,025.2234 (710.78)   328.2617 (66.77)    19,947.2615 (732.76)   308.5050 (269.44)      38;15      49.9370 (0.00)        200           1
+test_select_mixed_rows_binary[mysql_connector (C)]     26,599.2170 (>1000.0)  28,802.8910 (216.06)   27,356.3126 (970.99)   442.0645 (89.92)    27,309.8410 (>1000.0)  629.3600 (549.66)       67;2      36.5546 (0.00)        200           1
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+====================== 12 passed, 48 deselected in 33.21s ======================
+Running: /home/kolzeq/projects/mariadb-connector-python/.venv/bin/python -m pytest -v --benchmark-only --benchmark-disable-gc --benchmark-min-rounds=1000 test_bench_do_1.py test_bench_select_1.py test_bench_select_1000_rows.py test_bench_select_100_cols.py test_bench_do_1000_params.py test_bench_insert_batch.py test_bench_insert_row.py test_bench_select_mixed_rows.py -k mysql_connector and not mysql_connector_pure --benchmark-json benchmark_mysql_connector.json
+Working directory: /home/kolzeq/projects/mariadb-connector-python/benchmarks
+--------------------------------------------------------------------------------
+=== SYNC COMPARE ===
+
+========================================================================================================================
+BENCHMARK COMPARISON REPORT
+========================================================================================================================
+
+Test Do 1
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb                   0.013           76012.60        FASTEST             
+pymysql                   0.014           69233.67        1.10x slower        
+mariadb_c                 0.018           54699.07        1.39x slower        
+mysql_connector (C)       0.028           35494.09        2.14x slower        
+
+Test Do 1000 Params Binary
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 0.387           2583.10         FASTEST             
+mariadb                   0.733           1363.43         1.89x slower        
+mysql_connector (C)       12.763          78.35           32.97x slower       
+
+Test Do 1000 Params Text
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 0.255           3929.09         FASTEST             
+mariadb                   0.262           3816.27         1.03x slower        
+mysql_connector (C)       0.369           2706.67         1.45x slower        
+pymysql                   0.510           1958.97         2.01x slower        
+
+Test Insert Batch
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 0.149           6711.01         FASTEST             
+mariadb                   0.209           4776.54         1.40x slower        
+mysql_connector (C)       0.455           2198.55         3.05x slower        
+pymysql                   0.488           2049.30         3.27x slower        
+
+Test Insert Row
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 0.039           25650.59        FASTEST             
+mariadb                   0.043           23166.39        1.11x slower        
+mysql_connector (C)       0.044           22958.63        1.12x slower        
+pymysql                   0.056           17958.96        1.43x slower        
+
+Test Select 1
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 0.019           53666.90        FASTEST             
+mariadb                   0.026           37934.76        1.41x slower        
+pymysql                   0.029           34396.85        1.56x slower        
+mysql_connector (C)       0.046           21759.95        2.47x slower        
+
+Test Select 1000 Rows Binary
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 0.195           5133.85         FASTEST             
+mysql_connector (C)       0.743           1346.79         3.81x slower        
+mariadb                   1.180           847.31          6.06x slower        
+
+Test Select 1000 Rows Text
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 0.166           6036.02         FASTEST             
+mysql_connector (C)       0.591           1693.28         3.56x slower        
+mariadb                   1.006           993.79          6.07x slower        
+pymysql                   1.856           538.93          11.20x slower       
+
+Test Select 100 Cols Binary
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 0.091           10946.17        FASTEST             
+mariadb                   0.184           5433.50         2.01x slower        
+mysql_connector (C)       0.220           4535.92         2.41x slower        
+
+Test Select 100 Cols Text
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 0.064           15583.61        FASTEST             
+mariadb                   0.147           6782.10         2.30x slower        
+mysql_connector (C)       0.158           6338.32         2.46x slower        
+pymysql                   0.423           2366.14         6.59x slower        
+
+Test Select Mixed Rows Binary
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 9.314           107.36          FASTEST             
+mysql_connector (C)       27.356          36.55           2.94x slower        
+mariadb                   35.186          28.42           3.78x slower        
+
+Test Select Mixed Rows Text
+------------------------------------------------------------------------------------------------------------------------
+Driver                    Mean (ms)       OPS             vs Fastest          
+------------------------------------------------------------------------------------------------------------------------
+mariadb_c                 10.276          97.32           FASTEST             
+mysql_connector (C)       20.025          49.94           1.95x slower        
+mariadb                   26.856          37.24           2.61x slower        
+pymysql                   60.175          16.62           5.86x slower        
+
+========================================================================================================================
+=== ASYNC mariadb_async ven. 11 sept 2026 12:11:29 CEST ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=True min_rounds=1000 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/kolzeq/projects/mariadb-connector-python
+configfile: pyproject.toml
+plugins: cov-7.1.0, env-1.6.0, benchmark-5.2.3
+collected 44 items / 33 deselected / 11 selected
+
+async/test_bench_async_do_1.py .                                         [  9%]
+async/test_bench_async_select_1.py .                                     [ 18%]
+async/test_bench_async_select_1000_rows.py .                             [ 27%]
+async/test_bench_async_select_100_cols.py .                              [ 36%]
+async/test_bench_async_do_1000_params.py .                               [ 45%]
+async/test_bench_async_insert_batch.py .                                 [ 54%]
+async/test_bench_async_select_mixed_rows.py ..                           [ 72%]
+async/test_bench_async_insert_batch_10k.py .                             [ 81%]
+async/test_bench_async_concurrent.py .                                   [ 90%]
+async/test_bench_async_pool.py .                                         [100%]
+Wrote benchmark data in: <_io.BufferedWriter name='benchmark_async_mariadb_async.json'>
+
+
+
+-------------------------------------------------------------------------------------------------------------- benchmark: 11 tests ---------------------------------------------------------------------------------------------------------------
+Name (time in us)                                              Min                    Max                   Mean                StdDev                 Median                   IQR            Outliers          OPS            Rounds  Iterations
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_async_do_1[mariadb_async]                             32.7540 (1.0)         155.0680 (1.0)          37.1577 (1.0)          5.9356 (1.0)          35.6580 (1.0)          1.6125 (1.0)       416;552  26,912.3063 (1.0)        4491           1
+test_async_select_1[mariadb_async]                         46.2000 (1.41)        300.8110 (1.94)         51.0980 (1.38)         6.3858 (1.08)         49.0975 (1.38)         2.3070 (1.43)    1905;2165  19,570.2464 (0.73)      16850           1
+test_async_select_100_cols[mariadb_async]                 158.2990 (4.83)        925.8660 (5.97)        182.2943 (4.91)        71.1578 (11.99)       164.8170 (4.62)        16.9527 (10.51)      53;121   5,485.6340 (0.20)       1761           1
+test_async_insert_batch[mariadb_async]                    228.2050 (6.97)        497.4860 (3.21)        254.2839 (6.84)        27.5857 (4.65)        245.2830 (6.88)        20.4072 (12.66)     131;102   3,932.6119 (0.15)       1253           1
+test_async_do_1000_params[mariadb_async]                  255.5180 (7.80)        597.6480 (3.85)        281.1200 (7.57)        22.4110 (3.78)        275.1790 (7.72)        26.7557 (16.59)      488;93   3,557.1992 (0.13)       2915           1
+test_async_select_1000_rows[mariadb_async]                914.3470 (27.92)     1,405.5620 (9.06)      1,042.6161 (28.06)       50.5159 (8.51)      1,033.0585 (28.97)       53.5490 (33.21)      238;35     959.1258 (0.04)       1000           1
+test_async_concurrent_connections[mariadb_async]       12,006.7630 (366.57)   13,175.4370 (84.97)    12,343.8576 (332.20)     231.6253 (39.02)    12,311.4865 (345.27)     302.9905 (187.90)       35;2      81.0120 (0.00)        100           1
+test_async_select_mixed_rows_text[mariadb_async]       26,100.9440 (796.88)   28,046.5070 (180.87)   26,834.1203 (722.17)     359.1657 (60.51)    26,735.9865 (749.79)     405.3315 (251.37)       57;8      37.2660 (0.00)        200           1
+test_async_select_mixed_rows_binary[mariadb_async]     34,195.8480 (>1000.0)  41,847.4560 (269.87)   35,765.2809 (962.53)   1,531.6171 (258.04)   35,103.3145 (984.44)   1,675.5030 (>1000.0)     26;11      27.9601 (0.00)        200           1
+test_async_pool_queries[mariadb_async]                 44,905.5090 (>1000.0)  50,197.2890 (323.71)   45,966.5622 (>1000.0)    717.0226 (120.80)   45,811.0885 (>1000.0)    855.9705 (530.83)       19;1      21.7549 (0.00)        100           1
+test_async_insert_batch_10k[mariadb_async]             51,830.7400 (>1000.0)  55,343.4780 (356.90)   53,002.1055 (>1000.0)    783.2361 (131.96)   52,735.7500 (>1000.0)    833.8160 (517.10)       10;3      18.8672 (0.00)         50           1
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+====================== 11 passed, 33 deselected in 29.69s ======================
+Running: /home/kolzeq/projects/mariadb-connector-python/.venv/bin/python -m pytest -v --benchmark-only --benchmark-disable-gc --benchmark-min-rounds=1000 async/test_bench_async_do_1.py async/test_bench_async_select_1.py async/test_bench_async_select_1000_rows.py async/test_bench_async_select_100_cols.py async/test_bench_async_do_1000_params.py async/test_bench_async_insert_batch.py async/test_bench_async_select_mixed_rows.py async/test_bench_async_insert_batch_10k.py async/test_bench_async_concurrent.py async/test_bench_async_pool.py -k mariadb_async --benchmark-json benchmark_async_mariadb_async.json
+Working directory: /home/kolzeq/projects/mariadb-connector-python/benchmarks
+MARIADB_PYTHON_CONNECTOR=python
+--------------------------------------------------------------------------------
+=== ASYNC mariadb_c_async ven. 11 sept 2026 12:11:59 CEST ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=True min_rounds=1000 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/kolzeq/projects/mariadb-connector-python
+configfile: pyproject.toml
+plugins: cov-7.1.0, env-1.6.0, benchmark-5.2.3
+collected 44 items / 33 deselected / 11 selected
+
+async/test_bench_async_do_1.py .                                         [  9%]
+async/test_bench_async_select_1.py .                                     [ 18%]
+async/test_bench_async_select_1000_rows.py .                             [ 27%]
+async/test_bench_async_select_100_cols.py .                              [ 36%]
+async/test_bench_async_do_1000_params.py .                               [ 45%]
+async/test_bench_async_insert_batch.py .                                 [ 54%]
+async/test_bench_async_select_mixed_rows.py ..                           [ 72%]
+async/test_bench_async_insert_batch_10k.py .                             [ 81%]
+async/test_bench_async_concurrent.py .                                   [ 90%]
+async/test_bench_async_pool.py .                                         [100%]
+Wrote benchmark data in: <_io.BufferedWriter name='benchmark_async_mariadb_c_async.json'>
+
+
+
+------------------------------------------------------------------------------------------------------------- benchmark: 11 tests --------------------------------------------------------------------------------------------------------------
+Name (time in us)                                                Min                    Max                   Mean              StdDev                 Median                 IQR            Outliers          OPS            Rounds  Iterations
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_async_do_1[mariadb_c_async]                             31.7930 (1.0)         389.2130 (1.49)         39.4568 (1.0)       12.6004 (1.80)         36.1860 (1.0)        2.2563 (1.0)       191;650  25,344.1545 (1.0)        3533           1
+test_async_select_1[mariadb_c_async]                         38.7200 (1.22)        261.1790 (1.0)          45.6091 (1.16)       7.0054 (1.0)          44.4350 (1.23)       4.3137 (1.91)    1571;1561  21,925.4442 (0.87)      17339           1
+test_async_select_100_cols[mariadb_c_async]                  83.5410 (2.63)        282.0510 (1.08)         92.0257 (2.33)      12.3720 (1.77)         88.2490 (2.44)       4.7117 (2.09)      334;582  10,866.5317 (0.43)       3469           1
+test_async_insert_batch[mariadb_c_async]                    182.5590 (5.74)        406.1850 (1.56)        203.9841 (5.17)      21.9088 (3.13)        197.6760 (5.46)      13.4240 (5.95)      122;113   4,902.3430 (0.19)       1871           1
+test_async_do_1000_params[mariadb_c_async]                  258.6330 (8.13)        551.6060 (2.11)        286.7318 (7.27)      25.5130 (3.64)        280.7940 (7.76)      28.7757 (12.75)      418;98   3,487.5798 (0.14)       2399           1
+test_async_select_1000_rows[mariadb_c_async]                321.5200 (10.11)       633.6190 (2.43)        362.0731 (9.18)      31.0296 (4.43)        358.0690 (9.90)      44.5677 (19.75)      884;55   2,761.8729 (0.11)       2961           1
+test_async_select_mixed_rows_text[mariadb_c_async]        7,719.4290 (242.80)    9,256.8580 (35.44)     7,998.9687 (202.73)   179.6752 (25.65)     7,979.2200 (220.51)   181.0605 (80.25)        34;7     125.0161 (0.00)        200           1
+test_async_concurrent_connections[mariadb_c_async]        9,975.2100 (313.75)   11,092.6790 (42.47)    10,397.3292 (263.51)   209.0030 (29.83)    10,373.5765 (286.67)   259.4810 (115.01)       33;1      96.1785 (0.00)        100           1
+test_async_select_mixed_rows_binary[mariadb_c_async]     10,938.8590 (344.06)   14,651.9300 (56.10)    11,379.4649 (288.40)   341.3162 (48.72)    11,319.7125 (312.82)   251.6890 (111.55)      26;10      87.8776 (0.00)        200           1
+test_async_insert_batch_10k[mariadb_c_async]             21,562.7920 (678.22)   22,934.8040 (87.81)    21,994.4368 (557.43)   256.2721 (36.58)    21,954.1925 (606.70)   368.5710 (163.36)       13;1      45.4660 (0.00)         50           1
+test_async_pool_queries[mariadb_c_async]                 33,740.8980 (>1000.0)  35,616.1880 (136.37)   34,396.2748 (871.74)   433.8765 (61.93)    34,248.4035 (946.45)   664.4215 (294.48)       28;0      29.0729 (0.00)        100           1
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+====================== 11 passed, 33 deselected in 16.47s ======================
+Running: /home/kolzeq/projects/mariadb-connector-python/.venv/bin/python -m pytest -v --benchmark-only --benchmark-disable-gc --benchmark-min-rounds=1000 async/test_bench_async_do_1.py async/test_bench_async_select_1.py async/test_bench_async_select_1000_rows.py async/test_bench_async_select_100_cols.py async/test_bench_async_do_1000_params.py async/test_bench_async_insert_batch.py async/test_bench_async_select_mixed_rows.py async/test_bench_async_insert_batch_10k.py async/test_bench_async_concurrent.py async/test_bench_async_pool.py -k mariadb_c_async --benchmark-json benchmark_async_mariadb_c_async.json
+Working directory: /home/kolzeq/projects/mariadb-connector-python/benchmarks
+MARIADB_PYTHON_CONNECTOR=c
+--------------------------------------------------------------------------------
+=== ASYNC aiomysql ven. 11 sept 2026 12:12:15 CEST ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=True min_rounds=1000 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/kolzeq/projects/mariadb-connector-python
+configfile: pyproject.toml
+plugins: cov-7.1.0, env-1.6.0, benchmark-5.2.3
+collected 44 items / 33 deselected / 11 selected
+
+async/test_bench_async_do_1.py .                                         [  9%]
+async/test_bench_async_select_1.py .                                     [ 18%]
+async/test_bench_async_select_1000_rows.py .                             [ 27%]
+async/test_bench_async_select_100_cols.py .                              [ 36%]
+async/test_bench_async_do_1000_params.py .                               [ 45%]
+async/test_bench_async_insert_batch.py .                                 [ 54%]
+async/test_bench_async_select_mixed_rows.py .s                           [ 72%]
+async/test_bench_async_insert_batch_10k.py .                             [ 81%]
+async/test_bench_async_concurrent.py .                                   [ 90%]
+async/test_bench_async_pool.py .                                         [100%]
+Wrote benchmark data in: <_io.BufferedWriter name='benchmark_async_aiomysql.json'>
+
+
+
+---------------------------------------------------------------------------------------------------------- benchmark: 10 tests ----------------------------------------------------------------------------------------------------------
+Name (time in us)                                       Min                    Max                   Mean                StdDev                 Median                 IQR            Outliers          OPS            Rounds  Iterations
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_async_do_1[aiomysql]                           33.6010 (1.0)         169.3840 (1.0)          38.6278 (1.0)          6.6989 (1.0)          37.0320 (1.0)        1.4770 (1.0)       279;489  25,888.0666 (1.0)        4064           1
+test_async_select_1[aiomysql]                       52.3580 (1.56)        254.2560 (1.50)         57.5534 (1.49)         6.8939 (1.03)         55.7620 (1.51)       2.4012 (1.63)    1577;1914  17,375.1607 (0.67)      14769           1
+test_async_insert_batch[aiomysql]                  324.4920 (9.66)        857.7410 (5.06)        532.8565 (13.79)       48.2580 (7.20)        527.5650 (14.25)     49.6965 (33.65)      299;56   1,876.6778 (0.07)       1331           1
+test_async_do_1000_params[aiomysql]                370.6250 (11.03)       643.5700 (3.80)        438.2475 (11.35)       41.4251 (6.18)        431.9240 (11.66)     60.0415 (40.65)      575;15   2,281.8158 (0.09)       1917           1
+test_async_select_100_cols[aiomysql]               427.0860 (12.71)     1,038.1620 (6.13)        489.5213 (12.67)       50.1582 (7.49)        481.3580 (13.00)     45.5460 (30.84)      150;42   2,042.8119 (0.08)       1000           1
+test_async_select_1000_rows[aiomysql]            2,082.8490 (61.99)     2,861.3760 (16.89)     2,195.2692 (56.83)       70.6836 (10.55)     2,177.9040 (58.81)     67.9870 (46.03)      124;38     455.5250 (0.02)       1000           1
+test_async_concurrent_connections[aiomysql]     14,435.2950 (429.61)   16,191.7470 (95.59)    14,751.5011 (381.89)     227.4679 (33.96)    14,695.3840 (396.83)   182.7835 (123.75)       16;5      67.7897 (0.00)        100           1
+test_async_pool_queries[aiomysql]               60,043.6280 (>1000.0)  70,941.2020 (418.82)   61,727.6514 (>1000.0)  2,565.5952 (382.99)   60,904.4985 (>1000.0)  541.7215 (366.77)      10;10      16.2002 (0.00)        100           1
+test_async_insert_batch_10k[aiomysql]           61,387.6680 (>1000.0)  64,457.8400 (380.54)   62,531.5618 (>1000.0)    672.1909 (100.34)   62,423.5780 (>1000.0)  989.9120 (670.22)       16;0      15.9919 (0.00)         50           1
+test_async_select_mixed_rows_text[aiomysql]     61,411.4500 (>1000.0)  68,910.5750 (406.83)   62,589.9487 (>1000.0)    828.7149 (123.71)   62,504.1735 (>1000.0)  728.2565 (493.07)       26;9      15.9770 (0.00)        200           1
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+=========================== short test summary info ============================
+SKIPPED [1] async/test_bench_async_select_mixed_rows.py:59: aiomysql does not support the binary protocol
+================ 10 passed, 1 skipped, 33 deselected in 34.50s =================
+Running: /home/kolzeq/projects/mariadb-connector-python/.venv/bin/python -m pytest -v --benchmark-only --benchmark-disable-gc --benchmark-min-rounds=1000 async/test_bench_async_do_1.py async/test_bench_async_select_1.py async/test_bench_async_select_1000_rows.py async/test_bench_async_select_100_cols.py async/test_bench_async_do_1000_params.py async/test_bench_async_insert_batch.py async/test_bench_async_select_mixed_rows.py async/test_bench_async_insert_batch_10k.py async/test_bench_async_concurrent.py async/test_bench_async_pool.py -k aiomysql --benchmark-json benchmark_async_aiomysql.json
+Working directory: /home/kolzeq/projects/mariadb-connector-python/benchmarks
+--------------------------------------------------------------------------------
+=== ASYNC asyncmy ven. 11 sept 2026 12:12:50 CEST ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.1.1, pluggy-1.6.0
+benchmark: 5.2.3 (defaults: timer=time.perf_counter disable_gc=True min_rounds=1000 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /home/kolzeq/projects/mariadb-connector-python
+configfile: pyproject.toml
+plugins: cov-7.1.0, env-1.6.0, benchmark-5.2.3
+collected 44 items / 33 deselected / 11 selected
+
+async/test_bench_async_do_1.py .                                         [  9%]
+async/test_bench_async_select_1.py .                                     [ 18%]
+async/test_bench_async_select_1000_rows.py .                             [ 27%]
+async/test_bench_async_select_100_cols.py .                              [ 36%]
+async/test_bench_async_do_1000_params.py .                               [ 45%]
+async/test_bench_async_insert_batch.py .                                 [ 54%]
+async/test_bench_async_select_mixed_rows.py ..                           [ 72%]
+async/test_bench_async_insert_batch_10k.py .                             [ 81%]
+async/test_bench_async_concurrent.py .                                   [ 90%]
+async/test_bench_async_pool.py .                                         [100%]
+Wrote benchmark data in: <_io.BufferedWriter name='benchmark_async_asyncmy.json'>
+
+
+
+------------------------------------------------------------------------------------------------------------- benchmark: 11 tests --------------------------------------------------------------------------------------------------------------
+Name (time in us)                                         Min                     Max                    Mean                StdDev                  Median                   IQR            Outliers          OPS            Rounds  Iterations
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+test_async_do_1[asyncmy]                              32.4590 (1.0)          161.5760 (1.0)           39.1641 (1.0)          6.9270 (1.0)           37.9870 (1.0)          3.5760 (1.20)      359;422  25,533.6140 (1.0)        4338           1
+test_async_select_1[asyncmy]                          45.2810 (1.40)         271.5000 (1.68)          50.7898 (1.30)         7.6792 (1.11)          48.3770 (1.27)         2.9678 (1.0)     2042;2453  19,688.9759 (0.77)      16845           1
+test_async_select_1000_rows[asyncmy]                 171.2340 (5.28)         324.4040 (2.01)         186.4103 (4.76)        15.4937 (2.24)         181.1005 (4.77)        16.4360 (5.54)      775;226   5,364.5113 (0.21)       5322           1
+test_async_select_100_cols[asyncmy]                  190.4400 (5.87)       1,151.0200 (7.12)         223.0933 (5.70)       100.2492 (14.47)        200.1280 (5.27)        19.1470 (6.45)       61;121   4,482.4297 (0.18)       1581           1
+test_async_insert_batch[asyncmy]                     276.3670 (8.51)         755.2920 (4.67)         466.6711 (11.92)       88.9783 (12.85)        493.8730 (13.00)       61.5122 (20.73)     379;288   2,142.8369 (0.08)       1325           1
+test_async_do_1000_params[asyncmy]                   315.1410 (9.71)         562.6880 (3.48)         360.5449 (9.21)        29.5807 (4.27)         352.9370 (9.29)        24.8515 (8.37)      506;164   2,773.5799 (0.11)       2229           1
+test_async_select_mixed_rows_binary[asyncmy]       5,198.5480 (160.16)     6,023.5770 (37.28)      5,376.5977 (137.28)     104.3902 (15.07)      5,360.7940 (141.12)     103.3920 (34.84)        37;9     185.9912 (0.01)        200           1
+test_async_select_mixed_rows_text[asyncmy]         5,636.9100 (173.66)     7,443.4070 (46.07)      5,879.1728 (150.12)     166.3328 (24.01)      5,850.5360 (154.01)     124.9800 (42.11)        20;8     170.0920 (0.01)        200           1
+test_async_concurrent_connections[asyncmy]         9,350.0210 (288.06)    10,523.1730 (65.13)      9,636.8938 (246.06)     252.4092 (36.44)      9,506.0675 (250.25)     351.2300 (118.35)       19;3     103.7679 (0.00)        106           1
+test_async_insert_batch_10k[asyncmy]              49,951.7980 (>1000.0)   63,814.0020 (394.95)    51,377.0934 (>1000.0)  2,627.7035 (379.34)    50,619.2480 (>1000.0)    763.6480 (257.32)        4;4      19.4639 (0.00)         50           1
+test_async_pool_queries[asyncmy]                 148,028.1960 (>1000.0)  190,454.3980 (>1000.0)  157,562.0893 (>1000.0)  6,813.3080 (983.58)   157,048.1465 (>1000.0)  4,600.8590 (>1000.0)      23;9       6.3467 (0.00)        100           1
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Legend:
+  Outliers: 1 Standard Deviation from Mean; 1.5 IQR (InterQuartile Range) from 1st Quartile and 3rd Quartile.
+  OPS: Operations Per Second, computed as 1 / Mean
+====================== 11 passed, 33 deselected in 29.42s ======================
+Running: /home/kolzeq/projects/mariadb-connector-python/.venv/bin/python -m pytest -v --benchmark-only --benchmark-disable-gc --benchmark-min-rounds=1000 async/test_bench_async_do_1.py async/test_bench_async_select_1.py async/test_bench_async_select_1000_rows.py async/test_bench_async_select_100_cols.py async/test_bench_async_do_1000_params.py async/test_bench_async_insert_batch.py async/test_bench_async_select_mixed_rows.py async/test_bench_async_insert_batch_10k.py async/test_bench_async_concurrent.py async/test_bench_async_pool.py -k asyncmy --benchmark-json benchmark_async_asyncmy.json
+Working directory: /home/kolzeq/projects/mariadb-connector-python/benchmarks
+--------------------------------------------------------------------------------
+=== ASYNC COMPARE ===
+
+=======================================================================================================================
+ASYNC BENCHMARK COMPARISON (median per call; fastest driver = 1.00x)
+=======================================================================================================================
+Benchmark                                       aiomysql              asyncmy        mariadb_async      mariadb_c_async
+-----------------------------------------------------------------------------------------------------------------------
+concurrent_connections                   14.70ms   1.55x       9.51ms   1.00x      12.31ms   1.30x      10.37ms   1.09x
+do_1                                      37.0μs   1.04x       38.0μs   1.07x       35.7μs   1.00x       36.2μs   1.01x
+do_1000_params                           431.9μs   1.57x      352.9μs   1.28x      275.2μs   1.00x      280.8μs   1.02x
+insert_batch                             527.6μs   2.67x      493.9μs   2.50x      245.3μs   1.24x      197.7μs   1.00x
+insert_batch_10k                         62.42ms   2.84x      50.62ms   2.31x      52.74ms   2.40x      21.95ms   1.00x
+pool_queries                             60.90ms   1.78x     157.05ms   4.59x      45.81ms   1.34x      34.25ms   1.00x
+select_1                                  55.8μs   1.25x       48.4μs   1.09x       49.1μs   1.10x       44.4μs   1.00x
+select_1000_rows                          2.18ms  12.03x      181.1μs   1.00x       1.03ms   5.70x      358.1μs   1.98x
+select_100_cols                          481.4μs   5.45x      200.1μs   2.27x      164.8μs   1.87x       88.2μs   1.00x
+select_mixed_rows_binary                             N/A       5.36ms   1.00x      35.10ms   6.55x      11.32ms   2.11x
+select_mixed_rows_text                   62.50ms  10.68x       5.85ms   1.00x      26.74ms   4.57x       7.98ms   1.36x
+=======================================================================================================================
+=== END ven. 11 sept 2026 12:13:20 CEST ===

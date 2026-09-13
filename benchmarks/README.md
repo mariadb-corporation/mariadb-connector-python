@@ -40,6 +40,23 @@ python run_benchmarks.py --compare
 - **SELECT 100 Columns** - Wide result set parsing
 - **DO 1000 Parameters** - Parameter binding overhead
 - **Batch INSERT** - Batch insert performance (100 rows)
+- **Batch INSERT 10k** - `executemany()` of 10,000 mixed-type rows into a BLACKHOLE table
+- **Concurrent connections** - 50 threads each doing connect + single-row point query + close
+- **Connection pool** - 500 point queries from 20 threads through a 5-20 pool (drivers with a pool)
+
+## Async Benchmarks
+
+`async/` compares `mariadb.AsyncConnection` (pure Python and C extension)
+with **aiomysql** and **asyncmy**. Besides the six tests above it adds the
+scenarios of [asyncmy's own benchmark suite](https://github.com/long2ice/asyncmy/tree/dev/benchmark):
+a 10,000-row batch insert, 50 concurrent connections (connect + single-row
+point query + close), and 500 concurrent queries through a 5-20 connection pool.
+
+```bash
+pip install aiomysql asyncmy
+make bench-async            # all async drivers + comparison table
+make compare-async          # table from existing benchmark_async_*.json
+```
 
 ## Documentation
 

@@ -42,6 +42,10 @@ BENCHMARKS = [
     'test_bench_do_1000_params.py',
     'test_bench_insert_batch.py',
     'test_bench_insert_row.py',
+    # Sync counterparts of the async suite's extra scenarios
+    'test_bench_insert_batch_10k.py',
+    'test_bench_concurrent.py',
+    'test_bench_pool.py',
 ]
 
 DRIVERS = ['mariadb', 'mariadb_c', 'pymysql', 'mysql_connector', 'mysql_connector_pure']
