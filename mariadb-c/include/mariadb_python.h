@@ -228,6 +228,15 @@ typedef struct {
     PyObject *converter;
     uint8_t tls_in_use;
     void *active_result_cursor;
+    uint8_t connect_pending;
+    uint8_t connect_in_progress;
+    char *pending_host;
+    char *pending_user;
+    char *pending_passwd;
+    char *pending_db;
+    char *pending_socket;
+    unsigned int pending_port;
+    unsigned long pending_client_flags;
 } MrdbConnection;
 
 typedef struct {

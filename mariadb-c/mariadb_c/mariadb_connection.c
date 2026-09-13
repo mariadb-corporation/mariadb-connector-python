@@ -83,6 +83,11 @@ PyObject *MrdbConnection_sync_ping(MrdbConnection *self);
 static PyObject *MrdbConnection_init_fields_only(MrdbConnection *self);
 static PyObject *MrdbConnection_async_real_query_start(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_async_real_query_cont(MrdbConnection *self, PyObject *args);
+static PyObject *MrdbConnection_prepare_async_connect(MrdbConnection *self, PyObject *args, PyObject *kwargs);
+static PyObject *MrdbConnection_async_connect_start(MrdbConnection *self);
+static PyObject *MrdbConnection_async_connect_cont(MrdbConnection *self, PyObject *args);
+static void MrdbConnection_after_connect(MrdbConnection *self);
+static void MrdbConnection_free_pending(MrdbConnection *self);
 static PyObject *MrdbConnection_async_ping_start(MrdbConnection *self);
 static PyObject *MrdbConnection_async_ping_cont(MrdbConnection *self, PyObject *args);
 static PyObject *MrdbConnection_async_close_start(MrdbConnection *self);
@@ -187,6 +192,15 @@ MrdbConnection_Methods[] =
     {"_async_real_query_cont", (PyCFunction)MrdbConnection_async_real_query_cont,
       METH_VARARGS,
       "Continue non-blocking query"},
+    {"_prepare_async_connect", (PyCFunction)(void(*)(void))MrdbConnection_prepare_async_connect,
+     METH_VARARGS | METH_KEYWORDS,
+     "Apply the connection options without connecting; _async_connect_start() then connects"},
+    {"_async_connect_start", (PyCFunction)MrdbConnection_async_connect_start,
+     METH_NOARGS,
+     "Start the non-blocking connect prepared by _prepare_async_connect()"},
+    {"_async_connect_cont", (PyCFunction)MrdbConnection_async_connect_cont,
+     METH_VARARGS,
+     "Continue a non-blocking connect after the requested socket readiness"},
     {"_async_ping_start", (PyCFunction)MrdbConnection_async_ping_start,
       METH_NOARGS,
       "Start non-blocking ping"},
@@ -402,13 +416,20 @@ MrdbConnection_init_fields(MrdbConnection *self)
     self->converter = NULL;
     self->tls_in_use = 0;
     self->active_result_cursor = NULL;
+    self->connect_pending = 0;
+    self->connect_in_progress = 0;
+    self->pending_host = self->pending_user = self->pending_passwd = NULL;
+    self->pending_db = self->pending_socket = NULL;
+    self->pending_port = 0;
+    self->pending_client_flags = 0;
     return 0;
 }
 
 static int
-MrdbConnection_Initialize(MrdbConnection *self,
+MrdbConnection_configure(MrdbConnection *self,
         PyObject *args,
-        PyObject *dsnargs)
+        PyObject *dsnargs,
+        uint8_t async_connect)
 {
     uint8_t has_error= 1;
     char *dsn= NULL, *host=NULL, *user= NULL, *password= NULL, *schema= NULL,
@@ -614,6 +635,22 @@ MrdbConnection_Initialize(MrdbConnection *self,
           goto end;
     }
 
+    if (async_connect)
+    {
+        if (mysql_optionsv(self->mysql, MYSQL_OPT_NONBLOCK, (void *)0))
+            goto end;
+        self->pending_host= host ? strdup(host) : NULL;
+        self->pending_user= user ? strdup(user) : NULL;
+        self->pending_passwd= password ? strdup(password) : NULL;
+        self->pending_db= schema ? strdup(schema) : NULL;
+        self->pending_socket= socket ? strdup(socket) : NULL;
+        self->pending_port= port;
+        self->pending_client_flags= client_flags;
+        self->connect_pending= 1;
+        has_error= 0;
+        goto end;
+    }
+
     Py_BEGIN_ALLOW_THREADS;
     mysql_real_connect(self->mysql, host, user, password, schema, port,
             socket, client_flags);
@@ -624,27 +661,7 @@ MrdbConnection_Initialize(MrdbConnection *self,
         goto end;
     }
 
-    if (mysql_get_ssl_cipher(self->mysql))
-        self->tls_in_use= 1;
-
-    /* PEP-446-style hygiene: mark the socket non-inheritable so an
-       execve() in a child process won't leak our fd.  This does NOT
-       protect against fork() without exec — that case is documented
-       as unsupported (open a fresh connection in the child). */
-    {
-        my_socket _fd = mysql_get_socket(self->mysql);
-#ifdef _WIN32
-        if (_fd != INVALID_SOCKET)
-            SetHandleInformation((HANDLE)_fd, HANDLE_FLAG_INHERIT, 0);
-#else
-        if (_fd >= 0) {
-            int _flags = fcntl((int)_fd, F_GETFD, 0);
-            if (_flags != -1)
-                fcntl((int)_fd, F_SETFD, _flags | FD_CLOEXEC);
-        }
-#endif
-    }
-    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
+    MrdbConnection_after_connect(self);
 
     has_error= 0;
 end:
@@ -659,6 +676,30 @@ end:
         return -1;
 
     return 0;
+}
+
+static int
+MrdbConnection_Initialize(MrdbConnection *self,
+        PyObject *args,
+        PyObject *dsnargs)
+{
+    return MrdbConnection_configure(self, args, dsnargs, 0);
+}
+
+static PyObject *
+MrdbConnection_prepare_async_connect(MrdbConnection *self,
+        PyObject *args,
+        PyObject *kwargs)
+{
+    if (self->mysql)
+    {
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+            "Connection is already initialized");
+        return NULL;
+    }
+    if (MrdbConnection_configure(self, args, kwargs, 1))
+        return NULL;
+    Py_RETURN_NONE;
 }
 
 static int MrdbConnection_traverse(
@@ -760,6 +801,7 @@ static void MrdbConnection_dealloc(PyObject *obj)
     Py_CLEAR(self->status_callback);
 #endif
     Py_CLEAR(self->dsn);
+    MrdbConnection_free_pending(self);
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -1260,6 +1302,130 @@ MrdbConnection_async_real_query_cont(MrdbConnection *self, PyObject *args) {
 
 
 /* Async ping methods */
+
+/* Everything the constructor does once the server accepted the connection:
+   shared by the blocking constructor path and the non-blocking completion. */
+static void
+MrdbConnection_after_connect(MrdbConnection *self)
+{
+    if (mysql_get_ssl_cipher(self->mysql))
+        self->tls_in_use= 1;
+
+    /* PEP-446-style hygiene: mark the socket non-inheritable so an
+       execve() in a child process won't leak our fd.  This does NOT
+       protect against fork() without exec — that case is documented
+       as unsupported (open a fresh connection in the child). */
+    {
+        my_socket _fd = mysql_get_socket(self->mysql);
+#ifdef _WIN32
+        if (_fd != INVALID_SOCKET)
+            SetHandleInformation((HANDLE)_fd, HANDLE_FLAG_INHERIT, 0);
+#else
+        if (_fd >= 0) {
+            int _flags = fcntl((int)_fd, F_GETFD, 0);
+            if (_flags != -1)
+                fcntl((int)_fd, F_SETFD, _flags | FD_CLOEXEC);
+        }
+#endif
+    }
+    mariadb_get_infov(self->mysql, MARIADB_CONNECTION_HOST, (void *)&self->host);
+}
+
+static void
+MrdbConnection_free_pending(MrdbConnection *self)
+{
+    free(self->pending_host);
+    free(self->pending_user);
+    free(self->pending_passwd);
+    free(self->pending_db);
+    free(self->pending_socket);
+    self->pending_host= self->pending_user= self->pending_passwd= NULL;
+    self->pending_db= self->pending_socket= NULL;
+    self->connect_pending= 0;
+    self->connect_in_progress= 0;
+}
+
+#define CONNECT_WAITING 1
+#define CONNECT_RUNNING 2
+
+static PyObject *
+MrdbConnection_finish_async_connect(MrdbConnection *self, int status, MYSQL *ret)
+{
+    if (status != 0)
+    {
+        self->connect_in_progress= CONNECT_WAITING;
+        if (status > 0 && status < 8 && wait_status_cache[status])
+        {
+            Py_INCREF(wait_status_cache[status]);
+            return wait_status_cache[status];
+        }
+        return PyLong_FromLong(status);
+    }
+    self->connect_in_progress= 0;
+    if (ret == NULL)
+    {
+        /* keep the error before the parameters are dropped */
+        mariadb_throw_exception(self->mysql, NULL, 0, NULL);
+        MrdbConnection_free_pending(self);
+        return NULL;
+    }
+    MrdbConnection_after_connect(self);
+    MrdbConnection_free_pending(self);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+MrdbConnection_async_connect_start(MrdbConnection *self)
+{
+    MYSQL *ret= NULL;
+    int status;
+
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    if (!self->connect_pending)
+    {
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+            "No non-blocking connect pending (_prepare_async_connect() was not called)");
+        return NULL;
+    }
+    if (self->connect_in_progress)
+    {
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+            "Non-blocking connect already in progress");
+        return NULL;
+    }
+    self->connect_in_progress= CONNECT_RUNNING;
+    Py_BEGIN_ALLOW_THREADS;
+    status= mysql_real_connect_start(&ret, self->mysql, self->pending_host,
+                                     self->pending_user, self->pending_passwd,
+                                     self->pending_db, self->pending_port,
+                                     self->pending_socket, self->pending_client_flags);
+    Py_END_ALLOW_THREADS;
+    return MrdbConnection_finish_async_connect(self, status, ret);
+}
+
+static PyObject *
+MrdbConnection_async_connect_cont(MrdbConnection *self, PyObject *args)
+{
+    MYSQL *ret= NULL;
+    int wait_status, status;
+
+    if (!PyArg_ParseTuple(args, "i", &wait_status))
+        return NULL;
+    MARIADB_CHECK_CONNECTION(self, NULL);
+    if (!self->connect_pending || self->connect_in_progress != CONNECT_WAITING)
+    {
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+            self->connect_in_progress == CONNECT_RUNNING ?
+            "Non-blocking connect already in progress" :
+            "No non-blocking connect in progress");
+        return NULL;
+    }
+    self->connect_in_progress= CONNECT_RUNNING;
+    Py_BEGIN_ALLOW_THREADS;
+    status= mysql_real_connect_cont(&ret, self->mysql, wait_status);
+    Py_END_ALLOW_THREADS;
+    return MrdbConnection_finish_async_connect(self, status, ret);
+}
 
 static PyObject *
 MrdbConnection_async_ping_start(MrdbConnection *self) {

@@ -44,6 +44,34 @@ MYSQL_WAIT_TIMEOUT = 8
 # Import the C connection base class
 from mariadb_c._mariadb import connection as CConnection
 
+_ADD_READER_SUPPORT: dict[type, bool] = {}
+
+
+def _loop_supports_add_reader(loop: asyncio.AbstractEventLoop) -> bool:
+    """Whether this event loop can poll sockets (add_reader). Probed once per
+    loop class with a throw-away socket pair: Windows' ProactorEventLoop has the
+    method but raises NotImplementedError."""
+    cls = type(loop)
+    cached = _ADD_READER_SUPPORT.get(cls)
+    if cached is not None:
+        return cached
+    supported = False
+    if hasattr(loop, 'add_reader'):
+        try:
+            a, b = socket.socketpair()
+            try:
+                loop.add_reader(a.fileno(), lambda: None)
+                loop.remove_reader(a.fileno())
+                supported = True
+            finally:
+                a.close()
+                b.close()
+        except (NotImplementedError, AttributeError, OSError):
+            supported = False
+    _ADD_READER_SUPPORT[cls] = supported
+    return supported
+
+
 class AsyncConnection(CConnection, AsyncConnectionCommon[Any]):
     """
     MariaDB Connector/Python Async Connection Object
@@ -199,18 +227,40 @@ class AsyncConnection(CConnection, AsyncConnectionCommon[Any]):
     
     async def _connect(self) -> None:
         """
-        Internal method to establish async connection.
-        
-        Uses standard blocking mysql_real_connect() for initial connection (including SSL handshake),
-        then sets MYSQL_OPT_NONBLOCK afterward. This avoids SSL/TLS issues on Windows with SCHANNEL
-        buffering and simplifies the code.
+        Internal method to establish the connection.
         """
-        # Call the C extension's __init__ which does mysql_real_connect() synchronously
-        CConnection.__init__(self, *self._args, **self._kwargs)
+        loop = asyncio.get_event_loop()
+        supports_add_reader = _loop_supports_add_reader(loop)
 
-        # Connection is now fully established (including SSL handshake)
-        # NOW set MYSQL_OPT_NONBLOCK for async operations
-        self.set_nonblock_option()
+        if supports_add_reader and sys.platform != "win32":
+            # Non-blocking connect driven off the selector.
+            CConnection._prepare_async_connect(self, *self._args, **self._kwargs)
+            self._loop = loop
+            self._wait_for_status = self._wait_for_status_selector
+            try:
+                status = self._async_connect_start()
+                if isinstance(status, int) and status != 0:
+                    # the socket exists once _start returned a wait status
+                    self._socket_fd = self.get_socket()
+                    while isinstance(status, int) and status != 0:
+                        status = self._async_connect_cont(await self._wait_for_status(status))
+            except BaseException:
+                self._disarm_reader()
+                raise
+            self._socket_fd = self.get_socket()
+        else:
+            # Call the C extension's __init__ which does mysql_real_connect() synchronously
+            CConnection.__init__(self, *self._args, **self._kwargs)
+            # Connection is now fully established (including SSL handshake)
+            # NOW set MYSQL_OPT_NONBLOCK for async operations
+            self.set_nonblock_option()
+            self._socket_fd = self.get_socket()
+            if supports_add_reader:
+                self._loop = loop
+                self._wait_for_status = self._wait_for_status_selector
+            else:
+                # Windows: Use C-based polling
+                self._wait_for_status = self._wait_for_status_c_poll
 
         # Set converter on C extension's _converter field (same as sync)
         if self._converter_param is not None:
@@ -218,44 +268,14 @@ class AsyncConnection(CConnection, AsyncConnectionCommon[Any]):
 
         cache_size: int = self._prep_stmt_cache_size if self._cache_prep_stmts else 0
         self._stmt_cache = StmtCache(self, cache_size)
-        
-        # Get socket FD after connection is fully established
-        self._socket_fd = self.get_socket()
-        
-        # Select platform-specific wait implementation BEFORE calling async methods
-        loop = asyncio.get_event_loop()
-        supports_add_reader = False
-        if hasattr(loop, 'add_reader'):
-            # Test if add_reader actually works (Windows ProactorEventLoop has it but raises NotImplementedError)
-            try:
-                def dummy_callback() -> None:
-                    pass
-                loop.add_reader(self._socket_fd, dummy_callback)
-                loop.remove_reader(self._socket_fd)
-                supports_add_reader = True
-            except (NotImplementedError, AttributeError):
-                supports_add_reader = False
-        
+
         if supports_add_reader:
-            # Unix/Linux: drive non-blocking I/O off the selector.
-            #
-            # The reader is registered persistently and reused across queries.
-            # It is armed lazily on the first read-wait.
-            # when it fires with no pending wait, i.e. the peer closed it (EOF is
-            # "readable"), it self-suspends so an idle connection cannot spin.
-            # The next operation re-arms it.
-            #
+            # The reader is registered persistently and reused across queries
+            # (armed lazily on the first read-wait; it self-suspends when it
+            # fires with no pending wait, so an idle connection cannot spin).
             # The writer is registered on demand only for the duration of a
-            # write-wait: a connected socket is almost always writable, so a
-            # persistent writer would fire every loop iteration and busy-spin.
-            self._loop = loop
-            self._wait_for_status = self._wait_for_status_selector
-            
-            # libmariadb leaves the socket in blocking mode after the synchronous connect/handshake.
+            # write-wait.
             os.set_blocking(self._socket_fd, False)
-        else:
-            # Windows: Use C-based polling
-            self._wait_for_status = self._wait_for_status_c_poll
 
         await self.set_autocommit(self._autocommit)
 
