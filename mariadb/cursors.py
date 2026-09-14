@@ -23,6 +23,7 @@ from numbers import Number
 from mariadb.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
 from typing import Sequence
 import decimal
+import keyword
 from collections import namedtuple
 
 PARAMSTYLE_QMARK = 1
@@ -48,8 +49,35 @@ SQL_OTHER = 255
 
 ROWS_EOF = -1
 
-def _get_namedtuple_cls(field_names: tuple):
-    return namedtuple("Row", field_names, rename=True)
+
+#    def _get_namedtuple_cls(field_names: tuple):
+#        return namedtuple("Row", field_names, rename=True)
+def _get_namedtuple_cls(columns: tuple[str, ...]) -> type[tuple[Any, ...]]:
+    """Create a namedtuple class from column definitions."""
+    seen: set[str] = set()
+    field_names: list[str] = []
+
+    for i, name in enumerate(columns):
+        # Fallback for invalid identifiers, keywords, or leading underscores
+        if (
+            not name
+            or not name.isidentifier()
+            or keyword.iskeyword(name)
+            or name.startswith("_")
+        ):
+            name = f"column_{i}"
+
+        # Reject duplicate names in result set
+        if name in seen:
+            raise ProgrammingError(
+                f"Duplicate column name '{name}' in result set: a "
+                "named_tuple cursor requires unique column names"
+            )
+
+        seen.add(name)
+        field_names.append(name)
+
+    return namedtuple("Row", field_names)  # pyright: ignore[reportUntypedNamedTuple]
 
 class Cursor(mariadb._mariadb.cursor):
     """
