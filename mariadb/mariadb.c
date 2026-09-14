@@ -46,6 +46,7 @@ extern int cursor_datetime_init(void);
 
 PyObject *decimal_module= NULL,
          *decimal_type= NULL,
+         *keyword_iskeyword= NULL,
          *socket_module= NULL,
          *indicator_module= NULL;
 extern uint16_t max_pool_size;
@@ -149,6 +150,21 @@ PyMODINIT_FUNC PyInit__mariadb(void)
     if (!(socket_module= PyImport_ImportModule("socket")))
     {
         goto error;
+    }
+
+    {
+        PyObject *keyword_module;
+
+        if (!(keyword_module= PyImport_ImportModule("keyword")))
+        {
+            goto error;
+        }
+        keyword_iskeyword= PyObject_GetAttrString(keyword_module, "iskeyword");
+        Py_DECREF(keyword_module);
+        if (!keyword_iskeyword)
+        {
+            goto error;
+        }
     }
 
     Py_SET_TYPE(&MrdbCursor_Type, &PyType_Type);
