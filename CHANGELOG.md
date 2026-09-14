@@ -36,7 +36,7 @@ Release date: sep. 2026
 - [CONPY-342](https://jira.mariadb.org/browse/CONPY-342): Enforce the connection charset and close the connection on a charset mismatch
 - [CONPY-339](https://jira.mariadb.org/browse/CONPY-339): Fix 100% CPU usage caused by `_on_socket_writable` firing continuously on idle async connections
 - [CONPY-363](https://jira.mariadb.org/browse/CONPY-363): Stop native async TLS connections logging "returning true from eof_received() has no effect when using ssl"
-- [CONPY-386](https://jira.mariadb.org/browse/CONPY-386): `cursor(named_tuple=True)` no longer drops a column when two columns share a name: the result set is refused instead
+- [CONPY-386](https://jira.mariadb.org/browse/CONPY-386): `cursor(named_tuple=True)` no longer drops a column when two columns share a name. Member names follow one rule in the C and the pure-Python implementation: a column name is kept when `collections.namedtuple` accepts it (a valid identifier, not a keyword, no leading underscore, not already used); any other name, a duplicate included, becomes `column_<index>`. `cursor.description` keeps the original names
 - [CONPY-385](https://jira.mariadb.org/browse/CONPY-385): `cursor(named_tuple=True)` no longer raises when a column name is a Python keyword
 - [CONPY-368](https://jira.mariadb.org/browse/CONPY-368): Return `None` for DATE/DATETIME values Python cannot represent, instead of raising `SystemError`
 - [CONPY-365](https://jira.mariadb.org/browse/CONPY-365): Refuse an out-of-bounds decimal length in the result metadata instead of reading past the buffer
