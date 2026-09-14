@@ -194,6 +194,41 @@ class TestConnection(unittest.TestCase):
         cursor.close()
         conn.close()
 
+    def test_unsupported_character_set(self):
+        """The connector talks utf8mb4 in both directions: a statement that
+        moves the client or the result character set away from it is refused,
+        on the text and on the binary protocol, with a ProgrammingError (not
+        a SystemError from an exception left pending in the C callback)."""
+        if self.connection.server_version < 100202:
+            self.skipTest("session tracking not supported")
+        if is_maxscale():
+            self.skipTest("MAXSCALE doesn't forward session state changes")
+
+        for statement in ("SET NAMES latin1",
+                          "SET character_set_client = latin1",
+                          "SET character_set_results = latin1"):
+            for binary in (False, True):
+                with self.subTest(statement=statement, binary=binary):
+                    conn = create_connection()
+                    cursor = conn.cursor(binary=binary)
+                    with self.assertRaises(mariadb.ProgrammingError) as exc:
+                        if binary:
+                            cursor.execute(statement, ())
+                        else:
+                            cursor.execute(statement)
+                    self.assertIn("latin1", str(exc.exception))
+                    cursor.close()
+                    conn.close()
+
+        # a variable the connector does not depend on, and utf8mb4 itself,
+        # pass
+        conn = create_connection()
+        cursor = conn.cursor()
+        cursor.execute("SET character_set_connection = latin1")
+        cursor.execute("SET character_set_results = utf8mb4")
+        cursor.close()
+        conn.close()
+
     def test_ping(self):
         if is_maxscale():
             self.skipTest("MAXSCALE wrong thread id")
