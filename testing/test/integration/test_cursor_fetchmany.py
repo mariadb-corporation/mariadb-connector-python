@@ -22,7 +22,12 @@ class TestCursorFetchmany(unittest.TestCase):
     def setUp(self):
         self.connection = create_connection()
         self.cursor = self.connection.cursor()
-        self.cursor.execute("SELECT seq FROM seq_1_to_10")
+        # a plain table rather than the sequence engine: the suite also runs
+        # against MySQL
+        self.cursor.execute("CREATE TEMPORARY TABLE test_fetchmany (seq INT)")
+        self.cursor.executemany("INSERT INTO test_fetchmany VALUES (?)",
+                                [(i,) for i in range(1, 11)])
+        self.cursor.execute("SELECT seq FROM test_fetchmany ORDER BY seq")
 
     def tearDown(self):
         self.cursor.close()
