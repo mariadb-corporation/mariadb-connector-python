@@ -929,6 +929,42 @@ class TestConnection(unittest.TestCase):
             cursor.execute("SELECT 1")
 
 
+    def test_unsupported_character_set(self):
+        """A statement moving character_set_client or character_set_results
+        away from utf8mb4 is refused on the text and the binary protocol. The
+        C extension raises ProgrammingError and keeps the connection; the
+        pure-Python client raises OperationalError and closes it."""
+        conn = create_connection()
+        if not conn.server_version >= 110300:
+            conn.close()
+            self.skipTest("SESSION_TRACK for the character set variables requires MariaDB >= 11.3")
+        conn.close()
+
+        for statement in ("SET NAMES latin1",
+                          "SET character_set_client = latin1",
+                          "SET character_set_results = latin1"):
+            for binary in (False, True):
+                with self.subTest(statement=statement, binary=binary):
+                    conn = create_connection()
+                    cursor = conn.cursor(binary=binary)
+                    with self.assertRaises((mariadb.OperationalError,
+                                            mariadb.ProgrammingError)) as exc:
+                        if binary:
+                            cursor.execute(statement, ())
+                        else:
+                            cursor.execute(statement)
+                    self.assertIn("latin1", str(exc.exception))
+                    cursor.close()
+                    conn.close()
+
+        # a variable the connector does not depend on, and utf8mb4 itself, pass
+        conn = create_connection()
+        cursor = conn.cursor()
+        cursor.execute("SET character_set_connection = latin1")
+        cursor.execute("SET character_set_results = utf8mb4")
+        cursor.close()
+        conn.close()
+
     def test_long_password_connection(self):
         """
         PLUGIN_AUTH_LENENC_CLIENT_DATA: a password whose encoded auth data

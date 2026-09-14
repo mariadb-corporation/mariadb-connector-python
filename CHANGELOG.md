@@ -18,6 +18,7 @@ Release date: sep. 2026
 
 **Bug fixes:**
 
+- A statement that switches `character_set_results` away from utf8mb4 is now refused like one switching `character_set_client`, in both implementations; the C extension reports it as a `ProgrammingError` on the text and the binary protocol instead of a `SystemError`
 - `fetchmany()` with a negative count returns every remaining row in both implementations; in the C extension a count out of range for a C `long long` raises `OverflowError` instead of fetching every row and failing with a `SystemError`
 - [CONPY-378](https://jira.mariadb.org/browse/CONPY-378): strip timezone-aware `datetime` and `time` parameters in the text protocol again. Kudos to Ruurd Noppen.
 - [CONPY-382](https://jira.mariadb.org/browse/CONPY-382): Raise instead of crashing on a parameter that cannot be serialized 

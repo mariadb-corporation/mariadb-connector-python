@@ -115,8 +115,15 @@ class OkPacket(Completion):
 
 
 class CharsetMismatchError(OperationalError):
-    """Raised when the server changes character_set_client away from the configured charset."""
+    """Raised when the server changes character_set_client or
+    character_set_results away from the configured charset."""
     pass
+
+
+# The connector talks utf8mb4 in both directions: a statement that switches
+# either of these away from it (SET NAMES, SET character_set_results, ...)
+# is refused, otherwise parameters and results would be transcoded wrongly.
+_TRACKED_CHARSET_VARIABLES = frozenset(('character_set_client', 'character_set_results'))
 
 
 def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None:
@@ -133,20 +140,21 @@ def _process_session_tracking(parser: PayloadReader, context: 'Context') -> None
                 var_name_len = parser.read_length_encoded_int_not_null()
                 var_name = parser.read_bytes(var_name_len).decode('utf-8')
                 var_value_len = parser.read_length_encoded_int()
-                if (var_name == 'character_set_client'):
+                if var_name in _TRACKED_CHARSET_VARIABLES:
                     if var_value_len is None:
                         raise CharsetMismatchError(
-                            "character_set_client cannot be changed to NULL. "
+                            f"{var_name} cannot be changed to NULL. "
                             "Connection closed."
                         )
                     var_value = parser.read_bytes(var_value_len).decode('utf-8')
                     if context.charset and var_value != context.charset:
                         raise CharsetMismatchError(
-                            f"character_set_client changed to '{var_value}' "
+                            f"{var_name} changed to '{var_value}' "
                             "but only 'utf8mb4' is permitted. "
                             "Connection closed."
                         )
-                    context.charset = var_value
+                    if var_name == 'character_set_client':
+                        context.charset = var_value
                 else:
                     if var_value_len:
                         parser.skip(var_value_len)

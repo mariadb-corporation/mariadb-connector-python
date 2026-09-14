@@ -80,6 +80,23 @@ class TestOkPacketSessionTracking(unittest.TestCase):
         with self.assertRaises(CharsetMismatchError):
             OkPacket.decode(_ok(_var('autocommit', 'OFF'), _var('character_set_client', 'latin1')), ctx)
 
+    def test_results_charset_change_is_detected(self) -> None:
+        """character_set_results is watched like character_set_client: the
+        connector decodes results as utf8mb4 too."""
+        ctx = _context()
+        ctx.charset = 'utf8mb4'
+        with self.assertRaises(CharsetMismatchError) as exc:
+            OkPacket.decode(_ok(_var('character_set_results', 'latin1')), ctx)
+        self.assertIn('character_set_results', str(exc.exception))
+        self.assertEqual(ctx.charset, 'utf8mb4')
+
+    def test_results_charset_utf8mb4_is_accepted(self) -> None:
+        ctx = _context()
+        ctx.charset = 'utf8mb4'
+        OkPacket.decode(_ok(_var('character_set_results', 'utf8mb4'),
+                            _var('character_set_connection', 'latin1')), ctx)
+        self.assertEqual(ctx.charset, 'utf8mb4')
+
     def test_charset_change_to_null_is_detected(self) -> None:
         ctx = _context()
         ctx.charset = 'utf8mb4'

@@ -1661,6 +1661,11 @@ MrdbCursor_execute_binary(MrdbCursor *self)
         goto error;
     }
 
+    /* the session tracking callback may have raised while the response was
+       processed (unsupported character set) */
+    if (PyErr_Occurred())
+        goto error;
+
     self->field_count= mysql_stmt_field_count(self->stmt);
     Py_RETURN_NONE;
 
@@ -1778,6 +1783,12 @@ MrdbCursor_readresponse(MrdbCursor *self)
         if (rc)
         {
           mariadb_throw_exception(db, NULL, 0, NULL);
+          return NULL;
+        }
+        /* the session tracking callback may have raised while the OK packet
+           was processed (unsupported character set) */
+        if (PyErr_Occurred())
+        {
           return NULL;
         }
         self->field_count= mysql_field_count(self->connection->mysql);
