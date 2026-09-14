@@ -579,6 +579,7 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon[Any]):
 
         if not size:
             size = self.arraysize
+        # a negative count means every remaining row, as in the sync cursor
 
         # Lazy buffering: buffer rows if needed (e.g., after nextset())
         if self._user_buffered and self._buffered_rows is None and self.field_count > 0:
@@ -586,14 +587,14 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon[Any]):
 
         # If buffered mode, serve from buffer
         if self._user_buffered and self._buffered_rows is not None:
-            end_index = min(self._row_index + size, len(self._buffered_rows))
+            end_index = len(self._buffered_rows) if size < 0 else min(self._row_index + size, len(self._buffered_rows))
             rows: List[Any] = self._buffered_rows[self._row_index:end_index]
             self._row_index = end_index
             return rows
 
         # For unbuffered cursors, fetch rows and update rowcount cumulatively
         rows = []
-        for _ in range(size):
+        while size < 0 or len(rows) < size:
             row = await self._fetch_row_unbuffered()
             if row is None:
                 break

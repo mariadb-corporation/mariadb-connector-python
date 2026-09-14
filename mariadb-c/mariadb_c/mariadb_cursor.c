@@ -1922,7 +1922,7 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
 {
     PyObject *List;
     unsigned int field_count= self->field_count;
-    uint64_t row_count;
+    int64_t row_count;
 
     MARIADB_CHECK_STMT_FETCH(self);
 
@@ -1938,16 +1938,24 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
         return NULL;
     }
 
-    row_count= (uint64_t)PyLong_AsLongLong(rows);
-    if (PyErr_Occurred())
+    row_count= PyLong_AsLongLong(rows);
+    if (row_count == -1 && PyErr_Occurred())
+    {
+        /* out of range for a long long: OverflowError is set */
         return NULL;
+    }
+    /* a negative count (ROWS_EOF) means every remaining row */
+    if (row_count < 0)
+    {
+        row_count= INT64_MAX;
+    }
 
     if (!(List= PyList_New(0)))
     {
         return NULL;
     }
 
-    for (uint64_t i=0; i < row_count && !MrdbCursor_fetchinternal(self); i++)
+    for (int64_t i=0; i < row_count && !MrdbCursor_fetchinternal(self); i++)
     {
         uint32_t j;
         PyObject *Row;

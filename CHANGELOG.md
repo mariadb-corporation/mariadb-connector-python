@@ -18,6 +18,7 @@ Release date: sep. 2026
 
 **Bug fixes:**
 
+- `fetchmany()` with a negative count returns every remaining row in both implementations; in the C extension a count out of range for a C `long long` raises `OverflowError` instead of fetching every row and failing with a `SystemError`
 - [CONPY-378](https://jira.mariadb.org/browse/CONPY-378): strip timezone-aware `datetime` and `time` parameters in the text protocol again. Kudos to Ruurd Noppen.
 - [CONPY-382](https://jira.mariadb.org/browse/CONPY-382): Raise instead of crashing on a parameter that cannot be serialized 
 - [CONPY-358](https://jira.mariadb.org/browse/CONPY-358): Support `default_file` and `default_group` (option-file reading) in the pure-Python client

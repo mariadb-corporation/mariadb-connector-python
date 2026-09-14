@@ -339,13 +339,17 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon[
         if size is None:
             size = self.arraysize
 
-        # Optimize: fetch rows directly instead of calling fetchone repeatedly
-        rows : List[tuple[Any, ...]]= []
-        for _ in range(size):
-            row = await result.fetch_one()
-            if row is None:
-                break
-            rows.append(row)
+        if size < 0:
+            # a negative count means every remaining row, as in the C extension
+            rows = await result.fetch_all()
+        else:
+            # Optimize: fetch rows directly instead of calling fetchone repeatedly
+            rows = []
+            for _ in range(size):
+                row = await result.fetch_one()
+                if row is None:
+                    break
+                rows.append(row)
 
         if rows:
             return self._apply_row_formatting(rows)
