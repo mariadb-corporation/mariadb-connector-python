@@ -22,7 +22,12 @@ class TestCursorFetchmany(unittest.TestCase):
     def setUp(self) -> None:
         self.connection = create_connection()
         self.cursor = self.connection.cursor()
-        self.cursor.execute("SELECT seq FROM seq_1_to_10")
+        # a plain table rather than the sequence engine: the suite also runs
+        # against MySQL
+        self.cursor.execute("CREATE TEMPORARY TABLE test_fetchmany (seq INT)")
+        self.cursor.executemany("INSERT INTO test_fetchmany VALUES (?)",
+                                [(i,) for i in range(1, 11)])
+        self.cursor.execute("SELECT seq FROM test_fetchmany ORDER BY seq")
 
     def tearDown(self) -> None:
         self.cursor.close()
@@ -63,7 +68,10 @@ class TestAsyncCursorFetchmany(unittest.IsolatedAsyncioTestCase):
             with self.subTest(buffered=buffered):
                 connection = await mariadb.asyncConnect(**conf())
                 cursor = connection.cursor(buffered=buffered)
-                await cursor.execute("SELECT seq FROM seq_1_to_10")
+                await cursor.execute("CREATE TEMPORARY TABLE test_fetchmany (seq INT)")
+                await cursor.executemany("INSERT INTO test_fetchmany VALUES (?)",
+                                         [(i,) for i in range(1, 11)])
+                await cursor.execute("SELECT seq FROM test_fetchmany ORDER BY seq")
                 await cursor.fetchmany(3)
                 self.assertEqual([r[0] for r in await cursor.fetchmany(-1)],
                                  list(range(4, 11)))
