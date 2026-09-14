@@ -11,6 +11,7 @@ Release date: sep. 2026
 
 **Bug fixes:**
 
+- `fetchmany()` with a count out of range for a C `long long` raises `OverflowError` instead of fetching every row and failing with a `SystemError`; the row list is released when a row cannot be built
 - [CONPY-152](https://jira.mariadb.org/browse/CONPY-152): `executemany()` accepts a statement without placeholders again, such as `INSERT ... VALUES (DEFAULT)`
 - [CONPY-328](https://jira.mariadb.org/browse/CONPY-328): Fix the unsigned conversion for `TINYINT`
 - [CONPY-329](https://jira.mariadb.org/browse/CONPY-329): Fix the date conversion in the binary protocol
