@@ -814,6 +814,107 @@ static void MrdbCursor_finalize(MrdbCursor *self)
 }
 /* }}} */
 
+static PyObject *ma_named_tuple_names(MrdbCursor *self)
+{
+    PyObject *names, *seen= NULL;
+    unsigned int i;
+
+    if (!(names= PyList_New(self->field_count)) ||
+        !(seen= PySet_New(NULL)))
+    {
+        goto error;
+    }
+
+    for (i=0; i < self->field_count; i++)
+    {
+        PyObject *name, *res;
+        int keep;
+
+        if (!(name= PyUnicode_DecodeUTF8(self->fields[i].name,
+                                         self->fields[i].name_length, NULL)))
+        {
+            if (!PyErr_ExceptionMatches(PyExc_UnicodeDecodeError))
+            {
+                goto error;
+            }
+            PyErr_Clear();
+            keep= 0;
+        }
+        else
+        {
+            /* str.isidentifier() rather than PyUnicode_IsIdentifier():
+               PyPy does not export the latter in its C API. */
+            if (!(res= PyObject_CallMethod(name, "isidentifier", NULL)))
+            {
+                Py_DECREF(name);
+                goto error;
+            }
+            keep= PyObject_IsTrue(res);
+            Py_DECREF(res);
+            if (keep > 0)
+            {
+                keep= PyUnicode_AsUTF8(name)[0] != '_';
+            }
+        }
+        if (keep > 0)
+        {
+            if (!(res= PyObject_CallFunctionObjArgs(keyword_iskeyword, name,
+                                                    NULL)))
+            {
+                Py_DECREF(name);
+                goto error;
+            }
+            keep= PyObject_Not(res);
+            Py_DECREF(res);
+        }
+        if (keep > 0)
+        {
+            /* already taken by an earlier column? */
+            if ((keep= PySet_Contains(seen, name)) >= 0)
+            {
+                keep= !keep;
+            }
+        }
+        if (keep < 0)
+        {
+            Py_XDECREF(name);
+            goto error;
+        }
+        if (!keep)
+        {
+            unsigned int counter= 0;
+            int taken;
+
+            Py_XDECREF(name);
+            name= PyUnicode_FromFormat("column_%u", i);
+            while (name && (taken= PySet_Contains(seen, name)) > 0)
+            {
+                Py_DECREF(name);
+                name= PyUnicode_FromFormat("column_%u_%u", i, ++counter);
+            }
+            if (!name || taken < 0)
+            {
+                Py_XDECREF(name);
+                goto error;
+            }
+        }
+        if (PySet_Add(seen, name) < 0)
+        {
+            Py_DECREF(name);
+            goto error;
+        }
+        PyList_SET_ITEM(names, i, name);
+    }
+    Py_DECREF(seen);
+    return names;
+
+error:
+    Py_XDECREF(seen);
+    Py_XDECREF(names);
+    return NULL;
+}
+/* }}} */
+
 static int Mrdb_GetFieldInfo(MrdbCursor *self)
 {
     self->row_number= 0;
@@ -876,59 +977,37 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             char *p, *key;
             size_t names_size= 0, key_len;
             int rc;
-            PyObject *seen;
+            PyObject *names;
 
-            /* All column names are known now: a struct sequence can't carry
-               the same member twice, the second one would silently shadow
-               the first. */
-            if (!(seen= PySet_New(NULL)))
+            /* All column names are known now; the member names are derived
+               from them (see ma_named_tuple_names) and copied into one
+               buffer owned by the row type. */
+            if (!(names= ma_named_tuple_names(self)))
             {
                 return 1;
             }
             for (i=0; i < self->field_count; i++)
             {
-                PyObject *name;
-                int found;
+                Py_ssize_t len;
 
-                if (!(name= PyUnicode_FromString(self->fields[i].name)))
+                if (!PyUnicode_AsUTF8AndSize(PyList_GET_ITEM(names, i), &len))
                 {
-                    Py_DECREF(seen);
+                    Py_DECREF(names);
                     return 1;
                 }
-                found= PySet_Contains(seen, name);
-                if (found == 0)
-                {
-                    found= PySet_Add(seen, name) < 0 ? -1 : 0;
-                }
-                Py_DECREF(name);
-                if (found)
-                {
-                    Py_DECREF(seen);
-                    if (found > 0)
-                    {
-                        mariadb_throw_exception(NULL, Mariadb_ProgrammingError,
-                            0, "Duplicate column name '%s' in result set: a "
-                            "named_tuple cursor requires unique column names",
-                            self->fields[i].name);
-                    }
-                    return 1;
-                }
-            }
-            Py_DECREF(seen);
-
-            for (i=0; i < self->field_count; i++)
-            {
-                names_size+= strlen(self->fields[i].name) + 1;
+                names_size+= (size_t)len + 1;
             }
 
             if (!(field_names= PyBytes_FromStringAndSize(NULL,
                             (Py_ssize_t)names_size))) {
+                Py_DECREF(names);
                 return 1;
             }
 
             if (!(self->sequence_fields= (PyStructSequence_Field *)
                         PyMem_RawCalloc(self->field_count + 1,
                             sizeof(PyStructSequence_Field)))) {
+                Py_DECREF(names);
                 Py_DECREF(field_names);
                 PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory for sequence fields");
                 return 1;
@@ -942,12 +1021,15 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
             p= PyBytes_AS_STRING(field_names);
             for (i=0; i < self->field_count; i++)
             {
-                size_t len= strlen(self->fields[i].name) + 1;
+                Py_ssize_t len;
+                const char *name= PyUnicode_AsUTF8AndSize(
+                        PyList_GET_ITEM(names, i), &len);
 
-                memcpy(p, self->fields[i].name, len);
+                memcpy(p, name, (size_t)len + 1);
                 self->sequence_fields[i].name= p;
-                p+= len;
+                p+= len + 1;
             }
+            Py_DECREF(names);
             self->sequence_type= PyStructSequence_NewType(&sequence_desc);
             if (!self->sequence_type) {
                 Py_DECREF(field_names);

@@ -17,10 +17,10 @@ the last were handled, so both reserved words ('def', 'class') and
 underscore-prefixed columns ('_foo') crashed. Soft keywords ('match', 'type')
 are accepted by namedtuple and must keep their own name.
 
-Offending names become 'column_<position>', which the existing duplicate
-suffixing then keeps unique. The C extension uses a struct sequence rather
-than namedtuple and never raised, so it is exercised here only to confirm the
-query works on both drivers.
+Offending names become 'column_<position>', with '_1', '_2', ... appended
+should that name itself be taken. The C extension builds a struct sequence,
+which would take any name, but applies the same rule so that both drivers
+name the members identically.
 """
 from __future__ import annotations
 
@@ -56,6 +56,7 @@ def test_underscore_prefixed_column_name_does_not_raise(conn: Any) -> None:
     row = cur.fetchone()
     cur.close()
     assert tuple(row) == (1, 2)
+    assert row.column_0 == 1
     assert row.other == 2
 
 
@@ -77,19 +78,18 @@ def test_renamed_columns_stay_addressable_and_ordered(conn: Any) -> None:
     assert tuple(row) == (1, 2, 3)
     assert row.ok == 2
     # the replacement name carries the column position
-    assert row[0] == 1 and row[2] == 3
+    assert row.column_0 == 1 and row.column_2 == 3
 
 
 def test_replacement_name_colliding_with_real_column_stays_unique(conn: Any) -> None:
-    # 'def' becomes column_0, which is also a real column here. Building the row
-    # type at all proves the two were kept distinct: namedtuple raises on a
-    # duplicate field name. (The C extension does not rename, so it never
-    # collides; only the values are checked on both.)
+    # 'def' becomes column_0, which is also a real column here: that column is
+    # then a duplicate and gets its own position, on both drivers.
     cur = conn.cursor(named_tuple=True)
     cur.execute("SELECT 1 AS `def`, 2 AS column_0")
     row = cur.fetchone()
     cur.close()
     assert tuple(row) == (1, 2)
+    assert (row.column_0, row.column_1) == (1, 2)
 
 
 def test_ordinary_column_names_are_untouched(conn: Any) -> None:
