@@ -1,7 +1,16 @@
 #!/usr/bin/env python -O
 # -*- coding: utf-8 -*-
 
-"""Regression tests for CONPY-380"""
+"""Regression tests for CONPY-380: a column name that is not valid UTF-8.
+
+Building the row type of a named_tuple cursor used to fail on such a name and,
+when the error was caught, a fetch walked a result set whose row buffer was
+never allocated and segfaulted. The name is now treated like any other name a
+named tuple cannot carry: the member is called after its position,
+"column_<index>",
+and the statement succeeds. The undecodable name is only reported when it is
+actually needed as text, i.e. from cursor.description.
+"""
 
 import struct
 import unittest
@@ -21,7 +30,8 @@ ALIVE_QUERY = "SELECT 'still alive'"
 
 # query -> (columns, rows)
 _RESULTS = {
-    BAD_QUERY: ([(BAD_NAME, MYSQL_TYPE_LONG)], [(1,)]),
+    BAD_QUERY: ([(BAD_NAME, MYSQL_TYPE_LONG), ("fine", MYSQL_TYPE_LONG)],
+                [(1, 2)]),
     GOOD_QUERY: ([("answer", MYSQL_TYPE_LONG),
                   ("status", MYSQL_TYPE_VAR_STRING)],
                  [(42, "ok")]),
@@ -67,51 +77,33 @@ class TestCursorInvalidFieldName(unittest.TestCase):
         self.server.__exit__(None, None, None)
         self.assertIsNone(self.server.error)
 
-    def _undecodable_column(self, cursor: mariadb.Cursor) -> None:
-        with self.assertRaises(Exception) as ctx:
-            cursor.execute(BAD_QUERY)
-        # a real error, not "returned a result with an exception set"
-        self.assertNotIsInstance(ctx.exception, SystemError)
+    def test_undecodable_name_is_renamed(self):
+        for binary in (False, True):
+            with self.subTest(binary=binary):
+                cursor = self.connection.cursor(named_tuple=True,
+                                                binary=binary)
+                cursor.execute(BAD_QUERY)
+                row = cursor.fetchone()
+                self.assertEqual((row.column_0, row.fine), (1, 2))
+                self.assertIn("column_0=1", repr(row))
+                cursor.close()
 
-    def test_fetch_after_failure_reports_no_result_set(self):
-        """Catching the error and fetching anyway used to segfault."""
+    def test_description_reports_the_undecodable_name(self):
+        """The name is only decoded when it is needed as text."""
         cursor = self.connection.cursor(named_tuple=True)
-        try:
-            cursor.execute(BAD_QUERY)
-        except Exception:
-            pass
-
-        with self.assertRaises(Exception) as ctx:
-            cursor.fetchall()
-        self.assertIn("result set", str(ctx.exception))
+        cursor.execute(BAD_QUERY)
+        cursor.fetchall()
+        with self.assertRaises((UnicodeDecodeError, mariadb.DataError)):
+            cursor.description
         cursor.close()
 
-    def test_cursor_usable_after_failure(self):
-        """The cursor must recover for the next statement."""
+    def test_cursor_and_connection_stay_usable(self):
         cursor = self.connection.cursor(named_tuple=True)
-        self._undecodable_column(cursor)
-
+        cursor.execute(BAD_QUERY)
+        cursor.fetchall()
         cursor.execute(GOOD_QUERY)
         row = cursor.fetchall()[0]
-        self.assertEqual(row.answer, 42)
-        self.assertEqual(row.status, "ok")
-        cursor.close()
-
-    def test_cursor_usable_after_failure_binary(self):
-        """Same on the prepared statement path."""
-        cursor = self.connection.cursor(named_tuple=True, binary=True)
-        self._undecodable_column(cursor)
-
-        cursor.execute(GOOD_QUERY)
-        row = cursor.fetchall()[0]
-        self.assertEqual(row.answer, 42)
-        self.assertEqual(row.status, "ok")
-        cursor.close()
-
-    def test_connection_usable_after_failure(self):
-        """The pending result set must be drained, not left on the wire."""
-        cursor = self.connection.cursor(named_tuple=True)
-        self._undecodable_column(cursor)
+        self.assertEqual((row.answer, row.status), (42, "ok"))
         cursor.close()
 
         other = self.connection.cursor()
