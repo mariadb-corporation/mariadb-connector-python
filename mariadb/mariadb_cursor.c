@@ -605,9 +605,21 @@ static PyObject *ma_named_tuple_names(MrdbCursor *self)
             PyErr_Clear();
             keep= 0;
         }
-        else if ((keep= PyUnicode_IsIdentifier(name)) > 0)
+        else
         {
-            keep= PyUnicode_AsUTF8(name)[0] != '_';
+            /* str.isidentifier() rather than PyUnicode_IsIdentifier():
+               PyPy does not export the latter in its C API. */
+            if (!(res= PyObject_CallMethod(name, "isidentifier", NULL)))
+            {
+                Py_DECREF(name);
+                goto error;
+            }
+            keep= PyObject_IsTrue(res);
+            Py_DECREF(res);
+            if (keep > 0)
+            {
+                keep= PyUnicode_AsUTF8(name)[0] != '_';
+            }
         }
         if (keep > 0)
         {
