@@ -90,15 +90,19 @@ class TestCursorNamedTupleNames(unittest.TestCase):
 
     def test_column_named_like_internal_key(self):
         """The copied names are kept in an attribute on the row type. A column
-        with that name must keep its own value."""
+        with that name starts with an underscore, so it is renamed to its
+        position and cannot shadow the attribute; its value stays reachable."""
         cursor = self.connection.cursor(named_tuple=True)
         cursor.execute("SELECT 1 AS _mariadb_field_names, 2 AS other")
         rows = cursor.fetchall()
+        names = [d[0] for d in cursor.description]
         cursor.close()
 
-        self.assertEqual(rows[0]._mariadb_field_names, 1)
+        self.assertEqual(rows[0].column_0, 1)
         self.assertEqual(rows[0].other, 2)
-        self.assertIn("_mariadb_field_names", repr(rows[0]))
+        self.assertIn("column_0=1", repr(rows[0]))
+        self.assertEqual(names[0], "_mariadb_field_names")
+        self.assertIsInstance(type(rows[0])._mariadb_field_names, bytes)
 
 
 if __name__ == '__main__':
