@@ -110,20 +110,23 @@ def test_repr_after_connection_close(driver: Any) -> None:
 
 def test_column_named_like_internal_key() -> None:
     """The C extension keeps the copied names in an attribute on the row type.
-    A column with that name must keep its own value.
-
-    C extension only: the pure Python driver builds rows with namedtuple,
-    which rejects field names starting with an underscore.
+    A column with that name starts with an underscore, so it is renamed to its
+    position and cannot shadow the attribute; its value stays reachable and
+    description keeps the name. Same names on both drivers.
     """
-    connection = mariadb_c.connect(**conf())
-    try:
-        cur = connection.cursor(named_tuple=True)
-        cur.execute("SELECT 1 AS _mariadb_field_names, 2 AS other")
-        rows = cur.fetchall()
-        cur.close()
+    for driver in (mariadb, mariadb_c):
+        connection = driver.connect(**conf())
+        try:
+            cur = connection.cursor(named_tuple=True)
+            cur.execute("SELECT 1 AS _mariadb_field_names, 2 AS other")
+            rows = cur.fetchall()
+            names = [d[0] for d in cur.description]
+            cur.close()
 
-        assert rows[0]._mariadb_field_names == 1
-        assert rows[0].other == 2
-        assert "_mariadb_field_names" in repr(rows[0])
-    finally:
-        connection.close()
+            assert rows[0].column_0 == 1
+            assert rows[0].other == 2
+            assert "column_0=1" in repr(rows[0])
+            assert names[0] == "_mariadb_field_names"
+        finally:
+            connection.close()
+    assert isinstance(type(rows[0])._mariadb_field_names, bytes)  # C row type

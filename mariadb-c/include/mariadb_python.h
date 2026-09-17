@@ -328,7 +328,8 @@ extern PyObject *Mariadb_NotSupportedError;
 extern PyObject *Mariadb_Warning;
 
 extern PyObject *decimal_module,
-                *decimal_type;
+                *decimal_type,
+                *keyword_iskeyword;
 
 /* Object types */
 extern PyTypeObject Mariadb_Fieldinfo_Type;

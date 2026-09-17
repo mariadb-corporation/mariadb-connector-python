@@ -624,26 +624,15 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         seen: set[str] = set()
         field_names: list[str] = []
         for i in range(columns.count):
-            name = columns.get_name(i) or columns.get_org_name(i)
-            if (not name or not name.isidentifier() or keyword.iskeyword(name)
-                    or name.startswith('_')):
-                # namedtuple won't take this name; the positional replacement
-                # is unique per column, so no column becomes unreachable.
+            name = columns.get_name(i)
+            if not (name and name.isidentifier() and not keyword.iskeyword(name)
+                    and not name.startswith('_') and name not in seen):
                 name = f'column_{i}'
-            elif name in seen:
-                # Two columns sharing a name the row keeps - a join selecting
-                # an id from each table, typically - can't both be reached, so
-                # refuse the result set instead of dropping one.
-                raise ProgrammingError(
-                    f"Duplicate column name '{name}' in result set: a "
-                    "named_tuple cursor requires unique column names")
-            else:
-                seen.add(name)
-            original_name = name
-            counter = 1
-            while name in field_names:
-                name = f'{original_name}_{counter}'
-                counter += 1
+                counter = 0
+                while name in seen:
+                    counter += 1
+                    name = f'column_{i}_{counter}'
+            seen.add(name)
             field_names.append(name)
         
         # namedtuple (not typing.NamedTuple) is required: field names are only
