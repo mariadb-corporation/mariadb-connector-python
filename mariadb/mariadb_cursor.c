@@ -1068,9 +1068,11 @@ static int MrdbCursor_fetchinternal(MrdbCursor *self)
     if (!self->parseinfo.is_text)
     {
         rc= mysql_stmt_fetch(self->stmt);
-        if (rc == MYSQL_NO_DATA)
-            return 1;
-        return 0;
+        if (rc == 0 || rc == MYSQL_DATA_TRUNCATED)
+            return 0;
+        if (rc != MYSQL_NO_DATA)
+            mariadb_throw_exception(self->stmt, NULL, 1, NULL);
+        return 1;
     }
 
     if (!(row= mysql_fetch_row(self->result)))
@@ -1107,6 +1109,8 @@ MrdbCursor_fetchone(MrdbCursor *self)
     }
     if (MrdbCursor_fetchinternal(self))
     {
+        if (PyErr_Occurred())
+            return NULL;
         Py_RETURN_NONE;
     }
 
@@ -1589,6 +1593,15 @@ MrdbCursor_fetchrows(MrdbCursor *self, PyObject *rows)
         }
         /* CONPY-99: the list holds its own reference now */
         Py_DECREF(Row);
+    }
+    /* The loop also stops when MrdbCursor_fetchinternal() raised on a failed
+       fetch (e.g. a malformed row refused by Connector/C); don't return a
+       partial result with a pending exception. */
+    if (PyErr_Occurred())
+    {
+        Py_DECREF(List);
+        self->row_count= 0;
+        return NULL;
     }
     self->row_count= CURSOR_NUM_ROWS(self);
     return List;
