@@ -1316,9 +1316,20 @@ int MrdbCursor_fetchinternal(MrdbCursor *self)
     if (!self->is_text)
     {
         rc= mysql_stmt_fetch(self->stmt);
-        if (rc == MYSQL_NO_DATA)
-            return 1;
-        return 0;
+        /* A successful fetch returns 0; MYSQL_DATA_TRUNCATED indicates the row
+           was fetched but one or more values didn't fit their bind buffer.
+           Both mean a row is available. */
+        if (rc == 0 || rc == MYSQL_DATA_TRUNCATED)
+            return 0;
+        /* MYSQL_NO_DATA marks the end of the result set. Any other return
+           value (a generic error, or the malformed-packet rejection that a
+           bounds-checking Connector/C raises for an over-long field length)
+           is a real error: raise it instead of treating it as a good row,
+           which would leave self->values[] unset and crash in
+           ma_set_result_column_value(). */
+        if (rc != MYSQL_NO_DATA)
+            mariadb_throw_exception(self->stmt, NULL, 1, NULL);
+        return 1;
     }
 
     if (!(row= mysql_fetch_row(self->result)))
@@ -1390,6 +1401,8 @@ MrdbCursor_fetchone(MrdbCursor *self)
     }
     if (MrdbCursor_fetchinternal(self))
     {
+        if (PyErr_Occurred())
+            return NULL;
         Py_RETURN_NONE;
     }
 
