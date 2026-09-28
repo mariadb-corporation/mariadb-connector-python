@@ -42,7 +42,7 @@ static PyObject *get_exception_type(int error_number)
   case WARN_DATA_TRUNCATED:
       return Mariadb_DataError;
 
-  /* ProgrammingError: Exception raised for programming errors, e.g. table not found or 
+  /* ProgrammingError: Exception raised for programming errors, e.g. table not found or
      already exists, syntax error in the SQL statement, wrong number of parameters specified, etc. */
   case ER_EMPTY_QUERY:
   case ER_CANT_DO_THIS_DURING_AN_TRANSACTION:
@@ -131,7 +131,7 @@ void mariadb_throw_exception(void *handle,
 
     if (!exception_type)
       exception_type= Mariadb_DatabaseError;
- 
+
     ErrorNo= PyLong_FromLong(is_statement ?
                           mysql_stmt_errno((MYSQL_STMT *)handle) : mysql_errno((MYSQL *)handle));
     ErrorMsg= PyUnicode_FromString(is_statement ?

@@ -35,6 +35,9 @@ dist/
 mariadb.egg-info/
 mariadb_binary/
 
+# Auto-generated version files
+mariadb/release_info.py
+
 # Cache
 __pycache__
 

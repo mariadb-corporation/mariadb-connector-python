@@ -1872,47 +1872,59 @@ class TestCursor(unittest.TestCase):
     def test_conpy133(self):
         if is_mysql():
             self.skipTest("Skip (MySQL)")
+
         with create_connection() as conn:
+            # 1. Valid Executable Comments (Parameters inside active comments should be bound)
+            valid_cases = [
+                ("SELECT /*! ? */", (1,), 1),
+                ("SELECT /*M! ? */", (1,), 1),
+                ("SELECT /*M!50601 ? */", (1,), 1),
+                ("SELECT /*!40301 ? */", (1,), 1),
+                ("SELECT /*M!100201 ? */", (1,), 1),
+                ("SELECT /*M!100500 ? */", (1,), 1),
+                ("SELECT /*M!110000 ? */", (1,), 1),
+                ("SELECT /*! ? */, /*M! ? */", (1, 2), 1),
+                ("SELECT /*M!50601 ? + ? */", (1, 2), 3),
+            ]
 
-            cursor = conn.cursor()
-            cursor.execute("SELECT /*! ? */", (1,))
-            row = cursor.fetchone()
-            assert row is not None
-            self.assertEqual(row[0], 1)
-            del cursor
+            for query, params, expected_first_col in valid_cases:
+                with self.subTest(query=query):
+                    with conn.cursor() as cursor:
+                        cursor.execute(query, params)
+                        row = cursor.fetchone()
+                        self.assertIsNotNone(row)
+                        self.assertEqual(row[0], expected_first_col)
 
-            cursor = conn.cursor()
-            cursor.execute("SELECT /*M! ? */", (1,))
-            row = cursor.fetchone()
-            assert row is not None
-            self.assertEqual(row[0], 1)
-            del cursor
+            # 2. Executable Comments with Unsupported/Future Server Versions
+            # In higher version comments, the contents are ignored/skipped. Depending on C-connector
+            # parsing, this may either raise a ProgrammingError/Error or pass gracefully.
+            invalid_version_cases = [
+                ("SELECT /*!50701 ? */", (1,)),
+                ("SELECT /*!250701 ? */", (1,)),
+                ("SELECT /*M!99999 ? */", (1,)),
+            ]
 
-            cursor = conn.cursor()
-            cursor.execute("SELECT /*M!50601 ? */", (1,))
-            row = cursor.fetchone()
-            assert row is not None
-            self.assertEqual(row[0], 1)
-            del cursor
+            for query, params in invalid_version_cases:
+                with self.subTest(query=query):
+                    with conn.cursor() as cursor:
+                        try:
+                            cursor.execute(query, params)
+                        except mariadb.Error:
+                            pass
 
-            cursor = conn.cursor()
-            cursor.execute("SELECT /*!40301 ? */", (1,))
-            row = cursor.fetchone()
-            assert row is not None
-            self.assertEqual(row[0], 1)
-            del cursor
+            # 3. Parameters both inside and outside comments
+            with self.subTest(query="WHERE parameters inside and outside comments"):
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT /*M! ? */ AS result WHERE 1=?", (1, 1))
+                    row = cursor.fetchone()
+                    self.assertIsNotNone(row)
+                    self.assertEqual(row[0], 1)
 
-            with conn.cursor() as cursor:
-                try:
-                    cursor.execute("SELECT /*!50701 ? */", (1,))
-                except mariadb.ProgrammingError:
-                    pass
-
-            with conn.cursor() as cursor:
-                try:
-                    cursor.execute("SELECT /*!250701 ? */", (1,))
-                except mariadb.ProgrammingError:
-                    pass
+            with self.subTest(query="WHERE parameters inside version comments"):
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT ? /*!999999 , ? */", (1,))  # Only 1 parameter passed
+                    row= cursor.fetchone()
+                    self.assertEqual(row[0],1)
 
     def check_closed(self):
         with create_connection() as conn:

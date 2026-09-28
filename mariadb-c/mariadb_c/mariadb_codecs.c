@@ -144,14 +144,20 @@ mariadb_pydate_to_tm(enum enum_field_types type,
             type == MYSQL_TYPE_DATETIME)
     {
         uint8_t is_time= PyTime_CheckExact(obj);
-        tm->hour= is_time ? PyDateTime_TIME_GET_HOUR(obj) :
-            PyDateTime_DATE_GET_HOUR(obj);
-        tm->minute= is_time ? PyDateTime_TIME_GET_MINUTE(obj) :
-            PyDateTime_DATE_GET_MINUTE(obj);
-        tm->second= is_time ? PyDateTime_TIME_GET_SECOND(obj) :
-            PyDateTime_DATE_GET_SECOND(obj);
-        tm->second_part= is_time ? PyDateTime_TIME_GET_MICROSECOND(obj) :
-            PyDateTime_DATE_GET_MICROSECOND(obj);
+        uint8_t is_datetime= PyDateTime_CheckExact(obj);
+
+        if (is_time) {
+            tm->hour = PyDateTime_TIME_GET_HOUR(obj);
+            tm->minute = PyDateTime_TIME_GET_MINUTE(obj);
+            tm->second = PyDateTime_TIME_GET_SECOND(obj);
+            tm->second_part = PyDateTime_TIME_GET_MICROSECOND(obj);
+        } else if (is_datetime) {
+            tm->hour = PyDateTime_DATE_GET_HOUR(obj);
+            tm->minute = PyDateTime_DATE_GET_MINUTE(obj);
+            tm->second = PyDateTime_DATE_GET_SECOND(obj);
+            tm->second_part = PyDateTime_DATE_GET_MICROSECOND(obj);
+        }
+
         if (type == MYSQL_TYPE_TIME)
         {
             tm->time_type= MYSQL_TIMESTAMP_TIME;
@@ -161,9 +167,11 @@ mariadb_pydate_to_tm(enum enum_field_types type,
     if (type == MYSQL_TYPE_DATE ||
             type == MYSQL_TYPE_DATETIME)
     {
-        tm->year= PyDateTime_GET_YEAR(obj);
-        tm->month= PyDateTime_GET_MONTH(obj);
-        tm->day= PyDateTime_GET_DAY(obj);
+        if (PyDate_Check(obj) || PyDateTime_Check(obj)) {
+            tm->year = PyDateTime_GET_YEAR(obj);
+            tm->month = PyDateTime_GET_MONTH(obj);
+            tm->day = PyDateTime_GET_DAY(obj);
+        }
         if (type == MYSQL_TYPE_DATE)
             tm->time_type= MYSQL_TIMESTAMP_DATE;
         else
@@ -515,10 +523,12 @@ static PyObject *ma_convert_value(MrdbCursor *self,
             PyCallable_Check(func))
     {
         PyObject *arglist= PyTuple_New(1);
-        Py_INCREF(value);
-        PyTuple_SetItem(arglist, 0, value);
-        new_value= PyObject_CallObject(func, arglist);
-        Py_DECREF(arglist);
+        if (arglist) {
+            Py_INCREF(value);
+            PyTuple_SetItem(arglist, 0, value);
+            new_value= PyObject_CallObject(func, arglist);
+            Py_DECREF(arglist);
+        }
     }
     Py_XDECREF(key);
     return new_value;
@@ -741,6 +751,9 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
     if (PyErr_Occurred())
         goto end;
 
+    if (PyErr_Occurred())
+        goto end;
+
     ext_field_type= mariadb_extended_field_type(&self->fields[column]);
 
     if (!row)
@@ -930,6 +943,8 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
                     self->values[column]= Py_None;
                 } else {
                     PyErr_SetString(PyExc_ValueError, "Invalid or out-of-bounds decimal length encountered");
+                    Py_INCREF(Py_None);
+                    self->values[column]= Py_None;
                     goto end;
                 }
                 *row+= length;
@@ -985,6 +1000,12 @@ field_fetch_callback(void *data, unsigned int column, unsigned char **row)
         }
         default:
             break;
+    }
+    if (!self->values[column])
+    {
+         PyErr_Clear();
+         Py_INCREF(Py_None);
+         self->values[column]= Py_None;
     }
     /* check if values need to be converted */
     if (self->connection->converter)

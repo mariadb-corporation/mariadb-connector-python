@@ -237,6 +237,7 @@ typedef struct {
     char *pending_socket;
     unsigned int pending_port;
     unsigned long pending_client_flags;
+    PyObject *weakreflist;
 } MrdbConnection;
 
 typedef struct {
@@ -300,6 +301,7 @@ typedef struct {
     uint8_t closed;
     uint8_t reprepare;
     uint8_t param_cb_active;
+    PyObject *weakreflist;
 } MrdbCursor;
 
 typedef struct
