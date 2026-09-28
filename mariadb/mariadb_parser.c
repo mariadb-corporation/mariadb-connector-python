@@ -123,13 +123,27 @@ parser_error(char *errmsg, size_t errmsg_len, const char *errstr)
 
 #define IS_WHITESPACE(a) (a==32 || a==9 || a==10 || a==13)
 
+/* Helper function to parse version digits right after '!' or 'M!' */
+static unsigned long parse_comment_version(const char *ptr, const char *end, size_t *bytes_read)
+{
+    unsigned long ver = 0;
+    const char *start = ptr;
+
+    while (ptr <= end && isdigit((unsigned char)*ptr) && (ptr - start < 6)) {
+        ver = ver * 10 + (*ptr - '0');
+        ptr++;
+    }
+    *bytes_read = (size_t)(ptr - start);
+
+    return ver;
+}
+
 uint8_t
 MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
                  char *errmsg, size_t errmsg_len)
 {
     char *a, *end;
     char lastchar = 0;
-    uint8_t i;
     PyObject *tmp;
 
     if (errmsg_len)
@@ -178,43 +192,57 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
                 case LIT_BACKTICK:
                     if (*a == '`')
                         p->in_literal = LIT_NONE;
+                    lastchar = *a;
                     a++;
                     continue;
             }
         }
 
-        /* --- handle comments --- */
+        /* --- handle comment entry --- */
         if (!p->in_comment && p->in_literal == LIT_NONE)
         {
             /* Style 1: C-style comments */
-            if (*a == '/' && *(a+1) == '*')
+            if (*a == '/' && (a + 1) <= end && *(a + 1) == '*')
             {
-                a += 2;
+                a += 2; /* Skip past '/' and '*' */
 
-                /* check special comments starting with ! */
-                if (a <= end && *a == '!')
+                /* Check MariaDB M! comments */
+                if ((a + 1) <= end && *a == 'M' && *(a + 1) == '!')
                 {
-                    if (isspace(*(a+1)) || isdigit(*(a+1)))
-                    {
-                        p->in_comment = 0; /* treat as special, parse content normally */
-                        continue;
-                    }
-                }
-
-                /* check MariaDB M! comments */
-                if (a+1 <= end && *a == 'M' && *(a+1) == '!')
-                {
+                    size_t ver_len = 0;
                     a += 2;
-                    /* If whitespace or version number, treat as special */
-                    if (isspace(*a) || isdigit(*a))
-                    {
-                        p->in_comment = 0; /* parse normally */
+                    unsigned long ver = parse_comment_version(a, end, &ver_len);
+                    a += ver_len;
+
+                    /* If server_version is known and higher/equal, parse inside as active SQL */
+                    if (mysql_get_server_version(p->mysql) == 0 || mysql_get_server_version(p->mysql) >= ver) {
+                        p->in_comment = 0;
+                        lastchar = *(a - 1);
+                        continue;
+                    }
+                }
+                /* Check MySQL/Generic ! comments: e.g. !50000 ... */
+                else if (a <= end && *a == '!')
+                {
+                    size_t ver_len = 0;
+                    a++;
+                    unsigned long ver = parse_comment_version(a, end, &ver_len);
+                    a += ver_len;
+
+                    /*
+                     * High version thresholds (like 90000) meant for MySQL will
+                     * evaluate false on lower MariaDB versions, skipping params.
+                     */
+                    if (mysql_get_server_version(p->mysql) == 0 || mysql_get_server_version(p->mysql) >= ver) {
+                        p->in_comment = 0;
+                        lastchar = *(a - 1);
                         continue;
                     }
                 }
 
-                /* normal comment */
+                /* Standard or inactive comment block */
                 p->in_comment = 1;
+                lastchar = '*';
                 continue;
             }
 
@@ -223,26 +251,31 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
             {
                 a++;
                 p->comment_eol = 1;
+                lastchar = '#';
                 continue;
             }
 
             /* Style 3: -- comment */
-            if (*a == '-' && *(a+1) == '-' && ((a+2) <= end) && *(a+2) == ' ')
+            if (*a == '-' && (a + 1) <= end && *(a + 1) == '-' && 
+               ((a + 2) <= end) && isspace((unsigned char)*(a + 2)))
             {
                 a += 3;
                 p->comment_eol = 1;
+                lastchar = ' ';
                 continue;
             }
         }
-        else
+        else if (p->in_comment)
         {
-            /* inside normal C-style comment */
-            if (*a == '*' && *(a+1) == '/')
+            /* Inside inactive C-style comment: watch for closing comment */
+            if (*a == '*' && (a + 1) <= end && *(a + 1) == '/')
             {
                 a += 2;
                 p->in_comment = 0;
+                lastchar = '/';
                 continue;
             }
+            lastchar = *a;
             a++;
             continue;
         }
@@ -253,13 +286,15 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
             {
                 a++;
                 p->comment_eol = 0;
+                lastchar = '\n';
                 continue;
             }
+            lastchar = *a;
             a++;
             continue;
         }
 
-        /* --- parameter handling --- */
+        /* --- parameter handling (only executed if NOT in comment) --- */
         if (*a == '?')
         {
             if (p->paramstyle && p->paramstyle != QMARK)
@@ -273,6 +308,7 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
             tmp = PyLong_FromLong((long)(a - p->statement.str));
             PyList_Append(p->param_list, tmp);
             Py_DECREF(tmp);
+            lastchar = *a;
             a++;
             continue;
         }
@@ -280,7 +316,7 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
         /* FORMAT / PYFORMAT handling */
         if (*a == '%' && lastchar != '\\')
         {
-            if (*(a+1) == 's' || *(a+1) == 'd')
+            if ((a + 1) <= end && (*(a + 1) == 's' || *(a + 1) == 'd'))
             {
                 if (p->paramstyle && p->paramstyle != FORMAT)
                 {
@@ -290,20 +326,21 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
                 }
                 p->paramstyle = FORMAT;
                 *a = '?';
-                memmove(a+1, a+2, end - a);
+                memmove(a + 1, a + 2, end - a);
                 end--;
                 tmp = PyLong_FromLong((long)(a - p->statement.str));
                 PyList_Append(p->param_list, tmp);
                 Py_DECREF(tmp);
+                lastchar = '?';
                 a++;
                 p->param_count++;
                 continue;
             }
 
-            if (*(a+1) == '(')
+            if ((a + 1) <= end && *(a + 1) == '(')
             {
-                char *val_end = strstr(a+1, ")s");
-                if (val_end)
+                char *val_end = strstr(a + 1, ")s");
+                if (val_end && val_end <= end)
                 {
                     ssize_t keylen = val_end - a + 1;
                     if (p->paramstyle && p->paramstyle != PYFORMAT)
@@ -323,7 +360,7 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
                     {
                         MrdbString *m;
                         if (!(m = PyMem_RawRealloc(p->keys,
-                                                     p->param_count * sizeof(MrdbString))))
+                                                   p->param_count * sizeof(MrdbString))))
                         {
                             parser_error(errmsg, errmsg_len, "Not enough memory");
                             return 1;
@@ -338,17 +375,18 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
                             return 1;
                         }
                     }
-                    if (!(p->keys[p->param_count-1].str = PyMem_RawCalloc(1, keylen-2)))
+                    if (!(p->keys[p->param_count - 1].str = PyMem_RawCalloc(1, keylen - 2)))
                     {
                         parser_error(errmsg, errmsg_len, "Not enough memory");
                         return 1;
                     }
-                    memcpy(p->keys[p->param_count-1].str, a+2, keylen-3);
-                    p->keys[p->param_count-1].length = keylen-3;
+                    memcpy(p->keys[p->param_count - 1].str, a + 2, keylen - 3);
+                    p->keys[p->param_count - 1].length = keylen - 3;
 
-                    memmove(a+1, val_end+2, end - a - keylen + 1);
-                    a += 1;
+                    memmove(a + 1, val_end + 2, end - a - keylen + 1);
                     end -= keylen;
+                    lastchar = '?';
+                    a += 1;
                     continue;
                 }
             }
@@ -363,12 +401,15 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
                 {
                     p->is_insert = 1;
                     a += 7;
+                    lastchar = 'T';
+                    continue;
                 }
             }
             if (p->is_insert && check_keyword(a, end, "VALUES", 6))
             {
                 p->value_ofs = a + 7;
                 a += 7;
+                lastchar = 'S';
                 continue;
             }
         }
@@ -376,7 +417,7 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
         {
             if (p->command == SQL_NONE)
             {
-                for (uint8_t i=0; binary_command[i].str.str; i++)
+                for (uint8_t i = 0; binary_command[i].str.str; i++)
                 {
                     if (check_keyword(a, end, binary_command[i].str.str,
                                       binary_command[i].str.length))
@@ -398,4 +439,3 @@ MrdbParser_parse(MrdbParser *p, uint8_t is_batch,
     p->statement.length = end - p->statement.str + 1;
     return 0;
 }
-
