@@ -254,58 +254,41 @@ def get_converter(val: Any) -> ParamConverter | None:
 
 
 # ============================================================================
-# Pre-computed lookup tables for SQL parsing optimization
+# SQL tokenizer
 # ============================================================================
 
-# Character classification lookup tables (256 entries for all byte values)
-_IS_ALPHA = bytearray(256)
-_IS_DIGIT = bytearray(256)
-_IS_IDENTIFIER_START = bytearray(256)
-_IS_IDENTIFIER_CHAR = bytearray(256)
-_IS_SPECIAL_CHAR = bytearray(256)  # Characters that need special handling in NORMAL state
-
-# Mark special characters that need handling in NORMAL state
-# These are characters that can trigger state changes or are placeholders
-_SPECIAL_CHARS = [
-    39,  # ' (single quote)
-    34,  # " (double quote)
-    96,  # ` (backtick)
-    63,  # ? (qmark placeholder)
-    37,  # % (format placeholder)
-    58,  # : (named placeholder)
-    47,  # / (comment start)
-    42,  # * (comment)
-    35,  # # (comment)
-    45,  # - (comment)
-]
-
-
-def _init_lookup_tables() -> None:
-    """Populate the module-level parser lookup tables.
-
-    Kept in a function so the loop variables stay local instead of leaking into
-    the module namespace — which otherwise required a ``del`` cleanup that
-    pyright flags as possibly-unbound.
-    """
-    for i in range(256):
-        # A-Z (65-90), a-z (97-122)
-        if (65 <= i <= 90) or (97 <= i <= 122):
-            _IS_ALPHA[i] = 1
-            _IS_IDENTIFIER_START[i] = 1
-            _IS_IDENTIFIER_CHAR[i] = 1
-        # 0-9 (48-57)
-        if 48 <= i <= 57:
-            _IS_DIGIT[i] = 1
-            _IS_IDENTIFIER_CHAR[i] = 1
-        # _ (95)
-        if i == 95:
-            _IS_IDENTIFIER_START[i] = 1
-            _IS_IDENTIFIER_CHAR[i] = 1
-    for char_code in _SPECIAL_CHARS:
-        _IS_SPECIAL_CHAR[char_code] = 1
-
-
-_init_lookup_tables()
+# One compiled pattern finds, in C, the next thing that matters in a statement:
+# either a region to step over (string literal, quoted identifier, comment) or a
+# placeholder, reported through the group that matched. Everything else is
+# skipped without running Python code per byte. Every alternative starts with a
+# literal byte (hence the look-behinds placed after it): that lets the regex
+# engine search for that set of bytes instead of trying each alternative at
+# each position.
+#   group 1: ?            (qmark)
+#   group 2: %s / %d      (format)
+#   group 3: %(name)s     (pyformat), the name
+#   group 4: :name        (named), the name
+_TOKEN_RE = re.compile(
+    # 'string' / "string": a backslash escapes the next byte; an unterminated
+    # literal runs to the end of the statement
+    rb"""'[^'\\]*(?:\\.[^'\\]*)*(?:'|\\?\Z)"""
+    rb"""|"[^"\\]*(?:\\.[^"\\]*)*(?:"|\\?\Z)"""
+    rb"|`[^`]*`?"                         # `identifier`
+    rb"|\#[^\n]*"                         # comment to end of line
+    # '--' only starts a comment when followed by whitespace or a control
+    # character (not in expressions like '2--1'), or at the end of the statement
+    rb"|--(?=[\x00-\x20]|\Z)[^\n]*"
+    # /* comment */, but not the executable /*! ... */ and /*M ... */ forms,
+    # whose content is parsed as SQL. The opening '/*' is consumed before the
+    # closing '*/' is searched for, so '/*/' opens a comment (as on the server)
+    # instead of closing it on its own '*'
+    rb"|/\*(?![!M]).*?(?:\*/|\Z)"
+    rb"|\?()"
+    # '%' and ':' preceded by a backslash are not placeholders
+    rb"|%(?<!\\%)(?:([sd])|\(([^)]*)\)s)"
+    rb"|:(?<!\\:)([A-Za-z_][A-Za-z0-9_]*)",
+    re.DOTALL)
+_tokens = _TOKEN_RE.finditer
 
 
 # ============================================================================
@@ -385,9 +368,6 @@ def substitute_params(
 
     # Localize for speed
     _converter = get_converter
-    is_identifier_start = _IS_IDENTIFIER_START
-    is_identifier_char = _IS_IDENTIFIER_CHAR
-    is_special = _IS_SPECIAL_CHAR
 
     # Use list for fragments (Faster than bytearray.extend in Python)
     result_list: list[bytes | bytearray] = []
@@ -397,200 +377,62 @@ def substitute_params(
     cached_conv_func = None
     last_param_type = None
 
-    state = 0  # 0=NORMAL, 1=STRING, 2=ESCAPE, 3=BACKTICK, 4=EOL, 5=COMMENT
-    single_quotes = False
-    last_char = 0
     last_copy = 0
     param_idx = 0
-    i = 0
 
-    while i < length:
-        c = _sql[i]
+    for token in _tokens(_sql):
+        kind = token.lastindex
+        if kind is None:
+            continue  # string literal, quoted identifier or comment
 
-        if state == 0:  # NORMAL
-            if not is_special[c]:
-                last_char = c
-                i += 1
-                continue
+        if kind == 1:  # ?
+            if params_list is None:
+                raise ProgrammingError(
+                    "Positional placeholder '?' used but parameters provided as dict. "
+                    "Use named placeholders like :name or %(name)s instead."
+                )
+            if param_idx >= params_len:
+                raise ProgrammingError(
+                    f"Parameter count mismatch: SQL has at least {param_idx + 1} placeholders, "
+                    f"but only {params_len} parameters provided"
+                )
+            param = params_list[param_idx]
+            param_idx += 1
+        elif kind == 2:  # %s or %d
+            if params_list is None:
+                raise ProgrammingError(
+                    "Positional placeholder '%s' or '%d' used but parameters provided as dict. "
+                    "Use named placeholders like :name or %(name)s instead."
+                )
+            param = params_list[param_idx]
+            param_idx += 1
+        else:  # %(name)s or :name
+            param_name = token.group(kind).decode('utf-8')
+            if kind == 3 and params_dict is None:
+                raise ProgrammingError(
+                    f"Named placeholder '%({param_name})s' used but parameters provided as tuple/list. "
+                    "Use positional placeholders like ? or %s instead."
+                )
+            param = params_dict.get(param_name)  # type: ignore[union-attr]
+            if param is None and params_dict.get(param_name, _MISSING) is _MISSING:  # type: ignore[union-attr]
+                raise ProgrammingError(
+                    f"Dictionary doesn't contain key '{param_name}'"
+                )
 
-            # Check '?'
-            if c == 63:
-                if params_list is None:
-                    raise ProgrammingError(
-                        "Positional placeholder '?' used but parameters provided as dict. "
-                        "Use named placeholders like :name or %(name)s instead."
-                    )
-                if param_idx >= params_len:
-                    raise ProgrammingError(
-                        f"Parameter count mismatch: SQL has at least {param_idx + 1} placeholders, "
-                        f"but only {params_len} parameters provided"
-                    )
-                if i > last_copy:
-                    _append(_sql[last_copy:i])
-                param = params_list[param_idx]
-                p_type = type(param)  # pyright: ignore[reportUnknownVariableType]
-                if p_type is not last_param_type:
-                    cached_conv_func = _converter(param)
-                    last_param_type = p_type
+        start = token.start()
+        if start > last_copy:
+            _append(_sql[last_copy:start])
+        last_copy = token.end()
 
-                if cached_conv_func is not None:
-                    _append(cached_conv_func(param, no_backslash_escapes))
-                else:
-                    _append(escape_str(str(param), no_backslash_escapes))
+        p_type = type(param)  # pyright: ignore[reportUnknownVariableType]
+        if p_type is not last_param_type:
+            cached_conv_func = _converter(param)
+            last_param_type = p_type
 
-                param_idx += 1
-                last_copy = i + 1
-                last_char = c
-                i += 1
-                continue
-
-            # Check '%'
-            elif c == 37 and last_char != 92:
-                if i + 1 < length:
-                    next_c = _sql[i + 1]
-                    if next_c == 115 or next_c == 100:  # %s or %d
-                        if i > last_copy:
-                            _append(_sql[last_copy:i])
-                        if params_list is None:
-                            raise ProgrammingError(
-                                "Positional placeholder '%s' or '%d' used but parameters provided as dict. "
-                                "Use named placeholders like :name or %(name)s instead."
-                            )
-                        param = params_list[param_idx] # pyright: ignore[reportUnknownVariableType, reportOptionalSubscript]
-                        p_type = type(param)  # pyright: ignore[reportUnknownArgumentType, reportUnknownVariableType]
-                        if p_type is not last_param_type:
-                            cached_conv_func = _converter(param)
-                            last_param_type = p_type
-
-                        if cached_conv_func is not None:
-                            _append(cached_conv_func(param, no_backslash_escapes))
-                        else:
-                            _append(escape_str(str(param), no_backslash_escapes)) # pyright: ignore[reportUnknownArgumentType]
-
-                        param_idx += 1
-                        last_copy = i + 2
-                        i += 2
-                        last_char = next_c
-                        continue
-                    elif next_c == 40:  # %(name)s
-                        j = i + 2
-                        while j < length and _sql[j] != 41:
-                            j += 1
-                        if j + 1 < length and _sql[j + 1] == 115:
-                            param_name = _sql[i+2:j].decode('utf-8')
-                            if i > last_copy:
-                                _append(_sql[last_copy:i])
-                            if params_dict is None:
-                                raise ProgrammingError(
-                                    f"Named placeholder '%({param_name})s' used but parameters provided as tuple/list. "
-                                    "Use positional placeholders like ? or %s instead."
-                                )
-                            param = params_dict.get(param_name)
-                            if param is not None:
-                                p_type = type(param)  # pyright: ignore[reportUnknownVariableType]
-                                if p_type is not last_param_type:
-                                    cached_conv_func = _converter(param)
-                                    last_param_type = p_type
-
-                                if cached_conv_func is not None:
-                                    _append(cached_conv_func(param, no_backslash_escapes))
-                                else:
-                                    _append(escape_str(str(param), no_backslash_escapes))
-                            else:
-                                if params_dict.get(param_name, _MISSING) is _MISSING:
-                                    raise ProgrammingError(
-                                        f"Dictionary doesn't contain key '{param_name}'"
-                                    )
-                                _append(b'NULL')
-                            last_copy = j + 2
-                            i = j + 2
-                            last_char = 115
-                            continue
-
-            # Check ':'
-            elif c == 58 and last_char != 92:
-                if i + 1 < length:
-                    next_c = _sql[i + 1]
-                    if is_identifier_start[next_c]:
-                        j = i + 1
-                        while j < length and is_identifier_char[_sql[j]]:
-                            j += 1
-                        param_name = _sql[i+1:j].decode('utf-8')
-                        if i > last_copy:
-                            _append(_sql[last_copy:i])
-
-                        param = params_dict.get(param_name)  # type: ignore[union-attr]
-                        if param is not None:
-                            p_type = type(param)  # pyright: ignore[reportUnknownVariableType]
-                            if p_type is not last_param_type:
-                                cached_conv_func = _converter(param)
-                                last_param_type = p_type
-                            if cached_conv_func is not None:
-                                _append(cached_conv_func(param, no_backslash_escapes))
-                            else:
-                                _append(escape_str(str(param), no_backslash_escapes))
-                        else:
-                            if params_dict.get(param_name, _MISSING) is _MISSING:  # type: ignore[union-attr]
-                                raise ProgrammingError(
-                                    f"Dictionary doesn't contain key '{param_name}'"
-                                )
-                            _append(b'NULL')
-                        last_copy = j
-                        i = j
-                        last_char = _sql[j-1] if j > i else c
-                        continue
-
-            # Context Transitions
-            elif c == 39:  # "'"
-                state = 1
-                single_quotes = True
-            elif c == 34:  # '"'
-                state = 1
-                single_quotes = False
-            elif c == 96:  # '`'
-                state = 3
-            elif c == 42 and last_char == 47:  # '/*'
-                if i + 1 < length and _sql[i + 1] not in (33, 77):
-                    state = 5
-            elif c == 47:  # '/'
-                if last_char == 42:  # '*/' (defensive no-op in NORMAL state)
-                    state = 0
-            elif c == 35:  # '#'
-                state = 4
-            elif c == 45 and last_char == 45:  # '--'
-                # MySQL/MariaDB: '--' only starts a line comment when the second
-                # dash is followed by whitespace or a control character
-                if i + 1 >= length or _sql[i + 1] <= 0x20:
-                    state = 4
-
-        elif state == 1:  # STRING
-            if c == 92:  # '\'
-                state = 2
-            elif (c == 39 and single_quotes) or (c == 34 and not single_quotes):
-                state = 0
-
-        elif state == 2:  # ESCAPE
-            state = 1
-
-        elif state == 3:  # BACKTICK
-            if c == 96:
-                state = 0
-
-        elif state == 4:  # EOL
-            if c == 10:  # '\n'
-                state = 0
-
-        elif state == 5:  # COMMENT
-            if last_char == 42 and c == 47:  # '*/'
-                # Reset last_char after closing a block comment so a following
-                # '*' is not re-paired with this '/' into a spurious '/*'
-                state = 0
-                last_char = 0
-                i += 1
-                continue
-
-        last_char = c
-        i += 1
+        if cached_conv_func is not None:
+            _append(cached_conv_func(param, no_backslash_escapes))
+        else:
+            _append(escape_str(str(param), no_backslash_escapes))
 
     if last_copy < length:
         _append(_sql[last_copy:])
@@ -613,135 +455,28 @@ def normalize_to_qmark(sql: str) -> Tuple[str, List[str] | None]:
         for named/pyformat styles, or None for positional styles.
     """
     _sql = sql.encode('utf-8')
-    length = len(_sql)
 
     result_list: List[bytes] = []
     _append = result_list.append
     param_names: List[str] = []
-    has_named_params = False
-
-    is_identifier_start = _IS_IDENTIFIER_START
-    is_identifier_char = _IS_IDENTIFIER_CHAR
-    is_special = _IS_SPECIAL_CHAR
-
-    state = 0  # 0=NORMAL, 1=STRING, 2=ESCAPE, 3=BACKTICK, 4=EOL, 5=COMMENT
-    single_quotes = False
-    last_char = 0
     last_copy = 0
-    i = 0
 
-    while i < length:
-        c = _sql[i]
+    for token in _tokens(_sql):
+        kind = token.lastindex
+        if kind is None or kind == 1:
+            continue  # string literal, quoted identifier, comment, or already qmark
 
-        if state == 0:
-            if not is_special[c]:
-                last_char = c
-                i += 1
-                continue
+        start = token.start()
+        if start > last_copy:
+            _append(_sql[last_copy:start])
+        _append(b'?')
+        last_copy = token.end()
+        if kind > 2:  # %(name)s or :name
+            param_names.append(token.group(kind).decode('utf-8'))
 
-            if c == 63:  # '?' — already qmark
-                last_char = c
-                i += 1
-                continue
+    if not result_list:
+        return sql, None  # nothing to convert
 
-            elif c == 37 and last_char != 92:  # '%' not escaped
-                if i + 1 < length:
-                    next_c = _sql[i + 1]
-                    if next_c == 115 or next_c == 100:  # %s or %d
-                        if i > last_copy:
-                            _append(_sql[last_copy:i])
-                        _append(b'?')
-                        i += 2
-                        last_copy = i
-                        last_char = 63
-                        continue
-                    elif next_c == 40:  # %(name)s
-                        j = i + 2
-                        while j < length and _sql[j] != 41:
-                            j += 1
-                        if j + 1 < length and _sql[j + 1] == 115:
-                            if i > last_copy:
-                                _append(_sql[last_copy:i])
-                            _append(b'?')
-                            param_names.append(_sql[i + 2:j].decode('utf-8'))
-                            has_named_params = True
-                            i = j + 2
-                            last_copy = i
-                            last_char = 63
-                            continue
-
-            elif c == 58 and last_char != 92:  # ':' not escaped — :name
-                if i + 1 < length and is_identifier_start[_sql[i + 1]]:
-                    j = i + 1
-                    while j < length and is_identifier_char[_sql[j]]:
-                        j += 1
-                    if i > last_copy:
-                        _append(_sql[last_copy:i])
-                    _append(b'?')
-                    param_names.append(_sql[i + 1:j].decode('utf-8'))
-                    has_named_params = True
-                    i = j
-                    last_copy = i
-                    last_char = 63
-                    continue
-
-            if c == 39:
-                state = 1
-                single_quotes = True
-            elif c == 34:
-                state = 1
-                single_quotes = False
-            elif c == 96:
-                state = 3
-            elif c == 42 and last_char == 47:
-                if i + 1 < length and _sql[i + 1] not in (33, 77):
-                    state = 5
-                elif i + 1 >= length:
-                    state = 5
-            elif c == 47:
-                if last_char == 42:  # '*/' (defensive no-op in NORMAL state)
-                    state = 0
-            elif c == 35:
-                state = 4
-            elif c == 45 and last_char == 45:
-                # '--' starts a comment only when followed by whitespace / a
-                # control character
-                if i + 1 >= length or _sql[i + 1] <= 0x20:
-                    state = 4
-
-        elif state == 1:
-            if c == 92:
-                state = 2
-            elif (c == 39 and single_quotes) or (c == 34 and not single_quotes):
-                state = 0
-
-        elif state == 2:
-            state = 1
-            last_char = c
-            i += 1
-            continue
-
-        elif state == 3:
-            if c == 96:
-                state = 0
-
-        elif state == 4:
-            if c == 10:
-                state = 0
-
-        elif state == 5:
-            if last_char == 42 and c == 47:  # '*/'
-                # Reset last_char so a following '*' is not re-paired into '/*'.
-                state = 0
-                last_char = 0
-                i += 1
-                continue
-
-        last_char = c
-        i += 1
-
-    if last_copy < length:
-        _append(_sql[last_copy:])
-
+    _append(_sql[last_copy:])
     normalized = b''.join(result_list).decode('utf-8')
-    return normalized, (param_names if has_named_params else None)
+    return normalized, (param_names or None)
