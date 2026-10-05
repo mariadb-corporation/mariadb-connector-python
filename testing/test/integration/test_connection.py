@@ -23,6 +23,43 @@ class TestConnection(unittest.TestCase):
     def tearDown(self):
         del self.connection
 
+    def test_status_callback_reference(self):
+        import gc
+        import sys
+
+        def callback(connection, info):
+            calls.append(info)
+
+        calls = []
+        before = sys.getrefcount(callback)
+        connection = create_connection({"status_callback": callback})
+        self.assertEqual(sys.getrefcount(callback), before + 1)
+
+        cursor = connection.cursor()
+        cursor.execute("SET @@session.autocommit = NOT @@session.autocommit")
+        cursor.close()
+        del cursor  # a cursor references its connection
+        self.assertTrue(any("autocommit" in info for info in calls), calls)
+
+        connection._converter = {0: connection}
+        connection.close()
+        del connection
+        gc.collect()
+        self.assertEqual(sys.getrefcount(callback), before)
+
+        connection = create_connection({"status_callback": callback})
+        self.assertEqual(sys.getrefcount(callback), before + 1)
+        connection.close()
+        del connection
+        self.assertEqual(sys.getrefcount(callback), before)
+
+        # None means no callback
+        connection = create_connection({"status_callback": None})
+        cursor = connection.cursor()
+        cursor.execute("SET @@session.autocommit = NOT @@session.autocommit")
+        cursor.close()
+        connection.close()
+
     def test_conpy364(self):
         # A pooled connection sits in a reference cycle (the pool holds it, it
         # holds the pool), so the cyclic collector reclaims it and clears its

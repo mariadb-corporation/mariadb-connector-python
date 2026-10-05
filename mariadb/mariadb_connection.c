@@ -214,7 +214,7 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
   va_list ap;
   MrdbConnection *self= (MrdbConnection *)data;
   PyObject *dict= NULL;
-  PyObject *dict_key= NULL, *dict_val= NULL;
+  PyObject *dict_key= NULL, *dict_val= NULL, *res;
 
   PyGILState_STATE gstate;
   /* Acquire the GIL */
@@ -232,7 +232,9 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
       PyDict_SetItem(dict, dict_key, dict_val);
       Py_DECREF(dict_key);
       Py_DECREF(dict_val);
-      PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      res= PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      Py_XDECREF(res);
+      Py_DECREF(dict);
     }
   }
   if (type == SESSION_TRACK_TYPE)
@@ -261,7 +263,9 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
       PyDict_SetItem(dict, dict_key, dict_val);
       Py_DECREF(dict_key);
       Py_DECREF(dict_val);
-      PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      res= PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+      Py_XDECREF(res);
+      Py_DECREF(dict);
     }
 
     if (track_type == SESSION_TRACK_SYSTEM_VARIABLES)
@@ -297,7 +301,9 @@ void MrdbConnection_process_status_info(void *data, enum enum_mariadb_status_inf
         PyDict_SetItem(dict, dict_key, dict_val);
         Py_DECREF(dict_key);
         Py_DECREF(dict_val);
-        PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+        res= PyObject_CallFunction(self->status_callback, "OO", (PyObject *)data, dict);
+        Py_XDECREF(res);
+        Py_DECREF(dict);
       }
     }
   }
@@ -363,6 +369,10 @@ MrdbConnection_Initialize(MrdbConnection *self,
                                                   "(found version %s)", mysql_get_client_info());
     }
 #else
+    if (status_callback == Py_None)
+        status_callback= NULL;
+    Py_XINCREF(status_callback);
+    Py_XDECREF(self->status_callback);
     self->status_callback= status_callback;
 #endif
 
@@ -575,6 +585,7 @@ static void MrdbConnection_dealloc(PyObject *obj)
         if (self->mysql) {
             ma_connection_close(self);
         }
+        MrdbConnection_clear(self);
         Py_TYPE(self)->tp_free((PyObject *)self);
     }
 }
