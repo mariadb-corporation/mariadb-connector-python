@@ -1537,18 +1537,33 @@ class TestCursor(unittest.TestCase):
             self.skipTest("Skip (MySQL)")
 
         with create_connection() as conn:
-            # 1. Valid Executable Comments (Parameters inside active comments should be bound)
+            server_version = conn.server_version  # tuple like (10, 6, 12) or integer version depending on helper
+
+            if isinstance(server_version, tuple):
+                srv_ver_int = server_version[0] * 10000 + server_version[1] * 100 + server_version[2]
+            else:
+                srv_ver_int = server_version
+
+            # 1. Valid Executable Comments active on the current server version
             valid_cases = [
                 ("SELECT /*! ? */", (1,), 1),
                 ("SELECT /*M! ? */", (1,), 1),
                 ("SELECT /*M!50601 ? */", (1,), 1),
                 ("SELECT /*!40301 ? */", (1,), 1),
-                ("SELECT /*M!100201 ? */", (1,), 1),
-                ("SELECT /*M!100500 ? */", (1,), 1),
-                ("SELECT /*M!110000 ? */", (1,), 1),
                 ("SELECT /*! ? */, /*M! ? */", (1, 2), 1),
                 ("SELECT /*M!50601 ? + ? */", (1, 2), 3),
             ]
+
+            # Only add version-conditional cases if the running server version supports them
+            version_conditional_cases = [
+                (100201, "SELECT /*M!100201 ? */", (1,), 1),
+                (100500, "SELECT /*M!100500 ? */", (1,), 1),
+                (110000, "SELECT /*M!110000 ? */", (1,), 1),
+            ]
+
+            for required_ver, query, params, expected_first_col in version_conditional_cases:
+                if srv_ver_int >= required_ver:
+                    valid_cases.append((query, params, expected_first_col))
 
             for query, params, expected_first_col in valid_cases:
                 with self.subTest(query=query):
@@ -1559,21 +1574,19 @@ class TestCursor(unittest.TestCase):
                         self.assertEqual(row[0], expected_first_col)
 
             # 2. Executable Comments with Unsupported/Future Server Versions
-            # In higher version comments, the contents are ignored/skipped. Depending on C-connector
-            # parsing, this may either raise a ProgrammingError/Error or pass gracefully.
+            # Using 999999 ensures it is higher than any current MariaDB version.
             invalid_version_cases = [
-                ("SELECT /*!50701 ? */", (1,)),
-                ("SELECT /*!250701 ? */", (1,)),
-                ("SELECT /*M!99999 ? */", (1,)),
+                ("SELECT 1 /*!999999 , ? */", ()),
+                ("SELECT 1 /*M!999999 , ? */", ()),
             ]
 
             for query, params in invalid_version_cases:
                 with self.subTest(query=query):
                     with conn.cursor() as cursor:
-                        try:
-                            cursor.execute(query, params)
-                        except mariadb.Error:
-                            pass
+                        cursor.execute(query, params)
+                        row = cursor.fetchone()
+                        self.assertIsNotNone(row)
+                        self.assertEqual(row[0], 1)
 
             # 3. Parameters both inside and outside comments
             with self.subTest(query="WHERE parameters inside and outside comments"):
@@ -1586,8 +1599,9 @@ class TestCursor(unittest.TestCase):
             with self.subTest(query="WHERE parameters inside version comments"):
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT ? /*!999999 , ? */", (1,))  # Only 1 parameter passed
-                    row= cursor.fetchone()
-                    self.assertEqual(row[0],1)
+                    row = cursor.fetchone()
+                    self.assertIsNotNone(row)
+                    self.assertEqual(row[0], 1)
 
     def check_closed(self):
         with create_connection() as conn:
