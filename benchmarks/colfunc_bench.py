@@ -10,7 +10,7 @@ import os, time, decimal, datetime
 os.environ["MARIADB_PYTHON_CONNECTOR"] = "python"
 import mariadb
 from mariadb.impl.client.base_client import BaseClient
-from mariadb.impl.client import base_client as bc
+from mariadb.impl.client import base_client as bc  # noqa: F401  (_unpack_* helpers)
 from mariadb_shared.constants import FIELD_TYPE
 
 CFG = dict(host=os.environ.get("TEST_DB_HOST", "localhost"), port=int(os.environ.get("TEST_DB_PORT", 3306)),
@@ -57,12 +57,20 @@ def conv_time(v):
     seconds, _, fraction = parts[2].partition(b'.')
     td = _td(0, _int(parts[0]) * 3600 + _int(parts[1]) * 60 + _int(seconds), _int(fraction.ljust(6, b'0')) if fraction else 0)
     return -td if negative else td
+# field types by converter, as asyncmy's decoder table keys them (the driver
+# itself no longer has such sets: it folds the type into a per-column code when
+# the column definition is decoded, see column_definition_packet.KIND_*)
+_STRING_TYPES = frozenset((FIELD_TYPE.VARCHAR, FIELD_TYPE.BIT, FIELD_TYPE.ENUM, FIELD_TYPE.SET,
+                           FIELD_TYPE.TINY_BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB,
+                           FIELD_TYPE.BLOB, FIELD_TYPE.VAR_STRING, FIELD_TYPE.STRING,
+                           FIELD_TYPE.GEOMETRY, FIELD_TYPE.VECTOR))
 CONV = {}
-for t in bc._TEXT_INT_TYPES: CONV[t] = _int
-for t in bc._TEXT_FLOAT_TYPES: CONV[t] = _float
-for t in bc._TEXT_DECIMAL_TYPES: CONV[t] = conv_dec
-for t in bc._TEXT_DATETIME_TYPES: CONV[t] = conv_dt
-for t in bc._TEXT_DATE_TYPES: CONV[t] = conv_date
+for t in (FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG, FIELD_TYPE.INT24, FIELD_TYPE.YEAR):
+    CONV[t] = _int
+for t in (FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE): CONV[t] = _float
+for t in (FIELD_TYPE.DECIMAL, FIELD_TYPE.NEWDECIMAL): CONV[t] = conv_dec
+for t in (FIELD_TYPE.DATETIME, FIELD_TYPE.TIMESTAMP): CONV[t] = conv_dt
+for t in (FIELD_TYPE.DATE, FIELD_TYPE.NEWDATE): CONV[t] = conv_date
 CONV[FIELD_TYPE.TIME] = conv_time
 def build_converters(columns, num_cols):
     """asyncmy's _get_descriptions() equivalent: one converter per column."""
@@ -70,7 +78,7 @@ def build_converters(columns, num_cols):
     out = [None] * num_cols
     for i in range(num_cols):
         t = types[i]
-        if t in bc._TEXT_STRING_TYPES:
+        if t in _STRING_TYPES:
             out[i] = conv_str if (charsets[i] != 63 or special[i]) else _bytes
         else:
             out[i] = CONV.get(t, conv_str)
