@@ -15,7 +15,7 @@ on:
       connector_c_version:
         description: 'MariaDB Connector/C version to build against'
         required: false
-        default: '3.4.9'
+        default: '3.4.11'
         type: string
       publish_to:
         description: 'Publish to'
@@ -28,7 +28,7 @@ on:
           - none
 
 env:
-  MARIADB_CONNECTOR_C_VERSION: ${{ github.event.inputs.connector_c_version || '3.4.9' }}
+  MARIADB_CONNECTOR_C_VERSION: ${{ github.event.inputs.connector_c_version || '3.4.11' }}
   OPENSSL_VERSION: 3.5.8
   MYSQL_TEST_HOST: mariadb.example.com
   MYSQL_TEST_PORT: 3306
