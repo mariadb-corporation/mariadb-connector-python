@@ -221,26 +221,33 @@ class ColumnsDefinition:
         # m is already the cached list[bytes] from a previous call
         return m  # type: ignore[no-any-return]
 
-    def _decode_str(self, i: int, field_idx: int) -> str:
+    def _decode_str(self, i: int, field_idx: int, errors: str) -> str:
         raw = self._fields(i)[field_idx]
         if raw:
-            return raw.decode('utf-8', errors='replace')
+            return raw.decode('utf-8', errors)
         return ''
 
-    def get_schema(self, i: int) -> str:
-        return self._decode_str(i, 0)
+    # The identifiers are UTF-8 (the connection character set is utf8mb4).
+    # One that is not is reported where it is needed as text, i.e. the
+    # accessors raise UnicodeDecodeError, as the C extension does from
+    # cursor.description; a caller that only needs a usable name (the
+    # members of a named tuple, the keys of a dictionary row) asks for
+    # errors='replace' and falls back to a positional name.
 
-    def get_table(self, i: int) -> str:
-        return self._decode_str(i, 1)
+    def get_schema(self, i: int, errors: str = 'strict') -> str:
+        return self._decode_str(i, 0, errors)
 
-    def get_org_table(self, i: int) -> str:
-        return self._decode_str(i, 2)
+    def get_table(self, i: int, errors: str = 'strict') -> str:
+        return self._decode_str(i, 1, errors)
 
-    def get_name(self, i: int) -> str:
-        return self._decode_str(i, 3)
+    def get_org_table(self, i: int, errors: str = 'strict') -> str:
+        return self._decode_str(i, 2, errors)
 
-    def get_org_name(self, i: int) -> str:
-        return self._decode_str(i, 4)
+    def get_name(self, i: int, errors: str = 'strict') -> str:
+        return self._decode_str(i, 3, errors)
+
+    def get_org_name(self, i: int, errors: str = 'strict') -> str:
+        return self._decode_str(i, 4, errors)
 
     def get_catalog(self, i: int) -> str:
         return 'def'

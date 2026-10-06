@@ -97,6 +97,16 @@ class TestCursorInvalidFieldName(unittest.TestCase):
             cursor.description
         cursor.close()
 
+    def test_dictionary_rows_report_the_undecodable_name(self):
+        """A dictionary row needs the name as text, so the fetch raises."""
+        for binary in (False, True):
+            with self.subTest(binary=binary):
+                cursor = self.connection.cursor(dictionary=True, binary=binary)
+                cursor.execute(BAD_QUERY)
+                with self.assertRaises((UnicodeDecodeError, mariadb.DataError)):
+                    cursor.fetchall()
+                cursor.close()
+
     def test_cursor_and_connection_stay_usable(self):
         cursor = self.connection.cursor(named_tuple=True)
         cursor.execute(BAD_QUERY)

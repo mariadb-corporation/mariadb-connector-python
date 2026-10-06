@@ -624,7 +624,7 @@ class BaseCursor(ABC, Generic[TResult, TConnection]):
         seen: set[str] = set()
         field_names: list[str] = []
         for i in range(columns.count):
-            name = columns.get_name(i)
+            name = columns.get_name(i, 'replace')
             if not (name and name.isidentifier() and not keyword.iskeyword(name)
                     and not name.startswith('_') and name not in seen):
                 name = f'column_{i}'
