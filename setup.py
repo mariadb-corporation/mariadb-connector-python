@@ -40,9 +40,15 @@ PY_MARIADB_VERSION = "%s.%s.%s" % (PY_MARIADB_MAJOR_VERSION,
                                    PY_MARIADB_MINOR_VERSION,
                                    PY_MARIADB_PATCH_VERSION)
 
+# PEP 440: the pre-release segment is attached directly (1.1.15b1), a
+# post-release one after a dot (1.1.15.post1).
+if PY_MARIADB_PRE_RELEASE_SEGMENT:
+    PY_MARIADB_VERSION += "%s%s" % (PY_MARIADB_PRE_RELEASE_SEGMENT,
+                                    PY_MARIADB_PRE_RELEASE_NR)
+
 if PY_MARIADB_POST_RELEASE_SEGMENT:
-    PY_MARIADB_VERSION += ".%s" % (PY_MARIADB_POST_RELEASE_SEGMENT +
-                                   PY_MARIADB_POST_RELEASE_NR)
+    PY_MARIADB_VERSION += ".%s%s" % (PY_MARIADB_POST_RELEASE_SEGMENT,
+                                     PY_MARIADB_POST_RELEASE_NR)
 
 PY_MARIADB_VERSION_INFO = (PY_MARIADB_MAJOR_VERSION,
                            PY_MARIADB_MINOR_VERSION,
@@ -93,6 +99,7 @@ setup(name='mariadb',
           'Programming Language :: Python :: 3.12',
           'Programming Language :: Python :: 3.13',
           'Programming Language :: Python :: 3.14',
+          'Programming Language :: Python :: 3.15',
           'Operating System :: Microsoft :: Windows',
           'Operating System :: MacOS',
           'Operating System :: POSIX',
