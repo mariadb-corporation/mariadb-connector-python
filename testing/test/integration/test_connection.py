@@ -26,14 +26,21 @@ class TestConnection(unittest.TestCase):
     def test_status_callback_reference(self):
         import gc
         import sys
+        import weakref
+
+        # PyPy has no sys.getrefcount: there the reference count checks are
+        # skipped and only the weak reference below proves the release.
+        getrefcount = getattr(sys, "getrefcount", lambda obj: None)
 
         def callback(connection, info):
             calls.append(info)
 
         calls = []
-        before = sys.getrefcount(callback)
+        alive = weakref.ref(callback)
+        before = getrefcount(callback)
         connection = create_connection({"status_callback": callback})
-        self.assertEqual(sys.getrefcount(callback), before + 1)
+        if before is not None:
+            self.assertEqual(getrefcount(callback), before + 1)
 
         cursor = connection.cursor()
         cursor.execute("SET @@session.autocommit = NOT @@session.autocommit")
@@ -41,17 +48,34 @@ class TestConnection(unittest.TestCase):
         del cursor  # a cursor references its connection
         self.assertTrue(any("autocommit" in info for info in calls), calls)
 
-        connection._converter = {0: connection}
+        # A cycle through the connection: the cyclic collector must reach
+        # the callback through tp_traverse. PyPy never collects a cycle that
+        # runs through a C extension object, so the cycle is CPython only.
+        if platform.python_implementation() != "PyPy":
+            connection._converter = {0: connection}
         connection.close()
         del connection
         gc.collect()
-        self.assertEqual(sys.getrefcount(callback), before)
+        if before is not None:
+            self.assertEqual(getrefcount(callback), before)
 
         connection = create_connection({"status_callback": callback})
-        self.assertEqual(sys.getrefcount(callback), before + 1)
+        if before is not None:
+            self.assertEqual(getrefcount(callback), before + 1)
         connection.close()
         del connection
-        self.assertEqual(sys.getrefcount(callback), before)
+        gc.collect()
+        if before is not None:
+            self.assertEqual(getrefcount(callback), before)
+
+        # Nothing but this frame holds the callback any more. PyPy frees an
+        # object that was handed to C over a few collections, not one.
+        del callback
+        for _ in range(10):
+            gc.collect()
+            if alive() is None:
+                break
+        self.assertIsNone(alive())
 
         # None means no callback
         connection = create_connection({"status_callback": None})
