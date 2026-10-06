@@ -133,7 +133,8 @@ class Connection(mariadb._mariadb.connection):
         return cursor
 
     def close(self):
-        self._check_closed()
+        if self._closed:
+            return
         pool = getattr(self, "_Connection__pool", None)
         if pool:
             pool._close_connection(self)

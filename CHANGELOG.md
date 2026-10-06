@@ -19,7 +19,7 @@ Release date: sep. 2026
 - [CONPY-332](https://jira.mariadb.org/browse/CONPY-332): Fix the backslash escapes in the `ConnectionPool` docstring
 - [CONPY-334](https://jira.mariadb.org/browse/CONPY-334): Identify the parameters of a statement containing literals correctly
 - [CONPY-347](https://jira.mariadb.org/browse/CONPY-347): Fix memory leaks when raising exceptions and when reading cursor metadata
-- [CONPY-364](https://jira.mariadb.org/browse/CONPY-364): Fix an exception raised during the recycle phase of a connection pool
+- [CONPY-364](https://jira.mariadb.org/browse/CONPY-364): Fix an exception raised when a connection is closed during the recycle phase of a connection pool
 - [CONPY-365](https://jira.mariadb.org/browse/CONPY-365): Refuse an out-of-bounds decimal length in the result metadata instead of reading past the buffer
 - [CONPY-368](https://jira.mariadb.org/browse/CONPY-368): Return `None` for DATE/DATETIME values Python cannot represent, instead of raising `SystemError`
 - [CONPY-369](https://jira.mariadb.org/browse/CONPY-369): Fix an intermittent segmentation fault in the CPython GC when traversing a SQLAlchemy `_ConnectionRecord` wrapping a connection
