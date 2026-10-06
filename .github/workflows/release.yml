@@ -155,7 +155,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
-        pyver: [cp310, cp311, cp312, cp313, cp314]
+        pyver: [cp310, cp311, cp312, cp313, cp314, cp315]
         platform: [manylinux, musllinux]
 
     steps:
@@ -192,7 +192,7 @@ jobs:
         run: python3 ./tools/ci/copy_to_binary.py
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v4.2.0
+        uses: pypa/cibuildwheel@v4.3.0
         with:
           package-dir: mariadb_binary
         env:
@@ -311,7 +311,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x86_64, arm64]
-        pyver: [cp310, cp311, cp312, cp313, cp314]
+        pyver: [cp310, cp311, cp312, cp313, cp314, cp315]
 
     env:
       HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
@@ -346,7 +346,7 @@ jobs:
         run: python3 ./tools/ci/copy_to_binary.py
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v4.2.0
+        uses: pypa/cibuildwheel@v4.3.0
         with:
           package-dir: mariadb_binary
         env:
@@ -387,14 +387,23 @@ jobs:
 
   # Build mariadb-binary (binary wheels) - Windows
   build-mariadb-binary-windows:
-    name: Build mariadb-binary (Windows ${{ matrix.pyver }})
+    name: Build mariadb-binary (Windows ${{ matrix.arch }} ${{ matrix.pyver }})
     runs-on: windows-latest
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_mariadb_binary == 'true')
     strategy:
       fail-fast: false
       matrix:
-        arch: [win_amd64]
-        pyver: [cp310, cp311, cp312, cp313, cp314]
+        arch: [win_amd64, win32]
+        pyver: [cp310, cp311, cp312, cp313, cp314, cp315]
+        # These entries only add keys to the combinations above: the
+        # cibuildwheel architecture and the cmake generator platform.
+        include:
+          - arch: win_amd64
+            cibw_arch: AMD64
+            cmake_arch: x64
+          - arch: win32
+            cibw_arch: x86
+            cmake_arch: Win32
 
     defaults:
       run:
@@ -426,10 +435,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: C:\mariadb-connector-c.build
-          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-windows-amd64-v3
+          key: mariadb-connector-c-${{ env.MARIADB_CONNECTOR_C_VERSION }}-windows-${{ matrix.cmake_arch }}-v3
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v4.2.0
+        uses: pypa/cibuildwheel@v4.3.0
         with:
           package-dir: mariadb_binary
         env:
@@ -439,7 +448,10 @@ jobs:
           TEST_DB_PORT: ${{ env.MYSQL_TEST_PORT }}
           TEST_DB_PASSWORD: ${{ env.MYSQL_TEST_PASSWD }}              
           CIBW_BUILD: ${{matrix.pyver}}-${{matrix.arch}}
-          CIBW_ARCHS_WINDOWS: AMD64
+          CIBW_ARCHS_WINDOWS: ${{ matrix.cibw_arch }}
+          # Read by build_connector_c_windows.bat, which cibuildwheel runs
+          # directly on the runner, so the job environment is visible to it.
+          CMAKE_ARCH: ${{ matrix.cmake_arch }}
           CIBW_BEFORE_ALL_WINDOWS: >-
             cmd /c "{project}\tools\ci\build_connector_c_windows.bat"
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >-
