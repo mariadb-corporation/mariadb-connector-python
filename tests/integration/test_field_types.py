@@ -7,6 +7,7 @@
 Integration tests for field types and field metadata
 """
 
+import datetime
 import unittest
 import mariadb
 from mariadb import fieldinfo
@@ -122,6 +123,46 @@ class FieldTypesTest(unittest.TestCase):
             result = cursor.fetchone()
             assert result is not None
             self.assertEqual(result[0], 75)
+
+    def test_geometry_values_both_protocols(self):
+        """A POINT / GEOMETRY column comes back as its WKB bytes on the text
+        and the binary protocol. On MariaDB these columns carry extended type
+        metadata (type name 'point'), which the pure-Python parser used to
+        treat like an unknown extended type and return None for."""
+        self.cursor.execute("""
+            CREATE TEMPORARY TABLE test_geometry_values (
+                p POINT,
+                g GEOMETRY
+            )
+        """)
+        self.cursor.execute(
+            "INSERT INTO test_geometry_values VALUES "
+            "(ST_GeomFromText('POINT(1 2)'), ST_GeomFromText('POINT(1 2)')), (NULL, NULL)")
+
+        self.cursor.execute("SELECT p, g, ST_AsText(p) FROM test_geometry_values ORDER BY p IS NULL")
+        text_rows = self.cursor.fetchall()
+        with self.connection.cursor(binary=True) as cursor:
+            cursor.execute("SELECT p, g, ST_AsText(p) FROM test_geometry_values WHERE 1 = ? ORDER BY p IS NULL", (1,))
+            binary_rows = cursor.fetchall()
+
+        for rows in (text_rows, binary_rows):
+            self.assertEqual(len(rows), 2)
+            point, geometry, wkt = rows[0]
+            self.assertIsInstance(point, bytes)
+            self.assertEqual(point, geometry)
+            self.assertEqual(wkt, 'POINT(1 2)')
+            self.assertEqual(rows[1], (None, None, None))
+        self.assertEqual(text_rows, binary_rows)
+
+    def test_zero_time_both_protocols(self):
+        """'00:00:00' comes back as timedelta(0) on both protocols; the binary
+        protocol may encode a zero TIME as an empty value (length 0), which
+        must not be read as NULL."""
+        self.cursor.execute("SELECT CAST('00:00:00' AS TIME), CAST('00:00:00' AS TIME(6))")
+        self.assertEqual(self.cursor.fetchone(), (datetime.timedelta(0), datetime.timedelta(0)))
+        with self.connection.cursor(binary=True) as cursor:
+            cursor.execute("SELECT CAST('00:00:00' AS TIME), CAST('00:00:00' AS TIME(6)) WHERE 1 = ?", (1,))
+            self.assertEqual(cursor.fetchone(), (datetime.timedelta(0), datetime.timedelta(0)))
 
     def test_field_info_string_types(self):
         """Test string field types"""

@@ -72,6 +72,20 @@ class SqlParserCommentTest(unittest.TestCase):
     def test_adjacent_block_comments(self):
         self.assertEqual(_norm("SELECT /*a*//*b*/ :p"), "SELECT /*a*//*b*/ ?")
 
+    def test_slash_star_slash_opens_comment(self):
+        # '/*/' is an opening '/*' followed by a '/' of comment content, as on
+        # the server: the comment runs to the next '*/'
+        self.assertEqual(_norm("SELECT /*/ :x */ :p"), "SELECT /*/ :x */ ?")
+        self.assertEqual(_subst("SELECT /*/ ? */ ?", [9]), "SELECT /*/ ? */ 9")
+
+    def test_empty_block_comment(self):
+        self.assertEqual(_norm("SELECT /**/ :p"), "SELECT /**/ ?")
+        self.assertEqual(_subst("SELECT /**/ ?", [9]), "SELECT /**/ 9")
+
+    def test_unterminated_block_comment_runs_to_end(self):
+        self.assertEqual(_norm("SELECT 1 /* :p"), "SELECT 1 /* :p")
+        self.assertEqual(_subst("SELECT 1 /* ?", []), "SELECT 1 /* ?")
+
 
 if __name__ == "__main__":
     unittest.main()
