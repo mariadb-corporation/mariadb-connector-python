@@ -709,9 +709,22 @@ static void ma_set_result_column_value(MrdbCursor *self, PyObject *row, uint32_t
             PyStructSequence_SET_ITEM(row, column, value);
             break;
         case RESULT_DICTIONARY:
-            PyDict_SetItemString(row, self->fields[column].name, value);
+        {
+            /* Decode the name explicitly rather than through
+               PyDict_SetItemString(): PyPy's cpyext decodes a C string
+               leniently, and a column name that is not valid UTF-8 must
+               raise here as it does from cursor.description. */
+            PyObject *key= PyUnicode_DecodeUTF8(self->fields[column].name,
+                                                self->fields[column].name_length,
+                                                NULL);
+            if (key)
+            {
+                PyDict_SetItem(row, key, value);
+                Py_DECREF(key);
+            }
             Py_DECREF(value); /* CONPY-119 */
             break;
+        }
         default:
             PyTuple_SET_ITEM(row, column, value);
             break;
