@@ -257,7 +257,9 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon[Any]):
                 # Text protocol: shared parser handles placeholder discovery,
                 # validation, and value conversion in a single pass.
                 no_backslash = bool(self.connection.server_status & _NO_BACKSLASH_ESCAPES)
-                self._transformed_statement = b"".join(substitute_params(sql, self._data, no_backslash))
+                self._transformed_statement = b"".join(substitute_params(
+                    sql, self._data, no_backslash,
+                    self.connection.server_version, self.connection.server_mariadb))
                 await self._execute_text_async(self._transformed_statement, sql)
         else:
             # No parameters — always text protocol
@@ -380,7 +382,8 @@ class AsyncCursor(StmtReuseMixin, CCursor, AsyncCursorCommon[Any]):
 
         # If the server doesn't support bulk operations, we need to emulate
         # by looping through the data and executing each one individually.
-        normalized_sql, param_names = normalize_to_qmark(sql)
+        normalized_sql, param_names = normalize_to_qmark(
+            sql, self.connection.server_version, self.connection.server_mariadb)
 
         if param_names is not None:
             reordered: list[list[Any]] = []

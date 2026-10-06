@@ -145,7 +145,9 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon[
                 else:
                     # Named parameters use text protocol with substitution
                     no_backslash_escapes = (client.context.server_status & NO_BACKSLASH_ESCAPES) > 0
-                    query_packet = QueryPacket.from_substitute(sql, parameters, no_backslash_escapes)
+                    query_packet = QueryPacket.from_substitute(
+                        sql, parameters, no_backslash_escapes,
+                        self.connection.server_version, self.connection.server_mariadb)
                     self._completions = await client.execute(query_packet, self._config, self._buffered)
             else:
                 # Use simple query packet
@@ -193,7 +195,8 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon[
                 raise ProgrammingError(f"wrong parameter type")
 
             # Normalize SQL to qmark style and get parameter mapping
-            normalized_sql, param_names = normalize_to_qmark(sql)
+            normalized_sql, param_names = normalize_to_qmark(
+                sql, self.connection.server_version, self.connection.server_mariadb)
 
             # Reorder parameters if needed (for named/pyformat styles)
             if param_names is not None:
@@ -250,7 +253,9 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon[
                     params = data[i]
                     parameters = list(params) if params else []
                     # Use normalized_sql (qmark style) since parameters are already reordered
-                    query_packet = QueryPacket.from_substitute(normalized_sql, parameters, no_backslash_escapes)
+                    query_packet = QueryPacket.from_substitute(
+                        normalized_sql, parameters, no_backslash_escapes,
+                        self.connection.server_version, self.connection.server_mariadb)
                     # Text-protocol fallback has no prepared statement to thread.
                     completions.append(await client.execute(query_packet, self._config, True, None))
 

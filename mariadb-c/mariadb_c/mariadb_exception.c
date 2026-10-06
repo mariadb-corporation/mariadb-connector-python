@@ -61,6 +61,7 @@ static PyObject *get_exception_type(int error_number)
   case ER_WRONG_TABLE_NAME:
   case ER_BAD_DB_ERROR:
   case ER_BAD_FIELD_ERROR:
+  case CR_INVALID_PARAMETER_NO:
       return Mariadb_ProgrammingError;
 
   /* IntegrityError: Exception raised when the relational integrity of the database is affected,

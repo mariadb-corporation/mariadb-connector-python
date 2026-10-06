@@ -63,8 +63,10 @@ class QueryPacket(ClientMessage):
         return QueryPacket(payload, sql)
 
     @staticmethod
-    def from_substitute(sql: str, parameters: Any, no_backslash_escapes: bool = False) -> 'QueryPacket':
-        result_list = substitute_params(sql, parameters, no_backslash_escapes)
+    def from_substitute(sql: str, parameters: Any, no_backslash_escapes: bool = False,
+                        server_version: int = 0, is_mariadb: bool = True) -> 'QueryPacket':
+        result_list = substitute_params(sql, parameters, no_backslash_escapes,
+                                        server_version, is_mariadb)
         result_list.insert(0, b'\x00\x00\x00\x00\x03')
         return QueryPacket(bytearray(b"".join(result_list)), sql)
 

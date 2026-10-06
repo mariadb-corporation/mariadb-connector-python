@@ -19,7 +19,7 @@ import decimal
 import ipaddress
 import re
 import uuid
-from typing import Any, Callable, List, Mapping, Sequence, Tuple
+from typing import Any, Callable, List, Mapping, Sequence, Tuple, Iterator
 
 from mariadb_shared.constants.INDICATOR import MrdbIndicator
 from mariadb_shared.exceptions import NotSupportedError, ProgrammingError
@@ -268,6 +268,9 @@ def get_converter(val: Any) -> ParamConverter | None:
 #   group 2: %s / %d      (format)
 #   group 3: %(name)s     (pyformat), the name
 #   group 4: :name        (named), the name
+#   group 6: /*! or /*M!  (executable comment opener), group 5 its 'M' marker
+#            and group 6 its version digits; see _tokens() for what the
+#            server does with it
 _TOKEN_RE = re.compile(
     # 'string' / "string": a backslash escapes the next byte; an unterminated
     # literal runs to the end of the statement
@@ -278,17 +281,48 @@ _TOKEN_RE = re.compile(
     # '--' only starts a comment when followed by whitespace or a control
     # character (not in expressions like '2--1'), or at the end of the statement
     rb"|--(?=[\x00-\x20]|\Z)[^\n]*"
-    # /* comment */, but not the executable /*! ... */ and /*M ... */ forms,
-    # whose content is parsed as SQL. The opening '/*' is consumed before the
-    # closing '*/' is searched for, so '/*/' opens a comment (as on the server)
-    # instead of closing it on its own '*'
-    rb"|/\*(?![!M]).*?(?:\*/|\Z)"
+    # /* comment */, but not the executable /*! ... */ and /*M! ... */ forms
+    # (matched below). The opening '/*' is consumed before the closing '*/' is
+    # searched for, so '/*/' opens a comment (as on the server) instead of
+    # closing it on its own '*'
+    rb"|/\*(?!M?!).*?(?:\*/|\Z)"
     rb"|\?()"
     # '%' and ':' preceded by a backslash are not placeholders
     rb"|%(?<!\\%)(?:([sd])|\(([^)]*)\)s)"
-    rb"|:(?<!\\:)([A-Za-z_][A-Za-z0-9_]*)",
+    rb"|:(?<!\\:)([A-Za-z_][A-Za-z0-9_]*)"
+    # the opener of an executable comment, up to six version digits
+    rb"|/\*(M?)!(\d{0,6})",
     re.DOTALL)
-_tokens = _TOKEN_RE.finditer
+
+
+def _comment_is_executed(marker: bytes, digits: bytes, server_version: int,
+                         is_mariadb: bool) -> bool:
+    if marker and not is_mariadb:
+        return False
+    if not digits or not server_version:
+        return True
+    version = int(digits)
+    if is_mariadb and not marker and 50700 <= version < 100000:
+        return False
+    return version <= server_version
+
+
+def _tokens(sql: bytes, server_version: int, is_mariadb: bool) -> Iterator['re.Match[bytes]']:
+    if b"/*!" not in sql and b"/*M!" not in sql:
+        yield from _TOKEN_RE.finditer(sql)
+        return
+    pos = 0
+    search = _TOKEN_RE.search
+    while (token := search(sql, pos)) is not None:
+        if token.lastindex == 6:
+            if _comment_is_executed(token.group(5), token.group(6), server_version, is_mariadb):
+                pos = token.end()
+            else:
+                end = sql.find(b"*/", token.end())
+                pos = len(sql) if end < 0 else end + 2
+            continue
+        yield token
+        pos = token.end()
 
 
 # ============================================================================
@@ -299,6 +333,8 @@ def substitute_params(
     sql: str,
     parameters: Mapping[str, Any] | Sequence[Any],
     no_backslash_escapes: bool = False,
+    server_version: int = 0,
+    is_mariadb: bool = True,
 ) -> list[bytes | bytearray]:
     """
     Parse SQL, discover placeholders, and substitute parameters in a single pass.
@@ -310,6 +346,10 @@ def substitute_params(
         sql: SQL statement with placeholders
         parameters: dict for named/pyformat, or list/tuple for positional
         no_backslash_escapes: True when server has NO_BACKSLASH_ESCAPES
+        server_version: the server version as an int (MMmmpp), 0 if unknown,
+            and is_mariadb whether the server is MariaDB: they decide which
+            executable comments ('/*!NNNNNN', '/*M!NNNNNN') the server runs,
+            and so whether a placeholder inside one is a parameter
 
     Returns:
         List of bytes fragments.  Caller joins them (and may prepend a
@@ -380,7 +420,7 @@ def substitute_params(
     last_copy = 0
     param_idx = 0
 
-    for token in _tokens(_sql):
+    for token in _tokens(_sql, server_version, is_mariadb):
         kind = token.lastindex
         if kind is None:
             continue  # string literal, quoted identifier or comment
@@ -434,13 +474,20 @@ def substitute_params(
         else:
             _append(escape_str(str(param), no_backslash_escapes))
 
+    if params_list is not None and param_idx != params_len:
+        raise ProgrammingError(
+            f"Parameter count mismatch: SQL has {param_idx} placeholders, "
+            f"but {params_len} parameters provided"
+        )
+
     if last_copy < length:
         _append(_sql[last_copy:])
 
     return result_list
 
 
-def normalize_to_qmark(sql: str) -> Tuple[str, List[str] | None]:
+def normalize_to_qmark(sql: str, server_version: int = 0,
+                       is_mariadb: bool = True) -> Tuple[str, List[str] | None]:
     """
     Convert SQL with any placeholder style to qmark (?) style.
 
@@ -461,7 +508,7 @@ def normalize_to_qmark(sql: str) -> Tuple[str, List[str] | None]:
     param_names: List[str] = []
     last_copy = 0
 
-    for token in _tokens(_sql):
+    for token in _tokens(_sql, server_version, is_mariadb):
         kind = token.lastindex
         if kind is None or kind == 1:
             continue  # string literal, quoted identifier, comment, or already qmark

@@ -1710,6 +1710,30 @@ MrdbCursor_set_statement(MrdbCursor *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+static int ma_check_reused_param_count(MrdbCursor *self)
+{
+    unsigned long expected;
+    Py_ssize_t given= 0;
+
+    if (self->reprepare || !self->stmt)
+        return 0;
+    expected= mysql_stmt_param_count(self->stmt);
+    if (self->data && (given= PySequence_Size(self->data)) < 0)
+    {
+        PyErr_Clear();
+        given= 0;
+    }
+    if ((unsigned long)given != expected)
+    {
+        mariadb_throw_exception(NULL, Mariadb_ProgrammingError, 0,
+            "Parameter count mismatch: statement has %lu placeholders, "
+            "but %ld parameters provided", expected, (long)given);
+        return 1;
+    }
+    self->paramcount= (uint32_t)expected;
+    return 0;
+}
+
 static PyObject *
 MrdbCursor_execute_binary(MrdbCursor *self)
 {
@@ -1724,6 +1748,8 @@ MrdbCursor_execute_binary(MrdbCursor *self)
         mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
         goto error;
     }
+    if (ma_check_reused_param_count(self))
+        goto error;
 
     /* CONPY-164: reset array_size */
     self->array_size= 0;
@@ -2145,6 +2171,8 @@ MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args)
         mariadb_throw_exception(self->connection->mysql, NULL, 0, NULL);
         return NULL;
     }
+    if (ma_check_reused_param_count(self))
+        return NULL;
 
     /* Reset array_size */
     self->array_size = 0;

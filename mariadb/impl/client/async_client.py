@@ -26,6 +26,7 @@ from mariadb.impl.message.server.prepare_stmt_packet import PrepareStmtPacket, C
 from mariadb.impl.message.server.column_definition_packet import ColumnsDefinition
 from .base_client import BaseClient, find_default_unix_socket, PROTOCOL_TCP, PROTOCOL_SOCKET
 from ..message.server.ok_packet import CharsetMismatchError
+from ..message.client.execute_packet import ExecutePacket
 from .context import Context
 from ..message.payload_reader import PayloadReader
 from ..configuration import Configuration
@@ -685,6 +686,7 @@ class AsyncClient(BaseClient):
                 cached_stmt = cache.get(key) if cache is not None else None
                 if cached_stmt and cached_stmt.acquire():
                     with cached_stmt:
+                        self._check_parameter_count(messages, cached_stmt)
                         all_completions: List[List[Completion]] = []
                         for message in messages:
                             message.statement_id = cached_stmt.statement_id  # type: ignore[attr-defined]
@@ -723,6 +725,7 @@ class AsyncClient(BaseClient):
 
                         try:
                             prepareResult = await self._parse_prepare_response(await self.read_payload(), sql, cache)
+                            self._check_parameter_count(messages, prepareResult)
                         except DatabaseError as e:
                             first_error = e
 
@@ -740,6 +743,7 @@ class AsyncClient(BaseClient):
                         self.reset_buffer()
 
                         prepareResult = await self._parse_prepare_response(await self.read_payload(), sql, cache)
+                        self._check_parameter_count(messages, prepareResult)
 
                         # Now write and read execute messages
                         for message in messages:
@@ -769,6 +773,18 @@ class AsyncClient(BaseClient):
                 raise OperationalError(f"Execution failed: {e}")
 
 
+
+    @staticmethod
+    def _check_parameter_count(messages: List[ClientMessage], prepared: PrepareStmtPacket) -> None:
+        """A COM_STMT_EXECUTE must carry exactly as many values as the statement
+        has placeholders, and only the server's prepare response knows that
+        number for sure (a placeholder inside a comment the server skips is
+        not one); with another count the server misreads the packet."""
+        for message in messages:
+            if isinstance(message, ExecutePacket) and len(message.parameters) != prepared.parameter_count:
+                raise ProgrammingError(
+                    f"Parameter count mismatch: statement has {prepared.parameter_count} placeholders, "
+                    f"but {len(message.parameters)} parameters provided")
 
     async def _read_result(self, is_binary: bool, config: Configuration, buffered: bool = True, prepare_stmt_packet: PrepareStmtPacket | None = None, sql: str | None = None) -> List[Completion]:
         results : List[Completion] = []

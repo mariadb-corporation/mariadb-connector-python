@@ -1881,9 +1881,7 @@ class TestCursor(unittest.TestCase):
                 ("SELECT /*M!50601 ? */", (1,), 1),
                 ("SELECT /*!40301 ? */", (1,), 1),
                 ("SELECT /*M!100201 ? */", (1,), 1),
-                ("SELECT /*M!100500 ? */", (1,), 1),
-                ("SELECT /*M!110000 ? */", (1,), 1),
-                ("SELECT /*! ? */, /*M! ? */", (1, 2), 1),
+                ("SELECT /*M!100500 ? */", (1,), 1),                ("SELECT /*! ? */, /*M! ? */", (1, 2), 1),
                 ("SELECT /*M!50601 ? + ? */", (1, 2), 3),
             ]
 
@@ -1896,21 +1894,20 @@ class TestCursor(unittest.TestCase):
                         self.assertEqual(row[0], expected_first_col)
 
             # 2. Executable Comments with Unsupported/Future Server Versions
-            # In higher version comments, the contents are ignored/skipped. Depending on C-connector
-            # parsing, this may either raise a ProgrammingError/Error or pass gracefully.
+            # 999999 is higher than any server version: the server skips the
+            # comment, so the placeholder inside it is not a parameter
             invalid_version_cases = [
-                ("SELECT /*!50701 ? */", (1,)),
-                ("SELECT /*!250701 ? */", (1,)),
-                ("SELECT /*M!99999 ? */", (1,)),
+                ("SELECT 1 /*!999999 , ? */", ()),
+                ("SELECT 1 /*M!999999 , ? */", ()),
             ]
 
             for query, params in invalid_version_cases:
                 with self.subTest(query=query):
                     with conn.cursor() as cursor:
-                        try:
-                            cursor.execute(query, params)
-                        except mariadb.Error:
-                            pass
+                        cursor.execute(query, params)
+                        row = cursor.fetchone()
+                        self.assertIsNotNone(row)
+                        self.assertEqual(row[0], 1)
 
             # 3. Parameters both inside and outside comments
             with self.subTest(query="WHERE parameters inside and outside comments"):
@@ -1923,8 +1920,21 @@ class TestCursor(unittest.TestCase):
             with self.subTest(query="WHERE parameters inside version comments"):
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT ? /*!999999 , ? */", (1,))  # Only 1 parameter passed
-                    row= cursor.fetchone()
-                    self.assertEqual(row[0],1)
+                    row = cursor.fetchone()
+                    self.assertIsNotNone(row)
+                    self.assertEqual(row[0], 1)
+
+            # 4. A value for a placeholder inside a skipped comment is one too
+            # many: an error on both protocols, never silently dropped
+            for binary in (False, True):
+                with self.subTest(query="too many parameters", binary=binary):
+                    with conn.cursor(binary=binary) as cursor:
+                        cursor.execute("SELECT ? + /*M!999999 ? + */ ?", (1, 3))
+                        self.assertEqual(cursor.fetchone()[0], 4)
+                        with self.assertRaises(mariadb.ProgrammingError):
+                            cursor.execute("SELECT ? + /*M!999999 ? + */ ?", (1, 2, 3))
+                        with self.assertRaises(mariadb.ProgrammingError):
+                            cursor.execute("SELECT ? + /*M!999999 ? + */ ?", (1,))
 
     def check_closed(self):
         with create_connection() as conn:
