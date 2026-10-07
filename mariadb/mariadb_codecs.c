@@ -1501,8 +1501,15 @@ mariadb_param_to_bind(MrdbCursor *self,
 
       if (CHECK_TYPE(value->value, &PyLong_Type))
       {
+#if PY_VERSION_HEX < 0x030E0000
           if (_PyLong_Sign(value->value) < 0)
               is_negative= 1;
+#else
+          int sign;
+          PyLong_GetSign(value->value, &sign);
+          if (sign < 0)
+              is_negative= 1;
+#endif
       }
     }
 
