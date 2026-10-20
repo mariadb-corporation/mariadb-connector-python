@@ -421,6 +421,8 @@ PyObject *MrdbCursor_clear_result(MrdbCursor *self)
         /* free current result */
         if (mysql_stmt_field_count(self->stmt))
         {
+            if (!self->use_result_cb)
+              ma_bind_result_free(self);
             mysql_stmt_free_result(self->stmt);
         }
         /* check if there are more pending result sets */
@@ -820,6 +822,18 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
     return 0;
 }
 
+static int ma_register_result_cb(MrdbCursor *self)
+{
+#ifdef MARIADB_LENENC_ERROR
+    ps_result_callback_ex cb;
+
+    if (!mysql_stmt_attr_get(self->stmt, STMT_ATTR_CB_RESULT_EX, &cb) &&
+        !mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT_EX, field_fetch_callback))
+        return 1;
+#endif
+    return 0;
+}
+
 PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
 {
     Py_CLEAR(self->sequence_type);
@@ -845,10 +859,16 @@ PyObject *MrdbCursor_InitResultSet(MrdbCursor *self)
             goto error;
         }
         if (!self->parseinfo.is_text)
-            mysql_stmt_attr_set(self->stmt, STMT_ATTR_CB_RESULT, field_fetch_callback);
+        {
+            if (!(self->use_result_cb= ma_register_result_cb(self)))
+            {
+              if (ma_bind_result_setup(self))
+                goto error;
+            }
 
-        self->row_count= CURSOR_NUM_ROWS(self);
-        self->affected_rows= 0;
+            self->row_count= CURSOR_NUM_ROWS(self);
+            self->affected_rows= 0;
+        }
     } else {
       self->row_count= self->affected_rows= CURSOR_AFFECTED_ROWS(self);
     }
@@ -865,6 +885,7 @@ error:
     self->field_count= 0;
     self->row_count= 0;
     self->affected_rows= 0;
+    ma_bind_result_free(self);
     return NULL;
 }
 
@@ -1069,7 +1090,11 @@ static int MrdbCursor_fetchinternal(MrdbCursor *self)
     {
         rc= mysql_stmt_fetch(self->stmt);
         if (rc == 0 || rc == MYSQL_DATA_TRUNCATED)
-            return 0;
+        {
+            if (self->use_result_cb)
+                return 0;
+            return ma_values_from_bind(self);
+        }
         if (rc != MYSQL_NO_DATA)
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
         return 1;
@@ -1192,6 +1217,8 @@ MrdbCursor_nextset(MrdbCursor *self)
     {
         if (self->result)
         {
+            if (!self->use_result_cb)
+              ma_bind_result_free(self);
             mysql_free_result(self->result);
             self->result= NULL;
         }
