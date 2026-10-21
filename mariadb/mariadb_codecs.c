@@ -1825,40 +1825,51 @@ end:
     - MAX_DECIMAL_LEN is smaller than MA_BIND_STR_SIZE
 */
 
-
-static int ma_col_class(enum enum_field_types type)
+static const MA_COL_INFO ma_col_info[MYSQL_TYPE_GEOMETRY + 1]=
 {
-  switch (type)
-  {
-    case MYSQL_TYPE_NULL:        return MA_COL_NULL;
-    case MYSQL_TYPE_TINY:
-    case MYSQL_TYPE_SHORT:
-    case MYSQL_TYPE_YEAR:
-    case MYSQL_TYPE_INT24:
-    case MYSQL_TYPE_LONG:
-    case MYSQL_TYPE_LONGLONG:    return MA_COL_INT;
-    case MYSQL_TYPE_FLOAT:       return MA_COL_FLOAT;
-    case MYSQL_TYPE_DOUBLE:      return MA_COL_DOUBLE;
-    case MYSQL_TYPE_DATE:        return MA_COL_DATE;
-    case MYSQL_TYPE_TIME:        return MA_COL_TIME;
-    case MYSQL_TYPE_DATETIME:
-    case MYSQL_TYPE_TIMESTAMP:   return MA_COL_DATETIME;
-    case MYSQL_TYPE_NEWDECIMAL:  return MA_COL_DECIMAL;
-    case MYSQL_TYPE_TINY_BLOB:
-    case MYSQL_TYPE_MEDIUM_BLOB:
-    case MYSQL_TYPE_BLOB:
-    case MYSQL_TYPE_LONG_BLOB:
-    case MYSQL_TYPE_BIT:         return MA_COL_BLOB;
-    case MYSQL_TYPE_GEOMETRY:
-    case MYSQL_TYPE_STRING:
-    case MYSQL_TYPE_VAR_STRING:
-    case MYSQL_TYPE_JSON:
-    case MYSQL_TYPE_VARCHAR:
-    case MYSQL_TYPE_DECIMAL:
-    case MYSQL_TYPE_SET:
-    case MYSQL_TYPE_ENUM:        return MA_COL_STRING;
-    default:                     return MA_COL_UNKNOWN;
-  }
+  [MYSQL_TYPE_NULL]        = MA_STR_ENTRY(MA_COL_NULL),
+
+  [MYSQL_TYPE_TINY]        = MA_INT_ENTRY,
+  [MYSQL_TYPE_SHORT]       = MA_INT_ENTRY,
+  [MYSQL_TYPE_YEAR]        = MA_INT_ENTRY,
+  [MYSQL_TYPE_INT24]       = MA_INT_ENTRY,
+  [MYSQL_TYPE_LONG]        = MA_INT_ENTRY,
+  [MYSQL_TYPE_LONGLONG]    = MA_INT_ENTRY,
+
+  [MYSQL_TYPE_FLOAT]       = {MA_COL_FLOAT,  MYSQL_TYPE_FLOAT,  sizeof(float)},
+  [MYSQL_TYPE_DOUBLE]      = {MA_COL_DOUBLE, MYSQL_TYPE_DOUBLE, sizeof(double)},
+
+  [MYSQL_TYPE_DATE]        = MA_TIME_ENTRY(MA_COL_DATE,     MYSQL_TYPE_DATE),
+  [MYSQL_TYPE_TIME]        = MA_TIME_ENTRY(MA_COL_TIME,     MYSQL_TYPE_TIME),
+  [MYSQL_TYPE_DATETIME]    = MA_TIME_ENTRY(MA_COL_DATETIME, MYSQL_TYPE_DATETIME),
+  [MYSQL_TYPE_TIMESTAMP]   = MA_TIME_ENTRY(MA_COL_DATETIME, MYSQL_TYPE_TIMESTAMP),
+
+  [MYSQL_TYPE_NEWDECIMAL]  = MA_STR_ENTRY(MA_COL_DECIMAL),
+
+  [MYSQL_TYPE_TINY_BLOB]   = MA_STR_ENTRY(MA_COL_BLOB),
+  [MYSQL_TYPE_MEDIUM_BLOB] = MA_STR_ENTRY(MA_COL_BLOB),
+  [MYSQL_TYPE_BLOB]        = MA_STR_ENTRY(MA_COL_BLOB),
+  [MYSQL_TYPE_LONG_BLOB]   = MA_STR_ENTRY(MA_COL_BLOB),
+  [MYSQL_TYPE_BIT]         = MA_STR_ENTRY(MA_COL_BLOB),
+
+  [MYSQL_TYPE_GEOMETRY]    = MA_STR_ENTRY(MA_COL_STRING),
+  [MYSQL_TYPE_STRING]      = MA_STR_ENTRY(MA_COL_STRING),
+  [MYSQL_TYPE_VAR_STRING]  = MA_STR_ENTRY(MA_COL_STRING),
+  [MYSQL_TYPE_JSON]        = MA_STR_ENTRY(MA_COL_STRING),
+  [MYSQL_TYPE_VARCHAR]     = MA_STR_ENTRY(MA_COL_STRING),
+  [MYSQL_TYPE_DECIMAL]     = MA_STR_ENTRY(MA_COL_STRING),
+  [MYSQL_TYPE_SET]         = MA_STR_ENTRY(MA_COL_STRING),
+  [MYSQL_TYPE_ENUM]        = MA_STR_ENTRY(MA_COL_STRING)
+};
+
+static const MA_COL_INFO *ma_col_lookup(enum enum_field_types type)
+{
+  static const MA_COL_INFO unknown= {MA_COL_UNKNOWN, MYSQL_TYPE_STRING, 0};
+
+  if ((unsigned int)type > MYSQL_TYPE_GEOMETRY ||
+      ma_col_info[type].cls == MA_COL_UNKNOWN)
+    return &unknown;
+  return &ma_col_info[type];
 }
 
 void ma_bind_result_free(MrdbCursor *self)
@@ -1906,47 +1917,20 @@ int ma_bind_result_setup(MrdbCursor *self)
   for (i= 0; i < n; i++)
   {
     MYSQL_BIND *b= &st->bind[i];
-    MA_BIND_BUF *u= &st->buf[i];
-    enum enum_field_types ftype= self->fields[i].type;
+    const MA_COL_INFO *info= ma_col_lookup(self->fields[i].type);
 
-    switch (ma_col_class(ftype))
-    {
-      case MA_COL_INT:
-        /* the library converts every integer type to the bound one */
-        b->buffer_type= MYSQL_TYPE_LONGLONG;
-        b->buffer= &u->u.ll;
-        b->buffer_length= sizeof(long long);
-        b->is_unsigned= (self->fields[i].flags & UNSIGNED_FLAG) ? 1 : 0;
-        break;
-      case MA_COL_FLOAT:
-        b->buffer_type= MYSQL_TYPE_FLOAT;
-        b->buffer= &u->u.f;
-        b->buffer_length= sizeof(float);
-        break;
-      case MA_COL_DOUBLE:
-        b->buffer_type= MYSQL_TYPE_DOUBLE;
-        b->buffer= &u->u.d;
-        b->buffer_length= sizeof(double);
-        break;
-      case MA_COL_DATE:
-      case MA_COL_TIME:
-      case MA_COL_DATETIME:
-        b->buffer_type= ftype;          /* decoded by the library into MYSQL_TIME */
-        b->buffer= &u->u.tm;
-        b->buffer_length= sizeof(MYSQL_TIME);
-        break;
-      default:
-        /* text, blobs, decimal, unknown: bind as string. One byte is kept free
-           so that the value can be NUL terminated in place (decimal). */
-        b->buffer_type= MYSQL_TYPE_STRING;
-        b->buffer= u->u.str;
-        b->buffer_length= MA_BIND_STR_SIZE - 1;
-        break;
-    }
+    b->buffer_type= info->bind_type;
+    b->buffer= &st->buf[i];       /* every union member starts at offset 0 */
+    b->buffer_length= info->buf_size ? info->buf_size
+                                     : MA_BIND_STR_SIZE - 1;   /* one byte kept
+                                        free for the NUL of a decimal */
+    if (info->cls == MA_COL_INT)
+      b->is_unsigned= (self->fields[i].flags & UNSIGNED_FLAG) ? 1 : 0;
     b->length= &st->length[i];
     b->is_null= &st->is_null[i];
     b->error= &st->error[i];
   }
+
 
   if (mysql_stmt_bind_result(self->stmt, st->bind))
   {
@@ -1969,7 +1953,7 @@ static int ma_bind_value(MrdbCursor *self, unsigned int column)
   MA_BIND_BUF *u= &st->buf[column];
   MYSQL_FIELD *field= &self->fields[column];
   Mrdb_ExtFieldType *ext_field_type= mariadb_extended_field_type(field);
-  int cls= ma_col_class(field->type);
+  int cls= ma_col_lookup(field->type)->cls;
 
   /* like the callback: NULL values do not go through converters */
   if (st->is_null[column])

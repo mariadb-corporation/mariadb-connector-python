@@ -264,6 +264,19 @@ enum
   MA_COL_STRING       /* all other text like types */
 };
 
+typedef struct
+{
+  unsigned char  cls;          /* MA_COL_*, 0 = MA_COL_UNKNOWN */
+  unsigned char  bind_type;    /* enum_field_types value used for the bind */
+  unsigned short buf_size;     /* bytes needed in the bind buffer,
+                                  0 = the string buffer */
+} MA_COL_INFO;
+
+#define MA_INT_ENTRY   {MA_COL_INT, MYSQL_TYPE_LONGLONG, sizeof(long long)}
+#define MA_TIME_ENTRY(c, t) {(c), (t), sizeof(MYSQL_TIME)}
+#define MA_STR_ENTRY(c)     {(c), MYSQL_TYPE_STRING, 0}
+
+
 
 typedef struct st_ext_field_type {
   enum enum_extended_field_type ext_type;
