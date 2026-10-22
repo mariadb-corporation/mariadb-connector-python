@@ -2,7 +2,7 @@
 
 ## MariaDB Connector/Python 2.0.0rc3
 
-Release date: sep. 2026
+Release date: Oct. 2026
 
 **Notable changes:**
 
@@ -15,6 +15,12 @@ Release date: sep. 2026
 - [CONPY-366](https://jira.mariadb.org/browse/CONPY-366): Restore the 1.x `prepared` cursor option for migration compatibility. It is deprecated and will be removed.
 - [CONPY-362](https://jira.mariadb.org/browse/CONPY-362): Disable the shared prepared-statement cache by default
 - [CONPY-373](https://jira.mariadb.org/browse/CONPY-373): Add Python SAST (CodeQL and Bandit) to CI
+- [CONPY-317](https://jira.mariadb.org/browse/CONPY-317): Build the release packages in GitHub Actions, including binary wheels of the C extension (Linux manylinux and musllinux on x86_64 and aarch64, macOS, Windows; CPython 3.10 to 3.15)
+- [CONPY-391](https://jira.mariadb.org/browse/CONPY-391): Default to the OS login name when no `user` is given, instead of sending an empty user name (pure-Python client)
+- [CONPY-375](https://jira.mariadb.org/browse/CONPY-375): Add the `max_allowed_columns` connection option to bound the column count a server may announce for a result set, in both implementations
+- [CONPY-372](https://jira.mariadb.org/browse/CONPY-372): Bound the `parsec` authentication iteration factor by `connect_timeout` instead of a hardcoded limit
+- [CONPY-392](https://jira.mariadb.org/browse/CONPY-392): Parse result-set rows in a single pass over the receive buffer; the pure-Python row parsers use per-column decoder codes with no per-result-set setup, `COM_STMT_BULK_EXECUTE` packets are encoded column by column, and closing a connection is cheaper
+- [CONPY-393](https://jira.mariadb.org/browse/CONPY-393): Async pool: hand released connections directly to waiting tasks
 
 **Bug fixes:**
 
@@ -42,6 +48,19 @@ Release date: sep. 2026
 - [CONPY-365](https://jira.mariadb.org/browse/CONPY-365): Refuse an out-of-bounds decimal length in the result metadata instead of reading past the buffer
 - [CONPY-152](https://jira.mariadb.org/browse/CONPY-152): `executemany()` accepts a statement without placeholders again, such as `INSERT ... VALUES (DEFAULT)`
 - [CONPY-331](https://jira.mariadb.org/browse/CONPY-331): Name the argument in the error raised when a connection keyword has the wrong type
+- [CONPY-332](https://jira.mariadb.org/browse/CONPY-332): Fix the backslash escapes in the `ConnectionPool` docstring
+- [CONPY-347](https://jira.mariadb.org/browse/CONPY-347): Fix memory leaks when raising exceptions and when reading cursor metadata
+- [CONPY-364](https://jira.mariadb.org/browse/CONPY-364): Fix an exception raised when a connection is closed during the recycle phase of a connection pool
+- [CONPY-367](https://jira.mariadb.org/browse/CONPY-367): Reject multipart (>16 MB) packets before authentication, so a rogue server cannot cause an out-of-memory before the client is authenticated (pure-Python client)
+- [CONPY-369](https://jira.mariadb.org/browse/CONPY-369): Fix an intermittent segmentation fault in the CPython GC when traversing a SQLAlchemy `_ConnectionRecord` wrapping a connection
+- [CONPY-371](https://jira.mariadb.org/browse/CONPY-371): Fix the converter leaking the pre-conversion value of every converted column
+- [CONPY-374](https://jira.mariadb.org/browse/CONPY-374): Fix the C cursor `PyMemberDef` widths not matching the struct fields, which wrote out of bounds
+- [CONPY-376](https://jira.mariadb.org/browse/CONPY-376): `connect()` with `pool_name` checks the connection arguments against the configuration of an existing pool and raises `PoolError` when they differ, instead of ignoring them
+- [CONPY-379](https://jira.mariadb.org/browse/CONPY-379): Copy the `named_tuple` field names into the row type instead of aliasing the result set memory
+- [CONPY-380](https://jira.mariadb.org/browse/CONPY-380): Drop the result set when its initialisation fails, instead of leaving the cursor half-built
+- [CONPY-381](https://jira.mariadb.org/browse/CONPY-381): Fix the memory growth on long-lived `named_tuple=True` cursors
+- [CONPY-387](https://jira.mariadb.org/browse/CONPY-387): Fix the leak of every raised exception
+- [CONPY-395](https://jira.mariadb.org/browse/CONPY-395): The binary cursor raises when `mysql_stmt_fetch()` fails, instead of returning the failed fetch as a row, and does not return a partial result
 
 
 ## MariaDB Connector/Python 2.0.0rc2
@@ -58,6 +77,45 @@ Release date: Mar. 2026
 - [CONPY-333](https://jira.mariadb.org/browse/CONPY-333): C implementation: columns metadata reading
 - [CONPY-338](https://jira.mariadb.org/browse/CONPY-338): Unify binary protocol use
 - [CONPY-335](https://jira.mariadb.org/browse/CONPY-335): Metadata: Store metadata as an object of arrays instead of an array of objects
+
+
+## MariaDB Connector/Python 1.1.15
+
+Release date: Oct. 2026
+
+**Notable changes:**
+
+- [CONPY-317](https://jira.mariadb.org/browse/CONPY-317): Build the release packages in GitHub Actions: binary wheels are published for Windows (win32 and win_amd64, CPython 3.11 to 3.15); other platforms install from the source distribution
+- [CONPY-397](https://jira.mariadb.org/browse/CONPY-397): Build the release wheels against MariaDB Connector/C 3.4.11
+- [CONPY-319](https://jira.mariadb.org/browse/CONPY-319): Add the SQLAlchemy test suite to the GitHub Actions CI
+- [CONPY-373](https://jira.mariadb.org/browse/CONPY-373): Add Python SAST (CodeQL and Bandit) to CI
+- Python 3.11 is the minimum supported version (3.8, 3.9 and 3.10 are end of life); add Python 3.15 to the supported versions; use `PyLong_GetSign()` instead of the removed `_PyLong_Sign()` on Python 3.14 and later
+
+**Bug fixes:**
+
+- `fetchmany()` with a count out of range for a C `long long` raises `OverflowError` instead of fetching every row and failing with a `SystemError`; the row list is released when a row cannot be built
+- [CONPY-152](https://jira.mariadb.org/browse/CONPY-152): `executemany()` accepts a statement without placeholders again, such as `INSERT ... VALUES (DEFAULT)`
+- [CONPY-328](https://jira.mariadb.org/browse/CONPY-328): Fix the unsigned conversion for `TINYINT`
+- [CONPY-329](https://jira.mariadb.org/browse/CONPY-329): Return `None` for a DATE value the binary protocol cannot convert, like text protocol
+- [CONPY-331](https://jira.mariadb.org/browse/CONPY-331): Name the argument in the error raised when a connection keyword has the wrong type
+- [CONPY-332](https://jira.mariadb.org/browse/CONPY-332): Fix the backslash escapes in the `ConnectionPool` docstring
+- [CONPY-334](https://jira.mariadb.org/browse/CONPY-334): Identify the parameters of a statement containing literals correctly
+- [CONPY-347](https://jira.mariadb.org/browse/CONPY-347): Fix memory leaks when raising exceptions and when reading cursor metadata
+- [CONPY-364](https://jira.mariadb.org/browse/CONPY-364): Fix an exception raised when a connection is closed during the recycle phase of a connection pool; `close()` is a no-op on an already closed or finalized connection
+- [CONPY-365](https://jira.mariadb.org/browse/CONPY-365): Refuse an out-of-bounds decimal length in the result metadata instead of reading past the buffer
+- [CONPY-368](https://jira.mariadb.org/browse/CONPY-368): Return `None` for DATE/DATETIME values Python cannot represent, instead of raising `SystemError`
+- [CONPY-369](https://jira.mariadb.org/browse/CONPY-369): Fix an intermittent segmentation fault in the CPython GC when traversing a SQLAlchemy `_ConnectionRecord` wrapping a connection
+- [CONPY-371](https://jira.mariadb.org/browse/CONPY-371): Fix the converter leaking the pre-conversion value of every converted column
+- [CONPY-374](https://jira.mariadb.org/browse/CONPY-374): Fix the C cursor `PyMemberDef` widths not matching the struct fields, which wrote out of bounds
+- [CONPY-376](https://jira.mariadb.org/browse/CONPY-376): `connect()` with `pool_name` checks the connection arguments against the configuration of an existing pool and raises `PoolError` when they differ, instead of ignoring them
+- [CONPY-379](https://jira.mariadb.org/browse/CONPY-379): Copy the `named_tuple` field names into the row type instead of aliasing the result set memory
+- [CONPY-380](https://jira.mariadb.org/browse/CONPY-380): Drop the result set when its initialisation fails, instead of leaving the cursor half-built
+- [CONPY-381](https://jira.mariadb.org/browse/CONPY-381): Fix the memory growth on long-lived `named_tuple=True` cursors
+- [CONPY-382](https://jira.mariadb.org/browse/CONPY-382): Raise an exception instead of crashing on a parameter that cannot be serialized
+- [CONPY-386](https://jira.mariadb.org/browse/CONPY-386): `cursor(named_tuple=True)` no longer drops a column whose name is a duplicate or not a valid identifier (such as `COUNT(*)`, a keyword or a leading underscore): the field is renamed to `column_<index>`, with `_1`, `_2`, ... appended if that name is taken; `cursor.description` keeps the names as the server sent them
+- [CONPY-387](https://jira.mariadb.org/browse/CONPY-387): Fix the leak of every raised exception
+- [CONPY-395](https://jira.mariadb.org/browse/CONPY-395): The binary cursor raises when `mysql_stmt_fetch()` fails, instead of returning the failed fetch as a row, and does not return a partial result
+- [CONPY-399](https://jira.mariadb.org/browse/CONPY-399): Fix a use-after-free and a reference count underflow caused by `status_callback` holding a borrowed reference; the callback result and the status dictionary are released
 
 
 ## MariaDB Connector/Python 1.1.14
