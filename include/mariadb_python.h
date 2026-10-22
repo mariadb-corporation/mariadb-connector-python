@@ -36,12 +36,6 @@
 #define CHECK_TYPE_NO_NONE(obj, type) \
 (obj != Py_None && (Py_TYPE((obj)) == type || PyType_IsSubtype(Py_TYPE((obj)), type)))
 
-#if PY_VERSION_HEX < 0x030900A4 && !defined(Py_SET_TYPE)
-static inline void _Py_SET_TYPE(PyObject *ob, PyTypeObject *type)
-{ ob->ob_type = type; }
-#define Py_SET_TYPE(ob, type) _Py_SET_TYPE((PyObject*)(ob), type)
-#endif
-
 #if defined(_WIN32)
 #include <config_win.h>
 #include <windows.h>

@@ -18,10 +18,9 @@
 #
 
 import mariadb
-import datetime
 from numbers import Number
 from mariadb.constants import CURSOR, STATUS, CAPABILITY, INDICATOR
-from typing import Sequence
+from collections.abc import Sequence
 import decimal
 
 PARAMSTYLE_QMARK = 1

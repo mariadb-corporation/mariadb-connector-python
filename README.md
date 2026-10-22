@@ -7,7 +7,7 @@
 # MariaDB Connector/Python
 
 [![License (LGPL version 2.1)][licence-image]](LICENSE)
-[![Python 3.10][python-image]][python-url]
+[![Python 3.11][python-image]][python-url]
 [![Run CI Tests](https://github.com/mariadb-corporation/mariadb-connector-python/actions/workflows/ci.yml/badge.svg)](https://github.com/mariadb-corporation/mariadb-connector-python/actions/workflows/ci.yml)
 <a href="https://scan.coverity.com/projects/mariadb-connector-python">
   <img alt="Coverity Scan Build Status"
@@ -36,5 +36,5 @@ Bugs and feature requests should be filed in the [MariaDB bug ticket system](htt
 
 
 [licence-image]:https://img.shields.io/badge/license-GNU%20LGPL%20version%202.1-green.svg?style=flat-square
-[python-image]:https://img.shields.io/badge/python-3.10-blue.svg
-[python-url]:https://www.python.org/downloads/release/python-3100/
+[python-image]:https://img.shields.io/badge/python-3.11-blue.svg
+[python-url]:https://www.python.org/downloads/release/python-3110/

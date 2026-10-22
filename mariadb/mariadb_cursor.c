@@ -775,9 +775,6 @@ static int Mrdb_GetFieldInfo(MrdbCursor *self)
                 Py_DECREF(field_names);
                 return 1;
             }
-#if PY_VERSION_HEX < 0x03070000
-            self->sequence_type->tp_flags|= Py_TPFLAGS_HEAPTYPE;
-#endif
             {
                 size_t key_len= strlen(mariadb_named_tuple_field_names);
                 char *key= (char *)PyMem_RawMalloc(key_len +

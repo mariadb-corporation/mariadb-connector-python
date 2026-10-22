@@ -21,7 +21,8 @@ import mariadb
 import _thread
 import time
 
-from typing import Any, Dict, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from mariadb.constants import STATUS
 
@@ -34,7 +35,7 @@ _CONN_ALIASES = (("username", "user"), ("passwd", "password"),
                  ("db", "database"))
 
 
-def _connection_args(kwargs: Mapping[str, Any]) -> Dict[str, Any]:
+def _connection_args(kwargs: Mapping[str, Any]) -> dict[str, Any]:
     """
     Returns the connection relevant keyword arguments: pool keyword arguments
     are removed, unset (None) values are ignored and aliases are resolved, so
@@ -91,8 +92,8 @@ class ConnectionPool(object):
         """
         self._connections_free = []
         self._connections_used = []
-        self._pool_args: Dict[str, Any] = {}
-        self._conn_args: Dict[str, Any] = {}
+        self._pool_args: dict[str, Any] = {}
+        self._conn_args: dict[str, Any] = {}
         self._lock_pool = _thread.RLock()
         self.__closed = 0
 
