@@ -1,15 +1,15 @@
 | Benchmark | mariadb – C extension | mariadb – pure Python | PyMySQL – pure Python | mysql-connector – C | mysql-connector – pure Python |
 |---|---|---|---|---|---|
-| DO 1 — command round-trip | 91,279 ops/s (1.1x) | 97,907 ops/s **(fastest)** | 84,372 ops/s (1.2x) | 49,408 ops/s (2.0x) | 26,432 ops/s (3.7x) |
-| SELECT 1 — simple query | 77,241 ops/s **(fastest)** | 44,895 ops/s (1.7x) | 39,677 ops/s (1.9x) | 32,288 ops/s (2.4x) | 17,368 ops/s (4.4x) |
-| INSERT — mixed types (single row) | 29,450 ops/s **(fastest)** | 28,185 ops/s (1.0x) | 26,078 ops/s (1.1x) | 27,133 ops/s (1.1x) | 17,003 ops/s (1.7x) |
-| Batch INSERT — 100 rows (executemany) | 7,511 ops/s **(fastest)** | 6,213 ops/s (1.2x) | 2,048 ops/s (3.7x) | 2,276 ops/s (3.3x) | 1,794 ops/s (4.2x) |
-| SELECT 1000 rows — binary protocol | 5,216 ops/s **(fastest)** | 1,390 ops/s (3.8x) | – | 1,362 ops/s (3.8x) | 279 ops/s (18.7x) |
-| SELECT 1000 rows — text protocol | 5,745 ops/s **(fastest)** | 1,674 ops/s (3.4x) | 511 ops/s (11.3x) | 1,515 ops/s (3.8x) | 340 ops/s (16.9x) |
-| SELECT 100 columns — binary protocol | 11,287 ops/s **(fastest)** | 5,357 ops/s (2.1x) | – | 5,107 ops/s (2.2x) | 1,177 ops/s (9.6x) |
-| SELECT 100 columns — text protocol | 14,771 ops/s **(fastest)** | 6,654 ops/s (2.2x) | 2,249 ops/s (6.6x) | 6,410 ops/s (2.3x) | 2,307 ops/s (6.4x) |
-| DO 1000 params — binary protocol | 2,292 ops/s **(fastest)** | 1,310 ops/s (1.7x) | – | 73 ops/s (31.6x) | 58 ops/s (39.5x) |
-| DO 1000 params — text protocol | 3,647 ops/s **(fastest)** | 3,561 ops/s (1.0x) | 2,063 ops/s (1.8x) | 2,431 ops/s (1.5x) | 1,034 ops/s (3.5x) |
-| Batch INSERT — 10,000 rows (executemany) | 43 ops/s (1.2x) | 50 ops/s **(fastest)** | 14 ops/s (3.7x) | 14 ops/s (3.5x) | 7 ops/s (7.2x) |
-| 50 threads: connect + query + close | 249 ops/s **(fastest)** | 149 ops/s (1.7x) | 124 ops/s (2.0x) | 146 ops/s (1.7x) | 65 ops/s (3.8x) |
-| 500 queries from 20 threads through a 5–20 pool | 52 ops/s **(fastest)** | 27 ops/s (2.0x) | – | 20 ops/s (2.6x) | 8 ops/s (6.3x) |
+| DO 1 — command round-trip | 98,124 ops/s (1.0x) | 100,670 ops/s **(fastest)** | 88,117 ops/s (1.1x) | 53,440 ops/s (1.9x) | 31,392 ops/s (3.2x) |
+| SELECT 1 — simple query | 82,928 ops/s **(fastest)** | 49,608 ops/s (1.7x) | 43,062 ops/s (1.9x) | 34,732 ops/s (2.4x) | 18,453 ops/s (4.5x) |
+| INSERT — mixed types (single row) | 32,349 ops/s **(fastest)** | 29,095 ops/s (1.1x) | 27,518 ops/s (1.2x) | 30,446 ops/s (1.1x) | 18,123 ops/s (1.8x) |
+| Batch INSERT — 100 rows (executemany) | 8,092 ops/s **(fastest)** | 6,192 ops/s (1.3x) | 2,147 ops/s (3.8x) | 2,337 ops/s (3.5x) | 1,834 ops/s (4.4x) |
+| SELECT 1000 rows — binary protocol | 5,629 ops/s **(fastest)** | 1,509 ops/s (3.7x) | – | 1,516 ops/s (3.7x) | 294 ops/s (19.1x) |
+| SELECT 1000 rows — text protocol | 6,580 ops/s **(fastest)** | 1,802 ops/s (3.7x) | 538 ops/s (12.2x) | 1,769 ops/s (3.7x) | 358 ops/s (18.4x) |
+| SELECT 100 columns — binary protocol | 13,406 ops/s **(fastest)** | 5,842 ops/s (2.3x) | – | 5,750 ops/s (2.3x) | 1,221 ops/s (11.0x) |
+| SELECT 100 columns — text protocol | 17,655 ops/s **(fastest)** | 6,859 ops/s (2.6x) | 2,560 ops/s (6.9x) | 7,267 ops/s (2.4x) | 2,413 ops/s (7.3x) |
+| DO 1000 params — binary protocol | 3,398 ops/s **(fastest)** | 1,762 ops/s (1.9x) | – | 79 ops/s (43.2x) | 63 ops/s (54.3x) |
+| DO 1000 params — text protocol | 4,008 ops/s **(fastest)** | 3,929 ops/s (1.0x) | 2,219 ops/s (1.8x) | 2,858 ops/s (1.4x) | 1,072 ops/s (3.7x) |
+| Batch INSERT — 10,000 rows (executemany) | 49 ops/s (1.1x) | 54 ops/s **(fastest)** | 15 ops/s (3.6x) | 15 ops/s (3.6x) | 8 ops/s (7.1x) |
+| 50 threads: connect + query + close | 280 ops/s **(fastest)** | 156 ops/s (1.8x) | 146 ops/s (1.9x) | 166 ops/s (1.7x) | 74 ops/s (3.8x) |
+| 500 queries from 20 threads through a 5–20 pool | 56 ops/s **(fastest)** | 29 ops/s (1.9x) | – | 21 ops/s (2.6x) | 9 ops/s (6.4x) |
