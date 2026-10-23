@@ -319,6 +319,7 @@ extern char *dsn_keys[];
 
 /* Exceptions */
 extern PyObject *Mariadb_InterfaceError;
+extern PyObject *MrdbIndicator_Type;
 extern PyObject *Mariadb_Error;
 extern PyObject *Mariadb_DatabaseError;
 extern PyObject *Mariadb_DataError;
@@ -433,7 +434,7 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr);
 /* Helper macros */
 
 #define MrdbIndicator_Check(a)\
-      (PyObject_HasAttrString(a, "indicator"))
+      (PyObject_TypeCheck((a), (PyTypeObject *)MrdbIndicator_Type))
 
 #define MARIADB_CHECK_CONNECTION(connection, ret)\
     if (!(connection) || !(connection)->mysql)\

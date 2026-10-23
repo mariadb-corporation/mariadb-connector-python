@@ -6,6 +6,7 @@
 
 /* Exception objects - imported from main mariadb package in mariadb.c */
 PyObject *Mariadb_InterfaceError;
+PyObject *MrdbIndicator_Type= NULL;
 PyObject *Mariadb_Error;
 PyObject *Mariadb_DatabaseError;
 PyObject *Mariadb_DataError;

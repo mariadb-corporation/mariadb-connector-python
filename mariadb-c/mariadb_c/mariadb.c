@@ -195,6 +195,20 @@ PyMODINIT_FUNC PyInit__mariadb(void)
 
     Py_DECREF(shared_exc_module);
 
+    {
+        PyObject *indicator_module = PyImport_ImportModule("mariadb_shared.constants.INDICATOR");
+        if (!indicator_module) {
+            PyErr_SetString(PyExc_ImportError, "Cannot import mariadb_shared.constants.INDICATOR (the bundled shared module).");
+            goto error;
+        }
+        MrdbIndicator_Type = PyObject_GetAttrString(indicator_module, "MrdbIndicator");
+        Py_DECREF(indicator_module);
+        if (!MrdbIndicator_Type || !PyType_Check(MrdbIndicator_Type)) {
+            PyErr_SetString(PyExc_ImportError, "mariadb_shared.constants.INDICATOR.MrdbIndicator is missing or not a class.");
+            goto error;
+        }
+    }
+
     // All exceptions MUST be successfully imported
     if (!Mariadb_Error || !Mariadb_Warning || !Mariadb_InterfaceError ||
         !Mariadb_DatabaseError || !Mariadb_InternalError || !Mariadb_OperationalError ||
