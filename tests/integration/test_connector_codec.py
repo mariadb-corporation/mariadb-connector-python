@@ -19,6 +19,7 @@ tests/unit/test_fakeserver_behaviors.py.
 
 import array
 import datetime
+import enum
 import unittest
 from typing import TYPE_CHECKING, Any
 
@@ -143,6 +144,28 @@ class _SharedConnectorCodecs(_MixinBase):
         cur = self.conn.cursor(binary=True)
         cur.execute("SELECT ? AS x", (None,))
         self.assertIsNone(cur.fetchone()[0])
+        cur.close()
+
+    def test_binary_param_int_subclass(self):
+        # An int subclass (IntEnum) is an integer parameter, not its string
+        # representation sent under an integer type.
+        class Color(enum.IntEnum):
+            RED = 7
+
+        cur = self.conn.cursor(binary=True)
+        cur.execute("SELECT ?, ? AS x", (Color.RED, "x"))
+        self.assertEqual(cur.fetchone(), (7, "x"))
+        cur.close()
+
+    def test_binary_param_many_ints(self):
+        # ints of either width, None and bool in one statement
+        values = list(range(-500, 500))
+        cur = self.conn.cursor(binary=True)
+        cur.execute("SELECT " + ",".join(["?"] * len(values)), values)
+        self.assertEqual(list(cur.fetchone()), values)
+        mixed = values + [None, 2 ** 40, True]
+        cur.execute("SELECT " + ",".join(["?"] * len(mixed)), mixed)
+        self.assertEqual(list(cur.fetchone()), values + [None, 2 ** 40, 1])
         cur.close()
 
     def test_blob_text_decode(self):
