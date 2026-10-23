@@ -19,6 +19,7 @@ tests/unit/test_fakeserver_behaviors.py.
 
 import array
 import datetime
+import decimal
 import enum
 import unittest
 from typing import TYPE_CHECKING, Any
@@ -144,6 +145,42 @@ class _SharedConnectorCodecs(_MixinBase):
         cur = self.conn.cursor(binary=True)
         cur.execute("SELECT ? AS x", (None,))
         self.assertIsNone(cur.fetchone()[0])
+        cur.close()
+
+    def test_binary_param_non_finite(self):
+        cur = self.conn.cursor(binary=True)
+        for val in (float("nan"), float("inf"), float("-inf")):
+            with self.assertRaises(mariadb.NotSupportedError) as ctx:
+                cur.execute("SELECT ?", (val,))
+            self.assertIn(f"'{val!r}'", str(ctx.exception))
+        for text in ("NaN", "sNaN", "Infinity", "-Infinity"):
+            with self.assertRaises(mariadb.NotSupportedError) as ctx:
+                cur.execute("SELECT ?", (decimal.Decimal(text),))
+            self.assertIn(f"'{text}'", str(ctx.exception))
+        # the refused statement was never prepared: the same SQL runs next
+        cur.execute("SELECT ?", (1.5,))
+        self.assertEqual(cur.fetchone()[0], 1.5)
+        cur.execute("CREATE TEMPORARY TABLE test_c_nonfinite (d DOUBLE, n DECIMAL(10, 2))")
+        insert = "INSERT INTO test_c_nonfinite VALUES (?, ?)"
+        with self.assertRaises(mariadb.NotSupportedError):
+            cur.executemany(insert, [(1.5, decimal.Decimal("1.5")), (float("nan"), decimal.Decimal("1.5"))])
+        with self.assertRaises(mariadb.NotSupportedError):
+            cur.executemany(insert, [(1.5, decimal.Decimal("1.5")), (1.5, decimal.Decimal("NaN"))])
+        cur.executemany(insert, [(1.5, decimal.Decimal("1.5")), (2.5, decimal.Decimal("2.5"))])
+        cur.execute(insert, (3.5, decimal.Decimal("3.5")))
+        cur.execute("SELECT COUNT(*) FROM test_c_nonfinite")
+        self.assertEqual(cur.fetchone()[0], 3)
+        cur.execute("DROP TEMPORARY TABLE test_c_nonfinite")
+        cur.close()
+
+    def test_binary_prepare_error_then_same_sql(self):
+        cur = self.conn.cursor(binary=True)
+        for _ in range(2):
+            with self.assertRaises(mariadb.ProgrammingError) as ctx:
+                cur.execute("SELEC ?", (1,))
+            self.assertIn("syntax", str(ctx.exception))
+        cur.execute("SELECT ?", (1,))
+        self.assertEqual(cur.fetchone()[0], 1)
         cur.close()
 
     def test_binary_param_int_subclass(self):

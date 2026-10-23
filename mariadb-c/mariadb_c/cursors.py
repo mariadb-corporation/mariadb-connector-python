@@ -9,16 +9,10 @@ from typing import Any, List, Iterator, Type
 # Import shared constants and exceptions to avoid circular dependencies
 from mariadb_shared.constants import STATUS, CAPABILITY
 from mariadb_shared.constants.STATUS import NO_BACKSLASH_ESCAPES as _NO_BACKSLASH_ESCAPES
-from mariadb_shared.exceptions import (
-    ProgrammingError,
-    NotSupportedError
-)
+from mariadb_shared.exceptions import ProgrammingError
 from mariadb_shared.text_protocol import substitute_params, normalize_to_qmark
 from typing import Sequence
-import decimal
 import warnings
-
-_Decimal = decimal.Decimal
 
 ROWS_ALL = -1
 
@@ -120,26 +114,6 @@ class Cursor(StmtReuseMixin, CCursor, SyncCursorCommon[Any]):
         self._connection._check_closed()
 
 
-    def _check_decimal_parameter(self, val: Any) -> None:
-        """
-        Internal use only
-
-        Checks for unsupported parameters.
-        The following parameters are not supported by MariaDB/MySQL (but also
-        not part of the SQL Standard)
-
-        - float("nan" | "inf" | "-inf")
-        - Decimal("NaN" | "sNaN" | "Infinity" | "-Infinity")
-        """
-
-        if isinstance(val, float) and repr(val) in ("nan", "inf", "-inf"):
-            raise NotSupportedError(f"Float value '{repr(val)}' is not supported.")
-        elif isinstance(val, decimal.Decimal) and val.__str__() in ("NaN", "sNaN", "Infinity", "-Infinity"):
-            raise NotSupportedError(f"Decimal value '{val.__str__()}' is not supported.")
-
-        return None
-
-
     def callproc(self, procname: str, args: Sequence[Any] = ()) -> None:
         """
         Executes a stored procedure sp. The data sequence must contain an
@@ -212,11 +186,6 @@ class Cursor(StmtReuseMixin, CCursor, SyncCursorCommon[Any]):
             use_binary = _force_binary or self._use_binary
 
             if not isinstance(data, dict) and use_binary:
-                # Validate unsupported decimal/float values for binary protocol.
-                _check = self._check_decimal_parameter
-                for val in data:
-                    if type(val) is float or type(val) is _Decimal:
-                        _check(val)
                 # Binary protocol: server parses placeholders during prepare
                 if self.statement != sql:
                     super()._set_statement(sql, len(data))

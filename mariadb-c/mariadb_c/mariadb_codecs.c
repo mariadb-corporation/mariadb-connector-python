@@ -3,6 +3,7 @@
 
 #include "mariadb_python.h"
 #include <datetime.h>
+#include <math.h>
 #ifdef _WIN32
 /* shutdown() comes from the winsock header windows.h already pulled in, but
    SD_BOTH lives in winsock2.h, which cannot be included after windows.h. */
@@ -1233,6 +1234,55 @@ end:
 }
 
 /*
+   mariadb_check_finite
+   NaN and infinity have no SQL representation (CONPY-313): a float or a
+   decimal.Decimal parameter holding one is refused with NotSupportedError,
+   before anything is sent, with the same message as the pure-Python client.
+
+   @param obj[in]   the parameter value (not NULL)
+   @param type[in]  its MYSQL_TYPE as determined by mariadb_get_column_info
+
+   @return 0 if the value can be sent, 1 with the exception set otherwise
+*/
+static uint8_t
+mariadb_check_finite(PyObject *obj, enum enum_field_types type)
+{
+    if (type == MYSQL_TYPE_DOUBLE)
+    {
+        double d= PyFloat_AsDouble(obj);
+
+        if (isnan(d) || isinf(d))
+        {
+            mariadb_throw_exception(NULL, Mariadb_NotSupportedError, 0,
+                "Float value '%s' is not supported.",
+                isnan(d) ? "nan" : (d > 0 ? "inf" : "-inf"));
+            return 1;
+        }
+    }
+    else if (type == MYSQL_TYPE_NEWDECIMAL)
+    {
+        PyObject *str= PyObject_Str(obj);
+        const char *p;
+        uint8_t rc= 0;
+
+        if (!str)
+            return 1;
+        if (!(p= PyUnicode_AsUTF8(str)))
+            rc= 1;
+        else if (!strcmp(p, "NaN") || !strcmp(p, "sNaN") ||
+                 !strcmp(p, "Infinity") || !strcmp(p, "-Infinity"))
+        {
+            mariadb_throw_exception(NULL, Mariadb_NotSupportedError, 0,
+                "Decimal value '%s' is not supported.", p);
+            rc= 1;
+        }
+        Py_DECREF(str);
+        return rc;
+    }
+    return 0;
+}
+
+/*
    mariadb_get_parameter_info
    mariadb_get_parameter_info fills the MYSQL_BIND structure
    with correct field_types for the Python objects.
@@ -1278,6 +1328,8 @@ mariadb_get_parameter_info(MrdbCursor *self,
         }
         param->buffer_type= pinfo.type;
         bits= (uint32_t)pinfo.bits;
+        if (paramvalue.value && mariadb_check_finite(paramvalue.value, pinfo.type))
+            return 1;
     }
     else for (i=0; i < self->array_size; i++)
     {
@@ -1301,15 +1353,8 @@ mariadb_get_parameter_info(MrdbCursor *self,
             return 1;
         }
 
-        if (paramvalue.value && (PyFloat_Check(paramvalue.value) ||
-           (!strcmp(Py_TYPE(paramvalue.value)->tp_name, "decimal.Decimal") || !strcmp(Py_TYPE(paramvalue.value)->tp_name, "Decimal"))))
-        if (paramvalue.value != Py_None && pinfo.type == MYSQL_TYPE_NEWDECIMAL)
-        {
-            PyObject *res = PyObject_CallMethod((PyObject *)self, "_check_decimal_parameter", "O", paramvalue.value);
-            Py_XDECREF(res);
-            if (PyErr_Occurred())
-                return 1;
-        }
+        if (paramvalue.value && mariadb_check_finite(paramvalue.value, pinfo.type))
+            return 1;
 
         if (pinfo.type == MYSQL_TYPE_LONGLONG)
         {

@@ -531,6 +531,18 @@ static void MrdbCursor_clearstmt(MrdbCursor *self)
   self->param_cb_active = 0;
 }
 
+static void ma_forget_unprepared_statement(MrdbCursor *self)
+{
+    if (!self->reprepare ||
+        (self->stmt && self->stmt->state >= MYSQL_STMT_PREPARED))
+        return;
+    MrdbCursor_clearstmt(self);
+    MARIADB_FREE_MEM(self->params);
+    MrdbCursor_FreeValues(self);
+    MrdbCursor_FreeResultValues(self);
+    MARIADB_FREE_MEM(self->bind);
+}
+
 /* Clear Python-level active-cursor tracking attributes on the connection.
    Tries _active_streaming_result first (sync text + binary), then
    _active_async_cursor. */
@@ -1804,6 +1816,7 @@ MrdbCursor_execute_binary(MrdbCursor *self)
     Py_RETURN_NONE;
 
 error:
+    ma_forget_unprepared_statement(self);
     return NULL;
 }
 
@@ -2194,12 +2207,13 @@ MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args)
     /* Check and load parameters if present */
     if (self->data && self->paramcount)
     {
-        if (mariadb_check_execute_parameters(self, self->data))
-            return NULL;
-
         self->param_cb_active= 0;
-        if (mariadb_param_update(self, self->params, 0))
+        if (mariadb_check_execute_parameters(self, self->data) ||
+            mariadb_param_update(self, self->params, 0))
+        {
+            ma_forget_unprepared_statement(self);
             return NULL;
+        }
     }
 
     /* Set statement attributes if repreparing */
@@ -2245,6 +2259,7 @@ MrdbCursor_stmt_prepare_start(MrdbCursor *self)
         /* FAST PATH: completed immediately */
         if (rc) {
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
+            ma_forget_unprepared_statement(self);
             return NULL;
         }
         /* Set field count after preparation */
@@ -2279,6 +2294,7 @@ MrdbCursor_stmt_prepare_cont(MrdbCursor *self, PyObject *args)
     if (status == 0) {
         if (rc) {
             mariadb_throw_exception(self->stmt, NULL, 1, NULL);
+            ma_forget_unprepared_statement(self);
             return NULL;
         }
         /* Set field count after preparation completes */
