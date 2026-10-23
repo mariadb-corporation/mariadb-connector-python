@@ -18,6 +18,8 @@ _PACK_d = struct.Struct('<d').pack  # double for float
 _PACK_HEADER = struct.Struct('<BIBI').pack  # command, statement id, flags, iteration count
 
 _INT64_MAX = 0x7FFFFFFFFFFFFFFF
+_INT64_MIN = -0x8000000000000000
+_UINT64_MAX = 0xFFFFFFFFFFFFFFFF
 _UNSIGNED_FLAG = 0x80
 
 # Composite struct formats for datetime/date/time (pack multiple fields at once)
@@ -99,13 +101,11 @@ class ExecutePacket(ClientMessage):
                 if -2147483648 <= param <= 2147483647:
                     types[i * 2] = _FT_LONG
                     append(_PACK_i(param))
-                elif param > _INT64_MAX:
-                    types[i * 2] = _FT_LONGLONG
-                    types[i * 2 + 1] = _UNSIGNED_FLAG
-                    append(_PACK_Q(param))
                 else:
-                    types[i * 2] = _FT_LONGLONG
-                    append(_PACK_q(param))
+                    field_type, flags, fragment = _encode_int(param)
+                    types[i * 2] = field_type
+                    types[i * 2 + 1] = flags
+                    append(fragment)
             elif param is None:
                 null_bitmap[i >> 3] |= 1 << (i & 7)
             else:
@@ -148,12 +148,19 @@ def _length_encoded(data: bytes) -> bytes:
     return b'\xfe' + length.to_bytes(8, 'little') + data
 
 
-def _encode_int(param: int) -> _Encoded:
-    """int subclasses (IntEnum, ...); exact ints are encoded inline in payload()"""
+def _encode_int(param: int) -> tuple[int, int, bytes]:
+    """ints beyond 32 bits and int subclasses (IntEnum, ...); 32-bit ints
+    are encoded inline in payload(). Like the C extension: unsigned BIGINT
+    above 2**63-1, a decimal string below -2**63 (no integer type holds it),
+    OverflowError from 2**64 on."""
     if -2147483648 <= param <= 2147483647:
         return (_FT_LONG, 0, _PACK_i(param))
     if param > _INT64_MAX:
+        if param > _UINT64_MAX:
+            raise OverflowError("int too big to convert")
         return (_FT_LONGLONG, _UNSIGNED_FLAG, _PACK_Q(param))
+    if param < _INT64_MIN:
+        return (FIELD_TYPE.NEWDECIMAL, 0, _length_encoded(str(param).encode('ascii')))
     return (_FT_LONGLONG, 0, _PACK_q(param))
 
 

@@ -187,7 +187,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon[Any]
             self._completion_index = 0
             self._current_completion = self._completions[0]
 
-        except DatabaseError:
+        except (DatabaseError, OverflowError):
             raise
         except Exception as e:
             raise self._exception_factory.create_exception(
@@ -289,7 +289,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon[Any]
             if self._completions:
                 self._current_completion = self._completions[0]
 
-        except DatabaseError:
+        except (DatabaseError, OverflowError):
             raise
         except Exception as e:
             raise self._exception_factory.create_exception(
@@ -461,7 +461,7 @@ class SyncCursor(BaseCursor[SyncResult, 'SyncConnection'], SyncCursorCommon[Any]
             self._completion_index = 0
             self._current_completion = self._completions[0]
             return None
-        except DatabaseError:
+        except (DatabaseError, OverflowError):
             raise
         except Exception as e:
             raise self._exception_factory.create_exception(

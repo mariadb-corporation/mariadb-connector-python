@@ -767,7 +767,7 @@ class AsyncClient(BaseClient):
                     raise first_error
                 return all_completions
 
-            except DatabaseError as e:
+            except (DatabaseError, OverflowError) as e:
                 raise e
             except Exception as e:
                 raise OperationalError(f"Execution failed: {e}")

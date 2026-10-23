@@ -22,6 +22,8 @@ _STRUCT_d = struct.Struct('<d')  # double
 _STRUCT_BB = struct.Struct('<BB')  # two unsigned bytes
 
 _INT64_MAX = 0x7FFFFFFFFFFFFFFF
+_INT64_MIN = -0x8000000000000000
+_UINT64_MAX = 0xFFFFFFFFFFFFFFFF
 _UNSIGNED_FLAG = 0x80
 
 # Composite struct formats for datetime/date/time
@@ -386,6 +388,10 @@ class BulkExecutePacket(ClientMessage):
         if pytype is int:
             low = min(values)
             high = max(values)
+            if high > _UINT64_MAX:
+                raise OverflowError("int too big to convert")
+            if low < _INT64_MIN:
+                return FIELD_TYPE.NEWDECIMAL, 0
             field_type = _INT_TYPE_ORDER[max(_int_rank(low), _int_rank(high))]
             return BulkExecutePacket._resolve_integer_flags(
                 field_type, _UNSIGNED_FLAG if high > _INT64_MAX else 0, low < 0)
@@ -476,8 +482,12 @@ class BulkExecutePacket(ClientMessage):
                 return FIELD_TYPE.SHORT, 0
             elif -2147483648 <= param <= 2147483647:
                 return FIELD_TYPE.LONG, 0
+            elif param > _UINT64_MAX:
+                raise OverflowError("int too big to convert")
             elif param > _INT64_MAX:
                 return FIELD_TYPE.LONGLONG, _UNSIGNED_FLAG
+            elif param < _INT64_MIN:
+                return FIELD_TYPE.NEWDECIMAL, 0
             return FIELD_TYPE.LONGLONG, 0
         elif isinstance(param, float):
             return FIELD_TYPE.DOUBLE, 0

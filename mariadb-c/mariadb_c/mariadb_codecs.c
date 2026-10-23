@@ -1154,6 +1154,8 @@ PyObject *ListOrTuple_GetItem(PyObject *obj, Py_ssize_t index)
    @param   row_nr[in]       row number
    @paran   column_nr[in]    column number
    @param   paran[in][out]   bulk parameter pointer
+   @param   caps[in]         extended server capabilities (looked up once
+                             by the caller, not for every parameter)
 
    @return  0 on success, 1 on error
  */
@@ -1162,15 +1164,12 @@ mariadb_get_parameter(MrdbCursor *self,
                       uint8_t is_bulk,
                       uint32_t row_nr,
                       uint32_t column_nr,
-                      MrdbParamValue *param)
+                      MrdbParamValue *param,
+                      long caps)
 {
     PyObject *row= NULL,
              *column= NULL;
     uint8_t rc= 1;
-    long caps;
-
-    mariadb_get_infov(self->connection->mysql,
-                      MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES, &caps);
 
     if (is_bulk)
     {
@@ -1282,13 +1281,70 @@ mariadb_check_finite(PyObject *obj, enum enum_field_types type)
     return 0;
 }
 
+static uint8_t
+mariadb_param_to_bind(MrdbCursor *self, MYSQL_BIND *bind, MrdbParamValue *value);
+
+/*
+   mariadb_bind_long
+   Sizes and binds an int parameter of a single execute() from one
+   conversion: the smallest signed type that holds the value, unsigned
+   BIGINT above INT64_MAX, a decimal string below INT64_MIN.
+
+   @return 0 on success, 1 with the exception set
+*/
+static uint8_t
+mariadb_bind_long(MrdbCursor *self, MYSQL_BIND *param, MrdbParamValue *value)
+{
+    int overflow;
+    long long v= PyLong_AsLongLongAndOverflow(value->value, &overflow);
+
+    param->is_unsigned= 0;
+    if (overflow > 0)
+    {
+        *(uint64_t *)value->num= (uint64_t)PyLong_AsUnsignedLongLong(value->value);
+        if (PyErr_Occurred())
+            return 1;
+        param->buffer_type= MYSQL_TYPE_LONGLONG;
+        param->is_unsigned= 1;
+    }
+    else if (overflow < 0)
+    {
+        param->buffer_type= MYSQL_TYPE_NEWDECIMAL;
+        return mariadb_param_to_bind(self, param, value);
+    }
+    else if (v >= -127 && v <= 127)
+    {
+        *(int8_t *)value->num= (int8_t)v;
+        param->buffer_type= MYSQL_TYPE_TINY;
+    }
+    else if (v >= -32767 && v <= 32767)
+    {
+        *(int16_t *)value->num= (int16_t)v;
+        param->buffer_type= MYSQL_TYPE_SHORT;
+    }
+    else if (v >= -2147483647 && v <= 2147483647)
+    {
+        *(int32_t *)value->num= (int32_t)v;
+        param->buffer_type= MYSQL_TYPE_LONG;
+    }
+    else
+    {
+        *(int64_t *)value->num= (int64_t)v;
+        param->buffer_type= MYSQL_TYPE_LONGLONG;
+    }
+    param->buffer= value->num;
+    return 0;
+}
+
 /*
    mariadb_get_parameter_info
    mariadb_get_parameter_info fills the MYSQL_BIND structure
    with correct field_types for the Python objects.
 
-   In case of a bulk operation (executemany()) we will also optimize
-   the field type (e.g. by checking maxbit size for a PyLong).
+   For a single execute() the value is bound as well: the parameters are
+   walked once. In case of a bulk operation (executemany()) we will also
+   optimize the field type (e.g. by checking maxbit size for a PyLong),
+   and the values are bound row by row by mariadb_param_update().
    If the types in this column differ we will return an error.
 */
 static uint8_t
@@ -1299,18 +1355,35 @@ mariadb_get_parameter_info(MrdbCursor *self,
     uint32_t i, bits= 0;
     MrdbParamValue paramvalue;
     MrdbParamInfo pinfo;
+    long caps;
 
     param->is_unsigned= 0;
     paramvalue.indicator= 0;
     uint8_t rc;
     uint8_t has_negative= 0;
 
+    mariadb_get_infov(self->connection->mysql,
+                      MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES, &caps);
+
     if (!self->array_size)
     {
-        memset(&pinfo, 0, sizeof(MrdbParamInfo));
-        if (mariadb_get_parameter(self, 0, 0, column_nr, &paramvalue))
+        MrdbParamValue *value= &self->value[column_nr];
+
+        if (mariadb_get_parameter(self, 0, 0, column_nr, value, caps))
             return 1;
-        if ((rc= mariadb_get_column_info(paramvalue.value, &pinfo)))
+        if (!value->value)
+        {
+            /* None, or an indicator value */
+            param->buffer_type= MYSQL_TYPE_NULL;
+            if (value->indicator)
+                param->u.indicator= &value->indicator;
+            return 0;
+        }
+        if (CHECK_TYPE(value->value, &PyLong_Type))
+            return mariadb_bind_long(self, param, value);
+
+        memset(&pinfo, 0, sizeof(MrdbParamInfo));
+        if ((rc= mariadb_get_column_info(value->value, &pinfo)))
         {
             if (rc == 1)
             {
@@ -1322,18 +1395,18 @@ mariadb_get_parameter_info(MrdbCursor *self,
             {
                 mariadb_throw_exception(NULL, Mariadb_NotSupportedError, 0,
                     "Data type '%s' in column %d not supported in MariaDB Connector/Python",
-                     Py_TYPE(paramvalue.value)->tp_name, column_nr + 1);
+                     Py_TYPE(value->value)->tp_name, column_nr + 1);
             }
             return 1;
         }
-        param->buffer_type= pinfo.type;
-        bits= (uint32_t)pinfo.bits;
-        if (paramvalue.value && mariadb_check_finite(paramvalue.value, pinfo.type))
+        if (mariadb_check_finite(value->value, pinfo.type))
             return 1;
+        param->buffer_type= pinfo.type;
+        return mariadb_param_to_bind(self, param, value);
     }
     else for (i=0; i < self->array_size; i++)
     {
-        if (mariadb_get_parameter(self, 1, i, column_nr, &paramvalue))
+        if (mariadb_get_parameter(self, 1, i, column_nr, &paramvalue, caps))
             return 1;
         memset(&pinfo, 0, sizeof(MrdbParamInfo));
         if ((rc= mariadb_get_column_info(paramvalue.value, &pinfo)) && !paramvalue.indicator)
@@ -1358,6 +1431,17 @@ mariadb_get_parameter_info(MrdbCursor *self,
 
         if (pinfo.type == MYSQL_TYPE_LONGLONG)
         {
+            /* 2**64 and above: no type holds it (a negative of that size
+               goes as a decimal string, see has_negative below) */
+#if PY_VERSION_HEX >= 0x030e00a1
+            if (pinfo.bits > 64 && PyLong_IsNegative(paramvalue.value) == 0)
+#else
+            if (pinfo.bits > 64 && _PyLong_Sign(paramvalue.value) >= 0)
+#endif
+            {
+                PyErr_SetString(PyExc_OverflowError, "int too big to convert");
+                return 1;
+            }
             if (!param->is_unsigned)
             {
                 PyLong_AsLongLong(paramvalue.value);
@@ -1656,6 +1740,11 @@ mariadb_param_to_bind(MrdbCursor *self,
             {
                 if ((*(uint64_t *)value->num= (uint64_t)PyLong_AsUnsignedLongLong(value->value)) > 0x7FFFFFFFFFFFFFFF)
                     bind->is_unsigned= 1;
+                if (PyErr_Occurred())
+                {
+                    rc= 1;
+                    goto end;
+                }
             }
             else {
                 *(int64_t *)value->num= (int64_t)PyLong_AsLongLong(value->value);
@@ -1820,14 +1909,17 @@ mariadb_param_update(void *data, MYSQL_BIND *bind, uint32_t row_nr)
     MrdbCursor *self= (MrdbCursor *)data;
     uint32_t i;
     uint8_t rc= 1;
+    long caps;
     PyGILState_STATE gstate = PyGILState_Ensure();
 
     mrdb_stack_guard_enter(&gstate);
+    mariadb_get_infov(self->connection->mysql,
+                      MARIADB_CONNECTION_EXTENDED_SERVER_CAPABILITIES, &caps);
 
     for (i=0; i < self->paramcount; i++)
     {
         if (mariadb_get_parameter(self, (self->array_size > 0),
-                                 row_nr, i, &self->value[i]))
+                                 row_nr, i, &self->value[i], caps))
         {
             goto end;
         }

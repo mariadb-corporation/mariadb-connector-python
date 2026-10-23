@@ -157,7 +157,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon[
             self._completion_index = 0
             self._current_completion = self._completions[0]
 
-        except DatabaseError as e:
+        except (DatabaseError, OverflowError) as e:
             raise e
         except Exception as e:
             raise self._exception_factory.create_exception(
@@ -263,7 +263,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon[
             if self._completions:
                 self._current_completion = self._completions[0]
 
-        except DatabaseError as e:
+        except (DatabaseError, OverflowError) as e:
             raise e
         except Exception as e:
             raise self._exception_factory.create_exception(
@@ -517,7 +517,7 @@ class AsyncCursor(BaseCursor[AsyncResult, 'AsyncConnection'], AsyncCursorCommon[
             self._completion_index = 0
             self._current_completion = self._completions[0]
             return None  # type: ignore[return-value]  # Match C extension behavior
-        except DatabaseError as e:
+        except (DatabaseError, OverflowError) as e:
             raise e
         except Exception as e:
             raise self._exception_factory.create_exception(

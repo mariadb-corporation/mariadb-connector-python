@@ -183,6 +183,25 @@ class _SharedConnectorCodecs(_MixinBase):
         self.assertEqual(cur.fetchone()[0], 1)
         cur.close()
 
+    def test_binary_param_int_out_of_range(self):
+        # Same rule in both implementations: below -2**63 no integer type
+        # holds the value, it is sent as a decimal string; from 2**64 on
+        # OverflowError is raised before anything is sent.
+        cur = self.conn.cursor(binary=True)
+        cur.execute("SELECT ?", (-2 ** 63 - 1,))
+        self.assertEqual(cur.fetchone()[0], -2 ** 63 - 1)
+        with self.assertRaises(OverflowError):
+            cur.execute("SELECT ?", (2 ** 64,))
+        cur.execute("CREATE TEMPORARY TABLE test_c_bigint (v DECIMAL(30, 0))")
+        insert = "INSERT INTO test_c_bigint VALUES (?)"
+        cur.executemany(insert, [(5,), (-2 ** 63 - 1,), (2 ** 64 - 1,)])
+        with self.assertRaises(OverflowError):
+            cur.executemany(insert, [(5,), (2 ** 64,)])
+        cur.execute("SELECT v FROM test_c_bigint ORDER BY v")
+        self.assertEqual([int(r[0]) for r in cur.fetchall()], [-2 ** 63 - 1, 5, 2 ** 64 - 1])
+        cur.execute("DROP TEMPORARY TABLE test_c_bigint")
+        cur.close()
+
     def test_binary_param_int_subclass(self):
         # An int subclass (IntEnum) is an integer parameter, not its string
         # representation sent under an integer type.

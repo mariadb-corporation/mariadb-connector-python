@@ -1782,12 +1782,9 @@ MrdbCursor_execute_binary(MrdbCursor *self)
 
     if (self->data && self->paramcount)
     {
-        if (mariadb_check_execute_parameters(self, self->data))
-            goto error;
-
-        /* Load values */
+        /* checks the types and binds the values */
         self->param_cb_active= 0;
-        if (mariadb_param_update(self, self->params, 0))
+        if (mariadb_check_execute_parameters(self, self->data))
             goto error;
     }
 
@@ -2208,8 +2205,7 @@ MrdbCursor_prepare_stmt_only(MrdbCursor *self, PyObject *args)
     if (self->data && self->paramcount)
     {
         self->param_cb_active= 0;
-        if (mariadb_check_execute_parameters(self, self->data) ||
-            mariadb_param_update(self, self->params, 0))
+        if (mariadb_check_execute_parameters(self, self->data))
         {
             ma_forget_unprepared_statement(self);
             return NULL;
