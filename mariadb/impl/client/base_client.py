@@ -997,10 +997,17 @@ class BaseClient(ABC):
                 null_bits = int.from_bytes(data[pos:pos + null_bitmap_length], 'little') >> 2
             pos += null_bitmap_length
 
-            for i, kind in enumerate(kinds):
-                if null_bits and (null_bits >> i) & 1:
-                    add(None)
-                elif kind == KIND_INT32:
+            for kind in kinds:
+                # NULL bitmap consumed one bit per column: once the last set bit
+                # has been shifted out, this is a single falsy test per column
+                # (enumerate() + indexed bit test cost ~25 ns per column more)
+                if null_bits:
+                    if null_bits & 1:
+                        null_bits >>= 1
+                        add(None)
+                        continue
+                    null_bits >>= 1
+                if kind == KIND_INT32:
                     add(_unpack_i(data, pos)[0])
                     pos += 4
                 elif kind <= KIND_UTINY:
@@ -1042,7 +1049,7 @@ class BaseClient(ABC):
                         vstart = pos + 9
                     pos = vstart + length
                     if kind == KIND_STR:
-                        add(str(data[vstart:pos], 'utf-8', 'ignore'))
+                        add(data[vstart:pos].decode('utf-8', 'ignore'))
                     elif kind == KIND_BYTES:
                         add(bytes(data[vstart:pos]))
                     else:
