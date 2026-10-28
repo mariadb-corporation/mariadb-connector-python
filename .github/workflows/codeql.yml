@@ -15,9 +15,9 @@ name: "CodeQL"
 
 on:
   push:
-    branches: ['1.1', '1.1-georg', '1.0', 'sqlalchemy']
+    branches: ['1.1*', '1.0', 'sqlalchemy']
   pull_request:
-    branches: ['1.1', '1.1-georg', '1.0', 'sqlalchemy']
+    branches: ['1.1*', '1.0', 'sqlalchemy']
   schedule:
     # Weekly deep scan, Monday 06:00 UTC (offset from the main CI cron).
     - cron: '0 6 * * 1'

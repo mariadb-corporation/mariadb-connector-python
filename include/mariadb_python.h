@@ -219,6 +219,59 @@ enum enum_paramstyle
     PYFORMAT= 3
 };
 
+#define MA_BIND_STR_SIZE 256
+
+typedef struct
+{
+  union
+  {
+    long long   ll;
+    float       f;
+    double      d;
+    MYSQL_TIME  tm;
+    char        str[MA_BIND_STR_SIZE];
+  } u;
+} MA_BIND_BUF;
+
+typedef struct
+{
+  unsigned int   count;
+  MYSQL_BIND    *bind;
+  MA_BIND_BUF   *buf;
+  unsigned long *length;
+  my_bool       *is_null;
+  my_bool       *error;
+} MA_BIND_STATE;
+
+enum
+{
+  MA_COL_UNKNOWN= 0,
+  MA_COL_NULL,
+  MA_COL_INT,
+  MA_COL_FLOAT,
+  MA_COL_DOUBLE,
+  MA_COL_DATE,
+  MA_COL_TIME,
+  MA_COL_DATETIME,
+  MA_COL_DECIMAL,     /* NEWDECIMAL: text -> decimal_type */
+  MA_COL_BLOB,        /* blob types and BIT */
+  MA_COL_STRING       /* all other text like types */
+};
+
+typedef struct
+{
+  unsigned char  cls;          /* MA_COL_*, 0 = MA_COL_UNKNOWN */
+  unsigned char  bind_type;    /* enum_field_types value used for the bind */
+  unsigned short buf_size;     /* bytes needed in the bind buffer,
+                                  0 = the string buffer */
+} MA_COL_INFO;
+
+#define MA_INT_ENTRY   {MA_COL_INT, MYSQL_TYPE_LONGLONG, sizeof(long long)}
+#define MA_TIME_ENTRY(c, t) {(c), (t), sizeof(MYSQL_TIME)}
+#define MA_STR_ENTRY(c)     {(c), MYSQL_TYPE_STRING, 0}
+
+
+
 typedef struct st_ext_field_type {
   enum enum_extended_field_type ext_type;
   MARIADB_CONST_STRING str;
@@ -350,6 +403,8 @@ typedef struct {
     uint8_t fetched;
     uint8_t closed;
     uint8_t reprepare;
+    uint8_t use_result_cb;
+    MA_BIND_STATE *bindstate;
     enum enum_paramstyle paramstyle;
     PyObject *weakreflist;
 } MrdbCursor;
@@ -477,6 +532,10 @@ MrdbParser_end(MrdbParser *p);
 uint8_t
 MrdbParser_parse(MrdbParser *p, uint8_t is_batch, char *errmsg, size_t errmsg_len);
 
+int ma_bind_result_setup(MrdbCursor *self);
+
+void ma_bind_result_free(MrdbCursor *self);
+int ma_values_from_bind(MrdbCursor *self);
 /* Global defines */
 
 
